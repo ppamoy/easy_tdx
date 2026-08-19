@@ -17,7 +17,7 @@ interface MetricRow {
   group: string
 }
 
-// 按业务分组排列：收益 / 风险 / 交易
+// 按业务分组排列：收益 / 风险 / 交易 / 统计
 const METRICS: MetricRow[] = [
   { key: 'total_return', label: '总收益率', format: 'percent', group: '收益' },
   { key: 'annual_return', label: '年化收益', format: 'percent', group: '收益' },
@@ -38,6 +38,11 @@ const METRICS: MetricRow[] = [
   { key: 'max_loss', label: '最大亏损', format: 'percent', group: '交易' },
   { key: 'avg_holding_days', label: '平均持仓天数', format: 'ratio', group: '交易' },
   { key: 'rejected_trades', label: '拒单数', format: 'int', group: '交易' },
+  // 新增指标（V2.1）
+  { key: 'max_consec_win', label: '最大连续盈利', format: 'int', group: '统计' },
+  { key: 'max_consec_loss', label: '最大连续亏损', format: 'int', group: '统计' },
+  { key: 'start_cash', label: '初始资金', format: 'int', group: '统计' },
+  { key: 'end_value', label: '期末市值', format: 'int', group: '统计' },
 ]
 
 function formatVal(row: MetricRow, v: number): string {

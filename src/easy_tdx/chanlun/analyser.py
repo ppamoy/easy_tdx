@@ -22,6 +22,7 @@ from easy_tdx.chanlun.macd import calc_macd  # noqa: F401
 from easy_tdx.chanlun.mmd import find_mmds  # noqa: F401
 from easy_tdx.chanlun.types import BC, BI, FX, MMD, XD, ZS, CLKline, Kline
 from easy_tdx.chanlun.xd import find_xds  # noqa: F401
+from easy_tdx.MyTT import BOLL
 from easy_tdx.chanlun.zs import find_zss
 
 
@@ -66,6 +67,7 @@ class ChanlunResult:
     mmds: list[MMD] = field(default_factory=list)
     bcs: list[BC] = field(default_factory=list)
     macd: dict[str, list[float]] = field(default_factory=dict)
+    boll: Any = None  # BOLLResult or None
 
     def _fmt_dt(self, dt: datetime) -> str:
         """按 frequency 自适应格式化日期。
@@ -133,6 +135,7 @@ class ChanlunResult:
                     "type": mmd.mmd_type.value,
                     "date": self._fmt_dt(mmd.bi.end.k.date) if mmd.bi else None,
                     "msg": mmd.msg,
+                    "confidence": round(mmd.confidence, 2),
                 }
                 for mmd in self.mmds
             ],
@@ -226,12 +229,29 @@ class ChanlunAnalyser:
         xds = find_xds(bis, self._config)
         self._result.xds = xds
 
-        # Step 8: 买卖点识别
-        mmds = find_mmds(bis, zss, self._config)
+        # Step 7.5: BOLL 指标计算
+        if len(closes) >= 20:
+            from easy_tdx.chanlun.types import BOLLResult
+            _upper, _mid, _lower = BOLL(closes, N=20, P=2)
+            _width = [(_upper[i] - _lower[i]) / _mid[i] if _mid[i] > 0 else 0 for i in range(len(_upper))]
+            _pb = []
+            for i in range(len(closes)):
+                ub = _upper[i]
+                lb = _lower[i]
+                _pb.append((closes[i] - lb) / (ub - lb) if (ub - lb) > 0 else 0.5)
+            self._result.boll = BOLLResult(
+                upper=_upper, mid=_mid, lower=_lower,
+                width=_width, percent_b=_pb,
+            )
+
+        # Step 8: 买卖点识别（传入收盘价用于MACD力度计算）
+        # 提取成交量序列
+        volumes = [k.amount for k in klines]
+        mmds = find_mmds(bis, zss, closes=closes, config=self._config, volumes=volumes)
         self._result.mmds = mmds
 
-        # Step 9: 背驰判断
-        bcs = check_bi_beichi(bis, zss, self._config)
+        # Step 9: 背驰判断（传入收盘价用于MACD面积计算）
+        bcs = check_bi_beichi(bis, zss, closes=closes, config=self._config)
         self._result.bcs = bcs
 
         return self._result

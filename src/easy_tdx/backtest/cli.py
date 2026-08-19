@@ -154,19 +154,30 @@ def backtest(
 def _load_strategy(strategy_str: str | None, strategy_file: str | None) -> type | None:
     """加载策略类。
 
-    优先从 Python 文件加载，其次从 DSL 表达式加载（未实现）。
+    优先级：内置注册策略 > Python 文件加载 > DSL 表达式（未实现）。
 
     Args:
-        strategy_str: DSL 策略表达式
+        strategy_str: 策略名（内置注册表）或 DSL 表达式
         strategy_file: Python 策略文件路径
 
     Returns:
         Strategy 子类
     """
+    # 1. 先尝试从内置注册表加载
+    if strategy_str:
+        from ..backtest.strategies.registry import get_registry
 
+        try:
+            entry = get_registry().get(strategy_str)
+            return entry.strategy_cls
+        except KeyError:
+            pass  # 不是内置策略，继续尝试 DSL / 文件
+
+    # 2. 从 Python 文件加载
     if strategy_file:
         return _load_strategy_from_file(strategy_file)
 
+    # 3. DSL 表达式（未实现）
     if strategy_str:
         click.echo("错误: DSL 策略表达式尚未实现", err=True)
         return None

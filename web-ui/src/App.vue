@@ -1,5 +1,19 @@
 <script setup lang="ts">
-// 根组件：顶部标题栏 + 路由出口。
+// 根组件：顶部标题栏 + 路由出口 + 全局自选股面板。
+import { onMounted, onUnmounted } from 'vue'
+import WatchlistPanel from './components/WatchlistPanel.vue'
+
+// 快捷键：Ctrl+Shift+W 切换自选股面板
+function handleKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey && e.shiftKey && e.key === 'W') {
+    e.preventDefault()
+    const btn = document.querySelector('.watchlist-toggle') as HTMLButtonElement
+    if (btn) btn.click()
+  }
+}
+
+onMounted(() => document.addEventListener('keydown', handleKeydown))
+onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 </script>
 
 <template>
@@ -8,16 +22,21 @@
       <h1>easy-tdx 回测</h1>
       <nav class="app-nav">
         <RouterLink to="/" active-class="active">单标的回测</RouterLink>
+        <RouterLink to="/chanlun" active-class="active">缠论分析</RouterLink>
+        <RouterLink to="/changying" active-class="active">长赢投资</RouterLink>
+        <RouterLink to="/screening" active-class="active">动态选股</RouterLink>
         <RouterLink to="/portfolio" active-class="active">组合回测</RouterLink>
         <RouterLink to="/optimize" active-class="active">参数寻优</RouterLink>
         <RouterLink to="/compare" active-class="active">结果对比</RouterLink>
         <RouterLink to="/strategies" active-class="active">策略库</RouterLink>
         <RouterLink to="/settings" active-class="active">服务器设置</RouterLink>
+        <RouterLink to="/monitor" active-class="active">信号监控</RouterLink>
       </nav>
     </header>
     <main class="app-main">
       <RouterView />
     </main>
+    <WatchlistPanel />
   </div>
 </template>
 
@@ -44,6 +63,7 @@
 .app-nav {
   display: flex;
   gap: 16px;
+  flex-wrap: wrap;
 }
 .app-nav a {
   color: var(--text-dim);

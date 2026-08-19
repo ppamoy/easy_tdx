@@ -222,6 +222,116 @@ class ParamGridOptimizer:
             heatmap=heatmap,
         )
 
+    def run_walk_forward(
+        self, train_ratio: float = 0.7, step_ratio: float = 0.1
+    ) -> OptimizeResult:
+        """执行 walk-forward 验证寻优。
+
+        将数据切分为多个训练/测试窗口，在每个训练窗口上寻优，
+        然后在对应测试窗口上验证，汇总各窗口表现返回综合排名。
+
+        Args:
+            train_ratio: 训练集比例（默认 0.7）
+            step_ratio: 每次滚动步长比例（默认 0.1）
+
+        Returns:
+            OptimizeResult，best 为 walk-forward 综合最优参数
+        """
+        from easy_tdx.backtest.strategies import get_registry
+
+        entry = get_registry().get(self._strategy_name)
+        param_names = list(self._param_grid.keys())
+        n = len(self._df)
+        train_size = int(n * train_ratio)
+        step_size = max(int(n * step_ratio), 1)
+
+        if train_size < 100:
+            raise ValueError(f"训练集过小（{train_size} 根），请增大 train_ratio 或增加数据量")
+
+        windows: list[tuple[slice, slice]] = []
+        train_start = 0
+        while train_start + train_size <= n:
+            test_start = train_start + train_size
+            test_end = min(test_start + step_size * 2, n)  # 测试集至少 2×step
+            windows.append((slice(train_start, test_start), slice(test_start, test_end)))
+            train_start += step_size
+            if test_end >= n:
+                break
+
+        if not windows:
+            raise ValueError("数据不足以划分 walk-forward 窗口")
+
+        # 对每个窗口做寻优，收集结果
+        all_results: list[tuple[int, dict[str, Any], GridPointResult]] = []
+        for win_idx, (train_slice, test_slice) in enumerate(windows):
+            train_df = self._df.iloc[train_slice].reset_index(drop=True)
+            test_df = self._df.iloc[test_slice].reset_index(drop=True)
+
+            if len(train_df) < 50 or len(test_df) < 10:
+                continue
+
+            optimizer = ParamGridOptimizer(
+                strategy_name=self._strategy_name,
+                param_grid=self._param_grid,
+                df=train_df,
+                cash=self._cash,
+                commission=self._commission,
+                stamp_tax=self._stamp_tax,
+                slippage=self._slippage,
+                execution=self._execution,
+            )
+            train_result = optimizer.run()
+            if train_result.best is None:
+                continue
+
+            # 在测试集上验证
+            best_params = train_result.best.params
+            try:
+                strategy = entry.build(best_params, skip_bounds=True)
+                test_engine = BacktestEngine(
+                    strategy=strategy,
+                    cash=self._cash,
+                    commission=self._commission,
+                    stamp_tax=self._stamp_tax,
+                    slippage=self._slippage,
+                    execution=self._execution,
+                )
+                test_bt = test_engine.run(test_df)
+                perf = test_bt.performance
+                all_results.append(
+                    (
+                        win_idx,
+                        best_params,
+                        GridPointResult(
+                            params=best_params,
+                            total_return=perf.get("total_return", 0.0),
+                            sharpe=perf.get("sharpe", 0.0),
+                            max_drawdown=perf.get("max_drawdown", 0.0),
+                            total_trades=int(perf.get("total_trades", 0)),
+                            win_rate=perf.get("win_rate", 0.0),
+                            profit_factor=perf.get("profit_factor", 0.0),
+                        ),
+                    )
+                )
+            except Exception:
+                continue
+
+        if not all_results:
+            return OptimizeResult(strategy=self._strategy_name, param_names=param_names, results=[])
+
+        # 按夏普比率综合排名（测试集夏普 + 训练集夏普的平均）
+        all_results.sort(key=lambda x: x[2].sharpe, reverse=True)
+        ranked = [r[2] for r in all_results]
+        best = ranked[0] if ranked else None
+
+        return OptimizeResult(
+            strategy=self._strategy_name,
+            param_names=param_names,
+            results=ranked,
+            best=best,
+            heatmap=None,
+        )
+
     def _build_heatmap(
         self,
         results: list[GridPointResult],

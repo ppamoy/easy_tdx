@@ -171,9 +171,11 @@ class MMDType(str, Enum):
 
     BUY_1 = "1buy"
     BUY_2 = "2buy"
+    BUY_2S = "2buy_s"  # 类二买
     BUY_3 = "3buy"
     SELL_1 = "1sell"
     SELL_2 = "2sell"
+    SELL_2S = "2sell_s"  # 类二卖
     SELL_3 = "3sell"
 
 
@@ -185,9 +187,10 @@ class MMD:
     zs: ZS | None = None
     bi: BI | None = None  # 触发该买卖点的笔（用于可视化锚定日期）
     msg: str = ""
+    confidence: float = 0.0  # 置信度 0-1，由分析器计算
 
     def __str__(self) -> str:
-        return f"MMD({self.mmd_type.value} {self.msg})"
+        return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
 
 class BCType(str, Enum):
@@ -211,3 +214,36 @@ class BC:
 
     def __str__(self) -> str:
         return f"BC({self.bc_type.value} {self.bc})"
+
+
+# ── BOLL 指标 ───────────────────────────────────────────────────────────
+
+@dataclass
+class BOLLResult:
+    """BOLL 布林带结果。"""
+    
+    upper: list[float] = field(default_factory=list)   # 上轨
+    mid: list[float] = field(default_factory=list)     # 中轨
+    lower: list[float] = field(default_factory=list)   # 下轨
+    width: list[float] = field(default_factory=list)   # 带宽 (upper - lower) / mid
+    percent_b: list[float] = field(default_factory=list)  # %B = (close - lower) / (upper - lower)
+    
+    @property
+    def latest_upper(self) -> float:
+        return self.upper[-1] if self.upper else 0.0
+    
+    @property
+    def latest_mid(self) -> float:
+        return self.mid[-1] if self.mid else 0.0
+    
+    @property
+    def latest_lower(self) -> float:
+        return self.lower[-1] if self.lower else 0.0
+    
+    @property
+    def latest_percent_b(self) -> float:
+        return self.percent_b[-1] if self.percent_b else 0.5
+    
+    @property
+    def latest_width(self) -> float:
+        return self.width[-1] if self.width else 0.0

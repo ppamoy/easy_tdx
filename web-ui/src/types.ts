@@ -89,6 +89,12 @@ export interface Performance {
   max_loss: number
   avg_holding_days: number
   volatility: number
+  // 新增指标（V2.1）
+  max_consec_win: number
+  max_consec_loss: number
+  sharpe_ratio: number
+  start_cash: number
+  end_value: number
 }
 
 export interface EquityPoint {

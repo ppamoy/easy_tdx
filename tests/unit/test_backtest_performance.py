@@ -610,3 +610,91 @@ def test_avg_win_zero_when_no_cost_basis_column() -> None:
     # 无 cost_basis → 单笔收益率无法计算 → 记 0.0，不抛异常
     assert metrics["avg_win"] == 0.0
     assert metrics["max_win"] == 0.0
+
+
+def test_max_consecutive_wins() -> None:
+    """测试最大连续盈利次数计算。"""
+    equity = _make_equity_curve(n=252, total_return=0.1)
+    # 5 笔交易：赢、赢、输、赢、赢、赢、输 → 最大连续盈利 3
+    trades = pd.DataFrame(
+        {
+            "datetime": [20240101 + i for i in range(7)],
+            "direction": ["SELL"] * 7,
+            "pnl": [100, 200, -50, 150, 300, 250, -100],
+            "cost_basis": [10000.0] * 7,
+            "rejected": [False] * 7,
+        }
+    )
+
+    analyzer = PerformanceAnalyzer(equity, trades)
+    metrics = analyzer.compute()
+
+    assert metrics["max_consec_win"] == 3  # 第 4-6 笔连续盈利
+    assert metrics["max_consec_loss"] == 1  # 最长连续亏损为 1（单笔亏损）
+
+
+def test_max_consecutive_losses() -> None:
+    """测试最大连续亏损次数计算。"""
+    equity = _make_equity_curve(n=252, total_return=-0.05)
+    # 4 笔交易：赢、输、输、输 → 最大连续亏损 3
+    trades = pd.DataFrame(
+        {
+            "datetime": [20240101 + i for i in range(4)],
+            "direction": ["SELL"] * 4,
+            "pnl": [500, -200, -300, -100],
+            "cost_basis": [10000.0] * 4,
+            "rejected": [False] * 4,
+        }
+    )
+
+    analyzer = PerformanceAnalyzer(equity, trades)
+    metrics = analyzer.compute()
+
+    assert metrics["max_consec_loss"] == 3
+    assert metrics["max_consec_win"] == 1
+
+
+def test_max_consecutive_no_trades() -> None:
+    """无交易时最大连续盈亏应为 0。"""
+    equity = _make_equity_curve(n=252, total_return=0.0)
+    trades = pd.DataFrame(
+        columns=["datetime", "direction", "pnl", "cost_basis", "rejected"]
+    )
+
+    analyzer = PerformanceAnalyzer(equity, trades)
+    metrics = analyzer.compute()
+
+    assert metrics["max_consec_win"] == 0
+    assert metrics["max_consec_loss"] == 0
+
+
+def test_new_metrics_in_empty_result() -> None:
+    """空结果中新增指标应为 0。"""
+    equity = pd.DataFrame(columns=["total", "drawdown", "drawdown_pct"])
+    trades = pd.DataFrame(columns=["direction", "pnl", "rejected"])
+
+    analyzer = PerformanceAnalyzer(equity, trades)
+    metrics = analyzer.compute()
+
+    assert metrics["max_consec_win"] == 0
+    assert metrics["max_consec_loss"] == 0
+
+
+def test_all_metric_keys_present() -> None:
+    """所有指标键应存在（含新增的 max_consec_win/loss）。"""
+    equity = _make_equity_curve(n=252, total_return=0.1)
+    trades = _make_trades()
+
+    analyzer = PerformanceAnalyzer(equity, trades)
+    metrics = analyzer.compute()
+
+    required_keys = {
+        "total_return", "annual_return", "max_drawdown", "max_dd_duration",
+        "sharpe", "sortino", "calmar",
+        "total_trades", "win_trades", "lose_trades", "rejected_trades",
+        "win_rate", "profit_factor", "avg_win", "avg_loss",
+        "max_win", "max_loss", "avg_holding_days", "volatility",
+        "max_consec_win", "max_consec_loss",
+        "sharpe_ratio", "start_cash", "end_value",
+    }
+    assert required_keys.issubset(set(metrics.keys()))

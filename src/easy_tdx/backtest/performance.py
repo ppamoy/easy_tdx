@@ -211,6 +211,12 @@ class PerformanceAnalyzer:
         # 19. 年化波动率
         volatility = np.std(daily_ret) * np.sqrt(self.ANNUAL_DAYS)
 
+        # 20. 最大连续盈利次数
+        max_consec_win = self._compute_max_consecutive_trades(sell_trades["pnl"], positive=True)
+
+        # 21. 最大连续亏损次数
+        max_consec_loss = self._compute_max_consecutive_trades(sell_trades["pnl"], positive=False)
+
         return {
             "total_return": total_return,
             "annual_return": annual_return,
@@ -231,6 +237,8 @@ class PerformanceAnalyzer:
             "max_loss": max_loss,
             "avg_holding_days": avg_holding_days,
             "volatility": volatility,
+            "max_consec_win": max_consec_win,
+            "max_consec_loss": max_consec_loss,
             # 别名键（兼容常见叫法，避免 .get('sharpe_ratio') 等误用返回 0）
             "sharpe_ratio": sharpe,
             "start_cash": float(total[0]),
@@ -341,6 +349,36 @@ class PerformanceAnalyzer:
 
         return int(max_dd_idx - peak_idx)
 
+    @staticmethod
+    def _compute_max_consecutive_trades(
+        pnl_series: NDArray | pd.Series, positive: bool
+    ) -> int:
+        """计算最大连续盈利（positive=True）或连续亏损（positive=False）次数。
+
+        Args:
+            pnl_series: 每笔交易的已实现盈亏（SELL 行）
+            positive: True=连续盈利，False=连续亏损
+
+        Returns:
+            最大连续次数（0 表示无有效数据）
+        """
+        if len(pnl_series) == 0:
+            return 0
+        vals = pnl_series.to_numpy(dtype=np.float64) if isinstance(pnl_series, pd.Series) else pnl_series
+        if len(vals) == 0:
+            return 0
+        mask = vals > 0 if positive else vals <= 0
+        max_streak = 0
+        current = 0
+        for m in mask:
+            if m:
+                current += 1
+                if current > max_streak:
+                    max_streak = current
+            else:
+                current = 0
+        return max_streak
+
     def _empty_metrics(self) -> dict[str, float]:
         """返回全零指标字典（数据不足时的默认返回值）。
 
@@ -371,6 +409,8 @@ class PerformanceAnalyzer:
             "max_loss": 0.0,
             "avg_holding_days": 0.0,
             "volatility": 0.0,
+            "max_consec_win": 0,
+            "max_consec_loss": 0,
             "sharpe_ratio": 0.0,
             "start_cash": 0.0,
             "end_value": 0.0,

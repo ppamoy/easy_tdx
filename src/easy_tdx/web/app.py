@@ -211,6 +211,7 @@ def _create_app(
     from easy_tdx.web.routers.mac_quotes import router as mac_quotes_router
     from easy_tdx.web.routers.market import router as market_router
     from easy_tdx.web.routers.realtime import router as realtime_router
+    from easy_tdx.web.routers.screening import router as screening_router
     from easy_tdx.web.routers.server import router as server_router
     from easy_tdx.web.routers.sina import router as sina_router
     from easy_tdx.web.routers.strategies import router as strategies_router
@@ -239,6 +240,11 @@ def _create_app(
     app.include_router(strategies_router, prefix="/api/v1")
     # 服务器设置路由（列出/测速/切换 TDX host）
     app.include_router(server_router, prefix="/api/v1")
+    # 选股路由
+    app.include_router(screening_router, prefix="/api/v1")
+    # 信号监控路由
+    from easy_tdx.web.routers.monitor import router as monitor_router
+    app.include_router(monitor_router, prefix="/api/v1")
 
     # --- 前端 dist 托管（生产/打包态同源服务，开发态可缺省） ---
     # 必须在所有 API 路由注册之后：StaticFiles(html=True) 挂在 "/" 会吞掉

@@ -6,6 +6,8 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 
+import ChanlunChart from '../components/ChanlunChart.vue'
+// BUILD_TEST_MARKER_67890
 import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
 import KlineChart from '../components/KlineChart.vue'
@@ -45,13 +47,63 @@ const commission = ref(0.0003)
 const slippage = ref(0)
 const execution = ref<ExecutionMode>('next_open')
 
+// 缠论相关状态
+const chanlunLoading = ref(false)
+const chanlunBis = ref<any[]>([])
+const chanlunXds = ref<any[]>([])
+const chanlunZss = ref<any[]>([])
+const chanlunMmds = ref<any[]>([])
+const chanlunFxs = ref<any[]>([])
+const chanlunBcs = ref<any[]>([])
+
 // 成交价模式（精简为 开盘价/收盘价）
 const EXECUTIONS: { value: ExecutionMode; label: string }[] = [
   { value: 'next_open', label: '开盘价' },
   { value: 'next_close', label: '收盘价' },
 ]
 
+// ── 最近浏览股票（localStorage 持久化）────────────────────────────
+interface RecentStock {
+  code: string
+  market: string
+  category: Category
+  timestamp: number
+}
+const RECENT_KEY = 'easy_tdx_recent_stocks'
+const recentStocks = ref<RecentStock[]>([])
+
+function loadRecentStocks() {
+  try {
+    const raw = localStorage.getItem(RECENT_KEY)
+    if (raw) recentStocks.value = JSON.parse(raw)
+  } catch { /* ignore */ }
+}
+
+function saveRecentStock(code: string, cat: Category) {
+  const market = detectMarket(code)
+  // 去重：移除已存在的
+  recentStocks.value = recentStocks.value.filter(s => s.code !== code)
+  // 添加至头部
+  recentStocks.value.unshift({ code, market, category: cat, timestamp: Date.now() })
+  // 只保留最近20条
+  recentStocks.value = recentStocks.value.slice(0, 20)
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recentStocks.value))
+  } catch { /* ignore */ }
+}
+
+function clearRecentStocks() {
+  recentStocks.value = []
+  try { localStorage.removeItem(RECENT_KEY) } catch { /* ignore */ }
+}
+
+function selectRecent(stock: RecentStock) {
+  code.value = stock.code
+  category.value = stock.category
+}
+
 onMounted(async () => {
+  loadRecentStocks()
   await store.loadStrategies().catch((e) => {
     store.error = `加载策略列表失败：${e instanceof Error ? e.message : e}`
   })
@@ -91,6 +143,8 @@ async function onRun() {
   // 1. 先取行情（SymbolPicker.loadBars 会校验并填充 store.ohlcv）
   const ok = await symbolPicker.value?.loadBars()
   if (!ok) return // 校验/取数失败，错误已在 store.error
+  // 记录最近浏览
+  saveRecentStock(code.value, category.value)
   // 2. 再回测
   await store.run({
     strategy: strategy.value,
@@ -100,6 +154,56 @@ async function onRun() {
     slippage: slippage.value,
     execution: execution.value,
   })
+  // 3. 如果选择了缠论策略，运行缠论分析
+  if (strategy.value === 'chanlun' && store.ohlcv.length > 0) {
+    await runChanlunAnalysis()
+  }
+}
+
+// 缠论分析
+async function runChanlunAnalysis() {
+  chanlunLoading.value = true
+  chanlunBis.value = []
+  chanlunXds.value = []
+  chanlunZss.value = []
+  chanlunMmds.value = []
+  try {
+    const market = detectMarket(code.value)
+    const categoryMap: Record<string, string> = {
+      'DAY': 'DAY',
+      'WEEK': 'WEEK',
+      'MIN_5': 'MIN_5',
+      'MIN_15': 'MIN_15',
+      'MIN_30': 'MIN_30',
+      'MIN_60': 'MIN_60',
+    }
+    const resp = await fetch('/api/v1/chanlun/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        market,
+        code: code.value,
+        category: categoryMap[category.value] ?? 'DAY',
+        count: store.ohlcv.length,
+        start: 0,
+      }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error((err as { detail?: string }).detail ?? `HTTP ${resp.status}`)
+    }
+    const data = await resp.json()
+    chanlunBis.value = data.bis ?? []
+    chanlunXds.value = data.xds ?? []
+    chanlunZss.value = data.zss ?? []
+    chanlunMmds.value = data.mmds ?? []
+    chanlunFxs.value = data.fractals ?? []
+    chanlunBcs.value = data.bcs ?? []
+  } catch (e) {
+    console.error('缠论分析失败:', e)
+  } finally {
+    chanlunLoading.value = false
+  }
 }
 
 // ── 保存策略（把当前结果 + 配置 + 上下文存进策略库）──────────────────────────
@@ -121,12 +225,80 @@ const grade = computed(() =>
   store.result ? gradePerformance(store.result.performance) : null,
 )
 
+// 操作建议
+const tradingAdvice = computed(() => {
+  if (!store.result) return null
+  const perf = store.result.performance
+  const trades = store.result.trades
+  const executed = trades.filter(t => !t.rejected && t.pnl !== 0)
+
+  if (executed.length === 0) {
+    return { text: '暂无成交记录，无法给出操作建议。', color: '#94a3b8', details: [] }
+  }
+
+  const wins = executed.filter(t => t.pnl > 0)
+  const losses = executed.filter(t => t.pnl < 0)
+  const winRate = wins.length / executed.length
+  const totalPnl = executed.reduce((s, t) => s + t.pnl, 0)
+  const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((s, t) => s + t.pnl, 0)) / losses.length : 0
+  const profitFactor = avgLoss > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / avgLoss : Infinity
+  const maxDrawdown = perf.max_drawdown ?? 0
+
+  // 判断建议
+  if (winRate >= 0.6 && profitFactor >= 1.5 && totalPnl > 0 && maxDrawdown < 0.2) {
+    return {
+      text: '策略表现优秀：胜率高、盈亏比合理、回撤可控。建议：可加大仓位或延长持有周期。',
+      color: '#22c55e',
+      details: [
+        { label: '胜率', value: `${(winRate * 100).toFixed(1)}%`, color: '#22c55e' },
+        { label: '盈亏比', value: profitFactor === Infinity ? '∞' : profitFactor.toFixed(2), color: '#22c55e' },
+        { label: '总收益', value: `${(totalPnl > 0 ? '+' : '')}${totalPnl.toFixed(0)}元`, color: '#22c55e' },
+        { label: '最大回撤', value: `${(maxDrawdown * 100).toFixed(1)}%`, color: maxDrawdown < 0.15 ? '#22c55e' : '#fbbf24' },
+      ],
+    }
+  } else if (winRate >= 0.5 && totalPnl > 0) {
+    return {
+      text: '策略基本有效：胜率尚可且整体盈利。建议：优化止损参数减少大额亏损，或调整仓位控制风险。',
+      color: '#eab308',
+      details: [
+        { label: '胜率', value: `${(winRate * 100).toFixed(1)}%`, color: winRate >= 0.5 ? '#22c55e' : '#ef4444' },
+        { label: '总收益', value: `${(totalPnl > 0 ? '+' : '')}${totalPnl.toFixed(0)}元`, color: '#eab308' },
+        { label: '最大回撤', value: `${(maxDrawdown * 100).toFixed(1)}%`, color: maxDrawdown < 0.2 ? '#fbbf24' : '#ef4444' },
+      ],
+    }
+  } else if (totalPnl < 0) {
+    return {
+      text: '策略当前亏损：建议检查市场环境是否适合该策略，或调整参数重新回测。考虑暂停实盘交易。',
+      color: '#ef4444',
+      details: [
+        { label: '总收益', value: `${totalPnl.toFixed(0)}元`, color: '#ef4444' },
+        { label: '胜率', value: `${(winRate * 100).toFixed(1)}%`, color: '#ef4444' },
+        { label: '交易次数', value: `${executed.length}笔`, color: '#94a3b8' },
+      ],
+    }
+  } else {
+    return {
+      text: '样本不足，建议增加回测周期或扩大交易标的后再评估。',
+      color: '#94a3b8',
+      details: [{ label: '交易次数', value: `${executed.length}笔`, color: '#94a3b8' }],
+    }
+  }
+})
+
 // 当前股票完整代码（市场:6位），从 SymbolPicker 同步来的 code 是纯数字，
 // 需要带上市场前缀。复用 market.ts 的 detectMarket（与 SymbolPicker /
 // StocksPicker 同一套规则），避免分叉导致 ETF/基金（5 开头）等被错判市场。
 function fullSymbol(code6: string): string {
   return `${detectMarket(code6)}:${code6}`
 }
+
+// 判断是否为缠论策略
+const isChanlunStrategy = computed(() => {
+  return strategy.value === 'chanlun' || strategy.value === 'changying_chanlun'
+})
+
+// 计算 bars（用于 ChanlunChart）
+const bars = computed(() => store.ohlcv)
 
 function openSaveForm() {
   saveName.value = `${strategyLabel.value} · ${code.value}`
@@ -211,6 +383,26 @@ async function onSave() {
         <p v-else class="loading-text">加载策略中…</p>
       </section>
 
+      <!-- 最近浏览股票 -->
+      <section v-if="recentStocks.length > 0" class="panel-section recent-section">
+        <div class="recent-header">
+          <h3>最近浏览</h3>
+          <button class="ghost small" @click="clearRecentStocks">清空</button>
+        </div>
+        <div class="recent-list">
+          <div
+            v-for="s in recentStocks"
+            :key="s.code + s.timestamp"
+            class="recent-item"
+            :class="{ active: s.code === code && s.category === category }"
+            @click="selectRecent(s)"
+          >
+            <span class="recent-symbol">{{ s.market }}{{ s.code }}</span>
+            <span class="recent-cat">{{ s.category }}</span>
+          </div>
+        </div>
+      </section>
+
       <section class="panel-section">
         <h3>资金与成本</h3>
         <div class="field">
@@ -259,8 +451,28 @@ async function onSave() {
         </div>
 
         <section class="report-section">
-          <h3>K线 + 买卖点</h3>
-          <KlineChart :bars="store.ohlcv" :trades="store.result.trades" />
+          <h3>
+            K线 + 买卖点
+            <span v-if="strategy === 'chanlun'" class="chanlun-badge">缠论</span>
+          </h3>
+        <!-- 缠论策略：显示缠论结构图 -->
+          <ChanlunChart
+            v-if="isChanlunStrategy && !chanlunLoading && bars.length > 0"
+            :bars="bars"
+            :bis="chanlunBis"
+            :xds="chanlunXds"
+            :zss="chanlunZss"
+            :mmds="chanlunMmds"
+            :fxs="chanlunFxs"
+            :bcs="chanlunBcs"
+            :frequency="category"
+          />
+          <!-- 缠论分析中 -->
+          <div v-else-if="strategy === 'chanlun' && chanlunLoading" class="chanlun-loading">
+            正在分析缠论结构…
+          </div>
+          <!-- 普通策略：显示普通K线图 -->
+          <KlineChart v-else :bars="bars" :trades="store.result.trades" />
         </section>
 
         <section class="report-section">
@@ -273,6 +485,20 @@ async function onSave() {
           <GradeDetails :result="grade" expanded />
         </section>
 
+        <!-- 操作建议 -->
+        <section v-if="store.result && tradingAdvice" class="report-section trading-advice">
+          <h3>💡 操作建议</h3>
+          <div class="advice-content" :style="{ borderColor: tradingAdvice.color }">
+            <div class="advice-main" :style="{ color: tradingAdvice.color }">{{ tradingAdvice.text }}</div>
+            <div v-if="tradingAdvice.details?.length" class="advice-details">
+              <div v-for="(d, i) in tradingAdvice.details" :key="i" class="advice-detail-item">
+                <span class="detail-label">{{ d.label }}:</span>
+                <span class="detail-value" :style="{ color: d.color }">{{ d.value }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="report-section">
           <h3>绩效指标</h3>
           <MetricTable :perf="store.result.performance" />
@@ -280,7 +506,7 @@ async function onSave() {
 
         <section class="report-section">
           <h3>成交记录（{{ store.result.trades.length }} 笔）</h3>
-          <TradeTable :trades="store.result.trades" />
+          <TradeTable :trades="store.result.trades" :initial-cash="cash" />
         </section>
       </div>
     </main>
@@ -506,4 +732,125 @@ async function onSave() {
   opacity: 0.5;
   cursor: default;
 }
+
+/* 缠论徽章和加载状态 */
+.chanlun-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #c878ff;
+  background: rgba(200, 120, 255, 0.15);
+  border: 1px solid rgba(200, 120, 255, 0.3);
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.chanlun-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+/* 最近浏览股票 */
+.recent-section {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.recent-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.recent-header h3 {
+  margin: 0;
+}
+.recent-header .ghost {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+.recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.1s;
+}
+.recent-item:hover {
+  background: rgba(255,255,255,0.06);
+}
+.recent-item.active {
+  background: rgba(74, 158, 255, 0.12);
+  border: 1px solid rgba(74, 158, 255, 0.3);
+}
+.recent-symbol {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text);
+}
+.recent-cat {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* 操作建议 */
+.trading-advice .advice-content {
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid;
+  border-left: 3px solid;
+  border-radius: 6px;
+}
+
+.trading-advice .advice-main {
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.trading-advice .advice-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.trading-advice .advice-detail-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+}
+
+.trading-advice .detail-label {
+  color: var(--text-muted);
+}
+
+.trading-advice .detail-value {
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
 </style>
+// BUILD_TEST_MARKER_12345

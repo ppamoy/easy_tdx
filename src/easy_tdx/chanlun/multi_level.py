@@ -69,6 +69,117 @@ class MultiLevelAnalyser:
         """获取所有级别的分析结果。"""
         return {name: a.result for name, a in self._analysers.items()}
 
+    def compute_confluence_score(
+        self,
+        high_level: str,
+        low_level: str,
+    ) -> dict[str, Any]:
+        """计算多级别一致性评分。
+
+        比较高级别和低级别的买卖点信号，判断是否存在区间套确认。
+        返回综合评分和各子评分。
+
+        Returns:
+            dict with keys:
+                score: 综合一致性评分 0-1
+                high_level_signal: 高级别最近买卖点信息
+                low_level_signal: 低级别最近买卖点信息
+                trend_aligned: 趋势方向是否一致
+                zs_aligned: 中枢位置是否合理
+                time_aligned: 时间窗口是否重叠
+        """
+        high_result = self.get_result(high_level)
+        low_result = self.get_result(low_level)
+
+        empty = {
+            "score": 0.0,
+            "high_level_signal": None,
+            "low_level_signal": None,
+            "trend_aligned": None,
+            "zs_aligned": None,
+            "time_aligned": None,
+        }
+
+        if high_result is None or low_result is None:
+            return empty
+
+        # 获取高级别最近买卖点
+        high_mmds = sorted(high_result.mmds, key=lambda m: m.bi.index if m.bi else 0)
+        low_mmds = sorted(low_result.mmds, key=lambda m: m.bi.index if m.bi else 0)
+
+        if not high_mmds or not low_mmds:
+            return empty
+
+        latest_high = high_mmds[-1]
+        latest_low = low_mmds[-1]
+
+        # 1. 趋势对齐检查
+        high_trend = _detect_trend_direction(high_result.bis)
+        low_trend = _detect_trend_direction(low_result.bis)
+        trend_aligned = False
+        if high_trend and low_trend:
+            # 买信号：高低级别都看涨；卖信号：都看跌
+            high_is_buy = latest_high.mmd_type.value in ("1buy", "2buy", "3buy", "2buy_s")
+            low_is_buy = latest_low.mmd_type.value in ("1buy", "2buy", "3buy", "2buy_s")
+            high_is_sell = latest_high.mmd_type.value in ("1sell", "2sell", "3sell", "2sell_s")
+            low_is_sell = latest_low.mmd_type.value in ("1sell", "2sell", "3sell", "2sell_s")
+            if (high_is_buy and low_is_buy and high_trend == "up" and low_trend == "up"):
+                trend_aligned = True
+            elif (high_is_sell and low_is_sell and high_trend == "down" and low_trend == "down"):
+                trend_aligned = True
+
+        # 2. 中枢对齐检查
+        zs_aligned = False
+        if latest_high.bi and latest_low.bi:
+            # 检查低级别中枢是否与高级别买卖点时间重叠
+            high_bi_start = latest_high.bi.start.k.date
+            high_bi_end = latest_high.bi.end.k.date
+            for zs in low_result.zss:
+                if zs.start and zs.end:
+                    zs_start = zs.start.k.date
+                    zs_end = zs.end.k.date
+                    if zs_start <= high_bi_end and zs_end >= high_bi_start:
+                        zs_aligned = True
+                        break
+
+        # 3. 时间窗口对齐
+        time_aligned = False
+        if latest_high.bi and latest_low.bi:
+            high_end = latest_high.bi.end.k.date
+            low_end = latest_low.bi.end.k.date
+            # 允许低级别信号在高级别信号前后5根K线内
+            time_aligned = abs((high_end - low_end).days) <= 5
+
+        # 综合评分
+        components = []
+        if trend_aligned:
+            components.append(0.4)
+        if zs_aligned:
+            components.append(0.3)
+        if time_aligned:
+            components.append(0.3)
+
+        # 基础分：取高、低级别的平均置信度
+        base_score = (latest_high.confidence + latest_low.confidence) / 2
+        confluence_score = base_score * sum(components) if components else base_score * 0.5
+
+        return {
+            "score": round(confluence_score, 2),
+            "high_level_signal": {
+                "type": latest_high.mmd_type.value,
+                "date": high_result._fmt_dt(latest_high.bi.end.k.date) if latest_high.bi else None,
+                "confidence": round(latest_high.confidence, 2),
+            },
+            "low_level_signal": {
+                "type": latest_low.mmd_type.value,
+                "date": low_result._fmt_dt(latest_low.bi.end.k.date) if latest_low.bi else None,
+                "confidence": round(latest_low.confidence, 2),
+            },
+            "trend_aligned": trend_aligned,
+            "zs_aligned": zs_aligned,
+            "time_aligned": time_aligned,
+        }
+
     def query_low_level_qs(
         self,
         high_level: str,
@@ -111,26 +222,30 @@ class MultiLevelAnalyser:
         if high_result is None or low_result is None:
             return empty
 
-        # 高级别笔的时间范围
+        # 高级别笔的时间范围（使用原始K线时间）
         start_date = high_bi.start.k.date
         end_date = high_bi.end.k.date
 
         # 筛选低级别中时间范围内的笔
-        low_bis = [
-            bi
-            for bi in low_result.bis
-            if bi.start.k.date >= start_date and bi.end.k.date <= end_date
-        ]
+        # 放宽匹配：只要低级别笔与高级别笔的时间范围有交集
+        low_bis = []
+        for bi in low_result.bis:
+            bi_start = bi.start.k.date
+            bi_end = bi.end.k.date
+            # 笔与范围有重叠
+            if bi_start <= end_date and bi_end >= start_date:
+                low_bis.append(bi)
 
         # 筛选低级别中枢
-        low_zss = [
-            zs
-            for zs in low_result.zss
-            if zs.start is not None
-            and zs.end is not None
-            and zs.start.k.date >= start_date
-            and zs.end.k.date <= end_date
-        ]
+        low_zss = []
+        for zs in low_result.zss:
+            if zs.start is None or zs.end is None:
+                continue
+            zs_start = zs.start.k.date
+            zs_end = zs.end.k.date
+            # 中枢与范围有重叠
+            if zs_start <= end_date and zs_end >= start_date:
+                low_zss.append(zs)
 
         has_trend = len(low_zss) >= 2
         has_consolidation = len(low_zss) >= 1

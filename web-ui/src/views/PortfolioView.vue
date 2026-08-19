@@ -114,6 +114,26 @@ function openSaveForm() {
   showSaveForm.value = true
 }
 
+// 从自选股加载标的
+function loadFromWatchlist() {
+  try {
+    const raw = localStorage.getItem('easy_tdx_global_watchlist')
+    if (!raw) return
+    const watchlist: any[] = JSON.parse(raw)
+    const symbols = watchlist.map((w: any) => `${w.market}:${w.code}`)
+    if (symbols.length > 0) {
+      stocks.value = symbols
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// 清空所有标的
+function clearAll() {
+  stocks.value = []
+}
+
 async function onSave() {
   if (!store.portfolioResult || !saveName.value.trim()) return
   saving.value = true
@@ -163,6 +183,10 @@ async function onSave() {
       <section class="panel-section">
         <h3>标的列表</h3>
         <StocksPicker v-model="stocks" />
+        <div class="watchlist-load">
+          <button class="ghost small" @click="loadFromWatchlist">📌 从自选股加载</button>
+          <button class="ghost small" @click="clearAll">清空</button>
+        </div>
       </section>
 
       <section class="panel-section">
@@ -520,5 +544,16 @@ async function onSave() {
 .modal-actions .ghost:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+/* 自选股加载按钮 */
+.watchlist-load {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.watchlist-load .ghost {
+  font-size: 11px;
+  padding: 3px 8px;
 }
 </style>
