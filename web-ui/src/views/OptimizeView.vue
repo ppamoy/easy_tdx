@@ -38,6 +38,10 @@ const strategy = ref('ma_cross')
 const paramGrid = ref<Record<string, Array<number | string>>>({})
 const cash = ref(1000000)
 const execution = ref<ExecutionMode>('next_open')
+// Walk-Forward 验证选项
+const useWalkForward = ref(false)
+const trainRatio = ref(0.7)
+const stepRatio = ref(0.1)
 // 一键寻优并发工作进程数：0=串行（同 workers=1）；2+=多进程并行（CPU-bound 必须）
 const cpuCount = (() => {
   // navigator.hardwareConcurrency 返回逻辑核数（含超线程）；非浏览器/不可用时回退 4
@@ -127,6 +131,9 @@ async function onRun() {
     cash: cash.value,
     execution: execution.value,
     ohlcv: store.ohlcv,
+    use_walk_forward: useWalkForward.value,
+    train_ratio: useWalkForward.value ? trainRatio.value : undefined,
+    step_ratio: useWalkForward.value ? stepRatio.value : undefined,
   })
 }
 
@@ -262,6 +269,32 @@ const rankingGrades = computed<GradeResult[]>(() =>
         <p class="workers-tip">
           寻优是 CPU 密集计算，多进程可显著提速（仅对「一键寻优所有策略」生效）。机器较弱时建议先用串行测一次再开并发。
         </p>
+      </section>
+
+      <section class="panel-section">
+        <h3>Walk-Forward 验证 <span class="hint">（滚动窗口防过拟合）</span></h3>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" v-model="useWalkForward" />
+            启用 Walk-Forward 滚动验证
+          </label>
+        </div>
+        <template v-if="useWalkForward">
+          <div class="field">
+            <label>训练集比例 <span class="hint">默认 0.7</span></label>
+            <input v-model.number="trainRatio" type="range" min="0.5" max="0.9" step="0.05" />
+            <span class="hint">{{ trainRatio.toFixed(2) }}</span>
+          </div>
+          <div class="field">
+            <label>滚动步长比例 <span class="hint">默认 0.1</span></label>
+            <input v-model.number="stepRatio" type="range" min="0.05" max="0.5" step="0.05" />
+            <span class="hint">{{ stepRatio.toFixed(2) }}</span>
+          </div>
+          <p class="wf-tip">
+            在每个训练窗口上寻优，在对应测试窗口上验证，汇总各窗口表现得出更稳健的最优参数。
+            数据量建议 ≥300 根 K 线。
+          </p>
+        </template>
       </section>
 
       <button
@@ -440,6 +473,27 @@ const rankingGrades = computed<GradeResult[]>(() =>
   font-size: 12px;
   line-height: 1.5;
   color: var(--text-muted, #888);
+}
+.wf-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted, #888);
+  background: rgba(74, 158, 255, 0.05);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
 }
 .run-btn {
   width: 100%;

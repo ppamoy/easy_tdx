@@ -144,6 +144,11 @@ class OptimizeBacktestRequest(BaseModel):
     start_date: str | None = Field(default=None)
     end_date: str | None = Field(default=None)
 
+    # Walk-forward 验证参数（可选，默认 None 表示不做 walk-forward）
+    use_walk_forward: bool = Field(default=False, description="是否启用 Walk-Forward 滚动验证")
+    train_ratio: float = Field(default=0.7, ge=0.5, le=0.9, description="训练集比例（默认 0.7）")
+    step_ratio: float = Field(default=0.1, ge=0.05, le=0.5, description="滚动步长比例（默认 0.1）")
+
     @model_validator(mode="after")
     def _check_data_source(self) -> OptimizeBacktestRequest:
         if self.ohlcv is None and self.symbol is None:

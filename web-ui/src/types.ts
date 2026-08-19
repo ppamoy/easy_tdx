@@ -200,6 +200,10 @@ export interface OptimizeBacktestRequest {
   count?: number
   start_date?: string
   end_date?: string
+  // Walk-Forward 验证参数
+  use_walk_forward?: boolean
+  train_ratio?: number
+  step_ratio?: number
 }
 
 export interface GridPointResult {

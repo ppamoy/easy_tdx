@@ -557,7 +557,14 @@ def _run_optimize(df: pd.DataFrame, req: OptimizeBacktestRequest) -> dict[str, A
         slippage=req.slippage,
         execution=req.execution,
     )
-    result = optimizer.run()
+    # 若启用 Walk-Forward，使用滚动验证寻优
+    if getattr(req, "use_walk_forward", False):
+        result = optimizer.run_walk_forward(
+            train_ratio=getattr(req, "train_ratio", 0.7),
+            step_ratio=getattr(req, "step_ratio", 0.1),
+        )
+    else:
+        result = optimizer.run()
     return result.to_dict()
 
 
