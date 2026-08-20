@@ -5,12 +5,15 @@
 功能：
 1. 缠论结构分析（笔/中枢/买卖点）
 2. BOLL位置分析
-3. MACD状态分析
-4. KDJ状态分析
-5. RSI状态分析
-6. 成交量分析
-7. 综合评分和操作建议
-8. 风险管理和仓位建议
+3. MACD状态分析 + 背离检测
+4. KDJ状态分析 + 背离检测
+5. RSI状态分析 + 背离检测
+6. ADX趋势强度分析
+7. OBV能量潮分析
+8. 成交量分析
+9. K线形态识别（锤子/吊颈/吞没/十字星）
+10. 综合评分和操作建议
+11. 风险管理和仓位建议
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import numpy as np
 from fastapi import APIRouter, Depends
 
 from easy_tdx.web.convert import category_from_str, market_from_str
@@ -26,6 +30,156 @@ from easy_tdx.web.schemas import StockIdentifier
 
 router = APIRouter(tags=["diagnosis"])
 logger = logging.getLogger(__name__)
+
+
+# ── 辅助函数 ────────────────────────────────────────────────────────────────────
+
+def _detect_divergence(
+    prices: list[float],
+    indicators: list[float],
+    lookback: int = 60,
+) -> dict[str, Any]:
+    """检测价格与指标的顶背离/底背离。
+
+    顶背离：价格创新高，但指标未创新高 → 看跌信号
+    底背离：价格创新低，但指标未创新低 → 看涨信号
+    """
+    if len(prices) < lookback or len(indicators) < lookback:
+        return {"type": "none", "strength": 0, "detected": False}
+
+    recent_prices = prices[-lookback:]
+    recent_indicators = indicators[-lookback:]
+
+    # 找最近的两个局部高点（用于顶背离检测）
+    peaks_price = []
+    peaks_ind = []
+    troughs_price = []
+    troughs_ind = []
+
+    for i in range(2, len(recent_prices) - 2):
+        # 局部高点
+        if (recent_prices[i] > recent_prices[i-1] and recent_prices[i] > recent_prices[i-2]
+                and recent_prices[i] > recent_prices[i+1] and recent_prices[i] > recent_prices[i+2]):
+            peaks_price.append(i)
+            peaks_ind.append(i)
+        # 局部低点
+        if (recent_prices[i] < recent_prices[i-1] and recent_prices[i] < recent_prices[i-2]
+                and recent_prices[i] < recent_prices[i+1] and recent_prices[i] < recent_prices[i+2]):
+            troughs_price.append(i)
+            troughs_ind.append(i)
+
+    detected_type = "none"
+    strength = 0
+
+    # 顶背离：最近高点 > 前一个高点，但指标高点 < 前一个指标高点
+    if len(peaks_price) >= 2:
+        last_peak = peaks_price[-1]
+        prev_peak = peaks_price[-2]
+        price_higher = recent_prices[last_peak] > recent_prices[prev_peak]
+        ind_lower = recent_indicators[last_peak] < recent_indicators[prev_peak]
+        if price_higher and ind_lower:
+            detected_type = "bearish"
+            price_diff = (recent_prices[last_peak] - recent_prices[prev_peak]) / recent_prices[prev_peak]
+            ind_diff = (recent_indicators[prev_peak] - recent_indicators[last_peak]) / max(abs(recent_indicators[prev_peak]), 1e-10)
+            strength = min(1.0, abs(price_diff) * 10 + min(ind_diff, 0.5))
+
+    # 底背离：最近低点 < 前一个低点，但指标低点 > 前一个指标低点
+    elif len(troughs_price) >= 2:
+        last_trough = troughs_price[-1]
+        prev_trough = troughs_price[-2]
+        price_lower = recent_prices[last_trough] < recent_prices[prev_trough]
+        ind_higher = recent_indicators[last_trough] > recent_indicators[prev_trough]
+        if price_lower and ind_higher:
+            detected_type = "bullish"
+            price_diff = (recent_prices[prev_trough] - recent_prices[last_trough]) / max(abs(recent_prices[prev_trough]), 1e-10)
+            ind_diff = (recent_indicators[last_trough] - recent_indicators[prev_trough]) / max(abs(recent_indicators[prev_trough]), 1e-10)
+            strength = min(1.0, abs(price_diff) * 10 + min(ind_diff, 0.5))
+
+    return {
+        "type": detected_type,
+        "strength": round(strength, 2),
+        "detected": detected_type != "none",
+    }
+
+
+def _detect_candlestick_patterns(
+    opens: list[float],
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+) -> dict[str, Any]:
+    """识别K线形态，返回最近3根K线的形态信号。
+
+    形态：锤子线、上吊线、吞没形态、十字星、纺锤线
+    """
+    if len(closes) < 3:
+        return {"patterns": [], "signal": "none", "strength": 0}
+
+    patterns = []
+    lookback = min(5, len(closes))
+
+    for i in range(-lookback, 0):
+        o = opens[i]
+        h = highs[i]
+        l = lows[i]
+        c = closes[i]
+        body = abs(c - o)
+        range_val = h - l
+        upper_shadow = h - max(c, o)
+        lower_shadow = min(c, o) - l
+
+        if range_val == 0:
+            continue
+
+        body_pct = body / range_val
+        upper_pct = upper_shadow / range_val
+        lower_pct = lower_shadow / range_val
+        is_bullish = c > o
+        is_bearish = c < o
+
+        # 十字星：实体极小
+        if body_pct < 0.1:
+            patterns.append({"bar_index": i, "type": "doji", "bullish": is_bullish})
+        # 锤子线（看涨）：下影线长，实体小，上影线短，出现在下跌后
+        elif lower_pct > 0.6 and body_pct < 0.3 and upper_pct < 0.2 and is_bullish:
+            patterns.append({"bar_index": i, "type": "hammer", "bullish": True})
+        # 吊颈线（看跌）：锤子线形状但出现在上涨后
+        elif lower_pct > 0.6 and body_pct < 0.3 and upper_pct < 0.2 and is_bearish:
+            patterns.append({"bar_index": i, "type": "hanging_leg", "bullish": False})
+        # 吞没形态
+        elif i < -1:
+            prev_o = opens[i-1]
+            prev_c = closes[i-1]
+            prev_bearish = prev_c < prev_o
+            prev_bullish = prev_c > prev_o
+            if is_bullish and prev_bearish:
+                if c > prev_o and o < prev_c:
+                    patterns.append({"bar_index": i, "type": "bullish_engulfing", "bullish": True})
+            elif is_bearish and prev_bullish:
+                if c < prev_o and o > prev_c:
+                    patterns.append({"bar_index": i, "type": "bearish_engulfing", "bullish": False})
+
+    # 汇总信号
+    bullish_signals = sum(1 for p in patterns if p["bullish"])
+    bearish_signals = sum(1 for p in patterns if not p["bullish"])
+    total = len(patterns)
+
+    if total == 0:
+        signal, strength = "none", 0
+    elif bullish_signals > bearish_signals:
+        signal = "bullish"
+        strength = bullish_signals / total if total > 0 else 0
+    elif bearish_signals > bullish_signals:
+        signal = "bearish"
+        strength = bearish_signals / total if total > 0 else 0
+    else:
+        signal = "neutral"
+        strength = 0.5
+
+    return {"patterns": patterns, "signal": signal, "strength": round(strength, 2)}
+
+
+# ── 诊断主函数 ──────────────────────────────────────────────────────────────────
 
 
 @router.post("/diagnosis/analyze")
@@ -40,7 +194,7 @@ async def diagnose_stock(
     - code: 6位股票代码
     """
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-    from easy_tdx.MyTT import MACD, MA, BOLL, ATR, KDJ, RSI
+    from easy_tdx.MyTT import MACD, MA, BOLL, ATR, KDJ, RSI, DMI, OBV
 
     market = req.market
     code = req.code
@@ -196,7 +350,62 @@ async def diagnose_stock(
         volatility_label = "高波动"
         volatility_level = "high"
 
-    # ── 综合评分 ──────────────────────────────────────────────────────
+    # ── ADX 趋势强度分析 ─────────────────────────────────────────────
+    pdi, mdi, adx, adxr = DMI(closes, highs, lows, M1=14, M2=6)
+    latest_pdi = pdi[-1] if len(pdi) > 0 else 20
+    latest_mdi = mdi[-1] if len(mdi) > 0 else 20
+    latest_adx = adx[-1] if len(adx) > 0 else 25
+    latest_adxr = adxr[-1] if len(adxr) > 0 else 25
+    trend_direction = "up" if latest_pdi > latest_mdi else "down"
+    # ADX 强度分级：>50 极强，>25 有趋势，<20 无趋势/震荡
+    if latest_adx >= 50:
+        adx_strength = "极强"
+        adx_level = "very_strong"
+    elif latest_adx >= 40:
+        adx_strength = "强"
+        adx_level = "strong"
+    elif latest_adx >= 25:
+        adx_strength = "中等"
+        adx_level = "medium"
+    elif latest_adx >= 20:
+        adx_strength = "弱"
+        adx_level = "weak"
+    else:
+        adx_strength = "无趋势"
+        adx_level = "none"
+
+    # ── OBV 能量潮分析 ───────────────────────────────────────────────
+    obv_values = OBV(closes, volumes)
+    latest_obv = obv_values[-1] if len(obv_values) > 0 else 0
+    obv_ma20 = MA(obv_values, 20)[-1] if len(obv_values) >= 20 else latest_obv
+    obv_trending_up = bool(latest_obv > obv_ma20 and len(obv_values) >= 2 and obv_values[-1] > obv_values[-2])
+    obv_trending_down = bool(latest_obv < obv_ma20 and len(obv_values) >= 2 and obv_values[-1] < obv_values[-2])
+    obv_divergence_price = "bullish" if (latest_close > closes[-20] if len(closes) >= 20 else False) and obv_trending_down else (
+        "bearish" if (latest_close < closes[-20] if len(closes) >= 20 else False) and obv_trending_up else "none"
+    )
+
+    # ── 背离检测（MACD / KDJ / RSI） ─────────────────────────────────
+    macd_div = _detect_divergence(closes, macd_hist, lookback=60)
+    kdj_div = _detect_divergence(closes, j, lookback=60)
+    rsi_div = _detect_divergence(closes, [v for v in RSI(closes, N=14)], lookback=60)
+
+    # 综合背离信号：任意一个指标出现背离则标记
+    all_divs = [macd_div, kdj_div, rsi_div]
+    bullish_div_count = sum(1 for d in all_divs if d["type"] == "bullish")
+    bearish_div_count = sum(1 for d in all_divs if d["type"] == "bearish")
+    has_divergence = bullish_div_count > 0 or bearish_div_count > 0
+    dominant_div = "bullish" if bullish_div_count >= bearish_div_count and bullish_div_count > 0 else (
+        "bearish" if bearish_div_count > 0 else "none"
+    )
+    div_strength = max(d["strength"] for d in all_divs) if has_divergence else 0
+
+    # ── K线形态识别 ───────────────────────────────────────────────────
+    candle_result = _detect_candlestick_patterns(opens, highs, lows, closes)
+    candle_signal = candle_result["signal"]
+    candle_strength = candle_result["strength"]
+    recent_patterns = candle_result["patterns"][:3]  # 最近3个形态
+
+    # ── 综合评分（增强版） ────────────────────────────────────────────
     score = 50  # 基础分
 
     # 缠论信号
@@ -271,6 +480,37 @@ async def diagnose_stock(
     elif vol_contracting and abs(latest_close - opens[-1]) < latest_close * 0.01:
         score += 2  # 缩量横盘，观望
 
+    # ADX 趋势强度加成
+    if adx_level in ("strong", "very_strong"):
+        if trend_direction == "up":
+            score += 5  # 强上升趋势加成
+        else:
+            score -= 5  # 强下降趋势扣分
+    elif adx_level in ("none", "weak"):
+        score -= 3  # 无明确趋势，市场震荡，轻微扣分
+
+    # OBV 能量潮加成
+    if obv_trending_up and not macd_dead:
+        score += 4  # OBV上升确认上涨趋势
+    elif obv_trending_down and not macd_golden:
+        score -= 4  # OBV下降确认下跌趋势
+    if obv_divergence_price == "bullish":
+        score += 6  # OBV与价格底背离，强烈看涨信号
+    elif obv_divergence_price == "bearish":
+        score -= 6  # OBV与价格顶背离，强烈看跌信号
+
+    # 背离信号加成（重要！）
+    if dominant_div == "bullish":
+        score += int(8 * div_strength)  # 底背离加分，强度加权
+    elif dominant_div == "bearish":
+        score -= int(8 * div_strength)  # 顶背离扣分，强度加权
+
+    # K线形态加成
+    if candle_signal == "bullish":
+        score += int(5 * candle_strength)
+    elif candle_signal == "bearish":
+        score -= int(5 * candle_strength)
+
     score = max(0, min(100, score))
 
     # ── 操作建议 ──────────────────────────────────────────────────────
@@ -302,7 +542,8 @@ async def diagnose_stock(
 
     # ── 仓位建议 ──────────────────────────────────────────────────────
     position_recommendation = _calculate_position_recommendation(
-        score, volatility_level, atr_pct, ma_bullish, macd_golden
+        score, volatility_level, atr_pct, ma_bullish, macd_golden,
+        has_divergence=has_divergence, dominant_div=dominant_div, adx_level=adx_level,
     )
 
     # ── 返回结果 ──────────────────────────────────────────────────────
@@ -373,6 +614,35 @@ async def diagnose_stock(
             "oversold": rsi_oversold,
             "position": rsi_position,
         },
+        "adx": {
+            "pdi": round(latest_pdi, 2),
+            "mdi": round(latest_mdi, 2),
+            "adx": round(latest_adx, 2),
+            "adxr": round(latest_adxr, 2),
+            "trend_direction": trend_direction,
+            "strength": adx_strength,
+            "level": adx_level,
+        },
+        "obv": {
+            "value": round(latest_obv, 2),
+            "ma20": round(obv_ma20, 2),
+            "trending_up": obv_trending_up,
+            "trending_down": obv_trending_down,
+            "divergence_with_price": obv_divergence_price,
+        },
+        "divergence": {
+            "macd": macd_div,
+            "kdj": kdj_div,
+            "rsi": rsi_div,
+            "dominant": dominant_div,
+            "strength": round(div_strength, 2),
+            "has_divergence": has_divergence,
+        },
+        "candlestick": {
+            "signal": candle_signal,
+            "strength": round(candle_strength, 2),
+            "recent_patterns": recent_patterns,
+        },
         "risk": {
             "stop_loss_price": stop_loss_price,
             "take_profit_price": take_profit_price,
@@ -397,6 +667,9 @@ def _calculate_position_recommendation(
     atr_pct: float,
     ma_bullish: bool,
     macd_golden: bool,
+    has_divergence: bool = False,
+    dominant_div: str = "none",
+    adx_level: str = "medium",
 ) -> dict[str, Any]:
     """计算仓位建议。
 
@@ -448,7 +721,10 @@ def _calculate_position_recommendation(
     }
 
 
-def _get_position_notes(score: float, volatility: str, ma_bullish: bool, macd_golden: bool) -> str:
+def _get_position_notes(
+    score: float, volatility: str, ma_bullish: bool, macd_golden: bool,
+    has_divergence: bool = False, dominant_div: str = "none", adx_level: str = "medium",
+) -> str:
     """获取仓位建议说明。"""
     notes = []
     if score >= 75:
@@ -469,6 +745,14 @@ def _get_position_notes(score: float, volatility: str, ma_bullish: bool, macd_go
         notes.append("趋势确认，可增加仓位")
     elif not ma_bullish:
         notes.append("均线空头排列，谨慎操作")
+
+    if has_divergence and dominant_div == "bullish":
+        notes.append("检测到指标底背离，反弹信号增强")
+    elif has_divergence and dominant_div == "bearish":
+        notes.append("检测到指标顶背离，注意回调风险")
+
+    if adx_level in ("none", "weak"):
+        notes.append("ADX显示无明确趋势，市场震荡，控制仓位")
 
     return "；".join(notes)
 

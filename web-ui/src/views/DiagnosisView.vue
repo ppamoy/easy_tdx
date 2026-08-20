@@ -65,6 +65,18 @@ async function loadBars() {
   }
 }
 
+const PATTERN_LABELS: Record<string, string> = {
+  doji: '十字星',
+  hammer: '锤子线',
+  hanging_leg: '吊颈线',
+  bullish_engulfing: '阳吞没',
+  bearish_engulfing: '阴吞没',
+}
+
+function patternLabel(type: string): string {
+  return PATTERN_LABELS[type] || type
+}
+
 onMounted(() => {
   const q = router.currentRoute.value.query
   if (q.code) code.value = String(q.code)
@@ -260,6 +272,111 @@ onMounted(() => {
               <template v-if="diagnosis.rsi.overbought">RSI > 70，市场过热，注意回调风险</template>
               <template v-else-if="diagnosis.rsi.oversold">RSI < 30，市场超卖，可能有反弹机会</template>
               <template v-else>RSI 处于中性区间，趋势不明朗</template>
+            </div>
+          </div>
+        </div>
+
+        <!-- ADX 趋势强度 -->
+        <div class="metric-card">
+          <div class="card-title">📐 ADX 趋势强度</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">ADX</span><span class="kv-val">{{ diagnosis.adx.adx }}</span></div>
+            <div class="kv-row"><span class="kv-key">方向</span>
+              <span class="tag" :class="diagnosis.adx.trend_direction === 'up' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.adx.trend_direction === 'up' ? '📈 上升' : '📉 下降' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">强度</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.adx.level === 'very_strong', 'tag-orange': diagnosis.adx.level === 'medium', 'tag-blue': diagnosis.adx.level === 'none' }">
+                {{ diagnosis.adx.strength }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">+DI/-DI</span><span class="kv-val">{{ diagnosis.adx.pdi }} / {{ diagnosis.adx.mdi }}</span></div>
+            <div class="vol-tip">
+              <template v-if="diagnosis.adx.level === 'none' || diagnosis.adx.level === 'weak'">ADX 无趋势信号，市场震荡，不宜追涨杀跌</template>
+              <template v-else-if="diagnosis.adx.level === 'strong' || diagnosis.adx.level === 'very_strong'">趋势明确（{{ diagnosis.adx.strength }}），可顺势操作</template>
+              <template v-else>趋势中等，需谨慎判断方向</template>
+            </div>
+          </div>
+        </div>
+
+        <!-- OBV 能量潮 -->
+        <div class="metric-card">
+          <div class="card-title">💧 OBV 能量潮</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">OBV</span><span class="kv-val">{{ diagnosis.obv.value }}</span></div>
+            <div class="kv-row"><span class="kv-key">20日均线</span><span class="kv-val">{{ diagnosis.obv.ma20 }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">趋势</span>
+              <span class="tag" :class="diagnosis.obv.trending_up ? 'tag-green' : diagnosis.obv.trending_down ? 'tag-red' : 'tag-blue'">
+                {{ diagnosis.obv.trending_up ? '📈 资金流入' : diagnosis.obv.trending_down ? '📉 资金流出' : '→ 横盘' }}
+              </span>
+            </div>
+            <div v-if="diagnosis.obv.divergence_with_price !== 'none'" class="kv-row">
+              <span class="kv-key">量价背离</span>
+              <span class="tag" :class="diagnosis.obv.divergence_with_price === 'bullish' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.obv.divergence_with_price === 'bullish' ? '🟢 底背离（看涨）' : '🔴 顶背离（看跌）' }}
+              </span>
+            </div>
+            <div class="vol-tip">
+              <template v-if="diagnosis.obv.divergence_with_price === 'bullish'">OBV与价格底背离，资金暗中流入，潜在买点</template>
+              <template v-else-if="diagnosis.obv.divergence_with_price === 'bearish'">OBV与价格顶背离，资金暗中流出，注意风险</template>
+              <template v-else>量能跟随价格，趋势健康</template>
+            </div>
+          </div>
+        </div>
+
+        <!-- 背离检测 -->
+        <div class="metric-card" v-if="diagnosis.divergence.has_divergence">
+          <div class="card-title">⚠️ 指标背离</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">主导方向</span>
+              <span class="tag" :class="diagnosis.divergence.dominant === 'bullish' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.divergence.dominant === 'bullish' ? '🟢 底背离（看涨）' : '🔴 顶背离（看跌）' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">强度</span><span class="kv-val">{{ diagnosis.divergence.strength }}</span></div>
+            <div class="kv-row" v-if="diagnosis.divergence.macd.type !== 'none'">
+              <span class="kv-key">MACD</span>
+              <span class="tag" :class="diagnosis.divergence.macd.type === 'bullish' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.divergence.macd.type === 'bullish' ? '底背离' : '顶背离' }}
+              </span>
+            </div>
+            <div class="kv-row" v-if="diagnosis.divergence.kdj.type !== 'none'">
+              <span class="kv-key">KDJ</span>
+              <span class="tag" :class="diagnosis.divergence.kdj.type === 'bullish' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.divergence.kdj.type === 'bullish' ? '底背离' : '顶背离' }}
+              </span>
+            </div>
+            <div class="kv-row" v-if="diagnosis.divergence.rsi.type !== 'none'">
+              <span class="kv-key">RSI</span>
+              <span class="tag" :class="diagnosis.divergence.rsi.type === 'bullish' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.divergence.rsi.type === 'bullish' ? '底背离' : '顶背离' }}
+              </span>
+            </div>
+            <div class="vol-tip">
+              多指标同时背离时信号更强，建议结合缠论买卖点综合判断
+            </div>
+          </div>
+        </div>
+
+        <!-- K线形态 -->
+        <div class="metric-card" v-if="diagnosis.candlestick.signal !== 'none' && diagnosis.candlestick.signal !== 'neutral'">
+          <div class="card-title">🕯️ K线形态</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">综合信号</span>
+              <span class="tag" :class="diagnosis.candlestick.signal === 'bullish' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.candlestick.signal === 'bullish' ? '🟢 看涨形态' : '🔴 看跌形态' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">强度</span><span class="kv-val">{{ diagnosis.candlestick.strength }}</span></div>
+            <div v-for="p in diagnosis.candlestick.recent_patterns" :key="p.bar_index" class="kv-row">
+              <span class="kv-key">{{ patternLabel(p.type) }}</span>
+              <span class="tag" :class="p.bullish ? 'tag-green' : 'tag-red'">
+                {{ p.bullish ? '看涨' : '看跌' }}
+              </span>
             </div>
           </div>
         </div>

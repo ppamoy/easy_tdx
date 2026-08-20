@@ -429,6 +429,39 @@ export interface DiagnosisRSI {
   position: '极强超买' | '超买' | '中性' | '超卖' | '极强超卖'
 }
 
+export interface DiagnosisADX {
+  pdi: number
+  mdi: number
+  adx: number
+  adxr: number
+  trend_direction: 'up' | 'down'
+  strength: string
+  level: 'very_strong' | 'strong' | 'medium' | 'weak' | 'none'
+}
+
+export interface DiagnosisOBV {
+  value: number
+  ma20: number
+  trending_up: boolean
+  trending_down: boolean
+  divergence_with_price: 'bullish' | 'bearish' | 'none'
+}
+
+export interface DiagnosisDivergence {
+  macd: { type: string; strength: number; detected: boolean }
+  kdj: { type: string; strength: number; detected: boolean }
+  rsi: { type: string; strength: number; detected: boolean }
+  dominant: 'bullish' | 'bearish' | 'none'
+  strength: number
+  has_divergence: boolean
+}
+
+export interface DiagnosisCandlestick {
+  signal: 'bullish' | 'bearish' | 'neutral' | 'none'
+  strength: number
+  recent_patterns: Array<{ bar_index: number; type: string; bullish: boolean }>
+}
+
 export interface DiagnosisPositionSuggestion {
   position_pct: number
   suggestion: string
@@ -468,6 +501,10 @@ export interface DiagnosisResult {
   volume: DiagnosisVolume
   kdj: DiagnosisKDJ
   rsi: DiagnosisRSI
+  adx: DiagnosisADX
+  obv: DiagnosisOBV
+  divergence: DiagnosisDivergence
+  candlestick: DiagnosisCandlestick
   risk: DiagnosisRisk
   position_suggestion: DiagnosisPositionSuggestion
 }
