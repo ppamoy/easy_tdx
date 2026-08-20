@@ -31,6 +31,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
         <RouterLink to="/strategies" active-class="active">策略库</RouterLink>
         <RouterLink to="/settings" active-class="active">服务器设置</RouterLink>
         <RouterLink to="/monitor" active-class="active">信号监控</RouterLink>
+        <RouterLink to="/diagnosis" active-class="active">技术诊断</RouterLink>
       </nav>
     </header>
     <main class="app-main">

@@ -3,6 +3,7 @@
 // 功能：选择历史日期 → 长赢模型选股 → 缠论买卖点回测
 
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
 import ChanlunChart from '../components/ChanlunChart.vue'
 import EquityChart from '../components/EquityChart.vue'
@@ -10,6 +11,7 @@ import { formatError } from '../api'
 import type { Bar } from '../types'
 
 // ── 状态变量 ────────────────────────────────────────────────────────────
+const router = useRouter()
 const market = ref<'SZ' | 'SH'>('SZ')
 const selectDate = ref('')
 const scanning = ref(false)
@@ -137,6 +139,11 @@ function getActionExplanation(stock: StockResult): string {
     return `有${latest.type}信号但分类不明确，建议持有观察，等待更明确的趋势确认`
   }
   return '暂无明确信号'
+}
+
+// ── 跳转到技术诊断页 ─────────────────────────────────────────────────────
+function goToDiagnosis(stock: StockResult) {
+  router.push({ path: '/diagnosis', query: { code: stock.code, market: stock.market } })
 }
 
 // ── 扫描函数 ────────────────────────────────────────────────────────────
@@ -507,9 +514,17 @@ onMounted(() => {
           正在分析缠论结构…
         </div>
 
+        <!-- 快速诊断按钮 -->
+        <button
+          class="ghost backtest-btn"
+          @click="goToDiagnosis(selectedStock!)"
+        >
+          🔍 技术诊断
+        </button>
+
         <!-- 回测按钮 -->
-        <button 
-          class="primary backtest-btn" 
+        <button
+          class="primary backtest-btn"
           :disabled="backtestLoading || !bars.length"
           @click="runBacktest"
         >

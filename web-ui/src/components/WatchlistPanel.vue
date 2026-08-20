@@ -75,6 +75,12 @@ function goToBacktest(item: WatchItem) {
   isOpen.value = false
 }
 
+// 跳转到技术诊断页
+function goToDiagnosis(item: WatchItem) {
+  router.push({ path: '/diagnosis', query: { code: item.code, market: item.market } })
+  isOpen.value = false
+}
+
 onMounted(loadWatchlist)
 </script>
 
@@ -124,7 +130,8 @@ onMounted(loadWatchlist)
             <span v-if="item.category" class="item-cat">{{ item.category }}</span>
           </div>
           <div class="item-actions">
-            <button class="ghost tiny" @click="goToChanlun(item)">分析</button>
+            <button class="ghost tiny" @click="goToChanlun(item)">缠论</button>
+            <button class="ghost tiny" @click="goToDiagnosis(item)">诊断</button>
             <button class="ghost tiny" @click="goToBacktest(item)">回测</button>
             <button class="remove-btn" @click="removeFromWatch(i)">×</button>
           </div>
