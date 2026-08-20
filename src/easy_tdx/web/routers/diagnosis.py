@@ -63,7 +63,7 @@ async def diagnose_stock(
     highs = df["high"].tolist()
     lows = df["low"].tolist()
     opens = df["open"].tolist()
-    dates = [str(d)[:10] for d in df["datetime"].tolist()] if "datetime" in df.columns else []
+    dates = [str(d)[:10] for d in df["date"].tolist()] if "date" in df.columns else []
     latest_close = closes[-1]
     latest_date = dates[-1] if dates else ""
 
@@ -72,21 +72,18 @@ async def diagnose_stock(
     result = analyser.process_klines(df)
 
     # ── MACD分析 ──────────────────────────────────────────────────────
-    dif, dea, macd_hist = MACD(closes, fast=12, slow=26, signal=9)
+    dif, dea, macd_hist = MACD(closes, SHORT=12, LONG=26, M=9)
     latest_dif = dif[-1] if len(dif) > 0 else 0
     latest_dea = dea[-1] if len(dea) > 0 else 0
     latest_macd = macd_hist[-1] if len(macd_hist) > 0 else 0
 
     # MACD状态
-    macd_golden = False  # DIF上穿DEA
-    macd_dead = False    # DIF下穿DEA
-    if len(dif) >= 2 and len(dea) >= 2:
-        macd_golden = dif[-2] <= dea[-2] and dif[-1] > dea[-1]
-        macd_dead = dif[-2] >= dea[-2] and dif[-1] < dea[-1]
+    macd_golden = bool(dif[-2] <= dea[-2] and dif[-1] > dea[-1]) if len(dif) >= 2 and len(dea) >= 2 else False
+    macd_dead = bool(dif[-2] >= dea[-2] and dif[-1] < dea[-1]) if len(dif) >= 2 and len(dea) >= 2 else False
 
-    macd_above_zero = latest_dif > 0 and latest_dea > 0
-    macd_trending_up = latest_macd > 0 and (len(macd_hist) >= 2 and macd_hist[-1] > macd_hist[-2])
-    macd_trending_down = latest_macd < 0 and (len(macd_hist) >= 2 and macd_hist[-1] < macd_hist[-2])
+    macd_above_zero = bool(latest_dif > 0 and latest_dea > 0)
+    macd_trending_up = bool(latest_macd > 0 and len(macd_hist) >= 2 and macd_hist[-1] > macd_hist[-2])
+    macd_trending_down = bool(latest_macd < 0 and len(macd_hist) >= 2 and macd_hist[-1] < macd_hist[-2])
 
     # ── BOLL分析 ──────────────────────────────────────────────────────
     boll_upper, boll_mid, boll_lower = BOLL(closes, N=20, P=2)
@@ -109,17 +106,17 @@ async def diagnose_stock(
     ma20 = MA(closes, 20)[-1] if len(closes) >= 20 else latest_close
     ma60 = MA(closes, 60)[-1] if len(closes) >= 60 else latest_close
 
-    ma_bullish = ma5 > ma10 > ma20  # 多头排列
-    ma_bearish = ma5 < ma10 < ma20  # 空头排列
-    price_above_ma20 = latest_close > ma20
-    price_above_ma60 = latest_close > ma60
+    ma_bullish = bool(ma5 > ma10 > ma20)  # 多头排列
+    ma_bearish = bool(ma5 < ma10 < ma20)  # 空头排列
+    price_above_ma20 = bool(latest_close > ma20)
+    price_above_ma60 = bool(latest_close > ma60)
 
     # ── 成交量分析 ────────────────────────────────────────────────────
     vol_ma5 = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else volumes[-1] if volumes else 0
     vol_ma20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else volumes[-1] if volumes else 0
     vol_ratio = vol_ma5 / vol_ma20 if vol_ma20 > 0 else 1.0
-    vol_expanding = vol_ratio > 1.2  # 放量
-    vol_contracting = vol_ratio < 0.8  # 缩量
+    vol_expanding = bool(vol_ratio > 1.2)  # 放量
+    vol_contracting = bool(vol_ratio < 0.8)  # 缩量
 
     # ── 综合评分 ──────────────────────────────────────────────────────
     score = 50  # 基础分

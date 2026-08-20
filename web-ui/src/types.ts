@@ -365,3 +365,64 @@ export interface ServerSwitchResult {
   host: string
   message: string
 }
+
+// ── 股票诊断 ─────────────────────────────────────────────────────────────
+
+export interface DiagnosisChanlun {
+  bi_count: number
+  zs_count: number
+  mmd_count: number
+  buy_1_count: number
+  sell_1_count: number
+  latest_mmd: { type: string | null; confidence: number | null; msg: string | null } | null
+}
+
+export interface DiagnosisMACD {
+  dif: number
+  dea: number
+  hist: number
+  golden_cross: boolean
+  dead_cross: boolean
+  above_zero: boolean
+  trending: 'up' | 'down' | 'flat'
+}
+
+export interface DiagnosisBOLL {
+  upper: number
+  mid: number
+  lower: number
+  width: number
+  percent_b: number
+  position: 'upper' | 'mid' | 'lower'
+}
+
+export interface DiagnosisMovingAverages {
+  ma5: number
+  ma10: number
+  ma20: number
+  ma60: number
+  bullish_arrangement: boolean
+  bearish_arrangement: boolean
+}
+
+export interface DiagnosisVolume {
+  ratio: number
+  expanding: boolean
+  contracting: boolean
+}
+
+export interface DiagnosisResult {
+  symbol: string
+  date: string
+  close: number
+  score: number
+  action: 'strong_buy' | 'buy' | 'hold' | 'sell' | 'strong_sell'
+  action_label: string
+  action_color: string
+  reason: string
+  chanlun: DiagnosisChanlun
+  macd: DiagnosisMACD
+  boll: DiagnosisBOLL
+  moving_averages: DiagnosisMovingAverages
+  volume: DiagnosisVolume
+}

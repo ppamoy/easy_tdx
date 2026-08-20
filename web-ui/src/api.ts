@@ -7,6 +7,7 @@ import type {
   BacktestResult,
   Bar,
   Category,
+  DiagnosisResult,
   MultiStrategyBacktestRequest,
   OptimizeAllBacktestRequest,
   OptimizeBacktestRequest,
@@ -297,4 +298,13 @@ export async function switchServerHost(host: string): Promise<ServerSwitchResult
   })
   if (!resp.ok) await throwError(resp)
   return (await resp.json()) as ServerSwitchResult
+}
+
+// ── 股票诊断 ──────────────────────────────────────────────────────────────
+
+/** 快速诊断单只股票技术面（GET，方便浏览器直接访问）。 */
+export async function fetchDiagnosis(market: string, code: string): Promise<DiagnosisResult> {
+  const resp = await fetch(`${BASE}/diagnosis/quick?market=${market}&code=${code}`)
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as DiagnosisResult
 }
