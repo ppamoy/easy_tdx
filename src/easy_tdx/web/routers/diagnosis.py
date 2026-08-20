@@ -6,8 +6,11 @@
 1. 缠论结构分析（笔/中枢/买卖点）
 2. BOLL位置分析
 3. MACD状态分析
-4. 成交量分析
-5. 综合评分和操作建议
+4. KDJ状态分析
+5. RSI状态分析
+6. 成交量分析
+7. 综合评分和操作建议
+8. 风险管理和仓位建议
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ async def diagnose_stock(
     - code: 6位股票代码
     """
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-    from easy_tdx.MyTT import MACD, MA, BOLL, ATR
+    from easy_tdx.MyTT import MACD, MA, BOLL, ATR, KDJ, RSI
 
     market = req.market
     code = req.code
@@ -84,6 +87,47 @@ async def diagnose_stock(
     macd_above_zero = bool(latest_dif > 0 and latest_dea > 0)
     macd_trending_up = bool(latest_macd > 0 and len(macd_hist) >= 2 and macd_hist[-1] > macd_hist[-2])
     macd_trending_down = bool(latest_macd < 0 and len(macd_hist) >= 2 and macd_hist[-1] < macd_hist[-2])
+
+    # ── KDJ分析 ──────────────────────────────────────────────────────
+    k, d, j = KDJ(closes, highs, lows, N=9, M1=3, M2=3)
+    latest_k = k[-1] if len(k) > 0 else 50
+    latest_d = d[-1] if len(d) > 0 else 50
+    latest_j = j[-1] if len(j) > 0 else 50
+
+    # KDJ状态
+    kdj_golden = bool(k[-2] <= d[-2] and k[-1] > d[-1]) if len(k) >= 2 and len(d) >= 2 else False
+    kdj_dead = bool(k[-2] >= d[-2] and k[-1] < d[-1]) if len(k) >= 2 and len(d) >= 2 else False
+    kdj_overbought = bool(latest_k > 80 or latest_j > 100)
+    kdj_oversold = bool(latest_k < 20 or latest_j < 0)
+
+    # KDJ位置
+    if latest_k > 80:
+        kdj_position = "超买"
+    elif latest_k < 20:
+        kdj_position = "超卖"
+    else:
+        kdj_position = "中性"
+
+    # ── RSI分析 ──────────────────────────────────────────────────────
+    rsi_values = RSI(closes, N=14)
+    latest_rsi = rsi_values[-1] if len(rsi_values) > 0 else 50
+
+    # RSI状态
+    rsi_overbought = bool(latest_rsi > 70)
+    rsi_oversold = bool(latest_rsi < 30)
+    rsi_divergence = False  # 简化：实际需比较价格和RSI走势
+
+    # RSI位置
+    if latest_rsi > 80:
+        rsi_position = "极强超买"
+    elif latest_rsi > 70:
+        rsi_position = "超买"
+    elif latest_rsi < 20:
+        rsi_position = "极强超卖"
+    elif latest_rsi < 30:
+        rsi_position = "超卖"
+    else:
+        rsi_position = "中性"
 
     # ── BOLL分析 ──────────────────────────────────────────────────────
     boll_upper, boll_mid, boll_lower = BOLL(closes, N=20, P=2)
@@ -189,6 +233,26 @@ async def diagnose_stock(
     elif boll_position == "upper":
         score -= 8
 
+    # KDJ
+    if kdj_golden:
+        score += 8
+    elif kdj_dead:
+        score -= 8
+    if kdj_oversold:
+        score += 6
+    elif kdj_overbought:
+        score -= 6
+
+    # RSI
+    if latest_rsi < 30:
+        score += 8
+    elif latest_rsi > 70:
+        score -= 8
+    elif latest_rsi < 40:
+        score += 3
+    elif latest_rsi > 60:
+        score -= 3
+
     # 均线
     if ma_bullish:
         score += 10
@@ -235,6 +299,11 @@ async def diagnose_stock(
         action_label = "强烈卖出"
         action_color = "#ef4444"
         reason = f"多指标共振看跌，建议清仓回避。止损位 {stop_loss_price} 元，远离多头趋势"
+
+    # ── 仓位建议 ──────────────────────────────────────────────────────
+    position_recommendation = _calculate_position_recommendation(
+        score, volatility_level, atr_pct, ma_bullish, macd_golden
+    )
 
     # ── 返回结果 ──────────────────────────────────────────────────────
     return {
@@ -288,6 +357,22 @@ async def diagnose_stock(
             "expanding": vol_expanding,
             "contracting": vol_contracting,
         },
+        "kdj": {
+            "k": round(latest_k, 2),
+            "d": round(latest_d, 2),
+            "j": round(latest_j, 2),
+            "golden_cross": kdj_golden,
+            "dead_cross": kdj_dead,
+            "overbought": kdj_overbought,
+            "oversold": kdj_oversold,
+            "position": kdj_position,
+        },
+        "rsi": {
+            "value": round(latest_rsi, 2),
+            "overbought": rsi_overbought,
+            "oversold": rsi_oversold,
+            "position": rsi_position,
+        },
         "risk": {
             "stop_loss_price": stop_loss_price,
             "take_profit_price": take_profit_price,
@@ -302,7 +387,90 @@ async def diagnose_stock(
             "support_2": round(support_2, 2),
             "resistance_2": round(resistance_2, 2),
         },
+        "position_suggestion": position_recommendation,
     }
+
+
+def _calculate_position_recommendation(
+    score: float,
+    volatility: str,
+    atr_pct: float,
+    ma_bullish: bool,
+    macd_golden: bool,
+) -> dict[str, Any]:
+    """计算仓位建议。
+
+    根据综合评分、波动率、均线状态和MACD状态给出仓位建议。
+    """
+    # 基础仓位建议
+    if score >= 75:
+        base_position = 80
+    elif score >= 60:
+        base_position = 60
+    elif score >= 45:
+        base_position = 40
+    elif score >= 30:
+        base_position = 20
+    else:
+        base_position = 0
+
+    # 波动率调整
+    if volatility == "high":
+        base_position = int(base_position * 0.6)
+    elif volatility == "low":
+        base_position = min(100, int(base_position * 1.2))
+
+    # 趋势确认调整
+    if ma_bullish and macd_golden and score >= 60:
+        base_position = min(100, base_position + 10)
+    elif not ma_bullish and score >= 60:
+        base_position = max(0, base_position - 10)
+
+    # 建议标签
+    if base_position >= 70:
+        suggestion = "重仓"
+        risk_level = "中高风险"
+    elif base_position >= 40:
+        suggestion = "半仓"
+        risk_level = "中等风险"
+    elif base_position >= 20:
+        suggestion = "轻仓"
+        risk_level = "低风险"
+    else:
+        suggestion = "观望"
+        risk_level = "高风险"
+
+    return {
+        "position_pct": base_position,
+        "suggestion": suggestion,
+        "risk_level": risk_level,
+        "notes": _get_position_notes(score, volatility, ma_bullish, macd_golden),
+    }
+
+
+def _get_position_notes(score: float, volatility: str, ma_bullish: bool, macd_golden: bool) -> str:
+    """获取仓位建议说明。"""
+    notes = []
+    if score >= 75:
+        notes.append("多指标共振看涨，可考虑重仓")
+    elif score >= 60:
+        notes.append("技术面偏多，建议半仓以上")
+    elif score >= 45:
+        notes.append("方向不明确，建议轻仓或观望")
+    else:
+        notes.append("技术面偏空，建议空仓观望")
+
+    if volatility == "high":
+        notes.append("高波动股票，建议降低仓位")
+    elif volatility == "low":
+        notes.append("低波动股票，可适当加仓")
+
+    if ma_bullish and macd_golden:
+        notes.append("趋势确认，可增加仓位")
+    elif not ma_bullish:
+        notes.append("均线空头排列，谨慎操作")
+
+    return "；".join(notes)
 
 
 @router.get("/diagnosis/quick")

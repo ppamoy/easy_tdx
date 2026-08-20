@@ -411,6 +411,31 @@ export interface DiagnosisVolume {
   contracting: boolean
 }
 
+export interface DiagnosisKDJ {
+  k: number
+  d: number
+  j: number
+  golden_cross: boolean
+  dead_cross: boolean
+  overbought: boolean
+  oversold: boolean
+  position: '超买' | '超卖' | '中性'
+}
+
+export interface DiagnosisRSI {
+  value: number
+  overbought: boolean
+  oversold: boolean
+  position: '极强超买' | '超买' | '中性' | '超卖' | '极强超卖'
+}
+
+export interface DiagnosisPositionSuggestion {
+  position_pct: number
+  suggestion: string
+  risk_level: string
+  notes: string
+}
+
 export interface DiagnosisRisk {
   stop_loss_price: number
   take_profit_price: number
@@ -441,5 +466,8 @@ export interface DiagnosisResult {
   boll: DiagnosisBOLL
   moving_averages: DiagnosisMovingAverages
   volume: DiagnosisVolume
+  kdj: DiagnosisKDJ
+  rsi: DiagnosisRSI
   risk: DiagnosisRisk
+  position_suggestion: DiagnosisPositionSuggestion
 }

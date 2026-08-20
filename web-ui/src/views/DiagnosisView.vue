@@ -220,6 +220,70 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- KDJ -->
+        <div class="metric-card">
+          <div class="card-title">📈 KDJ 指标</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">K值</span><span class="kv-val">{{ diagnosis.kdj.k }}</span></div>
+            <div class="kv-row"><span class="kv-key">D值</span><span class="kv-val">{{ diagnosis.kdj.d }}</span></div>
+            <div class="kv-row"><span class="kv-key">J值</span><span class="kv-val" :class="diagnosis.kdj.j > 100 ? 'sell' : diagnosis.kdj.j < 0 ? 'buy' : ''">{{ diagnosis.kdj.j }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">状态</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.kdj.golden_cross, 'tag-red': diagnosis.kdj.dead_cross }">
+                {{ diagnosis.kdj.golden_cross ? '金叉 ✅' : diagnosis.kdj.dead_cross ? '死叉 ⚠️' : diagnosis.kdj.position }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">区域</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.kdj.oversold, 'tag-red': diagnosis.kdj.overbought }">
+                {{ diagnosis.kdj.oversold ? '🟢 超卖区' : diagnosis.kdj.overbought ? '🔴 超买区' : '🟡 中性区' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- RSI -->
+        <div class="metric-card">
+          <div class="card-title">📊 RSI 指标</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">RSI(14)</span>
+              <span class="kv-val" :class="diagnosis.rsi.overbought ? 'sell' : diagnosis.rsi.oversold ? 'buy' : ''">{{ diagnosis.rsi.value }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">状态</span>
+              <span class="tag" :class="{ 'tag-red': diagnosis.rsi.overbought, 'tag-green': diagnosis.rsi.oversold }">
+                {{ diagnosis.rsi.position }}
+              </span>
+            </div>
+            <div class="vol-tip">
+              <template v-if="diagnosis.rsi.overbought">RSI > 70，市场过热，注意回调风险</template>
+              <template v-else-if="diagnosis.rsi.oversold">RSI < 30，市场超卖，可能有反弹机会</template>
+              <template v-else>RSI 处于中性区间，趋势不明朗</template>
+            </div>
+          </div>
+        </div>
+
+        <!-- 仓位建议 -->
+        <div class="metric-card position-card">
+          <div class="card-title">💼 仓位建议</div>
+          <div class="card-body">
+            <div class="position-main">
+              <div class="position-pct" :style="{ color: diagnosis.position_suggestion.position_pct >= 60 ? '#22c55e' : diagnosis.position_suggestion.position_pct >= 40 ? '#f59e0b' : '#ef4444' }">
+                {{ diagnosis.position_suggestion.position_pct }}%
+              </div>
+              <div class="position-label">{{ diagnosis.position_suggestion.suggestion }}</div>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">风险等级</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.position_suggestion.risk_level === '低风险', 'tag-orange': diagnosis.position_suggestion.risk_level === '中等风险', 'tag-red': diagnosis.position_suggestion.risk_level === '高风险' }">
+                {{ diagnosis.position_suggestion.risk_level }}
+              </span>
+            </div>
+            <div class="position-notes">{{ diagnosis.position_suggestion.notes }}</div>
+          </div>
+        </div>
+
         <!-- 止损止盈 & 风险 -->
         <div class="metric-card risk-card">
           <div class="card-title">🛡️ 风控建议</div>
@@ -498,7 +562,31 @@ onMounted(() => {
   margin-left: 4px;
 }
 
-/* 决策建议卡 */
+/* 仓位建议卡 */
+.position-card .position-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.position-card .position-pct {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+.position-card .position-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+}
+.position-card .position-notes {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  margin-top: 4px;
+}
 .tip-card .tip-summary {
   font-size: 13px;
   color: var(--text);
