@@ -411,6 +411,22 @@ export interface DiagnosisVolume {
   contracting: boolean
 }
 
+export interface DiagnosisRisk {
+  stop_loss_price: number
+  take_profit_price: number
+  stop_loss_pct: number
+  take_profit_pct: number
+  risk_reward_ratio: number
+  atr: number
+  atr_pct: number
+  volatility_label: string
+  volatility_level: 'low' | 'medium' | 'high'
+  support_1: number
+  resistance_1: number
+  support_2: number
+  resistance_2: number
+}
+
 export interface DiagnosisResult {
   symbol: string
   date: string
@@ -425,4 +441,5 @@ export interface DiagnosisResult {
   boll: DiagnosisBOLL
   moving_averages: DiagnosisMovingAverages
   volume: DiagnosisVolume
+  risk: DiagnosisRisk
 }

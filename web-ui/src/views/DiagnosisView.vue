@@ -220,6 +220,33 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- 止损止盈 & 风险 -->
+        <div class="metric-card risk-card">
+          <div class="card-title">🛡️ 风控建议</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">波动率</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.risk.volatility_level === 'low', 'tag-orange': diagnosis.risk.volatility_level === 'medium', 'tag-red': diagnosis.risk.volatility_level === 'high' }">
+                {{ diagnosis.risk.volatility_label }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">ATR(14)</span><span class="kv-val">{{ diagnosis.risk.atr }}</span></div>
+            <div class="divider"></div>
+            <div class="kv-row highlight-row">
+              <span class="kv-key">🛑 止损价</span>
+              <span class="kv-val sell">{{ diagnosis.risk.stop_loss_price }} <small>(-{{ diagnosis.risk.stop_loss_pct }}%)</small></span>
+            </div>
+            <div class="kv-row highlight-row">
+              <span class="kv-key">🎯 止盈价</span>
+              <span class="kv-val buy">{{ diagnosis.risk.take_profit_price }} <small>(+{{ diagnosis.risk.take_profit_pct }}%)</small></span>
+            </div>
+            <div class="kv-row"><span class="kv-key">风险收益比</span><span class="kv-val">1 : {{ diagnosis.risk.risk_reward_ratio }}</span></div>
+            <div class="divider"></div>
+            <div class="kv-row"><span class="kv-key">支撑位 S1</span><span class="kv-val">{{ diagnosis.risk.support_1 }}</span></div>
+            <div class="kv-row"><span class="kv-key">阻力位 R1</span><span class="kv-val">{{ diagnosis.risk.resistance_1 }}</span></div>
+          </div>
+        </div>
+
         <!-- 操作建议汇总 -->
         <div class="metric-card tip-card">
           <div class="card-title">💡 决策建议</div>
@@ -454,6 +481,21 @@ onMounted(() => {
   padding-top: 4px;
   border-top: 1px dashed var(--border);
   margin-top: 2px;
+}
+
+/* 风控卡片 */
+.risk-card .divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.risk-card .highlight-row {
+  font-size: 14px;
+}
+.risk-card .kv-val small {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 4px;
 }
 
 /* 决策建议卡 */

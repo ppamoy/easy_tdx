@@ -37,7 +37,7 @@ async def diagnose_stock(
     - code: 6位股票代码
     """
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-    from easy_tdx.MyTT import MACD, MA, BOLL
+    from easy_tdx.MyTT import MACD, MA, BOLL, ATR
 
     market = req.market
     code = req.code
@@ -118,6 +118,40 @@ async def diagnose_stock(
     vol_expanding = bool(vol_ratio > 1.2)  # 放量
     vol_contracting = bool(vol_ratio < 0.8)  # 缩量
 
+    # ── ATR & 止损止盈价位 ────────────────────────────────────────────
+    atr_values = ATR(closes, highs, lows, N=14)
+    latest_atr = atr_values[-1] if len(atr_values) > 0 else latest_close * 0.02
+    atr_pct = (latest_atr / latest_close * 100) if latest_close > 0 else 0
+
+    # 支撑阻力位（基于近期高低点）
+    lookback = 60
+    recent_highs = highs[-lookback:]
+    recent_lows = lows[-lookback:]
+    resistance_1 = max(recent_highs) if recent_highs else latest_close
+    support_1 = min(recent_lows) if recent_lows else latest_close
+    resistance_2 = max(recent_highs[-30:]) if len(recent_highs) >= 30 else resistance_1
+    support_2 = min(recent_lows[-30:]) if len(recent_lows) >= 30 else support_1
+
+    # 动态止损止盈（基于ATR倍数）
+    stop_loss_price = round(latest_close - latest_atr * 1.5, 2)
+    take_profit_price = round(latest_close + latest_atr * 3.0, 2)
+    stop_loss_pct = round((latest_close - stop_loss_price) / latest_close * 100, 2)
+    take_profit_pct = round((take_profit_price - latest_close) / latest_close * 100, 2)
+
+    # 风险收益比
+    risk_reward_ratio = round(3.0 / 1.5, 1) if stop_loss_price > 0 else 0
+
+    # 波动率评级
+    if atr_pct < 1.5:
+        volatility_label = "低波动"
+        volatility_level = "low"
+    elif atr_pct < 3.0:
+        volatility_label = "中等波动"
+        volatility_level = "medium"
+    else:
+        volatility_label = "高波动"
+        volatility_level = "high"
+
     # ── 综合评分 ──────────────────────────────────────────────────────
     score = 50  # 基础分
 
@@ -180,27 +214,27 @@ async def diagnose_stock(
         action = "strong_buy"
         action_label = "强烈买入"
         action_color = "#22c55e"
-        reason = "多指标共振看涨：缠论买点确认 + MACD金叉 + 均线多头排列"
+        reason = f"多指标共振看涨：缠论买点确认 + MACD金叉 + 均线多头排列。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
     elif score >= 60:
         action = "buy"
         action_label = "买入"
         action_color = "#4ade80"
-        reason = "技术面偏多，可考虑分批建仓"
+        reason = f"技术面偏多，可考虑分批建仓。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
     elif score >= 45:
         action = "hold"
         action_label = "持有观察"
         action_color = "#f59e0b"
-        reason = "方向不明确，建议观望或持有现有仓位"
+        reason = f"方向不明确，建议观望。支撑位 {support_1} 元，阻力位 {resistance_1} 元，等待突破方向"
     elif score >= 30:
         action = "sell"
         action_label = "卖出"
         action_color = "#f97316"
-        reason = "技术面偏空，建议减仓或止损"
+        reason = f"技术面偏空，建议减仓。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
     else:
         action = "strong_sell"
         action_label = "强烈卖出"
         action_color = "#ef4444"
-        reason = "多指标共振看跌，建议清仓回避"
+        reason = f"多指标共振看跌，建议清仓回避。止损位 {stop_loss_price} 元，远离多头趋势"
 
     # ── 返回结果 ──────────────────────────────────────────────────────
     return {
@@ -253,6 +287,20 @@ async def diagnose_stock(
             "ratio": round(vol_ratio, 2),
             "expanding": vol_expanding,
             "contracting": vol_contracting,
+        },
+        "risk": {
+            "stop_loss_price": stop_loss_price,
+            "take_profit_price": take_profit_price,
+            "stop_loss_pct": stop_loss_pct,
+            "take_profit_pct": take_profit_pct,
+            "risk_reward_ratio": risk_reward_ratio,
+            "atr": round(latest_atr, 2),
+            "atr_pct": round(atr_pct, 2),
+            "volatility_label": volatility_label,
+            "support_1": round(support_1, 2),
+            "resistance_1": round(resistance_1, 2),
+            "support_2": round(support_2, 2),
+            "resistance_2": round(resistance_2, 2),
         },
     }
 
