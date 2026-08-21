@@ -21,15 +21,15 @@ class TestConfidenceScoring:
 
         # 1买基础置信度应最高
         mmd_1buy = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰(强度=strong)")
-        assert _calc_confidence(mmd_1buy, 0.0) >= 0.85
+        assert _calc_confidence(mmd_1buy, 0.0) >= 0.88
 
         # 1卖基础置信度
         mmd_1sell = MMD(mmd_type=MMDType.SELL_1, msg="1卖: 顶背驰")
-        assert _calc_confidence(mmd_1sell, 0.0) >= 0.90
+        assert _calc_confidence(mmd_1sell, 0.0) >= 0.92
 
-        # 3买基础置信度较低
+        # 3买基础置信度（V4提高至0.72）
         mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买: 突破确认")
-        assert _calc_confidence(mmd_3buy, 0.0) < 0.60
+        assert _calc_confidence(mmd_3buy, 0.0) >= 0.70
 
     def test_confidence_beichi_strength_bonus(self):
         """测试背驰强度对置信度的影响。"""

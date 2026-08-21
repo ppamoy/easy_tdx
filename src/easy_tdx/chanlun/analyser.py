@@ -136,6 +136,11 @@ class ChanlunResult:
                     "date": self._fmt_dt(mmd.bi.end.k.date) if mmd.bi else None,
                     "msg": mmd.msg,
                     "confidence": round(mmd.confidence, 2),
+                    "quality": {
+                        "grade": mmd.quality.grade if mmd.quality else None,
+                        "score": mmd.quality.score if mmd.quality else None,
+                        "reasons": mmd.quality.reasons if mmd.quality else None,
+                    } if mmd.quality else None,
                 }
                 for mmd in self.mmds
             ],
@@ -247,7 +252,7 @@ class ChanlunAnalyser:
         # Step 8: 买卖点识别（传入收盘价用于MACD力度计算）
         # 提取成交量序列
         volumes = [k.amount for k in klines]
-        mmds = find_mmds(bis, zss, closes=closes, config=self._config, volumes=volumes)
+        mmds = find_mmds(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd)
         self._result.mmds = mmds
 
         # Step 9: 背驰判断（传入收盘价用于MACD面积计算）
