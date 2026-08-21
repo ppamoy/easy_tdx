@@ -326,6 +326,30 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- Fibonacci 回撤位 -->
+        <div class="metric-card">
+          <div class="card-title">🌀 Fibonacci 回撤位 (120日)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">当前位置</span>
+              <span class="kv-val" :class="diagnosis.fibonacci.position < 0.2 ? 'buy' : diagnosis.fibonacci.position > 0.8 ? 'sell' : ''">
+                {{ (diagnosis.fibonacci.position * 100).toFixed(1) }}%
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">周期高点</span><span class="kv-val">{{ diagnosis.fibonacci.period_high }}</span></div>
+            <div class="kv-row"><span class="kv-key">周期低点</span><span class="kv-val">{{ diagnosis.fibonacci.period_low }}</span></div>
+            <div v-for="(val, key) in diagnosis.fibonacci.levels" :key="key" class="kv-row">
+              <span class="kv-key">{{ key }}</span>
+              <span class="kv-val">{{ val }}</span>
+            </div>
+            <div class="vol-tip">
+              <template v-if="diagnosis.fibonacci.position < 0.2">价格接近周期低点，斐波那契支撑强劲</template>
+              <template v-else-if="diagnosis.fibonacci.position > 0.8">价格接近周期高点，注意回调风险</template>
+              <template v-else>价格在回撤位中间区域，等待方向选择</template>
+            </div>
+          </div>
+        </div>
+
         <!-- 背离检测 -->
         <div class="metric-card" v-if="diagnosis.divergence.has_divergence">
           <div class="card-title">⚠️ 指标背离</div>

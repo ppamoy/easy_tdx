@@ -469,6 +469,13 @@ export interface DiagnosisPositionSuggestion {
   notes: string
 }
 
+export interface DiagnosisFibonacci {
+  levels: Record<string, number>
+  position: number
+  period_high: number | null
+  period_low: number | null
+}
+
 export interface DiagnosisRisk {
   stop_loss_price: number
   take_profit_price: number
@@ -507,4 +514,5 @@ export interface DiagnosisResult {
   candlestick: DiagnosisCandlestick
   risk: DiagnosisRisk
   position_suggestion: DiagnosisPositionSuggestion
+  fibonacci: DiagnosisFibonacci
 }

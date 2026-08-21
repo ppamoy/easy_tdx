@@ -252,7 +252,10 @@ class ChanlunAnalyser:
         # Step 8: 买卖点识别（传入收盘价用于MACD力度计算）
         # 提取成交量序列
         volumes = [k.amount for k in klines]
-        mmds = find_mmds(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd)
+        # V5: 计算波动率用于动态阈值
+        from easy_tdx.chanlun.mmd import _calc_atr_volatility
+        volatility = _calc_atr_volatility(closes) if closes else None
+        mmds = find_mmds(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd, volatility=volatility)
         self._result.mmds = mmds
 
         # Step 9: 背驰判断（传入收盘价用于MACD面积计算）

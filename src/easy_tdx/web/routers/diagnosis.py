@@ -309,6 +309,26 @@ async def diagnose_stock(
     price_above_ma20 = bool(latest_close > ma20)
     price_above_ma60 = bool(latest_close > ma60)
 
+    # ── Fibonacci 支撑阻力位 ───────────────────────────────────────────
+    fib_lookback = 120
+    if len(highs) >= fib_lookback and len(lows) >= fib_lookback:
+        period_high = max(highs[-fib_lookback:])
+        period_low = min(lows[-fib_lookback:])
+        fib_range = period_high - period_low
+        fib_levels: dict[str, float] = {}
+        if fib_range > 0:
+            fib_ratios = [0.236, 0.382, 0.5, 0.618, 0.786]
+            for r in fib_ratios:
+                fib_levels[f"fib_{r}"] = round(period_high - fib_range * r, 2)
+            fib_levels["resistance"] = round(period_high, 2)
+            fib_levels["support"] = round(period_low, 2)
+            fib_position = (latest_close - period_low) / fib_range if fib_range > 0 else 0.5
+        else:
+            fib_position = 0.5
+    else:
+        fib_levels = {}
+        fib_position = 0.5
+
     # ── 成交量分析 ────────────────────────────────────────────────────
     vol_ma5 = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else volumes[-1] if volumes else 0
     vol_ma20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else volumes[-1] if volumes else 0
@@ -472,6 +492,14 @@ async def diagnose_stock(
     elif not price_above_ma20 and not price_above_ma60:
         score -= 5
 
+    # V5: Fibonacci 位置加成
+    if fib_position > 0.8:
+        score -= 5  # 价格接近周期高点，警惕回调
+    elif fib_position < 0.2:
+        score += 5  # 价格接近周期低点，支撑强劲
+    elif 0.6 < fib_position < 0.7:
+        score += 2  # 在61.8%回撤位附近，有一定支撑
+
     # 成交量
     if vol_expanding and latest_close > opens[-1]:
         score += 5  # 放量上涨
@@ -592,6 +620,12 @@ async def diagnose_stock(
             "ma60": round(ma60, 2),
             "bullish_arrangement": ma_bullish,
             "bearish_arrangement": ma_bearish,
+        },
+        "fibonacci": {
+            "levels": fib_levels,
+            "position": round(fib_position, 3),
+            "period_high": round(max(highs[-fib_lookback:]), 2) if len(highs) >= fib_lookback else None,
+            "period_low": round(min(lows[-fib_lookback:]), 2) if len(lows) >= fib_lookback else None,
         },
         "volume": {
             "ratio": round(vol_ratio, 2),

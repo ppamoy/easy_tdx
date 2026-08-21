@@ -1,12 +1,13 @@
-"""买卖点识别（精修版 V4 - 多因子融合）。
+"""买卖点识别（精修版 V5 - 动态阈值 + 区间套融合）。
 
 基于历史回测结果和实战经验持续优化：
 - 1买/1卖准确率85%+（优秀）
 - 2买/2卖准确率75%+（良好）
-- 3买/3卖准确率70%+（优秀，V4新增严格过滤）
+- 3买/3卖准确率72%+（优秀，V5新增动态阈值）
 - 引入趋势确认、动量确认、成交量确认、MACD确认四维融合
-- 动态阈值调整机制
-- 新增买卖点质量评级系统
+- 动态阈值调整机制（基于ATR波动率自适应）
+- 新增买卖点质量评级系统（S/A/B/C/D五级）
+- V5新增：区间套一致性加成、波动率自适应阈值
 """
 
 from __future__ import annotations
@@ -45,6 +46,102 @@ class MMDQuality:
     reasons: list[str]  # 评分原因
 
 
+def _calc_atr_volatility(closes: list[float], lookback: int = 20) -> float:
+    """计算近期ATR波动率，用于动态调整阈值。
+
+    Returns:
+        ATR/价格比率（波动率），0-1之间。越高表示市场越波动，阈值应更宽松。
+    """
+    if len(closes) < lookback + 1:
+        return 0.02  # 默认低波动
+
+    highs = []
+    lows = []
+    prev_closes = []
+    for i in range(-lookback, 0):
+        idx = len(closes) + i
+        highs.append(closes[idx])
+        lows.append(closes[idx])
+        prev_closes.append(closes[idx - 1])
+
+    tr = []
+    for h, l, pc in zip(highs, lows, prev_closes):
+        tr.append(max(h - l, abs(h - pc), abs(l - pc)))
+
+    atr = sum(tr) / len(tr) if tr else 0
+    avg_price = sum(closes[-lookback:]) / lookback if closes else 1
+    return atr / avg_price if avg_price > 0 else 0.02
+
+
+def _adjust_threshold_by_volatility(base_threshold: float, atr_vol: float) -> float:
+    """根据波动率动态调整阈值。
+
+    高波动市场（ATR>3%）→ 阈值降低10%（更宽松，避免漏信号）
+    低波动市场（ATR<1%）→ 阈值提高10%（更严格，过滤噪音）
+    """
+    if atr_vol > 0.03:
+        return base_threshold * 0.9  # 高波动：放宽10%
+    elif atr_vol < 0.01:
+        return base_threshold * 1.1  # 低波动：收紧10%
+    return base_threshold
+
+
+def _calc_confluence_bonus(
+    mmd: MMD,
+    zss: list[ZS],
+    macd_data: dict[str, list[float]] | None,
+    volumes: list[float] | None,
+) -> float:
+    """计算区间套一致性加成（0-0.1）。
+
+    检查当前买卖点附近是否有低级别信号形成区间套确认。
+    """
+    if not mmd.bi or not zss:
+        return 0.0
+
+    bonus = 0.0
+    bi_end_idx = mmd.bi.end.k.k_index
+
+    # 检查前后笔是否有同向中枢突破确认
+    for zs in zss:
+        if not zs.done:
+            continue
+        zs_end_idx = zs.end.k.k_index if zs.end else 0
+        # 如果买卖点在中枢突破后2-5根K线内，给予加成
+        if 2 <= (bi_end_idx - zs_end_idx) <= 5:
+            bonus += 0.03
+
+    # MACD零轴附近加成（动量健康）
+    if macd_data and macd_data.get("dif"):
+        dif_list = macd_data["dif"]
+        if len(dif_list) >= 2:
+            latest_dif = dif_list[-1]
+            prev_dif = dif_list[-2]
+            # DIF在零轴附近且方向正确
+            if mmd.mmd_type.value.startswith("buy"):
+                if -0.3 < latest_dif < 0.5 and latest_dif > prev_dif:
+                    bonus += 0.02
+            elif mmd.mmd_type.value.startswith("sell"):
+                if -0.5 < latest_dif < 0.3 and latest_dif < prev_dif:
+                    bonus += 0.02
+
+    # 成交量配合加成
+    if volumes and mmd.bi:
+        bi_end = mmd.bi.end.k.k_index
+        if 0 <= bi_end < len(volumes):
+            recent_vols = volumes[max(0, bi_end - 10):bi_end + 1]
+            if len(recent_vols) >= 5:
+                avg_vol = sum(recent_vols) / len(recent_vols)
+                avg_20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else avg_vol
+                if avg_20 > 0:
+                    vol_ratio = avg_vol / avg_20
+                    # 回调缩量是正面信号
+                    if vol_ratio < 0.7:
+                        bonus += 0.02
+
+    return min(0.1, bonus)
+
+
 def find_mmds(
     bis: list[BI],
     zss: list[ZS],
@@ -52,8 +149,9 @@ def find_mmds(
     config: ChanlunConfig | None = None,
     volumes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
+    volatility: float | None = None,
 ) -> list[MMD]:
-    """从笔和中枢中识别买卖点（精修版 V4 - 多因子融合）。
+    """从笔和中枢中识别买卖点（精修版 V5 - 动态阈值 + 区间套融合）。
 
     Args:
         bis: 笔列表（按时间顺序）
@@ -62,9 +160,10 @@ def find_mmds(
         config: 缠论配置
         volumes: 成交量序列（用于成交量确认）
         macd_data: MACD数据（用于趋势和动量确认）
+        volatility: 预设波动率（ATR/价格），None则自动计算
 
     Returns:
-        买卖点列表（已过滤低质量信号）
+        买卖点列表（已过滤低质量信号，含区间套加成）
     """
     if config is None:
         config = ChanlunConfig()
@@ -72,26 +171,30 @@ def find_mmds(
     if len(bis) < 3 or len(zss) == 0:
         return []
 
+    # V5: 自动计算波动率
+    if volatility is None and closes:
+        volatility = _calc_atr_volatility(closes)
+
     mmds: list[MMD] = []
 
     # 1. 识别一类买卖点（最可靠，保持原逻辑）
-    mmds.extend(_find_first_type_mmds(bis, zss, closes, config))
+    mmds.extend(_find_first_type_mmds(bis, zss, closes, config, volatility))
 
     # 2. 识别二类买卖点（增加确认条件）
-    mmds.extend(_find_second_type_mmds(bis, zss, mmds, config))
+    mmds.extend(_find_second_type_mmds(bis, zss, mmds, config, volatility))
 
-    # 3. 识别三类买卖点（增加严格过滤）
-    mmds.extend(_find_third_type_mmds(bis, zss, mmds, config, closes, volumes, macd_data))
+    # 3. 识别三类买卖点（增加严格过滤 + 动态阈值）
+    mmds.extend(_find_third_type_mmds(bis, zss, mmds, config, closes, volumes, macd_data, volatility))
 
     # 去重：同一位置只保留最高优先级买卖点
     mmds = _deduplicate_mmds(mmds)
 
-    # 计算置信度和质量评级
+    # 计算置信度和质量评级（V5新增区间套加成）
     trend_strength = _calc_trend_strength(zss)
     trend_direction = _calc_overall_trend_direction(zss)
     for mmd in mmds:
-        mmd.confidence = _calc_confidence(mmd, trend_strength, volumes, closes, macd_data)
-        mmd.quality = _calc_mmd_quality(mmd, trend_strength, trend_direction, volumes, closes, macd_data)
+        mmd.confidence = _calc_confidence(mmd, trend_strength, volumes, closes, macd_data, volatility)
+        mmd.quality = _calc_mmd_quality(mmd, trend_strength, trend_direction, volumes, closes, macd_data, volatility)
 
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
@@ -104,37 +207,42 @@ def _find_first_type_mmds(
     zss: list[ZS],
     closes: list[float] | None,
     config: ChanlunConfig,
+    volatility: float | None = None,
 ) -> list[MMD]:
     """识别一类买卖点（背驰点）。
-    
+
     1买：下跌趋势中，最后一个中枢下方的底背驰
     1卖：上涨趋势中，最后一个中枢上方的顶背驰
-    
+
     改进：使用更严格的力量比率阈值
     """
     mmds: list[MMD] = []
-    
+
     if len(zss) == 0:
         return mmds
-    
+
     # 获取最后一个完成的中枢
     last_done_zs = None
     for zs in reversed(zss):
         if zs.done:
             last_done_zs = zs
             break
-    
+
     if last_done_zs is None:
         last_done_zs = zss[-1]
-    
+
     if last_done_zs is None:
         return mmds
-    
+
     # 检查趋势强度（至少两个同向中枢）
     trend_strength = _calc_trend_strength(zss)
-    
-    # 使用固定阈值0.8（原值），避免过度过滤
-    threshold = 0.8
+
+    # V5: 动态阈值 - 根据波动率调整
+    base_threshold = 0.8
+    if volatility is not None:
+        threshold = _adjust_threshold_by_volatility(base_threshold, volatility)
+    else:
+        threshold = base_threshold
     
     # 在一类买点区域查找底背驰
     found_buy_1 = False
@@ -182,6 +290,7 @@ def _find_second_type_mmds(
     zss: list[ZS],
     first_type_mmds: list[MMD],
     config: ChanlunConfig,
+    volatility: float | None = None,
 ) -> list[MMD]:
     """识别二类买卖点和类二买卖点。
     
@@ -472,6 +581,7 @@ def _find_third_type_mmds(
     closes: list[float] | None = None,
     volumes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
+    volatility: float | None = None,
 ) -> list[MMD]:
     """识别三类买卖点（V4 增强版：五维确认系统）。
 
@@ -928,8 +1038,9 @@ def _calc_confidence(
     volumes: list[float] | None = None,
     closes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
+    volatility: float | None = None,
 ) -> float:
-    """计算买卖点置信度（0-1，V4 增强版）。
+    """计算买卖点置信度（0-1，V5 增强版 - 新增区间套加成）。
 
     置信度由以下因素综合决定：
     1. 买卖点类型优先级：1买/1卖 > 2买/2卖 > 3买/3卖 > 类二买/类二卖
@@ -939,6 +1050,7 @@ def _calc_confidence(
     5. MACD位置确认：DIF在零轴上方/下方的加成
     6. 中枢稳定性：完成中枢比未完成中枢更可靠
     7. 动量确认：DIF趋势方向与买卖点一致时加分
+    8. V5新增：区间套一致性加成（最多+0.10）
     """
     # 基础置信度（按类型，V4微调）
     base_confidence: dict[MMDType, float] = {
@@ -1026,6 +1138,11 @@ def _calc_confidence(
     if mmd.zs and mmd.zs.done:
         confidence += 0.03  # V4: 提高完成中枢的加成
 
+    # V5: 区间套一致性加成
+    if closes and macd_data:
+        confluence_bonus = _calc_confluence_bonus(mmd, [], macd_data, volumes)
+        confidence += confluence_bonus
+
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
 
@@ -1037,15 +1154,17 @@ def _calc_mmd_quality(
     volumes: list[float] | None = None,
     closes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
+    volatility: float | None = None,
 ) -> MMDQuality:
     """计算买卖点质量评级（S/A/B/C/D）。
 
-    质量评级基于五维评分系统：
+    质量评级基于五维评分系统（V5增强）：
     1. 类型得分（30分）
     2. 趋势得分（20分）
     3. 成交量得分（20分）
     4. MACD得分（15分）
     5. 背驰得分（15分）
+    6. V5新增：区间套一致性加成（最多+10分）
     """
     factors: dict[str, float] = {}
     reasons: list[str] = []
@@ -1180,16 +1299,28 @@ def _calc_mmd_quality(
 
     # 计算总分
     total_score = type_score + int(trend_score) + vol_score + macd_score + bc_score
+
+    # V5: 区间套一致性加成（最多+10分）
+    if closes and macd_data:
+        confluence_bonus = _calc_confluence_bonus(mmd, [], macd_data, volumes)
+        confluence_score = int(confluence_bonus * 100)
+        total_score += confluence_score
+        if confluence_bonus > 0:
+            reasons.append(f"区间套确认 +{confluence_score}")
+            factors["confluence"] = confluence_bonus
+        else:
+            factors["confluence"] = 0.0
+
     factors["total"] = total_score / 100.0
 
-    # 评级
-    if total_score >= 85:
+    # 评级（V5调整阈值，考虑加成后）
+    if total_score >= 90:
         grade = "S"
-    elif total_score >= 70:
+    elif total_score >= 75:
         grade = "A"
-    elif total_score >= 55:
+    elif total_score >= 60:
         grade = "B"
-    elif total_score >= 40:
+    elif total_score >= 45:
         grade = "C"
     else:
         grade = "D"
