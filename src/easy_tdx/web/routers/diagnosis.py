@@ -194,6 +194,7 @@ async def diagnose_stock(
     - code: 6位股票代码
     """
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+    from easy_tdx.chanlun.mmd import calc_signal_quality_report, _calc_atr_volatility
     from easy_tdx.MyTT import MACD, MA, BOLL, ATR, KDJ, RSI, DMI, OBV
 
     market = req.market
@@ -358,6 +359,9 @@ async def diagnose_stock(
 
     # 风险收益比
     risk_reward_ratio = round(3.0 / 1.5, 1) if stop_loss_price > 0 else 0
+
+    # V7: 计算波动率用于信号报告
+    volatility = _calc_atr_volatility(closes) if closes else None
 
     # 波动率评级
     if atr_pct < 1.5:
@@ -641,6 +645,12 @@ async def diagnose_stock(
                 }
                 for m in sorted(result.mmds, key=lambda x: getattr(getattr(x, "quality", None), "score", 0) if getattr(x, "quality", None) else 0, reverse=True)[:3]
             ],
+            # V7: 信号质量报告（入场/止损/止盈建议）
+            "signal_report": calc_signal_quality_report(
+                latest_mmd, closes, volumes,
+                {"dif": dif, "dea": dea, "hist": macd_hist} if len(dif) > 0 else None,
+                volatility,
+            ) if latest_mmd else None,
         },
         "macd": {
             "dif": round(latest_dif, 4),

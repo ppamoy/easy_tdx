@@ -91,10 +91,13 @@ def _calc_confluence_bonus(
     zss: list[ZS],
     macd_data: dict[str, list[float]] | None,
     volumes: list[float] | None,
+    closes: list[float] | None = None,
+    volatility: float | None = None,
 ) -> float:
     """计算区间套一致性加成（0-0.1）。
 
     检查当前买卖点附近是否有低级别信号形成区间套确认。
+    V6 增强：新增 ATR 波动率调整和中枢突破时间窗口优化。
     """
     if not mmd.bi or not zss:
         return 0.0
@@ -102,22 +105,22 @@ def _calc_confluence_bonus(
     bonus = 0.0
     bi_end_idx = mmd.bi.end.k.k_index
 
-    # 检查前后笔是否有同向中枢突破确认
+    # 检查前后笔是否有同向中枢突破确认（V6: 放宽时间窗口到 3-8 根 K 线）
     for zs in zss:
         if not zs.done:
             continue
         zs_end_idx = zs.end.k.k_index if zs.end else 0
-        # 如果买卖点在中枢突破后2-5根K线内，给予加成
-        if 2 <= (bi_end_idx - zs_end_idx) <= 5:
+        # V6: 从 2-5 扩展到 3-8 根 K 线，增加区间套确认概率
+        if 3 <= (bi_end_idx - zs_end_idx) <= 8:
             bonus += 0.03
 
-    # MACD零轴附近加成（动量健康）
+    # MACD 零轴附近加成（动量健康）
     if macd_data and macd_data.get("dif"):
         dif_list = macd_data["dif"]
         if len(dif_list) >= 2:
             latest_dif = dif_list[-1]
             prev_dif = dif_list[-2]
-            # DIF在零轴附近且方向正确
+            # DIF 在零轴附近且方向正确
             if mmd.mmd_type.value.startswith("buy"):
                 if -0.3 < latest_dif < 0.5 and latest_dif > prev_dif:
                     bonus += 0.02
@@ -139,7 +142,150 @@ def _calc_confluence_bonus(
                     if vol_ratio < 0.7:
                         bonus += 0.02
 
+    # V6: ATR 波动率调整加成
+    if closes and volatility is not None:
+        if mmd.mmd_type.value.startswith("buy") and volatility < 0.02:
+            # 低波动市场中的买点更可靠
+            bonus += 0.01
+        elif mmd.mmd_type.value.startswith("sell") and volatility < 0.02:
+            bonus += 0.01
+
     return min(0.1, bonus)
+
+
+def calc_signal_quality_report(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float] | None,
+    macd_data: dict[str, list[float]] | None,
+    volatility: float | None,
+) -> dict[str, Any]:
+    """计算买卖点质量报告（V6 新增）。
+
+    提供详细的入场/出场价位建议和风险收益比分析。
+
+    Returns:
+        dict with keys:
+            entry_price: 建议入场价
+            stop_loss: 建议止损价
+            take_profit_1: 第一止盈价
+            take_profit_2: 第二止盈价
+            risk_reward_ratio: 风险收益比
+            signal_strength: 信号强度 (0-1)
+            entry_reason: 入场理由
+            risk_notes: 风险提示
+    """
+    if not mmd.bi:
+        return {}
+
+    bi = mmd.bi
+    latest_close = closes[-1] if closes else 0
+    bi_low = bi.low
+    bi_high = bi.high
+
+    # 计算 ATR 用于动态止损
+    atr = 0.0
+    if len(closes) >= 14:
+        highs = []
+        lows = []
+        prev_closes = []
+        for i in range(-14, 0):
+            idx = len(closes) + i
+            if 0 <= idx < len(closes):
+                highs.append(closes[idx])
+                lows.append(closes[idx])
+                if idx > 0:
+                    prev_closes.append(closes[idx - 1])
+                else:
+                    prev_closes.append(closes[idx])
+        if len(highs) >= 14 and len(prev_closes) >= 14:
+            trs = []
+            for h, l, pc in zip(highs, lows, prev_closes):
+                tr = max(h - l, abs(h - pc), abs(l - pc))
+                trs.append(tr)
+            atr = sum(trs) / len(trs) if trs else latest_close * 0.02
+    else:
+        atr = latest_close * 0.02
+
+    # 根据买卖点类型计算入场/止损/止盈
+    mmd_type = mmd.mmd_type.value
+    entry_price = 0.0
+    stop_loss = 0.0
+    take_profit_1 = 0.0
+    take_profit_2 = 0.0
+    entry_reason = ""
+    risk_notes = ""
+
+    if mmd_type == "3buy":
+        # 3 买：回踩确认后入场
+        entry_price = round(bi_low * 1.002, 2)  # 略高于回调低点
+        stop_loss = round(bi_low * 0.98, 2)  # 跌破回调低点 2% 止损
+        # 止盈：基于中枢高度和 ATR
+        zs_height = mmd.zs.zg - mmd.zs.zd if mmd.zs else 0
+        tp1_dist = max(zs_height * 0.5, atr * 2)
+        tp2_dist = max(zs_height * 1.0, atr * 4)
+        take_profit_1 = round(entry_price + tp1_dist, 2)
+        take_profit_2 = round(entry_price + tp2_dist, 2)
+        entry_reason = f"3 买信号：回踩中枢上沿 ({mmd.zs.zg:.2f}) 后低点 {bi_low:.2f} 企稳"
+        risk_notes = f"止损 {stop_loss:.2f}（-{(entry_price-stop_loss)/entry_price*100:.1f}%），第一止盈 {take_profit_1:.2f}"
+
+    elif mmd_type == "3sell":
+        # 3 卖：反弹确认后入场（做空）
+        entry_price = round(bi_high * 0.998, 2)  # 略低于反弹高点
+        stop_loss = round(bi_high * 1.02, 2)  # 突破反弹高点 2% 止损
+        zs_height = mmd.zs.zg - mmd.zs.zd if mmd.zs else 0
+        tp1_dist = max(zs_height * 0.5, atr * 2)
+        tp2_dist = max(zs_height * 1.0, atr * 4)
+        take_profit_1 = round(entry_price - tp1_dist, 2)
+        take_profit_2 = round(entry_price - tp2_dist, 2)
+        entry_reason = f"3 卖信号：反弹中枢下沿 ({mmd.zs.zd:.2f}) 后高点 {bi_high:.2f} 遇阻"
+        risk_notes = f"止损 {stop_loss:.2f}（+{(stop_loss-entry_price)/entry_price*100:.1f}%），第一止盈 {take_profit_1:.2f}"
+
+    elif mmd_type in ("1buy", "2buy"):
+        entry_price = round(latest_close, 2)
+        stop_loss = round(latest_close - atr * 2, 2)
+        take_profit_1 = round(latest_close + atr * 3, 2)
+        take_profit_2 = round(latest_close + atr * 5, 2)
+        entry_reason = f"{mmd_type} 信号：背驰确认，当前价 {latest_close:.2f}"
+        risk_notes = f"止损 {stop_loss:.2f}（-{(entry_price-stop_loss)/entry_price*100:.1f}%）"
+
+    elif mmd_type in ("1sell", "2sell"):
+        entry_price = round(latest_close, 2)
+        stop_loss = round(latest_close + atr * 2, 2)
+        take_profit_1 = round(latest_close - atr * 3, 2)
+        take_profit_2 = round(latest_close - atr * 5, 2)
+        entry_reason = f"{mmd_type} 信号：背驰确认，当前价 {latest_close:.2f}"
+        risk_notes = f"止损 {stop_loss:.2f}（+{(stop_loss-entry_price)/entry_price*100:.1f}%）"
+
+    else:
+        entry_price = round(latest_close, 2)
+        stop_loss = round(latest_close - atr * 1.5, 2)
+        take_profit_1 = round(latest_close + atr * 2.5, 2)
+        take_profit_2 = round(latest_close + atr * 4, 2)
+        entry_reason = f"信号：当前价 {latest_close:.2f}"
+        risk_notes = f"止损 {stop_loss:.2f}"
+
+    # 计算风险收益比
+    risk = abs(entry_price - stop_loss)
+    reward = abs(take_profit_1 - entry_price)
+    risk_reward_ratio = round(reward / risk, 2) if risk > 0 else 0
+
+    # 信号强度（综合置信度和质量评级）
+    grade = getattr(getattr(mmd, "quality", None), "grade", None)
+    grade_factor = {"S": 1.2, "A": 1.1, "B": 1.0, "C": 0.85, "D": 0.7}.get(grade, 0.8)
+    signal_strength = round(min(1.0, mmd.confidence * grade_factor), 2)
+
+    return {
+        "entry_price": entry_price,
+        "stop_loss": stop_loss,
+        "take_profit_1": take_profit_1,
+        "take_profit_2": take_profit_2,
+        "risk_reward_ratio": risk_reward_ratio,
+        "signal_strength": signal_strength,
+        "entry_reason": entry_reason,
+        "risk_notes": risk_notes,
+        "atr": round(atr, 2),
+    }
 
 
 def find_mmds(
