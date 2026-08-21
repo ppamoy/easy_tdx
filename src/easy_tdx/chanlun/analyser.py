@@ -255,7 +255,10 @@ class ChanlunAnalyser:
         # V5: 计算波动率用于动态阈值
         from easy_tdx.chanlun.mmd import _calc_atr_volatility
         volatility = _calc_atr_volatility(closes) if closes else None
-        mmds = find_mmds(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd, volatility=volatility)
+        # V12: 传递highs/lows用于真实ADX计算
+        highs = [k.high for k in klines]
+        lows = [k.low for k in klines]
+        mmds = find_mmds(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd, volatility=volatility, highs=highs, lows=lows)
         self._result.mmds = mmds
 
         # Step 9: 背驰判断（传入收盘价用于MACD面积计算）

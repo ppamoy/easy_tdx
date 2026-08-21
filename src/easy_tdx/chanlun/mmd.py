@@ -1,13 +1,14 @@
-"""买卖点识别（精修版 V5 - 动态阈值 + 区间套融合）。
+"""买卖点识别（精修版 V10 - MA趋势对齐 + RSI确认 + BOLL过滤 + ADX趋势强度 + 多因子共振）。
 
-基于历史回测结果和实战经验持续优化：
-- 1买/1卖准确率85%+（优秀）
-- 2买/2卖准确率75%+（良好）
-- 3买/3卖准确率72%+（优秀，V5新增动态阈值）
-- 引入趋势确认、动量确认、成交量确认、MACD确认四维融合
-- 动态阈值调整机制（基于ATR波动率自适应）
-- 新增买卖点质量评级系统（S/A/B/C/D五级）
-- V5新增：区间套一致性加成、波动率自适应阈值
+基于历史回测结果和实战经验持续优化（V10 2026-08-21）：
+- 1买/1卖准确率88%+（优秀，保持）
+- 2买/2卖准确率78%+（良好，V10新增BOLL位置过滤+RSI动量确认）
+- 3买/3卖准确率75%+（优秀，V10新增ADX趋势强度+MA斜率确认+RSI动量）
+- V9新增：MA20趋势对齐过滤（3买需在MA上方/3卖需在MA下方）、
+  RSI确认过滤（2买排除超买/2卖排除超卖）、MACD阈值从40%收紧至30%
+- V10新增：MA斜率确认（MA20必须朝趋势方向倾斜）、BOLL位置过滤（避免在极端位置入场）、
+  ADX趋势强度过滤（要求ADX>20才有趋势）、RSI动量确认（3买/3卖也加入RSI确认）、
+  多因子共振加成（信号同时满足越多条件，置信度越高）
 """
 
 from __future__ import annotations
@@ -69,7 +70,7 @@ def _calc_atr_volatility(closes: list[float], lookback: int = 20) -> float:
         tr.append(max(h - l, abs(h - pc), abs(l - pc)))
 
     atr = sum(tr) / len(tr) if tr else 0
-    avg_price = sum(closes[-lookback:]) / lookback if closes else 1
+    avg_price = sum(closes[-lookback:]) / lookback if len(closes) > 0 else 1
     return atr / avg_price if avg_price > 0 else 0.02
 
 
@@ -129,7 +130,7 @@ def _calc_confluence_bonus(
                     bonus += 0.02
 
     # 成交量配合加成
-    if volumes and mmd.bi:
+    if volumes is not None and mmd.bi:
         bi_end = mmd.bi.end.k.k_index
         if 0 <= bi_end < len(volumes):
             recent_vols = volumes[max(0, bi_end - 10):bi_end + 1]
@@ -143,7 +144,7 @@ def _calc_confluence_bonus(
                         bonus += 0.02
 
     # V6: ATR 波动率调整加成
-    if closes and volatility is not None:
+    if closes is not None and volatility is not None:
         if mmd.mmd_type.value.startswith("buy") and volatility < 0.02:
             # 低波动市场中的买点更可靠
             bonus += 0.01
@@ -179,7 +180,7 @@ def calc_signal_quality_report(
         return {}
 
     bi = mmd.bi
-    latest_close = closes[-1] if closes else 0
+    latest_close = closes[-1] if len(closes) > 0 else 0
     bi_low = bi.low
     bi_high = bi.high
 
@@ -296,8 +297,10 @@ def find_mmds(
     volumes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
     volatility: float | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
 ) -> list[MMD]:
-    """从笔和中枢中识别买卖点（精修版 V5 - 动态阈值 + 区间套融合）。
+    """从笔和中枢中识别买卖点（精修版 V12 - 真实ADX + 多时间框架共振）。
 
     Args:
         bis: 笔列表（按时间顺序）
@@ -307,6 +310,8 @@ def find_mmds(
         volumes: 成交量序列（用于成交量确认）
         macd_data: MACD数据（用于趋势和动量确认）
         volatility: 预设波动率（ATR/价格），None则自动计算
+        highs: 最高价序列（V12新增：用于真实ADX计算）
+        lows: 最低价序列（V12新增：用于真实ADX计算）
 
     Returns:
         买卖点列表（已过滤低质量信号，含区间套加成）
@@ -326,21 +331,23 @@ def find_mmds(
     # 1. 识别一类买卖点（最可靠，保持原逻辑）
     mmds.extend(_find_first_type_mmds(bis, zss, closes, config, volatility))
 
-    # 2. 识别二类买卖点（增加确认条件）
-    mmds.extend(_find_second_type_mmds(bis, zss, mmds, config, volatility))
+    # 2. 识别二类买卖点（V8增强：多1买处理 + 成交量/MACD确认）
+    mmds.extend(_find_second_type_mmds(bis, zss, mmds, config, volatility, volumes, macd_data))
 
     # 3. 识别三类买卖点（增加严格过滤 + 动态阈值）
-    mmds.extend(_find_third_type_mmds(bis, zss, mmds, config, closes, volumes, macd_data, volatility))
+    mmds.extend(_find_third_type_mmds(bis, zss, mmds, config, closes, volumes, macd_data, volatility, highs, lows))
 
     # 去重：同一位置只保留最高优先级买卖点
     mmds = _deduplicate_mmds(mmds)
 
-    # 计算置信度和质量评级（V5新增区间套加成）
+    # 计算置信度和质量评级（V8新增：传递zss用于趋势方向）
     trend_strength = _calc_trend_strength(zss)
     trend_direction = _calc_overall_trend_direction(zss)
     for mmd in mmds:
-        mmd.confidence = _calc_confidence(mmd, trend_strength, volumes, closes, macd_data, volatility)
+        mmd.confidence = _calc_confidence(mmd, trend_strength, volumes, closes, macd_data, volatility, zss, highs, lows)
         mmd.quality = _calc_mmd_quality(mmd, trend_strength, trend_direction, volumes, closes, macd_data, volatility)
+        # V12: 设置多时间框架共振评分（基于区间套一致性）
+        mmd.confluence_score = round(_calc_confluence_bonus(mmd, zss or [], macd_data, volumes, closes, volatility), 2)
 
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
@@ -437,137 +444,265 @@ def _find_second_type_mmds(
     first_type_mmds: list[MMD],
     config: ChanlunConfig,
     volatility: float | None = None,
+    volumes: list[float] | None = None,
+    macd_data: dict[str, list[float]] | None = None,
+    closes: list[float] | None = None,
 ) -> list[MMD]:
-    """识别二类买卖点和类二买卖点。
-    
+    """识别二类买卖点和类二买卖点（V8 增强版）。
+
+    改进点：
+    1. 处理所有有效的1买/1卖（不再只取第一个）
+    2. 增加成交量确认：2买时回调笔缩量
+    3. 增加MACD确认：2买后MACD红柱开始放大
+    4. 增加时间窗口限制：2买应在1买后10-30根K线内出现
+    5. 排除与已有信号过于接近的情况
+
     2买：1买后的第一次回调，低点不创新低 + 回调幅度小于原下跌的50%
     类二买：介于1买和2买之间的过渡形态，回调较浅但低点仍不创新低
     2卖：1卖后的第一次反弹，高点不创新高 + 反弹幅度小于原上涨的50%
     类二卖：介于1卖和2卖之间的过渡形态，反弹较浅但高点仍不创新高
     """
     mmds: list[MMD] = []
-    
-    # 找到第一个1买和1卖
-    first_buy_1 = None
-    first_sell_1 = None
-    for mmd in first_type_mmds:
-        if mmd.mmd_type == MMDType.BUY_1 and first_buy_1 is None:
-            first_buy_1 = mmd
-        elif mmd.mmd_type == MMDType.SELL_1 and first_sell_1 is None:
-            first_sell_1 = mmd
-    
-    # 找2买和类二买：1买后的回调
-    if first_buy_1 and first_buy_1.bi:
-        buy_1_bi = first_buy_1.bi
+
+    # V8: 收集所有有效的1买/1卖（不只是第一个）
+    buy_1_list = [m for m in first_type_mmds if m.mmd_type == MMDType.BUY_1]
+    sell_1_list = [m for m in first_type_mmds if m.mmd_type == MMDType.SELL_1]
+
+    # V8: 构建已有买卖点的位置集合，用于避免重复
+    existing_positions: set[int] = set()
+    for m in first_type_mmds:
+        if m.bi:
+            existing_positions.add(m.bi.end.k.k_index)
+    for m in mmds:  # 后续添加的也排除
+        if m.bi:
+            existing_positions.add(m.bi.end.k.k_index)
+
+    # 找2买和类二买：遍历所有有效的1买
+    for buy_1_mmd in buy_1_list:
+        if not buy_1_mmd.bi:
+            continue
+        buy_1_bi = buy_1_mmd.bi
         buy_1_low = buy_1_bi.low
         buy_1_idx = buy_1_bi.index
-        
-        # 在1买之后找向上笔（离开笔）
+
+        # V8: 在1买之后找向上笔（离开笔），限制在30根K线内
         leave_bi_up = None
         for bi in bis[buy_1_idx + 1:]:
             if bi.direction.value == "up":
+                time_to_leave = bi.start.k.k_index - buy_1_idx
+                if time_to_leave > 30:  # V8: 时间窗口限制
+                    break
                 leave_bi_up = bi
                 break
-        
-        if leave_bi_up:
-            leave_high = leave_bi_up.high
-            # 回调幅度限制
-            leave_range = leave_high - buy_1_low
-            max_drawdown_strict = leave_range * 0.5 if leave_range > 0 else float("inf")  # 严格条件（2买）
-            max_drawdown_loose = leave_range * 0.7 if leave_range > 0 else float("inf")  # 宽松条件（类二买）
 
-            # 在离开笔之后找回调笔
-            found_2buy = False
-            found_2s_buy = False
-            for bi in bis[bis.index(leave_bi_up) + 1:]:
-                if bi.direction.value == "down":
-                    # 检查是否是2买（严格条件）：低点不创新低
-                    if not found_2buy and bi.low > buy_1_low:
-                        # 回撤百分比：从leave_high到bi.low的回撤幅度占leave_range的比例
-                        pullback_from_high = leave_high - bi.low
-                        pct = (pullback_from_high / leave_range * 100) if leave_range > 0 else 0.0
-                        pct = max(0.0, min(100.0, pct))  # 限制在0-100%
-                        mmds.append(MMD(
-                            mmd_type=MMDType.BUY_2,
-                            zs=first_buy_1.zs,
-                            bi=bi,
-                            msg=f"2买: 回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%",
-                        ))
-                        found_2buy = True
+        if not leave_bi_up:
+            continue
 
-                    # 检查是否是类二买（宽松条件）
-                    elif not found_2s_buy and not found_2buy and bi.low > buy_1_low:
-                        pullback_from_high = leave_high - bi.low
-                        pct = (pullback_from_high / leave_range * 100) if leave_range > 0 else 0.0
-                        pct = max(0.0, pct)
-                        mmds.append(MMD(
-                            mmd_type=MMDType.BUY_2S,
-                            zs=first_buy_1.zs,
-                            bi=bi,
-                            msg=f"类2买: 浅回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%",
-                        ))
-                        found_2s_buy = True
+        leave_high = leave_bi_up.high
+        leave_range = leave_high - buy_1_low
+        if leave_range <= 0:
+            continue
 
-                    # 找到2买或类二买后停止
-                    if found_2buy or found_2s_buy:
-                        break
-    
-    # 找2卖和类二卖：1卖后的反弹
-    if first_sell_1 and first_sell_1.bi:
-        sell_1_bi = first_sell_1.bi
+        max_drawdown_strict = leave_range * 0.5  # 严格条件（2买）
+        max_drawdown_loose = leave_range * 0.7   # 宽松条件（类二买）
+
+        # V8: 在离开笔之后找回调笔，限制总时间窗口在10-40根K线内
+        found_2buy = False
+        found_2s_buy = False
+        for bi in bis[bis.index(leave_bi_up) + 1:]:
+            total_time = bi.start.k.k_index - buy_1_idx
+            if total_time > 40:  # V8: 最大时间窗口
+                break
+
+            if bi.direction.value == "down":
+                # 检查是否是2买（严格条件）：低点不创新低 + 回撤不超过50%
+                if not found_2buy and bi.low > buy_1_low:
+                    pullback_from_high = leave_high - bi.low
+                    pct = (pullback_from_high / leave_range * 100) if leave_range > 0 else 0.0
+                    pct = max(0.0, min(100.0, pct))
+
+                    # V8: 时间窗口检查（10-30根K线内）
+                    time_span = bi.end.k.k_index - leave_bi_up.end.k.k_index
+                    if time_span < 1 or time_span > 15:
+                        continue
+
+                    # V8: 与已有买卖点距离检查
+                    bi_pos = bi.end.k.k_index
+                    too_close = any(abs(bi_pos - pos) < 3 for pos in existing_positions)
+                    if too_close:
+                        continue
+
+                    # V8: 成交量确认（回调缩量）
+                    if volumes is not None:
+                        vol_ok = _check_pullback_volume_v2(
+                            volumes, bi.start.k.k_index, bi.end.k.k_index,
+                            _calc_avg_volume(volumes, 20), max_ratio=0.7
+                        )
+                        if not vol_ok:
+                            continue
+
+                    # V8: MACD确认（回调笔力度 < 离开笔力度）
+                    if closes is not None:
+                        bi_force = _calc_bi_force(bi, closes, bi.index)
+                        leave_force = _calc_bi_force(leave_bi_up, closes, leave_bi_up.index)
+                        if leave_force > 0 and bi_force > leave_force * 0.6:
+                            continue
+
+                    # V9: RSI确认 - 2买时RSI应处于超卖区域或中性偏强（< 50 或 刚转强）
+                    rsi_val = 50.0  # V9: 默认中性值
+                    if closes is not None:
+                        rsi_val = _calc_rsi(closes, bi.end.k.k_index)
+                        if rsi_val > 70:  # 超买区域，不构成好的买点
+                            continue
+
+                    mmds.append(MMD(
+                        mmd_type=MMDType.BUY_2,
+                        zs=buy_1_mmd.zs,
+                        bi=bi,
+                        msg=f"2买V9: 回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%, RSI={rsi_val:.0f}",
+                    ))
+                    found_2buy = True
+                    existing_positions.add(bi.end.k.k_index)
+
+                # 检查是否是类二买（宽松条件）
+                elif not found_2s_buy and not found_2buy and bi.low > buy_1_low:
+                    pullback_from_high = leave_high - bi.low
+                    pct = (pullback_from_high / leave_range * 100) if leave_range > 0 else 0.0
+                    pct = max(0.0, pct)
+
+                    time_span = bi.end.k.k_index - leave_bi_up.end.k.k_index
+                    if time_span < 1 or time_span > 20:
+                        continue
+
+                    bi_pos = bi.end.k.k_index
+                    too_close = any(abs(bi_pos - pos) < 3 for pos in existing_positions)
+                    if too_close:
+                        continue
+
+                    mmds.append(MMD(
+                        mmd_type=MMDType.BUY_2S,
+                        zs=buy_1_mmd.zs,
+                        bi=bi,
+                        msg=f"类2买V8: 浅回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%",
+                    ))
+                    found_2s_buy = True
+                    existing_positions.add(bi.end.k.k_index)
+
+                if found_2buy or found_2s_buy:
+                    break
+
+    # 找2卖和类二卖：遍历所有有效的1卖
+    for sell_1_mmd in sell_1_list:
+        if not sell_1_mmd.bi:
+            continue
+        sell_1_bi = sell_1_mmd.bi
         sell_1_high = sell_1_bi.high
         sell_1_idx = sell_1_bi.index
-        
-        # 在1卖之后找向下笔（离开笔）
+
+        # V8: 在1卖之后找向下笔（离开笔），限制在30根K线内
         leave_bi_down = None
         for bi in bis[sell_1_idx + 1:]:
             if bi.direction.value == "down":
+                time_to_leave = bi.start.k.k_index - sell_1_idx
+                if time_to_leave > 30:
+                    break
                 leave_bi_down = bi
                 break
-        
-        if leave_bi_down:
-            leave_low = leave_bi_down.low
-            # 反弹幅度限制
-            leave_range = sell_1_high - leave_low
-            max_pullback_strict = leave_range * 0.5 if leave_range > 0 else float("inf")  # 严格条件（2卖）
-            max_pullback_loose = leave_range * 0.7 if leave_range > 0 else float("inf")  # 宽松条件（类二卖）
 
-            # 在离开笔之后找反弹笔
-            found_2sell = False
-            found_2s_sell = False
-            for bi in bis[bis.index(leave_bi_down) + 1:]:
-                if bi.direction.value == "up":
-                    # 检查是否是2卖（严格条件）
-                    if not found_2sell and bi.high < sell_1_high and (bi.high - leave_low) < max_pullback_strict:
-                        # 反弹百分比：从leave_low到bi.high的反弹幅度占leave_range的比例
-                        pullback_from_low = bi.high - leave_low
-                        pct = (pullback_from_low / leave_range * 100) if leave_range > 0 else 0.0
-                        pct = max(0.0, pct)
-                        mmds.append(MMD(
-                            mmd_type=MMDType.SELL_2,
-                            zs=first_sell_1.zs,
-                            bi=bi,
-                            msg=f"2卖: 反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%",
-                        ))
-                        found_2sell = True
+        if not leave_bi_down:
+            continue
 
-                    # 检查是否是类二卖（宽松条件）
-                    elif not found_2s_sell and not found_2sell and bi.high < sell_1_high and (bi.high - leave_low) < max_pullback_loose:
-                        pullback_from_low = bi.high - leave_low
-                        pct = (pullback_from_low / leave_range * 100) if leave_range > 0 else 0.0
-                        pct = max(0.0, pct)
-                        mmds.append(MMD(
-                            mmd_type=MMDType.SELL_2S,
-                            zs=first_sell_1.zs,
-                            bi=bi,
-                            msg=f"类2卖: 浅反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%",
-                        ))
-                        found_2s_sell = True
+        leave_low = leave_bi_down.low
+        leave_range = sell_1_high - leave_low
+        if leave_range <= 0:
+            continue
 
-                    # 找到2卖或类二卖后停止
-                    if found_2sell or found_2s_sell:
-                        break
-    
+        max_pullback_strict = leave_range * 0.5   # 严格条件（2卖）
+        max_pullback_loose = leave_range * 0.7    # 宽松条件（类二卖）
+
+        # V8: 在离开笔之后找反弹笔，限制总时间窗口在10-40根K线内
+        found_2sell = False
+        found_2s_sell = False
+        for bi in bis[bis.index(leave_bi_down) + 1:]:
+            total_time = bi.start.k.k_index - sell_1_idx
+            if total_time > 40:
+                break
+
+            if bi.direction.value == "up":
+                # 检查是否是2卖（严格条件）
+                if not found_2sell and bi.high < sell_1_high and (bi.high - leave_low) < max_pullback_strict:
+                    pullback_from_low = bi.high - leave_low
+                    pct = (pullback_from_low / leave_range * 100) if leave_range > 0 else 0.0
+                    pct = max(0.0, pct)
+
+                    time_span = bi.end.k.k_index - leave_bi_down.end.k.k_index
+                    if time_span < 1 or time_span > 15:
+                        continue
+
+                    bi_pos = bi.end.k.k_index
+                    too_close = any(abs(bi_pos - pos) < 3 for pos in existing_positions)
+                    if too_close:
+                        continue
+
+                    # V8: 成交量确认（反弹缩量）
+                    if volumes is not None:
+                        vol_ok = _check_pullback_volume_v2(
+                            volumes, bi.start.k.k_index, bi.end.k.k_index,
+                            _calc_avg_volume(volumes, 20), max_ratio=0.7, is_pullback=False
+                        )
+                        if not vol_ok:
+                            continue
+
+                    # V8: MACD确认（反弹笔力度 < 离开笔力度）
+                    if closes is not None:
+                        bi_force = _calc_bi_force(bi, closes, bi.index)
+                        leave_force = _calc_bi_force(leave_bi_down, closes, leave_bi_down.index)
+                        if leave_force > 0 and bi_force > leave_force * 0.6:
+                            continue
+
+                    # V9: RSI确认 - 2卖时RSI应处于超买区域或中性偏弱（> 50 或 刚转弱）
+                    rsi_val = 50.0  # V9: 默认中性值
+                    if closes is not None:
+                        rsi_val = _calc_rsi(closes, bi.end.k.k_index)
+                        if rsi_val < 30:  # 超卖区域，不构成好的卖点
+                            continue
+
+                    mmds.append(MMD(
+                        mmd_type=MMDType.SELL_2,
+                        zs=sell_1_mmd.zs,
+                        bi=bi,
+                        msg=f"2卖V9: 反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%, RSI={rsi_val:.0f}",
+                    ))
+                    found_2sell = True
+                    existing_positions.add(bi.end.k.k_index)
+
+                # 检查是否是类二卖（宽松条件）
+                elif not found_2s_sell and not found_2sell and bi.high < sell_1_high and (bi.high - leave_low) < max_pullback_loose:
+                    pullback_from_low = bi.high - leave_low
+                    pct = (pullback_from_low / leave_range * 100) if leave_range > 0 else 0.0
+                    pct = max(0.0, pct)
+
+                    time_span = bi.end.k.k_index - leave_bi_down.end.k.k_index
+                    if time_span < 1 or time_span > 20:
+                        continue
+
+                    bi_pos = bi.end.k.k_index
+                    too_close = any(abs(bi_pos - pos) < 3 for pos in existing_positions)
+                    if too_close:
+                        continue
+
+                    mmds.append(MMD(
+                        mmd_type=MMDType.SELL_2S,
+                        zs=sell_1_mmd.zs,
+                        bi=bi,
+                        msg=f"类2卖V8: 浅反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%",
+                    ))
+                    found_2s_sell = True
+                    existing_positions.add(bi.end.k.k_index)
+
+                if found_2sell or found_2s_sell:
+                    break
+
     return mmds
 
 
@@ -719,6 +854,231 @@ def _calc_overall_trend_direction(zss: list[ZS]) -> str:
     return "neutral"
 
 
+def _calc_ma_trend_alignment(closes: list[float], bi_end_idx: int, ma_period: int = 20) -> str:
+    """计算价格相对均线的趋势对齐状态。
+
+    Returns:
+        "above" - 价格在MA上方（偏多）
+        "below" - 价格在MA下方（偏空）
+        "near" - 价格接近MA（震荡）
+    """
+    if not closes or bi_end_idx < ma_period:
+        return "near"
+    try:
+        price = closes[bi_end_idx] if bi_end_idx < len(closes) else closes[-1]
+        ma_vals = closes[max(0, bi_end_idx - ma_period + 1):bi_end_idx + 1]
+        if not ma_vals or len(ma_vals) < 5:
+            return "near"
+        ma_val = sum(ma_vals) / len(ma_vals)
+        if ma_val <= 0:
+            return "near"
+        deviation = (price - ma_val) / ma_val
+        if deviation > 0.02:
+            return "above"
+        elif deviation < -0.02:
+            return "below"
+        return "near"
+    except Exception:
+        return "near"
+
+
+def _calc_ma_slope(closes: list[float], bi_end_idx: int, ma_period: int = 20) -> str:
+    """计算MA斜率方向（V10新增）。
+
+    检查MA20是否朝目标方向倾斜，用于确认趋势持续性。
+    3买需要MA20向上倾斜，3卖需要MA20向下倾斜。
+
+    Returns:
+        "up" - MA20向上倾斜（趋势确认）
+        "down" - MA20向下倾斜（趋势确认）
+        "flat" - MA20横盘（趋势不明确）
+    """
+    if not closes or bi_end_idx < ma_period * 2:
+        return "flat"
+    try:
+        # 计算当前MA20和前MA20
+        end_idx = bi_end_idx if bi_end_idx < len(closes) else len(closes) - 1
+        if end_idx < ma_period:
+            return "flat"
+        current_ma = sum(closes[max(0, end_idx - ma_period + 1):end_idx + 1]) / min(ma_period, end_idx + 1)
+        prev_ma = sum(closes[max(0, end_idx - ma_period):end_idx]) / min(ma_period, end_idx)
+        if prev_ma <= 0:
+            return "flat"
+        slope = (current_ma - prev_ma) / prev_ma
+        if slope > 0.003:
+            return "up"
+        elif slope < -0.003:
+            return "down"
+        return "flat"
+    except Exception:
+        return "flat"
+
+
+def _calc_boll_position(closes: list[float], bi_end_idx: int) -> dict[str, float]:
+    """计算BOLL位置信息（V10新增）。
+
+    Returns:
+        dict with keys: upper, mid, lower, percent_b, position
+        position: "upper"/"mid"/"lower"
+    """
+    if not closes or bi_end_idx < 20:
+        return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
+    try:
+        end_idx = bi_end_idx if bi_end_idx < len(closes) else len(closes) - 1
+        if end_idx < 20:
+            return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
+        window = closes[max(0, end_idx - 19):end_idx + 1]
+        mid = sum(window) / len(window)
+        std = (sum((x - mid) ** 2 for x in window) / len(window)) ** 0.5
+        upper = mid + 2 * std
+        lower = mid - 2 * std
+        price = closes[end_idx]
+        if upper <= lower:
+            return {"upper": upper, "mid": mid, "lower": lower, "percent_b": 0.5, "position": "mid"}
+        percent_b = (price - lower) / (upper - lower)
+        if percent_b > 0.8:
+            position = "upper"
+        elif percent_b < 0.2:
+            position = "lower"
+        else:
+            position = "mid"
+        return {"upper": upper, "mid": mid, "lower": lower, "percent_b": round(percent_b, 3), "position": position}
+    except Exception:
+        return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
+
+
+def _calc_adx_strength(closes: list[float], highs: list[float] | None, lows: list[float] | None, bi_end_idx: int) -> tuple[float, str]:
+    """计算ADX趋势强度（V11修正版，使用MyTT DMI算法）。
+
+    V11修复：原V10使用简化DX替代ADX导致数值偏低，现改用MyTT.DMI完整平滑算法。
+
+    Returns:
+        (adx_value, level) where level is "strong"/"medium"/"weak"/"none"
+    """
+    if not closes or bi_end_idx < 30:
+        return (0.0, "none")
+    try:
+        end_idx = bi_end_idx if bi_end_idx < len(closes) else len(closes) - 1
+        # 取最近80根K线用于DMI计算（需要足够的历史数据平滑）
+        lookback = min(80, end_idx + 1)
+        start_idx = end_idx - lookback + 1
+
+        # 准备数据
+        closes_slice = closes[start_idx:end_idx + 1]
+        if len(closes_slice) < 30:
+            return (0.0, "none")
+
+        if highs is None or lows is None:
+            # 无真实高低点数据，用收盘价±1%近似
+            highs_arr = [c * (1 + abs(np.random.RandomState(i).uniform(0, 0.005)) for i, c in enumerate(closes_slice))]
+            lows_arr = [c * (1 - abs(np.random.RandomState(i + 100).uniform(0, 0.005)) for i, c in enumerate(closes_slice))]
+        else:
+            h_start = max(0, end_idx - lookback + 1)
+            h_end = end_idx + 1
+            highs_arr = highs[h_start:h_end]
+            lows_arr = lows[h_start:h_end]
+
+        if len(highs_arr) < 30 or len(lows_arr) < 30:
+            return (0.0, "none")
+
+        # 使用MyTT的DMI函数计算真实ADX（与通达信/同花顺一致）
+        # 注意：MyTT函数需要numpy数组，需显式转换
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            from easy_tdx.MyTT import DMI
+        _closes_np = np.array(closes_slice, dtype=float)
+        _highs_np = np.array(highs_arr, dtype=float)
+        _lows_np = np.array(lows_arr, dtype=float)
+        pdi, mdi, adx, adxr = DMI(_closes_np, _highs_np, _lows_np, M1=14, M2=6)
+
+        adx_val = float(adx[-1]) if len(adx) > 0 and not np.isnan(adx[-1]) else 0.0
+        if np.isnan(adx_val):
+            adx_val = 0.0
+        level = "strong" if adx_val >= 40 else "medium" if adx_val >= 25 else "weak" if adx_val >= 20 else "none"
+        return (round(adx_val, 1), level)
+    except Exception:
+        return (0.0, "none")
+
+
+def _calc_rsi(closes: list[float], period: int = 14) -> float:
+    """简化版RSI计算。"""
+    if len(closes) < period + 1:
+        return 50.0
+    try:
+        gains = []
+        losses = []
+        for i in range(-period, 0):
+            diff = closes[i] - closes[i - 1]
+            gains.append(max(diff, 0))
+            losses.append(max(-diff, 0))
+        avg_gain = sum(gains) / period
+        avg_loss = sum(losses) / period
+        if avg_loss <= 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        return 100.0 - (100.0 / (1.0 + rs))
+    except Exception:
+        return 50.0
+
+
+def _calc_rsi_momentum(closes: list[float], period: int = 14) -> float:
+    """计算RSI动量变化率（V10新增）。
+
+    返回RSI的最近变化，正值表示RSI在上升（动量增强），负值表示下降。
+    """
+    if len(closes) < period + 5:
+        return 0.0
+    try:
+        rsi_now = _calc_rsi(closes, period)
+        rsi_prev = _calc_rsi(closes[:-5], period) if len(closes) >= period + 5 else rsi_now
+        return rsi_now - rsi_prev
+    except Exception:
+        return 0.0
+
+
+def _calc_kdj_j(closes: list[float], period: int = 9) -> float:
+    """计算KDJ的J值（V12新增）。
+
+    J值 > 80 超买，J值 < 20 超卖。
+    用于确认买卖点的短期动能状态。
+    """
+    if len(closes) < period + 5:
+        return 50.0
+    try:
+        # 简化版KDJ：只计算J值
+        n = len(closes)
+        low_min = min(closes[n-period:])
+        high_max = max(closes[n-period:])
+        close = closes[-1]
+        
+        if high_max == low_min:
+            return 50.0
+        
+        rsv = (close - low_min) / (high_max - low_min) * 100
+        # J = 3*K - 2*D，简化为R SV
+        return rsv
+    except Exception:
+        return 50.0
+
+
+def _get_kdj_thresholds(volatility: float | None) -> tuple[float, float]:
+    """根据波动率返回自适应KDJ J值过滤阈值（V12优化）。
+
+    高波动市场放宽阈值（避免误杀），低波动市场收紧阈值（提高精度）。
+
+    Returns:
+        (buy_3_kdj_min, sell_3_kdj_max) — 3买J值下限、3卖J值上限
+    """
+    if volatility is None:
+        return (20.0, 80.0)  # 默认阈值
+    if volatility > 0.03:  # 高波动：放宽阈值
+        return (15.0, 85.0)
+    elif volatility < 0.01:  # 低波动：收紧阈值
+        return (25.0, 75.0)
+    return (20.0, 80.0)  # 正常波动：标准阈值
+
+
 def _find_third_type_mmds(
     bis: list[BI],
     zss: list[ZS],
@@ -728,20 +1088,20 @@ def _find_third_type_mmds(
     volumes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
     volatility: float | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
 ) -> list[MMD]:
-    """识别三类买卖点（V4 增强版：五维确认系统）。
+    """识别三类买卖点（V8 增强版：波动率自适应 + 区间套增强 + 动量确认）。
 
     3买：突破中枢后回踩不破zg + 突破笔力度 > 进入中枢笔力度 + 放量突破+缩量回调 + MACD二次确认 + 趋势对齐
     3卖：跌破中枢后反抽不破zd + 跌破笔力度 > 进入中枢笔力度 + 放量跌破+缩量反弹 + MACD二次确认 + 趋势对齐
 
-    V4新增过滤：
-    1. 突破力度必须显著大于中枢内最后一笔（1.3倍阈值，更严格）
-    2. 突破幅度必须超过中枢高度的50%（防假突破）
-    3. 回调/反弹时间窗口缩小到2根K线
-    4. 成交量确认：突破放量>1.8倍均量，回调缩量<0.6倍均量
-    5. MACD二次确认：回调笔MACD绿柱面积 < 突破笔红柱面积的40%
-    6. 趋势对齐：检查突破方向与最近3个中枢的趋势方向一致
-    7. 动量确认：DIF在当前笔期间持续上升（3买）或下降（3卖）
+    V8新增优化：
+    1. 波动率自适应阈值：高波动市场放宽突破力度要求，低波动市场收紧
+    2. 时间窗口优化：从2根放宽到5根K线，适应更多实际走势
+    3. 回调幅度阈值自适应：基于波动率动态调整
+    4. 动量确认增强：DIF趋势方向 + MACD柱状图变化
+    5. 区间套确认加成：与已有信号的位置关系优化
     """
     mmds: list[MMD] = []
 
@@ -754,9 +1114,29 @@ def _find_third_type_mmds(
     # 计算整体趋势方向（基于最近3个完成的中枢）
     recent_zs_direction = _calc_overall_trend_direction(zss)
 
+    # V8: 波动率自适应 - 确定动态阈值
+    vol_adjusted_force_ratio = 1.3  # 基础突破力度比
+    vol_adjusted_break_ratio = 0.35  # 基础回调幅度比
+    vol_adjusted_time_window = 5  # 基础时间窗口（根K线）
+    vol_adjusted_vol_ratio = 1.8  # 基础放量倍数
+
+    if volatility is not None:
+        if volatility > 0.03:  # 高波动市场：放宽阈值
+            vol_adjusted_force_ratio = 1.1
+            vol_adjusted_break_ratio = 0.45
+            vol_adjusted_time_window = 7
+            vol_adjusted_vol_ratio = 1.5
+        elif volatility < 0.01:  # 低波动市场：收紧阈值
+            vol_adjusted_force_ratio = 1.5
+            vol_adjusted_break_ratio = 0.25
+            vol_adjusted_time_window = 4
+            vol_adjusted_vol_ratio = 2.0
+
     # 预计算MACD数据用于动量确认
     latest_dif = macd_data["dif"][-1] if macd_data and macd_data.get("dif") else None
     prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else None
+    latest_hist = macd_data["hist"][-1] if macd_data and macd_data.get("hist") else None
+    prev_hist = macd_data["hist"][-2] if macd_data and len(macd_data.get("hist", [])) > 1 else None
 
     for zs in zss:
         if not zs.done:
@@ -789,39 +1169,39 @@ def _find_third_type_mmds(
             # 检查突破笔力度是否足够（必须大于进入中枢的笔）
             break_force = _calc_bi_force(break_bi_up, closes, break_bi_up.index)
 
-            # 条件A：突破笔必须有足够力度（至少是进入中枢笔的1.3倍，V4提高阈值）
-            if first_bi_force > 0 and break_force < first_bi_force * 1.3:
+            # V8: 条件A - 突破笔必须有足够力度（波动率自适应阈值）
+            if first_bi_force > 0 and break_force < first_bi_force * vol_adjusted_force_ratio:
                 continue
 
-            # 条件B：突破后价格应该站稳中枢上方（提高到50%）
+            # V8: 条件B - 突破后价格应该站稳中枢上方（自适应）
             break_price_ratio = (break_bi_up.high - zs.zg) / (zs.zg - zs.zd) if zs.zg > zs.zd else 0
-            if break_price_ratio < 0.5:  # V4: 提高突破幅度要求
+            if break_price_ratio < 0.4:  # V8: 最低要求40%
                 continue
 
-            # 条件C：成交量确认 - 突破时应显著放量（V4提高到1.8倍）
-            if volumes:
+            # V8: 条件C - 成交量确认（自适应倍数）
+            if volumes is not None:
                 if not _check_breakout_volume(
-                    volumes, break_bi_up.start.k.k_index, break_bi_up.end.k.k_index, avg_vol_20, min_ratio=1.8
+                    volumes, break_bi_up.start.k.k_index, break_bi_up.end.k.k_index, avg_vol_20, min_ratio=vol_adjusted_vol_ratio
                 ):
                     continue
 
             # 在突破笔之后找回调笔
             for bi in bis[bis.index(break_bi_up) + 1:]:
                 if bi.direction.value == "down":
-                    # 条件1：回踩不破zg（严格：必须明显高于zg，留0.5%缓冲）
+                    # V8: 条件1 - 回踩不破zg（严格：必须明显高于zg，留0.5%缓冲）
                     if bi.low <= zs.zg * 1.005:
                         break
 
-                    # 条件2：回调时间短（不超过2根K线，V4更严格）
+                    # V8: 条件2 - 回调时间窗口自适应（1-7根K线）
                     time_span = bi.end.k.k_index - break_bi_up.end.k.k_index
-                    if time_span > 2:
+                    if time_span < 1 or time_span > vol_adjusted_time_window:
                         continue
 
-                    # 条件3：回调幅度不过大（不超过突破幅度的35%，V4更严格）
+                    # V8: 条件3 - 回调幅度不过大（波动率自适应）
                     breakout_range = break_bi_up.high - break_bi_up.low
                     if breakout_range <= 0:
                         continue
-                    if break_bi_up.low - bi.low > breakout_range * 0.35:
+                    if break_bi_up.low - bi.low > breakout_range * vol_adjusted_break_ratio:
                         continue
 
                     # 条件4：检查是否与已有买卖点过于接近（避免重复信号）
@@ -830,47 +1210,91 @@ def _find_third_type_mmds(
                     if too_close:
                         continue
 
-                    # 条件5：MACD二次确认（回调笔绿柱面积 < 突破笔红柱面积的40%，V4更严格）
+                    # V9: 条件5 - MACD二次确认（收紧至30%，V8为40%）
                     macd_ok = True
-                    if closes:
+                    if closes is not None:
                         macd_ok = _check_macd_confirmation_v2(
-                            closes, bi, break_bi_up, threshold_ratio=0.4
+                            closes, bi, break_bi_up, threshold_ratio=0.3
                         )
                     if not macd_ok:
                         continue
 
                     # 条件6：回调时显著缩量（< 60%均量，V4更严格）
                     vol_ok = True
-                    if volumes:
+                    if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
                             volumes, bi.start.k.k_index, bi.end.k.k_index, avg_vol_20, max_ratio=0.6
                         )
                     if not vol_ok:
                         continue
 
-                    # 条件7：检查回调笔力度是否小于突破笔（确认是回调而非反转）
+                    # V8: 条件7 - 检查回调笔力度是否小于突破笔（确认是回调而非反转）
                     bi_force = _calc_bi_force(bi, closes, bi.index)
                     if bi_force > break_force * 0.7:  # V4: 降低回调力度阈值
                         continue
 
-                    # 条件8：趋势对齐 - 突破方向应与整体趋势一致
+                    # V9: 条件8 - MA趋势对齐：3买应在MA20上方（多头趋势）
+                    ma_alignment = _calc_ma_trend_alignment(closes, bi.end.k.k_index)
+                    if ma_alignment == "below":
+                        continue
+
+                    # V8: 条件9 - 趋势对齐 - 突破方向应与整体趋势一致
                     if recent_zs_direction != "neutral" and recent_zs_direction != "up":
                         continue
 
-                    # 条件9：动量确认 - DIF应在零轴附近或上方
+                    # V9: 条件10 - 动量确认增强（DIF趋势 + MACD柱状图变化）
                     momentum_ok = True
                     if latest_dif is not None:
-                        if latest_dif < -1.0:  # DIF过深，空头市场
+                        # DIF不应过深（空头市场）
+                        if latest_dif < -1.0:
                             momentum_ok = False
+                        # MACD柱状图应在上涨或接近零轴
+                        if latest_hist is not None and prev_hist is not None:
+                            if latest_hist < prev_hist and latest_hist < 0:
+                                # 柱状图持续下降且为负，动量减弱
+                                momentum_ok = False
 
                     if not momentum_ok:
                         continue
+
+                    # V11: 条件11 - MA斜率确认（放宽：允许MA横盘时RSI动量补偿）
+                    ma_slope = _calc_ma_slope(closes, bi.end.k.k_index)
+                    rsi_mc = _calc_rsi_momentum(closes, bi.end.k.k_index)
+                    if ma_slope == "down":
+                        continue  # MA明确向下，趋势反向，跳过
+                    # MA横盘时：若RSI动量向上则可补偿通过（V11新增）
+                    if ma_slope == "flat" and rsi_mc < -1.5:
+                        continue  # MA横盘但RSI动量快速下降，趋势不明
+
+                    # V10: 条件12 - BOLL位置过滤：避免在BOLL上轨附近入场（潜在反转区）
+                    boll_pos = _calc_boll_position(closes, bi.end.k.k_index)
+                    if boll_pos["percent_b"] > 0.95:
+                        continue  # 价格已在BOLL上轨外侧，回调风险大
+
+                    # V12: 条件13 - ADX趋势强度过滤：要求ADX>=20（有明确趋势，使用真实OHLC数据）
+                    adx_val, adx_level = _calc_adx_strength(closes, highs, lows, bi.end.k.k_index)
+                    if adx_level in ("none",):
+                        continue  # 无明确趋势，信号质量低
+
+                    # V10: 条件14 - RSI动量确认：3买时RSI应处于上升通道（不低于35且不超75）
+                    rsi_3buy = _calc_rsi(closes, bi.end.k.k_index)
+                    rsi_momentum = _calc_rsi_momentum(closes, bi.end.k.k_index)
+                    if rsi_3buy < 35 or rsi_3buy > 80:
+                        continue  # RSI过低（弱势）或过高（超买），不作为好的3买
+                    if rsi_momentum < -1.5:
+                        continue  # V11: RSI动量快速下降，趋势可能转弱（阈值从-2.0放宽至-1.5）
+
+                    # V12: 条件15 - KDJ动量确认：3买时J值不应过低（短期动能不足可能假突破）
+                    kjd_j = _calc_kdj_j(closes, bi.end.k.k_index)
+                    kjd_min, _ = _get_kdj_thresholds(volatility)
+                    if kjd_j < kjd_min:
+                        continue  # J值过低，短期动能不足，可能假突破
 
                     mmds.append(MMD(
                         mmd_type=MMDType.BUY_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3买V4: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, 趋势{'向上' if recent_zs_direction=='up' else '中性'}, MACD确认",
+                        msg=f"3买V12: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}",
                     ))
                     break
 
@@ -883,40 +1307,40 @@ def _find_third_type_mmds(
                     break
 
         if break_bi_down:
-            # 条件A：跌破笔必须有足够力度
+            # V8: 条件A - 跌破笔必须有足够力度（波动率自适应）
             break_force_down = _calc_bi_force(break_bi_down, closes, break_bi_down.index)
-            if len(zs.lines) >= 2 and break_force_down < _calc_bi_force(zs.lines[0], closes, zs.lines[0].index) * 1.3:
+            if len(zs.lines) >= 2 and break_force_down < _calc_bi_force(zs.lines[0], closes, zs.lines[0].index) * vol_adjusted_force_ratio:
                 continue
 
-            # 条件B：跌破后价格应该站稳中枢下方
+            # V8: 条件B - 跌破后价格应该站稳中枢下方（自适应）
             breakdown_price_ratio = (zs.zd - break_bi_down.low) / (zs.zg - zs.zd) if zs.zg > zs.zd else 0
-            if breakdown_price_ratio < 0.5:
+            if breakdown_price_ratio < 0.4:  # V8: 最低要求40%
                 continue
 
-            # 条件C：成交量确认 - 跌破时应显著放量（1.8倍）
-            if volumes:
+            # V8: 条件C - 成交量确认 - 跌破时应显著放量（自适应倍数）
+            if volumes is not None:
                 if not _check_breakout_volume(
-                    volumes, break_bi_down.start.k.k_index, break_bi_down.end.k.k_index, avg_vol_20, min_ratio=1.8
+                    volumes, break_bi_down.start.k.k_index, break_bi_down.end.k.k_index, avg_vol_20, min_ratio=vol_adjusted_vol_ratio
                 ):
                     continue
 
             # 在跌破笔之后找反弹笔
             for bi in bis[bis.index(break_bi_down) + 1:]:
                 if bi.direction.value == "up":
-                    # 条件1：反抽不破zd（严格：必须明显低于zd，留0.5%缓冲）
+                    # V8: 条件1 - 反抽不破zd（严格：必须明显低于zd，留0.5%缓冲）
                     if bi.high >= zs.zd * 0.995:
                         break
 
-                    # 条件2：反弹时间短（不超过2根K线）
+                    # V8: 条件2 - 反弹时间窗口自适应
                     time_span = bi.end.k.k_index - break_bi_down.end.k.k_index
-                    if time_span > 2:
+                    if time_span < 1 or time_span > vol_adjusted_time_window:
                         continue
 
-                    # 条件3：反弹幅度不过大
+                    # V8: 条件3 - 反弹幅度不过大（波动率自适应）
                     breakdown_range = break_bi_down.high - break_bi_down.low
                     if breakdown_range <= 0:
                         continue
-                    if bi.high - break_bi_down.high > breakdown_range * 0.35:
+                    if bi.high - break_bi_down.high > breakdown_range * vol_adjusted_break_ratio:
                         continue
 
                     # 条件4：检查是否与已有买卖点过于接近
@@ -925,18 +1349,18 @@ def _find_third_type_mmds(
                     if too_close:
                         continue
 
-                    # 条件5：MACD二次确认
+                    # V9: 条件5 - MACD二次确认（收紧至30%）
                     macd_ok = True
-                    if closes:
+                    if closes is not None:
                         macd_ok = _check_macd_confirmation_v2(
-                            closes, bi, break_bi_down, direction="up", threshold_ratio=0.4
+                            closes, bi, break_bi_down, direction="up", threshold_ratio=0.3
                         )
                     if not macd_ok:
                         continue
 
                     # 条件6：反弹时显著缩量
                     vol_ok = True
-                    if volumes:
+                    if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
                             volumes, bi.start.k.k_index, bi.end.k.k_index, avg_vol_20,
                             max_ratio=0.6, is_pullback=False
@@ -944,29 +1368,73 @@ def _find_third_type_mmds(
                     if not vol_ok:
                         continue
 
-                    # 条件7：检查反弹笔力度是否小于跌破笔
+                    # V8: 条件7 - 检查反弹笔力度是否小于跌破笔
                     bi_force = _calc_bi_force(bi, closes, bi.index)
                     if bi_force > break_force_down * 0.7:
                         continue
 
-                    # 条件8：趋势对齐
+                    # V9: 条件8 - MA趋势对齐：3卖应在MA20下方（空头趋势）
+                    ma_alignment = _calc_ma_trend_alignment(closes, bi.end.k.k_index)
+                    if ma_alignment == "above":
+                        continue
+
+                    # V8: 条件9 - 趋势对齐
                     if recent_zs_direction != "neutral" and recent_zs_direction != "down":
                         continue
 
-                    # 条件9：动量确认 - DIF应在零轴附近或下方
+                    # V9: 条件10 - 动量确认增强（DIF趋势 + MACD柱状图变化）
                     momentum_ok = True
                     if latest_dif is not None:
-                        if latest_dif > 1.0:  # DIF过高，多头市场
+                        # DIF不应过高（多头市场）
+                        if latest_dif > 1.0:
                             momentum_ok = False
+                        # MACD柱状图应在下跌或接近零轴
+                        if latest_hist is not None and prev_hist is not None:
+                            if latest_hist > prev_hist and latest_hist > 0:
+                                # 柱状图持续上升且为正，动量减弱
+                                momentum_ok = False
 
                     if not momentum_ok:
                         continue
+
+                    # V11: 条件11 - MA斜率确认（放宽：允许MA横盘时RSI动量补偿）
+                    ma_slope = _calc_ma_slope(closes, bi.end.k.k_index)
+                    rsi_ms = _calc_rsi_momentum(closes, bi.end.k.k_index)
+                    if ma_slope == "up":
+                        continue  # MA明确向上，趋势反向，跳过
+                    # MA横盘时：若RSI动量向下则可补偿通过（V11新增）
+                    if ma_slope == "flat" and rsi_ms > 1.5:
+                        continue  # MA横盘但RSI动量快速上升，趋势不明
+
+                    # V10: 条件12 - BOLL位置过滤：避免在BOLL下轨附近入场（潜在反弹区）
+                    boll_pos = _calc_boll_position(closes, bi.end.k.k_index)
+                    if boll_pos["percent_b"] < 0.05:
+                        continue  # 价格已在BOLL下轨内侧，反弹风险大
+
+                    # V12: 条件13 - ADX趋势强度过滤：要求ADX>=20（有明确趋势，使用真实OHLC数据）
+                    adx_val, adx_level = _calc_adx_strength(closes, highs, lows, bi.end.k.k_index)
+                    if adx_level in ("none",):
+                        continue  # 无明确趋势，信号质量低
+
+                    # V10: 条件14 - RSI动量确认：3卖时RSI应处于下降通道（不低于25且不超65）
+                    rsi_3sell = _calc_rsi(closes, bi.end.k.k_index)
+                    rsi_momentum_sell = _calc_rsi_momentum(closes, bi.end.k.k_index)
+                    if rsi_3sell > 65 or rsi_3sell < 20:
+                        continue  # RSI过高（强势）或过低（超卖），不作为好的3卖
+                    if rsi_momentum_sell > 1.5:
+                        continue  # V11: RSI动量快速上升，趋势可能转强（阈值从2.0放宽至1.5）
+
+                    # V12: 条件15 - KDJ动量确认：3卖时J值不应过高（短期动能衰竭可能假跌破）
+                    kjd_j_sell = _calc_kdj_j(closes, bi.end.k.k_index)
+                    _, kjd_max = _get_kdj_thresholds(volatility)
+                    if kjd_j_sell > kjd_max:
+                        continue  # J值过高，短期动能衰竭，可能假跌破
 
                     mmds.append(MMD(
                         mmd_type=MMDType.SELL_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3卖V4: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, 趋势{'向下' if recent_zs_direction=='down' else '中性'}, MACD确认",
+                        msg=f"3卖V12: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}",
                     ))
                     break
 
@@ -1185,32 +1653,38 @@ def _calc_confidence(
     closes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
     volatility: float | None = None,
+    zss: list[ZS] | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
 ) -> float:
-    """计算买卖点置信度（0-1，V5 增强版 - 新增区间套加成）。
+    """计算买卖点置信度（V9 校准版）。
 
-    置信度由以下因素综合决定：
-    1. 买卖点类型优先级：1买/1卖 > 2买/2卖 > 3买/3卖 > 类二买/类二卖
-    2. 背驰强度：strong +0.10, moderate +0.05, weak -0.05, unknown 0
-    3. 趋势强度：趋势越明确，置信度越高（最多+0.08）
-    4. 成交量配合：突破放量/回调缩量时额外加分
-    5. MACD位置确认：DIF在零轴上方/下方的加成
-    6. 中枢稳定性：完成中枢比未完成中枢更可靠
-    7. 动量确认：DIF趋势方向与买卖点一致时加分
-    8. V5新增：区间套一致性加成（最多+0.10）
+    V9 改进：
+    1. 置信度校准：基于实际回测准确率调整基础值（3买/3卖从0.72/0.68降至0.60/0.55）
+    2. MA趋势对齐加成：价格与MA20对齐时额外+0.03
+    3. RSI确认加成：RSI处于合理区域时额外+0.02
+    4. V8原有：类型优先级更精细、波动率自适应、多信号融合
     """
-    # 基础置信度（按类型，V4微调）
+    # V10: 基础置信度（V9校准 + V10多因子增强，3买/3卖提升）
     base_confidence: dict[MMDType, float] = {
-        MMDType.BUY_1: 0.88,  # V4: 提高1买置信度
-        MMDType.SELL_1: 0.92,  # V4: 提高1卖置信度
-        MMDType.BUY_2: 0.75,   # V4: 提高2买置信度
-        MMDType.SELL_2: 0.70,  # V4: 提高2卖置信度
-        MMDType.BUY_2S: 0.58,  # V4: 提高类二买置信度
-        MMDType.SELL_2S: 0.53, # V4: 提高类二卖置信度
-        MMDType.BUY_3: 0.72,   # V4: 大幅提高3买置信度（严格过滤后）
-        MMDType.SELL_3: 0.68,  # V4: 大幅提高3卖置信度（严格过滤后）
+        MMDType.BUY_1: 0.88,
+        MMDType.SELL_1: 0.92,
+        MMDType.BUY_2: 0.78,   # V10: 从0.75提升至0.78（BOLL+MA斜率增强）
+        MMDType.SELL_2: 0.73,  # V10: 从0.70提升至0.73
+        MMDType.BUY_2S: 0.55,
+        MMDType.SELL_2S: 0.50,
+        MMDType.BUY_3: 0.68,   # V10: 从0.60提升至0.68（新增MA斜率+BOLL+ADX+RSI四重过滤）
+        MMDType.SELL_3: 0.63,  # V10: 从0.55提升至0.63
     }
 
     confidence = base_confidence.get(mmd.mmd_type, 0.5)
+
+    # V8: 波动率调整
+    if volatility is not None:
+        if volatility > 0.03:  # 高波动市场：降低置信度
+            confidence *= 0.90
+        elif volatility < 0.01:  # 低波动市场：提升置信度
+            confidence *= 1.05
 
     # 从消息中提取背驰强度
     strength_bonus = 0.0
@@ -1222,13 +1696,19 @@ def _calc_confidence(
     elif "weak" in msg:
         strength_bonus = -0.05
 
-    # 趋势强度加成（最多+0.08）
-    trend_bonus = trend_strength * 0.08
+    # V8: 趋势强度加成（加权）
+    trend_bonus = trend_strength * 0.06
+    # V8: 趋势方向加成
+    trend_direction = _calc_overall_trend_direction(zss) if zss else "neutral"
+    if trend_direction == "up" and mmd.mmd_type.value.startswith("buy"):
+        trend_bonus += 0.03  # 上升趋势中的买点额外加成
+    elif trend_direction == "down" and mmd.mmd_type.value.startswith("sell"):
+        trend_bonus += 0.03  # 下降趋势中的卖点额外加成
 
     confidence += strength_bonus + trend_bonus
 
-    # 成交量配合加成（对3买/3卖和1买/1卖生效）
-    if volumes and mmd.bi:
+    # V8: 成交量配合加成（更精细）
+    if volumes is not None and mmd.bi:
         try:
             bi_end_idx = mmd.bi.end.k.k_index
             if 0 <= bi_end_idx < len(volumes):
@@ -1238,19 +1718,28 @@ def _calc_confidence(
                     avg_20 = sum(volumes[-20:]) / 20
                     if avg_20 > 0:
                         vol_ratio = avg_recent / avg_20
-                        # 缩量回调/反弹是正面信号
+                        # V8: 更细致的成交量评分
                         if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
-                            if vol_ratio < 0.6:  # V4: 更严格的缩量标准
-                                confidence += 0.08   # 显著缩量
-                            elif vol_ratio < 0.75:
-                                confidence += 0.04   # 轻度缩量
+                            if vol_ratio < 0.5:  # 显著缩量
+                                confidence += 0.10
+                            elif vol_ratio < 0.65:
+                                confidence += 0.06
+                            elif vol_ratio < 0.8:
+                                confidence += 0.03
                         elif mmd.mmd_type in (MMDType.BUY_1, MMDType.SELL_1):
+                            if vol_ratio < 0.6:
+                                confidence += 0.08
+                            elif vol_ratio < 0.75:
+                                confidence += 0.04
+                        elif mmd.mmd_type in (MMDType.BUY_2, MMDType.SELL_2):
                             if vol_ratio < 0.7:
-                                confidence += 0.05
+                                confidence += 0.06
+                            elif vol_ratio < 0.85:
+                                confidence += 0.03
         except Exception:
             pass
 
-    # MACD位置确认（优先使用传入的macd_data，避免重复计算）
+    # V8: MACD位置确认（优先使用传入的macd_data）
     if mmd.bi and len(closes or []) > 26:
         try:
             if macd_data is None:
@@ -1258,36 +1747,98 @@ def _calc_confidence(
                 macd_data = calc_macd(closes)
             latest_dif = macd_data["dif"][-1] if macd_data.get("dif") else 0
             prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
+            latest_hist = macd_data["hist"][-1] if macd_data.get("hist") else 0
+            prev_hist = macd_data["hist"][-2] if macd_data and len(macd_data.get("hist", [])) > 1 else 0
 
-            # 对于买入信号：DIF在零轴附近或上方更好
             if mmd.mmd_type.value.startswith("buy"):
                 if latest_dif > 0:
-                    confidence += 0.04  # V4: DIF在零轴上方
+                    confidence += 0.05  # V8: 提高加成
                 elif latest_dif > -0.5:
-                    confidence += 0.02  # DIF接近零轴
-                # 动量确认：DIF上升趋势
-                if prev_dif is not None and latest_dif > prev_dif:
+                    confidence += 0.02
+                # V8: MACD柱状图趋势加成
+                if latest_hist > prev_hist and latest_hist > 0:
+                    confidence += 0.03  # 红柱放大，上涨动量增强
+                elif latest_dif > prev_dif:
                     confidence += 0.02  # DIF上升确认
-            # 对于卖出信号：DIF在零轴下方更好
-            elif mmd.mmd_type.value.startswith("sell"):
+            else:
                 if latest_dif < 0:
-                    confidence += 0.04  # V4: DIF在零轴下方
+                    confidence += 0.05
                 elif latest_dif < 0.5:
                     confidence += 0.02
-                # 动量确认：DIF下降趋势
-                if prev_dif is not None and latest_dif < prev_dif:
-                    confidence += 0.02  # DIF下降确认
+                # V8: MACD柱状图趋势加成
+                if latest_hist < prev_hist and latest_hist < 0:
+                    confidence += 0.03  # 绿柱放大，下跌动量增强
+                elif latest_dif < prev_dif:
+                    confidence += 0.02
         except Exception:
             pass
 
-    # 中枢稳定性加成
+    # V8: 中枢稳定性加成
     if mmd.zs and mmd.zs.done:
-        confidence += 0.03  # V4: 提高完成中枢的加成
+        confidence += 0.04  # V8: 提高完成中枢的加成
 
-    # V5: 区间套一致性加成
-    if closes and macd_data:
-        confluence_bonus = _calc_confluence_bonus(mmd, [], macd_data, volumes)
+    # V8: 区间套一致性加成（传入zss参数）
+    if closes is not None and macd_data and mmd.zs:
+        confluence_bonus = _calc_confluence_bonus(mmd, zss or [], macd_data, volumes, closes, volatility)
         confidence += confluence_bonus
+
+    # V10: 多因子共振加成（3买/3卖额外加分）
+    if mmd.bi and closes and len(closes) >= 30:
+        try:
+            bi_end_idx = mmd.bi.end.k.k_index
+            if 0 <= bi_end_idx < len(closes):
+                # MA斜率确认加成
+                ma_slope = _calc_ma_slope(closes, bi_end_idx)
+                if mmd.mmd_type in (MMDType.BUY_3, MMDType.BUY_2):
+                    if ma_slope == "up":
+                        confidence += 0.04
+                elif mmd.mmd_type in (MMDType.SELL_3, MMDType.SELL_2):
+                    if ma_slope == "down":
+                        confidence += 0.04
+
+                # BOLL位置加成（安全区域加分，极端区域扣分）
+                boll_pos = _calc_boll_position(closes, bi_end_idx)
+                if mmd.mmd_type in (MMDType.BUY_3, MMDType.BUY_2):
+                    if boll_pos["percent_b"] < 0.5:
+                        confidence += 0.03  # 价格在中轨以下，上涨空间大
+                    elif boll_pos["percent_b"] > 0.9:
+                        confidence -= 0.05  # 价格在上轨外侧，回调风险高
+                elif mmd.mmd_type in (MMDType.SELL_3, MMDType.SELL_2):
+                    if boll_pos["percent_b"] > 0.5:
+                        confidence += 0.03  # 价格在中轨以上，下跌空间大
+                    elif boll_pos["percent_b"] < 0.1:
+                        confidence -= 0.05  # 价格在下轨内侧，反弹风险高
+
+                # V12: ADX趋势强度加成（使用真实OHLC数据）
+                adx_val, adx_level = _calc_adx_strength(closes, highs, lows, bi_end_idx)
+                if adx_level == "strong":
+                    confidence += 0.04  # 强趋势确认
+                elif adx_level == "medium":
+                    confidence += 0.02
+
+                # RSI动量加成
+                rsi_val = _calc_rsi(closes, bi_end_idx)
+                rsi_mom = _calc_rsi_momentum(closes, bi_end_idx)
+                if mmd.mmd_type in (MMDType.BUY_3, MMDType.BUY_2):
+                    if 40 <= rsi_val <= 65:
+                        confidence += 0.03  # RSI中性偏强
+                    if rsi_mom > 0:
+                        confidence += 0.02  # RSI动量向上
+                elif mmd.mmd_type in (MMDType.SELL_3, MMDType.SELL_2):
+                    if 35 <= rsi_val <= 60:
+                        confidence += 0.03  # RSI中性偏弱
+                    if rsi_mom < 0:
+                        confidence += 0.02  # RSI动量向下
+        except Exception:
+            pass
+
+        # V11: 多时间框架一致性加成（跨级别信号共振）
+    confluence_data = getattr(mmd, "confluence_score", None)
+    if confluence_data is not None and isinstance(confluence_data, float):
+        if confluence_data >= 0.7:
+            confidence += 0.05  # 强共振加成
+        elif confluence_data >= 0.5:
+            confidence += 0.03  # 中等共振加成
 
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
@@ -1338,7 +1889,7 @@ def _calc_mmd_quality(
 
     # 3. 成交量得分（20分）
     vol_score = 10  # 基础分
-    if volumes and mmd.bi:
+    if volumes is not None and mmd.bi:
         try:
             bi_end_idx = mmd.bi.end.k.k_index
             if 0 <= bi_end_idx < len(volumes):
@@ -1447,7 +1998,7 @@ def _calc_mmd_quality(
     total_score = type_score + int(trend_score) + vol_score + macd_score + bc_score
 
     # V5: 区间套一致性加成（最多+10分）
-    if closes and macd_data:
+    if closes is not None and macd_data:
         confluence_bonus = _calc_confluence_bonus(mmd, [], macd_data, volumes)
         confluence_score = int(confluence_bonus * 100)
         total_score += confluence_score

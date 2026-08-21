@@ -216,11 +216,11 @@ async def diagnose_stock(
             "symbol": symbol,
         }
 
-    closes = df["close"].tolist()
-    volumes = df["vol"].tolist()
-    highs = df["high"].tolist()
-    lows = df["low"].tolist()
-    opens = df["open"].tolist()
+    closes = df["close"].values  # V8: 保持 numpy 数组，MyTT 函数需要数值型数组
+    volumes = df["vol"].values
+    highs = df["high"].values
+    lows = df["low"].values
+    opens = df["open"].values
     dates = [str(d)[:10] for d in df["date"].tolist()] if "date" in df.columns else []
     latest_close = closes[-1]
     latest_date = dates[-1] if dates else ""
@@ -331,8 +331,8 @@ async def diagnose_stock(
         fib_position = 0.5
 
     # ── 成交量分析 ────────────────────────────────────────────────────
-    vol_ma5 = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else volumes[-1] if volumes else 0
-    vol_ma20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else volumes[-1] if volumes else 0
+    vol_ma5 = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else (volumes[-1] if len(volumes) > 0 else 0)
+    vol_ma20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else (volumes[-1] if len(volumes) > 0 else 0)
     vol_ratio = vol_ma5 / vol_ma20 if vol_ma20 > 0 else 1.0
     vol_expanding = bool(vol_ratio > 1.2)  # 放量
     vol_contracting = bool(vol_ratio < 0.8)  # 缩量
@@ -346,8 +346,8 @@ async def diagnose_stock(
     lookback = 60
     recent_highs = highs[-lookback:]
     recent_lows = lows[-lookback:]
-    resistance_1 = max(recent_highs) if recent_highs else latest_close
-    support_1 = min(recent_lows) if recent_lows else latest_close
+    resistance_1 = max(recent_highs) if len(recent_highs) > 0 else latest_close
+    support_1 = min(recent_lows) if len(recent_lows) > 0 else latest_close
     resistance_2 = max(recent_highs[-30:]) if len(recent_highs) >= 30 else resistance_1
     support_2 = min(recent_lows[-30:]) if len(recent_lows) >= 30 else support_1
 
@@ -361,7 +361,7 @@ async def diagnose_stock(
     risk_reward_ratio = round(3.0 / 1.5, 1) if stop_loss_price > 0 else 0
 
     # V7: 计算波动率用于信号报告
-    volatility = _calc_atr_volatility(closes) if closes else None
+    volatility = _calc_atr_volatility(closes) if len(closes) > 0 else None
 
     # 波动率评级
     if atr_pct < 1.5:
@@ -429,31 +429,56 @@ async def diagnose_stock(
     candle_strength = candle_result["strength"]
     recent_patterns = candle_result["patterns"][:3]  # 最近3个形态
 
-    # ── 综合评分（增强版） ────────────────────────────────────────────
+    # ── 综合评分（V8 增强版：多信号融合 + 置信度分层）────────────────────
     score = 50  # 基础分
 
-    # 缠论信号（V6增强：质量评级加成 + 多信号统计）
+    # V8: 缠论信号统计（按类型和置信度加权）
     buy_1_count = sum(1 for m in result.mmds if m.mmd_type.value == "1buy")
     sell_1_count = sum(1 for m in result.mmds if m.mmd_type.value == "1sell")
     buy_2_count = sum(1 for m in result.mmds if m.mmd_type.value == "2buy")
     sell_2_count = sum(1 for m in result.mmds if m.mmd_type.value == "2sell")
+    buy_3_count = sum(1 for m in result.mmds if m.mmd_type.value == "3buy")
+    sell_3_count = sum(1 for m in result.mmds if m.mmd_type.value == "3sell")
     latest_mmd = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0) if result.mmds else None
 
-    # V6: 质量评级加成 — S/A级信号权重更高
-    grade_bonus: dict[str, int] = {"S": 8, "A": 5, "B": 2, "C": 0, "D": -3}
+    # V8: 多信号融合权重（按类型和置信度动态调整）
+    chanlun_score = 0
     if latest_mmd:
         q = getattr(latest_mmd, "quality", None)
         grade = q.grade if q else None
-        base_type_score = 0
-        if latest_mmd.mmd_type.value in ("1buy", "2buy"):
-            base_type_score = 15
-        elif latest_mmd.mmd_type.value in ("1sell", "2sell"):
-            base_type_score = -15
-        # 质量评级加成
+        conf = latest_mmd.confidence
+
+        # V8: 类型权重 + 置信度加成 + 质量评级加成
+        type_weights = {
+            "1buy": 20, "1sell": -20,
+            "2buy": 15, "2sell": -15,
+            "3buy": 10, "3sell": -10,
+        }
+        base_score = type_weights.get(latest_mmd.mmd_type.value, 0)
+
+        # V8: 置信度加成（高置信度信号权重更高）
+        conf_factor = 0.5 + conf * 0.5  # 0.5-1.0 范围
+        conf_bonus = base_score * (conf_factor - 0.5) * 2
+
+        # V8: 质量评级加成 — S/A级信号权重更高
+        grade_bonus: dict[str, int] = {"S": 10, "A": 6, "B": 3, "C": 0, "D": -5}
         quality_adj = grade_bonus.get(grade, 0) if grade else 0
-        # 置信度加成（放大：高置信度信号更可靠）
-        conf_bonus = latest_mmd.confidence * 12 - (1 - latest_mmd.confidence) * 4
-        score += base_type_score + quality_adj + conf_bonus
+
+        chanlun_score = base_score + conf_bonus + quality_adj
+
+        # V8: 多信号叠加加成（多种类型同时存在时额外加分）
+        multi_signal_bonus = 0
+        signal_types = set(m.mmd_type.value for m in result.mmds)
+        if "1buy" in signal_types and "2buy" in signal_types:
+            multi_signal_bonus += 5  # 1买+2买共振
+        elif "1sell" in signal_types and "2sell" in signal_types:
+            multi_signal_bonus -= 5  # 1卖+2卖共振
+        if "3buy" in signal_types and latest_mmd.mmd_type.value.startswith("buy"):
+            multi_signal_bonus += 3  # 3买确认
+        elif "3sell" in signal_types and latest_mmd.mmd_type.value.startswith("sell"):
+            multi_signal_bonus -= 3  # 3卖确认
+
+        score += chanlun_score + multi_signal_bonus
 
     # MACD
     if macd_golden:
@@ -554,7 +579,7 @@ async def diagnose_stock(
 
     score = max(0, min(100, score))
 
-    # ── 操作建议（V6增强：动态缠论信号描述）─────────────────────────────
+    # ── 操作建议（V8 增强：置信度分层 + 多信号融合描述）─────────────────────
     # 构建缠论信号描述
     chanlun_desc = ""
     if latest_mmd:
@@ -568,30 +593,37 @@ async def diagnose_stock(
             if top_reason:
                 chanlun_desc += f" [{top_reason}]"
 
-    if score >= 75:
+    # V8: 置信度分层 - 根据置信度和评分共同决定操作建议
+    if score >= 75 and latest_mmd and latest_mmd.confidence >= 0.75:
         action = "strong_buy"
         action_label = "强烈买入"
         action_color = "#22c55e"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"多指标共振看涨：MACD金叉 + 均线多头排列{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
-    elif score >= 60:
+        reason = f"多指标共振看涨，缠论高置信度信号确认{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
+    elif score >= 60 and latest_mmd and latest_mmd.confidence >= 0.65:
         action = "buy"
         action_label = "买入"
         action_color = "#4ade80"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"技术面偏多，可考虑分批建仓{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
+        reason = f"技术面偏多，缠论信号可参考{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
     elif score >= 45:
         action = "hold"
         action_label = "持有观察"
         action_color = "#f59e0b"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
         reason = f"方向不明确，建议观望{extra}。支撑位 {support_1} 元，阻力位 {resistance_1} 元，等待突破方向"
+    elif score >= 30 and latest_mmd and latest_mmd.confidence >= 0.65:
+        action = "sell"
+        action_label = "卖出"
+        action_color = "#f97316"
+        extra = f"。{chanlun_desc}" if chanlun_desc else ""
+        reason = f"技术面偏空，缠论信号可参考{extra}。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
     elif score >= 30:
         action = "sell"
         action_label = "卖出"
         action_color = "#f97316"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"技术面偏空，建议减仓{extra}。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
+        reason = f"技术面偏空，建议减仓{extra}。下方支撑 {support_1} 元"
     else:
         action = "strong_sell"
         action_label = "强烈卖出"
@@ -651,7 +683,11 @@ async def diagnose_stock(
                 {"dif": dif, "dea": dea, "hist": macd_hist} if len(dif) > 0 else None,
                 volatility,
             ) if latest_mmd else None,
+            # V12: 多时间框架共振评分（如有）
+            "confluence_score": round(getattr(latest_mmd, "confluence_score", 0.0), 2) if latest_mmd else None,
         },
+        # V12: 多级别联立分析结果（需前端传入低级别数据）
+        "multi_level_confluence": None,
         "macd": {
             "dif": round(latest_dif, 4),
             "dea": round(latest_dea, 4),

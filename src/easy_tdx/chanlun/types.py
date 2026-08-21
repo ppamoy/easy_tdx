@@ -188,6 +188,8 @@ class MMD:
     bi: BI | None = None  # 触发该买卖点的笔（用于可视化锚定日期）
     msg: str = ""
     confidence: float = 0.0  # 置信度 0-1，由分析器计算
+    quality: object = None  # 质量评级，由分析器计算
+    confluence_score: float = 0.0  # 多时间框架共振评分 0-1，由MultiLevelAnalyser设置
 
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
