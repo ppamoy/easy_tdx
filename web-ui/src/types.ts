@@ -379,6 +379,8 @@ export interface DiagnosisChanlunMmd {
   confidence: number | null
   msg: string | null
   quality: DiagnosisChanlunMmdQuality | null
+  // V15: K线形态确认
+  kline_pattern?: string | null
 }
 
 export interface DiagnosisChanlunRecentSignal {
@@ -390,6 +392,7 @@ export interface DiagnosisChanlunRecentSignal {
 export interface DiagnosisSignalReport {
   entry_price: number | null
   stop_loss: number | null
+  dynamic_stop: number | null
   take_profit_1: number | null
   take_profit_2: number | null
   risk_reward_ratio: number | null
@@ -397,6 +400,12 @@ export interface DiagnosisSignalReport {
   entry_reason: string | null
   risk_notes: string | null
   atr: number | null
+  enhancement_notes: string[] | null
+  trailing_stop: number | null
+  // V15: 信号衰减信息
+  signal_aging?: { aged: boolean; age_bars: number; decay_factor: number } | null
+  // V15: K线形态确认
+  kline_pattern?: string | null
 }
 
 export interface DiagnosisChanlun {

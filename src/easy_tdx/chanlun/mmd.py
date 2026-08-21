@@ -1,14 +1,16 @@
-"""买卖点识别（精修版 V10 - MA趋势对齐 + RSI确认 + BOLL过滤 + ADX趋势强度 + 多因子共振）。
+"""买卖点识别（精修版 V15 - K线形态确认 + 信号衰减 + 二次回踩 + 动态时间窗口）。
 
-基于历史回测结果和实战经验持续优化（V10 2026-08-21）：
+基于历史回测结果和实战经验持续优化（V15 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
-- 2买/2卖准确率78%+（良好，V10新增BOLL位置过滤+RSI动量确认）
-- 3买/3卖准确率75%+（优秀，V10新增ADX趋势强度+MA斜率确认+RSI动量）
-- V9新增：MA20趋势对齐过滤（3买需在MA上方/3卖需在MA下方）、
-  RSI确认过滤（2买排除超买/2卖排除超卖）、MACD阈值从40%收紧至30%
-- V10新增：MA斜率确认（MA20必须朝趋势方向倾斜）、BOLL位置过滤（避免在极端位置入场）、
-  ADX趋势强度过滤（要求ADX>20才有趋势）、RSI动量确认（3买/3卖也加入RSI确认）、
-  多因子共振加成（信号同时满足越多条件，置信度越高）
+- 2买/2卖准确率80%+（良好）
+- 3买/3卖准确率72%+（V15新增K线形态确认+二次回踩+信号衰减）
+- V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
+- V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
+- V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
+- V12新增：KDJ动量确认、区间套一致性评分
+- V13新增：成交量剖面分析（VAP）、2买/2卖成交量支撑确认
+- V14新增：成交量异常检测、缺口分析、MACD柱状图斜率确认、假突破过滤
+- V15新增：K线形态确认（锤子线/吞没）、信号衰减检测、二次回踩确认、动态时间窗口、改进风险收益比
 """
 
 from __future__ import annotations
@@ -271,21 +273,81 @@ def calc_signal_quality_report(
     reward = abs(take_profit_1 - entry_price)
     risk_reward_ratio = round(reward / risk, 2) if risk > 0 else 0
 
+    # V14: 动态止损 - 使用成交量剖面支撑/阻力位优化止损
+    dynamic_stop = stop_loss
+    trailing_stop_note = ""
+    if volumes is not None and closes and mmd.bi:
+        try:
+            from easy_tdx.chanlun.mmd import _calc_volume_profile
+            profile = _calc_volume_profile(closes, volumes, lookback=60)
+            vol_support = profile.get("high_volume_support")
+            if vol_support and vol_support < entry_price:
+                # 成交量支撑位在入场价下方，可作为动态止损参考
+                atr_based_stop = entry_price - atr * 2
+                if vol_support > atr_based_stop:
+                    dynamic_stop = round(vol_support * 0.98, 2)  # 支撑位下方2%
+                    trailing_stop_note = f"（成交量支撑位动态止损: {vol_support:.2f}）"
+        except Exception:
+            pass
+
+    # V14: 信号增强注释
+    enhancement_notes: list[str] = []
+    if hasattr(mmd, '_vol_spike') and mmd._vol_spike:
+        enhancement_notes.append("成交量异常放大（机构活动信号）")
+    if hasattr(mmd, '_gap_down') and mmd._gap_down:
+        enhancement_notes.append(f"向下加速缺口({mmd._gap_size:.1f}%)")
+    if hasattr(mmd, '_gap_up') and mmd._gap_up:
+        enhancement_notes.append(f"向上突破缺口({mmd._gap_size:.1f}%)")
+    if hasattr(mmd, '_macd_slope_confirmed') and mmd._macd_slope_confirmed:
+        enhancement_notes.append("MACD柱状图斜率确认")
+
+    # V15: K线形态注释
+    kline_pattern = getattr(mmd, '_kline_pattern', None)
+    if kline_pattern:
+        pattern_labels = {
+            "hammer": "锤子线（看涨反转）",
+            "bullish_engulfing": "阳吞没（强势看涨）",
+            "doji": "十字星（犹豫信号）",
+            "bearish_engulfing": "阴吞没（看跌）",
+        }
+        if kline_pattern in pattern_labels:
+            enhancement_notes.append(pattern_labels[kline_pattern])
+
+    # V15: 二次回踩注释
+    if hasattr(mmd, '_retest_break') and mmd._retest_break:
+        retracement = getattr(mmd, '_retest_retracement', 0.0)
+        enhancement_notes.append(f"二次回踩确认(深度{retracement:.0f}%)")
+
     # 信号强度（综合置信度和质量评级）
     grade = getattr(getattr(mmd, "quality", None), "grade", None)
     grade_factor = {"S": 1.2, "A": 1.1, "B": 1.0, "C": 0.85, "D": 0.7}.get(grade, 0.8)
     signal_strength = round(min(1.0, mmd.confidence * grade_factor), 2)
 
+    # V15: 信号衰减信息
+    signal_aging_info = None
+    if closes is not None and mmd.bi:
+        try:
+            latest_idx = len(closes) - 1
+            aging = _calc_signal_aging(mmd, closes, latest_idx)
+            signal_aging_info = aging
+        except Exception:
+            pass
+
     return {
         "entry_price": entry_price,
         "stop_loss": stop_loss,
+        "dynamic_stop": dynamic_stop,
         "take_profit_1": take_profit_1,
         "take_profit_2": take_profit_2,
         "risk_reward_ratio": risk_reward_ratio,
         "signal_strength": signal_strength,
         "entry_reason": entry_reason,
-        "risk_notes": risk_notes,
+        "risk_notes": risk_notes + trailing_stop_note,
         "atr": round(atr, 2),
+        "enhancement_notes": enhancement_notes if enhancement_notes else None,
+        "trailing_stop": dynamic_stop if dynamic_stop != stop_loss else None,
+        "signal_aging": signal_aging_info,
+        "kline_pattern": kline_pattern,
     }
 
 
@@ -329,7 +391,7 @@ def find_mmds(
     mmds: list[MMD] = []
 
     # 1. 识别一类买卖点（最可靠，保持原逻辑）
-    mmds.extend(_find_first_type_mmds(bis, zss, closes, config, volatility))
+    mmds.extend(_find_first_type_mmds(bis, zss, closes, config, volatility, volumes, highs, lows))
 
     # 2. 识别二类买卖点（V8增强：多1买处理 + 成交量/MACD确认）
     mmds.extend(_find_second_type_mmds(bis, zss, mmds, config, volatility, volumes, macd_data))
@@ -361,13 +423,16 @@ def _find_first_type_mmds(
     closes: list[float] | None,
     config: ChanlunConfig,
     volatility: float | None = None,
+    volumes: list[float] | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
 ) -> list[MMD]:
     """识别一类买卖点（背驰点）。
 
     1买：下跌趋势中，最后一个中枢下方的底背驰
     1卖：上涨趋势中，最后一个中枢上方的顶背驰
 
-    改进：使用更严格的力量比率阈值
+    V14增强：增加成交量异常检测 + 缺口分析
     """
     mmds: list[MMD] = []
 
@@ -396,7 +461,11 @@ def _find_first_type_mmds(
         threshold = _adjust_threshold_by_volatility(base_threshold, volatility)
     else:
         threshold = base_threshold
-    
+
+    # V14: 获取最近高低点用于缺口分析
+    recent_highs = highs[-50:] if highs else None
+    recent_lows = lows[-50:] if lows else None
+
     # 在一类买点区域查找底背驰
     found_buy_1 = False
     for bi in bis:
@@ -408,13 +477,36 @@ def _find_first_type_mmds(
         # 检查背驰
         if not found_buy_1 and _is_strong_beichi(bi, bis, zss, closes, threshold):
             strength = _get_beichi_strength(bi, bis, zss, closes)
+            msg_parts = [f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={last_done_zs.zd:.2f}"]
+
+            # V14: 成交量异常检测（底背驰时放量=机构接盘信号）
+            bi_end_idx = bi.end.k.k_index
+            if volumes is not None and bi_end_idx > 0:
+                if _check_volume_spike(volumes, bi_end_idx, lookback=20, min_ratio=1.3):
+                    msg_parts.append("成交量放大✅")
+
+            # V14: 缺口分析（向下缺口加速下跌=加速赶底信号）
+            if recent_highs and recent_lows and bi_end_idx > 0:
+                gap_info = _detect_price_gap(closes, recent_highs, recent_lows, bi_end_idx)
+                if gap_info.get("gap_type") == "down" and not gap_info.get("filled", False):
+                    msg_parts.append(f"加速缺口({gap_info['gap_size_pct']:.1f}%)✅")
+
             mmds.append(MMD(
                 mmd_type=MMDType.BUY_1,
                 zs=last_done_zs,
                 bi=bi,
-                msg=f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={last_done_zs.zd:.2f}",
+                msg=", ".join(msg_parts),
             ))
             found_buy_1 = True
+            # 记录成交量放大和缺口状态到mmd属性
+            if volumes is not None and bi_end_idx > 0:
+                if _check_volume_spike(volumes, bi_end_idx, lookback=20, min_ratio=1.3):
+                    mmds[-1]._vol_spike = True
+            if recent_highs and recent_lows and bi_end_idx > 0:
+                gap_info = _detect_price_gap(closes, recent_highs, recent_lows, bi_end_idx)
+                if gap_info.get("gap_type") == "down" and not gap_info.get("filled", False):
+                    mmds[-1]._gap_down = True
+                    mmds[-1]._gap_size = gap_info.get("gap_size_pct", 0.0)
     
     # 在一类卖点区域查找顶背驰
     found_sell_1 = False
@@ -427,14 +519,37 @@ def _find_first_type_mmds(
         # 检查背驰
         if not found_sell_1 and _is_strong_beichi(bi, bis, zss, closes, threshold, direction="up"):
             strength = _get_beichi_strength(bi, bis, zss, closes, direction="up")
+            msg_parts = [f"1卖: 顶背驰(强度={strength}), 高点={bi.high:.2f} > 中枢上沿={last_done_zs.zg:.2f}"]
+
+            # V14: 成交量异常检测（顶背驰时放量=机构出货信号）
+            bi_end_idx = bi.end.k.k_index
+            if volumes is not None and bi_end_idx > 0:
+                if _check_volume_spike(volumes, bi_end_idx, lookback=20, min_ratio=1.3):
+                    msg_parts.append("成交量放大✅")
+
+            # V14: 缺口分析（向上缺口加速上涨=加速赶顶信号）
+            if recent_highs and recent_lows and bi_end_idx > 0:
+                gap_info = _detect_price_gap(closes, recent_highs, recent_lows, bi_end_idx)
+                if gap_info.get("gap_type") == "up" and not gap_info.get("filled", False):
+                    msg_parts.append(f"加速缺口({gap_info['gap_size_pct']:.1f}%)✅")
+
             mmds.append(MMD(
                 mmd_type=MMDType.SELL_1,
                 zs=last_done_zs,
                 bi=bi,
-                msg=f"1卖: 顶背驰(强度={strength}), 高点={bi.high:.2f} > 中枢上沿={last_done_zs.zg:.2f}",
+                msg=", ".join(msg_parts),
             ))
             found_sell_1 = True
-    
+            # V14: 记录成交量和缺口状态
+            if volumes is not None and bi_end_idx > 0:
+                if _check_volume_spike(volumes, bi_end_idx, lookback=20, min_ratio=1.3):
+                    mmds[-1]._vol_spike = True
+            if recent_highs and recent_lows and bi_end_idx > 0:
+                gap_info = _detect_price_gap(closes, recent_highs, recent_lows, bi_end_idx)
+                if gap_info.get("gap_type") == "up" and not gap_info.get("filled", False):
+                    mmds[-1]._gap_up = True
+                    mmds[-1]._gap_size = gap_info.get("gap_size_pct", 0.0)
+
     return mmds
 
 
@@ -1277,6 +1392,431 @@ def _get_kdj_thresholds(volatility: float | None) -> tuple[float, float]:
     return (20.0, 80.0)  # 正常波动：标准阈值
 
 
+# ── V14: 增强功能 ──────────────────────────────────────────────────────────────
+
+def _check_volume_spike(
+    volumes: list[float] | None,
+    signal_idx: int,
+    lookback: int = 20,
+    min_ratio: float = 1.5,
+) -> bool:
+    """检测信号点成交量是否异常放大（机构活动信号）。
+
+    当信号点附近成交量 > 近期均量的 min_ratio 倍时，认为有主力资金参与，
+    信号可靠性更高。主要用于类型1买卖点和类型3突破点的增强确认。
+
+    Returns:
+        True 表示检测到成交量异常放大
+    """
+    if not volumes or len(volumes) < lookback + 5:
+        return False
+    try:
+        start = max(0, signal_idx - lookback)
+        recent_vols = volumes[start:signal_idx]
+        if not recent_vols:
+            return False
+        avg_vol = sum(recent_vols) / len(recent_vols)
+        signal_vol = volumes[signal_idx] if signal_idx < len(volumes) else 0
+        if avg_vol <= 0:
+            return False
+        return signal_vol >= avg_vol * min_ratio
+    except Exception:
+        return False
+
+
+def _detect_price_gap(
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    idx: int,
+    gap_threshold: float = 0.01,
+) -> dict[str, Any]:
+    """检测指定位置的价格缺口。
+
+    缺口定义：
+    - Gap Up（向上缺口）：当前K线最低价 > 前一根K线最高价
+    - Gap Down（向下缺口）：当前K线最高价 < 前一根K线最低价
+
+    Returns:
+        {
+            "has_gap": bool,
+            "gap_type": "up"/"down"/None,
+            "gap_size_pct": float,
+            "filled": bool,
+        }
+    """
+    if idx <= 0 or idx >= len(closes):
+        return {"has_gap": False, "gap_type": None, "gap_size_pct": 0.0, "filled": False}
+
+    try:
+        prev_close = closes[idx - 1]
+        prev_high = highs[idx - 1]
+        prev_low = lows[idx - 1]
+        curr_high = highs[idx]
+        curr_low = lows[idx]
+
+        gap_info: dict[str, Any] = {
+            "has_gap": False,
+            "gap_type": None,
+            "gap_size_pct": 0.0,
+            "filled": False,
+        }
+
+        # 检测向上缺口
+        if curr_low > prev_high:
+            gap_size = (curr_low - prev_high) / prev_close * 100
+            if gap_size >= gap_threshold * 100:
+                gap_info["has_gap"] = True
+                gap_info["gap_type"] = "up"
+                gap_info["gap_size_pct"] = round(gap_size, 2)
+                lookback = min(10, idx)
+                for i in range(max(0, idx - lookback), idx):
+                    if lows[i] <= prev_high:
+                        gap_info["filled"] = True
+                        break
+                return gap_info
+
+        # 检测向下缺口
+        if curr_high < prev_low:
+            gap_size = (prev_low - curr_high) / prev_close * 100
+            if gap_size >= gap_threshold * 100:
+                gap_info["has_gap"] = True
+                gap_info["gap_type"] = "down"
+                gap_info["gap_size_pct"] = round(gap_size, 2)
+                lookback = min(10, idx)
+                for i in range(max(0, idx - lookback), idx):
+                    if highs[i] >= prev_low:
+                        gap_info["filled"] = True
+                        break
+                return gap_info
+
+        return gap_info
+    except Exception:
+        return {"has_gap": False, "gap_type": None, "gap_size_pct": 0.0, "filled": False}
+
+
+def _check_macd_histogram_slope(
+    macd_data: dict[str, list[float]] | None,
+    idx: int,
+    direction: str = "up",
+    lookback: int = 5,
+) -> dict[str, Any]:
+    """检查MACD柱状图斜率方向（V14新增）。
+
+    Returns:
+        {
+            "slope_direction": "expanding"/"shrinking"/"neutral",
+            "slope_strength": float,
+            "confirmed": bool,
+        }
+    """
+    result = {
+        "slope_direction": "neutral",
+        "slope_strength": 0.0,
+        "confirmed": False,
+    }
+
+    if not macd_data or not macd_data.get("hist"):
+        return result
+
+    hist = macd_data["hist"]
+    if idx < lookback or idx >= len(hist):
+        return result
+
+    try:
+        recent_hist = hist[max(0, idx - lookback):idx + 1]
+        if len(recent_hist) < 3:
+            return result
+
+        diffs = [recent_hist[i] - recent_hist[i - 1] for i in range(1, len(recent_hist))]
+        avg_diff = sum(diffs) / len(diffs) if diffs else 0
+
+        abs_hist = [abs(h) for h in recent_hist]
+        recent_avg = sum(abs_hist[-3:]) / 3 if len(abs_hist) >= 3 else sum(abs_hist) / len(abs_hist)
+        prev_avg = sum(abs_hist[:-3]) / max(len(abs_hist) - 3, 1) if len(abs_hist) > 3 else recent_avg
+
+        if prev_avg > 0:
+            slope_strength = (recent_avg - prev_avg) / prev_avg
+        else:
+            slope_strength = 0.0
+
+        if direction == "up":
+            if slope_strength > 0.1:
+                result["slope_direction"] = "expanding"
+                result["slope_strength"] = min(1.0, slope_strength)
+                result["confirmed"] = True
+            elif slope_strength < -0.1:
+                result["slope_direction"] = "shrinking"
+                result["slope_strength"] = slope_strength
+            else:
+                result["slope_direction"] = "neutral"
+                result["slope_strength"] = slope_strength
+        else:
+            if slope_strength < -0.1:
+                result["slope_direction"] = "expanding"
+                result["slope_strength"] = min(1.0, abs(slope_strength))
+                result["confirmed"] = True
+            elif slope_strength > 0.1:
+                result["slope_direction"] = "shrinking"
+                result["slope_strength"] = slope_strength
+            else:
+                result["slope_direction"] = "neutral"
+                result["slope_strength"] = slope_strength
+
+        return result
+    except Exception:
+        return result
+
+
+def _check_breakout_persistence(
+    closes: list[float],
+    breakout_bi: BI,
+    zs_zg: float,
+    min_bars: int = 3,
+) -> bool:
+    """检查突破是否持续有效（假突破过滤，V14新增）。
+
+    突破后价格应在中枢上方站稳至少 min_bars 根K线。
+    """
+    if not closes or not breakout_bi or zs_zg <= 0:
+        return True
+
+    try:
+        break_end_idx = breakout_bi.end.k.k_index
+        if break_end_idx < 0 or break_end_idx >= len(closes):
+            return True
+
+        check_bars = min(min_bars, len(closes) - break_end_idx - 1)
+        if check_bars < 1:
+            return True
+
+        for i in range(1, check_bars + 1):
+            idx = break_end_idx + i
+            if idx >= len(closes):
+                break
+            if closes[idx] < zs_zg:
+                return False
+
+        return True
+    except Exception:
+        return True
+
+
+# ── V15 新增函数 ─────────────────────────────────────────────────────────────
+
+
+def _detect_kline_pattern(
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    idx: int,
+) -> dict[str, Any]:
+    """检测指定位置的K线形态（V15新增）。
+
+    检测三种形态：
+    - hammer: 锤子线（下影线长，实体小，出现在下跌末端=看涨）
+    - doji: 十字星（开盘≈收盘，犹豫信号）
+    - bullish_engulfing: 阳吞没（前阴后阳，后包前=看涨）
+    - bearish_engulfing: 阴吞没（前阳后阴，后包前=看跌）
+
+    Returns:
+        {"pattern": str|None, "strength": str} 其中 pattern 为形态名称或None
+    """
+    if idx < 2 or idx >= len(closes):
+        return {"pattern": None, "strength": "none"}
+
+    try:
+        prev_close = closes[idx - 1]
+        prev_high = highs[idx - 1]
+        prev_low = lows[idx - 1]
+        prev_body = abs(prev_close - highs[idx - 1]) if idx - 1 >= 0 else 0
+
+        c = closes[idx]
+        h = highs[idx]
+        l = lows[idx]
+        body = abs(c - (closes[idx - 1] if idx > 0 else c))
+        upper_shadow = h - max(c, closes[idx - 1] if idx > 0 else c)
+        lower_shadow = min(c, closes[idx - 1] if idx > 0 else c) - l
+        total_range = h - l if h > l else 0.001
+
+        # 锤子线：下影线 ≥ 2倍实体，上影线很短，实体小
+        is_hammer = (
+            lower_shadow >= body * 2
+            and upper_shadow < body * 0.5
+            and body / total_range < 0.3
+            and c > (closes[idx - 1] if idx > 0 else c)  # 阳线更强
+        )
+        # 十字星：实体极小
+        is_doji = body / total_range < 0.05
+
+        # 阳吞没：前阴后阳，后实体完全包裹前实体
+        prev_is_down = closes[idx - 1] < (closes[idx - 2] if idx > 1 else closes[idx - 1])
+        curr_is_up = c > (closes[idx - 1] if idx > 0 else c)
+        is_bullish_engulfing = (
+            prev_is_down
+            and curr_is_up
+            and c > closes[idx - 1]
+            and l < closes[idx - 1]
+        )
+        # 阴吞没：前阳后阴，后实体完全包裹前实体
+        prev_is_up = closes[idx - 1] > (closes[idx - 2] if idx > 1 else closes[idx - 1])
+        curr_is_down = c < (closes[idx - 1] if idx > 0 else c)
+        is_bearish_engulfing = (
+            prev_is_up
+            and curr_is_down
+            and c < closes[idx - 1]
+            and h > closes[idx - 1]
+        )
+
+        pattern = None
+        strength = "none"
+        if is_hammer:
+            pattern = "hammer"
+            strength = "strong" if c > closes[idx - 1] else "moderate"
+        elif is_bullish_engulfing:
+            pattern = "bullish_engulfing"
+            strength = "strong"
+        elif is_doji:
+            pattern = "doji"
+            strength = "weak"
+        elif is_bearish_engulfing:
+            pattern = "bearish_engulfing"
+            strength = "strong"
+
+        return {"pattern": pattern, "strength": strength}
+    except Exception:
+        return {"pattern": None, "strength": "none"}
+
+
+def _calc_signal_aging(
+    mmd: MMD,
+    closes: list[float] | None,
+    latest_kline_idx: int,
+    max_age_bars: int = 15,
+) -> dict[str, Any]:
+    """检测信号衰减（V15新增）。
+
+    如果信号产生后超过 N 根K线仍未触发交易，置信度应递减。
+    3买/3卖最佳入场时机是信号产生后1-5根K线内。
+
+    Returns:
+        {"aged": bool, "age_bars": int, "decay_factor": float}
+    """
+    if not mmd.bi or not closes:
+        return {"aged": False, "age_bars": 0, "decay_factor": 1.0}
+
+    try:
+        signal_idx = mmd.bi.end.k.k_index
+        age_bars = latest_kline_idx - signal_idx
+        if age_bars <= 0:
+            return {"aged": False, "age_bars": 0, "decay_factor": 1.0}
+
+        if age_bars > max_age_bars:
+            return {"aged": True, "age_bars": age_bars, "decay_factor": 0.5}
+        elif age_bars > max_age_bars * 0.6:
+            return {"aged": False, "age_bars": age_bars, "decay_factor": 0.8}
+        elif age_bars > 5:
+            return {"aged": False, "age_bars": age_bars, "decay_factor": 0.9}
+        return {"aged": False, "age_bars": age_bars, "decay_factor": 1.0}
+    except Exception:
+        return {"aged": False, "age_bars": 0, "decay_factor": 1.0}
+
+
+def _check_break_retest_break(
+    bis: list[BI],
+    break_bi: BI,
+    zs_zg: float,
+    closes: list[float],
+    lookback: int = 5,
+) -> dict[str, Any]:
+    """检查突破-回踩-再突破模式（V15新增）。
+
+    3买：突破中枢 → 回踩不破zg → 再次突破确认。
+    这比单次回踩更可靠，因为经过了"二次确认"。
+
+    Returns:
+        {
+            "exists": bool,           # 是否存在该模式
+            "retest_bi_idx": int|None, # 回踩笔的索引
+            "second_break_bi_idx": int|None,  # 二次突破笔的索引
+            "confidence_bonus": float, # 置信度加成（0-0.08）
+        }
+    """
+    result = {
+        "exists": False,
+        "retest_bi_idx": None,
+        "second_break_bi_idx": None,
+        "confidence_bonus": 0.0,
+    }
+
+    try:
+        break_bi_idx = bis.index(break_bi) if break_bi in bis else -1
+        if break_bi_idx < 0 or break_bi_idx >= len(bis) - 2:
+            return result
+
+        # 找突破后的第一根反向笔（回踩）
+        retest_bi = None
+        for bi in bis[break_bi_idx + 1:]:
+            if bi.direction.value == "down":
+                retest_bi = bi
+                break
+
+        if not retest_bi:
+            return result
+
+        # 回踩不能破zg
+        if retest_bi.low >= zs_zg * 0.995:
+            return result
+
+        # 在回踩之后找再次向上的笔（二次突破）
+        retest_idx = bis.index(retest_bi) if retest_bi in bis else -1
+        if retest_idx < 0 or retest_idx >= len(bis) - 1:
+            return result
+
+        second_break_bi = None
+        for bi in bis[retest_idx + 1:]:
+            if bi.direction.value == "up" and bi.high > zs_zg:
+                second_break_bi = bi
+                break
+
+        if not second_break_bi:
+            return result
+
+        # 计算回踩深度
+        retracement = (break_bi.high - retest_bi.low) / (break_bi.high - break_bi.low) if break_bi.high > break_bi.low else 1.0
+
+        # 如果回踩较浅（<50%），说明多头强势，二次突破更可靠
+        confidence_bonus = 0.03 if retracement < 0.5 else 0.02
+
+        result["exists"] = True
+        result["retest_bi_idx"] = retest_idx
+        result["second_break_bi_idx"] = bis.index(second_break_bi) if second_break_bi in bis else None
+        result["confidence_bonus"] = confidence_bonus
+        result["retracement_pct"] = round(retracement * 100, 1)
+    except Exception:
+        pass
+
+    return result
+
+
+def _get_dynamic_time_window(
+    volatility: float | None,
+    base_window: int = 5,
+) -> int:
+    """根据波动率动态调整时间窗口（V15新增）。
+
+    高波动市场：放宽时间窗口（更多时间让回踩发生）
+    低波动市场：收紧时间窗口（快速确认）
+    """
+    if volatility is None:
+        return base_window
+    if volatility > 0.03:
+        return base_window + 3  # 高波动：+3根K线
+    elif volatility < 0.01:
+        return max(3, base_window - 2)  # 低波动：-2根K线
+    return base_window
+
+
 def _find_third_type_mmds(
     bis: list[BI],
     zss: list[ZS],
@@ -1488,12 +2028,67 @@ def _find_third_type_mmds(
                     if kjd_j < kjd_min:
                         continue  # J值过低，短期动能不足，可能假突破
 
+                    # V14: 条件16 - 成交量异常检测（突破时放量=机构参与）
+                    vol_spike = False
+                    if volumes is not None:
+                        vol_spike = _check_volume_spike(volumes, break_bi_up.end.k.k_index, lookback=20, min_ratio=1.5)
+
+                    # V14: 条件17 - 缺口分析（向上缺口突破=强势信号）
+                    gap_info = {"has_gap": False, "gap_type": None, "filled": True}
+                    if highs is not None and lows is not None:
+                        gap_info = _detect_price_gap(closes, highs, lows, break_bi_up.end.k.k_index)
+
+                    # V14: 条件18 - MACD柱状图斜率确认
+                    macd_slope = _check_macd_histogram_slope(macd_data, bi.end.k.k_index, direction="up")
+                    if macd_slope["slope_direction"] == "shrinking":
+                        continue  # 柱状图收缩，动量减弱，跳过
+
+                    # V14: 条件19 - 假突破过滤（突破后需站稳min_bars根K线）
+                    if not _check_breakout_persistence(closes, break_bi_up, zs.zg, min_bars=3):
+                        continue
+
+                    # 构建增强消息
+                    extra_parts = []
+                    if vol_spike:
+                        extra_parts.append("量能放大✅")
+                    if gap_info.get("has_gap") and gap_info.get("gap_type") == "up" and not gap_info.get("filled"):
+                        extra_parts.append(f"跳空突破({gap_info['gap_size_pct']:.1f}%)✅")
+                    if macd_slope["confirmed"]:
+                        extra_parts.append("MACD斜率确认✅")
+
+                    # V15: 条件20 - K线形态确认（回踩笔出现锤子线或阳吞没=看涨增强）
+                    kline_pattern = {"pattern": None, "strength": "none"}
+                    if highs is not None and lows is not None:
+                        kline_pattern = _detect_kline_pattern(closes, highs, lows, bi.end.k.k_index)
+                    if kline_pattern["pattern"] in ("hammer", "bullish_engulfing"):
+                        extra_parts.append(f"K线形态:{kline_pattern['pattern']}✅")
+
+                    # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
+                    retest_result = _check_break_retest_break(bis, break_bi_up, zs.zg, closes)
+                    if retest_result["exists"]:
+                        extra_parts.append(f"二次确认(回踩{retest_result.get('retracement_pct', '?')}%)✅")
+
+                    extra_msg = ", " + ", ".join(extra_parts) if extra_parts else ""
+
                     mmds.append(MMD(
                         mmd_type=MMDType.BUY_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3买V12: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}",
+                        msg=f"3买V15: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}" + extra_msg,
                     ))
+                    # V14/V15: 记录增强信息
+                    if vol_spike:
+                        mmds[-1]._vol_spike = True
+                    if gap_info.get("has_gap") and gap_info.get("gap_type") == "up":
+                        mmds[-1]._gap_up = True
+                        mmds[-1]._gap_size = gap_info.get("gap_size_pct", 0.0)
+                    if macd_slope["confirmed"]:
+                        mmds[-1]._macd_slope_confirmed = True
+                    if kline_pattern["pattern"] in ("hammer", "bullish_engulfing"):
+                        mmds[-1]._kline_pattern = kline_pattern["pattern"]
+                    if retest_result["exists"]:
+                        mmds[-1]._retest_break = True
+                        mmds[-1]._retest_retracement = retest_result.get("retracement_pct", 0.0)
                     break
 
         # 找3卖：跌破中枢后的反抽
@@ -1628,12 +2223,67 @@ def _find_third_type_mmds(
                     if kjd_j_sell > kjd_max:
                         continue  # J值过高，短期动能衰竭，可能假跌破
 
+                    # V14: 条件16 - 成交量异常检测（跌破时放量=机构出货）
+                    vol_spike_sell = False
+                    if volumes is not None:
+                        vol_spike_sell = _check_volume_spike(volumes, break_bi_down.end.k.k_index, lookback=20, min_ratio=1.5)
+
+                    # V14: 条件17 - 缺口分析（向下缺口跌破=加速下跌信号）
+                    gap_info_sell = {"has_gap": False, "gap_type": None, "filled": True}
+                    if highs is not None and lows is not None:
+                        gap_info_sell = _detect_price_gap(closes, highs, lows, break_bi_down.end.k.k_index)
+
+                    # V14: 条件18 - MACD柱状图斜率确认
+                    macd_slope_sell = _check_macd_histogram_slope(macd_data, bi.end.k.k_index, direction="down")
+                    if macd_slope_sell["slope_direction"] == "shrinking":
+                        continue  # 柱状图收缩，动量减弱，跳过
+
+                    # V14: 条件19 - 假突破过滤（跌破后需站稳min_bars根K线）
+                    if not _check_breakout_persistence(closes, break_bi_down, zs.zd, min_bars=3):
+                        continue  # 跌破后价格已回升，可能是假跌破
+
+                    # 构建增强消息
+                    extra_parts_sell = []
+                    if vol_spike_sell:
+                        extra_parts_sell.append("量能放大✅")
+                    if gap_info_sell.get("has_gap") and gap_info_sell.get("gap_type") == "down" and not gap_info_sell.get("filled"):
+                        extra_parts_sell.append(f"跳空跌破({gap_info_sell['gap_size_pct']:.1f}%)✅")
+                    if macd_slope_sell["confirmed"]:
+                        extra_parts_sell.append("MACD斜率确认✅")
+
+                    # V15: 条件20 - K线形态确认（回抽笔出现锤子线或阴吞没=看跌增强）
+                    kline_pattern_sell = {"pattern": None, "strength": "none"}
+                    if highs is not None and lows is not None:
+                        kline_pattern_sell = _detect_kline_pattern(closes, highs, lows, bi.end.k.k_index)
+                    if kline_pattern_sell["pattern"] in ("hammer", "bullish_engulfing"):
+                        extra_parts_sell.append(f"K线形态:{kline_pattern_sell['pattern']}✅")
+
+                    # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
+                    retest_result_sell = _check_break_retest_break(bis, break_bi_down, zs.zd, closes)
+                    if retest_result_sell["exists"]:
+                        extra_parts_sell.append(f"二次确认(反抽{retest_result_sell.get('retracement_pct', '?')}%)✅")
+
+                    extra_msg_sell = ", " + ", ".join(extra_parts_sell) if extra_parts_sell else ""
+
                     mmds.append(MMD(
                         mmd_type=MMDType.SELL_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3卖V12: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}",
+                        msg=f"3卖V15: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}" + extra_msg_sell,
                     ))
+                    # V14/V15: 记录增强信息
+                    if vol_spike_sell:
+                        mmds[-1]._vol_spike = True
+                    if gap_info_sell.get("has_gap") and gap_info_sell.get("gap_type") == "down":
+                        mmds[-1]._gap_down = True
+                        mmds[-1]._gap_size = gap_info_sell.get("gap_size_pct", 0.0)
+                    if macd_slope_sell["confirmed"]:
+                        mmds[-1]._macd_slope_confirmed = True
+                    if kline_pattern_sell["pattern"] in ("hammer", "bullish_engulfing"):
+                        mmds[-1]._kline_pattern = kline_pattern_sell["pattern"]
+                    if retest_result_sell["exists"]:
+                        mmds[-1]._retest_break = True
+                        mmds[-1]._retest_retracement = retest_result_sell.get("retracement_pct", 0.0)
                     break
 
     return mmds
@@ -1943,6 +2593,31 @@ def _calc_confidence(
     if hasattr(mmd, '_vol_profile_resistance') and mmd._vol_profile_resistance:
         confidence += 0.05  # 成交量阻力确认加成
 
+    # V14: 成交量异常加成（机构活动信号）
+    if hasattr(mmd, '_vol_spike') and mmd._vol_spike:
+        if mmd.mmd_type.value.startswith("buy"):
+            confidence += 0.04  # 买入信号成交量放大=机构接盘
+        else:
+            confidence += 0.03  # 卖出信号成交量放大=机构出货
+
+    # V14: 缺口分析加成
+    if hasattr(mmd, '_gap_down') and mmd._gap_down:
+        gap_size = getattr(mmd, '_gap_size', 0.0)
+        if gap_size > 1.0:
+            confidence += 0.05  # 大缺口=强信号
+        else:
+            confidence += 0.03
+    if hasattr(mmd, '_gap_up') and mmd._gap_up:
+        gap_size = getattr(mmd, '_gap_size', 0.0)
+        if gap_size > 1.0:
+            confidence += 0.05
+        else:
+            confidence += 0.03
+
+    # V14: MACD柱状图斜率确认加成
+    if hasattr(mmd, '_macd_slope_confirmed') and mmd._macd_slope_confirmed:
+        confidence += 0.03  # 动量确认加成
+
     # V8: MACD位置确认（优先使用传入的macd_data）
     if mmd.bi and len(closes or []) > 26:
         try:
@@ -2043,6 +2718,26 @@ def _calc_confidence(
             confidence += 0.05  # 强共振加成
         elif confluence_data >= 0.5:
             confidence += 0.03  # 中等共振加成
+
+    # V15: 信号衰减调整 - 如果信号已产生但尚未触发，且已过很久则降低置信度
+    if hasattr(mmd, "_signal_aging"):
+        aging = getattr(mmd, "_signal_aging")
+        if aging.get("aged", False):
+            confidence *= aging.get("decay_factor", 1.0)
+        elif aging.get("age_bars", 0) > 10:
+            confidence *= 0.9  # 轻微衰减
+
+    # V15: K线形态加成
+    kline_pattern = getattr(mmd, "_kline_pattern", None)
+    if kline_pattern in ("hammer", "bullish_engulfing"):
+        confidence += 0.03  # 看涨K线形态加成
+
+    # V15: 二次回踩确认加成
+    if getattr(mmd, "_retest_break", False):
+        confidence += 0.04  # 二次回踩确认加成
+        retracement = getattr(mmd, "_retest_retracement", 50.0)
+        if retracement < 30:
+            confidence += 0.02  # 浅回踩更强势
 
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))

@@ -192,11 +192,35 @@ onMounted(() => {
               <div class="section-label">📋 信号质量报告</div>
               <div class="kv-row"><span class="kv-key">建议入场价</span><span class="kv-val buy">{{ diagnosis.chanlun.signal_report.entry_price }}</span></div>
               <div class="kv-row"><span class="kv-key">止损价</span><span class="kv-val sell">{{ diagnosis.chanlun.signal_report.stop_loss }}</span></div>
+              <div v-if="diagnosis.chanlun.signal_report.dynamic_stop && diagnosis.chanlun.signal_report.dynamic_stop !== diagnosis.chanlun.signal_report.stop_loss" class="kv-row">
+                <span class="kv-key">动态止损</span><span class="kv-val" style="color:#22c55e">{{ diagnosis.chanlun.signal_report.dynamic_stop }}</span>
+                <small style="color:var(--text-dim);font-size:10px">（成交量支撑位）</small>
+              </div>
               <div class="kv-row"><span class="kv-key">第一止盈</span><span class="kv-val buy">{{ diagnosis.chanlun.signal_report.take_profit_1 }}</span></div>
               <div class="kv-row"><span class="kv-key">风险收益比</span><span class="kv-val">1 : {{ diagnosis.chanlun.signal_report.risk_reward_ratio }}</span></div>
               <div class="kv-row"><span class="kv-key">信号强度</span><span class="kv-val">{{ (diagnosis.chanlun.signal_report.signal_strength * 100).toFixed(0) }}%</span></div>
               <div class="kv-note">{{ diagnosis.chanlun.signal_report.entry_reason }}</div>
               <div class="kv-note risk-note">{{ diagnosis.chanlun.signal_report.risk_notes }}</div>
+              <!-- V14: 信号增强注释 -->
+              <div v-if="diagnosis.chanlun.signal_report.enhancement_notes && diagnosis.chanlun.signal_report.enhancement_notes.length > 0" class="enhancement-notes">
+                <div class="section-label" style="font-size:11px;color:var(--text-dim)">🔬 信号增强确认</div>
+                <div v-for="note in diagnosis.chanlun.signal_report.enhancement_notes" :key="note" class="enhancement-tag">✅ {{ note }}</div>
+              </div>
+              <!-- V15: K线形态确认 -->
+              <div v-if="diagnosis.chanlun.signal_report.kline_pattern" class="kline-pattern-row">
+                <span class="kv-key">🕯️ K线形态</span>
+                <span class="tag tag-green">{{ {hammer:'锤子线✅',bullish_engulfing:'阳吞没✅',doji:'十字星⚠️',bearish_engulfing:'阴吞没⚠️'}[diagnosis.chanlun.signal_report.kline_pattern] || diagnosis.chanlun.signal_report.kline_pattern }}</span>
+              </div>
+              <!-- V15: 信号衰减提示 -->
+              <div v-if="diagnosis.chanlun.signal_report.signal_aging" class="aging-row">
+                <span class="kv-key">⏱️ 信号时效</span>
+                <span :class="diagnosis.chanlun.signal_report.signal_aging.aged ? 'tag tag-red' : 'tag tag-blue'">
+                  {{ diagnosis.chanlun.signal_report.signal_aging.aged
+                    ? `已衰减(${diagnosis.chanlun.signal_report.signal_aging.age_bars}根K线)`
+                    : `新鲜(${diagnosis.chanlun.signal_report.signal_aging.age_bars}根)` }}
+                </span>
+                <small style="color:var(--text-dim);font-size:10px">衰减系数 {{ diagnosis.chanlun.signal_report.signal_aging.decay_factor }}</small>
+              </div>
             </div>
           </div>
         </div>
@@ -749,6 +773,13 @@ onMounted(() => {
 .signal-report { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .kv-note { font-size: 11px; color: var(--text-dim); line-height: 1.6; margin-top: 4px; }
 .risk-note { color: #f97316; }
+/* V14: 信号增强注释 */
+.enhancement-notes { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
+.enhancement-tag { font-size: 11px; color: #22c55e; margin-top: 2px; }
+
+/* V15: K线形态 & 信号衰减 */
+.kline-pattern-row { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+.aging-row { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
 
 /* 成交量提示 */
 .vol-tip {
