@@ -387,6 +387,18 @@ export interface DiagnosisChanlunRecentSignal {
   quality: { grade: 'S'|'A'|'B'|'C'|'D'|null; score: number|null } | null
 }
 
+export interface DiagnosisSignalReport {
+  entry_price: number | null
+  stop_loss: number | null
+  take_profit_1: number | null
+  take_profit_2: number | null
+  risk_reward_ratio: number | null
+  signal_strength: number | null
+  entry_reason: string | null
+  risk_notes: string | null
+  atr: number | null
+}
+
 export interface DiagnosisChanlun {
   bi_count: number
   zs_count: number
@@ -397,6 +409,15 @@ export interface DiagnosisChanlun {
   sell_2_count: number
   latest_mmd: DiagnosisChanlunMmd | null
   recent_signals: DiagnosisChanlunRecentSignal[]
+  confluence_score: number | null
+  volume_profile: {
+    support: number | null
+    resistance: number | null
+    current_rank: number
+    cluster_up: boolean
+    cluster_down: boolean
+  } | null
+  signal_report: DiagnosisSignalReport | null
 }
 
 export interface DiagnosisMACD {

@@ -171,6 +171,33 @@ onMounted(() => {
                 </span>
               </div>
             </div>
+            <!-- V12: 多时间框架共振评分 -->
+            <div v-if="diagnosis.chanlun.confluence_score != null" class="confluence-row">
+              <span class="kv-key">🔗 共振评分</span>
+              <span class="kv-val" :class="diagnosis.chanlun.confluence_score >= 0.7 ? 'buy' : diagnosis.chanlun.confluence_score >= 0.5 ? 'hold' : 'sell'">
+                {{ (diagnosis.chanlun.confluence_score * 100).toFixed(0) }}分
+              </span>
+            </div>
+            <!-- V13: 成交量剖面 -->
+            <div v-if="diagnosis.chanlun.volume_profile" class="vol-profile-row">
+              <span class="kv-key">📊 成交量支撑</span>
+              <span class="kv-val">{{ diagnosis.chanlun.volume_profile.support ?? '无' }}</span>
+              <span class="kv-key">📊 成交量阻力</span>
+              <span class="kv-val">{{ diagnosis.chanlun.volume_profile.resistance ?? '无' }}</span>
+              <span class="kv-key">位置分位</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.volume_profile.current_rank * 100).toFixed(0) }}%</span>
+            </div>
+            <!-- V7: 信号质量报告 -->
+            <div v-if="diagnosis.chanlun.signal_report" class="signal-report">
+              <div class="section-label">📋 信号质量报告</div>
+              <div class="kv-row"><span class="kv-key">建议入场价</span><span class="kv-val buy">{{ diagnosis.chanlun.signal_report.entry_price }}</span></div>
+              <div class="kv-row"><span class="kv-key">止损价</span><span class="kv-val sell">{{ diagnosis.chanlun.signal_report.stop_loss }}</span></div>
+              <div class="kv-row"><span class="kv-key">第一止盈</span><span class="kv-val buy">{{ diagnosis.chanlun.signal_report.take_profit_1 }}</span></div>
+              <div class="kv-row"><span class="kv-key">风险收益比</span><span class="kv-val">1 : {{ diagnosis.chanlun.signal_report.risk_reward_ratio }}</span></div>
+              <div class="kv-row"><span class="kv-key">信号强度</span><span class="kv-val">{{ (diagnosis.chanlun.signal_report.signal_strength * 100).toFixed(0) }}%</span></div>
+              <div class="kv-note">{{ diagnosis.chanlun.signal_report.entry_reason }}</div>
+              <div class="kv-note risk-note">{{ diagnosis.chanlun.signal_report.risk_notes }}</div>
+            </div>
           </div>
         </div>
 
@@ -709,6 +736,19 @@ onMounted(() => {
 .sig-grade.grade-B { background: rgba(59,130,246,0.2); color: #3b82f6; }
 .sig-grade.grade-C { background: rgba(249,115,22,0.2); color: #f97316; }
 .sig-grade.grade-D { background: rgba(239,68,68,0.2); color: #ef4444; }
+
+/* V12: 共振评分 */
+.confluence-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
+
+/* V13: 成交量剖面 */
+.vol-profile-row { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 12px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; }
+.vol-profile-row .kv-key { color: var(--text-dim); margin-right: 4px; }
+.vol-profile-row .kv-val { color: var(--text-primary); font-weight: 500; }
+
+/* V7: 信号质量报告 */
+.signal-report { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.kv-note { font-size: 11px; color: var(--text-dim); line-height: 1.6; margin-top: 4px; }
+.risk-note { color: #f97316; }
 
 /* 成交量提示 */
 .vol-tip {

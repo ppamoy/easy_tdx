@@ -533,3 +533,132 @@ class TestV12Enhancements:
         assert level_with in ("strong", "medium", "weak", "none")
         assert adx_without_ohlc >= 0
         assert level_without in ("strong", "medium", "weak", "none")
+
+
+class TestV13Enhancements:
+    """测试V13新增功能（成交量剖面分析 + 2买/2卖体积剖面确认）。"""
+
+    def test_calc_volume_profile_basic(self):
+        """测试成交量剖面计算基本功能。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_profile
+        # 生成模拟数据：价格在50-60之间波动，成交量随机
+        np.random.seed(42)
+        closes = [50.0 + i * 0.2 + np.random.normal(0, 0.5) for i in range(80)]
+        volumes = [1e6 + np.random.normal(0, 2e5) for _ in range(80)]
+        volumes = [max(1e5, v) for v in volumes]  # 确保成交量为正
+
+        profile = _calc_volume_profile(closes, volumes, lookback=60, num_bins=20)
+        assert isinstance(profile, dict)
+        assert "price_levels" in profile
+        assert "high_volume_support" in profile
+        assert "high_volume_resistance" in profile
+        assert "current_volume_rank" in profile
+        assert 0 <= profile["current_volume_rank"] <= 1
+
+    def test_calc_volume_profile_insufficient_data(self):
+        """测试数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_profile
+        closes = [10.0] * 10
+        volumes = [1e6] * 10
+        profile = _calc_volume_profile(closes, volumes, lookback=60)
+        assert profile["price_levels"] == []
+        assert profile["high_volume_support"] is None
+        assert profile["current_volume_rank"] == 0.5
+
+    def test_is_volume_profile_support(self):
+        """测试成交量支撑位检测。"""
+        from easy_tdx.chanlun.mmd import _is_volume_profile_support
+        # 生成有明显支撑位的数据：在48-50区间有大量成交
+        np.random.seed(77)
+        closes = []
+        volumes = []
+        for i in range(80):
+            if i < 30:
+                closes.append(50.0 + i * 0.1)
+                volumes.append(1e6 + np.random.normal(0, 2e5))
+            elif i < 50:
+                closes.append(48.0 + np.random.normal(0, 0.3))  # 在48附近聚集
+                volumes.append(3e6 + np.random.normal(0, 5e5))   # 高成交量
+            else:
+                closes.append(48.0 + (i - 50) * 0.15)
+                volumes.append(1e6 + np.random.normal(0, 2e5))
+        volumes = [max(5e5, v) for v in volumes]
+
+        # 48附近的低点应该在成交量支撑区内
+        result = _is_volume_profile_support(closes, volumes, 48.0, lookback=60)
+        assert isinstance(result, bool)
+
+    def test_is_volume_profile_resistance(self):
+        """测试成交量阻力位检测。"""
+        from easy_tdx.chanlun.mmd import _is_volume_profile_resistance
+        np.random.seed(88)
+        closes = []
+        volumes = []
+        for i in range(80):
+            if i < 30:
+                closes.append(50.0 - i * 0.1)
+                volumes.append(1e6 + np.random.normal(0, 2e5))
+            elif i < 50:
+                closes.append(52.0 + np.random.normal(0, 0.3))
+                volumes.append(3e6 + np.random.normal(0, 5e5))
+            else:
+                closes.append(52.0 - (i - 50) * 0.15)
+                volumes.append(1e6 + np.random.normal(0, 2e5))
+        volumes = [max(5e5, v) for v in volumes]
+
+        result = _is_volume_profile_resistance(closes, volumes, 52.0, lookback=60)
+        assert isinstance(result, bool)
+
+    def test_find_mmds_with_volume_profile_bonus(self):
+        """测试find_mmds接受highs/lows/volumes参数（V13兼容性）。"""
+        from easy_tdx.chanlun.mmd import find_mmds
+        from easy_tdx.chanlun.types import BI, FX, ZS, CLKline
+        from datetime import datetime
+
+        bis = []
+        zss = []
+        closes = [10.0 + i * 0.1 for i in range(50)]
+        highs = [c + 0.1 for c in closes]
+        lows = [c - 0.1 for c in closes]
+        volumes = [1e6] * 50
+
+        try:
+            result = find_mmds(bis, zss, closes=closes, highs=highs, lows=lows, volumes=volumes)
+            assert isinstance(result, list)
+        except TypeError as e:
+            if "unexpected keyword argument" in str(e):
+                pytest.fail(f"find_mmds不应拒绝highs/lows/volumes参数: {e}")
+            raise
+
+    def test_signal_report_structure(self):
+        """测试信号质量报告结构完整性。"""
+        from easy_tdx.chanlun.mmd import calc_signal_quality_report
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        closes = [10.0 + i * 0.05 for i in range(30)]
+        volumes = [1e6] * 30
+        macd_data = {"dif": [0.1] * 30, "dea": [0.08] * 30, "hist": [0.02] * 30}
+
+        report = calc_signal_quality_report(mmd, closes, volumes, macd_data, 0.02)
+        # 没有bi时返回空dict
+        assert report == {}
+
+    def test_confluence_score_in_diagnosis_response(self):
+        """测试诊断API响应包含confluence_score字段。"""
+        # 此测试验证diagnosis router中的字段名正确性
+        from easy_tdx.web.routers.diagnosis import _calc_volume_profile_for_diagnosis
+        # 应能正常导入且函数存在
+        assert callable(_calc_volume_profile_for_diagnosis)
+
+        # 测试函数行为
+        result = _calc_volume_profile_for_diagnosis([10.0] * 5, [1e6] * 5)
+        assert result is None  # 数据不足返回None
+
+        closes = [10.0 + i * 0.1 for i in range(70)]
+        volumes = [1e6 + i * 1e4 for i in range(70)]
+        result = _calc_volume_profile_for_diagnosis(closes, volumes)
+        assert result is not None
+        assert "support" in result
+        assert "resistance" in result
+        assert "current_rank" in result

@@ -555,12 +555,22 @@ def _find_second_type_mmds(
                         if rsi_val > 70:  # 超买区域，不构成好的买点
                             continue
 
-                    mmds.append(MMD(
+                    # V13: 成交量剖面支撑确认（提升2买准确度）
+                    vol_profile_bonus = False
+                    if volumes is not None:
+                        if _is_volume_profile_support(closes, volumes, bi.low):
+                            vol_profile_bonus = True  # 成交量支撑确认，后续加分
+
+                    _mmd_2buy = MMD(
                         mmd_type=MMDType.BUY_2,
                         zs=buy_1_mmd.zs,
                         bi=bi,
-                        msg=f"2买V9: 回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%, RSI={rsi_val:.0f}",
-                    ))
+                        msg=f"2买V13: 回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%, RSI={rsi_val:.0f}"
+                            + (", 成交量支撑确认✅" if vol_profile_bonus else ""),
+                    )
+                    if vol_profile_bonus:
+                        _mmd_2buy._vol_profile_support = True
+                    mmds.append(_mmd_2buy)
                     found_2buy = True
                     existing_positions.add(bi.end.k.k_index)
 
@@ -667,12 +677,22 @@ def _find_second_type_mmds(
                         if rsi_val < 30:  # 超卖区域，不构成好的卖点
                             continue
 
-                    mmds.append(MMD(
+                    # V13: 成交量剖面阻力确认（提升2卖准确度）
+                    vol_profile_bonus_sell = False
+                    if volumes is not None:
+                        if _is_volume_profile_resistance(closes, volumes, bi.high):
+                            vol_profile_bonus_sell = True  # 成交量阻力确认，后续加分
+
+                    _mmd_2sell = MMD(
                         mmd_type=MMDType.SELL_2,
                         zs=sell_1_mmd.zs,
                         bi=bi,
-                        msg=f"2卖V9: 反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%, RSI={rsi_val:.0f}",
-                    ))
+                        msg=f"2卖V13: 反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%, RSI={rsi_val:.0f}"
+                            + (", 成交量阻力确认✅" if vol_profile_bonus_sell else ""),
+                    )
+                    if vol_profile_bonus_sell:
+                        _mmd_2sell._vol_profile_resistance = True
+                    mmds.append(_mmd_2sell)
                     found_2sell = True
                     existing_positions.add(bi.end.k.k_index)
 
@@ -783,6 +803,184 @@ def _check_pullback_volume_v2(
         return pull_avg <= avg_vol * max_ratio
     except Exception:
         return True
+
+
+# ── V13: 成交量剖面分析 ─────────────────────────────────────────────────────
+
+def _calc_volume_profile(
+    closes: list[float],
+    volumes: list[float] | None,
+    lookback: int = 60,
+    num_bins: int = 20,
+) -> dict[str, Any]:
+    """计算成交量剖面（Volume at Price, VAP）。
+
+    将最近lookback根K线的价格区间分成num_bins个价格带，
+    统计每个价格带的成交量占比，识别高成交量支撑/阻力区。
+
+    Returns:
+        dict with keys:
+            price_levels: list of (price_mid, vol_pct) tuples
+            high_volume_support: float | None — 高成交量支撑位
+            high_volume_resistance: float | None — 高成交量阻力位
+            current_volume_rank: float — 当前价在近期成交量分布中的分位
+            volume_cluster_up: bool — 上方是否有明显成交密集区
+            volume_cluster_down: bool — 下方是否有明显成交密集区
+    """
+    if not volumes or len(volumes) < lookback:
+        return {
+            "price_levels": [],
+            "high_volume_support": None,
+            "high_volume_resistance": None,
+            "current_volume_rank": 0.5,
+            "volume_cluster_up": False,
+            "volume_cluster_down": False,
+        }
+
+    try:
+        n = len(closes)
+        start_idx = n - lookback
+        subset_closes = closes[start_idx:n]
+        subset_vols = volumes[start_idx:n]
+
+        if not subset_closes or not subset_vols:
+            return {
+                "price_levels": [],
+                "high_volume_support": None,
+                "high_volume_resistance": None,
+                "current_volume_rank": 0.5,
+                "volume_cluster_up": False,
+                "volume_cluster_down": False,
+            }
+
+        price_min = min(subset_closes)
+        price_max = max(subset_closes)
+        price_range = price_max - price_min
+        if price_range <= 0:
+            return {
+                "price_levels": [],
+                "high_volume_support": None,
+                "high_volume_resistance": None,
+                "current_volume_rank": 0.5,
+                "volume_cluster_up": False,
+                "volume_cluster_down": False,
+            }
+
+        bin_width = price_range / num_bins
+        bins = [0.0] * num_bins
+
+        for close, vol in zip(subset_closes, subset_vols):
+            bin_idx = min(int((close - price_min) / bin_width), num_bins - 1)
+            bins[bin_idx] += vol
+
+        total_vol = sum(bins)
+        if total_vol <= 0:
+            return {
+                "price_levels": [],
+                "high_volume_support": None,
+                "high_volume_resistance": None,
+                "current_volume_rank": 0.5,
+                "volume_cluster_up": False,
+                "volume_cluster_down": False,
+            }
+
+        # 计算每个价格带的成交量占比
+        vol_pcts = [b / total_vol for b in bins]
+        price_levels = []
+        for i, pct in enumerate(vol_pcts):
+            mid_price = price_min + (i + 0.5) * bin_width
+            price_levels.append((round(mid_price, 2), round(pct, 4)))
+
+        # 识别高成交量区（前20%成交量密集区）
+        threshold = sorted(vol_pcts, reverse=True)[int(num_bins * 0.2)] if num_bins > 0 else 0.05
+        high_vol_bins = [(i, p, vp) for i, (p, vp) in enumerate(price_levels) if vp >= threshold]
+
+        # 当前价格所在的价格带
+        current_price = closes[-1]
+        current_bin = min(int((current_price - price_min) / bin_width), num_bins - 1)
+        current_rank = sum(1 for pl, vp in price_levels if pl < current_price) / max(len(price_levels), 1)
+
+        # 判断上下方是否有成交密集区
+        upper_bins = set(i for i, _, _ in high_vol_bins if i > current_bin)
+        lower_bins = set(i for i, _, _ in high_vol_bins if i < current_bin)
+        volume_cluster_up = len(upper_bins) >= 2
+        volume_cluster_down = len(lower_bins) >= 2
+
+        # 高成交量支撑/阻力位
+        high_vol_support = None
+        high_vol_resistance = None
+        if lower_bins:
+            lowest_high_vol = min(lower_bins)
+            high_vol_support = price_levels[lowest_high_vol][0]
+        if upper_bins:
+            highest_low_vol = max(upper_bins)
+            high_vol_resistance = price_levels[highest_low_vol][0]
+
+        return {
+            "price_levels": price_levels,
+            "high_volume_support": high_vol_support,
+            "high_volume_resistance": high_vol_resistance,
+            "current_volume_rank": round(current_volume_rank := current_rank, 2),
+            "volume_cluster_up": volume_cluster_up,
+            "volume_cluster_down": volume_cluster_down,
+        }
+    except Exception:
+        return {
+            "price_levels": [],
+            "high_volume_support": None,
+            "high_volume_resistance": None,
+            "current_volume_rank": 0.5,
+            "volume_cluster_up": False,
+            "volume_cluster_down": False,
+        }
+
+
+def _is_volume_profile_support(
+    closes: list[float],
+    volumes: list[float] | None,
+    bi_low: float,
+    lookback: int = 60,
+) -> bool:
+    """检查指定低点是否在成交量支撑区内（V13新增）。
+
+    当2买/3买的回调低点位于高成交量密集区下方时，
+    说明该位置有大量历史成交支撑，信号更可靠。
+    """
+    if not volumes or len(volumes) < lookback:
+        return False
+    try:
+        profile = _calc_volume_profile(closes, volumes, lookback)
+        support = profile.get("high_volume_support")
+        if support is None:
+            return False
+        # 低点在支撑位附近（±2%以内）
+        return abs(bi_low - support) / support < 0.02
+    except Exception:
+        return False
+
+
+def _is_volume_profile_resistance(
+    closes: list[float],
+    volumes: list[float] | None,
+    bi_high: float,
+    lookback: int = 60,
+) -> bool:
+    """检查指定高点是否在成交量阻力区内（V13新增）。
+
+    当2卖/3卖的反抽高点位于高成交量密集区上方时，
+    说明该位置有大量历史成交阻力，信号更可靠。
+    """
+    if not volumes or len(volumes) < lookback:
+        return False
+    try:
+        profile = _calc_volume_profile(closes, volumes, lookback)
+        resistance = profile.get("high_volume_resistance")
+        if resistance is None:
+            return False
+        # 高点在阻力位附近（±2%以内）
+        return abs(bi_high - resistance) / resistance < 0.02
+    except Exception:
+        return False
 
 
 def _check_macd_confirmation_v2(
@@ -1738,6 +1936,12 @@ def _calc_confidence(
                                 confidence += 0.03
         except Exception:
             pass
+
+    # V13: 成交量剖面加成（2买/2卖专属：支撑/阻力确认加分）
+    if hasattr(mmd, '_vol_profile_support') and mmd._vol_profile_support:
+        confidence += 0.05  # 成交量支撑确认加成
+    if hasattr(mmd, '_vol_profile_resistance') and mmd._vol_profile_resistance:
+        confidence += 0.05  # 成交量阻力确认加成
 
     # V8: MACD位置确认（优先使用传入的macd_data）
     if mmd.bi and len(closes or []) > 26:

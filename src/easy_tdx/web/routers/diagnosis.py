@@ -28,6 +28,27 @@ from easy_tdx.web.convert import category_from_str, market_from_str
 from easy_tdx.web.deps import get_client
 from easy_tdx.web.schemas import StockIdentifier
 
+# V13: 延迟导入成交量剖面分析（避免循环导入）
+def _calc_volume_profile_for_diagnosis(
+    closes: list[float] | None,
+    volumes: list[float] | None,
+) -> dict[str, Any] | None:
+    """计算成交量剖面数据，用于诊断API响应（V13新增）。"""
+    if not closes or not volumes or len(closes) < 60:
+        return None
+    try:
+        from easy_tdx.chanlun.mmd import _calc_volume_profile
+        profile = _calc_volume_profile(closes, volumes, lookback=60, num_bins=20)
+        return {
+            "support": profile.get("high_volume_support"),
+            "resistance": profile.get("high_volume_resistance"),
+            "current_rank": profile.get("current_volume_rank", 0.5),
+            "cluster_up": profile.get("volume_cluster_up", False),
+            "cluster_down": profile.get("volume_cluster_down", False),
+        }
+    except Exception:
+        return None
+
 router = APIRouter(tags=["diagnosis"])
 logger = logging.getLogger(__name__)
 
@@ -685,6 +706,8 @@ async def diagnose_stock(
             ) if latest_mmd else None,
             # V12: 多时间框架共振评分（如有）
             "confluence_score": round(getattr(latest_mmd, "confluence_score", 0.0), 2) if latest_mmd else None,
+            # V13: 成交量剖面分析
+            "volume_profile": _calc_volume_profile_for_diagnosis(closes, volumes) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
