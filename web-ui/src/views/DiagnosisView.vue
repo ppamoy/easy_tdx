@@ -77,6 +77,13 @@ function patternLabel(type: string): string {
   return PATTERN_LABELS[type] || type
 }
 
+function getPositionTagClass(positionPct: number): string {
+  if (positionPct >= 60) return 'tag tag-green'
+  if (positionPct >= 40) return 'tag tag-blue'
+  if (positionPct >= 20) return 'tag tag-orange'
+  return 'tag tag-red'
+}
+
 onMounted(() => {
   const q = router.currentRoute.value.query
   if (q.code) code.value = String(q.code)
@@ -220,6 +227,18 @@ onMounted(() => {
                     : `新鲜(${diagnosis.chanlun.signal_report.signal_aging.age_bars}根)` }}
                 </span>
                 <small style="color:var(--text-dim);font-size:10px">衰减系数 {{ diagnosis.chanlun.signal_report.signal_aging.decay_factor }}</small>
+              </div>
+              <!-- V16: 仓位建议 -->
+              <div v-if="diagnosis.chanlun.signal_report.position_sizing" class="position-sizing-row">
+                <span class="kv-key">💼 仓位建议</span>
+                <span :class="getPositionTagClass(diagnosis.chanlun.signal_report.position_sizing.position_pct)">
+                  {{ diagnosis.chanlun.signal_report.position_sizing.suggestion }}
+                  ({{ diagnosis.chanlun.signal_report.position_sizing.position_pct }}%)
+                </span>
+                <small style="color:var(--text-dim);font-size:10px">{{ diagnosis.chanlun.signal_report.position_sizing.risk_level }}</small>
+              </div>
+              <div v-if="diagnosis.chanlun.signal_report.position_sizing && diagnosis.chanlun.signal_report.position_sizing.notes.length > 0" class="position-notes">
+                <div v-for="note in diagnosis.chanlun.signal_report.position_sizing.notes" :key="note" class="position-note-tag">📌 {{ note }}</div>
               </div>
             </div>
           </div>
@@ -780,6 +799,10 @@ onMounted(() => {
 /* V15: K线形态 & 信号衰减 */
 .kline-pattern-row { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
 .aging-row { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+/* V16: 仓位建议 */
+.position-sizing-row { margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+.position-notes { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
+.position-note-tag { font-size: 10px; color: var(--text-dim); padding-left: 4px; }
 
 /* 成交量提示 */
 .vol-tip {

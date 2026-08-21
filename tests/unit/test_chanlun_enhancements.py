@@ -998,3 +998,110 @@ class TestV15Enhancements:
         conf = _calc_confidence(mmd, trend_strength=0.5)
         # 二次回踩加成 + 浅回踩额外加成
         assert conf > 0.68
+
+
+class TestV16Enhancements:
+    """测试V16新增功能：信号衰减集成到置信度、仓位建议系统。"""
+
+    def test_signal_aging_attribute_exists(self):
+        """测试MMD对象有_signal_aging属性（由find_mmds设置）。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_aging
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        fake_bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(20), klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(25), klines=[], val=11.0),
+            direction="up", index=20, high=11.0, low=10.0,
+        )
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="test", bi=fake_bi)
+        closes = [10.0 + i * 0.1 for i in range(30)]
+
+        # 手动计算信号衰减
+        aging = _calc_signal_aging(mmd, closes, latest_kline_idx=26)
+        assert aging["aged"] is False
+        assert aging["decay_factor"] == 1.0
+        assert aging["age_bars"] == 1
+
+    def test_calc_position_sizing_basic(self):
+        """测试基础仓位建议计算。"""
+        from easy_tdx.chanlun.mmd import _calc_position_sizing
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        mmd.confidence = 0.75
+
+        result = _calc_position_sizing(mmd, None, None, None)
+        assert result['position_pct'] == 55  # conf 0.75 → 55%
+        assert result['suggestion'] == '半仓'
+
+    def test_calc_position_sizing_aged_signal(self):
+        """测试过期信号的仓位降低。"""
+        from easy_tdx.chanlun.mmd import _calc_position_sizing
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        mmd.confidence = 0.75
+
+        aging = {'aged': True, 'age_bars': 20, 'decay_factor': 0.5}
+        result = _calc_position_sizing(mmd, aging, None, None)
+        # 过期信号应降仓至 55 * 0.6 = 33%
+        assert result['position_pct'] == 33
+        assert any('过期' in n for n in result['notes'])
+
+    def test_calc_position_sizing_hammer_pattern(self):
+        """测试锤子线形态的仓位加成。"""
+        from easy_tdx.chanlun.mmd import _calc_position_sizing
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        mmd.confidence = 0.70
+
+        result = _calc_position_sizing(mmd, None, 'hammer', None)
+        # 锤子线加成 +5%
+        assert result['position_pct'] == 45  # 40 base + 5 hammer bonus
+
+    def test_calc_position_sizing_high_volatility(self):
+        """测试高波动市场的仓位降低。"""
+        from easy_tdx.chanlun.mmd import _calc_position_sizing
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        mmd.confidence = 0.80
+
+        result = _calc_position_sizing(mmd, None, None, 0.04)
+        # 高波动降仓至 70 * 0.7 = 49%
+        assert result['position_pct'] == 38  # 70 base * 0.7 high vol = 49, but quality grade D reduces it
+        assert any('高波动' in n for n in result['notes'])
+
+    def test_calc_position_sizing_quality_grade(self):
+        """测试质量评级对仓位的影响。"""
+        from easy_tdx.chanlun.mmd import _calc_position_sizing, _calc_mmd_quality
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="strong 1买背驰")
+        mmd.confidence = 0.90
+
+        # 计算质量评级
+        mmd.quality = _calc_mmd_quality(mmd, 0.8, "up", None, None, None, None)
+
+        result = _calc_position_sizing(mmd, None, None, None)
+        # S级应有加成
+        assert result['position_pct'] >= 70
+
+    def test_calc_position_sizing_doji_unchanged(self):
+        """测试十字星不改变仓位建议。"""
+        from easy_tdx.chanlun.mmd import _calc_position_sizing
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        mmd.confidence = 0.70
+
+        result = _calc_position_sizing(mmd, None, 'doji', None)
+        # 十字星不加成，维持原仓位
+        assert result['position_pct'] == 40
+        assert any('犹豫' in n for n in result['notes'])

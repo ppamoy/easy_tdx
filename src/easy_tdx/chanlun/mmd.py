@@ -333,6 +333,9 @@ def calc_signal_quality_report(
         except Exception:
             pass
 
+    # V16: 仓位建议（基于置信度 + 信号衰减 + K线形态综合评估）
+    position_sizing = _calc_position_sizing(mmd, signal_aging_info, kline_pattern, volatility)
+
     return {
         "entry_price": entry_price,
         "stop_loss": stop_loss,
@@ -348,6 +351,114 @@ def calc_signal_quality_report(
         "trailing_stop": dynamic_stop if dynamic_stop != stop_loss else None,
         "signal_aging": signal_aging_info,
         "kline_pattern": kline_pattern,
+        "position_sizing": position_sizing,
+    }
+
+
+def _calc_position_sizing(
+    mmd: MMD,
+    signal_aging: dict[str, Any] | None,
+    kline_pattern: str | None,
+    volatility: float | None,
+) -> dict[str, Any]:
+    """计算基于缠论信号的仓位建议（V16新增）。
+
+    综合考虑：
+    - 基础置信度（买卖点类型 + 多因子加成）
+    - 信号衰减（过期信号降低仓位）
+    - K线形态（看涨形态增加仓位）
+    - 波动率（高波动降低仓位）
+
+    Returns:
+        {"position_pct": int, "suggestion": str, "risk_level": str, "notes": list[str]}
+    """
+    # 基础仓位：基于置信度
+    base_conf = mmd.confidence if hasattr(mmd, "confidence") else 0.5
+    if base_conf >= 0.85:
+        base_pct = 70
+    elif base_conf >= 0.75:
+        base_pct = 55
+    elif base_conf >= 0.65:
+        base_pct = 40
+    elif base_conf >= 0.55:
+        base_pct = 25
+    else:
+        base_pct = 10
+
+    notes: list[str] = []
+    is_buy = "buy" in mmd.mmd_type.value
+
+    # 信号衰减调整
+    if signal_aging is not None:
+        decay = signal_aging.get("decay_factor", 1.0)
+        age_bars = signal_aging.get("age_bars", 0)
+        if signal_aging.get("aged", False):
+            base_pct = int(base_pct * 0.6)
+            notes.append(f"信号已过期({age_bars}根K线)，大幅降仓")
+        elif age_bars > 10:
+            base_pct = int(base_pct * 0.8)
+            notes.append(f"信号偏老({age_bars}根K线)，适度降仓")
+        elif age_bars <= 3:
+            base_pct = min(100, base_pct + 5)
+            notes.append("信号新鲜，可适当加仓")
+
+    # K线形态调整
+    if kline_pattern in ("hammer", "bullish_engulfing"):
+        if is_buy:
+            base_pct = min(100, base_pct + 5)
+            notes.append(f"{kline_pattern}形态确认，看涨增强")
+        else:
+            base_pct = max(0, base_pct - 5)
+            notes.append(f"{kline_pattern}形态确认，看跌增强")
+    elif kline_pattern in ("bearish_engulfing",):
+        if is_buy:
+            base_pct = max(0, base_pct - 5)
+            notes.append(f"{kline_pattern}形态确认，看跌警告")
+        else:
+            base_pct = min(100, base_pct + 5)
+            notes.append(f"{kline_pattern}形态确认，看跌增强")
+    elif kline_pattern == "doji":
+        notes.append("十字星形态，市场犹豫，维持现有仓位")
+
+    # 波动率调整
+    if volatility is not None:
+        if volatility > 0.03:
+            base_pct = int(base_pct * 0.7)
+            notes.append("高波动市场，降低仓位控制风险")
+        elif volatility < 0.01:
+            base_pct = min(100, int(base_pct * 1.1))
+            notes.append("低波动市场，可适当加仓")
+
+    # 质量评级加成
+    quality = getattr(mmd, "quality", None)
+    if quality is not None:
+        grade = getattr(quality, "grade", "C")
+        grade_bonus = {"S": 10, "A": 5, "B": 0, "C": -5, "D": -15}.get(grade, 0)
+        base_pct = max(0, min(100, base_pct + grade_bonus))
+        notes.append(f"质量评级{grade}级，{'显著' if grade in ('S', 'A') else '适度' if grade == 'B' else '限制'}仓位")
+
+    # 最终仓位裁剪
+    base_pct = max(0, min(100, base_pct))
+
+    # 建议标签
+    if base_pct >= 60:
+        suggestion = "重仓"
+        risk_level = "中高风险"
+    elif base_pct >= 40:
+        suggestion = "半仓"
+        risk_level = "中等风险"
+    elif base_pct >= 20:
+        suggestion = "轻仓"
+        risk_level = "低风险"
+    else:
+        suggestion = "观望"
+        risk_level = "高风险"
+
+    return {
+        "position_pct": base_pct,
+        "suggestion": suggestion,
+        "risk_level": risk_level,
+        "notes": notes if notes else ["无明显调整因素"],
     }
 
 
@@ -410,6 +521,13 @@ def find_mmds(
         mmd.quality = _calc_mmd_quality(mmd, trend_strength, trend_direction, volumes, closes, macd_data, volatility)
         # V12: 设置多时间框架共振评分（基于区间套一致性）
         mmd.confluence_score = round(_calc_confluence_bonus(mmd, zss or [], macd_data, volumes, closes, volatility), 2)
+        # V16: 计算信号衰减并存储到MMD对象（此前仅在报告函数中计算，未影响置信度）
+        if closes is not None and mmd.bi:
+            try:
+                latest_idx = len(closes) - 1
+                mmd._signal_aging = _calc_signal_aging(mmd, closes, latest_idx)
+            except Exception:
+                pass
 
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
@@ -2720,8 +2838,8 @@ def _calc_confidence(
             confidence += 0.03  # 中等共振加成
 
     # V15: 信号衰减调整 - 如果信号已产生但尚未触发，且已过很久则降低置信度
-    if hasattr(mmd, "_signal_aging"):
-        aging = getattr(mmd, "_signal_aging")
+    aging = getattr(mmd, "_signal_aging", None)
+    if aging is not None:
         if aging.get("aged", False):
             confidence *= aging.get("decay_factor", 1.0)
         elif aging.get("age_bars", 0) > 10:

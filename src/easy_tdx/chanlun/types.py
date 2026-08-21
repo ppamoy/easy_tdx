@@ -191,6 +191,21 @@ class MMD:
     quality: object = None  # 质量评级，由分析器计算
     confluence_score: float = 0.0  # 多时间框架共振评分 0-1，由MultiLevelAnalyser设置
 
+    # V14 enhancement fields
+    _vol_spike: bool = False  # 成交量异常放大
+    _gap_up: bool = False  # 向上缺口
+    _gap_down: bool = False  # 向下缺口
+    _gap_size: float = 0.0  # 缺口大小（%）
+    _macd_slope_confirmed: bool = False  # MACD柱状图斜率确认
+    _vol_profile_support: bool = False  # 成交量剖面支撑确认
+    _vol_profile_resistance: bool = False  # 成交量剖面阻力确认
+
+    # V15 enhancement fields
+    _kline_pattern: str | None = None  # K线形态：hammer/bullish_engulfing/doji/bearish_engulfing
+    _signal_aging: dict | None = None  # 信号衰减信息
+    _retest_break: bool = False  # 二次回踩确认
+    _retest_retracement: float = 50.0  # 回踩深度（%）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

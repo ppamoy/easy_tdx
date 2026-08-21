@@ -381,6 +381,8 @@ export interface DiagnosisChanlunMmd {
   quality: DiagnosisChanlunMmdQuality | null
   // V15: K线形态确认
   kline_pattern?: string | null
+  // V16: 仓位建议
+  position_sizing?: { position_pct: number; suggestion: string; risk_level: string; notes: string[] } | null
 }
 
 export interface DiagnosisChanlunRecentSignal {
@@ -406,6 +408,8 @@ export interface DiagnosisSignalReport {
   signal_aging?: { aged: boolean; age_bars: number; decay_factor: number } | null
   // V15: K线形态确认
   kline_pattern?: string | null
+  // V16: 仓位建议
+  position_sizing?: { position_pct: number; suggestion: string; risk_level: string; notes: string[] } | null
 }
 
 export interface DiagnosisChanlun {
