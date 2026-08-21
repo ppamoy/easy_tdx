@@ -179,3 +179,219 @@ async def chanlun_multi_level(
         "confluence": confluence,
         "low_level_qs": low_qs,
     }
+
+
+class ChanlunRecommendRequest(ChanlunRequest):
+    """缠论综合推荐请求。"""
+
+    include_diagnosis: bool = Field(default=True, description="是否同时运行技术指标诊断")
+
+
+@router.post("/chanlun/recommend")
+async def chanlun_recommend(
+    req: ChanlunRecommendRequest,
+    client: Any = Depends(get_client),
+) -> dict[str, Any]:
+    """缠论综合推荐：结合 V4 买卖点质量评级 + 技术指标诊断，给出最终操作建议。
+
+    输出包含：
+    - 最高优先级买卖点（带质量评级）
+    - 多级别一致性评分
+    - 技术指标诊断摘要
+    - 综合推荐动作（买入/持有/卖出）及理由
+    """
+    import numpy as np
+    from easy_tdx.chanlun import ChanlunAnalyser
+    from easy_tdx.chanlun.multi_level import MultiLevelAnalyser
+    from easy_tdx.MyTT import MACD, MA, KDJ as MYTT_KDJ, RSI as MYTT_RSI
+
+    symbol = f"{req.market}{req.code}"
+    frequency_map: dict[str, str] = {
+        "MIN_5": "5min", "MIN_15": "15min", "MIN_30": "30min",
+        "MIN_60": "60min", "DAY": "daily", "WEEK": "weekly",
+    }
+    freq = frequency_map.get(req.category.upper(), "daily")
+
+    # ── 1. 获取日线 K 线（缠论 + 诊断共用）──────────────────────────
+    df = await client.get_security_bars(
+        market_from_str(req.market), req.code, category_from_str("DAY"), 0, 500,
+    )
+    if df is None or len(df) < 100:
+        return {"error": "数据不足", "symbol": symbol}
+
+    closes = df["close"].tolist()
+    volumes = df["vol"].tolist() if "vol" in df.columns else []
+    highs = df["high"].tolist()
+    lows = df["low"].tolist()
+    latest_close = closes[-1]
+    latest_date = str(df["date"].iloc[-1])[:10] if "date" in df.columns else ""
+
+    # ── 2. 缠论 V4 分析 ──────────────────────────────────────────────
+    analyser = ChanlunAnalyser(code=symbol, frequency="daily")
+    chanlun_result = analyser.process_klines(df)
+    mmds = chanlun_result.mmds
+
+    # 取最高优先级买卖点（按质量评级排序）
+    def _mmd_sort_key(m):
+        q = getattr(m, "quality", None)
+        grade_val = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1}.get(q.grade if q else None, 0)
+        return (grade_val, m.confidence, m.bi.index if m.bi else 0)
+
+    sorted_mmds = sorted(mmds, key=_mmd_sort_key, reverse=True)
+    best_mmd = sorted_mmds[0] if sorted_mmds else None
+
+    # 买卖点摘要
+    mmd_summary = []
+    for m in sorted_mmds[:10]:
+        q = getattr(m, "quality", None)
+        mmd_summary.append({
+            "type": m.mmd_type.value,
+            "date": chanlun_result._fmt_dt(m.bi.end.k.date) if m.bi else None,
+            "confidence": round(m.confidence, 2),
+            "quality": {"grade": q.grade, "score": q.score, "reasons": q.reasons} if q else None,
+        })
+
+    # ── 3. 技术指标诊断（轻量版）─────────────────────────────────────
+    diag: dict[str, Any] = {}
+    if req.include_diagnosis and len(closes) >= 60:
+        dif, dea, macd_hist = MACD(closes, 12, 26, 9)
+        ma5 = MA(closes, 5)
+        ma10 = MA(closes, 10)
+        ma20 = MA(closes, 20)
+        ma60 = MA(closes, 60)
+        k, d, j = MYTT_KDJ(closes, highs, lows, 9, 3, 3)
+        rsi14 = MYTT_RSI(closes, 14)
+
+        latest_dif = dif[-1] if dif else 0
+        latest_dea = dea[-1] if dea else 0
+        golden_cross = dif[-2] <= dea[-2] and latest_dif > latest_dea if len(dif) > 1 else False
+        dead_cross = dif[-2] >= dea[-2] and latest_dif < latest_dea if len(dif) > 1 else False
+
+        # 均线排列
+        ma_bull = all(v > 0 for v in (ma5[-1]-ma10[-1], ma10[-1]-ma20[-1], ma20[-1]-ma60[-1])) if all(x > 0 for x in [ma5[-1],ma10[-1],ma20[-1],ma60[-1]]) else False
+
+        diag = {
+            "macd": {
+                "dif": round(latest_dif, 4), "dea": round(latest_dea, 4),
+                "hist": round(macd_hist[-1], 4) if macd_hist else 0,
+                "golden_cross": golden_cross, "dead_cross": dead_cross,
+                "above_zero": latest_dif > 0,
+            },
+            "kdj": {
+                "k": round(k[-1], 2) if k else 0, "d": round(d[-1], 2) if d else 0,
+                "j": round(j[-1], 2) if j else 0,
+                "overbought": (j[-1] if j else 0) > 80, "oversold": (j[-1] if j else 0) < 20,
+            },
+            "rsi": {
+                "value": round(rsi14[-1], 2) if rsi14 else 50,
+                "overbought": (rsi14[-1] if rsi14 else 50) > 70,
+                "oversold": (rsi14[-1] if rsi14 else 50) < 30,
+            },
+            "ma_bullish_arrangement": ma_bull,
+            "latest_close": round(latest_close, 2),
+        }
+
+    # ── 4. 综合推荐逻辑 ──────────────────────────────────────────────
+    buy_signals = 0
+    sell_signals = 0
+    reasons_buy: list[str] = []
+    reasons_sell: list[str] = []
+
+    # 缠论信号打分
+    if best_mmd:
+        q = getattr(best_mmd, "quality", None)
+        grade = q.grade if q else "C"
+        conf = best_mmd.confidence
+        mmd_type = best_mmd.mmd_type.value
+
+        if "buy" in mmd_type:
+            buy_signals += {"S": 3, "A": 2, "B": 1}.get(grade, 0)
+            buy_signals += int(conf * 2)
+            reasons_buy.append(f"缠论{mmd_type}({grade}级, 置信度{conf:.0%})")
+        elif "sell" in mmd_type:
+            sell_signals += {"S": 3, "A": 2, "B": 1}.get(grade, 0)
+            sell_signals += int(conf * 2)
+            reasons_sell.append(f"缠论{mmd_type}({grade}级, 置信度{conf:.0%})")
+
+    # 诊断指标打分
+    if diag:
+        if diag.get("macd", {}).get("golden_cross"):
+            buy_signals += 1
+            reasons_buy.append("MACD 金叉")
+        if diag.get("macd", {}).get("dead_cross"):
+            sell_signals += 1
+            reasons_sell.append("MACD 死叉")
+        if diag.get("macd", {}).get("above_zero"):
+            buy_signals += 0.5
+        else:
+            sell_signals += 0.5
+        kdj = diag.get("kdj", {})
+        if kdj.get("oversold"):
+            buy_signals += 1
+            reasons_buy.append("KDJ 超卖")
+        elif kdj.get("overbought"):
+            sell_signals += 1
+            reasons_sell.append("KDJ 超买")
+        rsi = diag.get("rsi", {})
+        if rsi.get("oversold"):
+            buy_signals += 0.5
+            reasons_buy.append("RSI 超卖")
+        elif rsi.get("overbought"):
+            sell_signals += 0.5
+            reasons_sell.append("RSI 超买")
+        if diag.get("ma_bullish_arrangement"):
+            buy_signals += 1
+            reasons_buy.append("均线多头排列")
+        else:
+            sell_signals += 0.5
+
+    net_score = buy_signals - sell_signals
+
+    if net_score >= 4:
+        action = "strong_buy"
+        action_label = "强烈买入"
+        action_color = "#22c55e"
+    elif net_score >= 2:
+        action = "buy"
+        action_label = "买入"
+        action_color = "#4ade80"
+    elif net_score <= -4:
+        action = "strong_sell"
+        action_label = "强烈卖出"
+        action_color = "#ef4444"
+    elif net_score <= -2:
+        action = "sell"
+        action_label = "卖出"
+        action_color = "#f87171"
+    else:
+        action = "hold"
+        action_label = "持有观望"
+        action_color = "#fbbf24"
+
+    all_reasons = reasons_buy + reasons_sell
+    reason_text = "；".join(all_reasons) if all_reasons else "无明显信号"
+
+    return {
+        "symbol": symbol,
+        "date": latest_date,
+        "close": round(latest_close, 2),
+        "action": action,
+        "action_label": action_label,
+        "action_color": action_color,
+        "net_score": round(net_score, 1),
+        "buy_signals": round(buy_signals, 1),
+        "sell_signals": round(sell_signals, 1),
+        "reason": reason_text,
+        "best_mmd": {
+            "type": best_mmd.mmd_type.value if best_mmd else None,
+            "date": chanlun_result._fmt_dt(best_mmd.bi.end.k.date) if best_mmd and best_mmd.bi else None,
+            "confidence": round(best_mmd.confidence, 2) if best_mmd else None,
+            "quality": {
+                "grade": getattr(getattr(best_mmd, "quality", None), "grade", None),
+                "score": getattr(getattr(getattr(best_mmd, "quality", None), "score", None), "score", None),
+            } if best_mmd else None,
+        },
+        "all_mmds": mmd_summary,
+        "diagnosis": diag,
+    }
+

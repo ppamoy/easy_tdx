@@ -159,9 +159,22 @@ class MultiLevelAnalyser:
         if time_aligned:
             components.append(0.3)
 
-        # 基础分：取高、低级别的平均置信度
+        # V4 质量加成：高质量买卖点（S/A）在区间套中权重更高
+        def _grade_factor(grade: str | None) -> float:
+            """将质量评级转换为加成系数。"""
+            if not grade:
+                return 0.8
+            map_ = {"S": 1.2, "A": 1.1, "B": 1.0, "C": 0.85, "D": 0.7}
+            return map_.get(grade, 0.8)
+
+        high_grade = getattr(getattr(latest_high, "quality", None), "grade", None)
+        low_grade = getattr(getattr(latest_low, "quality", None), "grade", None)
+        grade_factor = (_grade_factor(high_grade) + _grade_factor(low_grade)) / 2
+
+        # 基础分：取高、低级别的平均置信度，乘以质量加成
         base_score = (latest_high.confidence + latest_low.confidence) / 2
-        confluence_score = base_score * sum(components) if components else base_score * 0.5
+        weighted_components = sum(components) if components else 0.5
+        confluence_score = base_score * weighted_components * grade_factor
 
         return {
             "score": round(confluence_score, 2),
@@ -169,15 +182,18 @@ class MultiLevelAnalyser:
                 "type": latest_high.mmd_type.value,
                 "date": high_result._fmt_dt(latest_high.bi.end.k.date) if latest_high.bi else None,
                 "confidence": round(latest_high.confidence, 2),
+                "quality_grade": getattr(getattr(latest_high, "quality", None), "grade", None),
             },
             "low_level_signal": {
                 "type": latest_low.mmd_type.value,
                 "date": low_result._fmt_dt(latest_low.bi.end.k.date) if latest_low.bi else None,
                 "confidence": round(latest_low.confidence, 2),
+                "quality_grade": getattr(getattr(latest_low, "quality", None), "grade", None),
             },
             "trend_aligned": trend_aligned,
             "zs_aligned": zs_aligned,
             "time_aligned": time_aligned,
+            "grade_factor": round(grade_factor, 2),
         }
 
     def query_low_level_qs(

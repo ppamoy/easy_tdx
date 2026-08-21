@@ -49,11 +49,18 @@ interface ChanlunZs {
   done: boolean
 }
 
+interface ChanlunMmdQuality {
+  grade: 'S' | 'A' | 'B' | 'C' | 'D' | null
+  score: number | null
+  reasons: string[] | null
+}
+
 interface ChanlunMmd {
   type: string
   date: string | null
   msg: string
   confidence: number
+  quality: ChanlunMmdQuality | null
 }
 
 interface ChanlunFx {
@@ -103,8 +110,10 @@ const stats = computed(() => {
   const highConfSell = mmds.value.filter((m) => m.confidence >= 0.7 && (m.type === '1sell' || m.type === '2sell'))
   // 按类型统计
   const typeCounts: Record<string, number> = {}
+  const gradeCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0 }
   for (const m of mmds.value) {
     typeCounts[m.type] = (typeCounts[m.type] ?? 0) + 1
+    if (m.quality?.grade) gradeCounts[m.quality.grade] = (gradeCounts[m.quality.grade as keyof typeof gradeCounts] ?? 0) + 1
   }
   return {
     klineCount: bars.value.length,
@@ -119,6 +128,7 @@ const stats = computed(() => {
     lastBuyConf: buy1.length > 0 ? Math.max(...buy1.map((m) => m.confidence)) : 0,
     lastSellConf: sell1.length > 0 ? Math.max(...sell1.map((m) => m.confidence)) : 0,
     typeCounts,
+    gradeCounts,
   }
 })
 
@@ -310,6 +320,13 @@ function confidenceColor(c: number): string {
   return '#6b7280'
 }
 
+// 质量评级颜色
+function qualityColor(grade: string | null): string {
+  if (!grade) return '#94a3b8'
+  const map: Record<string, string> = { S: '#f59e0b', A: '#22c55e', B: '#3b82f6', C: '#f97316', D: '#ef4444' }
+  return map[grade] ?? '#94a3b8'
+}
+
 // 一致性评分颜色
 function mlConfColor(score: number): string {
   if (score >= 0.7) return '#22c55e'
@@ -464,6 +481,11 @@ async function analyze() {
         date: m.date,
         msg: m.msg,
         confidence: m.confidence ?? 0,
+        quality: m.quality ? {
+          grade: m.quality.grade ?? null,
+          score: m.quality.score ?? null,
+          reasons: m.quality.reasons ?? null,
+        } : null,
       }))
       // BOLL数据
       if (hr.boll) {
@@ -924,6 +946,11 @@ onUnmounted(() => {
           <span class="summary-type" :style="{ color: MMD_COLORS[type] ?? '#fff' }">{{ type }}</span>
           <span class="summary-count">{{ count }}</span>
         </div>
+        <div class="summary-sep"></div>
+        <div class="summary-item" v-for="(count, grade) in stats.gradeCounts" :key="grade" v-if="count > 0">
+          <span class="summary-grade" :style="{ color: qualityColor(grade), fontWeight: 700 }">{{ grade }}</span>
+          <span class="summary-count">{{ count }}</span>
+        </div>
       </div>
       <table>
         <thead>
@@ -931,6 +958,7 @@ onUnmounted(() => {
             <th>类型</th>
             <th>日期</th>
             <th>置信度</th>
+            <th>质量</th>
             <th>说明</th>
           </tr>
         </thead>
@@ -943,6 +971,12 @@ onUnmounted(() => {
                 {{ (m.confidence * 100).toFixed(0) }}%
               </span>
             </td>
+            <td v-if="m.quality">
+              <span class="quality-badge" :style="{ background: qualityColor(m.quality.grade) + '22', color: qualityColor(m.quality.grade), borderColor: qualityColor(m.quality.grade) }">
+                {{ m.quality.grade }} · {{ m.quality.score }}分
+              </span>
+            </td>
+            <td v-else><span class="quality-badge" style="background:#33415522;color:#94a3b8;border:1px solid #475569">-</span></td>
             <td>{{ m.msg }}</td>
           </tr>
         </tbody>
@@ -1153,6 +1187,17 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
+.summary-grade {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.summary-sep {
+  width: 1px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
 .summary-count {
   font-weight: 700;
   color: var(--text);
@@ -1311,6 +1356,16 @@ onUnmounted(() => {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
+}
+
+.quality-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid;
+  letter-spacing: 0.5px;
 }
 
 /* 操作建议面板 */
