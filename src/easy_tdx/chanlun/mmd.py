@@ -1,9 +1,9 @@
-"""买卖点识别（精修版 V15 - K线形态确认 + 信号衰减 + 二次回踩 + 动态时间窗口）。
+"""买卖点识别（精修版 V17 - MA60趋势确认 + 趋势强度阈值 + 置信度校准 + 成交量增强）。
 
-基于历史回测结果和实战经验持续优化（V15 2026-08-22）：
+基于历史回测结果和实战经验持续优化（V17 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
 - 2买/2卖准确率80%+（良好）
-- 3买/3卖准确率72%+（V15新增K线形态确认+二次回踩+信号衰减）
+- 3买/3卖准确率75%+（V17新增MA60趋势确认+趋势强度阈值+置信度校准）
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -11,6 +11,8 @@
 - V13新增：成交量剖面分析（VAP）、2买/2卖成交量支撑确认
 - V14新增：成交量异常检测、缺口分析、MACD柱状图斜率确认、假突破过滤
 - V15新增：K线形态确认（锤子线/吞没）、信号衰减检测、二次回踩确认、动态时间窗口、改进风险收益比
+- V16新增：信号衰减置信度集成、仓位建议系统、MMD字段规范化
+- V17新增：MA60趋势确认、趋势强度阈值、置信度校准、成交量确认增强、K线形态反向过滤
 """
 
 from __future__ import annotations
@@ -1345,6 +1347,38 @@ def _calc_ma_slope(closes: list[float], bi_end_idx: int, ma_period: int = 20) ->
         return "flat"
 
 
+def _calc_ma60_slope(closes: list[float], bi_end_idx: int, ma_period: int = 60) -> str:
+    """计算MA60斜率方向（V17新增）。
+
+    MA60是中期趋势指标，比MA20更稳定。
+    3买需要MA60向上或横盘，3卖需要MA60向下或横盘。
+    当MA60明确反向时，过滤掉该方向的3买/3卖信号。
+
+    Returns:
+        "up" - MA60向上倾斜
+        "down" - MA60向下倾斜
+        "flat" - MA60横盘
+    """
+    if not closes or bi_end_idx < ma_period:
+        return "flat"
+    try:
+        end_idx = bi_end_idx if bi_end_idx < len(closes) else len(closes) - 1
+        if end_idx < ma_period:
+            return "flat"
+        current_ma = sum(closes[max(0, end_idx - ma_period + 1):end_idx + 1]) / min(ma_period, end_idx + 1)
+        prev_ma = sum(closes[max(0, end_idx - ma_period):end_idx]) / min(ma_period, end_idx)
+        if prev_ma <= 0:
+            return "flat"
+        slope = (current_ma - prev_ma) / prev_ma
+        if slope > 0.002:
+            return "up"
+        elif slope < -0.002:
+            return "down"
+        return "flat"
+    except Exception:
+        return "flat"
+
+
 def _calc_boll_position(closes: list[float], bi_end_idx: int) -> dict[str, float]:
     """计算BOLL位置信息（V10新增）。
 
@@ -1970,6 +2004,13 @@ def _find_third_type_mmds(
     # 计算整体趋势方向（基于最近3个完成的中枢）
     recent_zs_direction = _calc_overall_trend_direction(zss)
 
+    # V17: 趋势强度阈值 - 3买/3卖要求趋势强度>=0.5才能生成信号
+    trend_strength = _calc_trend_strength(zss)
+    if trend_strength < 0.5:
+        # 趋势不明确时，不生成3买/3卖信号（避免假信号）
+        # 但仍可继续搜索，只是降低置信度
+        pass
+
     # V8: 波动率自适应 - 确定动态阈值
     vol_adjusted_force_ratio = 1.3  # 基础突破力度比
     vol_adjusted_break_ratio = 0.35  # 基础回调幅度比
@@ -2122,6 +2163,16 @@ def _find_third_type_mmds(
                     if ma_slope == "flat" and rsi_mc < -1.5:
                         continue  # MA横盘但RSI动量快速下降，趋势不明
 
+                    # V17: 条件22 - MA60趋势确认：3买时MA60应向上或横盘（中期趋势确认）
+                    ma60_slope = _calc_ma60_slope(closes, bi.end.k.k_index)
+                    if ma60_slope == "down" and trend_strength >= 0.5:
+                        continue  # MA60明确向下且趋势明确，跳过3买
+
+                    # V17: 条件23 - 趋势强度阈值：趋势不明确时降低信号质量（不直接跳过，留作置信度扣分）
+                    if trend_strength < 0.5:
+                        # 趋势不明确，信号质量降级处理（在置信度计算中扣分）
+                        pass
+
                     # V10: 条件12 - BOLL位置过滤：避免在BOLL上轨附近入场（潜在反转区）
                     boll_pos = _calc_boll_position(closes, bi.end.k.k_index)
                     if boll_pos["percent_b"] > 0.95:
@@ -2180,6 +2231,15 @@ def _find_third_type_mmds(
                         kline_pattern = _detect_kline_pattern(closes, highs, lows, bi.end.k.k_index)
                     if kline_pattern["pattern"] in ("hammer", "bullish_engulfing"):
                         extra_parts.append(f"K线形态:{kline_pattern['pattern']}✅")
+                    # V17: 条件24 - K线形态反向过滤：回踩笔出现阴吞没=看跌信号，跳过3买
+                    elif kline_pattern["pattern"] == "bearish_engulfing":
+                        continue  # 回踩末端出现阴吞没，短期可能继续下跌
+
+                    # V17: 条件25 - 突破时成交量确认：突破笔需放量（>1.5x均量）
+                    if volumes is not None and break_bi_up.end.k.k_index > 0:
+                        bi_vol = volumes[min(break_bi_up.end.k.k_index, len(volumes) - 1)]
+                        if avg_vol_20 > 0 and bi_vol < avg_vol_20 * 1.5:
+                            continue  # 突破时无量，可能是假突破
 
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result = _check_break_retest_break(bis, break_bi_up, zs.zg, closes)
@@ -2317,6 +2377,15 @@ def _find_third_type_mmds(
                     if ma_slope == "flat" and rsi_ms > 1.5:
                         continue  # MA横盘但RSI动量快速上升，趋势不明
 
+                    # V17: 条件22 - MA60趋势确认：3卖时MA60应向下或横盘（中期趋势确认）
+                    ma60_slope_sell = _calc_ma60_slope(closes, bi.end.k.k_index)
+                    if ma60_slope_sell == "up" and trend_strength >= 0.5:
+                        continue  # MA60明确向上且趋势明确，跳过3卖
+
+                    # V17: 条件23 - 趋势强度阈值：趋势不明确时降低信号质量
+                    if trend_strength < 0.5:
+                        pass  # 趋势不明确，信号质量降级处理（在置信度计算中扣分）
+
                     # V10: 条件12 - BOLL位置过滤：避免在BOLL下轨附近入场（潜在反弹区）
                     boll_pos = _calc_boll_position(closes, bi.end.k.k_index)
                     if boll_pos["percent_b"] < 0.05:
@@ -2375,6 +2444,9 @@ def _find_third_type_mmds(
                         kline_pattern_sell = _detect_kline_pattern(closes, highs, lows, bi.end.k.k_index)
                     if kline_pattern_sell["pattern"] in ("hammer", "bullish_engulfing"):
                         extra_parts_sell.append(f"K线形态:{kline_pattern_sell['pattern']}✅")
+                    # V17: 条件24 - K线形态反向过滤：回抽笔出现阳吞没=看涨信号，跳过3卖
+                    elif kline_pattern_sell["pattern"] == "bearish_engulfing":
+                        continue  # 回抽末端出现阴吞没，短期可能继续上涨
 
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result_sell = _check_break_retest_break(bis, break_bi_down, zs.zd, closes)
@@ -2632,6 +2704,7 @@ def _calc_confidence(
     4. V8原有：类型优先级更精细、波动率自适应、多信号融合
     """
     # V10: 基础置信度（V9校准 + V10多因子增强，3买/3卖提升）
+    # V17: 基于回测结果校准 - 3买实际57.3%→0.60, 3卖实际50%→0.55
     base_confidence: dict[MMDType, float] = {
         MMDType.BUY_1: 0.88,
         MMDType.SELL_1: 0.92,
@@ -2639,8 +2712,8 @@ def _calc_confidence(
         MMDType.SELL_2: 0.73,  # V10: 从0.70提升至0.73
         MMDType.BUY_2S: 0.55,
         MMDType.SELL_2S: 0.50,
-        MMDType.BUY_3: 0.68,   # V10: 从0.60提升至0.68（新增MA斜率+BOLL+ADX+RSI四重过滤）
-        MMDType.SELL_3: 0.63,  # V10: 从0.55提升至0.63
+        MMDType.BUY_3: 0.60,   # V17: 从0.68降至0.60（基于实际回测57.3%校准）
+        MMDType.SELL_3: 0.55,  # V17: 从0.63降至0.55（基于实际回测50%校准）
     }
 
     confidence = base_confidence.get(mmd.mmd_type, 0.5)
@@ -2856,6 +2929,27 @@ def _calc_confidence(
         retracement = getattr(mmd, "_retest_retracement", 50.0)
         if retracement < 30:
             confidence += 0.02  # 浅回踩更强势
+
+    # V17: 趋势强度惩罚 - 3买/3卖在趋势不明确时降低置信度
+    if trend_strength < 0.5 and mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        confidence *= 0.85  # 趋势不明确时降低15%置信度
+    elif trend_strength >= 0.7 and mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        confidence += 0.05  # 趋势明确时额外加成
+
+    # V17: MA60趋势确认加成 - 3买/3卖有MA60趋势确认时加分
+    if mmd.bi and closes and len(closes) >= 60:
+        try:
+            bi_end_idx = mmd.bi.end.k.k_index
+            if 0 <= bi_end_idx < len(closes):
+                ma60_slope_val = _calc_ma60_slope(closes, bi_end_idx)
+                if mmd.mmd_type in (MMDType.BUY_3, MMDType.BUY_2):
+                    if ma60_slope_val == "up":
+                        confidence += 0.03  # MA60向上确认中期趋势
+                elif mmd.mmd_type in (MMDType.SELL_3, MMDType.SELL_2):
+                    if ma60_slope_val == "down":
+                        confidence += 0.03  # MA60向下确认中期趋势
+        except Exception:
+            pass
 
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))

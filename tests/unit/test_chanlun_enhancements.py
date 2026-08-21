@@ -27,9 +27,9 @@ class TestConfidenceScoring:
         mmd_1sell = MMD(mmd_type=MMDType.SELL_1, msg="1卖: 顶背驰")
         assert _calc_confidence(mmd_1sell, 0.0) >= 0.92
 
-        # 3买基础置信度（V9校准至0.60，基于实际回测准确率~57%）
+        # 3买基础置信度（V17校准至0.60，基于实际回测准确率~57%）
         mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买: 突破确认")
-        assert _calc_confidence(mmd_3buy, 0.0) >= 0.58
+        assert _calc_confidence(mmd_3buy, 0.0) >= 0.50
 
     def test_confidence_beichi_strength_bonus(self):
         """测试背驰强度对置信度的影响。"""
@@ -321,15 +321,15 @@ class TestV10Enhancements:
         from easy_tdx.chanlun.types import MMD, MMDType
         from easy_tdx.chanlun.mmd import _calc_confidence
 
-        # 3买置信度应高于V9的0.60
+        # 3买置信度应高于V9的0.60（V17调整为0.60基础值，趋势强度惩罚后约0.51）
         mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买V10: 突破确认")
         conf_3buy = _calc_confidence(mmd_3buy, 0.0)
-        assert conf_3buy >= 0.65, f"3买置信度应>=0.65，实际={conf_3buy:.2f}"
+        assert conf_3buy >= 0.50, f"3买置信度应>=0.50，实际={conf_3buy:.2f}"
 
-        # 3卖置信度应高于V9的0.55
+        # 3卖置信度应高于V9的0.55（V17调整为0.55基础值，趋势强度惩罚后约0.47）
         mmd_3sell = MMD(mmd_type=MMDType.SELL_3, msg="3卖V10: 跌破确认")
         conf_3sell = _calc_confidence(mmd_3sell, 0.0)
-        assert conf_3sell >= 0.60, f"3卖置信度应>=0.60，实际={conf_3sell:.2f}"
+        assert conf_3sell >= 0.45, f"3卖置信度应>=0.45，实际={conf_3sell:.2f}"
 
         # 1买/1卖置信度保持不变
         mmd_1buy = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰")
@@ -439,7 +439,7 @@ class TestV11Enhancements:
         # 设置confluence_score属性模拟多时间框架共振
         mmd.confluence_score = 0.75
         conf = _calc_confidence(mmd, 0.5)
-        assert conf >= 0.70, f"强共振时应提升置信度，实际={conf:.2f}"
+        assert conf >= 0.67, f"强共振时应提升置信度，实际={conf:.2f}"
 
     def test_v11_confidence_with_medium_confluence (self):
         """测试V11中等共振加成。"""
@@ -449,7 +449,7 @@ class TestV11Enhancements:
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买V11: 突破确认")
         mmd.confluence_score = 0.55
         conf = _calc_confidence(mmd, 0.5)
-        assert conf >= 0.65, f"中等共振时应提升置信度，实际={conf:.2f}"
+        assert conf >= 0.62, f"中等共振时应提升置信度，实际={conf:.2f}"
 
 
 class TestV12Enhancements:
@@ -983,8 +983,8 @@ class TestV15Enhancements:
         mmd._kline_pattern = "hammer"
 
         conf = _calc_confidence(mmd, trend_strength=0.5)
-        # K线形态加成应提高置信度
-        assert conf > 0.68  # 基础值0.68 + 0.03 = 0.71
+        # K线形态加成应提高置信度（V17基础值0.60+形态0.03=0.63，加上趋势强度加成0.03=0.66）
+        assert conf > 0.60  # 基础值0.60 + 形态加成 + 趋势加成
 
     def test_retest_break_attribute_in_confidence(self):
         """测试二次回踩属性在置信度计算中被正确使用。"""
@@ -1105,3 +1105,124 @@ class TestV16Enhancements:
         # 十字星不加成，维持原仓位
         assert result['position_pct'] == 40
         assert any('犹豫' in n for n in result['notes'])
+
+
+class TestV17Enhancements:
+    """测试V17新增功能：MA60趋势确认 + 趋势强度阈值 + 置信度校准 + 成交量增强。"""
+
+    def test_calc_ma60_slope_up(self):
+        """测试MA60斜率计算：上升趋势返回up。"""
+        from easy_tdx.chanlun.mmd import _calc_ma60_slope
+        # 模拟60根K线的上升趋势（每日涨0.3%）
+        closes = [10.0 * (1.003 ** i) for i in range(80)]
+        result = _calc_ma60_slope(closes, 70)
+        assert result == "up", f"上升趋势MA60应返回up，实际={result}"
+
+    def test_calc_ma60_slope_down(self):
+        """测试MA60斜率计算：下降趋势返回down。"""
+        from easy_tdx.chanlun.mmd import _calc_ma60_slope
+        # 模拟60根K线的下降趋势（每日跌0.3%）
+        closes = [10.0 * (0.997 ** i) for i in range(80)]
+        result = _calc_ma60_slope(closes, 70)
+        assert result == "down", f"下降趋势MA60应返回down，实际={result}"
+
+    def test_calc_ma60_slope_flat(self):
+        """测试MA60斜率计算：横盘返回flat。"""
+        from easy_tdx.chanlun.mmd import _calc_ma60_slope
+        # 模拟横盘数据
+        closes = [10.0] * 80
+        result = _calc_ma60_slope(closes, 70)
+        assert result == "flat", f"横盘MA60应返回flat，实际={result}"
+
+    def test_calc_ma60_slope_insufficient_data(self):
+        """测试数据不足时MA60正常返回。"""
+        from easy_tdx.chanlun.mmd import _calc_ma60_slope
+        closes = [10.0 + i * 0.1 for i in range(30)]
+        result = _calc_ma60_slope(closes, 25)
+        assert result in ("up", "down", "flat")
+
+    def test_v17_trend_strength_penalty_for_3buy(self):
+        """测试V17趋势强度惩罚：趋势不明确时3买置信度降低。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        conf_low = _calc_confidence(mmd, 0.0)   # 趋势不明确
+        conf_high = _calc_confidence(mmd, 0.8)  # 趋势明确
+
+        # 趋势明确时应比不明确时置信度高
+        assert conf_high > conf_low, f"趋势明确时应提升置信度: {conf_high:.2f} vs {conf_low:.2f}"
+
+    def test_v17_trend_strength_bonus_for_3buy(self):
+        """测试V17趋势强度加成：趋势明确时3买置信度额外提升。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        conf = _calc_confidence(mmd, 0.8)  # 趋势明确
+
+        # 基础0.60 + 趋势强度>=0.7加成0.05 = 0.65
+        assert conf >= 0.64, f"趋势明确时3买置信度应>=0.64，实际={conf:.2f}"
+
+    def test_v17_confidence_calibration_3buy(self):
+        """测试V17置信度校准：3买基础值降至0.60。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        # 趋势强度=0.5时不应有惩罚或加成
+        conf = _calc_confidence(mmd, 0.5)
+        # 基础0.60 + 趋势强度0.5无惩罚加成
+        assert 0.58 <= conf <= 0.65, f"3买基准置信度应在0.58-0.65之间，实际={conf:.2f}"
+
+    def test_v17_confidence_calibration_3sell(self):
+        """测试V17置信度校准：3卖基础值降至0.55。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
+        conf = _calc_confidence(mmd, 0.5)
+        # 基础0.55
+        assert 0.53 <= conf <= 0.60, f"3卖基准置信度应在0.53-0.60之间，实际={conf:.2f}"
+
+    def test_v17_ma60_bonus_in_confidence(self):
+        """测试V17 MA60趋势确认加成。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        # 上升趋势数据
+        closes = [10.0 * (1.003 ** i) for i in range(80)]
+        fake_bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(50), klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(60), klines=[], val=11.0),
+            direction="up", index=50, high=11.0, low=10.0,
+        )
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试", bi=fake_bi)
+        conf = _calc_confidence(mmd, 0.5, closes=closes)
+        # MA60向上应提供额外加成
+        assert conf > 0.60, f"MA60向上时应提升置信度，实际={conf:.2f}"
+
+    def test_v17_all_types_still_work(self):
+        """测试V17不破坏各类买卖点的基础置信度。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 1买应保持高置信度
+        mmd_1buy = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰")
+        assert _calc_confidence(mmd_1buy, 0.5) >= 0.85
+
+        # 1卖应保持高置信度
+        mmd_1sell = MMD(mmd_type=MMDType.SELL_1, msg="1卖: 顶背驰")
+        assert _calc_confidence(mmd_1sell, 0.5) >= 0.88
+
+        # 2买/2卖应保持稳定
+        mmd_2buy = MMD(mmd_type=MMDType.BUY_2, msg="2买: 回调确认")
+        assert _calc_confidence(mmd_2buy, 0.5) >= 0.70
+
+        mmd_2sell = MMD(mmd_type=MMDType.SELL_2, msg="2卖: 反弹确认")
+        assert _calc_confidence(mmd_2sell, 0.5) >= 0.65
