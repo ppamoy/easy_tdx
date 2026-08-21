@@ -550,32 +550,50 @@ async def diagnose_stock(
 
     score = max(0, min(100, score))
 
-    # ── 操作建议 ──────────────────────────────────────────────────────
+    # ── 操作建议（V6增强：动态缠论信号描述）─────────────────────────────
+    # 构建缠论信号描述
+    chanlun_desc = ""
+    if latest_mmd:
+        mmd_type = latest_mmd.mmd_type.value
+        q = getattr(latest_mmd, "quality", None)
+        grade = q.grade if q else None
+        conf_pct = int(latest_mmd.confidence * 100)
+        chanlun_desc = f"缠论{mmd_type}({grade or '?'}级, 置信度{conf_pct}%)"
+        if q and q.reasons:
+            top_reason = q.reasons[0] if q.reasons else ""
+            if top_reason:
+                chanlun_desc += f" [{top_reason}]"
+
     if score >= 75:
         action = "strong_buy"
         action_label = "强烈买入"
         action_color = "#22c55e"
-        reason = f"多指标共振看涨：缠论买点确认 + MACD金叉 + 均线多头排列。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
+        extra = f"。{chanlun_desc}" if chanlun_desc else ""
+        reason = f"多指标共振看涨：MACD金叉 + 均线多头排列{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
     elif score >= 60:
         action = "buy"
         action_label = "买入"
         action_color = "#4ade80"
-        reason = f"技术面偏多，可考虑分批建仓。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
+        extra = f"。{chanlun_desc}" if chanlun_desc else ""
+        reason = f"技术面偏多，可考虑分批建仓{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
     elif score >= 45:
         action = "hold"
         action_label = "持有观察"
         action_color = "#f59e0b"
-        reason = f"方向不明确，建议观望。支撑位 {support_1} 元，阻力位 {resistance_1} 元，等待突破方向"
+        extra = f"。{chanlun_desc}" if chanlun_desc else ""
+        reason = f"方向不明确，建议观望{extra}。支撑位 {support_1} 元，阻力位 {resistance_1} 元，等待突破方向"
     elif score >= 30:
         action = "sell"
         action_label = "卖出"
         action_color = "#f97316"
-        reason = f"技术面偏空，建议减仓。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
+        extra = f"。{chanlun_desc}" if chanlun_desc else ""
+        reason = f"技术面偏空，建议减仓{extra}。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
     else:
         action = "strong_sell"
         action_label = "强烈卖出"
         action_color = "#ef4444"
-        reason = f"多指标共振看跌，建议清仓回避。止损位 {stop_loss_price} 元，远离多头趋势"
+        extra = f"。{chanlun_desc}" if chanlun_desc else ""
+        reason = f"多指标共振看跌，建议清仓回避{extra}。止损位 {stop_loss_price} 元，远离多头趋势"
 
     # ── 仓位建议 ──────────────────────────────────────────────────────
     position_recommendation = _calculate_position_recommendation(
