@@ -428,19 +428,28 @@ async def diagnose_stock(
     # ── 综合评分（增强版） ────────────────────────────────────────────
     score = 50  # 基础分
 
-    # 缠论信号
+    # 缠论信号（V6增强：质量评级加成 + 多信号统计）
     buy_1_count = sum(1 for m in result.mmds if m.mmd_type.value == "1buy")
     sell_1_count = sum(1 for m in result.mmds if m.mmd_type.value == "1sell")
+    buy_2_count = sum(1 for m in result.mmds if m.mmd_type.value == "2buy")
+    sell_2_count = sum(1 for m in result.mmds if m.mmd_type.value == "2sell")
     latest_mmd = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0) if result.mmds else None
 
+    # V6: 质量评级加成 — S/A级信号权重更高
+    grade_bonus: dict[str, int] = {"S": 8, "A": 5, "B": 2, "C": 0, "D": -3}
     if latest_mmd:
+        q = getattr(latest_mmd, "quality", None)
+        grade = q.grade if q else None
+        base_type_score = 0
         if latest_mmd.mmd_type.value in ("1buy", "2buy"):
-            score += 15
+            base_type_score = 15
         elif latest_mmd.mmd_type.value in ("1sell", "2sell"):
-            score -= 15
-        # 置信度加成
-        score += latest_mmd.confidence * 10
-        score -= (1 - latest_mmd.confidence) * 5
+            base_type_score = -15
+        # 质量评级加成
+        quality_adj = grade_bonus.get(grade, 0) if grade else 0
+        # 置信度加成（放大：高置信度信号更可靠）
+        conf_bonus = latest_mmd.confidence * 12 - (1 - latest_mmd.confidence) * 4
+        score += base_type_score + quality_adj + conf_bonus
 
     # MACD
     if macd_golden:
@@ -590,11 +599,30 @@ async def diagnose_stock(
             "mmd_count": len(result.mmds),
             "buy_1_count": buy_1_count,
             "sell_1_count": sell_1_count,
+            "buy_2_count": buy_2_count,
+            "sell_2_count": sell_2_count,
             "latest_mmd": {
                 "type": latest_mmd.mmd_type.value if latest_mmd else None,
                 "confidence": round(latest_mmd.confidence, 2) if latest_mmd else None,
                 "msg": latest_mmd.msg if latest_mmd else None,
+                "quality": {
+                    "grade": getattr(getattr(latest_mmd, "quality", None), "grade", None),
+                    "score": getattr(getattr(getattr(latest_mmd, "quality", None), "score", None), "score", None),
+                    "reasons": getattr(getattr(getattr(latest_mmd, "quality", None), "reasons", None), "reasons", None),
+                } if latest_mmd and getattr(latest_mmd, "quality", None) else None,
             } if latest_mmd else None,
+            # V6: 最近3个高质量买卖点
+            "recent_signals": [
+                {
+                    "type": m.mmd_type.value,
+                    "confidence": round(m.confidence, 2),
+                    "quality": {
+                        "grade": getattr(getattr(m, "quality", None), "grade", None),
+                        "score": getattr(getattr(getattr(m, "quality", None), "score", None), "score", None),
+                    } if getattr(m, "quality", None) else None,
+                }
+                for m in sorted(result.mmds, key=lambda x: getattr(getattr(x, "quality", None), "score", 0) if getattr(x, "quality", None) else 0, reverse=True)[:3]
+            ],
         },
         "macd": {
             "dif": round(latest_dif, 4),

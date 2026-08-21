@@ -157,6 +157,19 @@ onMounted(() => {
             <div v-if="diagnosis.chanlun.latest_mmd" class="latest-mmd">
               <span class="mmd-tag" :class="diagnosis.chanlun.latest_mmd.type">{{ diagnosis.chanlun.latest_mmd.type }}</span>
               <span class="mmd-conf">置信度 {{ diagnosis.chanlun.latest_mmd.confidence ?? '-' }}</span>
+              <span v-if="diagnosis.chanlun.latest_mmd.quality" class="mmd-quality" :class="'grade-' + diagnosis.chanlun.latest_mmd.quality.grade">
+                质量: {{ diagnosis.chanlun.latest_mmd.quality.grade }} ({{ diagnosis.chanlun.latest_mmd.quality.score }}分)
+              </span>
+            </div>
+            <div v-if="diagnosis.chanlun.recent_signals.length > 0" class="recent-signals">
+              <div class="section-label">近3个高质量信号:</div>
+              <div class="signal-list">
+                <span v-for="(sig, i) in diagnosis.chanlun.recent_signals" :key="i" class="signal-item" :class="sig.type">
+                  {{ sig.type }}
+                  <span class="sig-conf">{{ (sig.confidence * 100).toFixed(0) }}%</span>
+                  <span v-if="sig.quality" class="sig-grade grade-{{ sig.quality.grade }}">{{ sig.quality.grade }}</span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -677,6 +690,25 @@ onMounted(() => {
 .mmd-tag.buy { background: rgba(34,197,94,0.2); color: #22c55e; }
 .mmd-tag.sell { background: rgba(239,68,68,0.2); color: #ef4444; }
 .mmd-conf { font-size: 11px; color: var(--text-dim); }
+.mmd-quality { font-size: 11px; margin-left: 8px; padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+.mmd-quality.grade-S { background: rgba(234,179,8,0.2); color: #eab308; }
+.mmd-quality.grade-A { background: rgba(34,197,94,0.2); color: #22c55e; }
+.mmd-quality.grade-B { background: rgba(59,130,246,0.2); color: #3b82f6; }
+.mmd-quality.grade-C { background: rgba(249,115,22,0.2); color: #f97316; }
+.mmd-quality.grade-D { background: rgba(239,68,68,0.2); color: #ef4444; }
+.recent-signals { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.section-label { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; }
+.signal-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.signal-item { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: var(--bg-elevated); }
+.signal-item.buy { border-left: 2px solid #22c55e; }
+.signal-item.sell { border-left: 2px solid #ef4444; }
+.sig-conf { font-size: 10px; color: var(--text-dim); }
+.sig-grade { font-size: 10px; font-weight: 700; padding: 0 4px; border-radius: 3px; }
+.sig-grade.grade-S { background: rgba(234,179,8,0.2); color: #eab308; }
+.sig-grade.grade-A { background: rgba(34,197,94,0.2); color: #22c55e; }
+.sig-grade.grade-B { background: rgba(59,130,246,0.2); color: #3b82f6; }
+.sig-grade.grade-C { background: rgba(249,115,22,0.2); color: #f97316; }
+.sig-grade.grade-D { background: rgba(239,68,68,0.2); color: #ef4444; }
 
 /* 成交量提示 */
 .vol-tip {

@@ -368,13 +368,35 @@ export interface ServerSwitchResult {
 
 // ── 股票诊断 ─────────────────────────────────────────────────────────────
 
+export interface DiagnosisChanlunMmdQuality {
+  grade: 'S' | 'A' | 'B' | 'C' | 'D' | null
+  score: number | null
+  reasons: string[] | null
+}
+
+export interface DiagnosisChanlunMmd {
+  type: string | null
+  confidence: number | null
+  msg: string | null
+  quality: DiagnosisChanlunMmdQuality | null
+}
+
+export interface DiagnosisChanlunRecentSignal {
+  type: string
+  confidence: number
+  quality: { grade: 'S'|'A'|'B'|'C'|'D'|null; score: number|null } | null
+}
+
 export interface DiagnosisChanlun {
   bi_count: number
   zs_count: number
   mmd_count: number
   buy_1_count: number
   sell_1_count: number
-  latest_mmd: { type: string | null; confidence: number | null; msg: string | null } | null
+  buy_2_count: number
+  sell_2_count: number
+  latest_mmd: DiagnosisChanlunMmd | null
+  recent_signals: DiagnosisChanlunRecentSignal[]
 }
 
 export interface DiagnosisMACD {
