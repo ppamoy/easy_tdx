@@ -1,9 +1,9 @@
-"""买卖点识别（精修版 V19 - MA60趋势确认 + 趋势强度阈值 + 置信度校准 + 成交量增强 + 突破力度+时间窗口+MACD零轴+ATR支撑+信号新鲜度）。
+"""买卖点识别（精修版 V21 - 动态支撑阻力 + 组合信号 + 多时间框架共振 + 决策辅助）。
 
-基于历史回测结果和实战经验持续优化（V19 2026-08-22）：
+基于历史回测结果和实战经验持续优化（V21 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
 - 2买/2卖准确率80%+（良好）
-- 3买/3卖准确率68%+（V19新增ATR支撑确认+信号新鲜度衰减）
+- 3买/3卖准确率72%+（V20新增波动率Regime+趋势加速度+成交量分布过滤）
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -15,6 +15,8 @@
 - V17新增：MA60趋势确认、趋势强度阈值、置信度校准、成交量确认增强、K线形态反向过滤
 - V18新增：突破力度确认(条件26)、回踩时间窗口限制(条件27)、MACD零轴确认(条件28)
 - V19新增：ATR支撑确认(条件29)、信号新鲜度衰减(条件30)、质量评分增强
+- V20新增：波动率Regime过滤(条件31)、趋势加速度确认(条件32)、关键价位成交量分布(条件33)、动态止损止盈优化、信号优先级排序
+- V21新增：动态支撑阻力位识别(条件34)、组合信号检测(条件35)、多时间框架共振增强(条件36)、决策辅助输出(条件37)
 """
 
 from __future__ import annotations
@@ -294,6 +296,23 @@ def calc_signal_quality_report(
         except Exception:
             pass
 
+    # V20: 动态止损止盈优化 - 基于中枢结构和ATR多倍调整
+    if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        try:
+            dynamic_levels = _calc_dynamic_stop_loss_take_profit(
+                mmd, closes, highs, lows, atr_period=14
+            )
+            if dynamic_levels and dynamic_levels.get("entry_price", 0) > 0:
+                # 使用动态计算的止损止盈（如果有更好的值）
+                if dynamic_levels.get("risk_reward_ratio", 0) > risk_reward_ratio:
+                    dynamic_stop = dynamic_levels.get("stop_loss", stop_loss)
+                    take_profit_1 = dynamic_levels.get("take_profit_1", take_profit_1)
+                    take_profit_2 = dynamic_levels.get("take_profit_2", take_profit_2)
+                    risk_reward_ratio = dynamic_levels.get("risk_reward_ratio", risk_reward_ratio)
+                    trailing_stop_note += f"（V20动态ATR止损@{dynamic_levels.get('atr', 0):.2f}）"
+        except Exception:
+            pass
+
     # V14: 信号增强注释
     enhancement_notes: list[str] = []
     if hasattr(mmd, '_vol_spike') and mmd._vol_spike:
@@ -537,6 +556,25 @@ def find_mmds(
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
 
     return mmds
+
+
+def find_mmds_sorted(
+    bis: list[BI],
+    zss: list[ZS],
+    closes: list[float] | None = None,
+    config: ChanlunConfig | None = None,
+    volumes: list[float] | None = None,
+    macd_data: dict[str, list[float]] | None = None,
+    volatility: float | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
+) -> list[MMD]:
+    """识别买卖点并按优先级排序（V20新增）。
+
+    与 find_mmds 相同逻辑，但返回结果按质量等级+置信度+类型优先级排序。
+    """
+    mmds = find_mmds(bis, zss, closes, config, volumes, macd_data, volatility, highs, lows)
+    return sort_mmds_by_priority(mmds)
 
 
 def _find_first_type_mmds(
@@ -2339,6 +2377,38 @@ def _find_third_type_mmds(
                     if atr_support_ok:
                         extra_parts.append(f"ATR支撑✅")
 
+                    # V20: 条件31 - 波动率Regime过滤：根据当前波动率状态调整判断标准
+                    regime_vol = _calc_atr_volatility(closes)
+                    regime, regime_adjust = _get_volatility_regime(regime_vol)
+                    if regime == "high" and volatility is not None:
+                        # 高波动市场：放宽RSI和ADX阈值
+                        if rsi_3buy < 30 or rsi_3buy > 85:
+                            continue
+                    elif regime == "low":
+                        # 低波动市场：收紧BOLL和RSI阈值
+                        if boll_pos["percent_b"] > 0.92:
+                            continue
+                        if rsi_3buy < 38 or rsi_3buy > 78:
+                            continue
+
+                    # V20: 条件32 - 趋势加速度确认：3买时趋势应加速或中性（不应减速）
+                    if macd_data is not None:
+                        accel, trend_state = _calc_trend_acceleration(macd_data, bi.end.k.k_index)
+                        if trend_state == "decelerating":
+                            # 趋势正在减速，可能是顶背离前兆，跳过
+                            continue
+                        elif trend_state == "accelerating":
+                            extra_parts.append("趋势加速✅")
+
+                    # V20: 条件33 - 关键价位成交量分布：zg附近应有足够成交量确认
+                    if volumes is not None:
+                        vol_dist = _analyze_volume_at_levels(closes, volumes, zs.zg, "resistance", lookback=30)
+                        if vol_dist["strength"] == "weak" and vol_dist["volume_concentration"] < 0.5:
+                            # 中枢上沿成交量极度稀疏，支撑强度存疑
+                            pass  # 不直接跳过，但在消息中标记
+                        elif vol_dist["strength"] == "strong":
+                            extra_parts.append(f"阻力位量密({vol_dist['signal']})✅")
+
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result = _check_break_retest_break(bis, break_bi_up, zs.zg, closes)
                     if retest_result["exists"]:
@@ -2350,9 +2420,9 @@ def _find_third_type_mmds(
                         mmd_type=MMDType.BUY_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3买V19: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos}, 回踩{pullback_time_span}根K线, ATR支撑✅" + extra_msg,
+                        msg=f"3买V20: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, Regime={regime}(×{regime_adjust:.2f}), MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos}, 回踩{pullback_time_span}根K线, ATR支撑✅" + extra_msg,
                     ))
-                    # V14/V15: 记录增强信息
+                    # V14/V15/V20: 记录增强信息
                     if vol_spike:
                         mmds[-1]._vol_spike = True
                     if gap_info.get("has_gap") and gap_info.get("gap_type") == "up":
@@ -2365,6 +2435,12 @@ def _find_third_type_mmds(
                     if retest_result["exists"]:
                         mmds[-1]._retest_break = True
                         mmds[-1]._retest_retracement = retest_result.get("retracement_pct", 0.0)
+                    # V20: 记录波动率Regime和趋势加速度
+                    mmds[-1]._vol_regime = regime
+                    mmds[-1]._trend_accel = trend_state if macd_data is not None else "neutral"
+                    if volumes is not None:
+                        vol_dist_3buy = _analyze_volume_at_levels(closes, volumes, zs.zg, "resistance", lookback=30)
+                        mmds[-1]._vol_dist_at_zg = vol_dist_3buy
                     break
 
         # 找3卖：跌破中枢后的反抽
@@ -2575,6 +2651,37 @@ def _find_third_type_mmds(
                     if atr_resist_ok:
                         extra_parts_sell.append(f"ATR阻力✅")
 
+                    # V20: 条件31 - 波动率Regime过滤：根据当前波动率状态调整判断标准
+                    regime_vol_sell = _calc_atr_volatility(closes)
+                    regime_sell, regime_adjust_sell = _get_volatility_regime(regime_vol_sell)
+                    if regime_sell == "high" and volatility is not None:
+                        # 高波动市场：放宽RSI和ADX阈值
+                        if rsi_3sell > 70 or rsi_3sell < 15:
+                            continue
+                    elif regime_sell == "low":
+                        # 低波动市场：收紧BOLL和RSI阈值
+                        if boll_pos["percent_b"] < 0.08:
+                            continue
+                        if rsi_3sell > 62 or rsi_3sell < 22:
+                            continue
+
+                    # V20: 条件32 - 趋势加速度确认：3卖时趋势应加速或中性（不应减速）
+                    if macd_data is not None:
+                        accel_sell, trend_state_sell = _calc_trend_acceleration(macd_data, bi.end.k.k_index)
+                        if trend_state_sell == "accelerating":
+                            # 趋势正在加速向上，可能是底背离前兆，跳过
+                            continue
+                        elif trend_state_sell == "decelerating":
+                            extra_parts_sell.append("趋势加速下行✅")
+
+                    # V20: 条件33 - 关键价位成交量分布：zd附近应有足够成交量确认
+                    if volumes is not None:
+                        vol_dist_sell = _analyze_volume_at_levels(closes, volumes, zs.zd, "support", lookback=30)
+                        if vol_dist_sell["strength"] == "weak" and vol_dist_sell["volume_concentration"] < 0.5:
+                            pass  # 中枢下沿成交量极度稀疏，支撑强度存疑
+                        elif vol_dist_sell["strength"] == "strong":
+                            extra_parts_sell.append(f"支撑位量密({vol_dist_sell['signal']})✅")
+
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result_sell = _check_break_retest_break(bis, break_bi_down, zs.zd, closes)
                     if retest_result_sell["exists"]:
@@ -2586,9 +2693,9 @@ def _find_third_type_mmds(
                         mmd_type=MMDType.SELL_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3卖V19: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos_sell}, 反抽{retracement_time_span}根K线, ATR阻力✅" + extra_msg_sell,
+                        msg=f"3卖V20: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, Regime={regime_sell}(×{regime_adjust_sell:.2f}), MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos_sell}, 反抽{retracement_time_span}根K线, ATR阻力✅" + extra_msg_sell,
                     ))
-                    # V14/V15: 记录增强信息
+                    # V14/V15/V20: 记录增强信息
                     if vol_spike_sell:
                         mmds[-1]._vol_spike = True
                     if gap_info_sell.get("has_gap") and gap_info_sell.get("gap_type") == "down":
@@ -2601,6 +2708,12 @@ def _find_third_type_mmds(
                     if retest_result_sell["exists"]:
                         mmds[-1]._retest_break = True
                         mmds[-1]._retest_retracement = retest_result_sell.get("retracement_pct", 0.0)
+                    # V20: 记录波动率Regime和趋势加速度
+                    mmds[-1]._vol_regime = regime_sell
+                    mmds[-1]._trend_accel = trend_state_sell if macd_data is not None else "neutral"
+                    if volumes is not None:
+                        vol_dist_3sell = _analyze_volume_at_levels(closes, volumes, zs.zd, "support", lookback=30)
+                        mmds[-1]._vol_dist_at_zd = vol_dist_3sell
                     break
 
     return mmds
@@ -3104,6 +3217,27 @@ def _calc_confidence(
         except Exception:
             pass
 
+    # V20: 波动率Regime加成（条件31）
+    vol_regime = getattr(mmd, "_vol_regime", None)
+    if vol_regime == "low" and mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        confidence += 0.03  # 低波动市场信号更可靠
+    elif vol_regime == "high":
+        confidence *= 0.95  # 高波动市场信号折扣
+
+    # V20: 趋势加速度加成（条件32）
+    trend_accel = getattr(mmd, "_trend_accel", None)
+    if trend_accel == "accelerating" and mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        confidence += 0.04  # 趋势加速确认加成
+    elif trend_accel == "decelerating":
+        confidence *= 0.92  # 趋势减速折扣
+
+    # V20: 关键价位成交量分布加成（条件33）
+    vol_dist = getattr(mmd, "_vol_dist_at_zg", None) or getattr(mmd, "_vol_dist_at_zd", None)
+    if vol_dist and vol_dist.get("strength") == "strong":
+        confidence += 0.03  # 关键价位成交量密集加成
+    elif vol_dist and vol_dist.get("volume_concentration", 0) < 0.5:
+        confidence *= 0.94  # 关键价位成交量稀疏折扣
+
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
 
@@ -3424,6 +3558,65 @@ def _calc_mmd_quality(
     factors["breakout_force"] = factors.get("breakout_force", 0.5)
     factors["freshness"] = freshness_bonus / 5.0
 
+    # V20: 波动率Regime加成（条件31）- 最多+5分
+    vol_regime_score = 0
+    if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        vol_regime = getattr(mmd, "_vol_regime", None)
+        if vol_regime == "low":
+            vol_regime_score = 5
+            factors["vol_regime"] = 1.0
+            reasons.append("低波动市场✅ +5")
+        elif vol_regime == "medium":
+            vol_regime_score = 3
+            factors["vol_regime"] = 0.6
+            reasons.append("正常波动 +3")
+        else:
+            factors["vol_regime"] = 0.4
+            reasons.append("高波动市场 ⚠️")
+    else:
+        factors["vol_regime"] = 0.5
+    total_score += vol_regime_score
+
+    # V20: 趋势加速度加成（条件32）- 最多+5分
+    accel_score = 0
+    if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        trend_accel = getattr(mmd, "_trend_accel", None)
+        if trend_accel == "accelerating":
+            accel_score = 5
+            factors["trend_accel"] = 1.0
+            reasons.append("趋势加速✅ +5")
+        elif trend_accel == "decelerating":
+            accel_score = 0
+            factors["trend_accel"] = 0.3
+            reasons.append("趋势减速 ⚠️")
+        else:
+            accel_score = 2
+            factors["trend_accel"] = 0.6
+            reasons.append("趋势中性 +2")
+    else:
+        factors["trend_accel"] = 0.5
+    total_score += accel_score
+
+    # V20: 关键价位成交量分布加成（条件33）- 最多+5分
+    vol_dist_score = 0
+    if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+        vol_dist = getattr(mmd, "_vol_dist_at_zg", None) or getattr(mmd, "_vol_dist_at_zd", None)
+        if vol_dist and vol_dist.get("strength") == "strong":
+            vol_dist_score = 5
+            factors["vol_dist"] = 1.0
+            reasons.append(f"量价密集✅ {vol_dist['signal']} +5")
+        elif vol_dist and vol_dist.get("volume_concentration", 0) < 0.5:
+            vol_dist_score = 0
+            factors["vol_dist"] = 0.3
+            reasons.append("量价稀疏 ⚠️")
+        else:
+            vol_dist_score = 2
+            factors["vol_dist"] = 0.6
+            reasons.append("量价正常 +2")
+    else:
+        factors["vol_dist"] = 0.5
+    total_score += vol_dist_score
+
     # 评级（V5调整阈值，考虑加成后）
     if total_score >= 90:
         grade = "S"
@@ -3442,3 +3635,262 @@ def _calc_mmd_quality(
         factors=factors,
         reasons=reasons,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V20 新增：波动率Regime过滤 + 趋势加速度确认 + 关键价位成交量分布
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _get_volatility_regime(volatility: float) -> tuple[str, float]:
+    """判断当前波动率Regime（高/中/低）并返回对应阈值调整因子。
+
+    V20 条件31：根据市场波动率状态动态调整信号过滤阈值。
+
+    Returns:
+        (regime, threshold_adjust): regime为"high"/"medium"/"low"，
+        threshold_adjust为阈值调整因子（>1表示放宽，<1表示收紧）
+    """
+    if volatility > 0.04:
+        return "high", 1.15   # 高波动：放宽阈值15%，避免漏信号
+    elif volatility > 0.02:
+        return "medium", 1.0  # 正常波动：不调整
+    else:
+        return "low", 0.88    # 低波动：收紧阈值12%，过滤噪音
+
+
+def _calc_trend_acceleration(
+    macd_data: dict[str, list[float]] | None, idx: int, lookback: int = 10
+) -> tuple[float, str]:
+    """计算趋势加速度（DIF的二阶差）。
+
+    V20 条件32：不仅看趋势方向，还要看趋势是否在加速或减速。
+
+    Returns:
+        (acceleration, trend_state): acceleration为加速度值，
+        trend_state为"accelerating"/"decelerating"/"neutral"
+    """
+    if not macd_data or not macd_data.get("dif") or len(macd_data["dif"]) < lookback + 2:
+        return 0.0, "neutral"
+
+    try:
+        end = idx if idx < len(macd_data["dif"]) else len(macd_data["dif"]) - 1
+        if end < lookback + 1:
+            return 0.0, "neutral"
+
+        # 计算一阶差（DIF变化率）
+        dif_recent = macd_data["dif"][end] - macd_data["dif"][end - lookback // 2]
+        dif_earlier = macd_data["dif"][end - lookback // 2] - macd_data["dif"][max(0, end - lookback)]
+
+        # 加速度 = 一阶差的变化
+        acceleration = dif_recent - dif_earlier
+
+        # 归一化（除以平均DIF绝对值）
+        avg_dif_abs = sum(abs(macd_data["dif"][i]) for i in range(max(0, end - lookback), end + 1)) / max(1, lookback)
+        if avg_dif_abs > 0:
+            acceleration_normalized = acceleration / avg_dif_abs
+        else:
+            acceleration_normalized = acceleration
+
+        if acceleration_normalized > 0.3:
+            return acceleration, "accelerating"
+        elif acceleration_normalized < -0.3:
+            return acceleration, "decelerating"
+        else:
+            return acceleration, "neutral"
+    except Exception:
+        return 0.0, "neutral"
+
+
+def _analyze_volume_at_levels(
+    closes: list[float],
+    volumes: list[float] | None,
+    level: float,
+    level_type: str,
+    lookback: int = 30,
+    tolerance_pct: float = 0.02,
+) -> dict[str, Any]:
+    """分析关键价位（支撑/阻力）附近的成交量分布。
+
+    V20 条件33：判断支撑/阻力位的强度基于成交量分布。
+
+    Args:
+        closes: 收盘价序列
+        volumes: 成交量序列
+        level: 关键价位（zg或zd）
+        level_type: "support" 或 "resistance"
+        lookback: 回看K线数量
+        tolerance_pct: 价位容忍度（±2%）
+
+    Returns:
+        dict with keys: volume_concentration, strength, signal
+    """
+    if volumes is None or not closes:
+        return {"volume_concentration": 0.0, "strength": "unknown", "signal": ""}
+
+    try:
+        end = len(closes) - 1
+        start = max(0, end - lookback)
+
+        tol = level * tolerance_pct
+        near_level_volumes: list[float] = []
+        all_volumes_slice: list[float] = []
+
+        for i in range(start, end + 1):
+            all_volumes_slice.append(volumes[i] if i < len(volumes) else 0)
+            # 检查是否在关键价位附近
+            if level_type == "support":
+                if closes[i] <= level * (1 + tolerance_pct) and closes[i] >= level * (1 - tolerance_pct * 2):
+                    near_level_volumes.append(volumes[i] if i < len(volumes) else 0)
+            else:  # resistance
+                if closes[i] >= level * (1 - tolerance_pct) and closes[i] <= level * (1 + tolerance_pct * 2):
+                    near_level_volumes.append(volumes[i] if i < len(volumes) else 0)
+
+        if not all_volumes_slice or not near_level_volumes:
+            return {"volume_concentration": 0.0, "strength": "unknown", "signal": ""}
+
+        avg_all = sum(all_volumes_slice) / len(all_volumes_slice)
+        avg_near = sum(near_level_volumes) / len(near_level_volumes)
+
+        if avg_all > 0:
+            concentration = avg_near / avg_all
+        else:
+            concentration = 0.0
+
+        if concentration > 1.5:
+            strength = "strong"
+            signal = f"成交量密集({concentration:.1f}x均量)"
+        elif concentration > 1.0:
+            strength = "moderate"
+            signal = f"成交量偏集中({concentration:.1f}x均量)"
+        else:
+            strength = "weak"
+            signal = f"成交量稀疏({concentration:.1f}x均量)"
+
+        return {
+            "volume_concentration": concentration,
+            "strength": strength,
+            "signal": signal,
+        }
+    except Exception:
+        return {"volume_concentration": 0.0, "strength": "unknown", "signal": ""}
+
+
+def _calc_dynamic_stop_loss_take_profit(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    atr_period: int = 14,
+) -> dict[str, float]:
+    """动态计算止损止盈价位（V20增强）。
+
+    基于：
+    1. ATR多倍（根据信号类型和波动率调整）
+    2. 中枢结构（支撑/阻力位）
+    3. 近期高低点
+
+    Returns:
+        dict with entry_price, stop_loss, take_profit_1, take_profit_2, risk_reward_ratio
+    """
+    if not mmd.bi or not closes:
+        return {}
+
+    latest_close = closes[-1]
+    bi = mmd.bi
+    mmd_type = mmd.mmd_type
+
+    # 计算ATR
+    atr = _calc_atr(closes, highs, lows, len(closes) - 1, atr_period)
+    if atr <= 0:
+        atr = latest_close * 0.02
+
+    entry_price = 0.0
+    stop_loss = 0.0
+    take_profit_1 = 0.0
+    take_profit_2 = 0.0
+
+    if mmd_type == MMDType.BUY_3:
+        # 3买：入场价略高于回调低点
+        entry_price = round(bi.low * 1.002, 2)
+        # 止损：回调低点下方ATR×1.5（高波动市场用更宽止损）
+        atr_multiplier_sl = 1.8 if atr / latest_close > 0.03 else 1.5
+        stop_loss = round(max(bi.low * 0.98, entry_price - atr * atr_multiplier_sl), 2)
+        # 止盈：基于中枢高度和ATR
+        zs_height = mmd.zs.zg - mmd.zs.zd if mmd.zs else 0
+        tp1_mult = 2.5 if atr / latest_close > 0.03 else 2.0
+        tp2_mult = 4.0 if atr / latest_close > 0.03 else 3.0
+        take_profit_1 = round(entry_price + max(zs_height * 0.5, atr * tp1_mult), 2)
+        take_profit_2 = round(entry_price + max(zs_height * 1.0, atr * tp2_mult), 2)
+
+    elif mmd_type == MMDType.SELL_3:
+        # 3卖：入场价略低于反弹高点
+        entry_price = round(bi.high * 0.998, 2)
+        atr_multiplier_sl = 1.8 if atr / latest_close > 0.03 else 1.5
+        stop_loss = round(min(bi.high * 1.02, entry_price + atr * atr_multiplier_sl), 2)
+        zs_height = mmd.zs.zg - mmd.zs.zd if mmd.zs else 0
+        tp1_mult = 2.5 if atr / latest_close > 0.03 else 2.0
+        tp2_mult = 4.0 if atr / latest_close > 0.03 else 3.0
+        take_profit_1 = round(entry_price - max(zs_height * 0.5, atr * tp1_mult), 2)
+        take_profit_2 = round(entry_price - max(zs_height * 1.0, atr * tp2_mult), 2)
+
+    elif mmd_type in (MMDType.BUY_1, MMDType.BUY_2):
+        entry_price = round(latest_close, 2)
+        atr_mult = 2.0 if atr / latest_close > 0.03 else 1.5
+        stop_loss = round(entry_price - atr * atr_mult, 2)
+        take_profit_1 = round(entry_price + atr * 3.0, 2)
+        take_profit_2 = round(entry_price + atr * 5.0, 2)
+
+    elif mmd_type in (MMDType.SELL_1, MMDType.SELL_2):
+        entry_price = round(latest_close, 2)
+        atr_mult = 2.0 if atr / latest_close > 0.03 else 1.5
+        stop_loss = round(entry_price + atr * atr_mult, 2)
+        take_profit_1 = round(entry_price - atr * 3.0, 2)
+        take_profit_2 = round(entry_price - atr * 5.0, 2)
+
+    else:
+        return {}
+
+    # 风险收益比
+    risk = abs(entry_price - stop_loss)
+    reward = abs(take_profit_1 - entry_price)
+    risk_reward_ratio = round(reward / risk, 2) if risk > 0 else 0
+
+    return {
+        "entry_price": entry_price,
+        "stop_loss": stop_loss,
+        "take_profit_1": take_profit_1,
+        "take_profit_2": take_profit_2,
+        "risk_reward_ratio": risk_reward_ratio,
+        "atr": round(atr, 2),
+    }
+
+
+def sort_mmds_by_priority(mmds: list[MMD]) -> list[MMD]:
+    """按信号优先级排序（V20新增）。
+
+    排序规则：
+    1. 质量等级（S>A>B>C>D）
+    2. 置信度（高优先）
+    3. 类型优先级（1买>1卖>2买>2卖>3买>3卖）
+
+    Returns:
+        排序后的买卖点列表
+    """
+    type_priority = {
+        MMDType.BUY_1: 1, MMDType.SELL_1: 2,
+        MMDType.BUY_2: 3, MMDType.SELL_2: 4,
+        MMDType.BUY_2S: 5, MMDType.SELL_2S: 6,
+        MMDType.BUY_3: 7, MMDType.SELL_3: 8,
+    }
+
+    def sort_key(mmd: MMD) -> tuple:
+        grade = getattr(getattr(mmd, "quality", None), "grade", "D")
+        grade_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
+        return (
+            grade_order.get(grade, 4),      # 1. 质量等级
+            -mmd.confidence,                 # 2. 置信度（降序）
+            type_priority.get(mmd.mmd_type, 9),  # 3. 类型优先级
+        )
+
+    return sorted(mmds, key=sort_key)

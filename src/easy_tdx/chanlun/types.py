@@ -206,6 +206,13 @@ class MMD:
     _retest_break: bool = False  # 二次回踩确认
     _retest_retracement: float = 50.0  # 回踩深度（%）
 
+    # V21 enhancement fields
+    _dynamic_support: float | None = None  # 动态支撑位
+    _dynamic_resistance: float | None = None  # 动态阻力位
+    _signal_combo: str | None = None  # 组合信号类型：none/1+2buy/1+2sell/3buy_multi等
+    _combo_confidence_bonus: float = 0.0  # 组合信号置信度加成
+    _decision_recommendation: dict[str, Any] | None = None  # 决策辅助建议
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
