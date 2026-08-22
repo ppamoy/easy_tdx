@@ -1226,3 +1226,152 @@ class TestV17Enhancements:
 
         mmd_2sell = MMD(mmd_type=MMDType.SELL_2, msg="2卖: 反弹确认")
         assert _calc_confidence(mmd_2sell, 0.5) >= 0.65
+
+
+class TestV18Enhancements:
+    """测试V18新增功能：突破力度确认 + 回踩时间窗口 + MACD零轴确认。"""
+
+    def test_calc_macd_zero_axis_above(self):
+        """测试MACD零轴位置：DIF在零轴上方返回above。"""
+        from easy_tdx.chanlun.mmd import _calc_macd_zero_axis_position
+
+        macd_data = {"dif": [-0.1, -0.05, 0.02, 0.08, 0.15]}
+        result = _calc_macd_zero_axis_position(macd_data, 4)
+        assert result == "above", f"应返回above，实际={result}"
+
+    def test_calc_macd_zero_axis_below(self):
+        """测试MACD零轴位置：DIF在零轴下方返回below。"""
+        from easy_tdx.chanlun.mmd import _calc_macd_zero_axis_position
+
+        macd_data = {"dif": [0.1, 0.05, -0.02, -0.08, -0.15]}
+        result = _calc_macd_zero_axis_position(macd_data, 4)
+        assert result == "below", f"应返回below，实际={result}"
+
+    def test_calc_macd_zero_axis_crossing_above(self):
+        """测试MACD零轴位置：DIF穿越零轴向上返回crossing_above。"""
+        from easy_tdx.chanlun.mmd import _calc_macd_zero_axis_position
+
+        macd_data = {"dif": [-0.05, 0.03, 0.1, 0.15, 0.2]}
+        result = _calc_macd_zero_axis_position(macd_data, 1)
+        assert result == "crossing_above", f"应返回crossing_above，实际={result}"
+
+    def test_calc_macd_zero_axis_near_zero(self):
+        """测试MACD零轴位置：DIF接近零时返回near_zero。"""
+        from easy_tdx.chanlun.mmd import _calc_macd_zero_axis_position
+
+        macd_data = {"dif": [0.0005, 0.0003, 0.0001]}
+        result = _calc_macd_zero_axis_position(macd_data, 2)
+        assert result == "near_zero", f"应返回near_zero，实际={result}"
+
+    def test_check_pullback_time_window_within(self):
+        """测试回踩时间窗口：20根K线在限制内。"""
+        from easy_tdx.chanlun.mmd import _check_pullback_time_window
+        from easy_tdx.chanlun.types import BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        breakout_bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
+            direction="up", index=0, high=12.0, low=10.0,
+        )
+        pullback_bi = BI(
+            start=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
+            end=FX(fx_type=FXType.DI, k=FakeK(30), klines=[], val=11.0),
+            direction="down", index=10, high=12.0, low=11.0,
+        )
+        within, span = _check_pullback_time_window(pullback_bi, breakout_bi, max_bars=25)
+        assert within is True, f"20根K线应在限制内，实际span={span}"
+        assert span == 20
+
+    def test_check_pullback_time_window_over_limit(self):
+        """测试回踩时间窗口：30根K线超出限制。"""
+        from easy_tdx.chanlun.mmd import _check_pullback_time_window
+        from easy_tdx.chanlun.types import BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        breakout_bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
+            direction="up", index=0, high=12.0, low=10.0,
+        )
+        pullback_bi = BI(
+            start=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
+            end=FX(fx_type=FXType.DI, k=FakeK(45), klines=[], val=11.0),
+            direction="down", index=10, high=12.0, low=11.0,
+        )
+        within, span = _check_pullback_time_window(pullback_bi, breakout_bi, max_bars=25)
+        assert within is False, f"30根K线应超出限制，实际span={span}"
+
+    def test_v18_confidence_macd_zero_bonus(self):
+        """测试V18 MACD零轴确认加成。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        closes = [10.0 * (1.003 ** i) for i in range(80)]
+        fake_bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(50), klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(60), klines=[], val=11.0),
+            direction="up", index=50, high=11.0, low=10.0,
+        )
+
+        # MACD在零轴上方时的3买
+        macd_data = {"dif": [0.1 + i * 0.01 for i in range(80)]}
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试", bi=fake_bi)
+        conf_with_macd = _calc_confidence(mmd, 0.7, closes=closes, macd_data=macd_data)
+
+        # MACD在零轴下方时的3买
+        macd_data_below = {"dif": [-0.1 - i * 0.01 for i in range(80)]}
+        mmd_below = MMD(mmd_type=MMDType.BUY_3, msg="3买测试", bi=fake_bi)
+        conf_without_macd = _calc_confidence(mmd_below, 0.7, closes=closes, macd_data=macd_data_below)
+
+        # MACD在零轴上方时应比下方有更高置信度
+        assert conf_with_macd > conf_without_macd, \
+            f"MACD零轴上方应提升置信度: {conf_with_macd:.3f} vs {conf_without_macd:.3f}"
+
+    def test_v18_base_confidence_values(self):
+        """测试V18基础置信度值：3买上调至0.62，3卖上调至0.57。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 3买基础值应为0.62（无额外加成）
+        mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        conf_3buy = _calc_confidence(mmd_3buy, 0.5)
+        assert 0.60 <= conf_3buy <= 0.65, f"3买基准置信度应在0.60-0.65之间，实际={conf_3buy:.2f}"
+
+        # 3卖基础值应为0.57（无额外加成）
+        mmd_3sell = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
+        conf_3sell = _calc_confidence(mmd_3sell, 0.5)
+        assert 0.55 <= conf_3sell <= 0.60, f"3卖基准置信度应在0.55-0.60之间，实际={conf_3sell:.2f}"
+
+    def test_v18_all_types_still_valid(self):
+        """测试V18不破坏各类买卖点的基础置信度。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 1买应保持高置信度
+        mmd_1buy = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰")
+        assert _calc_confidence(mmd_1buy, 0.5) >= 0.85
+
+        # 1卖应保持高置信度
+        mmd_1sell = MMD(mmd_type=MMDType.SELL_1, msg="1卖: 顶背驰")
+        assert _calc_confidence(mmd_1sell, 0.5) >= 0.88
+
+        # 2买/2卖应保持稳定
+        mmd_2buy = MMD(mmd_type=MMDType.BUY_2, msg="2买: 回调确认")
+        assert _calc_confidence(mmd_2buy, 0.5) >= 0.70
+
+        mmd_2sell = MMD(mmd_type=MMDType.SELL_2, msg="2卖: 反弹确认")
+        assert _calc_confidence(mmd_2sell, 0.5) >= 0.65

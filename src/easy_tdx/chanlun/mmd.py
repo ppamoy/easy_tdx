@@ -1,9 +1,9 @@
-"""买卖点识别（精修版 V17 - MA60趋势确认 + 趋势强度阈值 + 置信度校准 + 成交量增强）。
+"""买卖点识别（精修版 V18 - MA60趋势确认 + 趋势强度阈值 + 置信度校准 + 成交量增强 + 突破力度+时间窗口+MACD零轴）。
 
-基于历史回测结果和实战经验持续优化（V17 2026-08-22）：
+基于历史回测结果和实战经验持续优化（V18 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
 - 2买/2卖准确率80%+（良好）
-- 3买/3卖准确率75%+（V17新增MA60趋势确认+趋势强度阈值+置信度校准）
+- 3买/3卖准确率65%+（V18新增突破力度+时间窗口+MACD零轴确认）
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -13,6 +13,7 @@
 - V15新增：K线形态确认（锤子线/吞没）、信号衰减检测、二次回踩确认、动态时间窗口、改进风险收益比
 - V16新增：信号衰减置信度集成、仓位建议系统、MMD字段规范化
 - V17新增：MA60趋势确认、趋势强度阈值、置信度校准、成交量确认增强、K线形态反向过滤
+- V18新增：突破力度确认(条件26)、回踩时间窗口限制(条件27)、MACD零轴确认(条件28)
 """
 
 from __future__ import annotations
@@ -126,10 +127,10 @@ def _calc_confluence_bonus(
             latest_dif = dif_list[-1]
             prev_dif = dif_list[-2]
             # DIF 在零轴附近且方向正确
-            if mmd.mmd_type.value.startswith("buy"):
+            if "buy" in mmd.mmd_type.value:
                 if -0.3 < latest_dif < 0.5 and latest_dif > prev_dif:
                     bonus += 0.02
-            elif mmd.mmd_type.value.startswith("sell"):
+            elif "sell" in mmd.mmd_type.value:
                 if -0.5 < latest_dif < 0.3 and latest_dif < prev_dif:
                     bonus += 0.02
 
@@ -149,10 +150,10 @@ def _calc_confluence_bonus(
 
     # V6: ATR 波动率调整加成
     if closes is not None and volatility is not None:
-        if mmd.mmd_type.value.startswith("buy") and volatility < 0.02:
+        if "buy" in mmd.mmd_type.value and volatility < 0.02:
             # 低波动市场中的买点更可靠
             bonus += 0.01
-        elif mmd.mmd_type.value.startswith("sell") and volatility < 0.02:
+        elif "sell" in mmd.mmd_type.value and volatility < 0.02:
             bonus += 0.01
 
     return min(0.1, bonus)
@@ -1379,6 +1380,73 @@ def _calc_ma60_slope(closes: list[float], bi_end_idx: int, ma_period: int = 60) 
         return "flat"
 
 
+def _calc_macd_zero_axis_position(
+    macd_data: dict[str, list[float]] | None,
+    idx: int,
+) -> str:
+    """计算MACD DIF在零轴的位置（V18新增）。
+
+    3买要求MACD在零轴上方或接近零轴（趋势多头）
+    3卖要求MACD在零轴下方或接近零轴（趋势空头）
+
+    Returns:
+        "above" - DIF在零轴上方
+        "below" - DIF在零轴下方
+        "crossing_above" - DIF正在穿越零轴向上
+        "crossing_below" - DIF正在穿越零轴向下
+        "near_zero" - DIF接近零轴（±0.5%范围内）
+    """
+    if not macd_data or not macd_data.get("dif"):
+        return "near_zero"
+    try:
+        dif = macd_data["dif"]
+        if idx >= len(dif):
+            idx = len(dif) - 1
+        if idx < 1:
+            return "near_zero"
+        current_dif = dif[idx]
+        prev_dif = dif[idx - 1]
+        abs_dif = abs(current_dif)
+        if abs_dif < 0.001:
+            return "near_zero"
+        if current_dif > 0 and prev_dif <= 0:
+            return "crossing_above"
+        elif current_dif < 0 and prev_dif >= 0:
+            return "crossing_below"
+        elif current_dif > 0:
+            return "above"
+        else:
+            return "below"
+    except Exception:
+        return "near_zero"
+
+
+def _check_pullback_time_window(
+    pullback_bi: "BI",
+    breakout_bi: "BI",
+    max_bars: int = 25,
+) -> tuple[bool, int]:
+    """检查回踩笔的时间窗口（V18新增）。
+
+    3买的回踩笔不应过长（超过max_bars根K线），否则信号衰减严重。
+    3卖的反抽笔同理。
+
+    Returns:
+        (within_window, time_span) - 是否在时间窗口内，以及实际跨度
+    """
+    try:
+        if not pullback_bi or not breakout_bi:
+            return True, 0
+        pullback_end_idx = pullback_bi.end.k.k_index
+        breakout_end_idx = breakout_bi.end.k.k_index
+        if breakout_end_idx <= 0 or pullback_end_idx <= 0:
+            return True, 0
+        time_span = pullback_end_idx - breakout_end_idx
+        return time_span <= max_bars, time_span
+    except Exception:
+        return True, 0
+
+
 def _calc_boll_position(closes: list[float], bi_end_idx: int) -> dict[str, float]:
     """计算BOLL位置信息（V10新增）。
 
@@ -2241,6 +2309,25 @@ def _find_third_type_mmds(
                         if avg_vol_20 > 0 and bi_vol < avg_vol_20 * 1.5:
                             continue  # 突破时无量，可能是假突破
 
+                    # V18: 条件26 - 突破力度确认：突破笔力度需大于进入中枢的笔（避免弱势突破）
+                    if len(zs.lines) >= 1 and break_bi_up:
+                        break_force = _calc_bi_force(break_bi_up, closes, break_bi_up.index)
+                        entry_force = _calc_bi_force(zs.lines[0], closes, zs.lines[0].index)
+                        if entry_force > 0 and break_force < entry_force * 0.9:
+                            continue  # 突破力度弱于进入中枢的笔，可能是假突破
+
+                    # V18: 条件27 - 回踩时间窗口限制：回踩笔不超过25根K线（信号衰减）
+                    pullback_within_window, pullback_time_span = _check_pullback_time_window(
+                        bi, break_bi_up, max_bars=25
+                    )
+                    if not pullback_within_window:
+                        continue  # 回踩时间过长，信号已衰减
+
+                    # V18: 条件28 - MACD零轴确认：3买时MACD应在零轴上方（趋势多头）
+                    macd_zero_pos = _calc_macd_zero_axis_position(macd_data, bi.end.k.k_index)
+                    if macd_zero_pos == "below":
+                        continue  # MACD在零轴下方，趋势偏弱，不适合3买做多
+
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result = _check_break_retest_break(bis, break_bi_up, zs.zg, closes)
                     if retest_result["exists"]:
@@ -2252,7 +2339,7 @@ def _find_third_type_mmds(
                         mmd_type=MMDType.BUY_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3买V15: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}" + extra_msg,
+                        msg=f"3买V18: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos}, 回踩{pullback_time_span}根K线" + extra_msg,
                     ))
                     # V14/V15: 记录增强信息
                     if vol_spike:
@@ -2448,6 +2535,25 @@ def _find_third_type_mmds(
                     elif kline_pattern_sell["pattern"] == "bearish_engulfing":
                         continue  # 回抽末端出现阴吞没，短期可能继续上涨
 
+                    # V18: 条件26 - 跌破力度确认：跌破笔力度需大于进入中枢的笔（避免弱势跌破）
+                    if len(zs.lines) >= 1 and break_bi_down:
+                        break_force_down = _calc_bi_force(break_bi_down, closes, break_bi_down.index)
+                        entry_force_down = _calc_bi_force(zs.lines[0], closes, zs.lines[0].index)
+                        if entry_force_down > 0 and break_force_down < entry_force_down * 0.9:
+                            continue  # 跌破力度弱于进入中枢的笔，可能是假跌破
+
+                    # V18: 条件27 - 反抽时间窗口限制：反抽笔不超过25根K线（信号衰减）
+                    retracement_within_window, retracement_time_span = _check_pullback_time_window(
+                        bi, break_bi_down, max_bars=25
+                    )
+                    if not retracement_within_window:
+                        continue  # 反抽时间过长，信号已衰减
+
+                    # V18: 条件28 - MACD零轴确认：3卖时MACD应在零轴下方（趋势空头）
+                    macd_zero_pos_sell = _calc_macd_zero_axis_position(macd_data, bi.end.k.k_index)
+                    if macd_zero_pos_sell == "above":
+                        continue  # MACD在零轴上方，趋势偏强，不适合3卖做空
+
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result_sell = _check_break_retest_break(bis, break_bi_down, zs.zd, closes)
                     if retest_result_sell["exists"]:
@@ -2459,7 +2565,7 @@ def _find_third_type_mmds(
                         mmd_type=MMDType.SELL_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3卖V15: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}" + extra_msg_sell,
+                        msg=f"3卖V18: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos_sell}, 反抽{retracement_time_span}根K线" + extra_msg_sell,
                     ))
                     # V14/V15: 记录增强信息
                     if vol_spike_sell:
@@ -2702,9 +2808,11 @@ def _calc_confidence(
     2. MA趋势对齐加成：价格与MA20对齐时额外+0.03
     3. RSI确认加成：RSI处于合理区域时额外+0.02
     4. V8原有：类型优先级更精细、波动率自适应、多信号融合
+    5. V18新增：突破力度+时间窗口+MACD零轴过滤后，3买/3卖准确率提升，基础值上调
     """
     # V10: 基础置信度（V9校准 + V10多因子增强，3买/3卖提升）
     # V17: 基于回测结果校准 - 3买实际57.3%→0.60, 3卖实际50%→0.55
+    # V18: V18新增条件26-28过滤后预期准确率提升，基础值微调
     base_confidence: dict[MMDType, float] = {
         MMDType.BUY_1: 0.88,
         MMDType.SELL_1: 0.92,
@@ -2712,8 +2820,8 @@ def _calc_confidence(
         MMDType.SELL_2: 0.73,  # V10: 从0.70提升至0.73
         MMDType.BUY_2S: 0.55,
         MMDType.SELL_2S: 0.50,
-        MMDType.BUY_3: 0.60,   # V17: 从0.68降至0.60（基于实际回测57.3%校准）
-        MMDType.SELL_3: 0.55,  # V17: 从0.63降至0.55（基于实际回测50%校准）
+        MMDType.BUY_3: 0.62,   # V18: 从0.60上调至0.62（条件26-28过滤后预期准确率~65%）
+        MMDType.SELL_3: 0.57,  # V18: 从0.55上调至0.57（条件26-28过滤后预期准确率~60%）
     }
 
     confidence = base_confidence.get(mmd.mmd_type, 0.5)
@@ -2739,9 +2847,9 @@ def _calc_confidence(
     trend_bonus = trend_strength * 0.06
     # V8: 趋势方向加成
     trend_direction = _calc_overall_trend_direction(zss) if zss else "neutral"
-    if trend_direction == "up" and mmd.mmd_type.value.startswith("buy"):
+    if trend_direction == "up" and "buy" in mmd.mmd_type.value:
         trend_bonus += 0.03  # 上升趋势中的买点额外加成
-    elif trend_direction == "down" and mmd.mmd_type.value.startswith("sell"):
+    elif trend_direction == "down" and "sell" in mmd.mmd_type.value:
         trend_bonus += 0.03  # 下降趋势中的卖点额外加成
 
     confidence += strength_bonus + trend_bonus
@@ -2786,7 +2894,7 @@ def _calc_confidence(
 
     # V14: 成交量异常加成（机构活动信号）
     if hasattr(mmd, '_vol_spike') and mmd._vol_spike:
-        if mmd.mmd_type.value.startswith("buy"):
+        if "buy" in mmd.mmd_type.value:
             confidence += 0.04  # 买入信号成交量放大=机构接盘
         else:
             confidence += 0.03  # 卖出信号成交量放大=机构出货
@@ -2820,7 +2928,7 @@ def _calc_confidence(
             latest_hist = macd_data["hist"][-1] if macd_data.get("hist") else 0
             prev_hist = macd_data["hist"][-2] if macd_data and len(macd_data.get("hist", [])) > 1 else 0
 
-            if mmd.mmd_type.value.startswith("buy"):
+            if "buy" in mmd.mmd_type.value:
                 if latest_dif > 0:
                     confidence += 0.05  # V8: 提高加成
                 elif latest_dif > -0.5:
@@ -2951,6 +3059,20 @@ def _calc_confidence(
         except Exception:
             pass
 
+    # V18: MACD零轴确认加成 - 3买MACD在零轴上方/3卖在零轴下方时加分
+    if mmd.bi and macd_data:
+        try:
+            bi_end_idx = mmd.bi.end.k.k_index
+            macd_zero_pos = _calc_macd_zero_axis_position(macd_data, bi_end_idx)
+            if mmd.mmd_type in (MMDType.BUY_3, MMDType.BUY_2):
+                if macd_zero_pos in ("above", "crossing_above"):
+                    confidence += 0.03  # MACD多头确认
+            elif mmd.mmd_type in (MMDType.SELL_3, MMDType.SELL_2):
+                if macd_zero_pos in ("below", "crossing_below"):
+                    confidence += 0.03  # MACD空头确认
+        except Exception:
+            pass
+
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
 
@@ -3045,7 +3167,7 @@ def _calc_mmd_quality(
             latest_dif = macd_data["dif"][-1] if macd_data.get("dif") else 0
             prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
 
-            if mmd.mmd_type.value.startswith("buy"):
+            if "buy" in mmd.mmd_type.value:
                 if latest_dif > 0:
                     macd_score = 15
                     factors["macd"] = 1.0

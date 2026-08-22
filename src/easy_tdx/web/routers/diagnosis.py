@@ -494,9 +494,9 @@ async def diagnose_stock(
             multi_signal_bonus += 5  # 1买+2买共振
         elif "1sell" in signal_types and "2sell" in signal_types:
             multi_signal_bonus -= 5  # 1卖+2卖共振
-        if "3buy" in signal_types and latest_mmd.mmd_type.value.startswith("buy"):
+        if "3buy" in signal_types and "buy" in latest_mmd.mmd_type.value:
             multi_signal_bonus += 3  # 3买确认
-        elif "3sell" in signal_types and latest_mmd.mmd_type.value.startswith("sell"):
+        elif "3sell" in signal_types and "sell" in latest_mmd.mmd_type.value:
             multi_signal_bonus -= 3  # 3卖确认
 
         score += chanlun_score + multi_signal_bonus
