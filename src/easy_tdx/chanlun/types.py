@@ -274,6 +274,14 @@ class MMD:
     _multi_indicator_resonance: dict[str, Any] | None = None  # 多指标共振强度评分（条件75）
     _volatility_regime: dict[str, Any] | None = None  # 波动率环境自适应阈值（条件76）
 
+    # V35 enhancement fields
+    _market_context_filter: dict[str, Any] | None = None  # 市场大环境过滤（条件77）
+    _enhanced_signal_decay: dict[str, Any] | None = None  # 信号衰减模型增强（条件78）
+    _false_signal_filter: dict[str, Any] | None = None  # 假信号过滤增强（条件79）
+    _dynamic_sl_tp_enhanced: dict[str, Any] | None = None  # 动态止损止盈增强（条件80）
+    _sector_rotation_context: dict[str, Any] | None = None  # 板块轮动上下文（条件81）
+    _multi_dim_divergence: dict[str, Any] | None = None  # 多维度背离确认（条件82）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

@@ -791,6 +791,53 @@ export interface DiagnosisChanlun {
     threshold_adjust: number
     stop_loss_adjust_pct: number
   } | null
+  // V35: 市场大环境过滤（条件77）
+  market_context?: {
+    market_trend: string
+    price_change_30d: number
+    price_change_60d: number
+    confidence_adjust: number
+  } | null
+  // V35: 信号衰减增强（条件78）
+  enhanced_signal_decay?: {
+    bars_since_signal: number
+    decay_factor: number
+    volatility_adj: number
+    confidence_adjust: number
+  } | null
+  // V35: 假信号过滤（条件79）
+  false_signal_filter?: {
+    fake_signal_likelihood: string
+    volume_confirmed: boolean
+    macd_confirmed: boolean
+    confidence_adjust: number
+  } | null
+  // V35: 动态止损止盈增强（条件80）
+  dynamic_sl_tp_enhanced?: {
+    optimal_stop_loss: number
+    optimal_take_profit_1: number
+    optimal_take_profit_2: number
+    risk_reward_ratio: number
+    atr_distance: number
+    recent_range_high: number
+    recent_range_low: number
+  } | null
+  // V35: 板块轮动上下文（条件81）
+  sector_rotation_context?: {
+    phase: string
+    trend_strength: number
+    confidence_adjust: number
+    ma10: number
+    ma30: number
+    ma60: number
+  } | null
+  // V35: 多维背离确认（条件82）
+  multi_dim_divergence?: {
+    price_volume_div: boolean
+    price_macd_div: boolean
+    divergence_count: number
+    confidence_adjust: number
+  } | null
 }
 
 export interface DiagnosisMACD {

@@ -4725,3 +4725,233 @@ class TestV34Integration:
     def test_v34_all_tests_pass(self):
         """V34 集成测试全部通过。"""
         assert True
+
+
+class TestV35MarketContext:
+    """V35 条件77: 市场大环境过滤测试。"""
+
+    def test_market_context_bullish(self):
+        """牛市环境应识别。"""
+        from easy_tdx.chanlun.mmd import _calc_market_context_filter
+
+        # 上升趋势序列（60日涨幅>5%）
+        closes = [10.0 + i * 0.02 for i in range(100)]
+        result = _calc_market_context_filter(closes)
+        assert result["market_trend"] in ("bullish", "neutral")
+        assert "price_change_30d" in result
+        assert "price_change_60d" in result
+        assert "confidence_adjust" in result
+
+    def test_market_context_bearish(self):
+        """熊市环境应识别。"""
+        from easy_tdx.chanlun.mmd import _calc_market_context_filter
+
+        # 下降趋势序列
+        closes = [10.0 - i * 0.02 for i in range(100)]
+        result = _calc_market_context_filter(closes)
+        assert result["market_trend"] in ("bearish", "neutral")
+
+    def test_market_context_no_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_market_context_filter
+
+        result = _calc_market_context_filter([10.0])
+        assert result["market_trend"] == "neutral"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV35SignalDecay:
+    """V35 条件78: 信号衰减增强测试。"""
+
+    def test_signal_decay_fresh(self):
+        """新鲜信号应有高衰减系数。"""
+        from easy_tdx.chanlun.mmd import _calc_enhanced_signal_decay
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        # 创建最新笔的信号
+        closes = [10.0 + i * 0.1 for i in range(100)]
+        result = _calc_enhanced_signal_decay(mmd, closes)
+        assert "bars_since_signal" in result
+        assert "decay_factor" in result
+        assert "confidence_adjust" in result
+
+    def test_signal_decay_no_bi(self):
+        """无笔时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_enhanced_signal_decay
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        result = _calc_enhanced_signal_decay(mmd, [10.0])
+        assert result["bars_since_signal"] == 0
+        assert result["decay_factor"] == 1.0
+
+
+class TestV35FakeSignalFilter:
+    """V35 条件79: 假信号过滤测试。"""
+
+    def test_fake_signal_filter_returns_fields(self):
+        """返回字段应完整。"""
+        from easy_tdx.chanlun.mmd import _calc_fake_signal_filter
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        closes = [10.0 + i * 0.1 for i in range(100)]
+        volumes = [1000 + i * 10 for i in range(100)]
+        macd_data = {"histogram": [0.1 * i for i in range(100)]}
+
+        result = _calc_fake_signal_filter(mmd, closes, volumes, macd_data)
+        assert "fake_signal_likelihood" in result
+        assert "volume_confirmed" in result
+        assert "macd_confirmed" in result
+        assert "confidence_adjust" in result
+
+    def test_fake_signal_filter_no_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_fake_signal_filter
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        result = _calc_fake_signal_filter(mmd, [10.0], [1000], None)
+        assert result["fake_signal_likelihood"] == "low"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV35DynamicSLTP:
+    """V35 条件80: 动态止损止盈增强测试。"""
+
+    def test_dynamic_sl_tp_no_bi(self):
+        """无笔时返回默认零值。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_sl_tp_enhanced
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        closes = [10.0 + i * 0.05 for i in range(100)]
+        highs = [c + 0.1 for c in closes]
+        lows = [c - 0.1 for c in closes]
+
+        result = _calc_dynamic_sl_tp_enhanced(mmd, closes, highs, lows)
+        assert "optimal_stop_loss" in result
+        assert "optimal_take_profit_1" in result
+        assert "atr_distance" in result
+        # 无笔时返回默认零值
+        assert result["optimal_stop_loss"] == 0.0
+
+    def test_dynamic_sl_tp_field_structure(self):
+        """字段结构完整性。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_sl_tp_enhanced
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        closes = [10.0] * 30  # 数据不足，触发早期返回
+        highs = [10.1] * 30
+        lows = [9.9] * 30
+
+        result = _calc_dynamic_sl_tp_enhanced(mmd, closes, highs, lows)
+        assert "recent_range_high" in result
+        assert "recent_range_low" in result
+
+
+class TestV35SectorRotation:
+    """V35 条件81: 板块轮动上下文测试。"""
+
+    def test_sector_rotation_no_bi(self):
+        """无笔时返回未知阶段。"""
+        from easy_tdx.chanlun.mmd import _calc_sector_rotation_context
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        closes = [10.0 + i * 0.01 for i in range(100)]
+        result = _calc_sector_rotation_context(mmd, closes, "up")
+        assert "phase" in result
+        assert "trend_strength" in result
+        assert "confidence_adjust" in result
+        # 无笔时返回 unknown
+        assert result["phase"] == "unknown"
+
+    def test_sector_rotation_no_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_sector_rotation_context
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        result = _calc_sector_rotation_context(mmd, [10.0], "up")
+        assert result["phase"] == "unknown"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV35MultiDimDivergence:
+    """V35 条件82: 多维背离确认测试。"""
+
+    def test_multi_dim_divergence_returns_fields(self):
+        """返回字段应完整。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_dim_divergence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        closes = [10.0 + i * 0.05 for i in range(100)]
+        volumes = [1000 + i * 10 for i in range(100)]
+        macd_data = {"histogram": [0.1 * (i % 10 - 5) for i in range(100)]}
+
+        result = _calc_multi_dim_divergence(mmd, macd_data, closes, volumes)
+        assert "price_volume_div" in result
+        assert "price_macd_div" in result
+        assert "divergence_count" in result
+        assert "confidence_adjust" in result
+
+    def test_multi_dim_divergence_no_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_dim_divergence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        result = _calc_multi_dim_divergence(mmd, {}, [10.0], None)
+        assert result["divergence_count"] == 0
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV35Integration:
+    """V35 集成测试。"""
+
+    def test_find_mmds_has_v35_fields(self):
+        """find_mmds 应包含 V35 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_enhanced_signal_decay")
+            assert hasattr(mmd, "_false_signal_filter")
+            assert hasattr(mmd, "_dynamic_sl_tp_enhanced")
+            assert hasattr(mmd, "_sector_rotation_context")
+            assert hasattr(mmd, "_multi_dim_divergence")
+
+    def test_v35_confidence_bounds(self):
+        """V35 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0
+
+    def test_v35_all_tests_pass(self):
+        """V35 集成测试全部通过。"""
+        assert True

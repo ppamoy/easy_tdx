@@ -793,6 +793,18 @@ async def diagnose_stock(
             "multi_indicator_resonance": getattr(latest_mmd, "_multi_indicator_resonance", None) if latest_mmd else None,
             # V34: 波动率环境自适应阈值（条件76）
             "volatility_regime": getattr(latest_mmd, '_last_vol_result', None) if latest_mmd else None,
+            # V35: 市场大环境过滤（条件77）
+            "market_context": getattr(find_mmds, '_last_market_context', None) if latest_mmd else None,
+            # V35: 信号衰减增强（条件78）
+            "enhanced_signal_decay": getattr(latest_mmd, "_enhanced_signal_decay", None) if latest_mmd else None,
+            # V35: 假信号过滤（条件79）
+            "false_signal_filter": getattr(latest_mmd, "_false_signal_filter", None) if latest_mmd else None,
+            # V35: 动态止损止盈增强（条件80）
+            "dynamic_sl_tp_enhanced": getattr(latest_mmd, "_dynamic_sl_tp_enhanced", None) if latest_mmd else None,
+            # V35: 板块轮动上下文（条件81）
+            "sector_rotation_context": getattr(latest_mmd, "_sector_rotation_context", None) if latest_mmd else None,
+            # V35: 多维背离确认（条件82）
+            "multi_dim_divergence": getattr(latest_mmd, "_multi_dim_divergence", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
