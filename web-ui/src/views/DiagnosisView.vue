@@ -310,6 +310,58 @@ onMounted(() => {
               </div>
               <div class="kv-note">{{ diagnosis.chanlun.vol_price_divergence.description }}</div>
             </div>
+            <!-- V23: Fibonacci回撤位确认 -->
+            <div v-if="diagnosis.chanlun.fib_retracement && diagnosis.chanlun.fib_retracement.confirmation_bonus > 0" class="signal-report fib-retr">
+              <div class="section-label">🔢 Fibonacci回撤位确认（V23）</div>
+              <div class="kv-row">
+                <span class="kv-key">最近回撤位</span>
+                <span class="tag" :class="diagnosis.chanlun.fib_retracement.is_key_level ? 'tag-green' : 'tag-yellow'">
+                  {{ diagnosis.chanlun.fib_retracement.near_fib_level || '未知' }}
+                  {{ diagnosis.chanlun.fib_retracement.is_key_level ? '⭐ 关键位' : '' }}
+                </span>
+                <span class="kv-val" style="margin-left:auto">距离 {{ diagnosis.chanlun.fib_retracement.distance_to_level }}%</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">回撤比例</span>
+                <span class="kv-val">{{ diagnosis.chanlun.fib_retracement.fib_ratio }}</span>
+                <span class="kv-val" :style="{ marginLeft: 'auto', color: '#22c55e' }">
+                  +{{ (diagnosis.chanlun.fib_retracement.confirmation_bonus*100).toFixed(0) }}% 置信度加成
+                </span>
+              </div>
+            </div>
+            <!-- V23: RSI区域分类 -->
+            <div v-if="diagnosis.chanlun.rsi_zone" class="signal-report rsi-zone">
+              <div class="section-label">📊 RSI区域分类（V23）</div>
+              <div class="kv-row">
+                <span class="kv-key">RSI值</span>
+                <span class="kv-val">{{ diagnosis.chanlun.rsi_zone.rsi }}</span>
+                <span class="tag" :class="{
+                  'tag-green': ['super_oversold','oversold','weak'].includes(diagnosis.chanlun.rsi_zone.zone),
+                  'tag-yellow': diagnosis.chanlun.rsi_zone.zone === 'neutral',
+                  'tag-red': ['slightly_overbought','overbought','super_overbought'].includes(diagnosis.chanlun.rsi_zone.zone),
+                }">
+                  {{ {super_oversold:'极强超卖',oversold:'超卖',weak:'弱势',neutral:'中性',slightly_overbought:'偏强',overbought:'超买',super_overbought:'极强超买'}[diagnosis.chanlun.rsi_zone.zone] || diagnosis.chanlun.rsi_zone.zone }}
+                </span>
+              </div>
+            </div>
+            <!-- V23: MACD零轴穿越确认 -->
+            <div v-if="diagnosis.chanlun.macd_zero_cross && diagnosis.chanlun.macd_zero_cross.confidence_bonus > 0" class="signal-report macd-zero">
+              <div class="section-label">📉 MACD零轴穿越确认（V23）</div>
+              <div class="kv-row">
+                <span class="kv-key">穿越类型</span>
+                <span class="tag" :class="{'tag-green': diagnosis.chanlun.macd_zero_cross.cross_type==='cross_above' || diagnosis.chanlun.macd_zero_cross.cross_type==='above', 'tag-red': diagnosis.chanlun.macd_zero_cross.cross_type==='cross_below' || diagnosis.chanlun.macd_zero_cross.cross_type==='below'}">
+                  {{ {cross_above:'上穿零轴↑',cross_below:'下穿零轴↓',above:'零轴上方',below:'零轴下方'}[diagnosis.chanlun.macd_zero_cross.cross_type] || diagnosis.chanlun.macd_zero_cross.cross_type }}
+                </span>
+                <span class="kv-val" style="margin-left:auto">强度 {{ {strong:'强',moderate:'中',weak:'弱'}[diagnosis.chanlun.macd_zero_cross.strength] || diagnosis.chanlun.macd_zero_cross.strength }}</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">距零轴距离</span>
+                <span class="kv-val">{{ diagnosis.chanlun.macd_zero_cross.distance_to_zero }}</span>
+                <span class="kv-val" style="color:#22c55e;margin-left:auto">
+                  +{{ (diagnosis.chanlun.macd_zero_cross.confidence_bonus*100).toFixed(0) }}% 置信度加成
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 

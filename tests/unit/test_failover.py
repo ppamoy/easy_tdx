@@ -389,6 +389,7 @@ class TestMarketStatEmptyFailover:
                 "easy_tdx.client.ping_all",
                 return_value=[("hostA", 0.01), ("hostB", 0.02)],
             ),
+            patch("easy_tdx.client.save_best_host"),
         ):
             df = client.get_market_stat()
 
@@ -515,6 +516,7 @@ class TestBarsEmptyFailover:
                 "easy_tdx.client.ping_all",
                 return_value=[("hostA", 0.01), ("hostB", 0.02)],
             ),
+            patch("easy_tdx.client.save_best_host"),
         ):
             df = client.get_index_bars(Market.SH, "880008", KlineCategory.DAY, 0, 10)
 
@@ -585,6 +587,7 @@ class TestBarsEmptyFailover:
                 "easy_tdx.client.ping_all",
                 return_value=[("hostA", 0.01), ("hostB", 0.02)],
             ),
+            patch("easy_tdx.client.save_best_host"),
         ):
             df = client.get_security_bars(Market.SH, "600000", KlineCategory.DAY, 0, 10)
 
@@ -639,6 +642,7 @@ class TestFundFlowEmptyFailover:
                 "easy_tdx.client.ping_all",
                 return_value=[("hostA", 0.01), ("hostB", 0.02)],
             ),
+            patch("easy_tdx.client.save_best_host"),
         ):
             df = client.get_history_fund_flow(Market.SH, "600519", 0, 10)
 
@@ -746,6 +750,7 @@ class TestAsyncFundFlowEmptyFailover:
                     "easy_tdx.client.ping_all",
                     return_value=[("hostA", 0.01), ("hostB", 0.02)],
                 ),
+                patch("easy_tdx.client.save_best_host"),
             ):
                 df = await client.get_history_fund_flow(Market.SH, "600519", 0, 10)
 

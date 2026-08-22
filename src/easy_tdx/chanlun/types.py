@@ -213,6 +213,17 @@ class MMD:
     _combo_confidence_bonus: float = 0.0  # 组合信号置信度加成
     _decision_recommendation: dict[str, Any] | None = None  # 决策辅助建议
 
+    # V23 enhancement fields
+    _fib_retracement: dict[str, Any] | None = None  # Fibonacci回撤位信息（条件40）
+    _rsi_zone: dict[str, Any] | None = None  # RSI区域分类（条件41）
+    _macd_zero_cross: dict[str, Any] | None = None  # MACD零轴穿越信息（条件42）
+
+    # V24 enhancement fields
+    _bi_quality: dict[str, Any] | None = None  # 笔质量评分（条件43）
+    _zs_strength: dict[str, Any] | None = None  # 中枢强度分析（条件44）
+    _enhanced_divergence: dict[str, Any] | None = None  # 增强背离检测（条件45）
+    _cross_validation: dict[str, Any] | None = None  # 信号交叉验证评分（条件46）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

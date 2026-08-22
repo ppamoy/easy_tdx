@@ -465,6 +465,50 @@ export interface DiagnosisChanlun {
     signal: string
     description: string
   } | null
+  // V23: Fibonacci回撤位确认（条件40）
+  fib_retracement?: {
+    near_fib_level: string | null
+    fib_ratio: number
+    distance_to_level: number
+    is_key_level: boolean
+    confirmation_bonus: number
+  } | null
+  // V23: RSI区域分类（条件41）
+  rsi_zone?: {
+    zone: string
+    rsi: number
+  } | null
+  // V23: MACD零轴穿越确认（条件42）
+  macd_zero_cross?: {
+    cross_type: string
+    distance_to_zero: number
+    strength: string
+    confidence_bonus: number
+  } | null
+  // V24: 笔质量评分（条件43）
+  bi_quality?: {
+    quality_score: number
+    confidence_bonus: number
+    factors: Record<string, number>
+  } | null
+  // V24: 中枢强度分析（条件44）
+  zs_strength?: {
+    strength_level: string
+    strength_score: number
+    confidence_bonus: number
+  } | null
+  // V24: 增强背离检测（条件45）
+  enhanced_divergence?: {
+    divergence_type: string
+    strength: string
+    confidence_bonus: number
+  } | null
+  // V24: 信号交叉验证评分（条件46）
+  cross_validation?: {
+    consensus_score: number
+    confirmations: string[]
+    consensus_bonus: number
+  } | null
 }
 
 export interface DiagnosisMACD {

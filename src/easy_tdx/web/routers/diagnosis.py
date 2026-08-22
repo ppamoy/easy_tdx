@@ -719,6 +719,20 @@ async def diagnose_stock(
             "vol_regime_dual": getattr(latest_mmd, "_vol_regime_dual", None) if latest_mmd else None,
             # V22: 量价背离检测
             "vol_price_divergence": getattr(latest_mmd, "_vol_price_divergence", None) if latest_mmd else None,
+            # V23: Fibonacci回撤位确认（条件40）
+            "fib_retracement": getattr(latest_mmd, "_fib_retracement", None) if latest_mmd else None,
+            # V23: RSI区域分类（条件41）
+            "rsi_zone": getattr(latest_mmd, "_rsi_zone", None) if latest_mmd else None,
+            # V23: MACD零轴穿越确认（条件42）
+            "macd_zero_cross": getattr(latest_mmd, "_macd_zero_cross", None) if latest_mmd else None,
+            # V24: 笔质量评分（条件43）
+            "bi_quality": getattr(latest_mmd, "_bi_quality", None) if latest_mmd else None,
+            # V24: 中枢强度分析（条件44）
+            "zs_strength": getattr(latest_mmd, "_zs_strength", None) if latest_mmd else None,
+            # V24: 增强背离检测（条件45）
+            "enhanced_divergence": getattr(latest_mmd, "_enhanced_divergence", None) if latest_mmd else None,
+            # V24: 信号交叉验证评分（条件46）
+            "cross_validation": getattr(latest_mmd, "_cross_validation", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -773,6 +787,7 @@ async def diagnose_stock(
             "overbought": rsi_overbought,
             "oversold": rsi_oversold,
             "position": rsi_position,
+            "zone": rsi_position,  # V23: RSI区域（与position相同，前端可直接使用）
         },
         "adx": {
             "pdi": round(latest_pdi, 2),

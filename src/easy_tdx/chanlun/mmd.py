@@ -1,6 +1,6 @@
-"""买卖点识别（精修版 V22 - 波动率双重确认 + 量价背离检测）。
+"""买卖点识别（精修版 V24 - 笔质量+中枢强度+背离检测+交叉验证）。
 
-基于历史回测结果和实战经验持续优化（V22 2026-08-22）：
+基于历史回测结果和实战经验持续优化（V24 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
 - 2买/2卖准确率80%+（良好）
 - 3买/3卖准确率72%+（V20新增波动率Regime+趋势加速度+成交量分布过滤）
@@ -18,6 +18,8 @@
 - V20新增：波动率Regime过滤(条件31)、趋势加速度确认(条件32)、关键价位成交量分布(条件33)、动态止损止盈优化、信号优先级排序
 - V21新增：动态支撑阻力位识别(条件34)、组合信号检测(条件35)、多时间框架共振增强(条件36)、决策辅助输出(条件37)
 - V22新增：波动率Regime双重确认(条件38)、量价背离检测(条件39)、诊断API暴露V21决策辅助
+- V23新增：Fibonacci回撤位动态确认(条件40)、RSI区域过滤增强(条件41)、MACD零轴穿越确认(条件42)、风险管理增强
+- V24新增：笔质量评分(条件43)、中枢强度分析(条件44)、增强背离检测(条件45)、信号交叉验证(条件46)
 """
 
 from __future__ import annotations
@@ -602,6 +604,79 @@ def find_mmds(
             try:
                 vp_div = _detect_volume_price_divergence(closes, volumes)
                 mmd._vol_price_divergence = vp_div
+            except Exception:
+                pass
+
+        # V23: 条件40 - Fibonacci回撤位动态确认
+        if closes is not None and len(closes) >= 130:
+            try:
+                fib_result = _calc_fibonacci_retracement_level(closes)
+                mmd._fib_retracement = fib_result
+            except Exception:
+                pass
+
+        # V23: 条件41 - RSI区域分类（在置信度计算中使用）
+        if closes is not None and len(closes) >= 14:
+            try:
+                rsi_val = _calc_rsi(closes, len(closes) - 1)
+                zone, _adj = _calc_rsi_zone(rsi_val)
+                mmd._rsi_zone = {"zone": zone, "rsi": round(rsi_val, 1)}
+            except Exception:
+                pass
+
+        # V23: 条件42 - MACD零轴穿越检测
+        if macd_data is not None and mmd.bi is not None:
+            try:
+                bi_idx = mmd.bi.end.k.k_index
+                macd_cross = _detect_macd_zero_axis_cross(macd_data, bi_idx)
+                mmd._macd_zero_cross = macd_cross
+            except Exception:
+                pass
+
+        # V24: 条件43 - 笔质量评分（Bi Quality Scoring）
+        if bis is not None and mmd.bi is not None and closes is not None:
+            try:
+                bi_quality = _calc_bi_quality(mmd.bi, bis, closes)
+                mmd._bi_quality = bi_quality
+                if bi_quality.get("quality_score", 0) > 0.7:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + bi_quality.get("confidence_bonus", 0.0)))
+            except Exception:
+                pass
+
+        # V24: 条件44 - 中枢强度分析（ZS Strength Analysis）
+        if zss is not None and mmd.zs is not None and volumes is not None:
+            try:
+                zs_strength = _calc_zs_strength(mmd.zs, volumes, closes)
+                mmd._zs_strength = zs_strength
+                if zs_strength.get("strength_level") == "strong":
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + 0.03))
+                elif zs_strength.get("strength_level") == "weak":
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence - 0.02))
+            except Exception:
+                pass
+
+        # V24: 条件45 - 增强背离检测（Enhanced Divergence Detection）
+        if macd_data is not None and closes is not None and mmd.bi is not None:
+            try:
+                bi_idx = mmd.bi.end.k.k_index
+                div_result = _detect_enhanced_divergence(macd_data, closes, bi_idx, mmd.mmd_type)
+                mmd._enhanced_divergence = div_result
+                if div_result.get("divergence_type") != "none":
+                    bonus = div_result.get("confidence_bonus", 0.0)
+                    if "buy" in mmd.mmd_type.value:
+                        mmd.confidence = max(0.0, min(1.0, mmd.confidence + bonus))
+                    else:
+                        mmd.confidence = max(0.0, min(1.0, mmd.confidence + bonus))
+            except Exception:
+                pass
+
+        # V24: 条件46 - 信号交叉验证评分（Signal Cross-Validation）
+        if closes is not None and macd_data is not None and volumes is not None:
+            try:
+                cv_result = _calc_cross_validation(mmd, bis or [], zss or [], closes, macd_data, volumes)
+                mmd._cross_validation = cv_result
+                consensus_bonus = cv_result.get("consensus_bonus", 0.0)
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + consensus_bonus))
             except Exception:
                 pass
 
@@ -3306,6 +3381,40 @@ def _calc_confidence(
     if vp_div and vp_div.get("type") == "bearish_divergence":
         confidence *= (1.0 - vp_div.get("strength", 0.5) * 0.15)  # 最多-15%
 
+    # V23: Fibonacci回撤位加成（条件40）
+    fib_result = getattr(mmd, '_fib_retracement', None)
+    if fib_result and fib_result.get("confirmation_bonus", 0) > 0:
+        # 仅对2买/2卖/3买/3卖加分（回撤位对1买/1卖影响较小）
+        if mmd.mmd_type in (MMDType.BUY_2, MMDType.BUY_2S, MMDType.BUY_3,
+                            MMDType.SELL_2, MMDType.SELL_2S, MMDType.SELL_3):
+            confidence += fib_result["confirmation_bonus"]
+
+    # V23: RSI区域调整（条件41）- 仅对买/卖点类型应用方向性调整
+    rsi_zone_data = getattr(mmd, '_rsi_zone', None)
+    if rsi_zone_data:
+        zone = rsi_zone_data.get("zone", "neutral")
+        rsi_val = rsi_zone_data.get("rsi", 50.0)
+        if "buy" in mmd.mmd_type.value:
+            # 买入信号：超卖区域加分，超买区域减分
+            if zone in ("super_oversold", "oversold"):
+                confidence += 0.03
+            elif zone in ("super_overbought", "overbought"):
+                confidence -= 0.02
+        elif "sell" in mmd.mmd_type.value:
+            # 卖出信号：超买区域加分，超卖区域减分
+            if zone in ("super_overbought", "overbought"):
+                confidence += 0.03
+            elif zone in ("super_oversold", "oversold"):
+                confidence -= 0.02
+
+    # V23: MACD零轴穿越加成（条件42）
+    macd_cross = getattr(mmd, '_macd_zero_cross', None)
+    if macd_cross and macd_cross.get("confidence_bonus", 0) > 0:
+        if "buy" in mmd.mmd_type.value and macd_cross.get("cross_type") in ("cross_above", "above"):
+            confidence += macd_cross["confidence_bonus"]
+        elif "sell" in mmd.mmd_type.value and macd_cross.get("cross_type") in ("cross_below", "below"):
+            confidence += macd_cross["confidence_bonus"]
+
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
 
@@ -4553,6 +4662,634 @@ def _detect_volume_price_divergence(
                 "description": "价格下跌且成交量放大，下跌动能强劲",
             }
 
+    except Exception:
+        pass
+
+    return result
+
+
+# ── V23 新增函数 ────────────────────────────────────────────────────────────────
+
+
+def _calc_fibonacci_retracement_level(
+    closes: list[float],
+    lookback: int = 120,
+) -> dict[str, Any]:
+    """Fibonacci回撤位动态确认（V23 条件40）。
+
+    识别近期价格区间的Fibonacci回撤位，判断当前买卖点是否落在关键回撤位上：
+    - 2买点常出现在38.2%或50%回撤位附近
+    - 3买点突破后回踩常在23.6%或38.2%回撤位
+    - 2卖/3卖同理反向
+
+    Returns:
+        {
+            "near_fib_level": str | None,  # 最近的Fibonacci回撤位
+            "fib_ratio": float,             # 回撤比例
+            "distance_to_level": float,     # 距最近Fib位距离（%）
+            "is_key_level": bool,           # 是否关键位（23.6%/38.2%/50%/61.8%）
+            "confirmation_bonus": float,    # 置信度加成
+        }
+    """
+    result = {
+        "near_fib_level": None,
+        "fib_ratio": 0.0,
+        "distance_to_level": 0.0,
+        "is_key_level": False,
+        "confirmation_bonus": 0.0,
+    }
+
+    try:
+        if not closes or len(closes) < lookback + 10:
+            return result
+
+        fib_ratios = [0.236, 0.382, 0.5, 0.618, 0.786]
+        key_ratios = {0.382, 0.5, 0.618}  # 关键回撤位
+
+        # 找近期高低点
+        high_idx = max(range(lookback), key=lambda i: closes[i])
+        low_idx = min(range(lookback), key=lambda i: closes[i])
+
+        period_high = closes[high_idx]
+        period_low = closes[low_idx]
+        fib_range = abs(period_high - period_low)
+
+        if fib_range <= 0:
+            return result
+
+        latest = closes[-1]
+
+        # 判断是下跌后反弹（买点位）还是上涨后回调（卖点位）
+        if period_low < period_high:
+            # 先跌后涨 → 计算反弹回撤位（买参考）
+            range_start = period_low
+            current_position = (latest - range_start) / fib_range
+        else:
+            # 先涨后跌 → 计算回调回撤位（卖参考）
+            range_start = period_high
+            current_position = (range_start - latest) / fib_range
+
+        # 找最近的Fibonacci回撤位
+        nearest_level = None
+        nearest_distance = float('inf')
+        nearest_ratio = 0.0
+
+        for ratio in fib_ratios:
+            level_price = range_start + fib_range * ratio
+            distance = abs(latest - level_price) / latest if latest > 0 else float('inf')
+            if distance < nearest_distance:
+                nearest_distance = distance
+                nearest_level = f"fib_{ratio}"
+                nearest_ratio = ratio
+
+        is_key = nearest_ratio in key_ratios
+        # 距离关键位越近，加成越大（容忍度±2%）
+        bonus = 0.0
+        if is_key and nearest_distance < 0.02:
+            bonus = 0.04
+        elif nearest_distance < 0.03:
+            bonus = 0.02
+
+        result = {
+            "near_fib_level": nearest_level,
+            "fib_ratio": round(nearest_ratio, 3),
+            "distance_to_level": round(nearest_distance * 100, 2),
+            "is_key_level": is_key,
+            "confirmation_bonus": bonus,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+def _calc_rsi_zone(rsi: float) -> tuple[str, float]:
+    """RSI区域分类及置信度调整因子（V23 条件41）。
+
+    将RSI细分为更精确的区域：
+    - 极强超卖(<20): +0.05（深度超卖，反弹概率高）
+    - 超卖(20-30): +0.03
+    - 弱势(30-40): +0.01
+    - 中性(40-60): 0
+    - 偏强(60-70): -0.01
+    - 超买(70-80): -0.03
+    - 极强超买(>80): -0.05（深度超买，回调风险大）
+
+    Returns:
+        (zone, confidence_adjust)
+    """
+    if rsi < 20:
+        return "super_oversold", 0.05
+    elif rsi < 30:
+        return "oversold", 0.03
+    elif rsi < 40:
+        return "weak", 0.01
+    elif rsi < 60:
+        return "neutral", 0.0
+    elif rsi < 70:
+        return "slightly_overbought", -0.01
+    elif rsi < 80:
+        return "overbought", -0.03
+    else:
+        return "super_overbought", -0.05
+
+
+def _detect_macd_zero_axis_cross(
+    macd_data: dict[str, list[float]] | None,
+    idx: int,
+    lookback: int = 10,
+) -> dict[str, Any]:
+    """MACD零轴穿越检测（V23 条件42）。
+
+    检测最近DIF是否穿越零轴，作为趋势转折的额外确认：
+    - DIF上穿零轴 → 多头趋势确立，买入信号增强
+    - DIF下穿零轴 → 空头趋势确立，卖出信号增强
+    - 远离零轴 → 趋势延续确认
+
+    Returns:
+        {
+            "cross_type": str,          # "cross_above"/"cross_below"/"above"/"below"/"none"
+            "distance_to_zero": float,  # DIF距零轴距离
+            "strength": str,            # "strong"/"moderate"/"weak"
+            "confidence_bonus": float,  # 置信度加成
+        }
+    """
+    result = {
+        "cross_type": "none",
+        "distance_to_zero": 0.0,
+        "strength": "none",
+        "confidence_bonus": 0.0,
+    }
+
+    try:
+        if not macd_data or not macd_data.get("dif"):
+            return result
+
+        difs = macd_data["dif"]
+        end = idx if idx < len(difs) else len(difs) - 1
+        if end < lookback + 1:
+            return result
+
+        recent_difs = difs[max(0, end - lookback):end + 1]
+        if len(recent_difs) < 2:
+            return result
+
+        latest_dif = recent_difs[-1]
+        prev_dif = recent_difs[-2]
+
+        # 计算距零轴距离
+        dist_to_zero = abs(latest_dif)
+
+        # 检测零轴穿越
+        if prev_dif <= 0 and latest_dif > 0:
+            cross_type = "cross_above"
+        elif prev_dif >= 0 and latest_dif < 0:
+            cross_type = "cross_below"
+        elif latest_dif > 0:
+            cross_type = "above"
+        elif latest_dif < 0:
+            cross_type = "below"
+        else:
+            cross_type = "none"
+
+        # 强度判定
+        if cross_type in ("cross_above", "cross_below"):
+            strength = "strong"
+        elif dist_to_zero > 2.0:
+            strength = "strong"
+        elif dist_to_zero > 0.5:
+            strength = "moderate"
+        else:
+            strength = "weak"
+
+        # 置信度加成
+        bonus = 0.0
+        if cross_type == "cross_above":
+            bonus = 0.04  # 刚上穿零轴，强势确认
+        elif cross_type == "above" and strength == "strong":
+            bonus = 0.02  # 多头趋势稳固
+        elif cross_type == "cross_below":
+            bonus = 0.04
+        elif cross_type == "below" and strength == "strong":
+            bonus = 0.02
+
+        result = {
+            "cross_type": cross_type,
+            "distance_to_zero": round(dist_to_zero, 4),
+            "strength": strength,
+            "confidence_bonus": bonus,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+# ── V24 新增函数 ────────────────────────────────────────────────────────────────
+
+def _calc_bi_quality(
+    bi: BI,
+    bis: list[BI],
+    closes: list[float] | None,
+) -> dict[str, Any]:
+    """笔质量评分（V24 条件43）。
+
+    评估笔的完整性与可靠性，作为买卖点置信度的辅助因子：
+    - 笔的长度（K线数量）：越长越可靠
+    - 笔的力度（价格变化幅度）：越大越可靠
+    - 笔的完成度（结束分型是否完成）：已完成更可靠
+    - 笔的方向一致性：与前后笔方向对比
+
+    Returns:
+        {
+            "quality_score": float,   # 0-1，笔质量评分
+            "confidence_bonus": float, # 置信度加成（最多+0.05）
+            "factors": dict,          # 各维度评分
+        }
+    """
+    result = {
+        "quality_score": 0.5,
+        "confidence_bonus": 0.0,
+        "factors": {},
+    }
+
+    try:
+        factors: dict[str, float] = {}
+
+        # 1. 笔长度评分（基于K线数量）
+        if bi.start.k.k_index >= 0 and bi.end.k.k_index >= 0:
+            bar_count = bi.end.k.k_index - bi.start.k.k_index + 1
+            if bar_count >= 20:
+                factors["bar_count"] = 1.0
+            elif bar_count >= 10:
+                factors["bar_count"] = 0.7
+            elif bar_count >= 5:
+                factors["bar_count"] = 0.5
+            else:
+                factors["bar_count"] = 0.3
+        else:
+            factors["bar_count"] = 0.3
+
+        # 2. 笔力度评分（价格变化幅度/平均价格）
+        avg_price = (bi.high + bi.low) / 2 if bi.high > 0 or bi.low > 0 else 1.0
+        price_range = (bi.high - bi.low) / avg_price if avg_price > 0 else 0
+        if price_range >= 0.10:
+            factors["price_range"] = 1.0
+        elif price_range >= 0.05:
+            factors["price_range"] = 0.7
+        elif price_range >= 0.02:
+            factors["price_range"] = 0.5
+        else:
+            factors["price_range"] = 0.3
+
+        # 3. 笔完成度评分
+        factors["completion"] = 1.0 if bi.is_done() else 0.5
+
+        # 4. 方向一致性评分（与前后笔对比）
+        bi_idx = bi.index
+        if bi_idx > 0 and bi_idx < len(bis) - 1:
+            prev_bi = bis[bi_idx - 1]
+            next_bi = bis[bi_idx + 1]
+            if prev_bi.direction != bi.direction and bi.direction != next_bi.direction:
+                factors["direction_consistency"] = 1.0
+            elif prev_bi.direction != bi.direction or bi.direction != next_bi.direction:
+                factors["direction_consistency"] = 0.6
+            else:
+                factors["direction_consistency"] = 0.3
+        else:
+            factors["direction_consistency"] = 0.5
+
+        # 综合评分（加权平均）
+        weights = {"bar_count": 0.25, "price_range": 0.35, "completion": 0.25, "direction_consistency": 0.15}
+        quality_score = sum(factors.get(k, 0.5) * w for k, w in weights.items())
+        quality_score = max(0.0, min(1.0, quality_score))
+
+        # 置信度加成：高质量笔+5%，中等+2%
+        if quality_score >= 0.8:
+            confidence_bonus = 0.05
+        elif quality_score >= 0.6:
+            confidence_bonus = 0.02
+        else:
+            confidence_bonus = 0.0
+
+        result = {
+            "quality_score": round(quality_score, 2),
+            "confidence_bonus": confidence_bonus,
+            "factors": {k: round(v, 2) for k, v in factors.items()},
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+def _calc_zs_strength(
+    zs: ZS | None,
+    volumes: list[float] | None,
+    closes: list[float] | None,
+) -> dict[str, Any]:
+    """中枢强度分析（V24 条件44）。
+
+    评估中枢的强度，作为买卖点置信度的辅助因子：
+    - 中枢波动幅度：幅度大说明多空分歧大，强度强
+    - 成交量分布：中枢区域内成交量集中说明资金关注度高
+    - 中枢线数：线数多说明震荡充分
+
+    Returns:
+        {
+            "strength_level": str,     # "strong"/"moderate"/"weak"
+            "strength_score": float,   # 0-1
+            "confidence_bonus": float, # 置信度加成
+        }
+    """
+    result = {
+        "strength_level": "weak",
+        "strength_score": 0.0,
+        "confidence_bonus": 0.0,
+    }
+
+    try:
+        if zs is None or zs.gg <= 0 or zs.dd >= zs.gg:
+            return result
+
+        strength_score = 0.0
+        factors: list[float] = []
+
+        # 1. 波动幅度评分（中枢高度/中枢均价）
+        avg_price = (zs.gg + zs.dd) / 2
+        volatility = (zs.gg - zs.dd) / avg_price if avg_price > 0 else 0
+        if volatility >= 0.15:
+            factors.append(1.0)
+        elif volatility >= 0.08:
+            factors.append(0.7)
+        elif volatility >= 0.03:
+            factors.append(0.5)
+        else:
+            factors.append(0.3)
+
+        # 2. 中枢线数评分
+        line_count = zs.line_count
+        if line_count >= 6:
+            factors.append(1.0)
+        elif line_count >= 4:
+            factors.append(0.7)
+        elif line_count >= 3:
+            factors.append(0.5)
+        else:
+            factors.append(0.3)
+
+        # 3. 成交量集中度（如有成交量数据）
+        if volumes is not None and len(volumes) > 0:
+            try:
+                start_idx = zs.start.k.k_index if zs.start else 0
+                end_idx = zs.end.k.k_index if zs.end else len(volumes) - 1
+                start_idx = max(0, start_idx)
+                end_idx = min(len(volumes) - 1, end_idx)
+                if end_idx > start_idx:
+                    zs_volume = sum(volumes[start_idx:end_idx + 1])
+                    avg_volume = sum(volumes) / len(volumes) if volumes else 1
+                    volume_ratio = zs_volume / (avg_volume * (end_idx - start_idx + 1)) if avg_volume > 0 else 0.5
+                    if volume_ratio >= 1.5:
+                        factors.append(1.0)
+                    elif volume_ratio >= 1.0:
+                        factors.append(0.7)
+                    elif volume_ratio >= 0.5:
+                        factors.append(0.5)
+                    else:
+                        factors.append(0.3)
+                else:
+                    factors.append(0.5)
+            except Exception:
+                factors.append(0.5)
+        else:
+            factors.append(0.5)
+
+        strength_score = sum(factors) / len(factors) if factors else 0.5
+        strength_score = max(0.0, min(1.0, strength_score))
+
+        if strength_score >= 0.7:
+            strength_level = "strong"
+            confidence_bonus = 0.03
+        elif strength_score >= 0.4:
+            strength_level = "moderate"
+            confidence_bonus = 0.0
+        else:
+            strength_level = "weak"
+            confidence_bonus = -0.02
+
+        result = {
+            "strength_level": strength_level,
+            "strength_score": round(strength_score, 2),
+            "confidence_bonus": confidence_bonus,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+def _detect_enhanced_divergence(
+    macd_data: dict[str, list[float]] | None,
+    closes: list[float] | None,
+    bi_idx: int,
+    mmd_type: MMDType,
+) -> dict[str, Any]:
+    """增强背离检测（V24 条件45）。
+
+    检测MACD柱状图的背离信号，比传统的DIF/DEA金叉死叉更敏感：
+    - 价格创新高但MACD柱状图面积缩小 → 顶背离（卖出信号增强）
+    - 价格创新低但MACD柱状图面积增大 → 底背离（买入信号增强）
+
+    Returns:
+        {
+            "divergence_type": str,     # "none"/"bullish"/"bearish"
+            "strength": str,            # "strong"/"moderate"/"weak"
+            "confidence_bonus": float,  # 置信度加成
+        }
+    """
+    result = {
+        "divergence_type": "none",
+        "strength": "none",
+        "confidence_bonus": 0.0,
+    }
+
+    try:
+        if macd_data is None or closes is None:
+            return result
+
+        hist = macd_data.get("hist", [])
+        if len(hist) < 20:
+            return result
+
+        # 取买卖点附近的数据
+        end = min(bi_idx + 1, len(closes))
+        lookback = min(20, end)
+        start = max(0, end - lookback)
+
+        price_segment = closes[start:end]
+        hist_segment = hist[start:end]
+
+        if len(price_segment) < 10 or len(hist_segment) < 10:
+            return result
+
+        # 分为前后两段比较
+        mid = len(price_segment) // 2
+        prev_prices = price_segment[:mid]
+        curr_prices = price_segment[mid:]
+        prev_hist = hist_segment[:mid]
+        curr_hist = hist_segment[mid:]
+
+        # 计算段内极值和面积
+        prev_price_max = max(prev_prices) if prev_prices else 0
+        curr_price_max = max(curr_prices) if curr_prices else 0
+        prev_price_min = min(prev_prices) if prev_prices else 0
+        curr_price_min = min(curr_prices) if curr_prices else 0
+
+        prev_hist_sum = sum(abs(h) for h in prev_hist) if prev_hist else 0
+        curr_hist_sum = sum(abs(h) for h in curr_hist) if curr_hist else 0
+
+        # 顶背离检测（价格创新高但动能减弱）
+        if mmd_type in (MMDType.SELL_1, MMDType.SELL_2, MMDType.SELL_2S, MMDType.SELL_3):
+            if curr_price_max > prev_price_max and curr_hist_sum < prev_hist_sum * 0.7:
+                divergence_type = "bearish"
+                strength = "strong" if curr_hist_sum < prev_hist_sum * 0.5 else "moderate"
+                bonus = 0.04 if strength == "strong" else 0.02
+                result = {
+                    "divergence_type": divergence_type,
+                    "strength": strength,
+                    "confidence_bonus": bonus,
+                }
+            elif curr_price_max > prev_price_max and curr_hist_sum < prev_hist_sum * 0.85:
+                divergence_type = "bearish"
+                strength = "weak"
+                bonus = 0.01
+                result = {
+                    "divergence_type": divergence_type,
+                    "strength": strength,
+                    "confidence_bonus": bonus,
+                }
+
+        # 底背离检测（价格创新低但动能减弱）
+        elif mmd_type in (MMDType.BUY_1, MMDType.BUY_2, MMDType.BUY_2S, MMDType.BUY_3):
+            if curr_price_min < prev_price_min and curr_hist_sum < prev_hist_sum * 0.7:
+                divergence_type = "bullish"
+                strength = "strong" if curr_hist_sum < prev_hist_sum * 0.5 else "moderate"
+                bonus = 0.04 if strength == "strong" else 0.02
+                result = {
+                    "divergence_type": divergence_type,
+                    "strength": strength,
+                    "confidence_bonus": bonus,
+                }
+            elif curr_price_min < prev_price_min and curr_hist_sum < prev_hist_sum * 0.85:
+                divergence_type = "bullish"
+                strength = "weak"
+                bonus = 0.01
+                result = {
+                    "divergence_type": divergence_type,
+                    "strength": strength,
+                    "confidence_bonus": bonus,
+                }
+
+    except Exception:
+        pass
+
+    return result
+
+
+def _calc_cross_validation(
+    mmd: MMD,
+    bis: list[BI],
+    zss: list[ZS],
+    closes: list[float] | None,
+    macd_data: dict[str, list[float]] | None,
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """信号交叉验证评分（V24 条件46）。
+
+    综合多个独立信号源的确认程度，给出交叉验证评分：
+    - MACD趋势确认
+    - 成交量确认
+    - 中枢结构确认
+    - 笔方向确认
+
+    Returns:
+        {
+            "consensus_score": float,  # 0-1，交叉验证得分
+            "confirmations": list[str], # 已确认的信号源列表
+            "consensus_bonus": float,  # 置信度加成
+        }
+    """
+    result = {
+        "consensus_score": 0.0,
+        "confirmations": [],
+        "consensus_bonus": 0.0,
+    }
+
+    try:
+        confirmations: list[str] = []
+
+        # 1. MACD趋势确认
+        if macd_data is not None:
+            dif = macd_data.get("dif", [])
+            if len(dif) >= 2:
+                latest_dif = dif[-1]
+                prev_dif = dif[-2]
+                if mmd.mmd_type.value.startswith("buy") and latest_dif > prev_dif and latest_dif > 0:
+                    confirmations.append("macd_trend")
+                elif mmd.mmd_type.value.startswith("sell") and latest_dif < prev_dif and latest_dif < 0:
+                    confirmations.append("macd_trend")
+
+        # 2. 成交量确认
+        if volumes is not None and len(volumes) >= 5:
+            recent_vol = sum(volumes[-5:]) / 5
+            avg_vol = sum(volumes) / len(volumes) if volumes else 1
+            if avg_vol > 0:
+                vol_ratio = recent_vol / avg_vol
+                if mmd.mmd_type.value.startswith("buy") and vol_ratio >= 1.2:
+                    confirmations.append("volume_support")
+                elif mmd.mmd_type.value.startswith("sell") and vol_ratio >= 1.0:
+                    confirmations.append("volume_confirmation")
+
+        # 3. 中枢结构确认
+        if mmd.zs is not None and len(zss) >= 1:
+            zs_idx = mmd.zs.index
+            if zs_idx < len(zss) - 1:
+                next_zs = zss[zs_idx + 1]
+                if mmd.mmd_type.value.startswith("buy"):
+                    if next_zs.zd > mmd.zs.zg:
+                        confirmations.append("zs_structure")
+                else:
+                    if next_zs.zg < mmd.zs.zd:
+                        confirmations.append("zs_structure")
+
+        # 4. 笔方向确认
+        if mmd.bi is not None and len(bis) > mmd.bi.index:
+            bi = mmd.bi
+            if mmd.mmd_type.value.startswith("buy") and bi.direction.value == "up":
+                confirmations.append("bi_direction")
+            elif mmd.mmd_type.value.startswith("sell") and bi.direction.value == "down":
+                confirmations.append("bi_direction")
+
+        # 计算交叉验证得分
+        num_confirmations = len(confirmations)
+        max_possible = 4
+        consensus_score = num_confirmations / max_possible
+
+        # 置信度加成
+        if num_confirmations >= 3:
+            consensus_bonus = 0.05
+        elif num_confirmations >= 2:
+            consensus_bonus = 0.03
+        elif num_confirmations >= 1:
+            consensus_bonus = 0.01
+        else:
+            consensus_bonus = 0.0
+
+        result = {
+            "consensus_score": round(consensus_score, 2),
+            "confirmations": confirmations,
+            "consensus_bonus": consensus_bonus,
+        }
     except Exception:
         pass
 

@@ -51,7 +51,10 @@ class TestSyncExecuteReconnect:
             mock_conn_cls.return_value = mock_conn
 
             client = TdxClient("1.1.1.1", 7709, 1.0, auto_reconnect=True, heartbeat_interval=0)
-            with patch("easy_tdx.client.time.sleep") as mock_sleep:
+            with (
+                patch("easy_tdx.client.time.sleep") as mock_sleep,
+                patch("easy_tdx.client.save_best_host"),
+            ):
                 with pytest.raises(TdxConnectionError):
                     client._execute(GetSecurityCountCmd(Market.SH))
             # 应 sleep 了 4 次（_RETRY_DELAYS 长度）
