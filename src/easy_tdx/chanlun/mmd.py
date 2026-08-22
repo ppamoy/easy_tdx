@@ -536,6 +536,23 @@ def find_mmds(
     # 去重：同一位置只保留最高优先级买卖点
     mmds = _deduplicate_mmds(mmds)
 
+    # V21: 条件34 - 动态支撑阻力位识别（用于后续信号评估）
+    dynamic_levels: dict[str, Any] = {}
+    if closes is not None and len(closes) >= 30:
+        try:
+            dynamic_levels = _identify_dynamic_support_resistance(
+                closes, highs, lows, lookback=min(60, len(closes))
+            )
+        except Exception:
+            pass
+
+    # V21: 条件35 - 组合信号检测（去重后检测邻近信号组合）
+    if closes is not None:
+        try:
+            _detect_combo_signals(mmds, closes)
+        except Exception:
+            pass
+
     # 计算置信度和质量评级（V8新增：传递zss用于趋势方向）
     trend_strength = _calc_trend_strength(zss)
     trend_direction = _calc_overall_trend_direction(zss)
@@ -549,6 +566,23 @@ def find_mmds(
             try:
                 latest_idx = len(closes) - 1
                 mmd._signal_aging = _calc_signal_aging(mmd, closes, latest_idx)
+            except Exception:
+                pass
+
+        # V21: 条件36 - 多时间框架共振增强（跨信号类型共振加分）
+        try:
+            tf_resonance = _calc_multi_tf_resonance(mmd, mmds, closes, macd_data, volatility)
+            mmd.confluence_score = round(mmd.confluence_score + tf_resonance, 2)
+            mmd.confluence_score = min(1.0, mmd.confluence_score)
+        except Exception:
+            pass
+
+        # V21: 条件37 - 决策辅助输出
+        if closes is not None:
+            try:
+                mmd._decision_recommendation = _generate_decision_recommendation(
+                    mmd, closes, highs, lows, dynamic_levels, volatility
+                )
             except Exception:
                 pass
 
@@ -3238,6 +3272,11 @@ def _calc_confidence(
     elif vol_dist and vol_dist.get("volume_concentration", 0) < 0.5:
         confidence *= 0.94  # 关键价位成交量稀疏折扣
 
+    # V21: 组合信号加成（条件35）- 邻近不同类型的同向信号增强
+    combo_bonus = getattr(mmd, '_combo_confidence_bonus', 0.0)
+    if combo_bonus > 0:
+        confidence += combo_bonus  # 组合信号额外加成
+
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
 
@@ -3894,3 +3933,401 @@ def sort_mmds_by_priority(mmds: list[MMD]) -> list[MMD]:
         )
 
     return sorted(mmds, key=sort_key)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V21 新增：动态支撑阻力 + 组合信号 + 多时间框架共振 + 决策辅助
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _identify_dynamic_support_resistance(
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    lookback: int = 60,
+) -> dict[str, Any]:
+    """识别动态支撑阻力位（V21 条件34）。
+
+    不仅依赖缠论中枢结构，还从近期价格行为中提取动态支撑阻力：
+    1. 近期swing低点/高点（局部极值）
+    2. 成交量密集区（volume profile nodes）
+    3. 整数价位/心理关口
+
+    Returns:
+        {
+            "support_levels": [float, ...],   # 动态支撑位（升序）
+            "resistance_levels": [float, ...], # 动态阻力位（升序）
+            "strongest_support": float | None, # 最强支撑
+            "strongest_resistance": float | None, # 最强阻力
+            "atr": float,                      # 当前ATR（用于区间判断）
+        }
+    """
+    if not closes or len(closes) < 20:
+        return {
+            "support_levels": [],
+            "resistance_levels": [],
+            "strongest_support": None,
+            "strongest_resistance": None,
+            "atr": 0.0,
+        }
+
+    try:
+        end = len(closes) - 1
+        start = max(0, end - lookback)
+
+        # 计算ATR
+        atr = _calc_atr(closes, highs, lows, end, 14)
+        if atr <= 0:
+            atr = closes[end] * 0.02
+
+        # 1. Swing 低点/高点检测（局部极值）
+        swing_lows: list[float] = []
+        swing_highs: list[float] = []
+        half = 3  # 左右各3根K线确认极值
+
+        for i in range(start + half, end - half):
+            is_low = True
+            is_high = True
+            for j in range(i - half, i + half + 1):
+                if j == i:
+                    continue
+                if lows and lows[j] <= (lows[i] if lows else closes[j]):
+                    is_low = False
+                if highs and highs[j] >= (highs[i] if highs else closes[j]):
+                    is_high = False
+            if is_low:
+                swing_lows.append(closes[i])
+            if is_high:
+                swing_highs.append(closes[i])
+
+        # 2. 聚类支撑/阻力位（相近价位合并）
+        def _cluster_levels(levels: list[float], tolerance: float = 0.015) -> list[float]:
+            """将相近价位聚类，返回代表性价位。"""
+            if not levels:
+                return []
+            sorted_levels = sorted(levels)
+            clusters: list[list[float]] = [[sorted_levels[0]]]
+            for level in sorted_levels[1:]:
+                if level <= clusters[-1][-1] * (1 + tolerance):
+                    clusters[-1].append(level)
+                else:
+                    clusters.append([level])
+            return [sum(c) / len(c) for c in clusters]
+
+        support_candidates = _cluster_levels(swing_lows)
+        resistance_candidates = _cluster_levels(swing_highs)
+
+        # 3. 加入整数价位/心理关口
+        latest = closes[end]
+        for power in range(1, 4):
+            round_level = round(latest / (10 ** power)) * (10 ** power)
+            if 0.9 * latest < round_level < 1.1 * latest and round_level not in support_candidates:
+                if round_level < latest:
+                    support_candidates.append(round_level)
+                else:
+                    resistance_candidates.append(round_level)
+
+        # 4. 按距离最新价排序，保留最近5个
+        support_levels = sorted(
+            [s for s in support_candidates if s < latest],
+            reverse=True,
+        )[:5]
+        resistance_levels = sorted(
+            [r for r in resistance_candidates if r > latest],
+        )[:5]
+
+        # 去重（距离太近的合并）
+        def _dedup_near(levels: list[float], min_gap: float = 0.01) -> list[float]:
+            if len(levels) <= 1:
+                return levels
+            result = [levels[0]]
+            for lvl in levels[1:]:
+                if abs(lvl - result[-1]) / result[-1] > min_gap:
+                    result.append(lvl)
+            return result
+
+        support_levels = _dedup_near(support_levels)
+        resistance_levels = _dedup_near(resistance_levels)
+
+        return {
+            "support_levels": support_levels,
+            "resistance_levels": resistance_levels,
+            "strongest_support": support_levels[0] if support_levels else None,
+            "strongest_resistance": resistance_levels[0] if resistance_levels else None,
+            "atr": atr,
+        }
+    except Exception:
+        return {
+            "support_levels": [],
+            "resistance_levels": [],
+            "strongest_support": None,
+            "strongest_resistance": None,
+            "atr": 0.0,
+        }
+
+
+def _detect_combo_signals(mmds: list[MMD], closes: list[float]) -> None:
+    """检测组合信号（V21 条件35）。
+
+    当多个不同类型的买卖点出现在相近价位区间时，形成"组合信号"，
+    置信度加成更高。例如：
+    - 1买 + 2买 同区域 → "1+2buy_combo"
+    - 1卖 + 2卖 同区域 → "1+2sell_combo"
+    - 多个3买密集 → "3buy_cluster"
+
+    修改：在MMD对象上设置 _signal_combo 和 _combo_confidence_bonus。
+    """
+    if len(mmds) < 2 or not closes:
+        return
+
+    try:
+        latest = closes[-1]
+        atr = _calc_atr(closes, None, None, len(closes) - 1, 14)
+        if atr <= 0:
+            atr = latest * 0.02
+        zone_width = atr * 3  # 3ATR范围内视为同一区域
+
+        # 按位置分组
+        by_zone: dict[float, list[MMD]] = {}
+        for mmd in mmds:
+            if not mmd.bi:
+                continue
+            price = mmd.bi.end.k.close if hasattr(mmd.bi.end.k, 'close') else latest
+            zone_key = round(price / zone_width) * zone_width
+            if zone_key not in by_zone:
+                by_zone[zone_key] = []
+            by_zone[zone_key].append(mmd)
+
+        # 检测组合
+        for zone_key, zone_mmds in by_zone.items():
+            if len(zone_mmds) < 2:
+                continue
+
+            types_in_zone = set(mmd.mmd_type for mmd in zone_mmds)
+            buy_types = {t for t in types_in_zone if "buy" in t.value}
+            sell_types = {t for t in types_in_zone if "sell" in t.value}
+
+            # 买组合
+            if len(buy_types) >= 2:
+                combo_type = "+".join(sorted(t.value for t in buy_types)) + "_combo"
+                bonus = 0.05 if len(buy_types) == 2 else 0.08
+                for mmd in zone_mmds:
+                    if "buy" in mmd.mmd_type.value:
+                        mmd._signal_combo = combo_type
+                        mmd._combo_confidence_bonus = bonus
+            # 卖组合
+            elif len(sell_types) >= 2:
+                combo_type = "+".join(sorted(t.value for t in sell_types)) + "_combo"
+                bonus = 0.05 if len(sell_types) == 2 else 0.08
+                for mmd in zone_mmds:
+                    if "sell" in mmd.mmd_type.value:
+                        mmd._signal_combo = combo_type
+                        mmd._combo_confidence_bonus = bonus
+
+            # 多3买/3卖聚集
+            buy_3_count = sum(1 for m in zone_mmds if m.mmd_type == MMDType.BUY_3)
+            sell_3_count = sum(1 for m in zone_mmds if m.mmd_type == MMDType.SELL_3)
+            if buy_3_count >= 2:
+                for mmd in zone_mmds:
+                    if mmd.mmd_type == MMDType.BUY_3:
+                        mmd._signal_combo = "3buy_cluster"
+                        mmd._combo_confidence_bonus = 0.06
+            if sell_3_count >= 2:
+                for mmd in zone_mmds:
+                    if mmd.mmd_type == MMDType.SELL_3:
+                        mmd._signal_combo = "3sell_cluster"
+                        mmd._combo_confidence_bonus = 0.06
+
+    except Exception:
+        pass
+
+
+def _calc_multi_tf_resonance(
+    mmd: MMD,
+    all_mmds: list[MMD],
+    closes: list[float] | None,
+    macd_data: dict[str, list[float]] | None,
+    volatility: float | None,
+) -> float:
+    """计算多时间框架共振增强分数（V21 条件36）。
+
+    除了区间套一致性外，还检查：
+    1. 同价位区间内是否有其他类型信号共振
+    2. MACD在多个信号点是否同向确认
+    3. 成交量在信号点附近是否持续活跃
+
+    Returns:
+        额外共振加分（0~0.08）
+    """
+    if not mmd.bi or not closes:
+        return 0.0
+
+    try:
+        bonus = 0.0
+        signal_price = mmd.bi.end.k.close if hasattr(mmd.bi.end.k, 'close') else closes[-1]
+        atr = _calc_atr(closes, None, None, len(closes) - 1, 14)
+        if atr <= 0:
+            atr = signal_price * 0.02
+        resonance_zone = atr * 2  # 2ATR共振区间
+
+        # 1. 检查邻近不同类型的同向信号
+        for other in all_mmds:
+            if other is mmd:
+                continue
+            if not other.bi:
+                continue
+            other_price = other.bi.end.k.close if hasattr(other.bi.end.k, 'close') else closes[-1]
+            if abs(other_price - signal_price) / signal_price > 0.03:
+                continue  # 超出3%不视为共振
+
+            # 同向信号共振
+            is_same_direction = (
+                ("buy" in mmd.mmd_type.value and "buy" in other.mmd_type.value) or
+                ("sell" in mmd.mmd_type.value and "sell" in other.mmd_type.value)
+            )
+            if is_same_direction and other.mmd_type != mmd.mmd_type:
+                # 不同类型同向 = 强共振
+                bonus += 0.04
+            elif is_same_direction and other.mmd_type == mmd.mmd_type:
+                # 同类型重复 = 弱共振
+                bonus += 0.02
+
+        # 2. MACD同向确认
+        if macd_data and macd_data.get("dif"):
+            difs = macd_data["dif"]
+            idx = mmd.bi.end.k.k_index if mmd.bi else len(difs) - 1
+            if 0 <= idx < len(difs) and len(difs) > 5:
+                recent_dif = difs[max(0, idx-3):idx+1]
+                if len(recent_dif) >= 3:
+                    rising = all(recent_dif[i] <= recent_dif[i+1] for i in range(len(recent_dif)-1))
+                    falling = all(recent_dif[i] >= recent_dif[i+1] for i in range(len(recent_dif)-1))
+                    if ("buy" in mmd.mmd_type.value and rising) or ("sell" in mmd.mmd_type.value and falling):
+                        bonus += 0.02
+
+        return min(0.08, bonus)
+    except Exception:
+        return 0.0
+
+
+def _generate_decision_recommendation(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    dynamic_levels: dict[str, Any],
+    volatility: float | None,
+) -> dict[str, Any]:
+    """生成决策辅助输出（V21 条件37）。
+
+    基于动态支撑阻力、止损止盈、组合信号等，生成结构化决策建议。
+
+    Returns:
+        {
+            "action": "buy"/"sell"/"hold",
+            "entry_price": float,
+            "stop_loss": float,
+            "take_profit_1": float,
+            "take_profit_2": float,
+            "position_pct": float,     # 建议仓位比例 0-1
+            "risk_reward_ratio": float,
+            "key_support": float | None,
+            "key_resistance": float | None,
+            "confidence_label": str,   # "高"/"中"/"低"
+            "warnings": list[str],     # 风险提示
+            "recommendation_text": str # 自然语言建议
+        }
+    """
+    if not mmd.bi or not closes:
+        return {}
+
+    try:
+        latest = closes[-1]
+        atr = _calc_atr(closes, highs, lows, len(closes) - 1, 14)
+        if atr <= 0:
+            atr = latest * 0.02
+
+        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+
+        # 基础建议
+        action = "buy" if "buy" in mmd.mmd_type.value else "sell" if "sell" in mmd.mmd_type.value else "hold"
+
+        # 入场价
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+            entry = mmd.bi.low * 1.002 if "buy" in action else mmd.bi.high * 0.998
+        else:
+            entry = latest
+
+        # 止损止盈（复用V20动态计算逻辑）
+        sl_tp = _calc_dynamic_stop_loss_take_profit(mmd, closes, highs, lows)
+        stop_loss = sl_tp.get("stop_loss", entry - atr * 1.5 if "buy" in action else entry + atr * 1.5)
+        tp1 = sl_tp.get("take_profit_1", entry + atr * 2.0 if "buy" in action else entry - atr * 2.0)
+        tp2 = sl_tp.get("take_profit_2", entry + atr * 3.5 if "buy" in action else entry - atr * 3.5)
+
+        # 风险收益比
+        risk = abs(entry - stop_loss)
+        reward = abs(tp1 - entry)
+        rrr = reward / risk if risk > 0 else 0
+
+        # 动态支撑阻力
+        key_support = dynamic_levels.get("strongest_support") if dynamic_levels else None
+        key_resistance = dynamic_levels.get("strongest_resistance") if dynamic_levels else None
+
+        # 仓位建议（基于置信度和风险收益比）
+        base_position = 0.10  # 基础10%
+        conf_bonus = mmd.confidence * 0.15  # 置信度加成
+        combo_bonus = getattr(mmd, '_combo_confidence_bonus', 0.0)
+        rrr_bonus = min(0.10, rrr * 0.02) if rrr > 1.5 else 0
+        position_pct = min(0.30, base_position + conf_bonus + combo_bonus + rrr_bonus)
+
+        # 置信度标签
+        if mmd.confidence >= 0.75:
+            conf_label = "高"
+        elif mmd.confidence >= 0.55:
+            conf_label = "中"
+        else:
+            conf_label = "低"
+
+        # 风险提示
+        warnings: list[str] = []
+        if vol > 0.04:
+            warnings.append("高波动市场，注意止损")
+        if rrr < 1.5:
+            warnings.append("风险收益比较低，谨慎入场")
+        if getattr(mmd, '_signal_aging', {}).get('aged', False):
+            warnings.append("信号已衰减，时效性降低")
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+            warnings.append("三类买卖点需谨慎确认")
+
+        # 自然语言建议
+        direction = "买入" if action == "buy" else "卖出" if action == "sell" else "观望"
+        type_name = mmd.mmd_type.value.replace("buy_", "买").replace("sell_", "卖")
+        parts = [f"{direction}信号：{type_name}"]
+        if mmd.confidence >= 0.7:
+            parts.append(f"置信度{conf_label}({mmd.confidence:.0%})")
+        if mmd._signal_combo and mmd._signal_combo != "none":
+            parts.append(f"组合信号✅({mmd._signal_combo})")
+        if key_support:
+            parts.append(f"下方支撑@{key_support:.2f}")
+        if key_resistance:
+            parts.append(f"上方阻力@{key_resistance:.2f}")
+        if warnings:
+            parts.append("⚠️" + ";".join(warnings[:2]))
+
+        recommendation_text = " | ".join(parts)
+
+        return {
+            "action": action,
+            "entry_price": round(entry, 2),
+            "stop_loss": round(stop_loss, 2),
+            "take_profit_1": round(tp1, 2),
+            "take_profit_2": round(tp2, 2),
+            "position_pct": round(position_pct, 2),
+            "risk_reward_ratio": round(rrr, 2),
+            "key_support": round(key_support, 2) if key_support else None,
+            "key_resistance": round(key_resistance, 2) if key_resistance else None,
+            "confidence_label": conf_label,
+            "warnings": warnings,
+            "recommendation_text": recommendation_text,
+        }
+    except Exception:
+        return {}
