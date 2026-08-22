@@ -240,6 +240,25 @@ class MMD:
     _structure_position: dict[str, Any] | None = None  # 买卖点结构位置评分（条件55）
     _stock_profile: dict[str, Any] | None = None  # 个股信号特征学习（条件56）
 
+    # V28 enhancement fields
+    _boll_squeeze: dict[str, Any] | None = None  # BOLL带宽压缩确认（条件57）
+    _breakout_vol_price: dict[str, Any] | None = None  # 突破量价确认（条件58）
+    _dynamic_atr_stop: dict[str, Any] | None = None  # 动态ATR止损位（条件59）
+
+    # V29 enhancement fields
+    _trend_continuity: dict[str, Any] | None = None  # 趋势方向持续性确认（条件60）
+    _consolidation_divergence: dict[str, Any] | None = None  # 盘整区背离预警（条件61）
+
+    # V30 enhancement fields
+    _kline_pattern_confirm: dict[str, Any] | None = None  # K线形态反向确认（条件62）
+    _zs_breakout_confirm: dict[str, Any] | None = None  # 中枢突破方向确认（条件63）
+    _recent_range_stop: dict[str, Any] | None = None  # 近期波动区间止损优化（条件64）
+
+    # V31 enhancement fields
+    _ma_alignment: dict[str, Any] | None = None  # 均线排列确认（条件65）
+    _macd_histogram_acceleration: dict[str, Any] | None = None  # MACD柱状图加速度（条件66）
+    _signal_health_dashboard: dict[str, Any] | None = None  # 信号综合健康度报告（条件67）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
@@ -281,20 +300,20 @@ class BOLLResult:
     
     @property
     def latest_upper(self) -> float:
-        return self.upper[-1] if self.upper else 0.0
-    
+        return self.upper[-1] if len(self.upper) > 0 else 0.0
+
     @property
     def latest_mid(self) -> float:
-        return self.mid[-1] if self.mid else 0.0
-    
+        return self.mid[-1] if len(self.mid) > 0 else 0.0
+
     @property
     def latest_lower(self) -> float:
-        return self.lower[-1] if self.lower else 0.0
-    
+        return self.lower[-1] if len(self.lower) > 0 else 0.0
+
     @property
     def latest_percent_b(self) -> float:
-        return self.percent_b[-1] if self.percent_b else 0.5
-    
+        return self.percent_b[-1] if len(self.percent_b) > 0 else 0.5
+
     @property
     def latest_width(self) -> float:
-        return self.width[-1] if self.width else 0.0
+        return self.width[-1] if len(self.width) > 0 else 0.0

@@ -34,7 +34,7 @@ def _calc_volume_profile_for_diagnosis(
     volumes: list[float] | None,
 ) -> dict[str, Any] | None:
     """计算成交量剖面数据，用于诊断API响应（V13新增）。"""
-    if not closes or not volumes or len(closes) < 60:
+    if closes is None or volumes is None or len(closes) < 60:
         return None
     try:
         from easy_tdx.chanlun.mmd import _calc_volume_profile
@@ -155,8 +155,8 @@ def _detect_candlestick_patterns(
         body_pct = body / range_val
         upper_pct = upper_shadow / range_val
         lower_pct = lower_shadow / range_val
-        is_bullish = c > o
-        is_bearish = c < o
+        is_bullish = bool(c > o)
+        is_bearish = bool(c < o)
 
         # 十字星：实体极小
         if body_pct < 0.1:
@@ -171,8 +171,8 @@ def _detect_candlestick_patterns(
         elif i < -1:
             prev_o = opens[i-1]
             prev_c = closes[i-1]
-            prev_bearish = prev_c < prev_o
-            prev_bullish = prev_c > prev_o
+            prev_bearish = bool(prev_c < prev_o)
+            prev_bullish = bool(prev_c > prev_o)
             if is_bullish and prev_bearish:
                 if c > prev_o and o < prev_c:
                     patterns.append({"bar_index": i, "type": "bullish_engulfing", "bullish": True})
@@ -753,6 +753,28 @@ async def diagnose_stock(
             "structure_position": getattr(latest_mmd, "_structure_position", None) if latest_mmd else None,
             # V27: 个股信号特征学习（条件56）
             "stock_profile": getattr(latest_mmd, "_stock_profile", None) if latest_mmd else None,
+            # V28: BOLL带宽压缩确认（条件57）
+            "boll_squeeze": getattr(latest_mmd, "_boll_squeeze", None) if latest_mmd else None,
+            # V28: 突破量价确认（条件58）
+            "breakout_vol_price": getattr(latest_mmd, "_breakout_vol_price", None) if latest_mmd else None,
+            # V28: 动态ATR止损位（条件59）
+            "dynamic_atr_stop": getattr(latest_mmd, "_dynamic_atr_stop", None) if latest_mmd else None,
+            # V29: 趋势方向持续性确认（条件60）
+            "trend_continuity": getattr(latest_mmd, "_trend_continuity", None) if latest_mmd else None,
+            # V29: 盘整区背离预警（条件61）
+            "consolidation_divergence": getattr(latest_mmd, "_consolidation_divergence", None) if latest_mmd else None,
+            # V30: K线形态反向确认（条件62）
+            "kline_pattern_confirm": getattr(latest_mmd, "_kline_pattern_confirm", None) if latest_mmd else None,
+            # V30: 中枢突破方向确认（条件63）
+            "zs_breakout_confirm": getattr(latest_mmd, "_zs_breakout_confirm", None) if latest_mmd else None,
+            # V30: 近期波动区间止损优化（条件64）
+            "recent_range_stop": getattr(latest_mmd, "_recent_range_stop", None) if latest_mmd else None,
+            # V31: 均线排列确认（条件65）
+            "ma_alignment": getattr(latest_mmd, "_ma_alignment", None) if latest_mmd else None,
+            # V31: MACD柱状图加速度（条件66）
+            "macd_histogram_acceleration": getattr(latest_mmd, "_macd_histogram_acceleration", None) if latest_mmd else None,
+            # V31: 信号综合健康度报告（条件67）
+            "signal_health_dashboard": getattr(latest_mmd, "_signal_health_dashboard", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

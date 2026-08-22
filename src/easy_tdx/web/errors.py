@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+import traceback as _tb
 
 from easy_tdx.exceptions import TdxConnectionError
 
@@ -32,6 +33,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
         del request  # unused but required by FastAPI signature
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("ValueError: %s\n%s", exc, _tb.format_exc())
         return JSONResponse(
             status_code=400,
             content=ApiErrorResponse(error="Bad request", detail=str(exc)).model_dump(),
@@ -40,6 +44,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
         del request  # unused but required by FastAPI signature
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("Unhandled exception: %s\n%s", exc, _tb.format_exc())
         return JSONResponse(
             status_code=500,
             content=ApiErrorResponse(error="Internal server error", detail=str(exc)).model_dump(),

@@ -254,7 +254,7 @@ class ChanlunAnalyser:
         volumes = [k.amount for k in klines]
         # V5: 计算波动率用于动态阈值
         from easy_tdx.chanlun.mmd import _calc_atr_volatility
-        volatility = _calc_atr_volatility(closes) if closes else None
+        volatility = _calc_atr_volatility(closes) if len(closes) > 0 else None
         # V12: 传递highs/lows用于真实ADX计算
         highs = [k.high for k in klines]
         lows = [k.low for k in klines]

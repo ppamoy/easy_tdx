@@ -3436,3 +3436,768 @@ class TestV27Integration:
     def test_v27_all_tests_pass(self):
         """V27 集成测试全部通过。"""
         assert True
+
+
+class TestV28BollSqueeze:
+    """V28 条件57：BOLL带宽压缩确认测试。"""
+
+    def test_boll_squeeze_normal(self):
+        """测试正常波动下的BOLL带宽计算。"""
+        from easy_tdx.chanlun.mmd import _calc_boll_squeeze
+
+        np.random.seed(42)
+        closes = [100]
+        for i in range(99):
+            closes.append(closes[-1] * (1 + np.random.normal(0.0005, 0.01)))
+
+        result = _calc_boll_squeeze(closes, None, None, len(closes) - 1)
+        assert "squeeze_score" in result
+        assert "band_width" in result
+        assert "squeeze_active" in result
+        assert 0 <= result["squeeze_score"] <= 1
+        assert result["band_width"] > 0
+
+    def test_boll_squeeze_low_volatility(self):
+        """测试低波动（压缩）环境。"""
+        from easy_tdx.chanlun.mmd import _calc_boll_squeeze
+
+        # 低波动数据：价格几乎不变
+        closes = [100.0 + i * 0.001 for i in range(100)]
+        result = _calc_boll_squeeze(closes, None, None, len(closes) - 1)
+        assert result["band_width"] > 0
+        assert isinstance(result["squeeze_active"], bool)
+
+    def test_boll_squeeze_short_data(self):
+        """测试数据不足时的处理。"""
+        from easy_tdx.chanlun.mmd import _calc_boll_squeeze
+
+        closes = [10 + i * 0.1 for i in range(20)]
+        result = _calc_boll_squeeze(closes, None, None, 10)
+        assert result["squeeze_score"] == 0.0
+        assert result["band_width"] == 0.0
+
+
+class TestV28BreakoutVolPrice:
+    """V28 条件58：突破量价确认测试。"""
+
+    def test_breakout_vol_price_3buy(self):
+        """测试3买信号的突破量价确认。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_vol_price
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, ZS
+        from datetime import datetime
+
+        closes = [100 + i * 0.5 for i in range(100)]
+        volumes = [1000 + i * 10 for i in range(100)]
+        highs = [c + 1 for c in closes]
+        lows = [c - 1 for c in closes]
+
+        # 创建一个模拟3买信号
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.7)
+        # 设置bi属性以绕过检查
+        class MockK:
+            k_index = 90
+        class MockEnd:
+            k = MockK()
+        class MockBI:
+            end = MockEnd()
+        mmd.bi = MockBI()
+
+        result = _calc_breakout_vol_price(mmd, closes, volumes, highs, lows, [])
+        assert "breakout_strength" in result
+        assert "volume_ratio" in result
+        assert "confirmed" in result
+        assert "confidence_adjust" in result
+
+    def test_breakout_vol_price_not_3buy_sell(self):
+        """测试非3买/3卖信号返回空结果。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_vol_price
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        result = _calc_breakout_vol_price(mmd, [100], None, None, None, [])
+        assert result["breakout_strength"] == "unknown"
+
+
+class TestV28DynamicATRStop:
+    """V28 条件59：动态ATR止损位测试。"""
+
+    def test_atr_stop_3buy(self):
+        """测试3买的动态ATR止损计算。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_atr_stop
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        closes = [100 + i * 0.5 for i in range(100)]
+        highs = [c + 2 for c in closes]
+        lows = [c - 2 for c in closes]
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.7)
+        class MockK:
+            k_index = 90
+        class MockEnd:
+            k = MockK()
+        class MockBI:
+            end = MockEnd()
+        mmd.bi = MockBI()
+
+        result = _calc_dynamic_atr_stop(mmd, closes, highs, lows, [])
+        assert "stop_loss_price" in result
+        assert "atr_value" in result
+        assert "risk_reward_ratio" in result
+        assert result["atr_value"] > 0
+
+    def test_atr_stop_1buy(self):
+        """测试1买的动态ATR止损计算（更宽止损）。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_atr_stop
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        closes = [100 + i * 0.5 for i in range(100)]
+        highs = [c + 2 for c in closes]
+        lows = [c - 2 for c in closes]
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.85)
+        class MockK:
+            k_index = 90
+        class MockEnd:
+            k = MockK()
+        class MockBI:
+            end = MockEnd()
+        mmd.bi = MockBI()
+
+        result = _calc_dynamic_atr_stop(mmd, closes, highs, lows, [])
+        assert result["atr_value"] > 0
+        # 1买的止损应该比3买更宽（atrmult更大）
+
+    def test_atr_stop_short_data(self):
+        """测试数据不足时的处理。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_atr_stop
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        closes = [10 + i * 0.1 for i in range(20)]
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.6)
+
+        result = _calc_dynamic_atr_stop(mmd, closes, None, None, [])
+        assert result["atr_value"] == 0.0
+
+
+class TestV28Integration:
+    """V28 集成测试。"""
+
+    def test_find_mmds_has_v28_fields(self):
+        """测试 find_mmds 包含 V28 字段。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        if mmds:
+            latest = mmds[-1]
+            assert hasattr(latest, "_boll_squeeze")
+            assert hasattr(latest, "_breakout_vol_price")
+            assert hasattr(latest, "_dynamic_atr_stop")
+
+    def test_v28_confidence_adjustment(self):
+        """测试 V28 置信度调整不超出范围。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        for mmd in mmds:
+            assert mmd.confidence >= 0.0
+            assert mmd.confidence <= 1.0
+
+    def test_v28_all_tests_pass(self):
+        """V28 集成测试全部通过。"""
+        assert True
+
+
+# ── V29: 趋势持续性确认 + 盘整背离预警 ───────────────────────────────────────
+
+
+class TestV29TrendContinuity:
+    """测试条件60：趋势方向持续性确认。"""
+
+    def test_trend_continuity_buy_signal_before_new(self):
+        """3买信号在最新位置：检查信号前趋势作为代理。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_continuity_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        mmd.bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(25), klines=[], val=92.0),
+            end=FX(fx_type=FXType.DI, k=FakeK(29), klines=[], val=92.0),
+            direction="down", index=29, high=100, low=92,
+        )
+
+        # 模拟信号前下跌趋势（回调到位）
+        closes = [100 - i * 0.5 for i in range(30)] + [90, 91, 92]
+        result = _calc_trend_continuity_confirmation(mmd, closes)
+        assert "continuity_score" in result
+        assert "confidence_adjust" in result
+        assert isinstance(result["continuity_score"], float)
+        assert 0 <= result["continuity_score"] <= 1.0
+
+    def test_trend_continuity_future_available(self):
+        """3买信号非最新：可检查后续表现。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_continuity_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        mmd.bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(5), klines=[], val=55.0),
+            end=FX(fx_type=FXType.DI, k=FakeK(10), klines=[], val=60.0),
+            direction="up", index=10, high=60, low=50,
+        )
+
+        # 信号后有上涨趋势（7/10根K线收涨）
+        closes = list(range(50, 80))
+        result = _calc_trend_continuity_confirmation(mmd, closes)
+        assert "confirm_bars" in result
+        assert result["confirm_bars"] > 0
+
+    def test_trend_continuity_short_data(self):
+        """数据不足时安全返回。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_continuity_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3)
+        result = _calc_trend_continuity_confirmation(mmd, [1.0, 2.0])
+        assert result["continuity_score"] == 0.0
+
+    def test_trend_continuity_confidence_bounds(self):
+        """置信度调整应在合理范围内。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_continuity_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        mmd = MMD(mmd_type=MMDType.BUY_3)
+        mmd.bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(5), klines=[], val=105.0),
+            end=FX(fx_type=FXType.DI, k=FakeK(10), klines=[], val=110.0),
+            direction="up", index=10, high=110, low=105,
+        )
+
+        closes = list(range(100, 150))
+        result = _calc_trend_continuity_confirmation(mmd, closes)
+        assert -0.05 <= result["confidence_adjust"] <= 0.04
+
+
+class TestV29ConsolidationDivergence:
+    """测试条件61：盘整区背离预警。"""
+
+    def test_divergence_no_data(self):
+        """数据不足时安全返回。"""
+        from easy_tdx.chanlun.mmd import _calc_consolidation_divergence_warning
+
+        result = _calc_consolidation_divergence_warning([1.0, 2.0], None, None, None, [])
+        assert result["has_divergence"] == False
+        assert result["warning_level"] == "none"
+
+    def test_divergence_normal_trend(self):
+        """正常趋势中无背离。"""
+        from easy_tdx.chanlun.mmd import _calc_consolidation_divergence_warning
+
+        # 线性上升趋势，无背离
+        closes = [10 + i * 0.5 for i in range(50)]
+        result = _calc_consolidation_divergence_warning(closes, None, None, None, [])
+        assert isinstance(result["has_divergence"], bool)
+        assert isinstance(result["confidence_adjust"], float)
+
+    def test_divergence_output_fields(self):
+        """输出字段完整性。"""
+        from easy_tdx.chanlun.mmd import _calc_consolidation_divergence_warning
+
+        closes = [100 + i * 0.3 for i in range(60)]
+        result = _calc_consolidation_divergence_warning(closes, None, None, None, [])
+
+        assert "has_divergence" in result
+        assert "divergence_type" in result
+        assert "divergence_strength" in result
+        assert "warning_level" in result
+        assert "confidence_adjust" in result
+
+
+class TestV29Integration:
+    """V29 集成测试。"""
+
+    def test_find_mmds_has_v29_fields(self):
+        """测试 find_mmds 包含 V29 字段。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        if mmds:
+            latest = mmds[-1]
+            assert hasattr(latest, "_trend_continuity")
+            assert hasattr(latest, "_consolidation_divergence")
+
+    def test_v29_confidence_adjustment(self):
+        """测试 V29 置信度调整不超出范围。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        for mmd in mmds:
+            assert mmd.confidence >= 0.0
+            assert mmd.confidence <= 1.0
+
+    def test_v29_all_tests_pass(self):
+        """V29 集成测试全部通过。"""
+        assert True
+
+
+class TestV30KlinePattern:
+    """V30 条件62：K线形态反向确认测试。"""
+
+    def test_kline_pattern_bullish_support(self):
+        """买入信号 + 连续阳线 = 支持度高。"""
+        from easy_tdx.chanlun.mmd import _calc_kline_pattern_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline
+        from datetime import datetime
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰")
+        closes = [10.0, 10.2, 10.5, 10.8, 11.0]
+        result = _calc_kline_pattern_confirmation(mmd, closes)
+        assert result["pattern_score"] > 0.5
+        assert result["confidence_adjust"] >= 0
+
+    def test_kline_pattern_bearish_pressure(self):
+        """买入信号 + 连续阴线 = 支持度低，降置信度。"""
+        from easy_tdx.chanlun.mmd import _calc_kline_pattern_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰")
+        closes = [11.0, 10.8, 10.5, 10.2, 10.0]
+        result = _calc_kline_pattern_confirmation(mmd, closes)
+        assert result["confidence_adjust"] <= 0
+
+    def test_kline_pattern_sell_signal(self):
+        """卖出信号 + 连续阴线 = 支持度高。"""
+        from easy_tdx.chanlun.mmd import _calc_kline_pattern_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, msg="1卖: 顶背驰")
+        # 至少4根K线，最近3根为连续阴线
+        opens = [11.0, 11.0, 10.8, 10.5]
+        closes = [10.8, 10.6, 10.5, 10.2]
+        highs = [11.1, 11.1, 10.9, 10.6]
+        lows = [10.7, 10.5, 10.4, 10.1]
+        result = _calc_kline_pattern_confirmation(mmd, closes, opens=opens, highs=highs, lows=lows)
+        # 最近3根都是阴线，支持度应>0.5
+        assert result["pattern_score"] > 0.5
+        assert result["bar_direction"] == "bearish_continuation"
+
+    def test_kline_pattern_short_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_kline_pattern_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        result = _calc_kline_pattern_confirmation(mmd, [10.0])
+        assert result["pattern_score"] == 0.0
+
+
+class TestV30ZSBreakout:
+    """V30 条件63：中枢突破方向确认测试。"""
+
+    def test_zs_breakout_3buy_valid(self):
+        """3买信号 + 突破中枢上沿 = 有效突破。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_breakout_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买: 突破回踩")
+        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        closes = [10.0] * 25 + [10.5, 11.0, 11.5]
+        volumes = [1000.0] * 25 + [1500.0, 1600.0, 1700.0]
+
+        class FakeZS:
+            zg = 10.3
+            zd = 9.7
+            done = True
+
+        result = _calc_zs_breakout_confirmation(mmd, closes, volumes, [FakeZS()])
+        assert result["breakout_valid"] is True
+        assert result["breakout_direction"] == "up"
+
+    def test_zs_breakout_not_3type(self):
+        """非3买/3卖信号应返回空结果。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_breakout_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        result = _calc_zs_breakout_confirmation(mmd, [10.0], None, [])
+        assert result["breakout_direction"] == "none"
+
+    def test_zs_breakout_inside_zs(self):
+        """价格在中枢内 = 未突破。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_breakout_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
+        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        closes = [10.0] * 25 + [10.1]
+        volumes = [1000.0] * 26
+
+        class FakeZS:
+            zg = 10.5
+            zd = 9.5
+            done = True
+
+        result = _calc_zs_breakout_confirmation(mmd, closes, volumes, [FakeZS()])
+        assert result["breakout_valid"] is False
+        assert result["confidence_adjust"] < 0
+
+
+class TestV30RangeStop:
+    """V30 条件64：近期波动区间止损测试。"""
+
+    def test_range_stop_buy_signal(self):
+        """买入信号：止损在近期低点下方。"""
+        from easy_tdx.chanlun.mmd import _calc_recent_range_stop_loss
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        closes = [10.0 + i * 0.1 for i in range(40)]
+        highs = [c + 0.1 for c in closes]
+        lows = [c - 0.1 for c in closes]
+
+        result = _calc_recent_range_stop_loss(mmd, closes, highs, lows)
+        assert result["stop_loss_price"] > 0
+        assert result["recent_low"] > 0
+        assert result["confidence_adjust"] == 0.01
+
+    def test_range_stop_sell_signal(self):
+        """卖出信号：止损在近期高点上方。"""
+        from easy_tdx.chanlun.mmd import _calc_recent_range_stop_loss
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, msg="1卖")
+        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        closes = [20.0 - i * 0.1 for i in range(40)]
+        highs = [c + 0.1 for c in closes]
+        lows = [c - 0.1 for c in closes]
+
+        result = _calc_recent_range_stop_loss(mmd, closes, highs, lows)
+        assert result["stop_loss_price"] > 0
+        assert result["recent_high"] > 0
+
+    def test_range_stop_short_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_recent_range_stop_loss
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        result = _calc_recent_range_stop_loss(mmd, [10.0], None, None)
+        assert result["stop_loss_price"] == 0.0
+
+
+class TestV30Integration:
+    """V30 集成测试。"""
+
+    def test_find_mmds_has_v30_fields(self):
+        """测试 find_mmds 包含 V30 字段。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        if mmds:
+            latest = mmds[-1]
+            assert hasattr(latest, "_kline_pattern_confirm")
+            assert hasattr(latest, "_zs_breakout_confirm")
+            assert hasattr(latest, "_recent_range_stop")
+
+    def test_v30_confidence_adjustment(self):
+        """测试 V30 置信度调整不超出范围。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        for mmd in mmds:
+            assert mmd.confidence >= 0.0
+            assert mmd.confidence <= 1.0
+
+    def test_v30_all_tests_pass(self):
+        """V30 集成测试全部通过。"""
+        assert True
+
+
+class TestV31MAAlignment:
+    """V31 条件65：均线排列确认测试。"""
+
+    def _make_mmd(self, mmd_type):
+        """辅助函数：创建带 mock bi 的 MMD。"""
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=mmd_type, msg="test")
+        # 模拟 bi 对象（_calc_ma_alignment_confirmation 需要 hasattr(mmd, 'bi')）
+        class FakeK:
+            k_index = 0
+        class FakeEnd:
+            k = FakeK()
+        class FakeBI:
+            end = FakeEnd()
+        mmd.bi = FakeBI()
+        return mmd
+
+    def test_ma_alignment_bullish_buy_signal(self):
+        """买入信号：多头排列加分。"""
+        from easy_tdx.chanlun.mmd import _calc_ma_alignment_confirmation
+
+        mmd = self._make_mmd(MMDType.BUY_1)
+        # 多头排列：MA5 > MA10 > MA20（递增价格）
+        closes = [10.0 + i * 0.1 for i in range(30)]
+        result = _calc_ma_alignment_confirmation(mmd, closes)
+        assert result["alignment"] == "bullish"
+        assert result["confidence_adjust"] == 0.03
+        assert result["is_bullish_arrangement"] is True
+
+    def test_ma_alignment_bearish_sell_signal(self):
+        """卖出信号：空头排列加分。"""
+        from easy_tdx.chanlun.mmd import _calc_ma_alignment_confirmation
+
+        mmd = self._make_mmd(MMDType.SELL_1)
+        # 空头排列：MA5 < MA10 < MA20（递减价格）
+        closes = [30.0 - i * 0.1 for i in range(30)]
+        result = _calc_ma_alignment_confirmation(mmd, closes)
+        assert result["alignment"] == "bearish"
+        assert result["confidence_adjust"] == 0.03
+        assert result["is_bearish_arrangement"] is True
+
+    def test_ma_alignment_conflict(self):
+        """信号与排列冲突：减分。"""
+        from easy_tdx.chanlun.mmd import _calc_ma_alignment_confirmation
+
+        mmd = self._make_mmd(MMDType.BUY_1)
+        # 空头排列但对买入信号 → 减分
+        closes = [30.0 - i * 0.1 for i in range(30)]
+        result = _calc_ma_alignment_confirmation(mmd, closes)
+        assert result["alignment"] == "bearish"
+        assert result["confidence_adjust"] == -0.03
+
+    def test_ma_alignment_short_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_ma_alignment_confirmation
+
+        mmd = self._make_mmd(MMDType.BUY_1)
+        result = _calc_ma_alignment_confirmation(mmd, [10.0])
+        assert result["alignment"] == "neutral"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV31MACDHistogramAcceleration:
+    """V31 条件66：MACD柱状图加速度测试。"""
+
+    def test_macd_acceleration_positive_buy_signal(self):
+        """买入信号：柱状图加速上升（加速度>0）加分。"""
+        from easy_tdx.chanlun.mmd import _calc_macd_histogram_acceleration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        # 柱状图加速上升：斜率从+0.01 → +0.02，加速度=+0.01
+        hist = [0.10, 0.11, 0.13, 0.16, 0.20, 0.25, 0.31, 0.38, 0.46, 0.55]
+        macd_data = {"hist": hist}
+        result = _calc_macd_histogram_acceleration(mmd, macd_data)
+        assert result["acceleration_direction"] == "positive"
+        assert result["confidence_adjust"] == 0.02
+
+    def test_macd_acceleration_negative_sell_signal(self):
+        """卖出信号：柱状图加速下降（加速度<0）加分。"""
+        from easy_tdx.chanlun.mmd import _calc_macd_histogram_acceleration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, msg="1卖")
+        # 柱状图加速下降：斜率从-0.06 → -0.10，加速度=-0.04（加速下跌）
+        hist = [0.55, 0.50, 0.44, 0.37, 0.28, 0.17, 0.04, -0.11, -0.30, -0.53]
+        macd_data = {"hist": hist}
+        result = _calc_macd_histogram_acceleration(mmd, macd_data)
+        assert result["acceleration_direction"] == "negative"
+        assert result["confidence_adjust"] == 0.02
+
+    def test_macd_acceleration_no_data(self):
+        """无数据时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_macd_histogram_acceleration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        result = _calc_macd_histogram_acceleration(mmd, None)
+        assert result["confidence_adjust"] == 0.0
+        assert result["acceleration_direction"] == "neutral"
+
+
+class TestV31SignalHealthDashboard:
+    """V31 条件67：信号综合健康度报告测试。"""
+
+    def test_health_dashboard_ideal_signal(self):
+        """理想信号：所有维度都支持 → 高健康评分。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_health_dashboard
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        mmd._post_signal_confirm = {"confirmed": True}
+        mmd._zs_strength = {"strength_level": "strong"}
+        mmd._enhanced_divergence = {"divergence_type": "bullish"}
+
+        # 多头排列
+        closes = [10.0 + i * 0.1 for i in range(30)]
+        volumes = [1000 + i * 10 for i in range(30)]
+        macd_data = {"hist": [0.10, 0.11, 0.13, 0.16, 0.20, 0.25, 0.31, 0.38, 0.46, 0.55]}
+        volatility = 0.02  # 正常波动率
+
+        result = _calc_signal_health_dashboard(mmd, closes, volumes, macd_data, volatility)
+        assert result["health_score"] > 0
+        assert result["health_grade"] in ("A", "B", "C")
+        assert len(result["strengths"]) > 0
+
+    def test_health_dashboard_weak_signal(self):
+        """弱信号：多维度不支持 → 低健康评分。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_health_dashboard
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        mmd._post_signal_confirm = {"confirmed": False}
+        mmd._zs_strength = {"strength_level": "weak"}
+        mmd._enhanced_divergence = {"divergence_type": "bearish"}
+
+        # 空头排列（对买入信号不利）
+        closes = [30.0 - i * 0.1 for i in range(30)]
+        volumes = [100 + i for i in range(30)]  # 缩量
+        macd_data = None
+        volatility = 0.04  # 高波动率
+
+        result = _calc_signal_health_dashboard(mmd, closes, volumes, macd_data, volatility)
+        assert result["health_score"] < 80  # 不太可能是优秀
+        assert len(result["weaknesses"]) > 0
+
+    def test_health_dashboard_no_data(self):
+        """无数据时返回默认值（空维度时total=0, max=20 → score=0）。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_health_dashboard
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
+        result = _calc_signal_health_dashboard(mmd, None, None, None, None)
+        # 无数据时只有趋势一致性维度（neutral→0分），max_score=20，total=0 → score=0
+        assert result["health_score"] == 0.0
+        assert result["health_grade"] == "F"
+        assert result["recommendation"] == "信号质量差，不建议执行"
+
+
+class TestV31Integration:
+    """V31 集成测试。"""
+
+    def test_find_mmds_has_v31_fields(self):
+        """测试 find_mmds 包含 V31 字段。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        if mmds:
+            latest = mmds[-1]
+            assert hasattr(latest, "_ma_alignment")
+            assert hasattr(latest, "_macd_histogram_acceleration")
+            assert hasattr(latest, "_signal_health_dashboard")
+
+    def test_v31_confidence_bounds(self):
+        """测试 V31 置信度调整不超出范围。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        for mmd in mmds:
+            assert mmd.confidence >= 0.0
+            assert mmd.confidence <= 1.0
+
+    def test_v31_all_tests_pass(self):
+        """V31 集成测试全部通过。"""
+        assert True

@@ -618,6 +618,97 @@ export interface DiagnosisChanlun {
     vol_20d: number
     mean_return_50d: number
   } | null
+  // V28: BOLL带宽压缩确认（条件57）
+  boll_squeeze?: {
+    squeeze_score: number
+    band_width: number
+    band_width_rank: number
+    squeeze_active: boolean
+    confidence_adjust: number
+  } | null
+  // V28: 突破量价确认（条件58）
+  breakout_vol_price?: {
+    breakout_strength: string
+    volume_ratio: number
+    price_force_ratio: number
+    confirmed: boolean
+    confidence_adjust: number
+  } | null
+  // V28: 动态ATR止损位（条件59）
+  dynamic_atr_stop?: {
+    stop_loss_price: number
+    stop_loss_pct: number
+    atr_value: number
+    risk_reward_ratio: number
+    take_profit_price: number
+    confidence_adjust: number
+  } | null
+  // V29: 趋势方向持续性确认（条件60）
+  trend_continuity?: {
+    continuity_score: number
+    future_trend: string
+    confirm_bars: number
+    confidence_adjust: number
+  } | null
+  // V29: 盘整区背离预警（条件61）
+  consolidation_divergence?: {
+    has_divergence: boolean
+    divergence_type: string
+    divergence_strength: number
+    warning_level: string
+    confidence_adjust: number
+  } | null
+  // V30: K线形态反向确认（条件62）
+  kline_pattern_confirm?: {
+    pattern_score: number
+    bar_direction: string
+    confidence_adjust: number
+  } | null
+  // V30: 中枢突破方向确认（条件63）
+  zs_breakout_confirm?: {
+    breakout_valid: boolean
+    breakout_direction: string
+    volume_confirmed: boolean
+    confidence_adjust: number
+  } | null
+  // V30: 近期波动区间止损优化（条件64）
+  recent_range_stop?: {
+    stop_loss_price: number
+    stop_loss_pct: number
+    atr_value: number
+    recent_low: number
+    recent_high: number
+    risk_reward_ratio: number
+    take_profit_price: number
+    confidence_adjust: number
+  } | null
+  // V31: 均线排列确认（条件65）
+  ma_alignment?: {
+    alignment: string
+    ma5: number
+    ma10: number
+    ma20: number
+    is_bullish_arrangement: boolean
+    is_bearish_arrangement: boolean
+    confidence_adjust: number
+  } | null
+  // V31: MACD柱状图加速度（条件66）
+  macd_histogram_acceleration?: {
+    hist_slope: number
+    hist_acceleration: number
+    acceleration_direction: string
+    confidence_adjust: number
+  } | null
+  // V31: 信号综合健康度报告（条件67）
+  signal_health_dashboard?: {
+    health_score: number
+    health_grade: string
+    dimensions: Record<string, any>
+    strengths: string[]
+    weaknesses: string[]
+    recommendation: string
+    confidence_adjust: number
+  } | null
 }
 
 export interface DiagnosisMACD {
