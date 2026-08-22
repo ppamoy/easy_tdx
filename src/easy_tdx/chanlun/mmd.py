@@ -976,6 +976,88 @@ def find_mmds(
             except Exception:
                 pass
 
+    # V34: 条件74-76（需要先收集各指标结果，再计算共振评分）
+    # 先批量计算各指标结果供共振评分使用
+    obv_results: list[dict[str, Any]] = []
+    macd_hist_results: list[dict[str, Any]] = []
+    rsi_results: list[dict[str, Any]] = []
+    vp_div_results: list[dict[str, Any]] = []
+    ma_align_results: list[dict[str, Any]] = []
+
+    if closes is not None and volumes is not None:
+        for mmd in mmds:
+            if mmd.bi is not None:
+                try:
+                    obv_r = _calc_obv_trend_confirmation(mmd, closes, volumes)
+                    obv_results.append(obv_r)
+                except Exception:
+                    obv_results.append({})
+            else:
+                obv_results.append({})
+            try:
+                mh_r = _calc_macd_histogram_area(mmd, macd_data) if macd_data is not None else {}
+                macd_hist_results.append(mh_r)
+            except Exception:
+                macd_hist_results.append({})
+            try:
+                rs_r = _calc_rsi_momentum_confirmation(mmd, closes) if mmd.bi is not None else {}
+                rsi_results.append(rs_r)
+            except Exception:
+                rsi_results.append({})
+            try:
+                vp_r = _calc_volume_price_divergence_enhanced(mmd, closes, volumes) if mmd.bi is not None else {}
+                vp_div_results.append(vp_r)
+            except Exception:
+                vp_div_results.append({})
+            try:
+                ma_r = _calc_ma_alignment_confirmation(mmd, closes) if mmd.bi is not None else {}
+                ma_align_results.append(ma_r)
+            except Exception:
+                ma_align_results.append({})
+
+    # V34: 条件74 - 趋势动能延续确认
+    for i, mmd in enumerate(mmds):
+        if closes is not None and mmd.bi is not None:
+            try:
+                tm_result = _calc_trend_momentum_continuation(mmd, closes)
+                mmd._trend_momentum_continuation = tm_result
+                if tm_result.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + tm_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+    # V34: 条件75 - 多指标共振强度评分
+    for i, mmd in enumerate(mmds):
+        try:
+            res_result = _calc_multi_indicator_resonance(
+                mmd,
+                obv_result=obv_results[i] if i < len(obv_results) else None,
+                macd_hist_result=macd_hist_results[i] if i < len(macd_hist_results) else None,
+                rsi_result=rsi_results[i] if i < len(rsi_results) else None,
+                vp_div_result=vp_div_results[i] if i < len(vp_div_results) else None,
+                ma_align_result=ma_align_results[i] if i < len(ma_align_results) else None,
+            )
+            mmd._multi_indicator_resonance = res_result
+            if res_result.get("confidence_adjust", 0) != 0:
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + res_result["confidence_adjust"]))
+        except Exception:
+            pass
+
+    # V34: 条件76 - 波动率环境自适应阈值（全局一次性计算）
+    if closes is not None:
+        try:
+            vol_result = _calc_volatility_adaptive_threshold(closes, highs, lows)
+            # 将所有MMD的置信度加上波动率调整
+            for mmd in mmds:
+                if vol_result.get("threshold_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_result["threshold_adjust"]))
+            # 存储波动率结果供诊断API使用
+            if not hasattr(find_mmds, '_last_vol_result'):
+                find_mmds._last_vol_result = {}
+            find_mmds._last_vol_result = vol_result
+        except Exception:
+            pass
+
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
 
@@ -8304,6 +8386,279 @@ def _calc_rsi_momentum_confirmation(
                 result["divergence_type"] = "bullish"
                 if is_sell:
                     result["confidence_adjust"] -= 0.03  # 底背离减分
+
+        return result
+    except Exception:
+        return result
+
+
+# ── V34 新增：条件74-76 ────────────────────────────────────────────────────────
+
+def _calc_trend_momentum_continuation(
+    mmd: MMD,
+    closes: list[float],
+    lookback: int = 20,
+) -> dict[str, Any]:
+    """趋势动能延续确认（V34 条件74）。
+
+    检测买卖点产生后趋势动能是否仍在延续。
+    通过比较多个时间窗口的价格变化率，判断趋势是在加速还是衰减。
+
+    核心逻辑：
+    - 买入信号 + 趋势加速（近期涨幅 > 前期涨幅）→ 加分 +2%
+    - 买入信号 + 趋势平稳 → 加分 +1%
+    - 买入信号 + 趋势衰减（近期涨幅 < 前期涨幅）→ 降权 -2%
+    - 卖出信号同理反向逻辑
+    """
+    result = {
+        "price_change_5d": 0.0,
+        "price_change_10d": 0.0,
+        "price_change_20d": 0.0,
+        "momentum_direction": "neutral",
+        "continuation": False,
+        "acceleration": "none",
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if len(closes) < lookback * 2 or not mmd.bi:
+            return result
+
+        n = len(closes)
+        # 计算不同时间窗口的价格变化率
+        change_5d = (closes[-1] - closes[-6]) / closes[-6] if closes[-6] > 0 else 0.0
+        change_10d = (closes[-1] - closes[-11]) / closes[-11] if len(closes) >= 11 and closes[-11] > 0 else 0.0
+        change_20d = (closes[-1] - closes[-21]) / closes[-21] if len(closes) >= 21 and closes[-21] > 0 else 0.0
+
+        result["price_change_5d"] = round(change_5d * 100, 2)
+        result["price_change_10d"] = round(change_10d * 100, 2)
+        result["price_change_20d"] = round(change_20d * 100, 2)
+
+        # 判断趋势方向
+        if change_20d > 0.02:
+            trend_dir = "bullish"
+        elif change_20d < -0.02:
+            trend_dir = "bearish"
+        else:
+            trend_dir = "neutral"
+        result["momentum_direction"] = trend_dir
+
+        # 判断加速度
+        if trend_dir == "bullish":
+            if change_5d > change_10d > change_20d:
+                accel = "accelerating"
+            elif change_5d < change_10d < change_20d:
+                accel = "decelerating"
+            else:
+                accel = "stable"
+        elif trend_dir == "bearish":
+            if change_5d < change_10d < change_20d:
+                accel = "accelerating"
+            elif change_5d > change_10d > change_20d:
+                accel = "decelerating"
+            else:
+                accel = "stable"
+        else:
+            accel = "stable"
+        result["acceleration"] = accel
+
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+
+        if is_buy:
+            if trend_dir == "bullish" and accel == "accelerating":
+                result["continuation"] = True
+                result["confidence_adjust"] = 0.02
+            elif trend_dir == "bullish" and accel == "stable":
+                result["continuation"] = True
+                result["confidence_adjust"] = 0.01
+            elif trend_dir == "bullish" and accel == "decelerating":
+                result["confidence_adjust"] = -0.02
+            elif trend_dir == "neutral":
+                result["confidence_adjust"] = 0.0
+        elif is_sell:
+            if trend_dir == "bearish" and accel == "accelerating":
+                result["continuation"] = True
+                result["confidence_adjust"] = 0.02
+            elif trend_dir == "bearish" and accel == "stable":
+                result["continuation"] = True
+                result["confidence_adjust"] = 0.01
+            elif trend_dir == "bearish" and accel == "decelerating":
+                result["confidence_adjust"] = -0.02
+            elif trend_dir == "neutral":
+                result["confidence_adjust"] = 0.0
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_indicator_resonance(
+    mmd: MMD,
+    obv_result: dict[str, Any] | None = None,
+    macd_hist_result: dict[str, Any] | None = None,
+    rsi_result: dict[str, Any] | None = None,
+    vp_div_result: dict[str, Any] | None = None,
+    ma_align_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """多指标共振强度评分（V34 条件75）。
+
+    综合多个技术指标的确认结果，计算共振强度评分。
+    共振越强，信号越可靠。
+    """
+    result = {
+        "resonance_score": 0.0,
+        "resonance_level": "none",
+        "bullish_votes": 0,
+        "bearish_votes": 0,
+        "neutral_votes": 0,
+        "total_indicators": 0,
+        "vote_details": {},
+        "confidence_adjust": 0.0,
+    }
+    try:
+        votes: dict[str, str] = {}
+
+        # OBV 投票
+        if obv_result and obv_result.get("confirmation"):
+            is_buy = "buy" in mmd.mmd_type.value
+            votes["obv"] = "bullish" if is_buy else "bearish"
+        elif obv_result and obv_result.get("obv_divergence", "none") != "none":
+            div_type = obv_result.get("obv_divergence", "none")
+            votes["obv"] = "bearish" if div_type == "bearish" else "bullish"
+        elif obv_result:
+            votes["obv"] = "neutral"
+
+        # MACD 动能锥投票
+        if macd_hist_result:
+            is_buy = "buy" in mmd.mmd_type.value
+            md = macd_hist_result.get("momentum_direction", "neutral")
+            acc = macd_hist_result.get("acceleration", "none")
+            if md == "bullish" and acc in ("accelerating", "stable"):
+                votes["macd_hist"] = "bullish" if is_buy else "bearish"
+            elif md == "bearish" and acc in ("accelerating", "stable"):
+                votes["macd_hist"] = "bearish" if is_buy else "bullish"
+            else:
+                votes["macd_hist"] = "neutral"
+
+        # RSI 动量投票
+        if rsi_result:
+            is_buy = "buy" in mmd.mmd_type.value
+            if rsi_result.get("momentum_support"):
+                votes["rsi"] = "bullish" if is_buy else "bearish"
+            elif rsi_result.get("divergence_detected"):
+                dt = rsi_result.get("divergence_type", "none")
+                votes["rsi"] = "bearish" if dt == "bearish" else "bullish"
+            else:
+                votes["rsi"] = "neutral"
+
+        # 量价背离投票
+        if vp_div_result and vp_div_result.get("divergence_detected"):
+            is_buy = "buy" in mmd.mmd_type.value
+            dt = vp_div_result.get("divergence_type", "none")
+            votes["vol_price"] = "bullish" if dt == "bullish" else "bearish" if is_buy else "bearish" if dt == "bearish" else "bullish"
+        elif vp_div_result:
+            votes["vol_price"] = "neutral"
+
+        # 均线排列投票
+        if ma_align_result and ma_align_result.get("alignment_confirmed"):
+            is_buy = "buy" in mmd.mmd_type.value
+            votes["ma_alignment"] = "bullish" if is_buy else "bearish"
+        elif ma_align_result:
+            votes["ma_alignment"] = "neutral"
+
+        bullish_count = sum(1 for v in votes.values() if v == "bullish")
+        bearish_count = sum(1 for v in votes.values() if v == "bearish")
+        neutral_count = sum(1 for v in votes.values() if v == "neutral")
+
+        result["bullish_votes"] = bullish_count
+        result["bearish_votes"] = bearish_count
+        result["neutral_votes"] = neutral_count
+        result["total_indicators"] = len(votes)
+        result["vote_details"] = votes
+
+        if len(votes) == 0:
+            result["resonance_score"] = 0.0
+            result["resonance_level"] = "none"
+            return result
+
+        support_votes = max(bullish_count, bearish_count)
+        resonance_score = support_votes / len(votes)
+        result["resonance_score"] = round(resonance_score * 100, 1)
+
+        if resonance_score >= 0.8:
+            resonance_level = "strong"
+        elif resonance_score >= 0.6:
+            resonance_level = "moderate"
+        elif resonance_score >= 0.4:
+            resonance_level = "weak"
+        else:
+            resonance_level = "none"
+        result["resonance_level"] = resonance_level
+
+        is_buy = "buy" in mmd.mmd_type.value
+        dominant = "bullish" if bullish_count > bearish_count else ("bearish" if bearish_count > bullish_count else "neutral")
+
+        if resonance_level == "strong" and dominant != "neutral":
+            result["confidence_adjust"] = 0.03
+        elif resonance_level == "moderate" and dominant != "neutral":
+            result["confidence_adjust"] = 0.02
+        elif resonance_level == "weak":
+            result["confidence_adjust"] = -0.01
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volatility_adaptive_threshold(
+    closes: list[float],
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
+    lookback: int = 60,
+) -> dict[str, Any]:
+    """波动率环境自适应阈值（V34 条件76）。
+
+    根据当前波动率环境动态调整信号阈值。
+    高波动环境需要更强的信号确认，低波动环境可以放宽阈值。
+    """
+    result = {
+        "atr_value": 0.0,
+        "volatility_pct": 0.0,
+        "volatility_regime": "normal",
+        "threshold_adjust": 0.0,
+        "stop_loss_adjust_pct": 0.0,
+    }
+    try:
+        if len(closes) < lookback:
+            return result
+
+        atr = _calc_atr(closes, highs, lows, len(closes) - 1, period=14)
+        latest_close = closes[-1]
+        result["atr_value"] = round(atr, 4)
+
+        recent_highs = highs[-lookback:] if highs is not None else [max(closes[-lookback:])] * lookback
+        recent_lows = lows[-lookback:] if lows is not None else [min(closes[-lookback:])] * lookback
+        price_range = max(recent_highs) - min(recent_lows)
+        avg_price = sum(closes[-lookback:]) / lookback
+        volatility_pct = (price_range / avg_price * 100) if avg_price > 0 else 0.0
+        result["volatility_pct"] = round(volatility_pct, 2)
+
+        if volatility_pct < 1.5:
+            regime = "low"
+            threshold_adjust = -0.01
+            stop_adjust = -0.5
+        elif volatility_pct < 3.0:
+            regime = "normal"
+            threshold_adjust = 0.0
+            stop_adjust = 0.0
+        else:
+            regime = "high"
+            threshold_adjust = 0.02
+            stop_adjust = 1.0
+
+        result["volatility_regime"] = regime
+        result["threshold_adjust"] = threshold_adjust
+        result["stop_loss_adjust_pct"] = stop_adjust
 
         return result
     except Exception:

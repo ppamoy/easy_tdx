@@ -787,6 +787,12 @@ async def diagnose_stock(
             "macd_hist_area": getattr(latest_mmd, "_macd_hist_area", None) if latest_mmd else None,
             # V33: RSI动量确认（条件73）
             "rsi_momentum_confirm": getattr(latest_mmd, "_rsi_momentum_confirm", None) if latest_mmd else None,
+            # V34: 趋势动能延续确认（条件74）
+            "trend_momentum_continuation": getattr(latest_mmd, "_trend_momentum_continuation", None) if latest_mmd else None,
+            # V34: 多指标共振强度评分（条件75）
+            "multi_indicator_resonance": getattr(latest_mmd, "_multi_indicator_resonance", None) if latest_mmd else None,
+            # V34: 波动率环境自适应阈值（条件76）
+            "volatility_regime": getattr(latest_mmd, '_last_vol_result', None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

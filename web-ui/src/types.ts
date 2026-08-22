@@ -762,6 +762,35 @@ export interface DiagnosisChanlun {
     divergence_type: string
     confidence_adjust: number
   } | null
+  // V34: 趋势动能延续确认（条件74）
+  trend_momentum_continuation?: {
+    price_change_5d: number
+    price_change_10d: number
+    price_change_20d: number
+    momentum_direction: string
+    continuation: boolean
+    acceleration: string
+    confidence_adjust: number
+  } | null
+  // V34: 多指标共振强度评分（条件75）
+  multi_indicator_resonance?: {
+    resonance_score: number
+    resonance_level: string
+    bullish_votes: number
+    bearish_votes: number
+    neutral_votes: number
+    total_indicators: number
+    vote_details: Record<string, string>
+    confidence_adjust: number
+  } | null
+  // V34: 波动率环境自适应阈值（条件76）
+  volatility_regime?: {
+    atr_value: number
+    volatility_pct: number
+    volatility_regime: string
+    threshold_adjust: number
+    stop_loss_adjust_pct: number
+  } | null
 }
 
 export interface DiagnosisMACD {

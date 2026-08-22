@@ -269,6 +269,11 @@ class MMD:
     _macd_hist_area: dict[str, Any] | None = None  # MACD动能锥面积确认（条件72）
     _rsi_momentum_confirm: dict[str, Any] | None = None  # RSI动量确认（条件73）
 
+    # V34 enhancement fields
+    _trend_momentum_continuation: dict[str, Any] | None = None  # 趋势动能延续确认（条件74）
+    _multi_indicator_resonance: dict[str, Any] | None = None  # 多指标共振强度评分（条件75）
+    _volatility_regime: dict[str, Any] | None = None  # 波动率环境自适应阈值（条件76）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
