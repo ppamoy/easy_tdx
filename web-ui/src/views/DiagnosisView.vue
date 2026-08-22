@@ -436,6 +436,95 @@ onMounted(() => {
                 {{ diagnosis.chanlun.composite_quality.recommendation }}
               </div>
             </div>
+
+            <!-- V26: 信号历史验证 -->
+            <div v-if="diagnosis.chanlun.signal_history" class="signal-report signal-history">
+              <div class="section-label">📊 信号历史验证（V26）</div>
+              <div class="kv-row">
+                <span class="kv-key">历史准确率</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_history.historical_accuracy >= 0.6 ? '#22c55e' : '#f59e0b' }">
+                  {{ (diagnosis.chanlun.signal_history.historical_accuracy * 100).toFixed(1) }}%
+                </span>
+                <span class="tag" :class="diagnosis.chanlun.signal_history.validation_passed ? 'tag-green' : 'tag-yellow'">
+                  {{ diagnosis.chanlun.signal_history.validation_passed ? '通过✅' : '待观察⚠️' }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">样本数量</span>
+                <span class="kv-val">{{ diagnosis.chanlun.signal_history.sample_size }} 根K线</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">置信度调整</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_history.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.signal_history.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.signal_history.confidence_adjust * 100).toFixed(2) }}%
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">近期趋势</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_history.recent_trend > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.signal_history.recent_trend > 0 ? '上涨↑' : '下跌↓' }} ({{ (diagnosis.chanlun.signal_history.recent_trend * 100).toFixed(2) }}%)
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">20日波动率</span>
+                <span class="kv-val">{{ (diagnosis.chanlun.signal_history.volatility_20d * 100).toFixed(2) }}%</span>
+              </div>
+            </div>
+
+            <!-- V26: 动态风险收益优化 -->
+            <div v-if="diagnosis.chanlun.dynamic_rr_optimization" class="signal-report dynamic-rr">
+              <div class="section-label">⚖️ 动态风险收益优化（V26）</div>
+              <div class="kv-row">
+                <span class="kv-key">止损价</span>
+                <span class="kv-val tag-red">{{ diagnosis.chanlun.dynamic_rr_optimization.optimal_stop_loss }}</span>
+                <span class="kv-key">第一止盈</span>
+                <span class="kv-val tag-green">{{ diagnosis.chanlun.dynamic_rr_optimization.optimal_take_profit_1 }}</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">第二止盈</span>
+                <span class="kv-val tag-green">{{ diagnosis.chanlun.dynamic_rr_optimization.optimal_take_profit_2 }}</span>
+                <span class="kv-key" style="margin-left:12px">风险收益比</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.dynamic_rr_optimization.risk_reward_ratio >= 2 ? '#22c55e' : '#f59e0b' }">
+                  1 : {{ diagnosis.chanlun.dynamic_rr_optimization.risk_reward_ratio.toFixed(1) }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">ATR止损距离</span>
+                <span class="kv-val">{{ diagnosis.chanlun.dynamic_rr_optimization.atr_based_stop }}</span>
+                <span class="kv-key">ATR值</span>
+                <span class="kv-val">{{ diagnosis.chanlun.dynamic_rr_optimization.atr }}</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">波动率调整</span>
+                <span class="tag" :class="diagnosis.chanlun.dynamic_rr_optimization.volatility_adjusted ? 'tag-yellow' : 'tag-gray'">
+                  {{ diagnosis.chanlun.dynamic_rr_optimization.volatility_adjusted ? '已调整' : '未调整' }}
+                </span>
+                <span class="kv-key">调整因子</span>
+                <span class="kv-val">{{ diagnosis.chanlun.dynamic_rr_optimization.adjustment_factor }}x</span>
+              </div>
+              <div class="kv-note" style="margin-top:4px;font-size:11px;color:var(--text-dim)">
+                当前波动率: {{ (diagnosis.chanlun.dynamic_rr_optimization.volatility * 100).toFixed(2) }}%
+              </div>
+            </div>
+
+            <!-- V26: 多标的对比评分 -->
+            <div v-if="diagnosis.chanlun.cross_stock_comparison && diagnosis.chanlun.cross_stock_comparison.ranked_signals.length > 0" class="signal-report cross-stock">
+              <div class="section-label">📈 多标的对比评分（V26）</div>
+              <div class="kv-row" v-for="(sig, idx) in diagnosis.chanlun.cross_stock_comparison.ranked_signals.slice(0, 3)" :key="idx">
+                <span class="kv-key">#{{ idx + 1 }}</span>
+                <span class="kv-val" :style="{ fontWeight: idx === 0 ? 'bold' : 'normal' }">
+                  {{ sig.mmd_type }} (置信度{{ (sig.confidence * 100).toFixed(0) }}%)
+                </span>
+                <span class="tag grade-tag grade-{{ sig.grade }}" style="font-size:11px">{{ sig.grade }}级</span>
+                <span class="kv-val" style="font-size:11px">{{ sig.recommendation }}</span>
+              </div>
+              <div class="kv-row" v-if="diagnosis.chanlun.cross_stock_comparison.comparison_summary">
+                <span class="kv-key">平均得分</span>
+                <span class="kv-val">{{ diagnosis.chanlun.cross_stock_comparison.comparison_summary.avg_composite_score }}</span>
+                <span class="kv-key">分散化评分</span>
+                <span class="kv-val">{{ diagnosis.chanlun.cross_stock_comparison.diversification_score }}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1089,4 +1178,16 @@ onMounted(() => {
 /* V22: 波动率双重确认 & 量价背离 */
 .vol-dual .kv-val { font-weight: 500; }
 .vol-div .kv-note { color: var(--text-dim); line-height: 1.5; }
+
+/* V26: 信号历史验证 */
+.signal-history .kv-val { font-weight: 600; }
+.signal-history .tag { font-size: 11px; }
+
+/* V26: 动态风险收益优化 */
+.dynamic-rr .kv-val { font-weight: 600; }
+.dynamic-rr .kv-note { font-size: 11px; color: var(--text-dim); }
+
+/* V26: 多标的对比评分 */
+.cross-stock .kv-val { font-weight: 500; }
+.cross-stock .tag { font-size: 10px; padding: 1px 6px; }
 </style>

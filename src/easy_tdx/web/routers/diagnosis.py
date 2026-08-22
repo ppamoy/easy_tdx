@@ -741,6 +741,12 @@ async def diagnose_stock(
             "vol_regime_filter": getattr(latest_mmd, "_vol_regime_filter", None) if latest_mmd else None,
             # V25: 综合信号质量评分（条件50）
             "composite_quality": getattr(latest_mmd, "_composite_quality", None) if latest_mmd else None,
+            # V26: 信号历史验证（条件51）
+            "signal_history": getattr(latest_mmd, "_signal_history", None) if latest_mmd else None,
+            # V26: 动态风险收益优化（条件52）
+            "dynamic_rr_optimization": getattr(latest_mmd, "_dynamic_rr_optimization", None) if latest_mmd else None,
+            # V26: 多标的对比评分（条件53）
+            "cross_stock_comparison": getattr(latest_mmd, "_cross_stock_comparison", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

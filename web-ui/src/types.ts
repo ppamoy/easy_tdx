@@ -537,6 +537,50 @@ export interface DiagnosisChanlun {
     breakdown: Record<string, number>
     recommendation: string
   } | null
+  // V26: 信号历史验证（条件51）
+  signal_history?: {
+    historical_accuracy: number
+    sample_size: number
+    confidence_adjust: number
+    validation_passed: boolean
+    recent_trend: number
+    volatility_20d: number
+  } | null
+  // V26: 动态风险收益优化（条件52）
+  dynamic_rr_optimization?: {
+    optimal_stop_loss: number
+    optimal_take_profit_1: number
+    optimal_take_profit_2: number
+    risk_reward_ratio: number
+    atr_based_stop: number
+    volatility_adjusted: boolean
+    adjustment_factor: number
+    atr: number
+    volatility: number
+  } | null
+  // V26: 多标的对比评分（条件53）
+  cross_stock_comparison?: {
+    ranked_signals: Array<{
+      index: number
+      mmd_type: string
+      confidence: number
+      composite_score: number
+      grade: string
+      recommendation: string
+      sort_score: number
+    }>
+    best_signal: any | null
+    comparison_summary: {
+      total_signals: number
+      avg_composite_score: number
+      avg_confidence: number
+      buy_signals: number
+      sell_signals: number
+      best_grade: string
+      recommendation: string
+    }
+    diversification_score: number
+  } | null
 }
 
 export interface DiagnosisMACD {

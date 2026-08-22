@@ -230,6 +230,11 @@ class MMD:
     _vol_regime_filter: dict[str, Any] | None = None  # 波动率自适应过滤（条件49）
     _composite_quality: dict[str, Any] | None = None  # 综合信号质量评分（条件50）
 
+    # V26 enhancement fields
+    _signal_history: dict[str, Any] | None = None  # 信号历史验证评分（条件51）
+    _dynamic_rr_optimization: dict[str, Any] | None = None  # 动态风险收益优化（条件52）
+    _cross_stock_comparison: dict[str, Any] | None = None  # 多标的对比评分（条件53）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

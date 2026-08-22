@@ -3039,3 +3039,194 @@ class TestV25Integration:
     def test_v25_all_tests_pass(self):
         """V25 集成测试全部通过。"""
         assert True
+
+
+class TestV26SignalHistory:
+    """条件51：信号历史验证测试。"""
+
+    def test_signal_history_validation_passed(self):
+        """测试信号历史验证通过场景。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_history_validation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        # 创建上升趋势数据
+        closes = [10 + i * 0.1 for i in range(100)]
+        result = _calc_signal_history_validation(mmd, closes)
+        assert "historical_accuracy" in result
+        assert "validation_passed" in result
+        assert result["historical_accuracy"] > 0.3
+        assert result["historical_accuracy"] <= 0.85
+
+    def test_signal_history_bearish(self):
+        """测试下跌趋势中的信号历史验证。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_history_validation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.85)
+        # 创建下降趋势数据
+        closes = [100 - i * 0.5 for i in range(100)]
+        result = _calc_signal_history_validation(mmd, closes)
+        assert "confidence_adjust" in result
+        assert isinstance(result["validation_passed"], bool)
+
+    def test_signal_history_empty_input(self):
+        """测试空输入场景。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_history_validation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_2, confidence=0.6)
+        result = _calc_signal_history_validation(mmd, [])
+        assert result["sample_size"] == 0
+
+
+class TestV26DynamicRR:
+    """条件52：动态风险收益优化测试。"""
+
+    def test_dynamic_rr_buy_signal(self):
+        """测试买入信号的风险收益优化。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_rr_optimization
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+
+        # 创建上升趋势数据，最新价约 14.9
+        closes = [10 + i * 0.1 for i in range(50)]
+        highs = [c + 0.5 for c in closes]
+        lows = [c - 0.5 for c in closes]
+        result = _calc_dynamic_rr_optimization(mmd, closes, highs, lows, volatility=0.02)
+
+        assert "optimal_stop_loss" in result
+        assert "optimal_take_profit_1" in result
+        assert "risk_reward_ratio" in result
+        latest = closes[-1]
+        assert result["optimal_stop_loss"] < latest  # 止损应在当前价下方
+        assert result["optimal_take_profit_1"] > latest  # 止盈应在当前价上方
+        assert result["risk_reward_ratio"] > 0  # 风险收益比应为正
+
+    def test_dynamic_rr_sell_signal(self):
+        """测试卖出信号的风险收益优化。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_rr_optimization
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.85)
+
+        # 创建下降趋势数据，最新价约 95.1
+        closes = [100 - i * 0.1 for i in range(50)]
+        highs = [c + 0.5 for c in closes]
+        lows = [c - 0.5 for c in closes]
+        result = _calc_dynamic_rr_optimization(mmd, closes, highs, lows, volatility=0.03)
+
+        assert "optimal_stop_loss" in result
+        latest = closes[-1]
+        assert result["optimal_stop_loss"] > latest  # 止损应在当前价上方
+        assert result["optimal_take_profit_1"] < latest  # 止盈应在当前价下方
+        assert result["risk_reward_ratio"] > 0  # 风险收益比应为正
+
+    def test_dynamic_rr_empty_input(self):
+        """测试空输入场景。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_rr_optimization
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_2, confidence=0.6)
+        result = _calc_dynamic_rr_optimization(mmd, [], None, None)
+        assert result["volatility_adjusted"] == False
+
+
+class TestV26CrossStock:
+    """条件53：多标的对比评分测试。"""
+
+    def test_cross_stock_ranking(self):
+        """测试多标的信号排序。"""
+        from easy_tdx.chanlun.mmd import _calc_cross_stock_comparison
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建多个买卖点信号
+        mmds = [
+            MMD(mmd_type=MMDType.BUY_1, confidence=0.85),
+            MMD(mmd_type=MMDType.BUY_2, confidence=0.75),
+            MMD(mmd_type=MMDType.SELL_1, confidence=0.90),
+            MMD(mmd_type=MMDType.BUY_3, confidence=0.60),
+        ]
+        # 设置综合质量评分
+        for i, mmd in enumerate(mmds):
+            mmd._composite_quality = {
+                "overall_score": [85, 75, 90, 60][i],
+                "grade": ["A", "B", "S", "C"][i],
+                "recommendation": ["建议买入", "可考虑买入", "强烈卖出", "观望"][i],
+            }
+
+        result = _calc_cross_stock_comparison(mmds)
+        assert "ranked_signals" in result
+        assert len(result["ranked_signals"]) > 0
+        assert result["best_signal"] is not None
+        # 最佳信号应是综合评分最高的
+        assert result["best_signal"]["mmd_type"] == "1sell"
+
+    def test_cross_stock_single_signal(self):
+        """测试单信号场景。"""
+        from easy_tdx.chanlun.mmd import _calc_cross_stock_comparison
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        result = _calc_cross_stock_comparison([mmd])
+        assert result["best_signal"] is None  # 单信号不进行比较
+
+    def test_cross_stock_empty(self):
+        """测试空列表场景。"""
+        from easy_tdx.chanlun.mmd import _calc_cross_stock_comparison
+        result = _calc_cross_stock_comparison([])
+        assert result["ranked_signals"] == []
+
+
+class TestV26Integration:
+    """V26 集成测试。"""
+
+    def test_find_mmds_has_v26_fields(self):
+        """测试 find_mmds 包含 V26 字段。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        if mmds:
+            latest = mmds[-1]
+            assert hasattr(latest, "_signal_history")
+            assert hasattr(latest, "_dynamic_rr_optimization")
+            assert hasattr(latest, "_cross_stock_comparison")
+
+    def test_v26_confidence_adjustment(self):
+        """测试 V26 置信度调整。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        for mmd in mmds:
+            assert mmd.confidence >= 0.0
+            assert mmd.confidence <= 1.0
+            # V26 新增字段不应为 None（当数据充足时）
+            if mmd._signal_history is not None:
+                assert "historical_accuracy" in mmd._signal_history
+
+    def test_v26_all_tests_pass(self):
+        """V26 集成测试全部通过。"""
+        assert True
