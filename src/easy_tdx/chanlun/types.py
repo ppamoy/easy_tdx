@@ -235,6 +235,11 @@ class MMD:
     _dynamic_rr_optimization: dict[str, Any] | None = None  # 动态风险收益优化（条件52）
     _cross_stock_comparison: dict[str, Any] | None = None  # 多标的对比评分（条件53）
 
+    # V27 enhancement fields
+    _multi_tf_confluence: dict[str, Any] | None = None  # 多级别区间套共振验证（条件54）
+    _structure_position: dict[str, Any] | None = None  # 买卖点结构位置评分（条件55）
+    _stock_profile: dict[str, Any] | None = None  # 个股信号特征学习（条件56）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

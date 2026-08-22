@@ -747,6 +747,12 @@ async def diagnose_stock(
             "dynamic_rr_optimization": getattr(latest_mmd, "_dynamic_rr_optimization", None) if latest_mmd else None,
             # V26: 多标的对比评分（条件53）
             "cross_stock_comparison": getattr(latest_mmd, "_cross_stock_comparison", None) if latest_mmd else None,
+            # V27: 多级别区间套共振验证（条件54）
+            "multi_tf_confluence": getattr(latest_mmd, "_multi_tf_confluence", None) if latest_mmd else None,
+            # V27: 买卖点结构位置评分（条件55）
+            "structure_position": getattr(latest_mmd, "_structure_position", None) if latest_mmd else None,
+            # V27: 个股信号特征学习（条件56）
+            "stock_profile": getattr(latest_mmd, "_stock_profile", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

@@ -581,6 +581,43 @@ export interface DiagnosisChanlun {
     }
     diversification_score: number
   } | null
+  // V27: 多级别区间套共振验证（条件54）
+  multi_tf_confluence?: {
+    overall_confluence_score: number
+    confidence_adjust: number
+    trend_alignment: string
+    short_trend: string
+    mid_trend: string
+    long_trend: string
+    per_signal: Record<string, {
+      resonance_score: number
+      trend_alignment: string
+      short_trend: string
+      mid_trend: string
+      long_trend: string
+    }>
+  } | null
+  // V27: 买卖点结构位置评分（条件55）
+  structure_position?: {
+    position_score: number
+    distance_to_support: number
+    distance_to_resistance: number
+    structural_quality: string
+    position_desc: string
+    latest_price: number
+    support_level: number
+    resistance_level: number
+  } | null
+  // V27: 个股信号特征学习（条件56）
+  stock_profile?: {
+    signal_type_success_rate: number
+    stock_volatility_regime: string
+    signal_frequency: string
+    confidence_adjust: number
+    personalized_rating: string
+    vol_20d: number
+    mean_return_50d: number
+  } | null
 }
 
 export interface DiagnosisMACD {

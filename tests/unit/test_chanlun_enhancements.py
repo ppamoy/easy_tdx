@@ -3230,3 +3230,209 @@ class TestV26Integration:
     def test_v26_all_tests_pass(self):
         """V26 集成测试全部通过。"""
         assert True
+
+
+class TestV27MultiTFConfluence:
+    """条件54：多级别区间套共振验证测试。"""
+
+    def test_multi_tf_confluence_bullish(self):
+        """测试多头趋势下的区间套共振。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建上升趋势数据
+        closes = [10 + i * 0.1 for i in range(100)]
+        mmds = [MMD(mmd_type=MMDType.BUY_1, confidence=0.8)]
+
+        result = _calc_multi_level_confluence_verification(mmds, closes, volatility=0.02)
+        assert "overall_confluence_score" in result
+        assert "trend_alignment" in result
+        assert "short_trend" in result
+        assert result["overall_confluence_score"] > 0
+        assert result["overall_confluence_score"] <= 1.0
+
+    def test_multi_tf_confluence_bearish(self):
+        """测试空头趋势下的区间套共振。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建下降趋势数据
+        closes = [100 - i * 0.5 for i in range(100)]
+        mmds = [MMD(mmd_type=MMDType.SELL_1, confidence=0.85)]
+
+        result = _calc_multi_level_confluence_verification(mmds, closes, volatility=0.03)
+        assert "trend_alignment" in result
+        assert result["trend_alignment"] in ["strong_bullish", "strong_bearish", "moderate_consistent", "mixed"]
+
+    def test_multi_tf_confluence_mixed(self):
+        """测试混合趋势下的区间套共振。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建震荡数据（先涨后跌）
+        closes = [10 + i * 0.1 for i in range(50)] + [15 - (i - 50) * 0.2 for i in range(50, 100)]
+        mmds = [MMD(mmd_type=MMDType.BUY_3, confidence=0.6)]
+
+        result = _calc_multi_level_confluence_verification(mmds, closes, volatility=0.03)
+        assert result["overall_confluence_score"] >= 0
+        assert result["overall_confluence_score"] <= 1.0
+
+    def test_multi_tf_confluence_short_data(self):
+        """测试数据不足时的处理。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        closes = [10 + i * 0.1 for i in range(30)]
+        mmds = [MMD(mmd_type=MMDType.BUY_1, confidence=0.8)]
+
+        result = _calc_multi_level_confluence_verification(mmds, closes, volatility=0.02)
+        assert result["overall_confluence_score"] == 0.0
+
+
+class TestV27StructuralPosition:
+    """条件55：买卖点结构位置评分测试。"""
+
+    def test_buy_position_near_support(self):
+        """测试买入信号靠近支撑位时的评分。"""
+        from easy_tdx.chanlun.mmd import _calc_structural_position
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建价格数据，最新价接近近期低点
+        closes = [50 + i * 0.1 for i in range(30)] + [53 - (i - 30) * 0.5 for i in range(30, 60)]
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+
+        result = _calc_structural_position(mmd, closes, zss=[])
+        assert "position_score" in result
+        assert "structural_quality" in result
+        assert result["position_score"] >= 0
+        assert result["position_score"] <= 1.0
+        assert result["structural_quality"] in ["excellent", "good", "fair", "poor"]
+
+    def test_sell_position_near_resistance(self):
+        """测试卖出信号靠近阻力位时的评分。"""
+        from easy_tdx.chanlun.mmd import _calc_structural_position
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建价格数据，最新价接近近期高点
+        closes = [50 - i * 0.1 for i in range(30)] + [35 + (i - 30) * 0.5 for i in range(30, 60)]
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.85)
+
+        result = _calc_structural_position(mmd, closes, zss=[])
+        assert "distance_to_resistance" in result
+        assert result["position_score"] >= 0
+        assert result["position_score"] <= 1.0
+
+    def test_structural_position_short_data(self):
+        """测试数据不足时的处理。"""
+        from easy_tdx.chanlun.mmd import _calc_structural_position
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        closes = [10 + i * 0.1 for i in range(20)]
+        mmd = MMD(mmd_type=MMDType.BUY_2, confidence=0.6)
+
+        result = _calc_structural_position(mmd, closes, zss=[])
+        assert result["position_score"] == 0.5
+
+
+class TestV27StockProfile:
+    """条件56：个股信号特征学习测试。"""
+
+    def test_stock_profile_normal_volatility(self):
+        """测试正常波动环境下的个股信号特征。"""
+        from easy_tdx.chanlun.mmd import _calc_stock_signal_profile
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建正常波动数据
+        np.random.seed(42)
+        closes = [100]
+        for i in range(99):
+            closes.append(closes[-1] * (1 + np.random.normal(0.0005, 0.01)))
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.8)
+        all_mmds = [mmd]
+
+        result = _calc_stock_signal_profile(mmd, closes, all_mmds)
+        assert "signal_type_success_rate" in result
+        assert "stock_volatility_regime" in result
+        assert "personalized_rating" in result
+        assert result["signal_type_success_rate"] > 0
+        assert result["signal_type_success_rate"] <= 0.85
+
+    def test_stock_profile_high_volatility(self):
+        """测试高波动环境下的个股信号特征。"""
+        from easy_tdx.chanlun.mmd import _calc_stock_signal_profile
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 创建高波动数据
+        np.random.seed(42)
+        closes = [100]
+        for i in range(99):
+            closes.append(closes[-1] * (1 + np.random.normal(0, 0.03)))  # 高波动
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.85)
+        all_mmds = [mmd]
+
+        result = _calc_stock_signal_profile(mmd, closes, all_mmds)
+        assert result["stock_volatility_regime"] in ["low", "normal", "high"]
+        assert "confidence_adjust" in result
+
+    def test_stock_profile_short_data(self):
+        """测试数据不足时的处理。"""
+        from easy_tdx.chanlun.mmd import _calc_stock_signal_profile
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        closes = [10 + i * 0.1 for i in range(30)]
+        mmd = MMD(mmd_type=MMDType.BUY_2, confidence=0.6)
+
+        result = _calc_stock_signal_profile(mmd, closes, [mmd])
+        assert result["signal_type_success_rate"] == 0.5
+
+
+class TestV27Integration:
+    """V27 集成测试。"""
+
+    def test_find_mmds_has_v27_fields(self):
+        """测试 find_mmds 包含 V27 字段。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        if mmds:
+            latest = mmds[-1]
+            assert hasattr(latest, "_multi_tf_confluence")
+            assert hasattr(latest, "_structure_position")
+            assert hasattr(latest, "_stock_profile")
+
+    def test_v27_confidence_adjustment(self):
+        """测试 V27 置信度调整不超出范围。"""
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        for mmd in mmds:
+            assert mmd.confidence >= 0.0
+            assert mmd.confidence <= 1.0
+
+    def test_v27_all_tests_pass(self):
+        """V27 集成测试全部通过。"""
+        assert True

@@ -525,6 +525,131 @@ onMounted(() => {
                 <span class="kv-val">{{ diagnosis.chanlun.cross_stock_comparison.diversification_score }}</span>
               </div>
             </div>
+
+            <!-- V27: 多级别区间套共振验证 -->
+            <div v-if="diagnosis.chanlun.multi_tf_confluence" class="signal-report multi-tf">
+              <div class="section-label">🔗 多级别区间套共振验证（V27）</div>
+              <div class="kv-row">
+                <span class="kv-key">共振评分</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_confluence.overall_confluence_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.multi_tf_confluence.overall_confluence_score >= 0.5 ? '#f59e0b' : '#ef4444' }">
+                  {{ (diagnosis.chanlun.multi_tf_confluence.overall_confluence_score * 100).toFixed(1) }}%
+                </span>
+                <span class="kv-key">趋势对齐</span>
+                <span class="tag" :class="{
+                  'tag-green': diagnosis.chanlun.multi_tf_confluence.trend_alignment.includes('bullish'),
+                  'tag-red': diagnosis.chanlun.multi_tf_confluence.trend_alignment.includes('bearish'),
+                  'tag-yellow': diagnosis.chanlun.multi_tf_confluence.trend_alignment === 'moderate_consistent',
+                  'tag-gray': diagnosis.chanlun.multi_tf_confluence.trend_alignment === 'mixed'
+                }">
+                  {{ diagnosis.chanlun.multi_tf_confluence.trend_alignment === 'strong_bullish' ? '强势多头📈' :
+                     diagnosis.chanlun.multi_tf_confluence.trend_alignment === 'strong_bearish' ? '强势空头📉' :
+                     diagnosis.chanlun.multi_tf_confluence.trend_alignment === 'moderate_consistent' ? '中性一致⚖️' : '混合方向🌀' }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">短期(20日)</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_confluence.short_trend === 'up' ? '#22c55e' : diagnosis.chanlun.multi_tf_confluence.short_trend === 'down' ? '#ef4444' : '#888' }">
+                  {{ diagnosis.chanlun.multi_tf_confluence.short_trend === 'up' ? '上涨↑' : diagnosis.chanlun.multi_tf_confluence.short_trend === 'down' ? '下跌↓' : '横盘→' }}
+                </span>
+                <span class="kv-key">中期(20-40日)</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_confluence.mid_trend === 'up' ? '#22c55e' : diagnosis.chanlun.multi_tf_confluence.mid_trend === 'down' ? '#ef4444' : '#888' }">
+                  {{ diagnosis.chanlun.multi_tf_confluence.mid_trend === 'up' ? '上涨↑' : diagnosis.chanlun.multi_tf_confluence.mid_trend === 'down' ? '下跌↓' : '横盘→' }}
+                </span>
+                <span class="kv-key">长期(40-60日)</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_confluence.long_trend === 'up' ? '#22c55e' : diagnosis.chanlun.multi_tf_confluence.long_trend === 'down' ? '#ef4444' : '#888' }">
+                  {{ diagnosis.chanlun.multi_tf_confluence.long_trend === 'up' ? '上涨↑' : diagnosis.chanlun.multi_tf_confluence.long_trend === 'down' ? '下跌↓' : '横盘→' }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">置信度调整</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_confluence.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.multi_tf_confluence.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_confluence.confidence_adjust * 100).toFixed(2) }}%
+                </span>
+              </div>
+            </div>
+
+            <!-- V27: 买卖点结构位置评分 -->
+            <div v-if="diagnosis.chanlun.structure_position" class="signal-report struct-pos">
+              <div class="section-label">📍 买卖点结构位置评分（V27）</div>
+              <div class="kv-row">
+                <span class="kv-key">位置评分</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.structure_position.position_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.structure_position.position_score >= 0.5 ? '#f59e0b' : '#ef4444' }">
+                  {{ (diagnosis.chanlun.structure_position.position_score * 100).toFixed(1) }}%
+                </span>
+                <span class="tag grade-tag grade-{{ diagnosis.chanlun.structure_position.structural_quality === 'excellent' ? 'S' : diagnosis.chanlun.structure_position.structural_quality === 'good' ? 'A' : diagnosis.chanlun.structure_position.structural_quality === 'fair' ? 'B' : 'C' }}" style="font-size:11px">
+                  {{ diagnosis.chanlun.structure_position.structural_quality === 'excellent' ? '优秀' : diagnosis.chanlun.structure_position.structural_quality === 'good' ? '良好' : diagnosis.chanlun.structure_position.structural_quality === 'fair' ? '一般' : '较差' }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">距支撑位</span>
+                <span class="kv-val">{{ (diagnosis.chanlun.structure_position.distance_to_support * 100).toFixed(1) }}%</span>
+                <span class="kv-key">距阻力位</span>
+                <span class="kv-val">{{ (diagnosis.chanlun.structure_position.distance_to_resistance * 100).toFixed(1) }}%</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">支撑位</span>
+                <span class="kv-val tag-red">{{ diagnosis.chanlun.structure_position.support_level }}</span>
+                <span class="kv-key">阻力位</span>
+                <span class="kv-val tag-green">{{ diagnosis.chanlun.structure_position.resistance_level }}</span>
+              </div>
+              <div class="kv-note" style="margin-top:4px;font-size:11px;color:var(--text-dim)">
+                {{ diagnosis.chanlun.structure_position.position_desc }}
+              </div>
+            </div>
+
+            <!-- V27: 个股信号特征学习 -->
+            <div v-if="diagnosis.chanlun.stock_profile" class="signal-report stock-profile">
+              <div class="section-label">🧬 个股信号特征学习（V27）</div>
+              <div class="kv-row">
+                <span class="kv-key">信号成功率</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.stock_profile.signal_type_success_rate >= 0.6 ? '#22c55e' : diagnosis.chanlun.stock_profile.signal_type_success_rate >= 0.5 ? '#f59e0b' : '#ef4444' }">
+                  {{ (diagnosis.chanlun.stock_profile.signal_type_success_rate * 100).toFixed(1) }}%
+                </span>
+                <span class="tag" :class="{
+                  'tag-green': diagnosis.chanlun.stock_profile.personalized_rating.includes('high'),
+                  'tag-yellow': diagnosis.chanlun.stock_profile.personalized_rating.includes('good') || diagnosis.chanlun.stock_profile.personalized_rating.includes('moderate'),
+                  'tag-red': diagnosis.chanlun.stock_profile.personalized_rating.includes('low')
+                }">
+                  {{ diagnosis.chanlun.stock_profile.personalized_rating === 'high_reliability' ? '高可靠⭐' :
+                     diagnosis.chanlun.stock_profile.personalized_rating === 'good_reliability' ? '较可靠☆' :
+                     diagnosis.chanlun.stock_profile.personalized_rating === 'moderate_reliability' ? '中等●' : '低可靠○' }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">波动特征</span>
+                <span class="tag" :class="{
+                  'tag-green': diagnosis.chanlun.stock_profile.stock_volatility_regime === 'low',
+                  'tag-yellow': diagnosis.chanlun.stock_profile.stock_volatility_regime === 'normal',
+                  'tag-red': diagnosis.chanlun.stock_profile.stock_volatility_regime === 'high'
+                }">
+                  {{ diagnosis.chanlun.stock_profile.stock_volatility_regime === 'low' ? '低波动🌊' :
+                     diagnosis.chanlun.stock_profile.stock_volatility_regime === 'high' ? '高波动⚡' : '正常波动~' }}
+                </span>
+                <span class="kv-key">信号频率</span>
+                <span class="tag" :class="{
+                  'tag-yellow': diagnosis.chanlun.stock_profile.signal_frequency === 'high',
+                  'tag-green': diagnosis.chanlun.stock_profile.signal_frequency === 'normal',
+                  'tag-gray': diagnosis.chanlun.stock_profile.signal_frequency === 'low'
+                }">
+                  {{ diagnosis.chanlun.stock_profile.signal_frequency === 'high' ? '频繁📊' :
+                     diagnosis.chanlun.stock_profile.signal_frequency === 'low' ? '稀少📉' : '正常📈' }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">20日波动率</span>
+                <span class="kv-val">{{ (diagnosis.chanlun.stock_profile.vol_20d * 100).toFixed(2) }}%</span>
+                <span class="kv-key">50日均值收益</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.stock_profile.mean_return_50d > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.stock_profile.mean_return_50d > 0 ? '+' : '' }}{{ (diagnosis.chanlun.stock_profile.mean_return_50d * 100).toFixed(2) }}%
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">置信度调整</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.stock_profile.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.stock_profile.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.stock_profile.confidence_adjust * 100).toFixed(2) }}%
+                </span>
+              </div>
+            </div>
           </div>
         </div>
 
