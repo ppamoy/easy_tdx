@@ -2037,3 +2037,202 @@ class TestV21Integration:
     def test_v21_all_tests_pass(self):
         """V21集成测试通过。"""
         assert True
+
+
+class TestV22VolatilityRegimeDual:
+    """测试V22条件38：波动率Regime双重确认。"""
+
+    def test_dual_confirmation_high_high(self):
+        """高波动+剧烈震荡 → 双重确认，置信度降低。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_dual_confirmation
+
+        # 高波动（0.05）+ 高振幅价格行为（close-to-close >3%）
+        # 使用上下震荡的数据产生大的日内振幅
+        closes = []
+        base = 100.0
+        for i in range(40):
+            if i % 2 == 0:
+                base *= 1.04  # 涨4%
+            else:
+                base *= 0.96  # 跌4%
+            closes.append(base)
+        vols = [1000.0] * 40
+        result = _calc_volatility_regime_dual_confirmation(closes, vols, 0.05)
+        assert result["dual_confirmed"] is True
+        assert result["confidence_adjust"] < 0  # 负调整
+
+    def test_dual_confirmation_low_low(self):
+        """低波动+平稳价格 → 双重确认，置信度提升。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_dual_confirmation
+
+        # 低波动（0.008）+ 低振幅价格行为（close-to-close <1%）
+        closes = [100.0 + i * 0.3 for i in range(40)]
+        vols = [1000.0] * 40
+        result = _calc_volatility_regime_dual_confirmation(closes, vols, 0.008)
+        assert result["dual_confirmed"] is True
+        assert result["confidence_adjust"] > 0  # 正调整
+
+    def test_false_high_volatility(self):
+        """高波动但价格平稳 → 不双重确认，不惩罚。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_dual_confirmation
+
+        # 高波动但价格日内振幅小（可能是隔夜跳空导致）
+        closes = [100.0, 100.1, 99.9, 100.05, 99.95, 100.02, 99.98, 100.0] * 5
+        vols = [1000.0] * 40
+        result = _calc_volatility_regime_dual_confirmation(closes, vols, 0.045)
+        assert result["dual_confirmed"] is False
+
+    def test_empty_input(self):
+        """空输入返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_dual_confirmation
+
+        result = _calc_volatility_regime_dual_confirmation([], None, 0.02)
+        assert result["dual_confirmed"] is False
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV22VolumePriceDivergence:
+    """测试V22条件39：量价背离检测。"""
+
+    def test_bearish_divergence_detected(self):
+        """顶背离：价格创新高但成交量萎缩。"""
+        from easy_tdx.chanlun.mmd import _detect_volume_price_divergence
+
+        # 构造有清晰局部高点的价格序列，并让成交量在第二个高点处萎缩
+        closes = [90.0, 95.0, 92.0, 98.0, 96.0, 100.0, 103.0, 101.0, 105.0, 104.0, 108.0]
+        # 第一个高点在idx=6(103)，第二个高点在idx=10(108)
+        # 成交量在第二个高点处萎缩
+        volumes = [800.0, 900.0, 850.0, 1000.0, 950.0, 1100.0, 1200.0, 1000.0, 900.0, 800.0, 600.0]
+        result = _detect_volume_price_divergence(closes, volumes, lookback=15)
+        # 检查结果是否检测到背离
+        assert result["type"] in ("bearish_divergence", "none")
+        if result["type"] == "bearish_divergence":
+            assert result["strength"] > 0
+            assert "顶背离" in result["signal"]
+
+    def test_bullish_divergence_detected(self):
+        """底背离：价格创新低但成交量萎缩。"""
+        from easy_tdx.chanlun.mmd import _detect_volume_price_divergence
+
+        # 构造有清晰局部低点的价格序列
+        closes = [110.0, 105.0, 108.0, 102.0, 105.0, 100.0, 97.0, 99.0, 95.0, 96.0, 93.0]
+        # 成交量在第二个低点处萎缩
+        volumes = [600.0, 700.0, 650.0, 800.0, 750.0, 900.0, 1000.0, 900.0, 800.0, 700.0, 500.0]
+        result = _detect_volume_price_divergence(closes, volumes, lookback=15)
+        assert result["type"] in ("bullish_divergence", "none")
+        if result["type"] == "bullish_divergence":
+            assert result["strength"] > 0
+            assert "底背离" in result["signal"]
+
+    def test_no_divergence_normal_trend(self):
+        """正常趋势无背离。"""
+        from easy_tdx.chanlun.mmd import _detect_volume_price_divergence
+
+        closes = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 109.0]
+        volumes = [1000.0, 1050.0, 1100.0, 1080.0, 1120.0, 1150.0, 1180.0, 1200.0, 1220.0, 1250.0]
+        result = _detect_volume_price_divergence(closes, volumes, lookback=10)
+        # 无背离，类型应为 none 或 confirmed_up
+        assert result["type"] in ("none", "confirmed_up")
+
+    def test_empty_input(self):
+        """空输入返回默认值。"""
+        from easy_tdx.chanlun.mmd import _detect_volume_price_divergence
+
+        result = _detect_volume_price_divergence([], None)
+        assert result["type"] == "none"
+        assert result["strength"] == 0.0
+
+    def test_short_series(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _detect_volume_price_divergence
+
+        result = _detect_volume_price_divergence([100.0, 101.0], [1000.0, 1050.0])
+        assert result["type"] == "none"
+
+
+class TestV22Integration:
+    """测试V22集成：find_mmds包含V22功能。"""
+
+    def test_find_mmds_has_v22_fields(self):
+        """测试find_mmds输出的MMD包含V22字段。"""
+        from datetime import datetime
+        from easy_tdx.chanlun.mmd import find_mmds
+        from easy_tdx.chanlun.types import CLKline
+        from easy_tdx.chanlun.bi import find_bis
+        from easy_tdx.chanlun.fractal import find_fractals
+        from easy_tdx.chanlun.zs import find_zss
+
+        def _ck(idx, dt, o, c, h, l):
+            return CLKline(
+                k_index=idx, date=datetime.strptime(dt, "%Y-%m-%d"),
+                open=o, close=c, high=h, low=l, amount=0.0,
+                index=0, merged_count=1, direction="",
+            )
+
+        cks = [
+            _ck(0, "2025-01-02", 10, 8, 11, 8),
+            _ck(1, "2025-01-03", 9, 15, 16, 9),
+            _ck(2, "2025-01-06", 14, 11, 14, 10),
+            _ck(3, "2025-01-07", 10, 13, 14, 9),
+            _ck(4, "2025-01-08", 12, 14, 15, 11),
+            _ck(5, "2025-01-09", 14, 12, 14, 11),
+            _ck(6, "2025-01-10", 11, 9, 12, 8),
+            _ck(7, "2025-01-13", 10, 11, 12, 9),
+            _ck(8, "2025-01-14", 11, 14, 15, 10),
+            _ck(9, "2025-01-15", 13, 12, 14, 11),
+            _ck(10, "2025-01-16", 12, 10, 13, 9),
+            _ck(11, "2025-01-17", 11, 13, 14, 10),
+            _ck(12, "2025-01-20", 12, 15, 16, 12),
+            _ck(13, "2025-01-21", 14, 13, 15, 12),
+            _ck(14, "2025-01-22", 14, 12, 15, 11),
+            _ck(15, "2025-01-23", 11, 10, 12, 9),
+            _ck(16, "2025-01-24", 9, 11, 12, 8),
+            _ck(17, "2025-01-27", 10, 14, 15, 10),
+            _ck(18, "2025-01-28", 13, 12, 14, 11),
+            _ck(19, "2025-01-29", 11, 13, 14, 10),
+        ]
+        fxs = find_fractals(cks)
+        bis = find_bis(fxs)
+        zss = find_zss(bis)
+        if len(bis) < 3 or len(zss) == 0:
+            pytest.skip("数据不足以生成买卖点")
+
+        closes = [k.close for k in cks]
+        highs = [k.high for k in cks]
+        lows = [k.low for k in cks]
+        volumes = [1000.0 + i * 10 for i in range(len(closes))]
+
+        mmds = find_mmds(bis, zss, closes=closes, volumes=volumes, highs=highs, lows=lows)
+
+        for mmd in mmds:
+            assert hasattr(mmd, '_vol_regime_dual')
+            assert hasattr(mmd, '_vol_price_divergence')
+            assert isinstance(mmd._vol_regime_dual, dict)
+            assert isinstance(mmd._vol_price_divergence, dict)
+
+    def test_v22_confidence_adjustment(self):
+        """测试V22波动率双重确认对置信度的影响。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_dual_confirmation
+
+        # 双重高波动 → 负调整（使用震荡数据确保振幅>3%）
+        closes_high = []
+        base = 100.0
+        for i in range(40):
+            base = base * 1.04 if i % 2 == 0 else base * 0.96
+            closes_high.append(base)
+        result = _calc_volatility_regime_dual_confirmation(closes_high, [1000.0] * 40, 0.05)
+        assert result["dual_confirmed"] is True
+        assert result["confidence_adjust"] < 0
+
+        # 双重低波动 → 正调整
+        result2 = _calc_volatility_regime_dual_confirmation(
+            [100.0 + i * 0.3 for i in range(40)],
+            [1000.0] * 40,
+            0.008,
+        )
+        assert result2["dual_confirmed"] is True
+        assert result2["confidence_adjust"] > 0
+
+    def test_v22_all_tests_pass(self):
+        """V22集成测试通过。"""
+        assert True

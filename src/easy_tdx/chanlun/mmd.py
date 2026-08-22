@@ -1,6 +1,6 @@
-"""买卖点识别（精修版 V21 - 动态支撑阻力 + 组合信号 + 多时间框架共振 + 决策辅助）。
+"""买卖点识别（精修版 V22 - 波动率双重确认 + 量价背离检测）。
 
-基于历史回测结果和实战经验持续优化（V21 2026-08-22）：
+基于历史回测结果和实战经验持续优化（V22 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
 - 2买/2卖准确率80%+（良好）
 - 3买/3卖准确率72%+（V20新增波动率Regime+趋势加速度+成交量分布过滤）
@@ -17,6 +17,7 @@
 - V19新增：ATR支撑确认(条件29)、信号新鲜度衰减(条件30)、质量评分增强
 - V20新增：波动率Regime过滤(条件31)、趋势加速度确认(条件32)、关键价位成交量分布(条件33)、动态止损止盈优化、信号优先级排序
 - V21新增：动态支撑阻力位识别(条件34)、组合信号检测(条件35)、多时间框架共振增强(条件36)、决策辅助输出(条件37)
+- V22新增：波动率Regime双重确认(条件38)、量价背离检测(条件39)、诊断API暴露V21决策辅助
 """
 
 from __future__ import annotations
@@ -577,12 +578,30 @@ def find_mmds(
         except Exception:
             pass
 
-        # V21: 条件37 - 决策辅助输出
+    # V21: 条件37 - 决策辅助输出
         if closes is not None:
             try:
                 mmd._decision_recommendation = _generate_decision_recommendation(
                     mmd, closes, highs, lows, dynamic_levels, volatility
                 )
+            except Exception:
+                pass
+
+        # V22: 条件38 - 波动率Regime双重确认
+        if closes is not None and volatility is not None:
+            try:
+                dual_result = _calc_volatility_regime_dual_confirmation(closes, volumes, volatility)
+                mmd._vol_regime_dual = dual_result
+                if dual_result.get("dual_confirmed"):
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + dual_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # V22: 条件39 - 量价背离检测
+        if closes is not None and volumes is not None:
+            try:
+                vp_div = _detect_volume_price_divergence(closes, volumes)
+                mmd._vol_price_divergence = vp_div
             except Exception:
                 pass
 
@@ -3277,6 +3296,16 @@ def _calc_confidence(
     if combo_bonus > 0:
         confidence += combo_bonus  # 组合信号额外加成
 
+    # V22: 波动率Regime双重确认加成（条件38）
+    vol_regime_dual = getattr(mmd, '_vol_regime_dual', None)
+    if vol_regime_dual and vol_regime_dual.get("dual_confirmed"):
+        confidence += vol_regime_dual.get("confidence_adjust", 0.0)
+
+    # V22: 量价背离惩罚（条件39）- 顶背离时降低置信度
+    vp_div = getattr(mmd, '_vol_price_divergence', None)
+    if vp_div and vp_div.get("type") == "bearish_divergence":
+        confidence *= (1.0 - vp_div.get("strength", 0.5) * 0.15)  # 最多-15%
+
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
 
@@ -4331,3 +4360,200 @@ def _generate_decision_recommendation(
         }
     except Exception:
         return {}
+
+
+# V22 新增：波动率Regime双重确认 + 量价背离检测
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _calc_volatility_regime_dual_confirmation(
+    closes: list[float],
+    volumes: list[float] | None,
+    volatility: float,
+) -> dict[str, Any]:
+    """波动率Regime双重确认（V22 条件38）。
+
+    在V20单因子波动率判断基础上，增加价格行为确认：
+    - 高波动市场 + 价格剧烈震荡（日内振幅>3%）→ 双重高波动确认，信号折扣加大
+    - 低波动市场 + 价格平稳（日内振幅<1%）→ 双重低波动确认，信号加成提升
+    - 仅波动率高但价格平稳 → 假高波动（流动性不足），不额外惩罚
+    - 仅价格波动大但波动率低 → 假低波动（趋势启动前兆），不额外奖励
+
+    Returns:
+        {"regime": str, "price_action": str, "dual_confirmed": bool, "confidence_adjust": float}
+    """
+    result = {
+        "regime": "medium",
+        "price_action": "unknown",
+        "dual_confirmed": False,
+        "confidence_adjust": 0.0,
+    }
+
+    try:
+        if not closes or len(closes) < 30:
+            return result
+
+        # 波动率 regime（复用V20逻辑）
+        if volatility > 0.04:
+            regime = "high"
+        elif volatility < 0.015:
+            regime = "low"
+        else:
+            regime = "medium"
+
+        # 价格行为分析：最近10根K线的平均日内振幅
+        lookback = min(10, len(closes) - 1)
+        amplitudes = []
+        for i in range(-lookback, 0):
+            idx = len(closes) + i
+            if idx >= 1 and idx < len(closes):
+                amp = (closes[idx] - closes[idx - 1]) / closes[idx - 1] if closes[idx - 1] > 0 else 0
+                amplitudes.append(abs(amp))
+
+        avg_amplitude = sum(amplitudes) / len(amplitudes) if amplitudes else 0
+
+        if avg_amplitude > 0.03:
+            price_action = "volatile"
+        elif avg_amplitude < 0.01:
+            price_action = "calm"
+        else:
+            price_action = "normal"
+
+        # 双重确认逻辑
+        dual_confirmed = False
+        confidence_adjust = 0.0
+
+        if regime == "high" and price_action == "volatile":
+            # 双重高波动确认：信号可靠性降低
+            dual_confirmed = True
+            confidence_adjust = -0.03
+        elif regime == "low" and price_action == "calm":
+            # 双重低波动确认：信号可靠性提升
+            dual_confirmed = True
+            confidence_adjust = +0.03
+        elif regime == "high" and price_action == "calm":
+            # 假高波动（可能是流动性问题），不额外惩罚
+            pass
+        elif regime == "low" and price_action == "volatile":
+            # 假低波动（趋势启动前兆），不额外奖励
+            pass
+
+        result = {
+            "regime": regime,
+            "price_action": price_action,
+            "dual_confirmed": dual_confirmed,
+            "confidence_adjust": confidence_adjust,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+def _detect_volume_price_divergence(
+    closes: list[float],
+    volumes: list[float] | None,
+    lookback: int = 30,
+) -> dict[str, Any]:
+    """量价背离检测（V22 条件39）。
+
+    检测价格与成交量的背离关系：
+    - 顶背离：价格创新高但成交量萎缩 → 看跌信号
+    - 底背离：价格创新低但成交量萎缩 → 看涨信号（但需成交量放大确认反转）
+
+    Returns:
+        {"type": str, "strength": float, "signal": str, "description": str}
+    """
+    result = {
+        "type": "none",
+        "strength": 0.0,
+        "signal": "",
+        "description": "",
+    }
+
+    try:
+        if not closes or not volumes or len(closes) < lookback + 10:
+            return result
+
+        recent_closes = closes[-lookback:]
+        recent_volumes = volumes[-lookback:] if len(volumes) >= lookback else volumes[-len(recent_closes):]
+
+        if not recent_volumes:
+            return result
+
+        # 找价格局部高点/低点
+        peaks_price = []
+        troughs_price = []
+        for i in range(2, len(recent_closes) - 2):
+            if (recent_closes[i] > recent_closes[i - 1] and recent_closes[i] > recent_closes[i - 2]
+                    and recent_closes[i] > recent_closes[i + 1] and recent_closes[i] > recent_closes[i + 2]):
+                peaks_price.append(i)
+            if (recent_closes[i] < recent_closes[i - 1] and recent_closes[i] < recent_closes[i - 2]
+                    and recent_closes[i] < recent_closes[i + 1] and recent_closes[i] < recent_closes[i + 2]):
+                troughs_price.append(i)
+
+        # 顶背离：价格创新高但成交量萎缩
+        if len(peaks_price) >= 2:
+            last_peak = peaks_price[-1]
+            prev_peak = peaks_price[-2]
+            price_higher = recent_closes[last_peak] > recent_closes[prev_peak]
+            vol_lower = recent_volumes[last_peak] < recent_volumes[prev_peak] * 0.8
+
+            if price_higher and vol_lower:
+                strength = min(1.0, (recent_closes[last_peak] - recent_closes[prev_peak]) /
+                               recent_closes[prev_peak] / 0.05 * 0.5 +
+                               (1 - recent_volumes[last_peak] / max(recent_volumes[prev_peak], 1)) * 0.5)
+                result = {
+                    "type": "bearish_divergence",
+                    "strength": round(strength, 2),
+                    "signal": "顶背离（价升量缩）",
+                    "description": f"价格较前高上涨{(recent_closes[last_peak]/max(recent_closes[prev_peak],1e-9)-1)*100:.1f}%，"
+                                   f"但成交量萎缩{(1-recent_volumes[last_peak]/max(recent_volumes[prev_peak],1))*100:.1f}%，"
+                                   f"警惕见顶信号",
+                }
+                return result
+
+        # 底背离：价格创新低但成交量萎缩
+        if len(troughs_price) >= 2:
+            last_trough = troughs_price[-1]
+            prev_trough = troughs_price[-2]
+            price_lower = recent_closes[last_trough] < recent_closes[prev_trough]
+            vol_lower = recent_volumes[last_trough] < recent_volumes[prev_trough] * 0.8
+
+            if price_lower and vol_lower:
+                strength = min(1.0, (recent_closes[prev_trough] - recent_closes[last_trough]) /
+                               recent_closes[prev_trough] / 0.05 * 0.5 +
+                               (1 - recent_volumes[last_trough] / max(recent_volumes[prev_trough], 1)) * 0.5)
+                result = {
+                    "type": "bullish_divergence",
+                    "strength": round(strength, 2),
+                    "signal": "底背离（价跌量缩）",
+                    "description": f"价格较前低下跌{(recent_closes[prev_trough]/max(recent_closes[last_trough],1e-9)-1)*100:.1f}%，"
+                                   f"但成交量萎缩{(1-recent_volumes[last_trough]/max(recent_volumes[prev_trough],1))*100:.1f}%，"
+                                   f"卖压衰竭，关注反弹信号",
+                }
+                return result
+
+        # 量价齐升/齐降确认
+        last_5_price_change = (recent_closes[-1] - recent_closes[-5]) / max(recent_closes[-5], 1e-9)
+        last_5_vol_change = (recent_volumes[-1] - recent_volumes[-5]) / max(recent_volumes[-5], 1e-9)
+
+        if last_5_price_change > 0.02 and last_5_vol_change > 0.1:
+            result = {
+                "type": "confirmed_up",
+                "strength": round(min(1.0, abs(last_5_price_change) / 0.05), 2),
+                "signal": "量价齐升确认",
+                "description": "价格上涨且成交量放大，趋势健康",
+            }
+        elif last_5_price_change < -0.02 and last_5_vol_change > 0.1:
+            result = {
+                "type": "confirmed_down",
+                "strength": round(min(1.0, abs(last_5_price_change) / 0.05), 2),
+                "signal": "量价齐跌确认",
+                "description": "价格下跌且成交量放大，下跌动能强劲",
+            }
+
+    except Exception:
+        pass
+
+    return result

@@ -431,6 +431,40 @@ export interface DiagnosisChanlun {
     cluster_down: boolean
   } | null
   signal_report: DiagnosisSignalReport | null
+  // V21: 决策辅助输出
+  decision_recommendation?: {
+    action: 'buy' | 'sell' | 'hold'
+    entry_price: number | null
+    stop_loss: number | null
+    take_profit_1: number | null
+    take_profit_2: number | null
+    position_pct: number | null
+    risk_reward_ratio: number | null
+    key_support: number | null
+    key_resistance: number | null
+    confidence_label: '高' | '中' | '低' | null
+    warnings: string[] | null
+    recommendation_text: string | null
+  } | null
+  // V21: 组合信号信息
+  combo_signal?: {
+    type: string | null
+    bonus: number
+  } | null
+  // V22: 波动率双重确认
+  vol_regime_dual?: {
+    regime: string
+    price_action: string
+    dual_confirmed: boolean
+    confidence_adjust: number
+  } | null
+  // V22: 量价背离检测
+  vol_price_divergence?: {
+    type: string
+    strength: number
+    signal: string
+    description: string
+  } | null
 }
 
 export interface DiagnosisMACD {

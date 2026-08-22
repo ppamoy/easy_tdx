@@ -241,6 +241,75 @@ onMounted(() => {
                 <div v-for="note in diagnosis.chanlun.signal_report.position_sizing.notes" :key="note" class="position-note-tag">📌 {{ note }}</div>
               </div>
             </div>
+            <!-- V21: 决策辅助输出 -->
+            <div v-if="diagnosis.chanlun.decision_recommendation" class="signal-report decision-rec">
+              <div class="section-label">🎯 决策辅助（V21）</div>
+              <div class="kv-row">
+                <span class="kv-key">操作建议</span>
+                <span :class="{'tag tag-green': diagnosis.chanlun.decision_recommendation.action==='buy', 'tag tag-red': diagnosis.chanlun.decision_recommendation.action==='sell', 'tag tag-yellow': diagnosis.chanlun.decision_recommendation.action==='hold'}">
+                  {{ {buy:'买入',sell:'卖出',hold:'观望'}[diagnosis.chanlun.decision_recommendation.action] }}
+                </span>
+                <span class="kv-val" style="margin-left:auto">{{ diagnosis.chanlun.decision_recommendation.confidence_label }}置信度</span>
+              </div>
+              <div class="kv-row"><span class="kv-key">建议入场价</span><span class="kv-val buy">{{ diagnosis.chanlun.decision_recommendation.entry_price }}</span></div>
+              <div class="kv-row"><span class="kv-key">止损价</span><span class="kv-val sell">{{ diagnosis.chanlun.decision_recommendation.stop_loss }}</span></div>
+              <div class="kv-row"><span class="kv-key">止盈1 / 止盈2</span><span class="kv-val buy">{{ diagnosis.chanlun.decision_recommendation.take_profit_1 }} / {{ diagnosis.chanlun.decision_recommendation.take_profit_2 }}</span></div>
+              <div class="kv-row"><span class="kv-key">关键支撑 / 阻力</span><span class="kv-val">{{ diagnosis.chanlun.decision_recommendation.key_support }} / {{ diagnosis.chanlun.decision_recommendation.key_resistance }}</span></div>
+              <div class="kv-row"><span class="kv-key">风险收益比</span><span class="kv-val">1 : {{ diagnosis.chanlun.decision_recommendation.risk_reward_ratio }}</span></div>
+              <div class="kv-row">
+                <span class="kv-key">建议仓位</span>
+                <span :class="getPositionTagClass((diagnosis.chanlun.decision_recommendation.position_pct||0)*100)">
+                  {{ (diagnosis.chanlun.decision_recommendation.position_pct*100).toFixed(0) }}%
+                </span>
+              </div>
+              <div class="kv-note" style="font-weight:600;color:var(--text-primary)">{{ diagnosis.chanlun.decision_recommendation.recommendation_text }}</div>
+              <div v-if="diagnosis.chanlun.decision_recommendation.warnings && diagnosis.chanlun.decision_recommendation.warnings.length > 0" class="enhancement-notes">
+                <div class="section-label" style="font-size:11px;color:var(--text-dim)">⚠️ 风险提示</div>
+                <div v-for="w in diagnosis.chanlun.decision_recommendation.warnings" :key="w" class="enhancement-tag tag tag-yellow">{{ w }}</div>
+              </div>
+            </div>
+            <!-- V21: 组合信号 -->
+            <div v-if="diagnosis.chanlun.combo_signal && diagnosis.chanlun.combo_signal.type && diagnosis.chanlun.combo_signal.type !== 'none'" class="signal-report combo-signal">
+              <div class="section-label">🔗 组合信号（V21）</div>
+              <div class="kv-row">
+                <span class="kv-key">组合类型</span>
+                <span class="tag tag-green">{{ diagnosis.chanlun.combo_signal.type }}</span>
+                <span class="kv-val" style="margin-left:auto;color:#22c55e">+{{ (diagnosis.chanlun.combo_signal.bonus*100).toFixed(0) }}% 置信度加成</span>
+              </div>
+            </div>
+            <!-- V22: 波动率双重确认 -->
+            <div v-if="diagnosis.chanlun.vol_regime_dual && diagnosis.chanlun.vol_regime_dual.dual_confirmed" class="signal-report vol-dual">
+              <div class="section-label">📊 波动率双重确认（V22）</div>
+              <div class="kv-row">
+                <span class="kv-key">波动率Regime</span>
+                <span class="tag" :class="{'tag-red': diagnosis.chanlun.vol_regime_dual.regime==='high', 'tag-green': diagnosis.chanlun.vol_regime_dual.regime==='low', 'tag-yellow': diagnosis.chanlun.vol_regime_dual.regime==='medium'}">
+                  {{ {high:'高波动',low:'低波动',medium:'正常'}[diagnosis.chanlun.vol_regime_dual.regime] }}
+                </span>
+                <span class="kv-key" style="margin-left:12px">价格行为</span>
+                <span class="tag" :class="{'tag-red': diagnosis.chanlun.vol_regime_dual.price_action==='volatile', 'tag-green': diagnosis.chanlun.vol_regime_dual.price_action==='calm', 'tag-yellow': diagnosis.chanlun.vol_regime_dual.price_action==='normal'}">
+                  {{ {volatile:'剧烈震荡',calm:'平稳',normal:'正常'}[diagnosis.chanlun.vol_regime_dual.price_action] }}
+                </span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">双重确认</span>
+                <span class="tag tag-green">✅ 已确认</span>
+                <span class="kv-val" :style="{ marginLeft: 'auto', color: diagnosis.chanlun.vol_regime_dual.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.vol_regime_dual.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.vol_regime_dual.confidence_adjust*100).toFixed(0) }}% 置信度调整
+                </span>
+              </div>
+            </div>
+            <!-- V22: 量价背离 -->
+            <div v-if="diagnosis.chanlun.vol_price_divergence && diagnosis.chanlun.vol_price_divergence.type !== 'none'" class="signal-report vol-div">
+              <div class="section-label">📈 量价背离检测（V22）</div>
+              <div class="kv-row">
+                <span class="kv-key">背离类型</span>
+                <span :class="{'tag tag-red': diagnosis.chanlun.vol_price_divergence.type==='bearish_divergence', 'tag tag-green': diagnosis.chanlun.vol_price_divergence.type==='bullish_divergence', 'tag tag-blue': diagnosis.chanlun.vol_price_divergence.type==='confirmed_up', 'tag tag-yellow': diagnosis.chanlun.vol_price_divergence.type==='confirmed_down'}">
+                  {{ diagnosis.chanlun.vol_price_divergence.signal }}
+                </span>
+                <span class="kv-val" style="margin-left:auto">强度 {{ (diagnosis.chanlun.vol_price_divergence.strength*100).toFixed(0) }}%</span>
+              </div>
+              <div class="kv-note">{{ diagnosis.chanlun.vol_price_divergence.description }}</div>
+            </div>
           </div>
         </div>
 
@@ -886,4 +955,12 @@ onMounted(() => {
 .chart-wrap {
   height: 360px;
 }
+
+/* V21: 决策辅助 & 组合信号 */
+.decision-rec .kv-note { font-weight: 600; color: var(--text-primary); }
+.combo-signal .kv-val { color: #22c55e; font-weight: 600; }
+
+/* V22: 波动率双重确认 & 量价背离 */
+.vol-dual .kv-val { font-weight: 500; }
+.vol-div .kv-note { color: var(--text-dim); line-height: 1.5; }
 </style>

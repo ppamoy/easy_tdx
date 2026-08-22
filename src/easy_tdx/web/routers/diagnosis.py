@@ -708,6 +708,17 @@ async def diagnose_stock(
             "confluence_score": round(getattr(latest_mmd, "confluence_score", 0.0), 2) if latest_mmd else None,
             # V13: 成交量剖面分析
             "volume_profile": _calc_volume_profile_for_diagnosis(closes, volumes) if latest_mmd else None,
+            # V21: 决策辅助输出（入场/止损/止盈/仓位建议/风险提示）
+            "decision_recommendation": getattr(latest_mmd, "_decision_recommendation", None) if latest_mmd else None,
+            # V21: 组合信号信息
+            "combo_signal": {
+                "type": getattr(latest_mmd, "_signal_combo", None),
+                "bonus": round(getattr(latest_mmd, "_combo_confidence_bonus", 0.0), 2),
+            } if latest_mmd else None,
+            # V22: 波动率双重确认
+            "vol_regime_dual": getattr(latest_mmd, "_vol_regime_dual", None) if latest_mmd else None,
+            # V22: 量价背离检测
+            "vol_price_divergence": getattr(latest_mmd, "_vol_price_divergence", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
