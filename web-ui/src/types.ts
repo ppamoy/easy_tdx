@@ -709,6 +709,59 @@ export interface DiagnosisChanlun {
     recommendation: string
     confidence_adjust: number
   } | null
+  // V32: 量价背离检测增强（条件68）
+  vol_price_divergence_enhanced?: {
+    divergence_detected: boolean
+    divergence_type: string
+    strength: number
+    volume_trend: string
+    price_trend: string
+    confidence_adjust: number
+  } | null
+  // V32: 信号优先级动态排序（条件69）
+  signal_priority?: {
+    priority_rank: number
+    total_signals: number
+    priority_score: number
+    rank_reason: string
+    confidence_adjust: number
+  } | null
+  // V32: 支撑阻力位突破确认（条件70）
+  sr_breakout_confirm?: {
+    sr_level: number
+    sr_type: string
+    breakout_valid: boolean
+    distance_pct: number
+    confidence_adjust: number
+  } | null
+  // V33: OBV能量潮趋势确认（条件71）
+  obv_trend_confirm?: {
+    obv_trend: string
+    price_trend: string
+    confirmation: boolean
+    obv_ma_ratio: number
+    confidence_adjust: number
+  } | null
+  // V33: MACD动能锥面积确认（条件72）
+  macd_hist_area?: {
+    hist_area_recent: number
+    hist_area_prev: number
+    area_ratio: number
+    momentum_direction: string
+    acceleration: string
+    confidence_adjust: number
+  } | null
+  // V33: RSI动量确认（条件73）
+  rsi_momentum_confirm?: {
+    rsi_value: number
+    rsi_prev: number
+    rsi_momentum: number
+    rsi_zone: string
+    momentum_support: boolean
+    divergence_detected: boolean
+    divergence_type: string
+    confidence_adjust: number
+  } | null
 }
 
 export interface DiagnosisMACD {

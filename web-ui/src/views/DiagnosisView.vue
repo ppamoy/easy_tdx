@@ -999,6 +999,194 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V32: 量价背离检测增强 -->
+        <div v-if="diagnosis.chanlun.vol_price_divergence_enhanced" class="metric-card vol-price-div">
+          <div class="card-title">📉 量价背离检测（V32）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">背离状态</span>
+              <span class="tag" :class="diagnosis.chanlun.vol_price_divergence_enhanced.divergence_detected ? 'tag-red' : 'tag-green'">
+                {{ diagnosis.chanlun.vol_price_divergence_enhanced.divergence_detected ? '⚠️ 背离预警' : '✅ 量价配合' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">背离类型</span>
+              <span class="kv-val">{{ diagnosis.chanlun.vol_price_divergence_enhanced.divergence_type === 'bearish' ? '顶背离（看跌）' : diagnosis.chanlun.vol_price_divergence_enhanced.divergence_type === 'bullish' ? '底背离（看涨）' : '无背离' }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">成交量趋势</span>
+              <span class="kv-val">{{ diagnosis.chanlun.vol_price_divergence_enhanced.volume_trend === 'increasing' ? '📈 放量' : diagnosis.chanlun.vol_price_divergence_enhanced.volume_trend === 'decreasing' ? '📉 缩量' : '➡️ 平稳' }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">价格趋势</span>
+              <span class="kv-val">{{ diagnosis.chanlun.vol_price_divergence_enhanced.price_trend === 'new_high' ? '🆙 创新高' : diagnosis.chanlun.vol_price_divergence_enhanced.price_trend === 'new_low' ? '🆕 创新低' : '➡️ 盘整' }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">背离强度</span>
+              <span class="kv-val">{{ diagnosis.chanlun.vol_price_divergence_enhanced.strength.toFixed(2) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.vol_price_divergence_enhanced.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.vol_price_divergence_enhanced.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.vol_price_divergence_enhanced.confidence_adjust * 100).toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V32: 信号优先级动态排序 -->
+        <div v-if="diagnosis.chanlun.signal_priority" class="metric-card signal-priority">
+          <div class="card-title">🏆 信号优先级排序（V32）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">当前排名</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_priority.priority_rank === 1 ? '#22c55e' : diagnosis.chanlun.signal_priority.priority_rank <= 2 ? '#3b82f6' : '#f59e0b' }">
+                第 {{ diagnosis.chanlun.signal_priority.priority_rank }} / {{ diagnosis.chanlun.signal_priority.total_signals }} 个信号
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">优先级分数</span>
+              <span class="kv-val">{{ diagnosis.chanlun.signal_priority.priority_score.toFixed(1) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">排序原因</span>
+              <span class="kv-val" style="font-size:12px">{{ diagnosis.chanlun.signal_priority.rank_reason }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_priority.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.signal_priority.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.signal_priority.confidence_adjust * 100).toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V32: 支撑阻力位突破确认 -->
+        <div v-if="diagnosis.chanlun.sr_breakout_confirm" class="metric-card sr-breakout">
+          <div class="card-title">📐 支撑阻力位确认（V32）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">S/R 类型</span>
+              <span class="tag" :class="diagnosis.chanlun.sr_breakout_confirm.breakout_valid ? 'tag-green' : 'tag-yellow'">
+                {{ diagnosis.chanlun.sr_breakout_confirm.sr_type === 'swing_low_broken' ? '✅ 支撑突破' : diagnosis.chanlun.sr_breakout_confirm.sr_type === 'swing_high_broken' ? '✅ 阻力跌破' : diagnosis.chanlun.sr_breakout_confirm.sr_type === 'approaching_sl' ? '⚠️ 接近支撑' : diagnosis.chanlun.sr_breakout_confirm.sr_type === 'approaching_sh' ? '⚠️ 接近阻力' : '➡️ 未突破' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">关键价位</span>
+              <span class="kv-val">{{ diagnosis.chanlun.sr_breakout_confirm.sr_level > 0 ? diagnosis.chanlun.sr_breakout_confirm.sr_level : '-' }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">距离</span>
+              <span class="kv-val">{{ diagnosis.chanlun.sr_breakout_confirm.distance_pct > 0 ? diagnosis.chanlun.sr_breakout_confirm.distance_pct.toFixed(2) + '%' : '-' }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.sr_breakout_confirm.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.sr_breakout_confirm.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.sr_breakout_confirm.confidence_adjust * 100).toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V33: OBV能量潮趋势确认 -->
+        <div v-if="diagnosis.chanlun.obv_trend_confirm" class="metric-card obv-trend">
+          <div class="card-title">💧 OBV能量潮确认（V33）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">OBV趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.obv_trend_confirm.obv_trend === 'rising' ? 'tag-green' : diagnosis.chanlun.obv_trend_confirm.obv_trend === 'falling' ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.obv_trend_confirm.obv_trend === 'rising' ? '📈 上升' : diagnosis.chanlun.obv_trend_confirm.obv_trend === 'falling' ? '📉 下降' : '➡️ 平稳' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">价格趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.obv_trend_confirm.price_trend === 'up' ? 'tag-green' : diagnosis.chanlun.obv_trend_confirm.price_trend === 'down' ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.obv_trend_confirm.price_trend === 'up' ? '📈 上涨' : diagnosis.chanlun.obv_trend_confirm.price_trend === 'down' ? '📉 下跌' : '➡️ 盘整' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">量价确认</span>
+              <span class="tag" :class="diagnosis.chanlun.obv_trend_confirm.confirmation ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.obv_trend_confirm.confirmation ? '✅ 确认' : '⚠️ 背离/不确认' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">OBV/MA比值</span>
+              <span class="kv-val">{{ diagnosis.chanlun.obv_trend_confirm.obv_ma_ratio.toFixed(4) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.obv_trend_confirm.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.obv_trend_confirm.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.obv_trend_confirm.confidence_adjust * 100).toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V33: MACD动能锥面积确认 -->
+        <div v-if="diagnosis.chanlun.macd_hist_area" class="metric-card macd-hist-area">
+          <div class="card-title">📊 MACD动能锥（V33）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">动能方向</span>
+              <span class="tag" :class="diagnosis.chanlun.macd_hist_area.momentum_direction === 'bullish' ? 'tag-green' : diagnosis.chanlun.macd_hist_area.momentum_direction === 'bearish' ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.macd_hist_area.momentum_direction === 'bullish' ? '🐂 看涨动能' : diagnosis.chanlun.macd_hist_area.momentum_direction === 'bearish' ? '🐻 看跌动能' : '➡️ 中性' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">加速度</span>
+              <span class="tag" :class="diagnosis.chanlun.macd_hist_area.acceleration === 'accelerating' ? 'tag-green' : diagnosis.chanlun.macd_hist_area.acceleration === 'decaying' ? 'tag-red' : 'tag-blue'">
+                {{ diagnosis.chanlun.macd_hist_area.acceleration === 'accelerating' ? '📈 加速' : diagnosis.chanlun.macd_hist_area.acceleration === 'decaying' ? '📉 衰减' : '➡️ 稳定' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">面积比（近/前）</span>
+              <span class="kv-val">{{ diagnosis.chanlun.macd_hist_area.area_ratio.toFixed(4) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.macd_hist_area.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.macd_hist_area.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.macd_hist_area.confidence_adjust * 100).toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V33: RSI动量确认 -->
+        <div v-if="diagnosis.chanlun.rsi_momentum_confirm" class="metric-card rsi-momentum">
+          <div class="card-title">📉 RSI动量确认（V33）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">RSI值</span>
+              <span class="tag" :class="diagnosis.chanlun.rsi_momentum_confirm.rsi_zone === 'overbought' ? 'tag-red' : diagnosis.chanlun.rsi_momentum_confirm.rsi_zone === 'oversold' ? 'tag-green' : 'tag-yellow'">
+                {{ diagnosis.chanlun.rsi_momentum_confirm.rsi_value.toFixed(1) }}（{{ diagnosis.chanlun.rsi_momentum_confirm.rsi_zone === 'overbought' ? '超买' : diagnosis.chanlun.rsi_momentum_confirm.rsi_zone === 'oversold' ? '超卖' : diagnosis.chanlun.rsi_momentum_confirm.rsi_zone === 'strong' ? '偏强' : diagnosis.chanlun.rsi_momentum_confirm.rsi_zone === 'weak' ? '偏弱' : '中性' }}）
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">RSI动量</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.rsi_momentum_confirm.rsi_momentum > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.rsi_momentum_confirm.rsi_momentum > 0 ? '+' : '' }}{{ diagnosis.chanlun.rsi_momentum_confirm.rsi_momentum.toFixed(2) }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">动量支持</span>
+              <span class="tag" :class="diagnosis.chanlun.rsi_momentum_confirm.momentum_support ? 'tag-green' : 'tag-yellow'">
+                {{ diagnosis.chanlun.rsi_momentum_confirm.momentum_support ? '✅ 动量支持' : '⚠️ 无支持' }}
+              </span>
+            </div>
+            <div v-if="diagnosis.chanlun.rsi_momentum_confirm.divergence_detected" class="kv-row">
+              <span class="kv-key">背离</span>
+              <span class="tag tag-red">⚠️ {{ diagnosis.chanlun.rsi_momentum_confirm.divergence_type === 'bearish' ? '顶背离' : '底背离' }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.rsi_momentum_confirm.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.rsi_momentum_confirm.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.rsi_momentum_confirm.confidence_adjust * 100).toFixed(2) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -1689,4 +1877,14 @@ onMounted(() => {
 .health-grade-C .card-title { color: #f59e0b; }
 .health-grade-D .card-title { color: #f97316; }
 .health-grade-F .card-title { color: #ef4444; }
+
+/* V32: 量价背离 + 信号优先级 + 支撑阻力位 */
+.vol-price-div .kv-val { font-weight: 600; }
+.signal-priority .kv-val { font-weight: 600; }
+.sr-breakout .kv-val { font-weight: 600; }
+
+/* V33: OBV能量潮 + MACD动能锥 + RSI动量确认 */
+.obv-trend .kv-val { font-weight: 600; }
+.macd-hist-area .kv-val { font-weight: 600; }
+.rsi-momentum .kv-val { font-weight: 600; }
 </style>

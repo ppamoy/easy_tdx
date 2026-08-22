@@ -82,6 +82,6 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 }
 .app-main {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
 }
 </style>

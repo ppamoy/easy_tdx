@@ -775,6 +775,18 @@ async def diagnose_stock(
             "macd_histogram_acceleration": getattr(latest_mmd, "_macd_histogram_acceleration", None) if latest_mmd else None,
             # V31: 信号综合健康度报告（条件67）
             "signal_health_dashboard": getattr(latest_mmd, "_signal_health_dashboard", None) if latest_mmd else None,
+            # V32: 量价背离检测增强（条件68）
+            "vol_price_divergence_enhanced": getattr(latest_mmd, "_vol_price_divergence_enhanced", None) if latest_mmd else None,
+            # V32: 信号优先级动态排序（条件69）
+            "signal_priority": getattr(latest_mmd, "_signal_priority", None) if latest_mmd else None,
+            # V32: 支撑阻力位突破确认（条件70）
+            "sr_breakout_confirm": getattr(latest_mmd, "_sr_breakout_confirm", None) if latest_mmd else None,
+            # V33: OBV能量潮趋势确认（条件71）
+            "obv_trend_confirm": getattr(latest_mmd, "_obv_trend_confirm", None) if latest_mmd else None,
+            # V33: MACD动能锥面积确认（条件72）
+            "macd_hist_area": getattr(latest_mmd, "_macd_hist_area", None) if latest_mmd else None,
+            # V33: RSI动量确认（条件73）
+            "rsi_momentum_confirm": getattr(latest_mmd, "_rsi_momentum_confirm", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

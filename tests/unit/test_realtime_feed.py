@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -278,13 +278,16 @@ class TestSessionGating:
         client = AsyncMockClient([_sample_quotes_df()])
 
         # 用一个不可能命中的时段（如 23:00-23:59）模拟盘外
-        feed = RealtimeDataFeed(
-            bus=bus,
-            symbols=[(0, "000001")],
-            sessions=((23 * 60, 23 * 60 + 59),),
-            interval=0.1,
-        )
-        await feed.run_async(client, max_iterations=1)
+        # 同时 patch time.time 确保测试不受执行时刻影响
+        off_session_time = time.mktime(time.strptime("2026-07-13 10:30:00", "%Y-%m-%d %H:%M:%S"))
+        with patch("easy_tdx.realtime.feed.time.time", return_value=off_session_time):
+            feed = RealtimeDataFeed(
+                bus=bus,
+                symbols=[(0, "000001")],
+                sessions=((23 * 60, 23 * 60 + 59),),
+                interval=0.1,
+            )
+            await feed.run_async(client, max_iterations=1)
         assert len(client.calls) == 0  # 盘外，没拉数据
 
 

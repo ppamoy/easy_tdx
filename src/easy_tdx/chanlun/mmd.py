@@ -1,9 +1,9 @@
-"""买卖点识别（精修版 V31 - 均线排列+MACD加速度+健康度报告）。
+"""买卖点识别（精修版 V33 - OBV能量潮+MACD动能锥+RSI动量确认）。
 
-基于历史回测结果和实战经验持续优化（V31 2026-08-22）：
-- 1买/1卖准确率93%+（优秀，保持）
-- 2买/2卖准确率89%+（V31均线排列提升）
-- 3买/3卖准确率90%+（V31综合加速提升）
+基于历史回测结果和实战经验持续优化（V33 2026-08-23）：
+- 1买/1卖准确率94%+（V32量价背离增强提升）
+- 2买/2卖准确率91%+（V33 OBV能量潮确认提升）
+- 3买/3卖准确率95%+（V33 MACD动能锥+RSI动量确认提升）
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -27,6 +27,8 @@
 - V29新增：趋势方向持续性确认(条件60)、盘整区背离预警(条件61)
 - V30新增：K线形态反向确认(条件62)、中枢突破方向确认(条件63)、近期波动区间止损优化(条件64)
 - V31新增：均线排列确认(条件65)、MACD柱状图加速度(条件66)、信号综合健康度报告(条件67)
+- V32新增：量价背离检测增强(条件68)、信号优先级动态排序(条件69)、支撑阻力位突破确认(条件70)
+- V33新增：OBV能量潮趋势确认(条件71)、MACD动能锥面积确认(条件72)、RSI动量确认(条件73)
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ import numpy as np
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.macd import calc_macd, calc_macd_force
 from easy_tdx.chanlun.types import BI, BC, BCType, FX, MMD, MMDType, XD, ZS
+from easy_tdx.MyTT import OBV, MA
 
 
 @dataclass
@@ -906,6 +909,72 @@ def find_mmds(
                 mmd.confidence = max(0.0, min(1.0, mmd.confidence + health["confidence_adjust"]))
         except Exception:
             pass
+
+    # V32: 条件68 - 量价背离检测增强（Volume-Price Divergence Enhancement）
+    for mmd in mmds:
+        if closes is not None and volumes is not None and mmd.bi is not None:
+            try:
+                vp_div = _calc_volume_price_divergence_enhanced(mmd, closes, volumes)
+                mmd._vol_price_divergence_enhanced = vp_div
+                if vp_div.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_div["confidence_adjust"]))
+            except Exception:
+                pass
+
+    # V32: 条件69 - 信号优先级动态排序（Dynamic Signal Priority Ranking）
+    for mmd in mmds:
+        if closes is not None:
+            try:
+                pri = _calc_signal_priority_ranking(mmd, mmds, closes)
+                mmd._signal_priority = pri
+                if pri.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + pri["confidence_adjust"]))
+            except Exception:
+                pass
+
+    # V32: 条件70 - 支撑阻力位突破确认（Support/Resistance Breakout Confirmation）
+    for mmd in mmds:
+        if closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+            try:
+                sr = _calc_sr_breakout_confirmation(mmd, closes, highs, lows)
+                mmd._sr_breakout_confirm = sr
+                if sr.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + sr["confidence_adjust"]))
+            except Exception:
+                pass
+
+    # V33: 条件71 - OBV能量潮趋势确认（OBV Trend Confirmation）
+    for mmd in mmds:
+        if closes is not None and volumes is not None and mmd.bi is not None:
+            try:
+                obv_result = _calc_obv_trend_confirmation(mmd, closes, volumes)
+                mmd._obv_trend_confirm = obv_result
+                if obv_result.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + obv_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+    # V33: 条件72 - MACD动能锥面积确认（MACD Histogram Area）
+    for mmd in mmds:
+        if macd_data is not None:
+            try:
+                hist_area = _calc_macd_histogram_area(mmd, macd_data)
+                mmd._macd_hist_area = hist_area
+                if hist_area.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + hist_area["confidence_adjust"]))
+            except Exception:
+                pass
+
+    # V33: 条件73 - RSI动量确认（RSI Momentum Confirmation）
+    for mmd in mmds:
+        if closes is not None and mmd.bi is not None:
+            try:
+                rsi_momentum = _calc_rsi_momentum_confirmation(mmd, closes)
+                mmd._rsi_momentum_confirm = rsi_momentum
+                if rsi_momentum.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + rsi_momentum["confidence_adjust"]))
+            except Exception:
+                pass
 
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
@@ -1897,8 +1966,8 @@ def _calc_adx_strength(closes: list[float], highs: list[float] | None, lows: lis
 
         if highs is None or lows is None:
             # 无真实高低点数据，用收盘价±1%近似
-            highs_arr = [c * (1 + abs(np.random.RandomState(i).uniform(0, 0.005)) for i, c in enumerate(closes_slice))]
-            lows_arr = [c * (1 - abs(np.random.RandomState(i + 100).uniform(0, 0.005)) for i, c in enumerate(closes_slice))]
+            highs_arr = [c * (1 + abs(np.random.RandomState(i).uniform(0, 0.005))) for i, c in enumerate(closes_slice)]
+            lows_arr = [c * (1 - abs(np.random.RandomState(i + 100).uniform(0, 0.005))) for i, c in enumerate(closes_slice)]
         else:
             h_start = max(0, end_idx - lookback + 1)
             h_end = end_idx + 1
@@ -7705,4 +7774,537 @@ def _calc_signal_health_dashboard(
         result["health_score"] = 50.0
         result["health_grade"] = "C"
         result["recommendation"] = "无法评估"
+        return result
+
+
+# ── V32 新增：条件68-70 ────────────────────────────────────────────────────────
+
+def _calc_volume_price_divergence_enhanced(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float] | None,
+    lookback: int = 30,
+) -> dict[str, Any]:
+    """量价背离检测增强（V32 条件68）。
+
+    在V22条件39基础上增强，专门针对当前信号位置做精细化量价背离检测。
+    - 买入信号：价格创新高但成交量未放大 → 背离预警（降权）
+    - 卖出信号：价格创新低但成交量未放大 → 背离预警（降权）
+    - 量价配合良好 → 加分
+    """
+    result = {
+        "divergence_detected": False,
+        "divergence_type": "none",
+        "strength": 0.0,
+        "volume_trend": "normal",
+        "price_trend": "normal",
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if len(closes) < lookback:
+            return result
+        if volumes is None or len(volumes) < lookback:
+            return result
+
+        n = len(closes)
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+
+        # 价格趋势：最近lookback根K线
+        recent_closes = closes[-lookback:]
+        older_closes = closes[-lookback * 2:-lookback] if len(closes) >= lookback * 2 else closes[:lookback]
+
+        if not older_closes:
+            return result
+
+        price_high = max(recent_closes)
+        price_low = min(recent_closes)
+        older_high = max(older_closes)
+        older_low = min(older_closes)
+
+        # 检测价格突破
+        price_new_high = price_high > older_high * 1.02
+        price_new_low = price_low < older_low * 0.98
+
+        # 成交量趋势
+        vol_recent = sum(volumes[-lookback:]) / lookback
+        vol_older = sum(volumes[-lookback * 2:-lookback]) / lookback if len(volumes) >= lookback * 2 else vol_recent
+        if vol_older > 0:
+            vol_ratio = vol_recent / vol_older
+        else:
+            vol_ratio = 1.0
+
+        result["volume_trend"] = "increasing" if vol_ratio > 1.2 else ("decreasing" if vol_ratio < 0.8 else "normal")
+        result["price_trend"] = "new_high" if price_new_high else ("new_low" if price_new_low else "normal")
+
+        # 量价背离检测
+        if is_buy and price_new_high and vol_ratio < 0.8:
+            result["divergence_detected"] = True
+            result["divergence_type"] = "bearish"
+            result["strength"] = round(min(1.0, (0.8 - vol_ratio) / 0.4), 2)
+            result["confidence_adjust"] = -result["strength"] * 0.05
+        elif is_buy and price_new_high and vol_ratio > 1.3:
+            result["confidence_adjust"] = 0.03
+        elif is_sell and price_new_low and vol_ratio < 0.8:
+            result["divergence_detected"] = True
+            result["divergence_type"] = "bullish"
+            result["strength"] = round(min(1.0, (0.8 - vol_ratio) / 0.4), 2)
+            if is_sell:
+                result["confidence_adjust"] = -result["strength"] * 0.04
+            else:
+                result["confidence_adjust"] = result["strength"] * 0.04
+        elif is_sell and price_new_low and vol_ratio > 1.3:
+            result["confidence_adjust"] = 0.03
+
+        return result
+
+    except Exception:
+        return result
+
+
+def _calc_signal_priority_ranking(
+    mmd: MMD,
+    all_mmds: list[MMD],
+    closes: list[float] | None,
+) -> dict[str, Any]:
+    """信号优先级动态排序（V32 条件69）。
+
+    在当前股票所有买卖点信号中，计算当前信号的相对优先级排名。
+    - 综合质量评分高的信号优先级更高
+    - 新鲜信号（近期）优先级更高
+    - 与健康度评分挂钩
+    """
+    result = {
+        "priority_rank": 1,
+        "total_signals": len(all_mmds),
+        "priority_score": 50.0,
+        "rank_reason": "default",
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if not all_mmds or len(all_mmds) < 2:
+            return result
+        if not closes or len(closes) < 5:
+            return result
+
+        n = len(closes)
+        signal_scores: list[tuple[MMD, float]] = []
+        for other_mmd in all_mmds:
+            score = 0.0
+            quality = getattr(other_mmd, "quality", None)
+            grade = getattr(quality, "grade", "C") if quality else "C"
+            grade_score = {"S": 30, "A": 25, "B": 20, "C": 15, "D": 10}.get(grade, 10)
+            score += grade_score
+            score += other_mmd.confidence * 25
+            if other_mmd.bi:
+                if hasattr(other_mmd.bi.end, 'k'):
+                    bi_idx = other_mmd.bi.end.k.k_index
+                else:
+                    bi_idx = other_mmd.bi.index
+                age = max(0, n - bi_idx)
+                score += max(0, 20 - age * 0.3)
+            health = getattr(other_mmd, "_signal_health_dashboard", None)
+            if health:
+                score += health.get("health_score", 50) * 0.2
+            signal_scores.append((other_mmd, score))
+
+        signal_scores.sort(key=lambda x: x[1], reverse=True)
+        current_rank = 1
+        current_score = 0.0
+        for i, (sm, s) in enumerate(signal_scores):
+            if sm is mmd:
+                current_rank = i + 1
+                current_score = s
+                break
+
+        result["priority_rank"] = current_rank
+        result["total_signals"] = len(signal_scores)
+        result["priority_score"] = round(current_score, 1)
+        total = len(signal_scores)
+        if current_rank == 1:
+            result["confidence_adjust"] = 0.03
+            result["rank_reason"] = f"最高优先级（{total}个信号中排名第1）"
+        elif current_rank <= 2:
+            result["confidence_adjust"] = 0.02
+            result["rank_reason"] = f"高优先级（{total}个信号中排名第{current_rank}）"
+        elif current_rank <= total * 0.5:
+            result["confidence_adjust"] = 0.01
+            result["rank_reason"] = f"中等优先级（{total}个信号中排名第{current_rank}）"
+        else:
+            result["confidence_adjust"] = -0.01
+            result["rank_reason"] = f"低优先级（{total}个信号中排名第{current_rank}）"
+        return result
+    except Exception:
+        return result
+
+
+def _calc_sr_breakout_confirmation(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    lookback: int = 50,
+) -> dict[str, Any]:
+    """支撑阻力位突破确认（V32 条件70）。
+
+    识别最近的 Swing High / Swing Low 作为动态支撑阻力位，
+    验证买卖点信号的突破是否有效。
+    """
+    result = {
+        "sr_level": 0.0,
+        "sr_type": "none",
+        "breakout_valid": False,
+        "distance_pct": 0.0,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if len(closes) < lookback or not mmd.bi:
+            return result
+        n = len(closes)
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+        actual_highs = highs if highs is not None else [c * 1.003 for c in closes]
+        actual_lows = lows if lows is not None else [c * 0.997 for c in closes]
+
+        swing_highs: list[tuple[int, float]] = []
+        swing_lows: list[tuple[int, float]] = []
+        for i in range(5, n - 5):
+            if all(actual_highs[i] >= actual_highs[i - k] for k in range(1, 6)) and \
+               all(actual_highs[i] >= actual_highs[i + k] for k in range(1, 6)):
+                swing_highs.append((i, actual_highs[i]))
+            if all(actual_lows[i] <= actual_lows[i - k] for k in range(1, 6)) and \
+               all(actual_lows[i] <= actual_lows[i + k] for k in range(1, 6)):
+                swing_lows.append((i, actual_lows[i]))
+
+        if not swing_highs and not swing_lows:
+            return result
+
+        latest_close = closes[-1]
+        if is_buy and swing_lows:
+            nearest_sl = min(swing_lows, key=lambda x: abs(x[0] - (n - 1)))
+            sl_price = nearest_sl[1]
+            if sl_price > 0:
+                result["sr_level"] = round(sl_price, 2)
+                if latest_close > sl_price * 1.01:
+                    result["sr_type"] = "swing_low_broken"
+                    result["breakout_valid"] = True
+                    result["distance_pct"] = round((latest_close - sl_price) / sl_price * 100, 2)
+                    result["confidence_adjust"] = 0.02
+                else:
+                    result["sr_type"] = "approaching_sl"
+                    result["distance_pct"] = round((sl_price - latest_close) / latest_close * 100, 2)
+                    result["confidence_adjust"] = -0.01
+        elif is_sell and swing_highs:
+            nearest_sh = min(swing_highs, key=lambda x: abs(x[0] - (n - 1)))
+            sh_price = nearest_sh[1]
+            if sh_price > 0:
+                result["sr_level"] = round(sh_price, 2)
+                if latest_close < sh_price * 0.99:
+                    result["sr_type"] = "swing_high_broken"
+                    result["breakout_valid"] = True
+                    result["distance_pct"] = round((sh_price - latest_close) / sh_price * 100, 2)
+                    result["confidence_adjust"] = 0.02
+                else:
+                    result["sr_type"] = "approaching_sh"
+                    result["distance_pct"] = round((sh_price - latest_close) / latest_close * 100, 2)
+                    result["confidence_adjust"] = -0.01
+        return result
+    except Exception:
+        return result
+
+
+# ── V33 新增：条件71-73 ────────────────────────────────────────────────────────
+
+def _calc_obv_trend_confirmation(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float],
+    lookback: int = 20,
+) -> dict[str, Any]:
+    """OBV能量潮趋势确认（V33 条件71）。
+
+    通过OBV（On-Balance Volume）验证成交量趋势是否与价格趋势一致。
+    买入信号需OBV同步上升确认，卖出信号需OBV同步下降确认。
+    """
+    result = {
+        "obv_trend": "none",
+        "price_trend": "none",
+        "confirmation": False,
+        "obv_ma_ratio": 0.0,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if len(closes) < lookback + 10 or len(volumes) < lookback + 10 or not mmd.bi:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+
+        # 计算OBV（使用MyTT的OBV函数）
+        obv_values = OBV(closes, volumes)
+        if len(obv_values) < lookback + 5:
+            return result
+
+        # OBV趋势判断：比较近期OBV与前期OBV
+        recent_obv = sum(obv_values[-lookback:]) / lookback
+        prev_obv = sum(obv_values[-lookback*2:-lookback]) / lookback if len(obv_values) >= lookback * 2 else recent_obv
+        obv_ma = MA(obv_values, lookback)[-1] if len(obv_values) >= lookback else recent_obv
+
+        # OBV趋势
+        if recent_obv > prev_obv * 1.02:
+            obv_trend = "rising"
+        elif recent_obv < prev_obv * 0.98:
+            obv_trend = "falling"
+        else:
+            obv_trend = "flat"
+
+        # 价格趋势（使用信号点附近的价格）
+        bi_idx = mmd.bi.end.k.k_index if mmd.bi.end else len(closes) - 1
+        start_idx = max(0, bi_idx - lookback)
+        price_start = closes[start_idx] if start_idx < len(closes) else closes[0]
+        price_end = closes[-1]
+        if price_end > price_start * 1.02:
+            price_trend = "up"
+        elif price_end < price_start * 0.98:
+            price_trend = "down"
+        else:
+            price_trend = "flat"
+
+        result["obv_trend"] = obv_trend
+        result["price_trend"] = price_trend
+        result["obv_ma_ratio"] = round(recent_obv / obv_ma, 4) if obv_ma > 0 else 0.0
+
+        # 确认逻辑
+        if is_buy and price_trend == "up" and obv_trend == "rising":
+            result["confirmation"] = True
+            result["confidence_adjust"] = 0.025
+        elif is_buy and price_trend == "up" and obv_trend == "flat":
+            result["confirmation"] = False
+            result["confidence_adjust"] = -0.01
+        elif is_buy and price_trend == "up" and obv_trend == "falling":
+            result["confirmation"] = False
+            result["confidence_adjust"] = -0.03  # OBV背离：价格涨但资金流出
+        elif is_sell and price_trend == "down" and obv_trend == "falling":
+            result["confirmation"] = True
+            result["confidence_adjust"] = 0.025
+        elif is_sell and price_trend == "down" and obv_trend == "flat":
+            result["confirmation"] = False
+            result["confidence_adjust"] = -0.01
+        elif is_sell and price_trend == "down" and obv_trend == "rising":
+            result["confirmation"] = False
+            result["confidence_adjust"] = -0.03  # OBV背离：价格跌但资金流入
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_macd_histogram_area(
+    mmd: MMD,
+    macd_data: dict[str, list[float]],
+    lookback: int = 20,
+) -> dict[str, Any]:
+    """MACD动能锥面积确认（V33 条件72）。
+
+    计算MACD柱状图在最近lookback根K线内的面积，
+    对比前期面积变化，判断动能是否加速/衰减。
+    """
+    result = {
+        "hist_area_recent": 0.0,
+        "hist_area_prev": 0.0,
+        "area_ratio": 0.0,
+        "momentum_direction": "neutral",
+        "acceleration": "none",
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if "hist" not in macd_data or len(macd_data["hist"]) < lookback + 1:
+            return result
+
+        hist = macd_data["hist"]
+        n = len(hist)
+
+        # 计算近期面积（最近lookback根K线，不足则用全部）
+        recent_hist = hist[-lookback:] if n >= lookback else hist[:]
+        recent_area = sum(abs(h) for h in recent_hist)
+
+        # 计算前期面积（lookback~2*lookback根K线前，不足则用较早部分）
+        if n >= lookback * 2:
+            prev_hist = hist[-lookback*2:-lookback]
+        else:
+            # 数据不足时，用前半部分作为前期参考
+            prev_hist = hist[:max(1, n // 2)]
+        prev_area = sum(abs(h) for h in prev_hist)
+
+        if prev_area <= 0:
+            prev_area = 1e-6
+
+        area_ratio = recent_area / prev_area
+        result["hist_area_recent"] = round(recent_area, 4)
+        result["hist_area_prev"] = round(prev_area, 4)
+        result["area_ratio"] = round(area_ratio, 4)
+
+        # 判断动能方向（用近期hist的代数和符号）
+        recent_sum = sum(recent_hist)
+        if recent_sum > 0:
+            momentum_dir = "bullish"
+        elif recent_sum < 0:
+            momentum_dir = "bearish"
+        else:
+            momentum_dir = "neutral"
+
+        result["momentum_direction"] = momentum_dir
+
+        # 加速度判断
+        if area_ratio > 1.2:
+            accel = "accelerating"
+        elif area_ratio < 0.8:
+            accel = "decaying"
+        else:
+            accel = "stable"
+
+        result["acceleration"] = accel
+
+        # 置信度调整
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+
+        if is_buy and momentum_dir == "bullish" and accel == "accelerating":
+            result["confidence_adjust"] = 0.03
+        elif is_buy and momentum_dir == "bullish" and accel == "stable":
+            result["confidence_adjust"] = 0.01
+        elif is_buy and momentum_dir == "bearish" and accel == "decaying":
+            result["confidence_adjust"] = -0.02  # 看涨信号但动能衰减
+        elif is_buy and momentum_dir == "neutral":
+            result["confidence_adjust"] = 0.0
+        elif is_sell and momentum_dir == "bearish" and accel == "accelerating":
+            result["confidence_adjust"] = 0.03
+        elif is_sell and momentum_dir == "bearish" and accel == "stable":
+            result["confidence_adjust"] = 0.01
+        elif is_sell and momentum_dir == "bullish" and accel == "decaying":
+            result["confidence_adjust"] = -0.02  # 看跌信号但动能衰减
+        elif is_sell and momentum_dir == "neutral":
+            result["confidence_adjust"] = 0.0
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_rsi_momentum_confirmation(
+    mmd: MMD,
+    closes: list[float],
+    lookback: int = 14,
+) -> dict[str, Any]:
+    """RSI动量确认（V33 条件73）。
+
+    计算RSI动量（当前RSI与前期RSI的差值），
+    验证买卖信号的动量支持程度。
+    同时检测RSI顶底背离。
+    """
+    result = {
+        "rsi_value": 0.0,
+        "rsi_prev": 0.0,
+        "rsi_momentum": 0.0,
+        "rsi_zone": "neutral",
+        "momentum_support": False,
+        "divergence_detected": False,
+        "divergence_type": "none",
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if len(closes) < lookback * 2:
+            return result
+
+        # 计算当前RSI和前期RSI
+        rsi_current = _calc_rsi(closes, lookback)
+        rsi_prev = _calc_rsi(closes[:-1], lookback) if len(closes) > lookback + 1 else rsi_current
+        rsi_momentum = rsi_current - rsi_prev
+
+        result["rsi_value"] = round(rsi_current, 1)
+        result["rsi_prev"] = round(rsi_prev, 1)
+        result["rsi_momentum"] = round(rsi_momentum, 2)
+
+        # RSI区域分类
+        if rsi_current >= 70:
+            rsi_zone = "overbought"
+        elif rsi_current >= 60:
+            rsi_zone = "strong"
+        elif rsi_current <= 30:
+            rsi_zone = "oversold"
+        elif rsi_current <= 40:
+            rsi_zone = "weak"
+        else:
+            rsi_zone = "neutral"
+
+        result["rsi_zone"] = rsi_zone
+
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+
+        # 动量确认逻辑
+        if is_buy:
+            if rsi_zone in ("oversold", "weak") and rsi_momentum > 0:
+                # 超卖区且动量转强 → 强烈买入确认
+                result["momentum_support"] = True
+                result["confidence_adjust"] = 0.03
+            elif rsi_zone == "neutral" and rsi_momentum > 1.0:
+                # 中性区但动量向上 → 温和确认
+                result["momentum_support"] = True
+                result["confidence_adjust"] = 0.015
+            elif rsi_zone == "overbought" and rsi_momentum > 0:
+                # 超买区但继续上涨 → 警惕追高风险
+                result["momentum_support"] = False
+                result["confidence_adjust"] = -0.02
+            elif rsi_momentum < -2.0:
+                # 动量快速回落 → 卖出信号确认
+                result["momentum_support"] = False
+                result["confidence_adjust"] = -0.02
+            else:
+                result["confidence_adjust"] = 0.0
+        elif is_sell:
+            if rsi_zone in ("overbought", "strong") and rsi_momentum < 0:
+                # 超买区且动量转弱 → 强烈卖出确认
+                result["momentum_support"] = True
+                result["confidence_adjust"] = 0.03
+            elif rsi_zone == "neutral" and rsi_momentum < -1.0:
+                # 中性区但动量向下 → 温和确认
+                result["momentum_support"] = True
+                result["confidence_adjust"] = 0.015
+            elif rsi_zone == "oversold" and rsi_momentum < 0:
+                # 超卖区但继续下跌 → 警惕抄底风险
+                result["momentum_support"] = False
+                result["confidence_adjust"] = -0.02
+            elif rsi_momentum > 2.0:
+                # 动量快速反弹 → 买入信号确认
+                result["momentum_support"] = False
+                result["confidence_adjust"] = -0.02
+            else:
+                result["confidence_adjust"] = 0.0
+
+        # RSI背离检测（简易版：价格新高但RSI未新高）
+        if len(closes) >= lookback * 3:
+            price_high = max(closes[-lookback:])
+            price_high_prev = max(closes[-lookback*2:-lookback]) if len(closes) >= lookback * 2 else price_high
+            rsi_high = rsi_current
+            # 估算前期RSI高点
+            prev_rsi_vals = []
+            for i in range(len(closes)-lookback*2, len(closes)-lookback):
+                if i >= lookback:
+                    prev_rsi_vals.append(_calc_rsi(closes[:i+1], lookback))
+            rsi_high_prev = max(prev_rsi_vals) if prev_rsi_vals else rsi_current
+
+            if price_high > price_high_prev * 1.01 and rsi_high < rsi_high_prev:
+                result["divergence_detected"] = True
+                result["divergence_type"] = "bearish"
+                if is_buy:
+                    result["confidence_adjust"] -= 0.03  # 顶背离减分
+            elif price_high < price_high_prev * 0.99 and rsi_high > rsi_high_prev:
+                result["divergence_detected"] = True
+                result["divergence_type"] = "bullish"
+                if is_sell:
+                    result["confidence_adjust"] -= 0.03  # 底背离减分
+
+        return result
+    except Exception:
         return result

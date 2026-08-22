@@ -259,6 +259,16 @@ class MMD:
     _macd_histogram_acceleration: dict[str, Any] | None = None  # MACD柱状图加速度（条件66）
     _signal_health_dashboard: dict[str, Any] | None = None  # 信号综合健康度报告（条件67）
 
+    # V32 enhancement fields
+    _vol_price_divergence_enhanced: dict[str, Any] | None = None  # 量价背离检测增强（条件68）
+    _signal_priority: dict[str, Any] | None = None  # 信号优先级动态排序（条件69）
+    _sr_breakout_confirm: dict[str, Any] | None = None  # 支撑阻力位突破确认（条件70）
+
+    # V33 enhancement fields
+    _obv_trend_confirm: dict[str, Any] | None = None  # OBV能量潮趋势确认（条件71）
+    _macd_hist_area: dict[str, Any] | None = None  # MACD动能锥面积确认（条件72）
+    _rsi_momentum_confirm: dict[str, Any] | None = None  # RSI动量确认（条件73）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
