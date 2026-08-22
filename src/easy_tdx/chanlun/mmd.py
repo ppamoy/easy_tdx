@@ -1,6 +1,6 @@
-"""买卖点识别（精修版 V24 - 笔质量+中枢强度+背离检测+交叉验证）。
+"""买卖点识别（精修版 V25 - 信号后确认+动量衰减+波动率自适应+综合质量评分）。
 
-基于历史回测结果和实战经验持续优化（V24 2026-08-22）：
+基于历史回测结果和实战经验持续优化（V25 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
 - 2买/2卖准确率80%+（良好）
 - 3买/3卖准确率72%+（V20新增波动率Regime+趋势加速度+成交量分布过滤）
@@ -20,6 +20,7 @@
 - V22新增：波动率Regime双重确认(条件38)、量价背离检测(条件39)、诊断API暴露V21决策辅助
 - V23新增：Fibonacci回撤位动态确认(条件40)、RSI区域过滤增强(条件41)、MACD零轴穿越确认(条件42)、风险管理增强
 - V24新增：笔质量评分(条件43)、中枢强度分析(条件44)、增强背离检测(条件45)、信号交叉验证(条件46)
+- V25新增：信号后确认验证(条件47)、动量衰减预警(条件48)、波动率自适应过滤(条件49)、综合信号质量评分(条件50)
 """
 
 from __future__ import annotations
@@ -679,6 +680,51 @@ def find_mmds(
                 mmd.confidence = max(0.0, min(1.0, mmd.confidence + consensus_bonus))
             except Exception:
                 pass
+
+        # V25: 条件47 - 信号后确认验证（Post-Signal Confirmation）
+        if closes is not None and mmd.bi is not None:
+            try:
+                post_confirm = _check_post_signal_confirmation(mmd, closes)
+                mmd._post_signal_confirm = post_confirm
+                if post_confirm.get("confirmed", False):
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + post_confirm.get("confidence_bonus", 0.0)))
+                else:
+                    # 未确认信号：对3买/3卖额外降权
+                    if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+                        mmd.confidence = max(0.0, min(1.0, mmd.confidence - 0.05))
+            except Exception:
+                pass
+
+        # V25: 条件48 - 动量衰减预警（Momentum Decay Warning）
+        if closes is not None and mmd.bi is not None and macd_data is not None:
+            try:
+                momentum_result = _detect_momentum_decay(mmd, closes, macd_data)
+                mmd._momentum_decay = momentum_result
+                penalty = momentum_result.get("confidence_penalty", 0.0)
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + penalty))
+            except Exception:
+                pass
+
+        # V25: 条件49 - 波动率自适应过滤（Volatility-Adaptive Filtering）
+        if closes is not None and volumes is not None and volatility is not None:
+            try:
+                vol_filter = _apply_volatility_adaptive_filter(mmd, closes, volumes, volatility)
+                mmd._vol_regime_filter = vol_filter
+                regime_bonus = vol_filter.get("confidence_bonus", 0.0)
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + regime_bonus))
+            except Exception:
+                pass
+
+        # V25: 条件50 - 综合信号质量评分（Composite Quality Score）
+        try:
+            composite = _calc_composite_quality(mmd)
+            mmd._composite_quality = composite
+            # 使用综合评分更新置信度（取最高值，避免重复计算）
+            composite_conf = composite.get("overall_score", 0.0) / 100.0  # 归一化到 0-1
+            if composite_conf > 0 and composite_conf > mmd.confidence:
+                mmd.confidence = composite_conf
+        except Exception:
+            pass
 
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
@@ -5234,9 +5280,9 @@ def _calc_cross_validation(
             if len(dif) >= 2:
                 latest_dif = dif[-1]
                 prev_dif = dif[-2]
-                if mmd.mmd_type.value.startswith("buy") and latest_dif > prev_dif and latest_dif > 0:
+                if "buy" in mmd.mmd_type.value and latest_dif > prev_dif and latest_dif > 0:
                     confirmations.append("macd_trend")
-                elif mmd.mmd_type.value.startswith("sell") and latest_dif < prev_dif and latest_dif < 0:
+                elif "sell" in mmd.mmd_type.value and latest_dif < prev_dif and latest_dif < 0:
                     confirmations.append("macd_trend")
 
         # 2. 成交量确认
@@ -5245,9 +5291,9 @@ def _calc_cross_validation(
             avg_vol = sum(volumes) / len(volumes) if volumes else 1
             if avg_vol > 0:
                 vol_ratio = recent_vol / avg_vol
-                if mmd.mmd_type.value.startswith("buy") and vol_ratio >= 1.2:
+                if "buy" in mmd.mmd_type.value and vol_ratio >= 1.2:
                     confirmations.append("volume_support")
-                elif mmd.mmd_type.value.startswith("sell") and vol_ratio >= 1.0:
+                elif "sell" in mmd.mmd_type.value and vol_ratio >= 1.0:
                     confirmations.append("volume_confirmation")
 
         # 3. 中枢结构确认
@@ -5255,7 +5301,7 @@ def _calc_cross_validation(
             zs_idx = mmd.zs.index
             if zs_idx < len(zss) - 1:
                 next_zs = zss[zs_idx + 1]
-                if mmd.mmd_type.value.startswith("buy"):
+                if "buy" in mmd.mmd_type.value:
                     if next_zs.zd > mmd.zs.zg:
                         confirmations.append("zs_structure")
                 else:
@@ -5265,9 +5311,9 @@ def _calc_cross_validation(
         # 4. 笔方向确认
         if mmd.bi is not None and len(bis) > mmd.bi.index:
             bi = mmd.bi
-            if mmd.mmd_type.value.startswith("buy") and bi.direction.value == "up":
+            if "buy" in mmd.mmd_type.value and bi.direction.value == "up":
                 confirmations.append("bi_direction")
-            elif mmd.mmd_type.value.startswith("sell") and bi.direction.value == "down":
+            elif "sell" in mmd.mmd_type.value and bi.direction.value == "down":
                 confirmations.append("bi_direction")
 
         # 计算交叉验证得分
@@ -5289,6 +5335,376 @@ def _calc_cross_validation(
             "consensus_score": round(consensus_score, 2),
             "confirmations": confirmations,
             "consensus_bonus": consensus_bonus,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+# ── V25 新增函数 ────────────────────────────────────────────────────────────────
+
+def _check_post_signal_confirmation(
+    mmd: MMD,
+    closes: list[float],
+    lookahead: int = 5,
+) -> dict[str, Any]:
+    """信号后确认验证（V25 条件47）。
+
+    在买卖点信号出现后，观察后续K线是否进一步确认该信号：
+    - 买入信号：后续价格继续上涨 → 确认
+    - 卖出信号：后续价格继续下跌 → 确认
+    - 未确认则对3买/3卖降权
+
+    Returns:
+        {
+            "confirmed": bool,           # 是否确认
+            "bars_ahead": int,           # 后续观察K线数
+            "price_change_pct": float,   # 价格变化百分比
+            "confidence_bonus": float,   # 置信度加成
+        }
+    """
+    result = {
+        "confirmed": False,
+        "bars_ahead": 0,
+        "price_change_pct": 0.0,
+        "confidence_bonus": 0.0,
+    }
+
+    try:
+        if not closes or len(closes) < 2:
+            return result
+
+        signal_idx = len(closes) - 1
+        if mmd.bi is not None and mmd.bi.end.k.k_index >= 0:
+            signal_idx = mmd.bi.end.k.k_index
+
+        look = min(lookahead, len(closes) - signal_idx - 1)
+        if look < 1:
+            return result
+
+        signal_price = closes[signal_idx]
+        latest_price = closes[signal_idx + look]
+        price_change_pct = (latest_price - signal_price) / signal_price if signal_price > 0 else 0.0
+
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+
+        confirmed = False
+        if is_buy and price_change_pct > 0.01:
+            confirmed = True
+        elif is_sell and price_change_pct < -0.01:
+            confirmed = True
+
+        if confirmed:
+            if abs(price_change_pct) >= 0.03:
+                bonus = 0.04
+            elif abs(price_change_pct) >= 0.02:
+                bonus = 0.03
+            else:
+                bonus = 0.02
+        else:
+            bonus = 0.0
+
+        result = {
+            "confirmed": confirmed,
+            "bars_ahead": look,
+            "price_change_pct": round(price_change_pct * 100, 2),
+            "confidence_bonus": bonus,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+def _detect_momentum_decay(
+    mmd: MMD,
+    closes: list[float],
+    macd_data: dict[str, list[float]],
+    lookback: int = 10,
+) -> dict[str, Any]:
+    """动量衰减预警（V25 条件48）。
+
+    检测买卖点信号后的动量衰减情况：
+    - MACD柱状图面积缩小 → 动量衰减
+    - DIF斜率变缓 → 趋势减弱
+    - 价格创新高/新低但MACD未配合 → 顶/底背离预警
+
+    Returns:
+        {
+            "decay_detected": bool,        # 是否检测到衰减
+            "decay_type": str,             # "bearish"/"bullish"/"none"
+            "momentum_score": float,       # 动量评分 0-1
+            "confidence_penalty": float,   # 置信度惩罚（负值）
+        }
+    """
+    result = {
+        "decay_detected": False,
+        "decay_type": "none",
+        "momentum_score": 0.5,
+        "confidence_penalty": 0.0,
+    }
+
+    try:
+        hist = macd_data.get("hist", [])
+        dif = macd_data.get("dif", [])
+        if not hist or len(hist) < lookback + 2:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+
+        recent_hist = hist[-lookback:]
+        old_hist = hist[-lookback*2:-lookback] if len(hist) >= lookback * 2 else hist[:lookback]
+        if not old_hist:
+            old_hist = hist[-lookback:]
+
+        recent_area = sum(abs(h) for h in recent_hist)
+        old_area = sum(abs(h) for h in old_hist)
+        area_ratio = recent_area / old_area if old_area > 0 else 1.0
+
+        dif_slope_recent = 0.0
+        dif_slope_old = 0.0
+        if len(dif) >= lookback + 1:
+            dif_slope_recent = dif[-1] - dif[-lookback // 2]
+            dif_slope_old = dif[-lookback // 2] - dif[max(0, -lookback)]
+
+        area_score = min(1.0, area_ratio)
+        slope_change = dif_slope_recent - dif_slope_old if dif_slope_old != 0 else 0.0
+        slope_score = max(0.0, min(1.0, 0.5 + slope_change * 10))
+
+        momentum_score = 0.6 * area_score + 0.4 * slope_score
+        momentum_score = max(0.0, min(1.0, momentum_score))
+
+        decay_detected = False
+        decay_type = "none"
+        confidence_penalty = 0.0
+
+        if is_buy and momentum_score < 0.4:
+            decay_detected = True
+            decay_type = "bullish_decay"
+            confidence_penalty = -0.03
+        elif is_sell and momentum_score < 0.4:
+            decay_detected = True
+            decay_type = "bearish_decay"
+            confidence_penalty = -0.03
+        elif momentum_score > 0.7:
+            confidence_penalty = 0.01
+
+        result = {
+            "decay_detected": decay_detected,
+            "decay_type": decay_type,
+            "momentum_score": round(momentum_score, 2),
+            "confidence_penalty": confidence_penalty,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+def _apply_volatility_adaptive_filter(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float] | None,
+    volatility: float,
+) -> dict[str, Any]:
+    """波动率自适应过滤（V25 条件49）。
+
+    根据当前市场波动率状态动态调整信号阈值：
+    - 高波动市场：放宽阈值，避免漏信号
+    - 低波动市场：收紧阈值，过滤噪音
+    - 波动率突变：标记异常状态
+
+    Returns:
+        {
+            "regime": str,                 # "high"/"medium"/"low"
+            "filter_applied": bool,        # 是否应用了过滤
+            "threshold_adjustment": float, # 阈值调整因子
+            "confidence_bonus": float,     # 置信度加成
+        }
+    """
+    result = {
+        "regime": "medium",
+        "filter_applied": False,
+        "threshold_adjustment": 1.0,
+        "confidence_bonus": 0.0,
+    }
+
+    try:
+        if volatility > 0.04:
+            regime = "high"
+            threshold_adj = 1.15
+        elif volatility > 0.02:
+            regime = "medium"
+            threshold_adj = 1.0
+        else:
+            regime = "low"
+            threshold_adj = 0.88
+
+        filter_applied = False
+        confidence_bonus = 0.0
+
+        if volumes is not None and len(volumes) >= 20:
+            avg_vol = sum(volumes[-20:]) / 20
+            recent_vol = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else avg_vol
+            vol_ratio = recent_vol / avg_vol if avg_vol > 0 else 1.0
+
+            if regime == "high" and vol_ratio >= 1.3:
+                filter_applied = True
+                confidence_bonus = 0.03
+            elif regime == "low" and vol_ratio < 0.7:
+                filter_applied = True
+                confidence_bonus = -0.02
+            elif regime == "medium" and vol_ratio >= 1.2:
+                filter_applied = True
+                confidence_bonus = 0.02
+
+        result = {
+            "regime": regime,
+            "filter_applied": filter_applied,
+            "threshold_adjustment": round(threshold_adj, 2),
+            "confidence_bonus": confidence_bonus,
+        }
+    except Exception:
+        pass
+
+    return result
+
+
+def _calc_composite_quality(
+    mmd: MMD,
+) -> dict[str, Any]:
+    """综合信号质量评分（V25 条件50）。
+
+    综合所有V7-V24增强因子的得分，给出一个统一的质量评分。
+
+    Returns:
+        {
+            "overall_score": float,      # 0-100 综合得分
+            "grade": str,                # S/A/B/C/D 评级
+            "breakdown": dict,           # 各维度得分
+            "recommendation": str,       # 交易建议
+        }
+    """
+    result = {
+        "overall_score": 0.0,
+        "grade": "D",
+        "breakdown": {},
+        "recommendation": "观望",
+    }
+
+    try:
+        breakdown: dict[str, float] = {}
+        total_score = 0.0
+
+        base_conf = mmd.confidence * 30.0
+        breakdown["base_confidence"] = round(base_conf, 1)
+        total_score += base_conf
+
+        bi_quality = getattr(mmd, "_bi_quality", None)
+        if bi_quality:
+            bq_score = bi_quality.get("quality_score", 0.5) * 15.0
+            breakdown["bi_quality"] = round(bq_score, 1)
+            total_score += bq_score
+        else:
+            breakdown["bi_quality"] = 7.5
+            total_score += 7.5
+
+        zs_strength = getattr(mmd, "_zs_strength", None)
+        if zs_strength:
+            zs_score = zs_strength.get("strength_score", 0.5) * 15.0
+            breakdown["zs_strength"] = round(zs_score, 1)
+            total_score += zs_score
+        else:
+            breakdown["zs_strength"] = 7.5
+            total_score += 7.5
+
+        cv = getattr(mmd, "_cross_validation", None)
+        if cv:
+            cv_score = cv.get("consensus_score", 0.0) * 10.0
+            breakdown["cross_validation"] = round(cv_score, 1)
+            total_score += cv_score
+        else:
+            breakdown["cross_validation"] = 5.0
+            total_score += 5.0
+
+        div = getattr(mmd, "_enhanced_divergence", None)
+        if div:
+            div_bonus = div.get("confidence_bonus", 0.0)
+            div_score = max(0, 5 + div_bonus * 10)
+            breakdown["enhanced_divergence"] = round(div_score, 1)
+            total_score += div_score
+        else:
+            breakdown["enhanced_divergence"] = 5.0
+            total_score += 5.0
+
+        post = getattr(mmd, "_post_signal_confirm", None)
+        if post:
+            post_score = 5.0 if post.get("confirmed", False) else 2.0
+            breakdown["post_signal_confirm"] = post_score
+            total_score += post_score
+        else:
+            breakdown["post_signal_confirm"] = 3.5
+            total_score += 3.5
+
+        mom = getattr(mmd, "_momentum_decay", None)
+        if mom:
+            mom_score = max(0, 5 + mom.get("confidence_penalty", 0) * 10)
+            breakdown["momentum_decay"] = round(mom_score, 1)
+            total_score += mom_score
+        else:
+            breakdown["momentum_decay"] = 5.0
+            total_score += 5.0
+
+        vol = getattr(mmd, "_vol_regime_filter", None)
+        if vol:
+            vol_bonus = vol.get("confidence_bonus", 0.0)
+            vol_score = max(0, min(5, 2.5 + vol_bonus * 10))
+            breakdown["vol_regime_filter"] = round(vol_score, 1)
+            total_score += vol_score
+        else:
+            breakdown["vol_regime_filter"] = 2.5
+            total_score += 2.5
+
+        type_weight = 1.0
+        if mmd.mmd_type in (MMDType.BUY_1, MMDType.SELL_1):
+            type_weight = 1.1
+        elif mmd.mmd_type in (MMDType.BUY_2, MMDType.SELL_2):
+            type_weight = 1.0
+        else:
+            type_weight = 0.9
+
+        total_score = total_score * type_weight
+        total_score = max(0.0, min(100.0, total_score))
+
+        if total_score >= 90:
+            grade = "S"
+        elif total_score >= 75:
+            grade = "A"
+        elif total_score >= 60:
+            grade = "B"
+        elif total_score >= 45:
+            grade = "C"
+        else:
+            grade = "D"
+
+        is_buy = "buy" in mmd.mmd_type.value
+        if total_score >= 80:
+            rec = "强烈" + ("买入" if is_buy else "卖出") + "（高质量信号）"
+        elif total_score >= 65:
+            rec = "建议" + ("买入" if is_buy else "卖出") + "（较高质量）"
+        elif total_score >= 50:
+            rec = "可考虑" + ("买入" if is_buy else "卖出") + "（中等质量）"
+        else:
+            rec = "观望" + ("，不建议买入" if is_buy else "，不建议卖出") + "（质量较低）"
+
+        result = {
+            "overall_score": round(total_score, 1),
+            "grade": grade,
+            "breakdown": {k: round(v, 1) for k, v in breakdown.items()},
+            "recommendation": rec,
         }
     except Exception:
         pass

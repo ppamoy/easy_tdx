@@ -224,6 +224,12 @@ class MMD:
     _enhanced_divergence: dict[str, Any] | None = None  # 增强背离检测（条件45）
     _cross_validation: dict[str, Any] | None = None  # 信号交叉验证评分（条件46）
 
+    # V25 enhancement fields
+    _post_signal_confirm: dict[str, Any] | None = None  # 信号后确认验证（条件47）
+    _momentum_decay: dict[str, Any] | None = None  # 动量衰减预警（条件48）
+    _vol_regime_filter: dict[str, Any] | None = None  # 波动率自适应过滤（条件49）
+    _composite_quality: dict[str, Any] | None = None  # 综合信号质量评分（条件50）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

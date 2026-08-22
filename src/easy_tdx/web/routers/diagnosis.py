@@ -733,6 +733,14 @@ async def diagnose_stock(
             "enhanced_divergence": getattr(latest_mmd, "_enhanced_divergence", None) if latest_mmd else None,
             # V24: 信号交叉验证评分（条件46）
             "cross_validation": getattr(latest_mmd, "_cross_validation", None) if latest_mmd else None,
+            # V25: 信号后确认验证（条件47）
+            "post_signal_confirm": getattr(latest_mmd, "_post_signal_confirm", None) if latest_mmd else None,
+            # V25: 动量衰减预警（条件48）
+            "momentum_decay": getattr(latest_mmd, "_momentum_decay", None) if latest_mmd else None,
+            # V25: 波动率自适应过滤（条件49）
+            "vol_regime_filter": getattr(latest_mmd, "_vol_regime_filter", None) if latest_mmd else None,
+            # V25: 综合信号质量评分（条件50）
+            "composite_quality": getattr(latest_mmd, "_composite_quality", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

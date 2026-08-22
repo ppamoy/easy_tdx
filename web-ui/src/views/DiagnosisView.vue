@@ -362,6 +362,80 @@ onMounted(() => {
                 </span>
               </div>
             </div>
+            <!-- V25: 信号后确认验证 -->
+            <div v-if="diagnosis.chanlun.post_signal_confirm" class="signal-report post-signal">
+              <div class="section-label">✅ 信号后确认验证（V25）</div>
+              <div class="kv-row">
+                <span class="kv-key">确认状态</span>
+                <span class="tag" :class="diagnosis.chanlun.post_signal_confirm.confirmed ? 'tag-green' : 'tag-yellow'">
+                  {{ diagnosis.chanlun.post_signal_confirm.confirmed ? '已确认 ✅' : '未确认 ⚠️' }}
+                </span>
+                <span class="kv-val">观察 {{ diagnosis.chanlun.post_signal_confirm.bars_ahead }} 根K线</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">价格变化</span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.post_signal_confirm.price_change_pct > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.post_signal_confirm.price_change_pct > 0 ? '+' : '' }}{{ diagnosis.chanlun.post_signal_confirm.price_change_pct }}%
+                </span>
+                <span class="kv-val" style="margin-left:auto;color:#22c55e">
+                  {{ diagnosis.chanlun.post_signal_confirm.confirmed ? '+' : '' }}{{ (diagnosis.chanlun.post_signal_confirm.confidence_bonus*100).toFixed(0) }}% 置信度加成
+                </span>
+              </div>
+            </div>
+            <!-- V25: 动量衰减预警 -->
+            <div v-if="diagnosis.chanlun.momentum_decay && diagnosis.chanlun.momentum_decay.decay_detected" class="signal-report momentum-decay">
+              <div class="section-label">⚠️ 动量衰减预警（V25）</div>
+              <div class="kv-row">
+                <span class="kv-key">衰减类型</span>
+                <span class="tag tag-orange">{{ {bullish_decay:'买入后动量衰减',bearish_decay:'卖出后动量衰减'}[diagnosis.chanlun.momentum_decay.decay_type] || diagnosis.chanlun.momentum_decay.decay_type }}</span>
+                <span class="kv-val">动量评分 {{ diagnosis.chanlun.momentum_decay.momentum_score }}</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-val" style="color:#ef4444;margin-left:auto">
+                  {{ diagnosis.chanlun.momentum_decay.confidence_penalty > 0 ? '+' : '' }}{{ (diagnosis.chanlun.momentum_decay.confidence_penalty*100).toFixed(0) }}% 置信度调整
+                </span>
+              </div>
+            </div>
+            <!-- V25: 波动率自适应过滤 -->
+            <div v-if="diagnosis.chanlun.vol_regime_filter" class="signal-report vol-regime">
+              <div class="section-label">🌊 波动率自适应过滤（V25）</div>
+              <div class="kv-row">
+                <span class="kv-key">波动率状态</span>
+                <span class="tag" :class="{'tag-red': diagnosis.chanlun.vol_regime_filter.regime==='high', 'tag-green': diagnosis.chanlun.vol_regime_filter.regime==='low'}">
+                  {{ {high:'高波动 🔴',medium:'正常 🟡',low:'低波动 🟢'}[diagnosis.chanlun.vol_regime_filter.regime] || diagnosis.chanlun.vol_regime_filter.regime }}
+                </span>
+                <span class="kv-val">阈值调整 {{ diagnosis.chanlun.vol_regime_filter.threshold_adjustment }}x</span>
+              </div>
+              <div class="kv-row">
+                <span class="kv-key">过滤应用</span>
+                <span class="tag" :class="diagnosis.chanlun.vol_regime_filter.filter_applied ? 'tag-yellow' : 'tag-gray'">
+                  {{ diagnosis.chanlun.vol_regime_filter.filter_applied ? '已应用' : '未应用' }}
+                </span>
+                <span class="kv-val" :style="{ color: diagnosis.chanlun.vol_regime_filter.confidence_bonus > 0 ? '#22c55e' : '#ef4444' }">
+                  {{ diagnosis.chanlun.vol_regime_filter.confidence_bonus > 0 ? '+' : '' }}{{ (diagnosis.chanlun.vol_regime_filter.confidence_bonus*100).toFixed(0) }}% 置信度调整
+                </span>
+              </div>
+            </div>
+            <!-- V25: 综合信号质量评分 -->
+            <div v-if="diagnosis.chanlun.composite_quality" class="signal-report composite-quality">
+              <div class="section-label">⭐ 综合信号质量评分（V25）</div>
+              <div class="kv-row">
+                <span class="kv-key">综合得分</span>
+                <span class="kv-val" :style="{ fontSize:'18px', fontWeight:'bold', color: diagnosis.chanlun.composite_quality.grade==='S'?'#22c55e':diagnosis.chanlun.composite_quality.grade==='A'?'#4ade80':diagnosis.chanlun.composite_quality.grade==='B'?'#f59e0b':'#ef4444' }">
+                  {{ diagnosis.chanlun.composite_quality.overall_score }}分
+                </span>
+                <span class="tag grade-tag grade-{{ diagnosis.chanlun.composite_quality.grade }}" :style="{ fontSize:'14px', padding:'2px 8px' }">
+                  评级 {{ diagnosis.chanlun.composite_quality.grade }}
+                </span>
+              </div>
+              <div class="kv-row" v-for="(val, key) in diagnosis.chanlun.composite_quality.breakdown" :key="key">
+                <span class="kv-key" style="font-size:11px">{{ key }}</span>
+                <span class="kv-val" style="font-size:11px">{{ val }}</span>
+              </div>
+              <div class="kv-note" style="margin-top:4px;font-weight:bold">
+                {{ diagnosis.chanlun.composite_quality.recommendation }}
+              </div>
+            </div>
           </div>
         </div>
 

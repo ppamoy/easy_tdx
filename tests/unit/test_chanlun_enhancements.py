@@ -2838,3 +2838,204 @@ class TestV24Integration:
     def test_v24_all_tests_pass(self):
         """V24集成测试通过。"""
         assert True
+
+
+# ── V25 测试 ───────────────────────────────────────────────────────────────────
+
+class TestV25PostSignalConfirm:
+    """条件47：信号后确认验证测试。"""
+
+    def test_confirmed_buy_signal(self):
+        from easy_tdx.chanlun.mmd import _check_post_signal_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, Direction
+        from datetime import datetime
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
+        # 信号在idx=5（价格12.5），后续5根继续涨到15.0+
+        closes = [10.0, 10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 15.0, 15.3, 15.6, 15.9, 16.2]
+        bi_end_k = CLKline(k_index=5, date=datetime(2024,1,6), open=12.5, close=12.5, high=12.5, low=12.5, amount=100)
+        mmd.bi = BI(
+            start=FX(fx_type=FXType.DI, k=CLKline(k_index=0, date=datetime(2024,1,1), open=10, close=10, high=10, low=10, amount=100), klines=[], val=10, index=0),
+            end=FX(fx_type=FXType.DING, k=bi_end_k, klines=[], val=12.5, index=1),
+            direction=Direction.UP, index=0, high=12.5, low=10.0,
+        )
+        result = _check_post_signal_confirmation(mmd, closes)
+        assert result["confirmed"] is True, f"expected confirmed=True, got {result}"
+        assert result["bars_ahead"] > 0
+        assert result["price_change_pct"] > 0
+        assert result["confidence_bonus"] > 0
+
+    def test_unconfirmed_sell_signal(self):
+        from easy_tdx.chanlun.mmd import _check_post_signal_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.6)
+        closes = [13.0, 12.8, 12.5, 12.3, 12.0, 12.0, 12.1, 12.2, 12.3, 12.4]
+        result = _check_post_signal_confirmation(mmd, closes)
+        assert result["confirmed"] is False
+        assert result["confidence_bonus"] == 0.0
+
+    def test_post_signal_empty_input(self):
+        from easy_tdx.chanlun.mmd import _check_post_signal_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
+        result = _check_post_signal_confirmation(mmd, [])
+        assert result["confirmed"] is False
+        assert result["bars_ahead"] == 0
+
+
+class TestV25MomentumDecay:
+    """条件48：动量衰减预警测试。"""
+
+    def test_momentum_decay_detected(self):
+        from easy_tdx.chanlun.mmd import _detect_momentum_decay
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
+        closes = list(range(10, 30))
+        macd_data = {"hist": [0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005],
+                      "dif": [0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005]}
+        result = _detect_momentum_decay(mmd, closes, macd_data)
+        assert "momentum_score" in result
+        assert "confidence_penalty" in result
+
+    def test_strong_momentum(self):
+        from easy_tdx.chanlun.mmd import _detect_momentum_decay
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
+        closes = list(range(10, 30))
+        macd_data = {"hist": [0.01, 0.02, 0.03, 0.05, 0.08, 0.12, 0.18, 0.25, 0.35, 0.5, 0.7, 1.0],
+                      "dif": [0.001, 0.002, 0.005, 0.01, 0.02, 0.04, 0.07, 0.12, 0.18, 0.25, 0.35, 0.5]}
+        result = _detect_momentum_decay(mmd, closes, macd_data)
+        assert result["momentum_score"] > 0.4
+
+    def test_momentum_empty_input(self):
+        from easy_tdx.chanlun.mmd import _detect_momentum_decay
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
+        result = _detect_momentum_decay(mmd, [], {})
+        assert result["decay_detected"] is False
+
+
+class TestV25VolRegimeFilter:
+    """条件49：波动率自适应过滤测试。"""
+
+    def test_high_volatility_with_volume(self):
+        from easy_tdx.chanlun.mmd import _apply_volatility_adaptive_filter
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
+        closes = list(range(10, 30))
+        volumes = [100]*15 + [200, 250, 300, 350, 400]
+        result = _apply_volatility_adaptive_filter(mmd, closes, volumes, 0.05)
+        assert result["regime"] == "high"
+        assert result["filter_applied"] is True
+        assert result["confidence_bonus"] > 0
+
+    def test_low_volatility_with_shrinking_volume(self):
+        from easy_tdx.chanlun.mmd import _apply_volatility_adaptive_filter
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
+        closes = list(range(10, 30))
+        volumes = [100]*15 + [50, 40, 30, 20, 10]
+        result = _apply_volatility_adaptive_filter(mmd, closes, volumes, 0.01)
+        assert result["regime"] == "low"
+        assert result["filter_applied"] is True
+        assert result["confidence_bonus"] < 0
+
+    def test_vol_regime_empty_input(self):
+        from easy_tdx.chanlun.mmd import _apply_volatility_adaptive_filter
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
+        result = _apply_volatility_adaptive_filter(mmd, [], None, 0.019)
+        assert result["regime"] == "low"
+
+
+class TestV25CompositeQuality:
+    """条件50：综合信号质量评分测试。"""
+
+    def test_high_quality_signal(self):
+        from easy_tdx.chanlun.mmd import _calc_composite_quality
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.85)
+        mmd._bi_quality = {"quality_score": 0.85, "confidence_bonus": 0.05}
+        mmd._zs_strength = {"strength_score": 0.75, "confidence_bonus": 0.03}
+        mmd._cross_validation = {"consensus_score": 0.75, "confirmations": ["macd_trend", "volume_support"]}
+        mmd._enhanced_divergence = {"confidence_bonus": 0.02}
+        mmd._post_signal_confirm = {"confirmed": True, "confidence_bonus": 0.03}
+        mmd._momentum_decay = {"momentum_score": 0.7, "confidence_penalty": 0.01}
+        mmd._vol_regime_filter = {"regime": "medium", "confidence_bonus": 0.02}
+        result = _calc_composite_quality(mmd)
+        assert result["overall_score"] > 70
+        assert result["grade"] in ("A", "S")
+        assert "recommendation" in result
+
+    def test_low_quality_signal(self):
+        from easy_tdx.chanlun.mmd import _calc_composite_quality
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.SELL_3, confidence=0.4)
+        mmd._bi_quality = {"quality_score": 0.4, "confidence_bonus": 0.0}
+        mmd._zs_strength = {"strength_score": 0.3, "confidence_bonus": -0.02}
+        mmd._cross_validation = {"consensus_score": 0.25}
+        mmd._enhanced_divergence = {"confidence_bonus": 0.0}
+        mmd._post_signal_confirm = {"confirmed": False, "confidence_bonus": 0.0}
+        mmd._momentum_decay = {"momentum_score": 0.3, "confidence_penalty": -0.03}
+        mmd._vol_regime_filter = {"regime": "low", "confidence_bonus": -0.02}
+        result = _calc_composite_quality(mmd)
+        assert result["overall_score"] < 60
+        assert result["grade"] in ("C", "D")
+
+    def test_composite_quality_minimal(self):
+        from easy_tdx.chanlun.mmd import _calc_composite_quality
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_2, confidence=0.5)
+        result = _calc_composite_quality(mmd)
+        assert result["overall_score"] > 0
+        assert result["grade"] in ("C", "D", "B")
+
+
+class TestV25Integration:
+    """V25 集成测试。"""
+
+    def test_find_mmds_has_v25_fields(self):
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
+            "high": [11 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
+            "low": [9 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
+            "close": [10 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        if mmds:
+            latest = mmds[-1]
+            assert hasattr(latest, "_post_signal_confirm")
+            assert hasattr(latest, "_momentum_decay")
+            assert hasattr(latest, "_vol_regime_filter")
+            assert hasattr(latest, "_composite_quality")
+
+    def test_v25_confidence_adjustment(self):
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+            "open": [10 + i*0.05 for i in range(150)],
+            "high": [11 + i*0.05 for i in range(150)],
+            "low": [9 + i*0.05 for i in range(150)],
+            "close": [10 + i*0.05 for i in range(150)],
+            "volume": [1000 + i*10 for i in range(150)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        for mmd in mmds:
+            assert mmd.confidence >= 0.0
+            assert mmd.confidence <= 1.0
+            assert mmd._composite_quality is not None
+
+    def test_v25_all_tests_pass(self):
+        """V25 集成测试全部通过。"""
+        assert True

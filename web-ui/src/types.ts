@@ -509,6 +509,34 @@ export interface DiagnosisChanlun {
     confirmations: string[]
     consensus_bonus: number
   } | null
+  // V25: 信号后确认验证（条件47）
+  post_signal_confirm?: {
+    confirmed: boolean
+    bars_ahead: number
+    price_change_pct: number
+    confidence_bonus: number
+  } | null
+  // V25: 动量衰减预警（条件48）
+  momentum_decay?: {
+    decay_detected: boolean
+    decay_type: string
+    momentum_score: number
+    confidence_penalty: number
+  } | null
+  // V25: 波动率自适应过滤（条件49）
+  vol_regime_filter?: {
+    regime: string
+    filter_applied: boolean
+    threshold_adjustment: number
+    confidence_bonus: number
+  } | null
+  // V25: 综合信号质量评分（条件50）
+  composite_quality?: {
+    overall_score: number
+    grade: string
+    breakdown: Record<string, number>
+    recommendation: string
+  } | null
 }
 
 export interface DiagnosisMACD {
