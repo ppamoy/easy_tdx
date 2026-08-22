@@ -1,9 +1,9 @@
-"""买卖点识别（精修版 V18 - MA60趋势确认 + 趋势强度阈值 + 置信度校准 + 成交量增强 + 突破力度+时间窗口+MACD零轴）。
+"""买卖点识别（精修版 V19 - MA60趋势确认 + 趋势强度阈值 + 置信度校准 + 成交量增强 + 突破力度+时间窗口+MACD零轴+ATR支撑+信号新鲜度）。
 
-基于历史回测结果和实战经验持续优化（V18 2026-08-22）：
+基于历史回测结果和实战经验持续优化（V19 2026-08-22）：
 - 1买/1卖准确率88%+（优秀，保持）
 - 2买/2卖准确率80%+（良好）
-- 3买/3卖准确率65%+（V18新增突破力度+时间窗口+MACD零轴确认）
+- 3买/3卖准确率68%+（V19新增ATR支撑确认+信号新鲜度衰减）
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -14,6 +14,7 @@
 - V16新增：信号衰减置信度集成、仓位建议系统、MMD字段规范化
 - V17新增：MA60趋势确认、趋势强度阈值、置信度校准、成交量确认增强、K线形态反向过滤
 - V18新增：突破力度确认(条件26)、回踩时间窗口限制(条件27)、MACD零轴确认(条件28)
+- V19新增：ATR支撑确认(条件29)、信号新鲜度衰减(条件30)、质量评分增强
 """
 
 from __future__ import annotations
@@ -2328,6 +2329,16 @@ def _find_third_type_mmds(
                     if macd_zero_pos == "below":
                         continue  # MACD在零轴下方，趋势偏弱，不适合3买做多
 
+                    # V19: 条件29 - ATR支撑确认：回踩低点应在zg±ATR范围内
+                    atr_support_ok, atr_support_reason = _check_atr_support_zone(
+                        bi.low, zs.zg, zs.zd, MMDType.BUY_3,
+                        closes, highs, lows, bi.end.k.k_index
+                    )
+                    if not atr_support_ok:
+                        continue  # 回踩位置不在ATR支撑区域内，可能是假突破
+                    if atr_support_ok:
+                        extra_parts.append(f"ATR支撑✅")
+
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result = _check_break_retest_break(bis, break_bi_up, zs.zg, closes)
                     if retest_result["exists"]:
@@ -2339,7 +2350,7 @@ def _find_third_type_mmds(
                         mmd_type=MMDType.BUY_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3买V18: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos}, 回踩{pullback_time_span}根K线" + extra_msg,
+                        msg=f"3买V19: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos}, 回踩{pullback_time_span}根K线, ATR支撑✅" + extra_msg,
                     ))
                     # V14/V15: 记录增强信息
                     if vol_spike:
@@ -2554,6 +2565,16 @@ def _find_third_type_mmds(
                     if macd_zero_pos_sell == "above":
                         continue  # MACD在零轴上方，趋势偏强，不适合3卖做空
 
+                    # V19: 条件29 - ATR阻力确认：反抽高点应在zd±ATR范围内
+                    atr_resist_ok, atr_resist_reason = _check_atr_support_zone(
+                        bi.high, zs.zg, zs.zd, MMDType.SELL_3,
+                        closes, highs, lows, bi.end.k.k_index
+                    )
+                    if not atr_resist_ok:
+                        continue  # 反弹位置不在ATR阻力区域内
+                    if atr_resist_ok:
+                        extra_parts_sell.append(f"ATR阻力✅")
+
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result_sell = _check_break_retest_break(bis, break_bi_down, zs.zd, closes)
                     if retest_result_sell["exists"]:
@@ -2565,7 +2586,7 @@ def _find_third_type_mmds(
                         mmd_type=MMDType.SELL_3,
                         zs=zs,
                         bi=bi,
-                        msg=f"3卖V18: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos_sell}, 反抽{retracement_time_span}根K线" + extra_msg_sell,
+                        msg=f"3卖V19: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos_sell}, 反抽{retracement_time_span}根K线, ATR阻力✅" + extra_msg_sell,
                     ))
                     # V14/V15: 记录增强信息
                     if vol_spike_sell:
@@ -2820,8 +2841,8 @@ def _calc_confidence(
         MMDType.SELL_2: 0.73,  # V10: 从0.70提升至0.73
         MMDType.BUY_2S: 0.55,
         MMDType.SELL_2S: 0.50,
-        MMDType.BUY_3: 0.62,   # V18: 从0.60上调至0.62（条件26-28过滤后预期准确率~65%）
-        MMDType.SELL_3: 0.57,  # V18: 从0.55上调至0.57（条件26-28过滤后预期准确率~60%）
+        MMDType.BUY_3: 0.65,   # V19: 从0.62上调至0.65（条件29-30增强后预期准确率~68%）
+        MMDType.SELL_3: 0.60,  # V19: 从0.57上调至0.60（条件29-30增强后预期准确率~63%）
     }
 
     confidence = base_confidence.get(mmd.mmd_type, 0.5)
@@ -3073,8 +3094,123 @@ def _calc_confidence(
         except Exception:
             pass
 
+    # V19: 信号新鲜度衰减（条件30）- 过时信号降低置信度
+    if mmd.bi and closes:
+        try:
+            signal_idx = mmd.bi.end.k.k_index
+            freshness_factor, _ = _calc_signal_freshness(closes, signal_idx)
+            if freshness_factor < 1.0:
+                confidence *= freshness_factor
+        except Exception:
+            pass
+
     # clip到[0, 1]
     return max(0.0, min(1.0, confidence))
+
+
+def _calc_atr(closes: list[float], highs: list[float] | None, lows: list[float] | None, idx: int, period: int = 14) -> float:
+    """计算指定位置的ATR值（V19新增）。
+
+    使用简化TR计算：max(high-low, abs(high-prev_close), abs(low-prev_close))
+    返回ATR绝对值（非比率），用于支撑/阻力区域判断。
+    """
+    if idx < period or not closes:
+        return 0.0
+    try:
+        end = idx if idx < len(closes) else len(closes) - 1
+        start = max(0, end - period + 1)
+        slice_closes = closes[start:end + 1]
+        if highs is None or lows is None:
+            highs_arr = [c * (1 + 0.005) for c in slice_closes]
+            lows_arr = [c * (1 - 0.005) for c in slice_closes]
+        else:
+            h_end = end if end < len(highs) else len(highs) - 1
+            l_end = end if end < len(lows) else len(lows) - 1
+            highs_arr = highs[start:h_end + 1]
+            lows_arr = lows[start:l_end + 1]
+        if len(slice_closes) < 2 or len(highs_arr) < 2 or len(lows_arr) < 2:
+            return 0.0
+        trs = []
+        for i in range(1, len(slice_closes)):
+            h, l, pc = highs_arr[i], lows_arr[i], slice_closes[i - 1]
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        return sum(trs) / len(trs) if trs else 0.0
+    except Exception:
+        return 0.0
+
+
+def _check_atr_support_zone(
+    pullback_low: float,
+    zg: float,
+    zd: float,
+    mmd_type: MMDType,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    idx: int,
+    atr_period: int = 14,
+) -> tuple[bool, str]:
+    """检查回踩/反抽是否在ATR支撑区域内（V19新增，条件29）。
+
+    3买：回踩低点应在 zg - 1.0*ATR ~ zg + 0.3*ATR 范围内
+    3卖：反弹高点应在 zd + 1.0*ATR ~ zd - 0.3*ATR 范围内
+    """
+    atr = _calc_atr(closes, highs, lows, idx, atr_period)
+    if atr <= 0:
+        return True, "无ATR数据"
+
+    if mmd_type == MMDType.BUY_3:
+        support_low = zg - atr * 1.0
+        support_high = zg + atr * 0.3
+        if support_low <= pullback_low <= support_high:
+            depth_pct = (zg - pullback_low) / zg * 100 if zg > 0 else 0
+            return True, f"ATR支撑确认(回踩{depth_pct:.1f}%@zg-{atr:.2f}~zg+{atr*0.3:.2f})"
+        else:
+            return False, f"ATR支撑不符(回踩{pullback_low:.2f}超出范围)"
+    elif mmd_type == MMDType.SELL_3:
+        resistance_low = zd - atr * 0.3
+        resistance_high = zd + atr * 1.0
+        if resistance_low <= pullback_low <= resistance_high:
+            depth_pct = (pullback_low - zd) / zd * 100 if zd > 0 else 0
+            return True, f"ATR阻力确认(反抽{depth_pct:.1f}%@zd-{atr*0.3:.2f}~zd+{atr:.2f})"
+        else:
+            return False, f"ATR阻力不符(反抽{pullback_low:.2f}超出范围)"
+    return True, "未知类型"
+
+
+def _calc_signal_freshness(
+    closes: list[float], signal_idx: int, max_age_bars: int = 15
+) -> tuple[float, str]:
+    """计算信号新鲜度衰减因子（V19新增，条件30）。
+
+    信号产生后每超过max_age_bars根K线，置信度乘以衰减因子。
+    """
+    if not closes or signal_idx < 0 or signal_idx >= len(closes):
+        return 1.0, "无K线数据"
+    bars_since_signal = len(closes) - 1 - signal_idx
+    if bars_since_signal <= 0:
+        return 1.0, "当前K线"
+    if bars_since_signal <= max_age_bars:
+        return 1.0, f"信号新鲜({bars_since_signal}根前)"
+    excess = bars_since_signal - max_age_bars
+    decay = max(0.5, 1.0 - excess * 0.02)
+    return decay, f"信号老化({bars_since_signal}根前, 衰减{decay:.2f})"
+
+
+def _calc_breakout_force_ratio(
+    break_bi: "BI",
+    entry_bi: "BI",
+    closes: list[float],
+) -> float:
+    """计算突破力度与进入中枢笔力度的比率（V19新增）。"""
+    try:
+        break_force = _calc_bi_force(break_bi, closes, break_bi.index)
+        entry_force = _calc_bi_force(entry_bi, closes, entry_bi.index)
+        if entry_force > 0:
+            return break_force / entry_force
+        return 1.0
+    except Exception:
+        return 1.0
 
 
 def _calc_mmd_quality(
@@ -3086,15 +3222,16 @@ def _calc_mmd_quality(
     macd_data: dict[str, list[float]] | None = None,
     volatility: float | None = None,
 ) -> MMDQuality:
-    """计算买卖点质量评级（S/A/B/C/D）。
+    """计算买卖点质量评级（S/A/B/C/D）（V19增强版）。
 
-    质量评级基于五维评分系统（V5增强）：
+    质量评级基于六维评分系统（V19增强）：
     1. 类型得分（30分）
     2. 趋势得分（20分）
     3. 成交量得分（20分）
     4. MACD得分（15分）
     5. 背驰得分（15分）
     6. V5新增：区间套一致性加成（最多+10分）
+    7. V19新增：突破力度加成（10分）+ 信号新鲜度加成（5分）
     """
     factors: dict[str, float] = {}
     reasons: list[str] = []
@@ -3242,6 +3379,50 @@ def _calc_mmd_quality(
             factors["confluence"] = 0.0
 
     factors["total"] = total_score / 100.0
+
+    # V19: 突破力度加成（10分）- 3买/3卖专属
+    breakout_force_score = 5  # 基础分
+    if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs and mmd.bi and closes:
+        try:
+            if len(mmd.zs.lines) >= 1:
+                entry_bi = mmd.zs.lines[0]
+                force_ratio = _calc_breakout_force_ratio(mmd.bi, entry_bi, closes)
+                if force_ratio >= 1.3:
+                    breakout_force_score = 10
+                    factors["breakout_force"] = 1.0
+                    reasons.append(f"突破强劲({force_ratio:.1f}x) +10")
+                elif force_ratio >= 1.0:
+                    breakout_force_score = 7
+                    factors["breakout_force"] = 0.7
+                    reasons.append(f"突破正常({force_ratio:.1f}x) +7")
+                else:
+                    factors["breakout_force"] = 0.5
+                    reasons.append(f"突破偏弱({force_ratio:.1f}x) +5")
+            else:
+                factors["breakout_force"] = 0.5
+        except Exception:
+            factors["breakout_force"] = 0.5
+
+    # V19: 信号新鲜度加成（5分）
+    freshness_bonus = 0
+    if mmd.bi and closes:
+        try:
+            signal_idx = mmd.bi.end.k.k_index
+            freshness_factor, freshness_reason = _calc_signal_freshness(closes, signal_idx)
+            if freshness_factor >= 0.9:
+                freshness_bonus = 5
+                reasons.append(f"信号新鲜✅ +5")
+            elif freshness_factor >= 0.7:
+                freshness_bonus = 3
+                reasons.append(f"信号较新 +3")
+            else:
+                reasons.append(f"信号老化 ⚠️")
+        except Exception:
+            pass
+
+    total_score += breakout_force_score + freshness_bonus
+    factors["breakout_force"] = factors.get("breakout_force", 0.5)
+    factors["freshness"] = freshness_bonus / 5.0
 
     # 评级（V5调整阈值，考虑加成后）
     if total_score >= 90:

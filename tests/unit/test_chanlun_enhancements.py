@@ -1165,25 +1165,25 @@ class TestV17Enhancements:
         assert conf >= 0.64, f"趋势明确时3买置信度应>=0.64，实际={conf:.2f}"
 
     def test_v17_confidence_calibration_3buy(self):
-        """测试V17置信度校准：3买基础值降至0.60。"""
+        """测试V17置信度校准：3买基础值降至0.60（V19上调至0.65）。"""
         from easy_tdx.chanlun.mmd import _calc_confidence
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
         # 趋势强度=0.5时不应有惩罚或加成
         conf = _calc_confidence(mmd, 0.5)
-        # 基础0.60 + 趋势强度0.5无惩罚加成
-        assert 0.58 <= conf <= 0.65, f"3买基准置信度应在0.58-0.65之间，实际={conf:.2f}"
+        # 基础0.65 + 趋势强度0.5无惩罚加成
+        assert 0.63 <= conf <= 0.70, f"3买基准置信度应在0.63-0.70之间，实际={conf:.2f}"
 
     def test_v17_confidence_calibration_3sell(self):
-        """测试V17置信度校准：3卖基础值降至0.55。"""
+        """测试V17置信度校准：3卖基础值降至0.55（V19上调至0.60）。"""
         from easy_tdx.chanlun.mmd import _calc_confidence
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
         conf = _calc_confidence(mmd, 0.5)
-        # 基础0.55
-        assert 0.53 <= conf <= 0.60, f"3卖基准置信度应在0.53-0.60之间，实际={conf:.2f}"
+        # 基础0.60
+        assert 0.58 <= conf <= 0.65, f"3卖基准置信度应在0.58-0.65之间，实际={conf:.2f}"
 
     def test_v17_ma60_bonus_in_confidence(self):
         """测试V17 MA60趋势确认加成。"""
@@ -1342,19 +1342,19 @@ class TestV18Enhancements:
             f"MACD零轴上方应提升置信度: {conf_with_macd:.3f} vs {conf_without_macd:.3f}"
 
     def test_v18_base_confidence_values(self):
-        """测试V18基础置信度值：3买上调至0.62，3卖上调至0.57。"""
+        """测试V18基础置信度值：3买上调至0.62（V19再调至0.65），3卖上调至0.57（V19再调至0.60）。"""
         from easy_tdx.chanlun.mmd import _calc_confidence
         from easy_tdx.chanlun.types import MMD, MMDType
 
-        # 3买基础值应为0.62（无额外加成）
+        # 3买基础值应为0.65（V19从0.62上调）
         mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
         conf_3buy = _calc_confidence(mmd_3buy, 0.5)
-        assert 0.60 <= conf_3buy <= 0.65, f"3买基准置信度应在0.60-0.65之间，实际={conf_3buy:.2f}"
+        assert 0.63 <= conf_3buy <= 0.70, f"3买基准置信度应在0.63-0.70之间，实际={conf_3buy:.2f}"
 
-        # 3卖基础值应为0.57（无额外加成）
+        # 3卖基础值应为0.60（V19从0.57上调）
         mmd_3sell = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
         conf_3sell = _calc_confidence(mmd_3sell, 0.5)
-        assert 0.55 <= conf_3sell <= 0.60, f"3卖基准置信度应在0.55-0.60之间，实际={conf_3sell:.2f}"
+        assert 0.58 <= conf_3sell <= 0.65, f"3卖基准置信度应在0.58-0.65之间，实际={conf_3sell:.2f}"
 
     def test_v18_all_types_still_valid(self):
         """测试V18不破坏各类买卖点的基础置信度。"""
@@ -1375,3 +1375,111 @@ class TestV18Enhancements:
 
         mmd_2sell = MMD(mmd_type=MMDType.SELL_2, msg="2卖: 反弹确认")
         assert _calc_confidence(mmd_2sell, 0.5) >= 0.65
+
+
+class TestV19Enhancements:
+    """测试V19新增功能：ATR支撑确认 + 信号新鲜度衰减 + 质量评分增强。"""
+
+    def test_calc_atr_basic(self):
+        """测试ATR计算基础功能。"""
+        from easy_tdx.chanlun.mmd import _calc_atr
+
+        closes = [10.0, 10.5, 10.3, 10.8, 10.6, 11.0, 10.9, 11.2, 11.1, 11.5]
+        highs = [10.2, 10.7, 10.5, 11.0, 10.8, 11.2, 11.1, 11.4, 11.3, 11.7]
+        lows = [9.8, 10.3, 10.1, 10.6, 10.4, 10.8, 10.7, 11.0, 10.9, 11.3]
+        atr = _calc_atr(closes, highs, lows, idx=9, period=5)
+        assert atr > 0, f"ATR应为正值，实际={atr}"
+        assert atr < 2.0, f"ATR应在合理范围内，实际={atr}"
+
+    def test_check_atr_support_zone_3buy(self):
+        """测试3买ATR支撑区域确认。"""
+        from easy_tdx.chanlun.mmd import _check_atr_support_zone
+        from easy_tdx.chanlun.types import MMDType
+
+        closes = [10.0, 10.2, 10.1, 10.3, 10.5, 10.4, 10.6, 10.8, 10.7, 11.0]
+        highs = [10.1, 10.3, 10.2, 10.4, 10.6, 10.5, 10.7, 10.9, 10.8, 11.1]
+        lows = [9.9, 10.1, 10.0, 10.2, 10.4, 10.3, 10.5, 10.7, 10.6, 10.9]
+        zg = 10.5
+
+        pullback_low = 10.4
+        ok, reason = _check_atr_support_zone(pullback_low, zg, 0.0, MMDType.BUY_3, closes, highs, lows, 9)
+        assert ok is True, f"回踩应在支撑区域内，实际={reason}"
+
+    def test_check_atr_support_zone_3sell(self):
+        """测试3卖ATR阻力区域确认。"""
+        from easy_tdx.chanlun.mmd import _check_atr_support_zone
+        from easy_tdx.chanlun.types import MMDType
+
+        closes = [10.0, 10.2, 10.1, 10.3, 10.5, 10.4, 10.6, 10.8, 10.7, 11.0]
+        highs = [10.1, 10.3, 10.2, 10.4, 10.6, 10.5, 10.7, 10.9, 10.8, 11.1]
+        lows = [9.9, 10.1, 10.0, 10.2, 10.4, 10.3, 10.5, 10.7, 10.6, 10.9]
+        zd = 9.8
+
+        pullback_high = 9.9
+        ok, reason = _check_atr_support_zone(pullback_high, 10.5, zd, MMDType.SELL_3, closes, highs, lows, 9)
+        assert ok is True, f"反弹应在阻力区域内，实际={reason}"
+
+    def test_calc_signal_freshness_current(self):
+        """测试信号新鲜度：当前K线信号无衰减。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_freshness
+
+        closes = list(range(100))
+        factor, reason = _calc_signal_freshness(closes, signal_idx=99)
+        assert factor == 1.0, f"当前K线信号应无衰减，实际={factor}"
+
+    def test_calc_signal_freshness_aged(self):
+        """测试信号新鲜度：过期信号有衰减。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_freshness
+
+        closes = list(range(100))
+        # 30根K线前的信号
+        factor2, reason2 = _calc_signal_freshness(closes, signal_idx=69)
+        assert factor2 < 1.0, f"30根前的信号应有衰减，实际={factor2}"
+        assert "老化" in reason2 or "衰减" in reason2
+
+    def test_calc_breakout_force_ratio(self):
+        """测试突破力度比率计算。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_force_ratio
+        from easy_tdx.chanlun.types import BI, FX, FXType
+
+        class FakeK:
+            def __init__(self, k_index):
+                self.k_index = k_index
+                self.index = k_index
+
+        entry_bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(5), klines=[], val=11.0),
+            direction="up", index=0, high=11.0, low=10.0,
+        )
+        break_bi = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(10), klines=[], val=11.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(15), klines=[], val=13.0),
+            direction="up", index=10, high=13.0, low=11.0,
+        )
+        closes = [10.0 + i * 0.1 for i in range(20)]
+        ratio = _calc_breakout_force_ratio(break_bi, entry_bi, closes)
+        assert ratio > 0, f"力度比率应为正值，实际={ratio}"
+
+    def test_v19_base_confidence_values(self):
+        """测试V19基础置信度：3买0.65，3卖0.60。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        conf_3buy = _calc_confidence(mmd_3buy, 0.5)
+        assert 0.63 <= conf_3buy <= 0.70, f"3买基准置信度应在0.63-0.70之间，实际={conf_3buy:.2f}"
+
+        mmd_3sell = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
+        conf_3sell = _calc_confidence(mmd_3sell, 0.5)
+        assert 0.58 <= conf_3sell <= 0.65, f"3卖基准置信度应在0.58-0.65之间，实际={conf_3sell:.2f}"
+
+    def test_v19_all_types_still_valid(self):
+        """测试V19不破坏各类买卖点的基础置信度。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        assert _calc_confidence(MMD(mmd_type=MMDType.BUY_1, msg="1买"), 0.5) >= 0.85
+        assert _calc_confidence(MMD(mmd_type=MMDType.SELL_1, msg="1卖"), 0.5) >= 0.88
+        assert _calc_confidence(MMD(mmd_type=MMDType.BUY_2, msg="2买"), 0.5) >= 0.70
+        assert _calc_confidence(MMD(mmd_type=MMDType.SELL_2, msg="2卖"), 0.5) >= 0.65
