@@ -817,6 +817,18 @@ async def diagnose_stock(
             "market_composite": getattr(find_mmds, '_last_market_composite', None) if latest_mmd else None,
             # V36: 买卖点策略推荐（条件88）
             "strategy_recommendation": getattr(latest_mmd, "_strategy_recommendation", None) if latest_mmd else None,
+            # V37: 连续确认过滤（条件89）
+            "consecutive_confirmation": getattr(latest_mmd, "_consecutive_confirmation", None) if latest_mmd else None,
+            # V37: 价格动能加速度（条件90）
+            "momentum_acceleration": getattr(latest_mmd, "_momentum_acceleration", None) if latest_mmd else None,
+            # V37: 波动率状态转换检测（条件91）
+            "volatility_regime_change": getattr(find_mmds, '_last_vol_regime_change', None) if latest_mmd else None,
+            # V37: 买卖点时间序列关联分析（条件92）
+            "temporal_correlation": getattr(latest_mmd, "_temporal_correlation", None) if latest_mmd else None,
+            # V37: 多时间框架动量一致性（条件93）
+            "multi_tf_momentum": getattr(latest_mmd, "_multi_tf_momentum", None) if latest_mmd else None,
+            # V37: 信号综合质量排名（条件94）
+            "quality_ranking": getattr(latest_mmd, "_quality_ranking", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

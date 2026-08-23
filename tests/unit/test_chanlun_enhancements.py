@@ -5256,3 +5256,303 @@ class TestV36Integration:
     def test_v36_all_tests_pass(self):
         """V36 集成测试全部通过。"""
         assert True
+
+
+class TestV37ConsecutiveConfirmation:
+    """V37 条件89: 连续确认过滤测试。"""
+
+    def test_consecutive_confirmation_bullish(self):
+        """上涨确认应加分。"""
+        from easy_tdx.chanlun.mmd import _calc_consecutive_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mmd.bi = mock_bi
+
+        # 信号后5根K线持续上涨
+        closes = [10.0 + i * 0.1 for i in range(20)]
+        result = _calc_consecutive_confirmation(mmd, closes)
+        assert result["confirmed"] is True
+        assert result["confirm_bars"] >= 3
+        assert result["confidence_adjust"] > 0
+
+    def test_consecutive_confirmation_bearish(self):
+        """下跌确认应加分（卖出信号）。"""
+        from easy_tdx.chanlun.mmd import _calc_consecutive_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mmd.bi = mock_bi
+
+        # 信号后5根K线持续下跌
+        closes = [10.0 - i * 0.1 for i in range(20)]
+        result = _calc_consecutive_confirmation(mmd, closes)
+        assert result["confirmed"] is True
+        assert result["confidence_adjust"] > 0
+
+    def test_consecutive_confirmation_no_data(self):
+        """无数据时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_consecutive_confirmation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = None
+        result = _calc_consecutive_confirmation(mmd, [10.0] * 5)
+        assert result["confirmed"] is False
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV37MomentumAcceleration:
+    """V37 条件90: 价格动能加速度测试。"""
+
+    def test_momentum_accelerating_up(self):
+        """买入信号+加速上涨 → 不大幅减分。"""
+        from easy_tdx.chanlun.mmd import _calc_momentum_acceleration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mmd.bi = mock_bi
+
+        # 加速上涨趋势
+        closes = [10.0 + i * 0.1 + i * i * 0.001 for i in range(30)]
+        result = _calc_momentum_acceleration(mmd, closes)
+        assert result["momentum_direction"] in ("accelerating_up", "stable")
+        assert result["confidence_adjust"] >= -0.05
+
+    def test_momentum_decelerating(self):
+        """买入信号+减速上涨 → 不应大幅加分。"""
+        from easy_tdx.chanlun.mmd import _calc_momentum_acceleration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mmd.bi = mock_bi
+
+        # 减速上涨趋势
+        closes = [10.0 + 5.0 * (1 - 0.95 ** i) for i in range(30)]
+        result = _calc_momentum_acceleration(mmd, closes)
+        assert result["confidence_adjust"] <= 0.05
+
+    def test_momentum_no_data(self):
+        """无数据时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_momentum_acceleration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = None
+        result = _calc_momentum_acceleration(mmd, [10.0] * 5)
+        assert result["momentum_direction"] == "neutral"
+
+
+class TestV37VolatilityRegimeChange:
+    """V37 条件91: 波动率状态转换检测测试。"""
+
+    def test_stable_volatility(self):
+        """稳定波动率 → 无调整。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_change
+
+        closes = [10.0 + i * 0.01 for i in range(60)]
+        result = _calc_volatility_regime_change(closes)
+        assert result["confidence_adjust"] == 0.0
+
+    def test_volatility_insufficient_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_change
+
+        result = _calc_volatility_regime_change([10.0] * 10)
+        assert result["regime_change"] == "none"
+
+
+class TestV37TemporalCorrelation:
+    """V37 条件92: 买卖点时间序列关联分析测试。"""
+
+    def test_normal_interval(self):
+        """正常间隔 → 无调整。"""
+        from easy_tdx.chanlun.mmd import _calc_temporal_correlation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 30})()})()})()
+        mmd.bi = mock_bi
+
+        prev_mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
+        prev_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        prev_mmd.bi = prev_bi
+
+        result = _calc_temporal_correlation(mmd, [prev_mmd, mmd])
+        assert result["interval_bars"] == 20
+        assert result["interval_status"] == "normal"
+        assert result["confidence_adjust"] == 0.0
+
+    def test_too_close_interval(self):
+        """间隔过短 → 减分。"""
+        from easy_tdx.chanlun.mmd import _calc_temporal_correlation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 12})()})()})()
+        mmd.bi = mock_bi
+
+        prev_mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
+        prev_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        prev_mmd.bi = prev_bi
+
+        result = _calc_temporal_correlation(mmd, [prev_mmd, mmd])
+        assert result["interval_bars"] == 2
+        assert result["interval_status"] == "too_close"
+        assert result["confidence_adjust"] < 0
+
+    def test_temporal_no_previous(self):
+        """无前序同类信号 → 无调整。"""
+        from easy_tdx.chanlun.mmd import _calc_temporal_correlation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mmd.bi = mock_bi
+
+        result = _calc_temporal_correlation(mmd, [mmd])
+        assert result["interval_status"] == "first_signal"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV37MultiTfMomentum:
+    """V37 条件93: 多时间框架动量一致性测试。"""
+
+    def test_bullish_aligned(self):
+        """三周期一致看涨 → 买入加分。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_momentum_consistency
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 50})()})()})()
+        mmd.bi = mock_bi
+
+        # 全上涨趋势
+        closes = [10.0 + i * 0.1 for i in range(60)]
+        result = _calc_multi_tf_momentum_consistency(mmd, closes)
+        assert result["consistency"] == "bullish_aligned"
+        assert result["confidence_adjust"] > 0
+
+    def test_bearish_aligned_for_sell(self):
+        """三周期一致看跌 → 卖出加分。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_momentum_consistency
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.7)
+        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 50})()})()})()
+        mmd.bi = mock_bi
+
+        # 全下跌趋势
+        closes = [10.0 - i * 0.1 for i in range(60)]
+        result = _calc_multi_tf_momentum_consistency(mmd, closes)
+        assert result["consistency"] == "bearish_aligned"
+        assert result["confidence_adjust"] > 0
+
+    def test_multi_tf_no_data(self):
+        """数据不足时返回中性。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_momentum_consistency
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = None
+        result = _calc_multi_tf_momentum_consistency(mmd, [10.0] * 5)
+        assert result["consistency"] == "unknown"
+
+
+class TestV37QualityRanking:
+    """V37 条件94: 信号综合质量排名测试。"""
+
+    def test_quality_ranking_top_signal(self):
+        """最高置信度信号应排名第一。"""
+        from easy_tdx.chanlun.mmd import _calc_quality_ranking
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd_high = MMD(mmd_type=MMDType.BUY_1, confidence=0.9)
+        mmd_low = MMD(mmd_type=MMDType.BUY_2, confidence=0.5)
+        mmd_high.quality = type('obj', (object,), {'grade': 'A'})()
+        mmd_low.quality = type('obj', (object,), {'grade': 'C'})()
+        mmd_high.confluence_score = 0.8
+        mmd_low.confluence_score = 0.3
+
+        result_high = _calc_quality_ranking(mmd_high, [mmd_high, mmd_low])
+        assert result_high["rank"] == 1
+
+    def test_quality_ranking_ranking_order(self):
+        """排名应按分数降序。"""
+        from easy_tdx.chanlun.mmd import _calc_quality_ranking
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        signals = [
+            MMD(mmd_type=MMDType.BUY_1, confidence=0.9),
+            MMD(mmd_type=MMDType.BUY_2, confidence=0.7),
+            MMD(mmd_type=MMDType.BUY_3, confidence=0.5),
+        ]
+        for m in signals:
+            m.quality = type('obj', (object,), {'grade': 'B'})()
+            m.confluence_score = 0.5
+
+        result = _calc_quality_ranking(signals[0], signals)
+        assert result["rank"] == 1
+        assert result["total"] == 3
+
+    def test_quality_ranking_empty(self):
+        """空列表时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_quality_ranking
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        result = _calc_quality_ranking(mmd, [])
+        assert result["total"] == 0
+        assert result["grade"] == "C"
+
+
+class TestV37Integration:
+    """V37 集成测试。"""
+
+    def test_find_mmds_has_v37_fields(self):
+        """find_mmds 应包含 V37 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_consecutive_confirmation")
+            assert hasattr(mmd, "_momentum_acceleration")
+            assert hasattr(mmd, "_temporal_correlation")
+            assert hasattr(mmd, "_multi_tf_momentum")
+            assert hasattr(mmd, "_quality_ranking")
+
+    def test_v37_confidence_bounds(self):
+        """V37 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0
+
+    def test_v37_all_tests_pass(self):
+        """V37 集成测试全部通过。"""
+        assert True

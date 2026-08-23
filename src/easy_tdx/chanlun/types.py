@@ -290,6 +290,14 @@ class MMD:
     _market_composite: dict[str, Any] | None = None  # 市场环境综合评分（条件87）
     _strategy_recommendation: dict[str, Any] | None = None  # 买卖点策略推荐（条件88）
 
+    # V37 enhancement fields
+    _consecutive_confirmation: dict[str, Any] | None = None  # 连续确认过滤（条件89）
+    _momentum_acceleration: dict[str, Any] | None = None  # 价格动能加速度（条件90）
+    _volatility_regime_change: dict[str, Any] | None = None  # 波动率状态转换检测（条件91）
+    _temporal_correlation: dict[str, Any] | None = None  # 买卖点时间序列关联分析（条件92）
+    _multi_tf_momentum: dict[str, Any] | None = None  # 多时间框架动量一致性（条件93）
+    _quality_ranking: dict[str, Any] | None = None  # 信号综合质量排名（条件94）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

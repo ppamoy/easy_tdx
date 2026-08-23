@@ -885,6 +885,45 @@ export interface DiagnosisChanlun {
     risk_level: string
     action_priority: number
   } | null
+  // V37: 连续确认过滤（条件89）
+  consecutive_confirmation?: {
+    confirmed: boolean
+    confirm_bars: number
+    confidence_adjust: number
+  } | null
+  // V37: 价格动能加速度（条件90）
+  momentum_acceleration?: {
+    acceleration: number
+    momentum_direction: string
+    confidence_adjust: number
+  } | null
+  // V37: 波动率状态转换检测（条件91）
+  volatility_regime_change?: {
+    regime_change: string
+    vol_ratio: number
+    confidence_adjust: number
+  } | null
+  // V37: 买卖点时间序列关联分析（条件92）
+  temporal_correlation?: {
+    interval_bars: number
+    interval_status: string
+    confidence_adjust: number
+  } | null
+  // V37: 多时间框架动量一致性（条件93）
+  multi_tf_momentum?: {
+    short_trend: string
+    mid_trend: string
+    long_trend: string
+    consistency: string
+    confidence_adjust: number
+  } | null
+  // V37: 信号综合质量排名（条件94）
+  quality_ranking?: {
+    grade: string
+    rank: number
+    total: number
+    score: number
+  } | null
 }
 
 export interface DiagnosisMACD {

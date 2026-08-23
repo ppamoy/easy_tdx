@@ -1628,6 +1628,156 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V37: 连续确认过滤（条件89）-->
+        <div v-if="diagnosis.chanlun.consecutive_confirmation" class="metric-card consecutive-conf">
+          <div class="card-title">✅ 连续确认（V37）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">确认状态</span>
+              <span class="tag" :class="diagnosis.chanlun.consecutive_confirmation.confirmed ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.consecutive_confirmation.confirmed ? '已确认 ✅' : '未确认 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">确认K线</span>
+              <span class="kv-val">{{ diagnosis.chanlun.consecutive_confirmation.confirm_bars }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.consecutive_confirmation.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.consecutive_confirmation.confidence_adjust < 0 ? '#ef4444' : '#888' }">
+                {{ diagnosis.chanlun.consecutive_confirmation.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.consecutive_confirmation.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V37: 价格动能加速度（条件90）-->
+        <div v-if="diagnosis.chanlun.momentum_acceleration" class="metric-card momentum-acc">
+          <div class="card-title">⚡ 动能加速度（V37）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">动量方向</span>
+              <span class="tag" :class="diagnosis.chanlun.momentum_acceleration.momentum_direction === 'accelerating' ? 'tag-green' : diagnosis.chanlun.momentum_acceleration.momentum_direction === 'decelerating' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.momentum_acceleration.momentum_direction }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">加速度</span>
+              <span class="kv-val">{{ diagnosis.chanlun.momentum_acceleration.acceleration.toFixed(4) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.momentum_acceleration.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.momentum_acceleration.confidence_adjust < 0 ? '#ef4444' : '#888' }">
+                {{ diagnosis.chanlun.momentum_acceleration.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.momentum_acceleration.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V37: 波动率状态转换（条件91）-->
+        <div v-if="diagnosis.chanlun.volatility_regime_change" class="metric-card vol-regime">
+          <div class="card-title">📊 波动率转换（V37）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">波动率状态</span>
+              <span class="tag" :class="{ 'tag-red': diagnosis.chanlun.volatility_regime_change.regime_change === 'low_to_high', 'tag-green': diagnosis.chanlun.volatility_regime_change.regime_change === 'high_to_low', 'tag-gray': diagnosis.chanlun.volatility_regime_change.regime_change === 'stable' }">
+                {{ diagnosis.chanlun.volatility_regime_change.regime_change === 'low_to_high' ? '低→高 📈' : diagnosis.chanlun.volatility_regime_change.regime_change === 'high_to_low' ? '高→低 📉' : '稳定 ➡️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">波动率比率</span>
+              <span class="kv-val">{{ diagnosis.chanlun.volatility_regime_change.vol_ratio.toFixed(2) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.volatility_regime_change.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.volatility_regime_change.confidence_adjust < 0 ? '#ef4444' : '#888' }">
+                {{ diagnosis.chanlun.volatility_regime_change.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volatility_regime_change.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V37: 时间序列关联（条件92）-->
+        <div v-if="diagnosis.chanlun.temporal_correlation" class="metric-card temporal-cor">
+          <div class="card-title">⏱️ 时序关联（V37）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">间隔K线</span>
+              <span class="kv-val">{{ diagnosis.chanlun.temporal_correlation.interval_bars }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">间隔状态</span>
+              <span class="tag" :class="{ 'tag-red': diagnosis.chanlun.temporal_correlation.interval_status === 'too_close', 'tag-yellow': diagnosis.chanlun.temporal_correlation.interval_status === 'too_far', 'tag-green': diagnosis.chanlun.temporal_correlation.interval_status === 'normal', 'tag-gray': diagnosis.chanlun.temporal_correlation.interval_status === 'first_signal' }">
+                {{ diagnosis.chanlun.temporal_correlation.interval_status === 'too_close' ? '过近 ⚠️' : diagnosis.chanlun.temporal_correlation.interval_status === 'too_far' ? '过远 📍' : diagnosis.chanlun.temporal_correlation.interval_status === 'first_signal' ? '首次信号' : '正常 ✓' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.temporal_correlation.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.temporal_correlation.confidence_adjust < 0 ? '#ef4444' : '#888' }">
+                {{ diagnosis.chanlun.temporal_correlation.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.temporal_correlation.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V37: 多时间框架动量一致性（条件93）-->
+        <div v-if="diagnosis.chanlun.multi_tf_momentum" class="metric-card multi-tf-mom">
+          <div class="card-title">📐 多TF动量一致性（V37）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">短期趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_momentum.short_trend === 'up' ? 'tag-green' : diagnosis.chanlun.multi_tf_momentum.short_trend === 'down' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_tf_momentum.short_trend }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">中期趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_momentum.mid_trend === 'up' ? 'tag-green' : diagnosis.chanlun.multi_tf_momentum.mid_trend === 'down' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_tf_momentum.mid_trend }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">长期趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_momentum.long_trend === 'up' ? 'tag-green' : diagnosis.chanlun.multi_tf_momentum.long_trend === 'down' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_tf_momentum.long_trend }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">一致性</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.multi_tf_momentum.consistency.includes('bullish'), 'tag-red': diagnosis.chanlun.multi_tf_momentum.consistency.includes('bearish') || diagnosis.chanlun.multi_tf_momentum.consistency === 'conflicted', 'tag-gray': diagnosis.chanlun.multi_tf_momentum.consistency === 'neutral' }">
+                {{ diagnosis.chanlun.multi_tf_momentum.consistency }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_momentum.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.multi_tf_momentum.confidence_adjust < 0 ? '#ef4444' : '#888' }">
+                {{ diagnosis.chanlun.multi_tf_momentum.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_momentum.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V37: 信号综合质量排名（条件94）-->
+        <div v-if="diagnosis.chanlun.quality_ranking" class="metric-card quality-rank">
+          <div class="card-title">🏆 信号质量排名（V37）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">质量等级</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.quality_ranking.grade === 'S' || diagnosis.chanlun.quality_ranking.grade === 'A', 'tag-yellow': diagnosis.chanlun.quality_ranking.grade === 'B', 'tag-gray': diagnosis.chanlun.quality_ranking.grade === 'C', 'tag-red': diagnosis.chanlun.quality_ranking.grade === 'D' }">
+                {{ diagnosis.chanlun.quality_ranking.grade }} 级
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">排名</span>
+              <span class="kv-val">#{{ diagnosis.chanlun.quality_ranking.rank }} / {{ diagnosis.chanlun.quality_ranking.total }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">综合得分</span>
+              <span class="kv-val">{{ diagnosis.chanlun.quality_ranking.score.toFixed(1) }}</span>
+            </div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -2349,4 +2499,12 @@ onMounted(() => {
 .urgency .kv-val { font-weight: 600; }
 .market-composite .kv-val { font-weight: 600; }
 .strategy-rec .kv-val { font-weight: 600; }
+
+/* V37: 连续确认 + 动能加速度 + 波动率转换 + 时序关联 + 多TF动量 + 质量排名 */
+.consecutive-conf .kv-val { font-weight: 600; }
+.momentum-acc .kv-val { font-weight: 600; }
+.vol-regime .kv-val { font-weight: 600; }
+.temporal-cor .kv-val { font-weight: 600; }
+.multi-tf-mom .kv-val { font-weight: 600; }
+.quality-rank .kv-val { font-weight: 600; }
 </style>
