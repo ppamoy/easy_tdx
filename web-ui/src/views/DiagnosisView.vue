@@ -2906,6 +2906,112 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V54: 多K线确认后确认（条件156）-->
+        <div v-if="diagnosis.chanlun.multi_bar_confirmation_v54" class="metric-card v54-multibar">
+          <div class="card-title">📊 多K线确认后确认（V54·条件156）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">确认状态</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_bar_confirmation_v54.confirmed ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.multi_bar_confirmation_v54.confirmed ? '✅ 确认通过' : '⚠️ 确认不足' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">连续确认K线</span>
+              <span class="kv-val">{{ diagnosis.chanlun.multi_bar_confirmation_v54.confirm_bars }} / {{ diagnosis.chanlun.multi_bar_confirmation_v54.total_bars }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_bar_confirmation_v54.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.multi_bar_confirmation_v54.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_bar_confirmation_v54.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_bar_confirmation_v54.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_bar_confirmation_v54.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V54: 缺口风险评估（条件157）-->
+        <div v-if="diagnosis.chanlun.gap_risk_assessment_v54" class="metric-card v54-gap">
+          <div class="card-title">🕳️ 缺口风险评估（V54·条件157）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">缺口检测</span>
+              <span class="tag" :class="diagnosis.chanlun.gap_risk_assessment_v54.has_gap ? (diagnosis.chanlun.gap_risk_assessment_v54.gap_direction === 'down' && diagnosis.chanlun.gap_risk_assessment_v54.confidence_adjust < 0 ? 'tag-red' : 'tag-green') : 'tag-gray'">
+                {{ diagnosis.chanlun.gap_risk_assessment_v54.has_gap ? (diagnosis.chanlun.gap_risk_assessment_v54.gap_direction === 'up' ? '⬆️ 向上缺口' : '⬇️ 向下缺口') : '✅ 无缺口' }}
+              </span>
+            </div>
+            <div class="kv-row" v-if="diagnosis.chanlun.gap_risk_assessment_v54.has_gap">
+              <span class="kv-key">缺口幅度</span>
+              <span class="kv-val">{{ diagnosis.chanlun.gap_risk_assessment_v54.gap_size_pct }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.gap_risk_assessment_v54.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.gap_risk_assessment_v54.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.gap_risk_assessment_v54.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.gap_risk_assessment_v54.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.gap_risk_assessment_v54.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V54: 波动率 regime 切换检测（条件158）-->
+        <div v-if="diagnosis.chanlun.volatility_regime_change_v54" class="metric-card v54-vol">
+          <div class="card-title">📈 波动率切换检测（V54·条件158）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">波动率状态</span>
+              <span class="tag" :class="diagnosis.chanlun.volatility_regime_change_v54.regime === 'expanding' ? 'tag-green' : diagnosis.chanlun.volatility_regime_change_v54.regime === 'contracting' ? 'tag-yellow' : 'tag-gray'">
+                {{ diagnosis.chanlun.volatility_regime_change_v54.regime === 'expanding' ? '📈 波动率扩张' : diagnosis.chanlun.volatility_regime_change_v54.regime === 'contracting' ? '📉 波动率收缩' : '➡️ 稳定' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">ATR变化</span>
+              <span class="tag" :class="diagnosis.chanlun.volatility_regime_change_v54.atr_expansion_pct > 0 ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.volatility_regime_change_v54.atr_expansion_pct > 0 ? '+' : '' }}{{ diagnosis.chanlun.volatility_regime_change_v54.atr_expansion_pct }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.volatility_regime_change_v54.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.volatility_regime_change_v54.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.volatility_regime_change_v54.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.volatility_regime_change_v54.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volatility_regime_change_v54.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V54: 量价配合度评分（条件159）-->
+        <div v-if="diagnosis.chanlun.volume_price_coordination_v54" class="metric-card v54-volprice">
+          <div class="card-title">📊 量价配合度评分（V54·条件159）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">价格趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_price_coordination_v54.price_trend === 'up' ? 'tag-green' : diagnosis.chanlun.volume_price_coordination_v54.price_trend === 'down' ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.volume_price_coordination_v54.price_trend === 'up' ? '📈 上涨' : diagnosis.chanlun.volume_price_coordination_v54.price_trend === 'down' ? '📉 下跌' : '➡️ 震荡' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">量能趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_price_coordination_v54.volume_trend === 'expanding' ? 'tag-green' : diagnosis.chanlun.volume_price_coordination_v54.volume_trend === 'shrinking' ? 'tag-yellow' : 'tag-gray'">
+                {{ diagnosis.chanlun.volume_price_coordination_v54.volume_trend === 'expanding' ? '📈 放量' : diagnosis.chanlun.volume_price_coordination_v54.volume_trend === 'shrinking' ? '📉 缩量' : '➡️ 稳定' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">配合评分</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_price_coordination_v54.score >= 2 ? 'tag-green' : diagnosis.chanlun.volume_price_coordination_v54.score <= -2 ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.volume_price_coordination_v54.score >= 2 ? '✅ 优秀' : diagnosis.chanlun.volume_price_coordination_v54.score <= -2 ? '🚨 恶化' : '🟡 一般' }} ({{ diagnosis.chanlun.volume_price_coordination_v54.score > 0 ? '+' : '' }}{{ diagnosis.chanlun.volume_price_coordination_v54.score }})
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_price_coordination_v54.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.volume_price_coordination_v54.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.volume_price_coordination_v54.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.volume_price_coordination_v54.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volume_price_coordination_v54.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>

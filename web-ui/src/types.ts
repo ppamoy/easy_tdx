@@ -1411,6 +1411,37 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V54: 多K线确认后确认（条件156）
+  multi_bar_confirmation_v54?: {
+    confirmed: boolean
+    confirm_bars: number
+    total_bars: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V54: 缺口风险评估（条件157）
+  gap_risk_assessment_v54?: {
+    has_gap: boolean
+    gap_direction: string
+    gap_size_pct: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V54: 波动率 regime 切换检测（条件158）
+  volatility_regime_change_v54?: {
+    atr_expansion_pct: number
+    regime: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V54: 量价配合度评分（条件159）
+  volume_price_coordination_v54?: {
+    score: number
+    volume_trend: string
+    price_trend: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

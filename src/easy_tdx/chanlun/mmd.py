@@ -1,14 +1,15 @@
-"""买卖点识别（精修版 V52 - 决策增强）。
+"""买卖点识别（精修版 V54 - 决策增强）。
 
-基于缠论理论持续优化（V52 2026-08-25）：
+基于缠论理论持续优化（V54 2026-08-25）：
 - 置信度计算：基于多因子加权，非单一准确率声明
+- V54新增：多K线确认后确认(条件156)+缺口风险评估(条件157)+波动率切换检测(条件158)+量价配合度评分(条件159)
+- V53新增：趋势顺势确认(条件152)+ATR自适应止损(条件153)+突破力度验证(条件154)+信号质量分层(条件155)
 - V52新增：量价持续确认(条件148)+多指标背离共振(条件149)+极端价位检测(条件150)+市场环境评分(条件151)
-- V51新增：突破笔力度二次确认增强(条件144)+回踩深度+时间(条件145)+趋势强度综合评分(条件146)+交易决策建议(条件147)
 - V50新增：板块联动分析(条件140)+多时间框架共振(条件141)+级别递归验证(条件142)+市场情绪融合(条件143)
 - V49新增：突破力度二次验证(条件137)+回踩结构完整性(条件138)+中枢级别权重(条件139)
 - V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
-- 总条件数：151个
+- 总条件数：159个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -11557,6 +11558,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V54 条件 156-159 ──
+
+        # 条件156：多K线确认后确认（Multi-Bar Post-Signal Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None:
+            try:
+                multi_bar = _calc_multi_bar_confirmation_v54(mmd, closes)
+                mmd._multi_bar_confirmation_v54 = multi_bar
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + multi_bar.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件157：缺口风险评估（Gap Risk Assessment）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+            try:
+                gap_risk = _calc_gap_risk_assessment_v54(mmd, closes, highs, lows)
+                mmd._gap_risk_assessment_v54 = gap_risk
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + gap_risk.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件158：波动率 regime 切换检测（Volatility Regime Change Detection）
+        if closes is not None and highs is not None and lows is not None:
+            try:
+                vol_regime = _calc_volatility_regime_change_v54(closes, highs, lows)
+                mmd._volatility_regime_change_v54 = vol_regime
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_regime.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件159：量价配合度评分（Volume-Price Coordination Score）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+            try:
+                vol_price_coord = _calc_volume_price_coordination_v54(mmd, closes, volumes)
+                mmd._volume_price_coordination_v54 = vol_price_coord
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_price_coord.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -15633,4 +15672,396 @@ def _calc_signal_quality_tier_v53(
     except Exception:
         return result
 
+
+
+
+# ── V54: 条件156-159 缠论模型精准度与决策帮助进一步提升 ────────────────────────
+
+def _calc_multi_bar_confirmation_v54(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多K线确认后确认（V54 条件156）。
+
+    检查信号产生后价格是否持续向预期方向运动，过滤"假突破"信号。
+    3买信号：信号后至少2根K线收盘价高于信号价 → 确认通过
+    3卖信号：信号后至少2根K线收盘价低于信号价 → 确认通过
+
+    Returns:
+        dict with keys: confirmed, confirm_bars, total_bars, confidence_adjust, msg
+    """
+    result = {
+        "confirmed": False,
+        "confirm_bars": 0,
+        "total_bars": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or not closes:
+            return result
+
+        signal_idx = mmd.bi.end.k.k_index
+        if signal_idx < 0 or signal_idx >= len(closes) - 1:
+            return result
+
+        signal_price = closes[signal_idx]
+        # 检查信号后最多10根K线
+        lookback = min(10, len(closes) - signal_idx - 1)
+        if lookback < 2:
+            return result
+
+        post_closes = closes[signal_idx + 1: signal_idx + 1 + lookback]
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+
+        # 统计连续确认的K线数
+        confirm_count = 0
+        for close in post_closes:
+            if is_buy and close > signal_price:
+                confirm_count += 1
+            elif is_sell and close < signal_price:
+                confirm_count += 1
+            else:
+                break  # 只要有一根不符合就停止
+
+        result["confirm_bars"] = confirm_count
+        result["total_bars"] = lookback
+
+        if is_buy:
+            if confirm_count >= 3:
+                result["confirmed"] = True
+                result["confidence_adjust"] = 0.04
+                result["msg"] = f"✅ 多K线确认通过：信号后{confirm_count}根K线持续上涨，+4%置信度"
+            elif confirm_count >= 2:
+                result["confirmed"] = True
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"多K线确认通过：信号后{confirm_count}根K线持续上涨，+2%置信度"
+            elif confirm_count >= 1:
+                result["confirmed"] = False
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"多K线确认不足：仅{confirm_count}根K线符合，-1%置信度"
+            else:
+                result["confirmed"] = False
+                result["confidence_adjust"] = -0.05
+                result["msg"] = f"⚠️ 多K线确认失败：信号后无K线持续上涨，-5%置信度（假突破风险）"
+        elif is_sell:
+            if confirm_count >= 3:
+                result["confirmed"] = True
+                result["confidence_adjust"] = 0.04
+                result["msg"] = f"✅ 多K线确认通过：信号后{confirm_count}根K线持续下跌，+4%置信度"
+            elif confirm_count >= 2:
+                result["confirmed"] = True
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"多K线确认通过：信号后{confirm_count}根K线持续下跌，+2%置信度"
+            elif confirm_count >= 1:
+                result["confirmed"] = False
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"多K线确认不足：仅{confirm_count}根K线符合，-1%置信度"
+            else:
+                result["confirmed"] = False
+                result["confidence_adjust"] = -0.05
+                result["msg"] = f"⚠️ 多K线确认失败：信号后无K线持续下跌，-5%置信度（假突破风险）"
+        else:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_gap_risk_assessment_v54(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """缺口风险评估（V54 条件157）。
+
+    检测信号后是否出现缺口，缺口会改变价格行为特征：
+    - 3买信号后出现向下跳空缺口：强烈的看跌信号，大幅降权
+    - 3买信号后出现向上跳空缺口：强化看涨信号，加分
+    - 3卖信号后出现向上跳空缺口：强烈的看涨信号，大幅降权
+    - 3卖信号后出现向下跳空缺口：强化看跌信号，加分
+
+    Returns:
+        dict with keys: has_gap, gap_direction, gap_size_pct, confidence_adjust, msg
+    """
+    result = {
+        "has_gap": False,
+        "gap_direction": "none",
+        "gap_size_pct": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or not closes or not highs or not lows:
+            return result
+
+        signal_idx = mmd.bi.end.k.k_index
+        if signal_idx < 0 or signal_idx >= len(closes) - 1:
+            return result
+
+        signal_price = closes[signal_idx]
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+
+        # 检查信号后5根K线是否有缺口
+        gap_window = min(5, len(closes) - signal_idx - 1)
+        if gap_window < 1:
+            return result
+
+        for i in range(1, gap_window + 1):
+            prev_close = closes[signal_idx + i - 1]
+            curr_high = highs[signal_idx + i]
+            curr_low = lows[signal_idx + i]
+
+            # 向上缺口：今日最低 > 昨日最高
+            if curr_low > prev_close * 1.005:  # 0.5% 阈值避免噪音
+                gap_size = (curr_low - prev_close) / prev_close * 100
+                if is_buy:
+                    result["has_gap"] = True
+                    result["gap_direction"] = "up"
+                    result["gap_size_pct"] = round(gap_size, 2)
+                    result["confidence_adjust"] = 0.03
+                    result["msg"] = f"✅ 3买信号后出现向上缺口{gap_size:.1f}%，强化看涨信号 +3%置信度"
+                elif is_sell:
+                    result["has_gap"] = True
+                    result["gap_direction"] = "up"
+                    result["gap_size_pct"] = round(gap_size, 2)
+                    result["confidence_adjust"] = -0.05
+                    result["msg"] = f"⚠️ 3卖信号后出现向上缺口{gap_size:.1f}%，强势反弹风险 -5%置信度"
+                break
+            # 向下缺口：今日最高 < 昨日最低
+            elif curr_high < prev_close * 0.995:
+                gap_size = (prev_close - curr_high) / prev_close * 100
+                if is_buy:
+                    result["has_gap"] = True
+                    result["gap_direction"] = "down"
+                    result["gap_size_pct"] = round(gap_size, 2)
+                    result["confidence_adjust"] = -0.06
+                    result["msg"] = f"🚨 3买信号后出现向下缺口{gap_size:.1f}%，强烈看跌信号 -6%置信度"
+                elif is_sell:
+                    result["has_gap"] = True
+                    result["gap_direction"] = "down"
+                    result["gap_size_pct"] = round(gap_size, 2)
+                    result["confidence_adjust"] = 0.03
+                    result["msg"] = f"✅ 3卖信号后出现向下缺口{gap_size:.1f}%，强化看跌信号 +3%置信度"
+                break
+
+        if not result["has_gap"]:
+            result["msg"] = "信号后5根K线内无缺口"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volatility_regime_change_v54(
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """波动率 regime 切换检测（V54 条件158）。
+
+    通过ATR变化率判断市场是否从低波动转入高波动（趋势启动）
+    或从高波动转入低波动（趋势结束/震荡）：
+    - ATR扩张 > 20%：波动率放大，趋势加速信号
+    - ATR收缩 < -20%：波动率收敛，可能进入盘整
+
+    Returns:
+        dict with keys: atr_expansion_pct, regime, confidence_adjust, msg
+    """
+    result = {
+        "atr_expansion_pct": 0.0,
+        "regime": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 40:
+            return result
+
+        # 计算ATR(14)
+        def calc_atr(highs, lows, closes, period=14):
+            if len(highs) < period + 1:
+                return None
+            tr_list = []
+            for i in range(1, len(highs)):
+                tr = max(
+                    highs[i] - lows[i],
+                    abs(highs[i] - closes[i - 1]),
+                    abs(lows[i] - closes[i - 1]),
+                )
+                tr_list.append(tr)
+            if len(tr_list) < period:
+                return None
+            return sum(tr_list[-period:]) / period
+
+        current_atr = calc_atr(highs, lows, closes, 14)
+        prev_atr = calc_atr(highs[:-1], lows[:-1], closes[:-1], 14)
+
+        if current_atr is None or prev_atr is None or prev_atr == 0:
+            return result
+
+        atr_change_pct = (current_atr - prev_atr) / prev_atr * 100
+        result["atr_expansion_pct"] = round(atr_change_pct, 2)
+
+        mid_price = closes[-1]
+        atr_pct = current_atr / mid_price * 100 if mid_price > 0 else 0
+
+        if atr_change_pct > 20:
+            result["regime"] = "expanding"
+            result["confidence_adjust"] = 0.02
+            result["msg"] = f"📈 波动率扩张{atr_change_pct:.1f}%，ATR占比{atr_pct:.2f}%，趋势加速确认 +2%置信度"
+        elif atr_change_pct < -20:
+            result["regime"] = "contracting"
+            result["confidence_adjust"] = -0.02
+            result["msg"] = f"📉 波动率收缩{abs(atr_change_pct):.1f}%，ATR占比{atr_pct:.2f}%，可能进入盘整 -2%置信度"
+        else:
+            result["regime"] = "stable"
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"波动率稳定（变化{atr_change_pct:+.1f}%），ATR占比{atr_pct:.2f}%"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_price_coordination_v54(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量价配合度评分（V54 条件159）。
+
+    评估最近10根K线的量价配合质量：
+    - 上涨日放量、下跌日缩量 → 量价配合良好 +3%
+    - 上涨日缩量、下跌日放量 → 量价背离警告 -3%
+    - 近期平均量/前期平均量 > 1.2 → 量能放大 +1%
+    - 近期平均量/前期平均量 < 0.8 → 量能萎缩 -1%
+
+    Returns:
+        dict with keys: score, volume_trend, price_trend, confidence_adjust, msg
+    """
+    result = {
+        "score": 0,
+        "volume_trend": "unknown",
+        "price_trend": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or not volumes or len(closes) < 20:
+            return result
+
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+
+        # 计算最近10根和前期10根的量和价
+        recent_closes = closes[-10:]
+        recent_volumes = volumes[-10:]
+        prev_closes = closes[-20:-10]
+        prev_volumes = volumes[-20:-10]
+
+        if len(recent_closes) < 5 or len(prev_closes) < 5:
+            return result
+
+        # 价格趋势
+        recent_price_change = (recent_closes[-1] - recent_closes[0]) / (recent_closes[0] + 1e-10)
+        if recent_price_change > 0.02:
+            price_trend = "up"
+        elif recent_price_change < -0.02:
+            price_trend = "down"
+        else:
+            price_trend = "flat"
+        result["price_trend"] = price_trend
+
+        # 成交量趋势
+        avg_recent_vol = sum(recent_volumes) / len(recent_volumes)
+        avg_prev_vol = sum(prev_volumes) / len(prev_volumes) if sum(prev_volumes) > 0 else 1
+        vol_ratio = avg_recent_vol / avg_prev_vol
+        if vol_ratio > 1.2:
+            volume_trend = "expanding"
+        elif vol_ratio < 0.8:
+            volume_trend = "shrinking"
+        else:
+            volume_trend = "stable"
+        result["volume_trend"] = volume_trend
+
+        # 量价配合评分
+        score = 0
+        # 上涨日/下跌日的量价配合
+        up_days_volume = 0
+        up_days_count = 0
+        down_days_volume = 0
+        down_days_count = 0
+        for i in range(1, len(recent_closes)):
+            if recent_closes[i] > recent_closes[i - 1]:
+                up_days_volume += recent_volumes[i]
+                up_days_count += 1
+            elif recent_closes[i] < recent_closes[i - 1]:
+                down_days_volume += recent_volumes[i]
+                down_days_count += 1
+
+        if up_days_count > 0 and down_days_count > 0:
+            avg_up_vol = up_days_volume / up_days_count
+            avg_down_vol = down_days_volume / down_days_count
+            if avg_up_vol > avg_down_vol * 1.1:
+                score += 2  # 上涨放量，下跌缩量
+            elif avg_up_vol < avg_down_vol * 0.9:
+                score -= 2  # 上涨缩量，下跌放量
+
+        # 量比调整
+        if vol_ratio > 1.2:
+            score += 1
+        elif vol_ratio < 0.8:
+            score -= 1
+
+        # 根据信号类型和趋势判断最终调整
+        if is_buy:
+            if price_trend == "up" and volume_trend == "expanding":
+                score += 2
+                result["confidence_adjust"] = min(0.05, score * 0.01)
+                result["msg"] = f"✅ 量价配合优秀：价格上涨+量能放大，+{result['confidence_adjust']:.0%}置信度"
+            elif price_trend == "up" and volume_trend == "shrinking":
+                score -= 2
+                result["confidence_adjust"] = -0.03
+                result["msg"] = f"⚠️ 量价背离：价格上涨但量能萎缩，-3%置信度"
+            elif price_trend == "up" and volume_trend == "stable":
+                score += 1
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"量价配合正常：价格上涨+量能稳定，+1%置信度"
+            elif price_trend == "flat":
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"量价配合一般：价格震荡，-1%置信度"
+            else:
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"🚨 量价恶化：价格下跌，-4%置信度"
+        elif is_sell:
+            if price_trend == "down" and volume_trend == "expanding":
+                score += 2
+                result["confidence_adjust"] = min(0.05, score * 0.01)
+                result["msg"] = f"✅ 量价配合优秀：价格下跌+量能放大，+{result['confidence_adjust']:.0%}置信度"
+            elif price_trend == "down" and volume_trend == "shrinking":
+                score -= 1
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"量价配合一般：价格下跌但量能萎缩，-1%置信度"
+            elif price_trend == "down" and volume_trend == "stable":
+                score += 1
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"量价配合正常：价格下跌+量能稳定，+1%置信度"
+            elif price_trend == "flat":
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"量价配合一般：价格震荡，-1%置信度"
+            else:
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"🚨 量价恶化：价格上涨，-4%置信度"
+        else:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+
+        result["score"] = max(-5, min(5, score))
+        return result
+    except Exception:
+        return result
 

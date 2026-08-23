@@ -951,6 +951,14 @@ async def diagnose_stock(
             "zs_breakout_strength_v53": getattr(latest_mmd, "_zs_breakout_strength_v53", None) if latest_mmd else None,
             # V53: 信号质量综合分层（条件155）
             "signal_quality_tier_v53": getattr(latest_mmd, "_signal_quality_tier_v53", None) if latest_mmd else None,
+            # V54: 多K线确认后确认（条件156）
+            "multi_bar_confirmation_v54": getattr(latest_mmd, "_multi_bar_confirmation_v54", None) if latest_mmd else None,
+            # V54: 缺口风险评估（条件157）
+            "gap_risk_assessment_v54": getattr(latest_mmd, "_gap_risk_assessment_v54", None) if latest_mmd else None,
+            # V54: 波动率 regime 切换检测（条件158）
+            "volatility_regime_change_v54": getattr(latest_mmd, "_volatility_regime_change_v54", None) if latest_mmd else None,
+            # V54: 量价配合度评分（条件159）
+            "volume_price_coordination_v54": getattr(latest_mmd, "_volume_price_coordination_v54", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

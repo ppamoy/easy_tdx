@@ -386,6 +386,12 @@ class MMD:
     _zs_breakout_strength_v53: dict[str, Any] | None = None  # 中枢突破力度验证（条件154）
     _signal_quality_tier_v53: dict[str, Any] | None = None  # 信号质量综合分层（条件155）
 
+    # V54 enhancement fields (2026-08-25)
+    _multi_bar_confirmation_v54: dict[str, Any] | None = None  # 多K线确认后确认（条件156）
+    _gap_risk_assessment_v54: dict[str, Any] | None = None  # 缺口风险评估（条件157）
+    _volatility_regime_change_v54: dict[str, Any] | None = None  # 波动率regime切换检测（条件158）
+    _volume_price_coordination_v54: dict[str, Any] | None = None  # 量价配合度评分（条件159）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
