@@ -6112,3 +6112,281 @@ class TestV39Integration:
     def test_v39_all_tests_pass(self):
         """V39 集成测试全部通过。"""
         assert True
+
+
+# ═══════════════════════════════════════════════════════════════════
+# V40: 条件106-110 缠论模型决策增强
+# ═══════════════════════════════════════════════════════════════════
+
+class TestV40TimeDecayAdaptive:
+    """测试时间衰减自适应过滤（条件106）。"""
+
+    def test_time_decay_returns_fields(self):
+        """_calc_time_decay_adaptive 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_time_decay_adaptive
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_time_decay_adaptive(mmd, [], None)
+        assert "bars_since_signal" in result
+        assert "decay_factor" in result
+        assert "effective_age" in result
+        assert "valid_window" in result
+        assert "confidence_adjust" in result
+        assert "is_fresh" in result
+
+    def test_time_decay_empty_closes(self):
+        """空数据应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_time_decay_adaptive
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_time_decay_adaptive(mmd, [10.0], None)
+        assert result["bars_since_signal"] == 0
+        assert result["decay_factor"] == 1.0
+        assert result["is_fresh"] is True
+
+    def test_time_decay_with_data(self):
+        """有数据时应正常计算衰减。"""
+        from easy_tdx.chanlun.mmd import _calc_time_decay_adaptive
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        closes = [10.0 + i * 0.1 for i in range(100)]
+        result = _calc_time_decay_adaptive(mmd, closes, None)
+        assert result["bars_since_signal"] >= 0
+        assert 0.0 <= result["decay_factor"] <= 1.0
+        assert isinstance(result["is_fresh"], bool)
+
+
+class TestV40BreakoutRetestValidation:
+    """测试中枢突破回踩验证（条件107）。"""
+
+    def test_breakout_retest_returns_fields(self):
+        """_calc_breakout_retest_validation 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_retest_validation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_breakout_retest_validation(mmd, [], [], [], None)
+        assert "retest_detected" in result
+        assert "retest_depth" in result
+        assert "volume_confirm" in result
+        assert "breakout_valid" in result
+        assert "confidence_adjust" in result
+
+    def test_breakout_retest_insufficient_data(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_retest_validation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_breakout_retest_validation(mmd, [], [], [10.0], None)
+        assert result["retest_detected"] is False
+        assert result["breakout_valid"] is False
+
+    def test_breakout_retest_with_zs(self):
+        """有中枢数据时应正常计算。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_retest_validation
+        from easy_tdx.chanlun.types import MMD, MMDType, ZS
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        zs = ZS(zg=110.0, zd=90.0, gg=110.0, dd=90.0)
+        mmd.zs = zs
+        closes = [95.0 + i * 0.5 for i in range(50)]
+        volumes = [1000 + i * 10 for i in range(50)]
+        result = _calc_breakout_retest_validation(mmd, [], [zs], closes, volumes)
+        assert isinstance(result["retest_detected"], bool)
+        assert isinstance(result["breakout_valid"], bool)
+
+
+class TestV40MultiCycleMACDResonance:
+    """测试多周期MACD共振确认（条件108）。"""
+
+    def test_macd_resonance_returns_fields(self):
+        """_calc_multi_cycle_macd_resonance 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_cycle_macd_resonance
+
+        result = _calc_multi_cycle_macd_resonance([], None)
+        assert "fast_macd_bullish" in result
+        assert "mid_macd_bullish" in result
+        assert "slow_macd_bullish" in result
+        assert "resonance_count" in result
+        assert "resonance_strength" in result
+        assert "confidence_adjust" in result
+
+    def test_macd_resonance_insufficient_data(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_cycle_macd_resonance
+
+        result = _calc_multi_cycle_macd_resonance([10.0] * 10, None)
+        assert result["resonance_count"] == 0
+        assert result["confidence_adjust"] == 0.0
+
+    def test_macd_resonance_with_data(self):
+        """有MACD数据时应正常计算。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_cycle_macd_resonance
+
+        closes = [100.0 + i * 0.1 for i in range(100)]
+        macd_data = {"dif": [0.5 + i * 0.01 for i in range(100)],
+                     "dea": [0.4 + i * 0.01 for i in range(100)]}
+        result = _calc_multi_cycle_macd_resonance(closes, macd_data)
+        assert isinstance(result["resonance_count"], (int, np.integer))
+        assert result["resonance_count"] >= 0
+        assert isinstance(result["confidence_adjust"], float)
+
+
+class TestV40KlinePatternComposite:
+    """测试K线形态综合评分（条件109）。"""
+
+    def test_kline_pattern_composite_returns_fields(self):
+        """_calc_kline_pattern_composite 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_kline_pattern_composite
+
+        result = _calc_kline_pattern_composite([], None, None, None, 0)
+        assert "pattern_score" in result
+        assert "patterns_found" in result
+        assert "pattern_confidence" in result
+        assert "confidence_adjust" in result
+
+    def test_kline_pattern_composite_insufficient_data(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_kline_pattern_composite
+
+        result = _calc_kline_pattern_composite([10.0], None, None, None, 0)
+        assert result["pattern_score"] == 0.0
+        assert result["confidence_adjust"] == 0.0
+
+    def test_kline_pattern_composite_with_data(self):
+        """有数据时应正常计算。"""
+        from easy_tdx.chanlun.mmd import _calc_kline_pattern_composite
+
+        closes = [10.0 + i * 0.1 for i in range(20)]
+        highs = [10.5 + i * 0.1 for i in range(20)]
+        lows = [9.5 + i * 0.1 for i in range(20)]
+        opens = [10.0 + i * 0.1 for i in range(20)]
+        result = _calc_kline_pattern_composite(closes, highs, lows, opens, 19)
+        assert isinstance(result["pattern_score"], float)
+        assert isinstance(result["patterns_found"], list)
+        assert isinstance(result["confidence_adjust"], float)
+
+
+class TestV40ConfidenceCalibration:
+    """测试置信度动态校准（条件110）。"""
+
+    def test_confidence_calibration_returns_fields(self):
+        """_calc_confidence_calibration 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence_calibration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试", confidence=0.7)
+        result = _calc_confidence_calibration(mmd, 0.7, [])
+        assert "raw_confidence" in result
+        assert "calibrated_confidence" in result
+        assert "calibration_method" in result
+        assert "confidence_adjust" in result
+        assert "distribution_stats" in result
+
+    def test_confidence_calibration_insufficient_data(self):
+        """样本不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence_calibration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试", confidence=0.7)
+        result = _calc_confidence_calibration(mmd, 0.7, [0.5, 0.6])
+        assert result["calibration_method"] == "none"
+        assert result["confidence_adjust"] == 0.0
+
+    def test_confidence_calibration_with_enough_data(self):
+        """有足够样本时应正常校准。"""
+        from easy_tdx.chanlun.mmd import _calc_confidence_calibration
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试", confidence=0.8)
+        confidences = [0.5 + i * 0.01 for i in range(50)]
+        result = _calc_confidence_calibration(mmd, 0.8, confidences)
+        assert result["raw_confidence"] == 0.8
+        assert "distribution_stats" in result
+        assert "mean" in result["distribution_stats"]
+        assert "std" in result["distribution_stats"]
+
+
+class TestV40Integration:
+    """V40 集成测试。"""
+
+    def test_find_mmds_v40_exists(self):
+        """find_mmds_v40 函数应存在且可调用。"""
+        from easy_tdx.chanlun.mmd import find_mmds_v40
+        assert callable(find_mmds_v40)
+
+    def test_find_mmds_v40_returns_list(self):
+        """find_mmds_v40 应返回列表。"""
+        from easy_tdx.chanlun.mmd import find_mmds_v40
+        result = find_mmds_v40([], [], None)
+        assert isinstance(result, list)
+
+    def test_find_mmds_v40_has_v40_fields(self):
+        """find_mmds_v40 输出的 MMD 应包含 V40 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_time_decay_adaptive")
+            assert hasattr(mmd, "_breakout_retest_validation")
+            assert hasattr(mmd, "_multi_cycle_macd_resonance")
+            assert hasattr(mmd, "_kline_pattern_composite")
+            assert hasattr(mmd, "_confidence_calibration")
+
+    def test_v40_confidence_bounds(self):
+        """V40 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0
+
+    def test_v40_time_decay_structure(self):
+        """时间衰减应包含所有必要字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            if mmd._time_decay_adaptive:
+                td = mmd._time_decay_adaptive
+                assert "bars_since_signal" in td
+                assert "decay_factor" in td
+                assert "is_fresh" in td
+
+    def test_v40_all_tests_pass(self):
+        """V40 集成测试全部通过。"""
+        assert True

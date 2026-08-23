@@ -19,7 +19,7 @@ from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
 from easy_tdx.chanlun.macd import calc_macd  # noqa: F401
-from easy_tdx.chanlun.mmd import find_mmds_v39  # noqa: F401
+from easy_tdx.chanlun.mmd import find_mmds_v40  # noqa: F401
 from easy_tdx.chanlun.types import BC, BI, FX, MMD, XD, ZS, CLKline, Kline
 from easy_tdx.chanlun.xd import find_xds  # noqa: F401
 from easy_tdx.MyTT import BOLL
@@ -258,7 +258,7 @@ class ChanlunAnalyser:
         # V12: 传递highs/lows用于真实ADX计算
         highs = [k.high for k in klines]
         lows = [k.low for k in klines]
-        mmds = find_mmds_v39(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd, volatility=volatility, highs=highs, lows=lows)
+        mmds = find_mmds_v40(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd, volatility=volatility, highs=highs, lows=lows)
         self._result.mmds = mmds
 
         # Step 9: 背驰判断（传入收盘价用于MACD面积计算）

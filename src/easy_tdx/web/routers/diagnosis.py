@@ -851,6 +851,16 @@ async def diagnose_stock(
             "independent_cross_validation": getattr(latest_mmd, "_independent_cross_validation", None) if latest_mmd else None,
             # V39: 决策质量综合评分（条件105）
             "decision_quality_score": getattr(latest_mmd, "_decision_quality_score", None) if latest_mmd else None,
+            # V40: 时间衰减自适应过滤（条件106）
+            "time_decay_adaptive": getattr(latest_mmd, "_time_decay_adaptive", None) if latest_mmd else None,
+            # V40: 中枢突破回踩验证（条件107）
+            "breakout_retest_validation": getattr(latest_mmd, "_breakout_retest_validation", None) if latest_mmd else None,
+            # V40: 多周期MACD共振确认（条件108）
+            "multi_cycle_macd_resonance": getattr(find_mmds_v39, '_last_macd_resonance', None) if latest_mmd else None,
+            # V40: K线形态综合评分（条件109）
+            "kline_pattern_composite": getattr(latest_mmd, "_kline_pattern_composite", None) if latest_mmd else None,
+            # V40: 置信度动态校准（条件110）
+            "confidence_calibration": getattr(latest_mmd, "_confidence_calibration", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

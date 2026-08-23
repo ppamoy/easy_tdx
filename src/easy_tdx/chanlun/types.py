@@ -313,6 +313,13 @@ class MMD:
     _independent_cross_validation: dict[str, Any] | None = None  # 独立交叉验证（条件104）
     _decision_quality_score: dict[str, Any] | None = None  # 决策质量综合评分（条件105）
 
+    # V40 enhancement fields
+    _time_decay_adaptive: dict[str, Any] | None = None  # 时间衰减自适应过滤（条件106）
+    _breakout_retest_validation: dict[str, Any] | None = None  # 中枢突破回踩验证（条件107）
+    _multi_cycle_macd_resonance: dict[str, Any] | None = None  # 多周期MACD共振确认（条件108）
+    _kline_pattern_composite: dict[str, Any] | None = None  # K线形态综合评分（条件109）
+    _confidence_calibration: dict[str, Any] | None = None  # 置信度动态校准（条件110）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

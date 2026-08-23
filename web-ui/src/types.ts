@@ -1003,6 +1003,51 @@ export interface DiagnosisChanlun {
     action_label: string
     factors: Record<string, number>
   } | null
+  // V40: 时间衰减自适应过滤（条件106）
+  time_decay_adaptive?: {
+    bars_since_signal: number
+    decay_factor: number
+    effective_age: number
+    valid_window: number
+    confidence_adjust: number
+    is_fresh: boolean
+  } | null
+  // V40: 中枢突破回踩验证（条件107）
+  breakout_retest_validation?: {
+    retest_detected: boolean
+    retest_depth: number
+    volume_confirm: boolean
+    breakout_valid: boolean
+    confidence_adjust: number
+  } | null
+  // V40: 多周期MACD共振确认（条件108）
+  multi_cycle_macd_resonance?: {
+    fast_macd_bullish: boolean
+    mid_macd_bullish: boolean
+    slow_macd_bullish: boolean
+    fast_macd_bearish: boolean
+    mid_macd_bearish: boolean
+    slow_macd_bearish: boolean
+    resonance_count: number
+    resonance_strength: number
+    confidence_adjust: number
+  } | null
+  // V40: K线形态综合评分（条件109）
+  kline_pattern_composite?: {
+    pattern_score: number
+    patterns_found: string[]
+    pattern_confidence: number
+    confidence_adjust: number
+  } | null
+  // V40: 置信度动态校准（条件110）
+  confidence_calibration?: {
+    raw_confidence: number
+    calibrated_confidence: number
+    calibration_method: string
+    confidence_adjust: number
+    distribution_stats: Record<string, number>
+    z_score?: number
+  } | null
 }
 
 export interface DiagnosisMACD {
