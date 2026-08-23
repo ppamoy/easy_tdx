@@ -1903,6 +1903,143 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V44: 趋势方向对齐验证（条件121）-->
+        <div v-if="diagnosis.chanlun.trend_direction_alignment" class="metric-card v44-trend">
+          <div class="card-title">🧭 趋势方向对齐（V44·条件121）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">趋势方向</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_direction_alignment.aligned ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.trend_direction_alignment.trend_direction }}
+                {{ diagnosis.chanlun.trend_direction_alignment.aligned ? '✅ 对齐' : '❌ 逆势' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.trend_direction_alignment.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.trend_direction_alignment.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.trend_direction_alignment.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.trend_direction_alignment.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V44: 突破笔力度对比（条件122）-->
+        <div v-if="diagnosis.chanlun.breakout_bi_strength_compare" class="metric-card v44-breakout">
+          <div class="card-title">💪 突破笔力度对比（V44·条件122）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">量比</span>
+              <span class="kv-val">{{ diagnosis.chanlun.breakout_bi_strength_compare.vol_ratio.toFixed(2) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">价格幅度比</span>
+              <span class="kv-val">{{ diagnosis.chanlun.breakout_bi_strength_compare.price_ratio.toFixed(2) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">突破有效性</span>
+              <span class="tag" :class="diagnosis.chanlun.breakout_bi_strength_compare.strength_ok ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.breakout_bi_strength_compare.strength_ok ? '有效突破 ✅' : '力度不足 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.breakout_bi_strength_compare.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.breakout_bi_strength_compare.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.breakout_bi_strength_compare.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.breakout_bi_strength_compare.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V44: 回踩时间窗口过滤（条件123）-->
+        <div v-if="diagnosis.chanlun.pullback_time_window" class="metric-card v44-pullback">
+          <div class="card-title">⏱️ 回踩时间窗口（V44·条件123）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">信号后K线</span>
+              <span class="kv-val">{{ diagnosis.chanlun.pullback_time_window.bars_since_signal }} 根</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">时效窗口</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.pullback_time_window.window_status === 'optimal', 'tag-yellow': diagnosis.chanlun.pullback_time_window.window_status === 'acceptable', 'tag-orange': diagnosis.chanlun.pullback_time_window.window_status === 'expired', 'tag-red': diagnosis.chanlun.pullback_time_window.window_status === 'critical' }">
+                {{ { optimal: '最佳窗口 ✅', acceptable: '可接受 ⚠️', expired: '已过期 🔶', critical: '严重过期 ❌' }[diagnosis.chanlun.pullback_time_window.window_status] || diagnosis.chanlun.pullback_time_window.window_status }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.pullback_time_window.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.pullback_time_window.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.pullback_time_window.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.pullback_time_window.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V44: 波动率自适应阈值（条件124）-->
+        <div v-if="diagnosis.chanlun.volatility_adaptive_threshold" class="metric-card v44-vol">
+          <div class="card-title">🌊 波动率自适应（V44·条件124）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">年化波动率</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.volatility_adaptive_threshold.volatility * 100).toFixed(2) }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">波动率状态</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volatility_adaptive_threshold.vol_regime === 'low', 'tag-blue': diagnosis.chanlun.volatility_adaptive_threshold.vol_regime === 'normal', 'tag-orange': diagnosis.chanlun.volatility_adaptive_threshold.vol_regime === 'high', 'tag-red': diagnosis.chanlun.volatility_adaptive_threshold.vol_regime === 'extreme' }">
+                {{ { low: '低波动 🟢', normal: '正常 🟡', high: '高波动 🟠', extreme: '极端 🔴' }[diagnosis.chanlun.volatility_adaptive_threshold.vol_regime] || diagnosis.chanlun.volatility_adaptive_threshold.vol_regime }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">阈值乘数</span>
+              <span class="kv-val">{{ diagnosis.chanlun.volatility_adaptive_threshold.threshold_multiplier.toFixed(2) }}×</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.volatility_adaptive_threshold.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.volatility_adaptive_threshold.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volatility_adaptive_threshold.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volatility_adaptive_threshold.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V44: 多指标背离共振（条件125）-->
+        <div v-if="diagnosis.chanlun.multi_indicator_divergence_resonance" class="metric-card v44-div">
+          <div class="card-title">🔀 多指标背离共振（V44·条件125）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">MACD背离</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_resonance.macd_divergence ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_indicator_divergence_resonance.macd_divergence ? '有背离 ✅' : '无背离' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">RSI背离</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_resonance.rsi_divergence ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_indicator_divergence_resonance.rsi_divergence ? '有背离 ✅' : '无背离' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">KDJ背离</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_resonance.kdj_divergence ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_indicator_divergence_resonance.kdj_divergence ? '有背离 ✅' : '无背离' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">共振数量</span>
+              <span class="kv-val">{{ diagnosis.chanlun.multi_indicator_divergence_resonance.resonance_count }}/3</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_indicator_divergence_resonance.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.multi_indicator_divergence_resonance.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_indicator_divergence_resonance.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_indicator_divergence_resonance.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -2637,4 +2774,11 @@ onMounted(() => {
 .breakout-strength .kv-val { font-weight: 600; }
 .composite-dev .kv-val { font-weight: 600; }
 .signal-decay .kv-val { font-weight: 600; }
+
+/* V44: 趋势对齐 + 突破力度 + 回踩窗口 + 波动自适应 + 背离共振 */
+.v44-trend .kv-val { font-weight: 600; }
+.v44-breakout .kv-val { font-weight: 600; }
+.v44-pullback .kv-val { font-weight: 600; }
+.v44-vol .kv-val { font-weight: 600; }
+.v44-div .kv-val { font-weight: 600; }
 </style>
