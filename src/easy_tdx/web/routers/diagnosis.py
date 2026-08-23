@@ -215,7 +215,7 @@ async def diagnose_stock(
     - code: 6位股票代码
     """
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-    from easy_tdx.chanlun.mmd import calc_signal_quality_report, _calc_atr_volatility
+    from easy_tdx.chanlun.mmd import calc_signal_quality_report, _calc_atr_volatility, find_mmds_v39
     from easy_tdx.MyTT import MACD, MA, BOLL, ATR, KDJ, RSI, DMI, OBV
 
     market = req.market
@@ -841,6 +841,16 @@ async def diagnose_stock(
             "composite_deviation": getattr(find_mmds, '_last_composite_deviation', None) if latest_mmd else None,
             # V38: 信号衰减预警（条件100）
             "signal_decay_warning": getattr(latest_mmd, "_signal_decay_warning", None) if latest_mmd else None,
+            # V39: 买卖点信号一致性验证（条件101）
+            "signal_consistency": getattr(latest_mmd, "_signal_consistency", None) if latest_mmd else None,
+            # V39: 中枢级别匹配验证（条件102）
+            "zs_level_match": getattr(latest_mmd, "_zs_level_match", None) if latest_mmd else None,
+            # V39: 多时间框架背离确认（条件103）
+            "multi_tf_divergence": getattr(find_mmds_v39, '_last_multi_tf_divergence', None) if latest_mmd else None,
+            # V39: 独立交叉验证（条件104）
+            "independent_cross_validation": getattr(latest_mmd, "_independent_cross_validation", None) if latest_mmd else None,
+            # V39: 决策质量综合评分（条件105）
+            "decision_quality_score": getattr(latest_mmd, "_decision_quality_score", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

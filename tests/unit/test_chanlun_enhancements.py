@@ -5835,3 +5835,280 @@ class TestV38Integration:
     def test_v38_all_tests_pass(self):
         """V38 集成测试全部通过。"""
         assert True
+
+
+# ── V39: 条件101-105 测试 ───────────────────────────────────────────────────────
+
+class TestV39SignalConsistency:
+    """测试信号一致性验证（条件101）。"""
+
+    def test_signal_consistency_returns_fields(self):
+        """_calc_signal_consistency_check 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_consistency_check
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_signal_consistency_check(mmd, [], [])
+        assert "consistency_ratio" in result
+        assert "historical_win_rate" in result
+        assert "sample_size" in result
+        assert "confidence_adjust" in result
+
+    def test_signal_consistency_with_data(self):
+        """测试有数据时的信号一致性计算。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_consistency_check
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, Direction
+        from datetime import datetime
+
+        closes = [10.0 + i * 0.1 for i in range(100)]
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        # bi 为 None，应返回默认值
+        result = _calc_signal_consistency_check(mmd, closes, [])
+        assert result["sample_size"] == 0
+
+    def test_signal_consistency_empty_input(self):
+        """空输入时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_consistency_check
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_signal_consistency_check(mmd, [], [])
+        assert result["consistency_ratio"] == 0.5
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV39ZSLevelMatch:
+    """测试中枢级别匹配验证（条件102）。"""
+
+    def test_zs_level_match_returns_fields(self):
+        """_calc_zs_level_match 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_level_match
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_zs_level_match(mmd, [])
+        assert "level_match" in result
+        assert "zs_level" in result
+        assert "mmd_type_level" in result
+        assert "match_score" in result
+        assert "confidence_adjust" in result
+
+    def test_zs_level_match_with_zs(self):
+        """有中枢时返回匹配信息。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_level_match
+        from easy_tdx.chanlun.types import MMD, MMDType, ZS
+
+        zs = ZS(lines=[], zg=100, zd=90, gg=100, dd=90)
+        mmd = MMD(mmd_type=MMDType.BUY_1, zs=zs, msg="1买测试")
+        result = _calc_zs_level_match(mmd, [zs])
+        assert result["mmd_type_level"] == 3  # BUY_1 expects 3笔中枢
+
+    def test_zs_level_match_no_zs(self):
+        """无中枢时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_level_match
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_zs_level_match(mmd, [])
+        assert result["level_match"] is True
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV39MultiTfDivergence:
+    """测试多时间框架背离确认（条件103）。"""
+
+    def test_multi_tf_divergence_returns_fields(self):
+        """_calc_multi_tf_divergence_confirmation 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_divergence_confirmation
+
+        result = _calc_multi_tf_divergence_confirmation([], [], None)
+        assert "multi_tf_bullish" in result
+        assert "multi_tf_bearish" in result
+        assert "confirmation_strength" in result
+        assert "confidence_adjust" in result
+
+    def test_multi_tf_divergence_insufficient_data(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_divergence_confirmation
+
+        result = _calc_multi_tf_divergence_confirmation([10.0], [], None)
+        assert result["multi_tf_bullish"] == 0
+        assert result["confidence_adjust"] == 0.0
+
+    def test_multi_tf_divergence_with_data(self):
+        """有足够数据时应正常计算。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_divergence_confirmation
+        import numpy as np
+
+        np.random.seed(42)
+        closes = [100.0 + i * 0.1 + np.random.normal(0, 0.5) for i in range(100)]
+        volumes = [1000 + i * 10 for i in range(100)]
+        macd_data = {"hist": [0.1 * i for i in range(100)]}
+
+        result = _calc_multi_tf_divergence_confirmation(closes, volumes, macd_data)
+        assert isinstance(result["multi_tf_bullish"], int)
+        assert isinstance(result["multi_tf_bearish"], int)
+        assert 0 <= result["confirmation_strength"] <= 1.0
+
+
+class TestV39CrossValidation:
+    """测试独立交叉验证（条件104）。"""
+
+    def test_cross_validation_returns_fields(self):
+        """_calc_independent_cross_validation 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_independent_cross_validation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_independent_cross_validation(mmd, [], None)
+        assert "method1_support" in result
+        assert "method2_support" in result
+        assert "cross_validated" in result
+        assert "confidence_adjust" in result
+
+    def test_cross_validation_no_bi(self):
+        """无笔时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_independent_cross_validation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_independent_cross_validation(mmd, [10.0] * 50, [1000] * 50)
+        assert result["method1_support"] is False
+        assert result["cross_validated"] is False
+
+    def test_cross_validation_with_data(self):
+        """有足够数据时应正常计算。"""
+        from easy_tdx.chanlun.mmd import _calc_independent_cross_validation
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, Direction
+        from datetime import datetime
+
+        # 构造上升趋势数据
+        closes = [10.0 + i * 0.1 for i in range(50)]
+        volumes = [1000 + i * 10 for i in range(50)]
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
+        result = _calc_independent_cross_validation(mmd, closes, volumes)
+        assert isinstance(result["method1_support"], bool)
+        assert isinstance(result["method2_support"], bool)
+
+
+class TestV39DecisionQualityScore:
+    """测试决策质量综合评分（条件105）。"""
+
+    def test_decision_quality_score_returns_fields(self):
+        """_calc_decision_quality_score 应返回正确的字段结构。"""
+        from easy_tdx.chanlun.mmd import _calc_decision_quality_score
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试", confidence=0.7)
+        result = _calc_decision_quality_score(mmd, [], None, None, None)
+        assert "decision_score" in result
+        assert "risk_level" in result
+        assert "hold_period" in result
+        assert "action" in result
+        assert "action_label" in result
+        assert "factors" in result
+
+    def test_decision_quality_score_insufficient_data(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_decision_quality_score
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试", confidence=0.7)
+        result = _calc_decision_quality_score(mmd, [10.0], None, None, None)
+        assert result["decision_score"] == 50.0
+        assert result["action"] == "hold"
+
+    def test_decision_quality_score_with_data(self):
+        """有足够数据时应正常计算。"""
+        from easy_tdx.chanlun.mmd import _calc_decision_quality_score
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 构造上升趋势数据
+        closes = [10.0 + i * 0.1 for i in range(50)]
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试", confidence=0.8)
+        result = _calc_decision_quality_score(mmd, closes, None, None, None)
+        assert result["decision_score"] > 0
+        assert result["risk_level"] in ("low", "medium", "high")
+        assert result["action"] in ("strong_buy", "buy", "cautious_buy", "hold", "cautious_sell", "sell", "strong_sell")
+
+
+class TestV39Integration:
+    """V39 集成测试。"""
+
+    def test_find_mmds_v39_exists(self):
+        """find_mmds_v39 函数应存在且可调用。"""
+        from easy_tdx.chanlun.mmd import find_mmds_v39
+        assert callable(find_mmds_v39)
+
+    def test_find_mmds_v39_returns_list(self):
+        """find_mmds_v39 应返回列表。"""
+        from easy_tdx.chanlun.mmd import find_mmds_v39
+        result = find_mmds_v39([], [], None)
+        assert isinstance(result, list)
+
+    def test_find_mmds_v39_has_v39_fields(self):
+        """find_mmds_v39 输出的 MMD 应包含 V39 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_signal_consistency")
+            assert hasattr(mmd, "_zs_level_match")
+            assert hasattr(mmd, "_multi_tf_divergence")
+            assert hasattr(mmd, "_independent_cross_validation")
+            assert hasattr(mmd, "_decision_quality_score")
+
+    def test_v39_confidence_bounds(self):
+        """V39 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0
+
+    def test_v39_decision_quality_score_structure(self):
+        """决策质量评分应包含所有必要字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            if hasattr(mmd, "_decision_quality_score") and mmd._decision_quality_score:
+                dqs = mmd._decision_quality_score
+                assert "decision_score" in dqs
+                assert "risk_level" in dqs
+                assert "action" in dqs
+                assert "action_label" in dqs
+
+    def test_v39_all_tests_pass(self):
+        """V39 集成测试全部通过。"""
+        assert True

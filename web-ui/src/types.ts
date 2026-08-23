@@ -965,6 +965,44 @@ export interface DiagnosisChanlun {
     price_drift_pct: number
     remaining_window_pct: number
   } | null
+  // V39: 买卖点信号一致性验证（条件101）
+  signal_consistency?: {
+    consistency_ratio: number
+    historical_win_rate: number
+    sample_size: number
+    confidence_adjust: number
+  } | null
+  // V39: 中枢级别匹配验证（条件102）
+  zs_level_match?: {
+    level_match: boolean
+    zs_level: number
+    mmd_type_level: number
+    match_score: number
+    confidence_adjust: number
+  } | null
+  // V39: 多时间框架背离确认（条件103）
+  multi_tf_divergence?: {
+    multi_tf_bullish: number
+    multi_tf_bearish: number
+    confirmation_strength: number
+    confidence_adjust: number
+  } | null
+  // V39: 独立交叉验证（条件104）
+  independent_cross_validation?: {
+    method1_support: boolean
+    method2_support: boolean
+    cross_validated: boolean
+    confidence_adjust: number
+  } | null
+  // V39: 决策质量综合评分（条件105）
+  decision_quality_score?: {
+    decision_score: number
+    risk_level: string
+    hold_period: string
+    action: string
+    action_label: string
+    factors: Record<string, number>
+  } | null
 }
 
 export interface DiagnosisMACD {

@@ -306,6 +306,13 @@ class MMD:
     _composite_deviation: dict[str, Any] | None = None  # 多指标偏离度综合评分（条件99）
     _signal_decay_warning: dict[str, Any] | None = None  # 信号衰减预警（条件100）
 
+    # V39 enhancement fields
+    _signal_consistency: dict[str, Any] | None = None  # 买卖点信号一致性验证（条件101）
+    _zs_level_match: dict[str, Any] | None = None  # 中枢级别匹配验证（条件102）
+    _multi_tf_divergence: dict[str, Any] | None = None  # 多时间框架背离确认（条件103）
+    _independent_cross_validation: dict[str, Any] | None = None  # 独立交叉验证（条件104）
+    _decision_quality_score: dict[str, Any] | None = None  # 决策质量综合评分（条件105）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
