@@ -2422,6 +2422,110 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V50: 板块联动分析（条件140）-->
+        <div v-if="diagnosis.chanlun.sector_correlation_v50" class="metric-card v50-sector">
+          <div class="card-title">🔗 板块联动分析（V50·条件140）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">联动状态</span>
+              <span class="tag" :class="diagnosis.chanlun.sector_correlation_v50.correlated ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.sector_correlation_v50.correlated ? '板块联动确认 ✅' : '无联动/背离 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">联动幅度</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.sector_correlation_v50.correlation_pct >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.sector_correlation_v50.correlation_pct > 0 ? '+' : '' }}{{ diagnosis.chanlun.sector_correlation_v50.correlation_pct }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.sector_correlation_v50.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.sector_correlation_v50.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.sector_correlation_v50.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.sector_correlation_v50.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V50: 多时间框架共振验证（条件141）-->
+        <div v-if="diagnosis.chanlun.multi_tf_resonance_v50" class="metric-card v50-mtf">
+          <div class="card-title">⏱️ 多时间框架共振（V50·条件141）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">共振状态</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_resonance_v50.resonant ? 'tag-green' : 'tag-yellow'">
+                {{ diagnosis.chanlun.multi_tf_resonance_v50.resonant ? '多周期共振 ✅' : '部分一致/背离' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">对齐分数</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_resonance_v50.alignment_score >= 0.67 ? '#22c55e' : diagnosis.chanlun.multi_tf_resonance_v50.alignment_score >= 0.33 ? '#f59e0b' : '#ef4444' }">
+                {{ diagnosis.chanlun.multi_tf_resonance_v50.alignment_score }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_resonance_v50.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.multi_tf_resonance_v50.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_resonance_v50.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_tf_resonance_v50.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V50: 缠论级别递归验证（条件142）-->
+        <div v-if="diagnosis.chanlun.level_recursive_validation_v50" class="metric-card v50-level">
+          <div class="card-title">📐 级别递归验证（V50·条件142）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">验证状态</span>
+              <span class="tag" :class="diagnosis.chanlun.level_recursive_validation_v50.validated ? 'tag-green' : 'tag-yellow'">
+                {{ diagnosis.chanlun.level_recursive_validation_v50.validated ? '递归验证通过 ✅' : '未通过' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">级别质量</span>
+              <span class="tag" :class="diagnosis.chanlun.level_recursive_validation_v50.level_quality === 'strong' ? 'tag-green' : diagnosis.chanlun.level_recursive_validation_v50.level_quality === 'normal' ? 'tag-blue' : 'tag-yellow'">
+                {{ diagnosis.chanlun.level_recursive_validation_v50.level_quality === 'strong' ? '强（支撑/阻力位）✅' : diagnosis.chanlun.level_recursive_validation_v50.level_quality === 'normal' ? '中（结构稳固）' : '弱' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.level_recursive_validation_v50.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.level_recursive_validation_v50.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.level_recursive_validation_v50.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.level_recursive_validation_v50.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V50: 市场情绪指标融合（条件143）-->
+        <div v-if="diagnosis.chanlun.market_sentiment_fusion_v50" class="metric-card v50-sentiment">
+          <div class="card-title">🎭 市场情绪融合（V50·条件143）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">情绪状态</span>
+              <span class="tag" :class="diagnosis.chanlun.market_sentiment_fusion_v50.sentiment === 'oversold' ? 'tag-green' : diagnosis.chanlun.market_sentiment_fusion_v50.sentiment === 'overbought' ? 'tag-red' : diagnosis.chanlun.market_sentiment_fusion_v50.sentiment === 'bullish' ? 'tag-blue' : 'tag-yellow'">
+                {{ diagnosis.chanlun.market_sentiment_fusion_v50.sentiment === 'oversold' ? '超卖（逆向买入机会）✅' : diagnosis.chanlun.market_sentiment_fusion_v50.sentiment === 'overbought' ? '超买（逆向卖出机会）✅' : diagnosis.chanlun.market_sentiment_fusion_v50.sentiment === 'bullish' ? '偏多' : diagnosis.chanlun.market_sentiment_fusion_v50.sentiment === 'bearish' ? '偏空' : '中性' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">情绪评分</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.market_sentiment_fusion_v50.sentiment_score > 0 ? '#22c55e' : diagnosis.chanlun.market_sentiment_fusion_v50.sentiment_score < 0 ? '#ef4444' : '#6b7280' }">
+                {{ diagnosis.chanlun.market_sentiment_fusion_v50.sentiment_score > 0 ? '+' : '' }}{{ diagnosis.chanlun.market_sentiment_fusion_v50.sentiment_score }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.market_sentiment_fusion_v50.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.market_sentiment_fusion_v50.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.market_sentiment_fusion_v50.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.market_sentiment_fusion_v50.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -3170,4 +3274,10 @@ onMounted(() => {
 .v46-zs .kv-val { font-weight: 600; }
 .v46-tf .kv-val { font-weight: 600; }
 .v46-regime .kv-val { font-weight: 600; }
+
+/* V50: 板块联动 + 多TF共振 + 级别递归 + 情绪融合 */
+.v50-sector .kv-val { font-weight: 600; }
+.v50-mtf .kv-val { font-weight: 600; }
+.v50-level .kv-val { font-weight: 600; }
+.v50-sentiment .kv-val { font-weight: 600; }
 </style>

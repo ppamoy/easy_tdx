@@ -919,6 +919,14 @@ async def diagnose_stock(
             "pullback_structure_integrity_v49": getattr(latest_mmd, "_pullback_structure_integrity_v49", None) if latest_mmd else None,
             # V49: 中枢级别权重（条件139）
             "zhongshu_level_weight_v49": getattr(latest_mmd, "_zhongshu_level_weight_v49", None) if latest_mmd else None,
+            # V50: 板块联动分析（条件140）
+            "sector_correlation_v50": getattr(latest_mmd, "_sector_correlation_v50", None) if latest_mmd else None,
+            # V50: 多时间框架共振验证（条件141）
+            "multi_tf_resonance_v50": getattr(latest_mmd, "_multi_tf_resonance_v50", None) if latest_mmd else None,
+            # V50: 缠论级别递归验证（条件142）
+            "level_recursive_validation_v50": getattr(latest_mmd, "_level_recursive_validation_v50", None) if latest_mmd else None,
+            # V50: 市场情绪指标融合（条件143）
+            "market_sentiment_fusion_v50": getattr(latest_mmd, "_market_sentiment_fusion_v50", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

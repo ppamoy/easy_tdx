@@ -1270,6 +1270,34 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V50: 板块联动分析（条件140）
+  sector_correlation_v50?: {
+    correlated: boolean
+    correlation_pct: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V50: 多时间框架共振验证（条件141）
+  multi_tf_resonance_v50?: {
+    resonant: boolean
+    alignment_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V50: 缠论级别递归验证（条件142）
+  level_recursive_validation_v50?: {
+    validated: boolean
+    level_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V50: 市场情绪指标融合（条件143）
+  market_sentiment_fusion_v50?: {
+    sentiment: string
+    sentiment_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

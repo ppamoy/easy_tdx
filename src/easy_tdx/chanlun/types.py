@@ -362,6 +362,12 @@ class MMD:
     _pullback_structure_integrity_v49: dict[str, Any] | None = None  # 回踩结构完整性（条件138）
     _zhongshu_level_weight_v49: dict[str, Any] | None = None  # 中枢级别权重（条件139）
 
+    # V50 enhancement fields (2026-08-25)
+    _sector_correlation_v50: dict[str, Any] | None = None  # 板块联动分析（条件140）
+    _multi_tf_resonance_v50: dict[str, Any] | None = None  # 多时间框架共振验证（条件141）
+    _level_recursive_validation_v50: dict[str, Any] | None = None  # 缠论级别递归验证（条件142）
+    _market_sentiment_fusion_v50: dict[str, Any] | None = None  # 市场情绪指标融合（条件143）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
