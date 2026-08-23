@@ -1343,6 +1343,39 @@ export interface DiagnosisChanlun {
     atr: number
     msg: string
   } | null
+  // V52: 量价持续确认（条件148）
+  volume_sustain_after_signal_v52?: {
+    vol_ratio_avg: number
+    vol_trend: string
+    confirmed: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V52: 多指标背离共振（条件149）
+  multi_indicator_divergence_fusion_v52?: {
+    macd_div: boolean
+    rsi_div: boolean
+    kdj_div: boolean
+    fusion_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V52: 近期极端价位检测（条件150）
+  recent_extreme_price_v52?: {
+    price_position: string
+    is_extreme: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V52: 市场环境健康评分（条件151）
+  market_regime_score_v52?: {
+    volatility_regime: string
+    trend_health: string
+    momentum_score: number
+    regime_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

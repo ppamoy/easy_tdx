@@ -374,6 +374,12 @@ class MMD:
     _trend_strength_composite_v51: dict[str, Any] | None = None  # 趋势强度综合评分（条件146）
     _trading_decision_v51: dict[str, Any] | None = None  # 交易决策建议（条件147）
 
+    # V52 enhancement fields (2026-08-25)
+    _volume_sustain_after_signal_v52: dict[str, Any] | None = None  # 量价持续确认（条件148）
+    _multi_indicator_divergence_fusion_v52: dict[str, Any] | None = None  # 多指标背离共振（条件149）
+    _recent_extreme_price_v52: dict[str, Any] | None = None  # 近期极端价位检测（条件150）
+    _market_regime_score_v52: dict[str, Any] | None = None  # 市场环境健康评分（条件151）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

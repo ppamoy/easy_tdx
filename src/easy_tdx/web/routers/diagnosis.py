@@ -935,6 +935,14 @@ async def diagnose_stock(
             "trend_strength_composite_v51": getattr(latest_mmd, "_trend_strength_composite_v51", None) if latest_mmd else None,
             # V51: 交易决策建议（条件147）
             "trading_decision_v51": getattr(latest_mmd, "_trading_decision_v51", None) if latest_mmd else None,
+            # V52: 量价持续确认（条件148）
+            "volume_sustain_after_signal_v52": getattr(latest_mmd, "_volume_sustain_after_signal_v52", None) if latest_mmd else None,
+            # V52: 多指标背离共振（条件149）
+            "multi_indicator_divergence_fusion_v52": getattr(latest_mmd, "_multi_indicator_divergence_fusion_v52", None) if latest_mmd else None,
+            # V52: 近期极端价位检测（条件150）
+            "recent_extreme_price_v52": getattr(latest_mmd, "_recent_extreme_price_v52", None) if latest_mmd else None,
+            # V52: 市场环境健康评分（条件151）
+            "market_regime_score_v52": getattr(latest_mmd, "_market_regime_score_v52", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

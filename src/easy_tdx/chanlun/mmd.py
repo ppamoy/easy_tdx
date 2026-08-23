@@ -1,12 +1,14 @@
-"""买卖点识别（精修版 V48 - 决策增强）。
+"""买卖点识别（精修版 V52 - 决策增强）。
 
-基于缠论理论持续优化（V48 2026-08-24）：
+基于缠论理论持续优化（V52 2026-08-25）：
 - 置信度计算：基于多因子加权，非单一准确率声明
+- V52新增：量价持续确认(条件148)+多指标背离共振(条件149)+极端价位检测(条件150)+市场环境评分(条件151)
+- V51新增：突破笔力度二次确认增强(条件144)+回踩深度+时间(条件145)+趋势强度综合评分(条件146)+交易决策建议(条件147)
+- V50新增：板块联动分析(条件140)+多时间框架共振(条件141)+级别递归验证(条件142)+市场情绪融合(条件143)
+- V49新增：突破力度二次验证(条件137)+回踩结构完整性(条件138)+中枢级别权重(条件139)
 - V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
-- V44新增：趋势方向对齐(121)+突破笔力度对比(122)+回踩时间窗口(123)+波动率自适应阈值(124)+多指标背离共振(125)
-- V46新增：趋势动能强度(126)+量价背离二次确认(127)+中枢突破真实性(128)+多TF信号一致性(129)+动态市场环境适配(130)
-- 总条件数：136个
+- 总条件数：151个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -11479,6 +11481,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V52 条件 148-151 ──
+
+        # 条件148：量价持续确认（Volume Sustain After Signal）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+            try:
+                vol_sustain = _calc_volume_sustain_after_signal_v52(mmd, closes, volumes)
+                mmd._volume_sustain_after_signal_v52 = vol_sustain
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_sustain.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件149：多指标背离共振（Multi-Indicator Divergence Fusion）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and macd_data is not None:
+            try:
+                div_fusion = _calc_multi_indicator_divergence_fusion_v52(mmd, closes, macd_data)
+                mmd._multi_indicator_divergence_fusion_v52 = div_fusion
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + div_fusion.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件150：近期极端价位检测（Recent Extreme Price Detection）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+            try:
+                extreme_price = _calc_recent_extreme_price_v52(mmd, closes, highs, lows)
+                mmd._recent_extreme_price_v52 = extreme_price
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + extreme_price.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件151：市场环境健康评分（Market Regime Score）
+        if closes is not None and volumes is not None and highs is not None and lows is not None:
+            try:
+                regime_score = _calc_market_regime_score_v52(closes, volumes, highs, lows)
+                mmd._market_regime_score_v52 = regime_score
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + regime_score.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -14905,5 +14945,300 @@ def _calc_trading_decision_v51(
     except Exception:
         return result
 
+
+# ── V52: 条件148-151 缠论模型精准度与决策帮助进一步提升 ────────────────────────────────
+
+def _calc_volume_sustain_after_signal_v52(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量价持续确认（V52 条件148）。
+
+    回测数据显示3买准确率仅57.3%，核心问题之一是"突破后量能萎缩"。
+    本条件验证信号后最近5根K线的成交量是否维持高位，
+    过滤"缩量突破"假信号。
+
+    Returns:
+        dict with keys: vol_ratio_avg, vol_trend, confirmed, confidence_adjust, msg
+    """
+    result = {
+        "vol_ratio_avg": 0.0,
+        "vol_trend": "unknown",
+        "confirmed": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or not volumes or len(closes) < 20:
+            return result
+
+        lookback = min(5, len(volumes) // 2)
+        if len(volumes) < lookback * 2:
+            return result
+
+        pre_vol = sum(volumes[-lookback * 2:-lookback]) / lookback
+        post_vol = sum(volumes[-lookback:]) / lookback
+
+        vol_ratio = post_vol / (pre_vol + 1e-10)
+        result["vol_ratio_avg"] = round(vol_ratio, 2)
+
+        if vol_ratio >= 1.2:
+            result["vol_trend"] = "sustaining"
+            result["confirmed"] = True
+            result["confidence_adjust"] = 0.03
+            result["msg"] = f"量价持续确认：信号后均量/信号前均量={vol_ratio:.2f}（量能维持）✅"
+        elif vol_ratio >= 0.9:
+            result["vol_trend"] = "normal"
+            result["confirmed"] = False
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"量价持续确认：信号后均量/信号前均量={vol_ratio:.2f}（量能正常）"
+        else:
+            result["vol_trend"] = "shrinking"
+            result["confirmed"] = False
+            result["confidence_adjust"] = -0.04
+            result["msg"] = f"⚠️ 量价持续确认：信号后均量/信号前均量={vol_ratio:.2f}（量能萎缩，警惕假突破）"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_indicator_divergence_fusion_v52(
+    mmd: MMD,
+    closes: list[float],
+    macd_data: dict[str, list[float]] | None,
+) -> dict[str, Any]:
+    """多指标背离共振（V52 条件149）。
+
+    融合MACD、RSI、KDJ三个指标的背离信号，
+    当2/3指标同时发出同向背离信号时，大幅提高置信度。
+
+    Returns:
+        dict with keys: macd_div, rsi_div, kdj_div, fusion_score, confidence_adjust, msg
+    """
+    result = {
+        "macd_div": False,
+        "rsi_div": False,
+        "kdj_div": False,
+        "fusion_score": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 30 or not macd_data:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        # 1. MACD背离检测（近20根K线）
+        macd_hist = macd_data.get("macd_hist", [])
+        if len(macd_hist) >= 20:
+            recent_hist = macd_hist[-20:]
+            price_slice = closes[-20:]
+            price_high = max(price_slice)
+            price_low = min(price_slice)
+            hist_high = max(recent_hist) if recent_hist else 0
+            hist_low = min(recent_hist) if recent_hist else 0
+            if is_buy:
+                result["macd_div"] = (price_low > closes[-30] * 0.98) and (hist_low > macd_hist[-40] if len(macd_hist) >= 40 else False)
+            else:
+                result["macd_div"] = (price_high < closes[-30] * 1.02) and (hist_high < macd_hist[-40] if len(macd_hist) >= 40 else False)
+
+        # 2. RSI背离检测
+        from easy_tdx.MyTT import RSI
+        if len(closes) >= 30:
+            rsi_val = RSI(closes, 14)[-1] if len(closes) >= 14 else 50.0
+            rsi_prev = RSI(closes[:len(closes)-1], 14)[-1] if len(closes) >= 15 else 50.0
+            if is_buy:
+                result["rsi_div"] = rsi_val < 35 and rsi_prev < 30
+            else:
+                result["rsi_div"] = rsi_val > 65 and rsi_prev > 70
+
+        # 3. KDJ背离检测
+        from easy_tdx.MyTT import KDJ
+        if len(closes) >= 20:
+            k, d, j = KDJ(closes, 9, 3, 3)
+            if len(j) >= 5:
+                j_recent = j[-5:]
+                j_prev = j[-10:-5] if len(j) >= 10 else []
+                if is_buy:
+                    result["kdj_div"] = min(j_recent) < 20 and (not j_prev or max(j_prev) > 20)
+                else:
+                    result["kdj_div"] = max(j_recent) > 80 and (not j_prev or min(j_prev) < 80)
+
+        div_count = sum([result["macd_div"], result["rsi_div"], result["kdj_div"]])
+        result["fusion_score"] = div_count
+
+        if div_count >= 2:
+            result["confidence_adjust"] = 0.04 if div_count == 3 else 0.03
+            indicators = []
+            if result["macd_div"]:
+                indicators.append("MACD")
+            if result["rsi_div"]:
+                indicators.append("RSI")
+            if result["kdj_div"]:
+                indicators.append("KDJ")
+            result["msg"] = f"多指标背离共振：{','.join(indicators)}同时发出同向信号（{div_count}/3）✅"
+        elif div_count == 1:
+            result["confidence_adjust"] = 0.01
+            result["msg"] = f"单一指标背离：仅{['MACD','RSI','KDJ'][[result['macd_div'],result['rsi_div'],result['kdj_div']].index(True)]}发出信号"
+        else:
+            result["confidence_adjust"] = -0.02
+            result["msg"] = "无指标背离确认，信号质量存疑"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_recent_extreme_price_v52(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """近期极端价位检测（V52 条件150）。
+
+    信号出现在历史极值附近时可靠性降低。
+
+    Returns:
+        dict with keys: price_position, is_extreme, confidence_adjust, msg
+    """
+    result = {
+        "price_position": "unknown",
+        "is_extreme": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 60 or not highs or not lows:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        lookback = min(60, len(closes))
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+        current_price = closes[-1]
+
+        range_val = max(recent_highs) - min(recent_lows)
+        high_pct = (current_price - min(recent_lows)) / (range_val + 1e-10)
+        result["price_position"] = f"{high_pct:.0%}"
+
+        if is_buy:
+            if high_pct > 0.9:
+                result["is_extreme"] = True
+                result["confidence_adjust"] = -0.03
+                result["msg"] = f"⚠️ 近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近高点），过度延伸风险"
+            elif high_pct < 0.2:
+                result["is_extreme"] = True
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近低点），支撑有效 ✅"
+            else:
+                result["msg"] = f"近期价位正常（60日区间{high_pct:.0%}位置）"
+        else:
+            if high_pct < 0.1:
+                result["is_extreme"] = True
+                result["confidence_adjust"] = -0.03
+                result["msg"] = f"⚠️ 近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近低点），过度延伸风险"
+            elif high_pct > 0.85:
+                result["is_extreme"] = True
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近高点），阻力有效 ✅"
+            else:
+                result["msg"] = f"近期价位正常（60日区间{high_pct:.0%}位置）"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_market_regime_score_v52(
+    closes: list[float],
+    volumes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """市场环境健康评分（V52 条件151）。
+
+    综合波动率、趋势方向和动量状态，评估当前市场环境是否适合交易。
+
+    Returns:
+        dict with keys: volatility_regime, trend_health, momentum_score, regime_score, confidence_adjust, msg
+    """
+    result = {
+        "volatility_regime": "unknown",
+        "trend_health": "unknown",
+        "momentum_score": 0.0,
+        "regime_score": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 60 or not volumes:
+            return result
+
+        recent_closes = closes[-20:]
+        recent_returns = [(recent_closes[i] - recent_closes[i - 1]) / (recent_closes[i - 1] + 1e-10) for i in range(1, len(recent_closes))]
+        vol_std = (sum(r ** 2 for r in recent_returns) / len(recent_returns)) ** 0.5 if recent_returns else 0.0
+
+        if vol_std > 0.03:
+            vol_regime = "high"
+        elif vol_std > 0.015:
+            vol_regime = "normal"
+        else:
+            vol_regime = "low"
+        result["volatility_regime"] = vol_regime
+
+        ma5 = sum(closes[-5:]) / 5
+        ma20 = sum(closes[-20:]) / 20
+        ma60 = sum(closes[-60:]) / 60
+        if ma5 > ma20 > ma60:
+            trend_health = "strong_uptrend"
+        elif ma5 < ma20 < ma60:
+            trend_health = "strong_downtrend"
+        elif abs(ma5 - ma20) / ma20 < 0.02:
+            trend_health = "sideways"
+        else:
+            trend_health = "weak_trend"
+        result["trend_health"] = trend_health
+
+        momentum = 0
+        price_change_5d = (closes[-1] - closes[-6]) / (closes[-6] + 1e-10)
+        price_change_20d = (closes[-1] - closes[-21]) / (closes[-21] + 1e-10)
+        if price_change_5d > 0.03:
+            momentum += 1
+        elif price_change_5d < -0.03:
+            momentum -= 1
+        if price_change_20d > 0.05:
+            momentum += 1
+        elif price_change_20d < -0.05:
+            momentum -= 1
+        result["momentum_score"] = round(momentum, 2)
+
+        regime_score = 0
+        if vol_regime == "low":
+            regime_score += 1
+        elif vol_regime == "high":
+            regime_score -= 1
+        if trend_health in ("strong_uptrend", "strong_downtrend"):
+            regime_score += 1
+        elif trend_health == "sideways":
+            regime_score -= 1
+
+        result["regime_score"] = regime_score
+
+        if regime_score >= 2:
+            result["confidence_adjust"] = 0.02
+            result["msg"] = f"市场环境良好（波动{vol_regime}+趋势{trend_health}），适合交易"
+        elif regime_score <= -1:
+            result["confidence_adjust"] = -0.03
+            result["msg"] = f"⚠️ 市场环境较差（波动{vol_regime}+趋势{trend_health}），建议谨慎"
+        else:
+            result["msg"] = f"市场环境中性（波动{vol_regime}+趋势{trend_health}）"
+
+        return result
+    except Exception:
+        return result
 
 

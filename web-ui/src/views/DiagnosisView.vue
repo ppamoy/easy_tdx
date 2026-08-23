@@ -2680,6 +2680,114 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V52: 量价持续确认（条件148）-->
+        <div v-if="diagnosis.chanlun.volume_sustain_after_signal_v52" class="metric-card v52-volume">
+          <div class="card-title">📊 量价持续确认（V52·条件148）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">成交量趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_sustain_after_signal_v52.confirmed ? 'tag-green' : 'tag-yellow'">
+                {{ diagnosis.chanlun.volume_sustain_after_signal_v52.vol_trend === 'sustaining' ? '✅ 维持' : diagnosis.chanlun.volume_sustain_after_signal_v52.vol_trend === 'shrinking' ? '⚠️ 萎缩' : '🟡 正常' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">量比（信号后/信号前）</span>
+              <span class="kv-val">{{ diagnosis.chanlun.volume_sustain_after_signal_v52.vol_ratio_avg }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_sustain_after_signal_v52.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.volume_sustain_after_signal_v52.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.volume_sustain_after_signal_v52.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.volume_sustain_after_signal_v52.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volume_sustain_after_signal_v52.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V52: 多指标背离共振（条件149）-->
+        <div v-if="diagnosis.chanlun.multi_indicator_divergence_fusion_v52" class="metric-card v52-divergence">
+          <div class="card-title">🔀 多指标背离共振（V52·条件149）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">MACD背离</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_fusion_v52.macd_div ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_indicator_divergence_fusion_v52.macd_div ? '✅' : '❌' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">RSI背离</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_fusion_v52.rsi_div ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_indicator_divergence_fusion_v52.rsi_div ? '✅' : '❌' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">KDJ背离</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_fusion_v52.kdj_div ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_indicator_divergence_fusion_v52.kdj_div ? '✅' : '❌' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">共振得分</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_fusion_v52.fusion_score >= 2 ? 'tag-green' : diagnosis.chanlun.multi_indicator_divergence_fusion_v52.fusion_score === 1 ? 'tag-yellow' : 'tag-red'">
+                {{ diagnosis.chanlun.multi_indicator_divergence_fusion_v52.fusion_score }}/3
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_indicator_divergence_fusion_v52.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V52: 近期极端价位检测（条件150）-->
+        <div v-if="diagnosis.chanlun.recent_extreme_price_v52" class="metric-card v52-extreme">
+          <div class="card-title">📍 近期极端价位检测（V52·条件150）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">60日区间位置</span>
+              <span class="tag" :class="diagnosis.chanlun.recent_extreme_price_v52.is_extreme ? (diagnosis.chanlun.recent_extreme_price_v52.confidence_adjust > 0 ? 'tag-green' : 'tag-red') : 'tag-gray'">
+                {{ diagnosis.chanlun.recent_extreme_price_v52.price_position }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">极端信号</span>
+              <span class="tag" :class="diagnosis.chanlun.recent_extreme_price_v52.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.recent_extreme_price_v52.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.recent_extreme_price_v52.confidence_adjust > 0 ? '✅ 支撑/阻力有效' : diagnosis.chanlun.recent_extreme_price_v52.confidence_adjust < 0 ? '⚠️ 过度延伸' : '🟡 正常' }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.recent_extreme_price_v52.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V52: 市场环境健康评分（条件151）-->
+        <div v-if="diagnosis.chanlun.market_regime_score_v52" class="metric-card v52-regime">
+          <div class="card-title">🌍 市场环境健康评分（V52·条件151）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">波动率状态</span>
+              <span class="tag" :class="diagnosis.chanlun.market_regime_score_v52.volatility_regime === 'low' ? 'tag-green' : diagnosis.chanlun.market_regime_score_v52.volatility_regime === 'high' ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.market_regime_score_v52.volatility_regime === 'low' ? '✅ 低波动' : diagnosis.chanlun.market_regime_score_v52.volatility_regime === 'high' ? '⚠️ 高波动' : '🟡 正常波动' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">趋势健康度</span>
+              <span class="tag" :class="diagnosis.chanlun.market_regime_score_v52.trend_health === 'sideways' ? 'tag-red' : 'tag-green'">
+                {{ diagnosis.chanlun.market_regime_score_v52.trend_health === 'strong_uptrend' ? '📈 强趋势向上' : diagnosis.chanlun.market_regime_score_v52.trend_health === 'strong_downtrend' ? '📉 强趋势向下' : diagnosis.chanlun.market_regime_score_v52.trend_health === 'sideways' ? '➡️ 横盘' : '🔄 弱趋势' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">动量得分</span>
+              <span class="tag" :class="diagnosis.chanlun.market_regime_score_v52.momentum_score > 0 ? 'tag-green' : diagnosis.chanlun.market_regime_score_v52.momentum_score < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.market_regime_score_v52.momentum_score > 0 ? '+' : '' }}{{ diagnosis.chanlun.market_regime_score_v52.momentum_score }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">环境评分</span>
+              <span class="tag" :class="diagnosis.chanlun.market_regime_score_v52.regime_score >= 2 ? 'tag-green' : diagnosis.chanlun.market_regime_score_v52.regime_score <= -1 ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.market_regime_score_v52.regime_score >= 2 ? '✅ 良好' : diagnosis.chanlun.market_regime_score_v52.regime_score <= -1 ? '⚠️ 较差' : '🟡 中性' }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.market_regime_score_v52.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
