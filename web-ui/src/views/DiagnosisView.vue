@@ -3012,6 +3012,116 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V55: 分钟级多时间框架共振过滤（条件160）-->
+        <div v-if="diagnosis.chanlun.multi_tf_resonance_filter_v55" class="metric-card v55-mtfr">
+          <div class="card-title">🔗 多时间框架共振过滤（V55·条件160）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">共振状态</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_resonance_filter_v55.resonated ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.multi_tf_resonance_filter_v55.resonated ? '✅ 共振确认' : '⚠️ 无共振/冲突' }}
+              </span>
+            </div>
+            <div class="kv-row" v-for="(tf, idx) in diagnosis.chanlun.multi_tf_resonance_filter_v55.timeframes" :key="idx">
+              <span class="kv-key">时间框架{{ idx + 1 }}</span>
+              <span class="kv-val">{{ tf }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_resonance_filter_v55.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.multi_tf_resonance_filter_v55.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_tf_resonance_filter_v55.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_tf_resonance_filter_v55.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_tf_resonance_filter_v55.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V55: 中枢级别权重自适应（条件161）-->
+        <div v-if="diagnosis.chanlun.zhongshu_level_weight_v55" class="metric-card v55-zsw">
+          <div class="card-title">💎 中枢级别权重（V55·条件161）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">中枢级别</span>
+              <span class="tag" :class="diagnosis.chanlun.zhongshu_level_weight_v55.level === '月线' ? 'tag-gold' : diagnosis.chanlun.zhongshu_level_weight_v55.level === '周线' ? 'tag-green' : diagnosis.chanlun.zhongshu_level_weight_v55.level === '日线' ? 'tag-blue' : 'tag-gray'">
+                {{ diagnosis.chanlun.zhongshu_level_weight_v55.level }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">权重加分</span>
+              <span class="kv-val">+{{ diagnosis.chanlun.zhongshu_level_weight_v55.weight_bonus }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">综合评分</span>
+              <span class="kv-val">{{ diagnosis.chanlun.zhongshu_level_weight_v55.level_score }}/10</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.zhongshu_level_weight_v55.confidence_adjust > 0 ? 'tag-green' : 'tag-gray'">
+                +{{ diagnosis.chanlun.zhongshu_level_weight_v55.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.zhongshu_level_weight_v55.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V55: 弱势股专项风险检测（条件162）-->
+        <div v-if="diagnosis.chanlun.weak_stock_risk_v55" class="metric-card v55-wsr" :class="{ 'is-weak': diagnosis.chanlun.weak_stock_risk_v55.is_weak }">
+          <div class="card-title">⚡ 弱势股风险检测（V55·条件162）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">风险等级</span>
+              <span class="tag" :class="diagnosis.chanlun.weak_stock_risk_v55.is_weak ? 'tag-red' : 'tag-green'">
+                {{ diagnosis.chanlun.weak_stock_risk_v55.is_weak ? '🚨 高风险' : '✅ 低风险' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">ATR/价格比</span>
+              <span class="kv-val">{{ diagnosis.chanlun.weak_stock_risk_v55.volatility_ratio }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">量比</span>
+              <span class="kv-val">{{ diagnosis.chanlun.weak_stock_risk_v55.volume_ratio }}</span>
+            </div>
+            <div class="kv-row" v-if="diagnosis.chanlun.weak_stock_risk_v55.risk_factors.length > 0">
+              <span class="kv-key">风险因素</span>
+              <span class="kv-val tag-red" style="font-size:11px">{{ diagnosis.chanlun.weak_stock_risk_v55.risk_factors.join(' | ') }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.weak_stock_risk_v55.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.weak_stock_risk_v55.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.weak_stock_risk_v55.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.weak_stock_risk_v55.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.weak_stock_risk_v55.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V55: 信号与趋势方向对齐验证（条件163）-->
+        <div v-if="diagnosis.chanlun.signal_trend_alignment_v55" class="metric-card v55-sta">
+          <div class="card-title">🧭 信号趋势对齐验证（V55·条件163）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">对齐状态</span>
+              <span class="tag" :class="diagnosis.chanlun.signal_trend_alignment_v55.aligned ? 'tag-green' : (diagnosis.chanlun.signal_trend_alignment_v55.confidence_adjust < 0 ? 'tag-red' : 'tag-yellow')">
+                {{ diagnosis.chanlun.signal_trend_alignment_v55.aligned ? '✅ 顺势信号' : (diagnosis.chanlun.signal_trend_alignment_v55.confidence_adjust < 0 ? '⚠️ 逆势信号' : '➡️ 震荡市') }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">趋势方向</span>
+              <span class="tag" :class="diagnosis.chanlun.signal_trend_alignment_v55.trend_direction === 'up' ? 'tag-green' : diagnosis.chanlun.signal_trend_alignment_v55.trend_direction === 'down' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.signal_trend_alignment_v55.trend_direction === 'up' ? '📈 上升' : diagnosis.chanlun.signal_trend_alignment_v55.trend_direction === 'down' ? '📉 下降' : '➡️ 震荡' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.signal_trend_alignment_v55.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.signal_trend_alignment_v55.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.signal_trend_alignment_v55.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.signal_trend_alignment_v55.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.signal_trend_alignment_v55.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -3766,4 +3876,31 @@ onMounted(() => {
 .v50-mtf .kv-val { font-weight: 600; }
 .v50-level .kv-val { font-weight: 600; }
 .v50-sentiment .kv-val { font-weight: 600; }
+
+/* V52: 量价持续 + 多指标背离 + 极端价位 + 市场评分 */
+.v52-volsustain .kv-val { font-weight: 600; }
+.v52-divergence .kv-val { font-weight: 600; }
+.v52-extreme .kv-val { font-weight: 600; }
+.v52-regime .kv-val { font-weight: 600; }
+
+/* V53: 趋势阶段 + ATR止损 + 突破力度 + 质量分层 */
+.v53-trendstage .kv-val { font-weight: 600; }
+.v53-atrstop .kv-val { font-weight: 600; }
+.v53-breakout .kv-val { font-weight: 600; }
+.v53-quality .kv-val { font-weight: 600; }
+
+/* V54: 多K线确认 + 缺口风险 + 波动率切换 + 量价配合 */
+.v54-multibar .kv-val { font-weight: 600; }
+.v54-gap .kv-val { font-weight: 600; }
+.v54-vol .kv-val { font-weight: 600; }
+.v54-volprice .kv-val { font-weight: 600; }
+
+/* V55: 多TF共振 + 中枢级别权重 + 弱势股风险 + 趋势对齐 */
+.v55-mtfr .kv-val { font-weight: 600; }
+.v55-zsw .kv-val { font-weight: 600; }
+.v55-wsr.is-weak { border-color: #ef4444; }
+.v55-sta .kv-val { font-weight: 600; }
+
+/* V55 custom tag colors */
+.tag-gold { background: #f59e0b; color: #fff; }
 </style>

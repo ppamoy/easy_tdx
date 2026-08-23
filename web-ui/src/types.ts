@@ -1442,6 +1442,37 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V55: 分钟级多时间框架共振过滤（条件160）
+  multi_tf_resonance_filter_v55?: {
+    resonated: boolean
+    timeframes: string[]
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V55: 中枢级别权重自适应（条件161）
+  zhongshu_level_weight_v55?: {
+    level: string
+    weight_bonus: number
+    level_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V55: 弱势股专项风险检测（条件162）
+  weak_stock_risk_v55?: {
+    is_weak: boolean
+    risk_factors: string[]
+    volatility_ratio: number
+    volume_ratio: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V55: 信号与趋势方向对齐验证（条件163）
+  signal_trend_alignment_v55?: {
+    aligned: boolean
+    trend_direction: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

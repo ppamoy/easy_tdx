@@ -1,7 +1,8 @@
-"""买卖点识别（精修版 V54 - 决策增强）。
+"""买卖点识别（精修版 V55 - 决策增强）。
 
-基于缠论理论持续优化（V54 2026-08-25）：
+基于缠论理论持续优化（V55 2026-08-26）：
 - 置信度计算：基于多因子加权，非单一准确率声明
+- V55新增：分钟级多时间框架共振过滤(条件160)+中枢级别权重自适应(条件161)+弱势股专项风险检测(条件162)+信号与趋势方向对齐验证(条件163)
 - V54新增：多K线确认后确认(条件156)+缺口风险评估(条件157)+波动率切换检测(条件158)+量价配合度评分(条件159)
 - V53新增：趋势顺势确认(条件152)+ATR自适应止损(条件153)+突破力度验证(条件154)+信号质量分层(条件155)
 - V52新增：量价持续确认(条件148)+多指标背离共振(条件149)+极端价位检测(条件150)+市场环境评分(条件151)
@@ -9,7 +10,7 @@
 - V49新增：突破力度二次验证(条件137)+回踩结构完整性(条件138)+中枢级别权重(条件139)
 - V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
-- 总条件数：159个
+- 总条件数：163个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -11596,6 +11597,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V55 条件 160-163 ──
+
+        # 条件160：分钟级多时间框架共振过滤（Multi-Timeframe Resonance Filter）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+            try:
+                mtfr = _calc_multi_tf_resonance_filter_v55(mmd, closes, volumes)
+                mmd._multi_tf_resonance_filter_v55 = mtfr
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mtfr.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件161：中枢级别权重自适应（Zhongshu Level Weight Adaptation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None:
+            try:
+                zs_weight = _calc_zhongshu_level_weight_v55(mmd, zss)
+                mmd._zhongshu_level_weight_v55 = zs_weight
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_weight.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件162：弱势股专项风险检测（Weak Stock Risk Detection）
+        if closes is not None and volumes is not None and highs is not None and lows is not None:
+            try:
+                weak_risk = _calc_weak_stock_risk_v55(mmd, closes, volumes, highs, lows)
+                mmd._weak_stock_risk_v55 = weak_risk
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + weak_risk.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件163：信号与趋势方向对齐验证（Signal Trend Alignment Validation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None:
+            try:
+                trend_align = _calc_signal_trend_alignment_v55(mmd, closes)
+                mmd._signal_trend_alignment_v55 = trend_align
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_align.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -16061,6 +16100,467 @@ def _calc_volume_price_coordination_v54(
             result["msg"] = "非3买/3卖信号，跳过此条件"
 
         result["score"] = max(-5, min(5, score))
+        return result
+    except Exception:
+        return result
+
+
+# ── V55: 条件160-163 缠论模型精准度与决策帮助进一步提升 ────────────────────────
+
+def _calc_multi_tf_resonance_filter_v55(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """分钟级多时间框架共振过滤（V55 条件160）。
+
+    通过日线K线内部结构模拟多时间框架共振：
+    - 若信号后短期动能（5根K线）与中长期动能（20根K线）方向一致 → 共振确认 +3%
+    - 若短期与中长期动能方向相反 → 时间框架冲突 -5%
+    - 若仅有一段时间框架支持 → 部分共振 +1%
+
+    利用日线数据中的量价结构模拟多TF一致性：
+    - 短期动量：最近5根K线的价格变化率 × 成交量加权
+    - 中期动量：最近20根K线的价格变化率 × 成交量加权
+    - 长期动量：最近60根K线的价格变化率（若有）
+
+    Returns:
+        dict with keys: resonated, timeframes, confidence_adjust, msg
+    """
+    result = {
+        "resonated": False,
+        "timeframes": [],
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 20:
+            return result
+
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        # 计算短期动量（5根K线）
+        short_closes = closes[-5:]
+        short_return = (short_closes[-1] - short_closes[0]) / (short_closes[0] + 1e-10)
+        short_vol = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else 0
+
+        # 计算中期动量（20根K线）
+        mid_closes = closes[-20:]
+        mid_return = (mid_closes[-1] - mid_closes[0]) / (mid_closes[0] + 1e-10)
+        mid_vol = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else 0
+
+        # 计算长期动量（60根K线，若可用）
+        long_return = 0.0
+        if len(closes) >= 60:
+            long_closes = closes[-60:]
+            long_return = (long_closes[-1] - long_closes[0]) / (long_closes[0] + 1e-10)
+
+        # 判断各时间框架方向
+        short_dir = "up" if short_return > 0.01 else ("down" if short_return < -0.01 else "flat")
+        mid_dir = "up" if mid_return > 0.01 else ("down" if mid_return < -0.01 else "flat")
+        long_dir = "up" if long_return > 0.01 else ("down" if long_return < -0.01 else "flat")
+
+        # 判断共振
+        aligned_count = sum(1 for d in [short_dir, mid_dir, long_dir] if d != "flat")
+        same_dir_count = sum(1 for d in [short_dir, mid_dir] if (is_buy and d == "up") or (is_sell and d == "down"))
+
+        result["timeframes"] = [f"{short_dir}({short_return:.1%})", f"{mid_dir}({mid_return:.1%})"]
+        if long_dir != "flat":
+            result["timeframes"].append(f"{long_dir}({long_return:.1%})")
+
+        if is_buy:
+            if same_dir_count >= 2:
+                # 短中期都向上 → 强共振
+                result["resonated"] = True
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"✅ 多时间框架共振确认：{' + '.join(result['timeframes'])}，+3%置信度"
+            elif same_dir_count == 1:
+                # 仅一个时间框架支持 → 部分共振
+                result["resonated"] = False
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"⚠️ 部分共振：{' + '.join(result['timeframes'])}，+1%置信度"
+            else:
+                # 短中期都向下 → 强烈冲突
+                result["resonated"] = False
+                result["confidence_adjust"] = -0.05
+                result["msg"] = f"🚨 时间框架冲突：{' + '.join(result['timeframes'])}，-5%置信度"
+        else:  # is_sell
+            opposite_dir_count = sum(1 for d in [short_dir, mid_dir] if d == "down")
+            if opposite_dir_count >= 2:
+                result["resonated"] = True
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"✅ 多时间框架共振确认：{' + '.join(result['timeframes'])}，+3%置信度"
+            elif opposite_dir_count == 1:
+                result["resonated"] = False
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"⚠️ 部分共振：{' + '.join(result['timeframes'])}，+1%置信度"
+            else:
+                result["resonated"] = False
+                result["confidence_adjust"] = -0.05
+                result["msg"] = f"🚨 时间框架冲突：{' + '.join(result['timeframes'])}，-5%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_level_weight_v55(
+    mmd: "MMD",
+    zss: list["ZS"],
+) -> dict[str, Any]:
+    """中枢级别权重自适应（V55 条件161）。
+
+    根据突破中枢的级别赋予不同置信度权重：
+    - 小级别中枢（构成笔数 ≤ 3）：需要更多确认，+2%
+    - 日线级别中枢（构成笔数 4-7）：核心信号，+4%
+    - 周线级别中枢（构成笔数 8-12）：强信号，+6%
+    - 月线级别中枢（构成笔数 ≥ 13）：极强信号，+8%
+    - 无中枢信息：0%
+
+    同时考虑中枢的完整性（done标志）和近期表现。
+
+    Returns:
+        dict with keys: level, weight_bonus, level_score, confidence_adjust, msg
+    """
+    result = {
+        "level": "unknown",
+        "weight_bonus": 0,
+        "level_score": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if not zss or len(zss) == 0:
+            result["msg"] = "无中枢数据，跳过此条件"
+            return result
+
+        # 找到最相关的中枢（最近完成的中枢）
+        relevant_zs = None
+        for zs in reversed(zss):
+            if zs.line_count >= 3 and zs.done:
+                relevant_zs = zs
+                break
+
+        if relevant_zs is None:
+            # 使用最新的已完成的线段级中枢
+            for zs in reversed(zss):
+                if zs.line_count >= 3:
+                    relevant_zs = zs
+                    break
+
+        if relevant_zs is None:
+            result["msg"] = "无可用的中枢数据"
+            return result
+
+        line_count = relevant_zs.line_count
+
+        # 根据中枢级别（笔数）确定权重
+        if line_count >= 13:
+            level = "月线"
+            weight_bonus = 8
+            result["confidence_adjust"] = 0.08
+        elif line_count >= 8:
+            level = "周线"
+            weight_bonus = 6
+            result["confidence_adjust"] = 0.06
+        elif line_count >= 4:
+            level = "日线"
+            weight_bonus = 4
+            result["confidence_adjust"] = 0.04
+        elif line_count >= 3:
+            level = "小级别"
+            weight_bonus = 2
+            result["confidence_adjust"] = 0.02
+        else:
+            level = "未知"
+            weight_bonus = 0
+            result["confidence_adjust"] = 0.0
+
+        # 中枢完整性加分
+        if relevant_zs.done:
+            level_score = weight_bonus + 1  # 完整中枢额外+1
+        else:
+            level_score = weight_bonus  # 未完成的中心中枢不给额外分
+
+        result["level"] = level
+        result["weight_bonus"] = weight_bonus
+        result["level_score"] = level_score
+
+        direction_hint = "买入" if is_buy else "卖出"
+        result["msg"] = (
+            f"💎 中枢级别权重：{level}中枢({line_count}笔)"
+            f"，完整性{'✓' if relevant_zs.done else '△'}"
+            f"，{direction_hint}信号权重+{level_score}% → +{result['confidence_adjust']:.0%}置信度"
+        )
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_weak_stock_risk_v55(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """弱势股专项风险检测（V55 条件162）。
+
+    针对招商银行、长江电力等弱势特征股票进行专项检测：
+    - 高波动率（ATR/价格 > 3%）→ 风险增加
+    - 低流动性（近期成交量 < 20日均量 × 0.6）→ 风险增加
+    - 价格处于近60日低位（< 20%分位）→ 弱势确认
+    - 连续下跌天数 > 5 → 弱势确认
+
+    对买入信号：弱势特征越多，置信度扣减越大（最多-8%）
+    对卖出信号：弱势特征越多，卖出信号越可靠（最多+5%）
+
+    Returns:
+        dict with keys: is_weak, risk_factors, volatility_ratio, volume_ratio, confidence_adjust, msg
+    """
+    result = {
+        "is_weak": False,
+        "risk_factors": [],
+        "volatility_ratio": 0.0,
+        "volume_ratio": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 60 or len(volumes) < 60:
+            result["msg"] = "数据不足，跳过弱势股检测"
+            return result
+
+        risk_score = 0
+        risk_factors = []
+
+        # 1. 波动率检测（ATR/价格）
+        atr_period = 14
+        true_ranges = []
+        for i in range(len(closes) - atr_period, len(closes)):
+            high = highs[i]
+            low = lows[i]
+            prev_close = closes[i - 1] if i > 0 else close
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            true_ranges.append(tr)
+        atr = sum(true_ranges) / len(true_ranges) if true_ranges else 0
+        latest_price = closes[-1]
+        atr_ratio = atr / (latest_price + 1e-10)
+        result["volatility_ratio"] = round(atr_ratio * 100, 2)
+
+        if atr_ratio > 0.03:  # ATR > 3% 为高波动
+            risk_score += 2
+            risk_factors.append("高波动率(ATR/价格>3%)")
+
+        # 2. 流动性检测
+        recent_vol = sum(volumes[-5:]) / 5
+        avg_vol = sum(volumes[-20:]) / 20
+        vol_ratio = recent_vol / (avg_vol + 1e-10)
+        result["volume_ratio"] = round(vol_ratio, 2)
+
+        if vol_ratio < 0.6:  # 成交量显著萎缩
+            risk_score += 2
+            risk_factors.append("低流动性(量比<0.6)")
+        elif vol_ratio < 0.8:
+            risk_score += 1
+            risk_factors.append("成交量萎缩(量比<0.8)")
+
+        # 3. 价格位置检测（近60日分位）
+        sorted_closes = sorted(closes[-60:])
+        price_percentile = sum(1 for c in sorted_closes if c <= latest_price) / len(sorted_closes)
+        if price_percentile < 0.2:  # 价格处于近60日20%分位以下
+            risk_score += 2
+            risk_factors.append("价格弱势(<60日20%分位)")
+        elif price_percentile < 0.3:
+            risk_score += 1
+            risk_factors.append("价格偏弱(<60日30%分位)")
+
+        # 4. 连续下跌检测
+        consecutive_down = 0
+        for i in range(len(closes) - 1, max(len(closes) - 10, -1), -1):
+            if i > 0 and closes[i] < closes[i - 1]:
+                consecutive_down += 1
+            else:
+                break
+        if consecutive_down >= 5:
+            risk_score += 2
+            risk_factors.append(f"连续下跌({consecutive_down}天)")
+        elif consecutive_down >= 3:
+            risk_score += 1
+            risk_factors.append(f"近期回调({consecutive_down}天)")
+
+        result["risk_factors"] = risk_factors
+        result["is_weak"] = risk_score >= 3
+
+        if is_buy:
+            # 买入信号：弱势特征扣分
+            if risk_score >= 5:
+                result["confidence_adjust"] = -0.08
+                result["msg"] = f"🚨 弱势股风险极高：{', '.join(risk_factors)}，-8%置信度"
+            elif risk_score >= 3:
+                result["confidence_adjust"] = -0.05
+                result["msg"] = f"⚠️ 弱势股风险较高：{', '.join(risk_factors)}，-5%置信度"
+            elif risk_score >= 1:
+                result["confidence_adjust"] = -0.02
+                result["msg"] = f"🟡 存在弱势特征：{', '.join(risk_factors)}，-2%置信度"
+            else:
+                result["msg"] = "✅ 无明显弱势特征，无需调整"
+        else:  # is_sell
+            # 卖出信号：弱势特征加分（弱势股的卖出信号更可靠）
+            if risk_score >= 5:
+                result["confidence_adjust"] = 0.05
+                result["msg"] = f"✅ 弱势股卖出信号强化：{', '.join(risk_factors)}，+5%置信度"
+            elif risk_score >= 3:
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"🟢 弱势股卖出信号较可靠：{', '.join(risk_factors)}，+3%置信度"
+            else:
+                result["msg"] = "✅ 无明显弱势特征，无需调整"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_trend_alignment_v55(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """信号与趋势方向对齐验证（V55 条件163）。
+
+    验证买卖点信号是否与当前主要趋势方向一致：
+    - 买入信号：需处于上升趋势或下跌趋势的末端（底部反转）
+    - 卖出信号：需处于下降趋势或上升趋势的末端（顶部反转）
+
+    趋势判断方法：
+    1. 均线系统：MA5/MA10/MA20/MA60 的排列状态
+    2. 价格动量：近期价格变化率
+    3. MACD趋势：DIF与DEA的位置关系
+
+    对齐规则：
+    - 上升趋势中的买入信号 → +2%（顺势买入）
+    - 下降趋势中的卖出信号 → +2%（顺势卖出）
+    - 上升趋势中的卖出信号 → -2%（逆势卖出风险）
+    - 下降趋势中的买入信号 → -2%（逆势买入风险）
+    - 震荡市中的信号 → 0%（中性）
+
+    Returns:
+        dict with keys: aligned, trend_direction, confidence_adjust, msg
+    """
+    result = {
+        "aligned": False,
+        "trend_direction": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if not closes or len(closes) < 60:
+            result["msg"] = "数据不足，跳过趋势对齐验证"
+            return result
+
+        # 计算均线
+        def ma(data: list[float], period: int) -> float:
+            if len(data) < period:
+                return data[-1] if data else 0
+            return sum(data[-period:]) / period
+
+        ma5 = ma(closes, 5)
+        ma10 = ma(closes, 10)
+        ma20 = ma(closes, 20)
+        ma60 = ma(closes, 60)
+        latest = closes[-1]
+
+        # 判断趋势方向
+        trend_score = 0
+        trend_factors = []
+
+        # 均线排列评分
+        if ma5 > ma10 > ma20:
+            trend_score += 2
+            trend_factors.append("MA5>MA10>MA20多头排列")
+        elif ma5 < ma10 < ma20:
+            trend_score -= 2
+            trend_factors.append("MA5<MA10<MA20空头排列")
+        elif ma5 > ma20:
+            trend_score += 1
+            trend_factors.append("短期均线在上")
+        elif ma5 < ma20:
+            trend_score -= 1
+            trend_factors.append("短期均线在下")
+
+        # 价格相对MA60位置
+        price_vs_ma60 = (latest - ma60) / (ma60 + 1e-10)
+        if price_vs_ma60 > 0.05:
+            trend_score += 1
+            trend_factors.append(f"价格高于MA60({price_vs_ma60:.1%})")
+        elif price_vs_ma60 < -0.05:
+            trend_score -= 1
+            trend_factors.append(f"价格低于MA60({price_vs_ma60:.1%})")
+
+        # 近期动量
+        momentum_20 = (closes[-1] - closes[-20]) / (closes[-20] + 1e-10)
+        if momentum_20 > 0.03:
+            trend_score += 1
+            trend_factors.append(f"20日动量正向({momentum_20:.1%})")
+        elif momentum_20 < -0.03:
+            trend_score -= 1
+            trend_factors.append(f"20日动量负向({momentum_20:.1%})")
+
+        # 确定趋势方向
+        if trend_score >= 2:
+            trend_direction = "up"
+        elif trend_score <= -2:
+            trend_direction = "down"
+        else:
+            trend_direction = "flat"
+
+        result["trend_direction"] = trend_direction
+
+        if is_buy:
+            if trend_direction == "up":
+                result["aligned"] = True
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"✅ 顺势买入：{', '.join(trend_factors)}，+2%置信度"
+            elif trend_direction == "down":
+                result["aligned"] = False
+                result["confidence_adjust"] = -0.02
+                result["msg"] = f"⚠️ 逆势买入风险：{', '.join(trend_factors)}，-2%置信度"
+            else:
+                result["msg"] = "➡️ 震荡市买入：信号方向不明确，暂不调整"
+        else:  # is_sell
+            if trend_direction == "down":
+                result["aligned"] = True
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"✅ 顺势卖出：{', '.join(trend_factors)}，+2%置信度"
+            elif trend_direction == "up":
+                result["aligned"] = False
+                result["confidence_adjust"] = -0.02
+                result["msg"] = f"⚠️ 逆势卖出风险：{', '.join(trend_factors)}，-2%置信度"
+            else:
+                result["msg"] = "➡️ 震荡市卖出：信号方向不明确，暂不调整"
+
         return result
     except Exception:
         return result

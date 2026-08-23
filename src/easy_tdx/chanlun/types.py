@@ -392,6 +392,12 @@ class MMD:
     _volatility_regime_change_v54: dict[str, Any] | None = None  # 波动率regime切换检测（条件158）
     _volume_price_coordination_v54: dict[str, Any] | None = None  # 量价配合度评分（条件159）
 
+    # V55 enhancement fields (2026-08-26)
+    _multi_tf_resonance_filter_v55: dict[str, Any] | None = None  # 分钟级多时间框架共振过滤（条件160）
+    _zhongshu_level_weight_v55: dict[str, Any] | None = None  # 中枢级别权重自适应（条件161）
+    _weak_stock_risk_v55: dict[str, Any] | None = None  # 弱势股专项风险检测（条件162）
+    _signal_trend_alignment_v55: dict[str, Any] | None = None  # 信号与趋势方向对齐验证（条件163）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

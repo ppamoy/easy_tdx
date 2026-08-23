@@ -959,6 +959,14 @@ async def diagnose_stock(
             "volatility_regime_change_v54": getattr(latest_mmd, "_volatility_regime_change_v54", None) if latest_mmd else None,
             # V54: 量价配合度评分（条件159）
             "volume_price_coordination_v54": getattr(latest_mmd, "_volume_price_coordination_v54", None) if latest_mmd else None,
+            # V55: 分钟级多时间框架共振过滤（条件160）
+            "multi_tf_resonance_filter_v55": getattr(latest_mmd, "_multi_tf_resonance_filter_v55", None) if latest_mmd else None,
+            # V55: 中枢级别权重自适应（条件161）
+            "zhongshu_level_weight_v55": getattr(latest_mmd, "_zhongshu_level_weight_v55", None) if latest_mmd else None,
+            # V55: 弱势股专项风险检测（条件162）
+            "weak_stock_risk_v55": getattr(latest_mmd, "_weak_stock_risk_v55", None) if latest_mmd else None,
+            # V55: 信号与趋势方向对齐验证（条件163）
+            "signal_trend_alignment_v55": getattr(latest_mmd, "_signal_trend_alignment_v55", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
