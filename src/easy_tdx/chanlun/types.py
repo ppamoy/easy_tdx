@@ -341,6 +341,13 @@ class MMD:
     _volatility_adaptive_threshold: dict[str, Any] | None = None  # 波动率自适应阈值（条件124）
     _multi_indicator_divergence_resonance: dict[str, Any] | None = None  # 多指标背离共振（条件125）
 
+    # V46 enhancement fields (2026-08-23)
+    _trend_momentum_strength: dict[str, Any] | None = None  # 趋势动能强度过滤（条件126）
+    _volume_price_divergence_secondary: dict[str, Any] | None = None  # 量价背离二次确认（条件127）
+    _zs_breakout_authenticity: dict[str, Any] | None = None  # 中枢突破真实性验证（条件128）
+    _multi_tf_signal_consistency: dict[str, Any] | None = None  # 多时间框架信号一致性（条件129）
+    _dynamic_market_regime: dict[str, Any] | None = None  # 动态市场环境适配（条件130）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

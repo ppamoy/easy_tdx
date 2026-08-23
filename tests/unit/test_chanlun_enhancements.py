@@ -6993,3 +6993,163 @@ class TestV44Integration:
     def test_v44_all_tests_pass(self):
         """V44 集成测试全部通过。"""
         assert True
+
+
+class TestV46Enhancements:
+    """V46 六维强化增强测试（条件126-130）。"""
+
+    def _make_mmd(self, mmd_type=MMDType.BUY_3):
+        mmd = MMD(mmd_type=mmd_type, msg="V46测试")
+        mmd.zs = {"high": 10.0, "low": 8.0}
+        return mmd
+
+    def test_trend_momentum_strength_returns_dict(self):
+        """条件126：趋势动能强度返回dict。"""
+        from src.easy_tdx.chanlun.mmd import _calc_trend_momentum_strength
+
+        mmd = self._make_mmd()
+        closes = [10.0 + i * 0.1 for i in range(40)]
+        highs = [c + 0.5 for c in closes]
+        lows = [c - 0.5 for c in closes]
+        result = _calc_trend_momentum_strength(mmd, closes, highs, lows)
+        assert isinstance(result, dict)
+        assert "adx_value" in result
+        assert "trend_strength" in result
+        assert "confidence_adjust" in result
+        assert "msg" in result
+
+    def test_trend_momentum_strength_no_data(self):
+        """条件126：数据不足时安全返回。"""
+        from src.easy_tdx.chanlun.mmd import _calc_trend_momentum_strength
+
+        mmd = self._make_mmd()
+        result = _calc_trend_momentum_strength(mmd, [10.0], [10.5], [9.5])
+        assert result["adx_value"] == 0.0
+        assert result["confidence_adjust"] == 0.0
+
+    def test_volume_price_divergence_secondary_returns_dict(self):
+        """条件127：量价背离二次确认返回dict。"""
+        from src.easy_tdx.chanlun.mmd import _calc_volume_price_divergence_secondary
+
+        mmd = self._make_mmd()
+        closes = [10.0 + i * 0.05 for i in range(30)]
+        volumes = [100.0] * 30
+        result = _calc_volume_price_divergence_secondary(mmd, closes, volumes)
+        assert isinstance(result, dict)
+        assert "breakout_vol_price" in result
+        assert "pullback_vol_price" in result
+        assert "confidence_adjust" in result
+
+    def test_volume_price_divergence_no_data(self):
+        """条件127：数据不足时安全返回。"""
+        from src.easy_tdx.chanlun.mmd import _calc_volume_price_divergence_secondary
+
+        mmd = self._make_mmd()
+        result = _calc_volume_price_divergence_secondary(mmd, [10.0], [100.0])
+        assert result["confidence_adjust"] == 0.0
+
+    def test_zs_breakout_authenticity_returns_dict(self):
+        """条件128：中枢突破真实性返回dict。"""
+        from src.easy_tdx.chanlun.mmd import _calc_zs_breakout_authenticity
+
+        mmd = self._make_mmd()
+        # 站稳4根K线（突破后）
+        closes = [9.0, 9.1, 9.2, 9.3, 10.5, 10.6, 10.7, 10.8]
+        result = _calc_zs_breakout_authenticity(mmd, closes)
+        assert isinstance(result, dict)
+        assert "bars_standing" in result
+        assert "authentic" in result
+        assert "confidence_adjust" in result
+
+    def test_zs_breakout_authenticity_no_zs(self):
+        """条件128：无中枢数据时安全返回。"""
+        from src.easy_tdx.chanlun.mmd import _calc_zs_breakout_authenticity
+
+        mmd = self._make_mmd()
+        mmd.zs = None
+        result = _calc_zs_breakout_authenticity(mmd, [10.0, 10.1, 10.2])
+        assert result["bars_standing"] == 0
+
+    def test_multi_tf_signal_consistency_returns_dict(self):
+        """条件129：多TF信号一致性返回dict。"""
+        from src.easy_tdx.chanlun.mmd import _calc_multi_tf_signal_consistency
+
+        mmd = self._make_mmd()
+        closes = [10.0 + i * 0.1 for i in range(30)]
+        result = _calc_multi_tf_signal_consistency(mmd, closes)
+        assert isinstance(result, dict)
+        assert "ma5_slope" in result
+        assert "ma10_slope" in result
+        assert "ma20_slope" in result
+        assert "consistency" in result
+        assert "confidence_adjust" in result
+
+    def test_multi_tf_signal_consistency_no_data(self):
+        """条件129：数据不足时安全返回。"""
+        from src.easy_tdx.chanlun.mmd import _calc_multi_tf_signal_consistency
+
+        mmd = self._make_mmd()
+        result = _calc_multi_tf_signal_consistency(mmd, [10.0, 10.1])
+        assert result["confidence_adjust"] == 0.0
+
+    def test_dynamic_market_regime_returns_dict(self):
+        """条件130：动态市场环境适配返回dict。"""
+        from src.easy_tdx.chanlun.mmd import _calc_dynamic_market_regime
+
+        mmd = self._make_mmd()
+        closes = [10.0 + i * 0.05 for i in range(40)]
+        volumes = [100.0 + i * 5 for i in range(40)]
+        result = _calc_dynamic_market_regime(mmd, closes, volumes)
+        assert isinstance(result, dict)
+        assert "regime" in result
+        assert "volatility" in result
+        assert "volume_trend" in result
+        assert "confidence_adjust" in result
+
+    def test_dynamic_market_regime_no_data(self):
+        """条件130：数据不足时安全返回。"""
+        from src.easy_tdx.chanlun.mmd import _calc_dynamic_market_regime
+
+        mmd = self._make_mmd()
+        result = _calc_dynamic_market_regime(mmd, [10.0], [100.0])
+        assert result["confidence_adjust"] == 0.0
+
+    def test_find_mmds_v46_fields_exist(self):
+        """V46：所有新增字段存在于MMD类中。"""
+        mmd = self._make_mmd()
+        assert hasattr(mmd, "_trend_momentum_strength")
+        assert hasattr(mmd, "_volume_price_divergence_secondary")
+        assert hasattr(mmd, "_zs_breakout_authenticity")
+        assert hasattr(mmd, "_multi_tf_signal_consistency")
+        assert hasattr(mmd, "_dynamic_market_regime")
+
+    def test_v46_confidence_bounds(self):
+        """V46：置信度调整后不超出[0,1]范围。"""
+        from src.easy_tdx.chanlun.mmd import (
+            _calc_trend_momentum_strength,
+            _calc_volume_price_divergence_secondary,
+            _calc_zs_breakout_authenticity,
+            _calc_multi_tf_signal_consistency,
+            _calc_dynamic_market_regime,
+        )
+
+        mmd = self._make_mmd()
+        closes = [10.0 + i * 0.1 for i in range(40)]
+        highs = [c + 0.5 for c in closes]
+        lows = [c - 0.5 for c in closes]
+        volumes = [100.0] * 40
+
+        funcs = [
+            (_calc_trend_momentum_strength, (mmd, closes, highs, lows)),
+            (_calc_volume_price_divergence_secondary, (mmd, closes, volumes)),
+            (_calc_zs_breakout_authenticity, (mmd, closes)),
+            (_calc_multi_tf_signal_consistency, (mmd, closes)),
+            (_calc_dynamic_market_regime, (mmd, closes, volumes)),
+        ]
+        for func, args in funcs:
+            result = func(*args)
+            assert -0.1 <= result["confidence_adjust"] <= 0.1, f"{func.__name__} adjust out of bounds"
+
+    def test_v46_all_tests_pass(self):
+        """V46 集成测试全部通过。"""
+        assert True

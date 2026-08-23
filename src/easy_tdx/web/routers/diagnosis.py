@@ -891,6 +891,16 @@ async def diagnose_stock(
             "volatility_adaptive_threshold": getattr(latest_mmd, "_volatility_adaptive_threshold", None) if latest_mmd else None,
             # V44: 多指标背离共振（条件125）
             "multi_indicator_divergence_resonance": getattr(latest_mmd, "_multi_indicator_divergence_resonance", None) if latest_mmd else None,
+            # V46: 趋势动能强度过滤（条件126）
+            "trend_momentum_strength": getattr(latest_mmd, "_trend_momentum_strength", None) if latest_mmd else None,
+            # V46: 量价背离二次确认（条件127）
+            "volume_price_divergence_secondary": getattr(latest_mmd, "_volume_price_divergence_secondary", None) if latest_mmd else None,
+            # V46: 中枢突破真实性验证（条件128）
+            "zs_breakout_authenticity": getattr(latest_mmd, "_zs_breakout_authenticity", None) if latest_mmd else None,
+            # V46: 多时间框架信号一致性（条件129）
+            "multi_tf_signal_consistency": getattr(latest_mmd, "_multi_tf_signal_consistency", None) if latest_mmd else None,
+            # V46: 动态市场环境适配（条件130）
+            "dynamic_market_regime": getattr(latest_mmd, "_dynamic_market_regime", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

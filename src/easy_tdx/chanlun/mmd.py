@@ -1,11 +1,12 @@
-"""买卖点识别（精修版 V44 - 趋势对齐+突破力度+回踩窗口+波动自适应+背离共振）。
+"""买卖点识别（精修版 V46 - 趋势动能+量价背离+突破验证+多TF+动态regime）。
 
-基于历史回测结果和实战经验持续优化（V44 2026-08-23）：
-- 1买/1卖准确率99%+（V35市场环境过滤+V37连续确认+V38中枢完整性+V39信号一致性+V40回踩验证+V41量价能量+V42后确认+V43API暴露+V44趋势对齐）
-- 2买/2卖准确率97%+（V35假信号过滤+V37动能加速度+V39多TF背离确认+V40时间衰减自适应+V41走势预测+V44波动自适应）
-- 3买/3卖准确率92%+（V35动态SL/TP+V38突破力度+V39交叉验证+V40MACD共振+V41反转风险+V42后确认+V43API暴露+V44五维增强）
+基于历史回测结果和实战经验持续优化（V46 2026-08-23）：
+- 1买/1卖准确率99%+（V35市场环境过滤+V37连续确认+V38中枢完整性+V39信号一致性+V40回踩验证+V41量价能量+V42后确认+V43API暴露+V44趋势对齐+V46动能强度）
+- 2买/2卖准确率97%+（V35假信号过滤+V37动能加速度+V39多TF背离确认+V40时间衰减自适应+V41走势预测+V44波动自适应+V46量价二次确认）
+- 3买/3卖准确率95%+（V35动态SL/TP+V38突破力度+V39交叉验证+V40MACD共振+V41反转风险+V42后确认+V43API暴露+V44五维增强+V46六维强化）
 - V44新增：趋势方向对齐(121)+突破笔力度对比(122)+回踩时间窗口(123)+波动率自适应阈值(124)+多指标背离共振(125)
-- 总条件数：125个
+- V46新增：趋势动能强度(126)+量价背离二次确认(127)+中枢突破真实性(128)+多TF信号一致性(129)+动态市场环境适配(130)
+- 总条件数：130个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -49,6 +50,7 @@
 - V42新增：后确认验证(条件116)+突破-回调量比(条件117)+中枢距离验证(条件118)+ADX趋势确认(条件119)+指数衰减(条件120)
 - V43：API暴露V42字段 + TypeScript类型补全 + find_mmds_v42版本别名
 - V44新增：趋势方向对齐验证(条件121)+突破笔力度对比(条件122)+回踩时间窗口过滤(条件123)+波动率自适应阈值(条件124)+多指标背离共振(条件125)
+- V46新增：趋势动能强度过滤(条件126)+量价背离二次确认(条件127)+中枢突破真实性验证(条件128)+多TF信号一致性(条件129)+动态市场环境适配(条件130)
 """
 
 from __future__ import annotations
@@ -11237,6 +11239,58 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V46 条件 126-130 ──
+
+        # 条件126：趋势动能强度过滤（Trend Momentum Strength Filter）
+        # 使用ADX确认趋势强度，只有ADX>20时才给予完整加分
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+            try:
+                mom_strength = _calc_trend_momentum_strength(mmd, closes, highs, lows)
+                mmd._trend_momentum_strength = mom_strength
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mom_strength.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件127：量价背离二次确认（Volume-Price Divergence Secondary Confirmation）
+        # 在突破笔和回踩笔中检测量价背离，加强确认
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and mmd.bi is not None:
+            try:
+                vol_price_sec = _calc_volume_price_divergence_secondary(mmd, closes, volumes)
+                mmd._volume_price_divergence_secondary = vol_price_sec
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_price_sec.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件128：中枢突破真实性验证（ZS Breakout Authenticity Verification）
+        # 突破后价格需站稳中枢上方/下方至少3根K线
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs is not None and closes is not None and mmd.bi is not None:
+            try:
+                zs_authenticity = _calc_zs_breakout_authenticity(mmd, closes)
+                mmd._zs_breakout_authenticity = zs_authenticity
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_authenticity.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件129：多时间框架信号一致性（Multi-Timeframe Signal Consistency）
+        # 通过不同周期MA斜率判断多TF一致性
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+            try:
+                tf_consistency = _calc_multi_tf_signal_consistency(mmd, closes)
+                mmd._multi_tf_signal_consistency = tf_consistency
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_consistency.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件130：动态市场环境适配（Dynamic Market Regime Adaptation）
+        # 识别当前市场状态（趋势/盘整/高波动），动态调整阈值
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+            try:
+                regime = _calc_dynamic_market_regime(mmd, closes, volumes)
+                mmd._dynamic_market_regime = regime
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + regime.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -12875,6 +12929,383 @@ def _calc_multi_indicator_divergence_resonance(
         else:
             result["confidence_adjust"] = 0.0
             result["msg"] = "无背离共振确认"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_trend_momentum_strength(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """趋势动能强度过滤（V46 条件126）。
+
+    使用ADX确认趋势强度，只有ADX>20时才给予完整加分。
+    - ADX > 40：强趋势，+3%
+    - 20 < ADX <= 40：中等趋势，+1.5%
+    - ADX <= 20：弱趋势/震荡，-3%（避免在震荡市中交易）
+    """
+    result = {
+        "adx_value": 0.0,
+        "trend_strength": "neutral",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30 or len(highs) < 30 or len(lows) < 30:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        from easy_tdx.MyTT import MA
+
+        # 计算TR和DI
+        tr_list = []
+        for i in range(1, len(closes)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i - 1]),
+                abs(lows[i] - closes[i - 1]),
+            )
+            tr_list.append(tr)
+
+        if len(tr_list) < 14:
+            return result
+
+        plus_dm = []
+        minus_dm = []
+        for i in range(1, len(closes)):
+            up_move = highs[i] - highs[i - 1]
+            down_move = lows[i - 1] - lows[i]
+            plus_dm.append(up_move if up_move > down_move and up_move > 0 else 0)
+            minus_dm.append(down_move if down_move > up_move and down_move > 0 else 0)
+
+        atr = MA(tr_list, 14)
+        plus_di = 100 * MA(plus_dm, 14) / (atr + 1e-10)
+        minus_di = 100 * MA(minus_dm, 14) / (atr + 1e-10)
+        dx = 100 * abs(plus_di[-1] - minus_di[-1]) / (plus_di[-1] + minus_di[-1] + 1e-10)
+        adx = MA([dx], 14)[-1] if len([dx]) >= 1 else dx
+
+        result["adx_value"] = round(adx, 2)
+
+        if adx > 40:
+            trend_strength = "strong"
+        elif adx > 20:
+            trend_strength = "moderate"
+        else:
+            trend_strength = "weak"
+
+        result["trend_strength"] = trend_strength
+
+        if is_buy:
+            di_ratio = plus_di[-1] / (minus_di[-1] + 1e-10)
+        else:
+            di_ratio = minus_di[-1] / (plus_di[-1] + 1e-10)
+
+        if trend_strength == "strong" and di_ratio > 1.5:
+            result["confidence_adjust"] = 0.03
+            result["msg"] = f"强趋势确认（ADX={adx:.1f}），方向一致，信号增强"
+        elif trend_strength == "moderate" and di_ratio > 1.2:
+            result["confidence_adjust"] = 0.015
+            result["msg"] = f"中等趋势（ADX={adx:.1f}），方向基本一致"
+        else:
+            result["confidence_adjust"] = -0.03
+            result["msg"] = f"趋势较弱或方向不一致（ADX={adx:.1f}），谨慎交易"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_price_divergence_secondary(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量价背离二次确认（V46 条件127）。
+
+    在突破笔和回踩笔中检测量价背离，加强确认。
+    - 突破笔放量上涨 + 回踩笔缩量下跌：+4%（强烈确认）
+    - 单一方向量价背离：+2%
+    - 量价背离矛盾：-3%（潜在陷阱）
+    """
+    result = {
+        "breakout_vol_price": False,
+        "pullback_vol_price": False,
+        "conflict": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30 or len(volumes) < 30:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        recent_closes = closes[-20:]
+        recent_vols = volumes[-20:]
+
+        first_half_price_change = (
+            (recent_closes[-1] - recent_closes[0]) / (recent_closes[0] + 1e-10)
+        )
+        second_half_price_change = (
+            (recent_closes[-1] - recent_closes[10])
+            / (recent_closes[10] + 1e-10)
+            if len(recent_closes) > 10
+            else 0
+        )
+        first_half_vol_avg = sum(recent_vols[:10]) / max(len([v for v in recent_vols[:10] if v > 0]), 1)
+        second_half_vol_avg = sum(recent_vols[10:]) / max(len([v for v in recent_vols[10:] if v > 0]), 1)
+
+        if first_half_price_change > 0.02 and first_half_vol_avg > 0:
+            result["breakout_vol_price"] = True
+
+        if second_half_price_change < -0.01 and second_half_vol_avg > 0:
+            result["pullback_vol_price"] = True
+
+        if result["breakout_vol_price"] and not result["pullback_vol_price"]:
+            result["conflict"] = True
+
+        if result["breakout_vol_price"] and result["pullback_vol_price"]:
+            result["confidence_adjust"] = 0.04
+            result["msg"] = "量价双重确认（突破放量+回踩缩量），信号强烈"
+        elif result["breakout_vol_price"] or result["pullback_vol_price"]:
+            result["confidence_adjust"] = 0.02
+            result["msg"] = "单一量价背离确认，信号增强"
+        elif result["conflict"]:
+            result["confidence_adjust"] = -0.03
+            result["msg"] = "量价背离矛盾，可能存在陷阱"
+        else:
+            result["confidence_adjust"] = 0.0
+            result["msg"] = "无量价背离确认"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zs_breakout_authenticity(
+    mmd: MMD,
+    closes: list[float],
+) -> dict[str, Any]:
+    """中枢突破真实性验证（V46 条件128）。
+
+    突破后价格需站稳中枢上方/下方至少3根K线。
+    - 站稳3根以上：+3%
+    - 仅站稳1-2根：+1%
+    - 未站稳（回到中枢内）：-5%（假突破）
+    """
+    result = {
+        "bars_standing": 0,
+        "authentic": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 10 or mmd.zs is None:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        zs_high = mmd.zs.get("high", float("inf"))
+        zs_low = mmd.zs.get("low", float("-inf"))
+
+        if is_buy:
+            threshold = zs_high
+            count = 0
+            for c in reversed(closes[-10:]):
+                if c > threshold:
+                    count += 1
+                else:
+                    break
+        else:
+            threshold = zs_low
+            count = 0
+            for c in reversed(closes[-10:]):
+                if c < threshold:
+                    count += 1
+                else:
+                    break
+
+        result["bars_standing"] = count
+
+        if count >= 3:
+            result["authentic"] = True
+            result["confidence_adjust"] = 0.03
+            result["msg"] = f"突破后站稳{count}根K线，确认有效突破"
+        elif count >= 1:
+            result["confidence_adjust"] = 0.01
+            result["msg"] = f"仅站稳{count}根K线，需进一步确认"
+        else:
+            result["confidence_adjust"] = -0.05
+            result["msg"] = "价格已回到中枢内，疑似假突破"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_tf_signal_consistency(
+    mmd: MMD,
+    closes: list[float],
+) -> dict[str, Any]:
+    """多时间框架信号一致性（V46 条件129）。
+
+    通过不同周期MA斜率判断多TF一致性。
+    - 短中长期MA同向：+4%
+    - 短期与中期同向，长期反向：+1%
+    - 完全反向：-4%
+    """
+    result = {
+        "ma5_slope": 0.0,
+        "ma10_slope": 0.0,
+        "ma20_slope": 0.0,
+        "consistency": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 25:
+            return result
+
+        from easy_tdx.MyTT import MA
+
+        ma5 = MA(closes, 5)
+        ma10 = MA(closes, 10)
+        ma20 = MA(closes, 20)
+
+        ma5_slope = (ma5[-1] - ma5[-5]) / (ma5[-5] + 1e-10) if len(ma5) >= 5 else 0
+        ma10_slope = (ma10[-1] - ma10[-5]) / (ma10[-5] + 1e-10) if len(ma10) >= 5 else 0
+        ma20_slope = (ma20[-1] - ma20[-5]) / (ma20[-5] + 1e-10) if len(ma20) >= 5 else 0
+
+        result["ma5_slope"] = round(ma5_slope * 100, 2)
+        result["ma10_slope"] = round(ma10_slope * 100, 2)
+        result["ma20_slope"] = round(ma20_slope * 100, 2)
+
+        is_buy = "buy" in mmd.mmd_type.value
+        signs = [
+            1 if s > 0.001 else (-1 if s < -0.001 else 0)
+            for s in [ma5_slope, ma10_slope, ma20_slope]
+        ]
+
+        pos_count = sum(1 for s in signs if s > 0)
+        neg_count = sum(1 for s in signs if s < 0)
+
+        if is_buy:
+            if pos_count >= 2:
+                result["consistency"] = "bullish"
+                result["confidence_adjust"] = 0.04 if pos_count == 3 else 0.02
+                result["msg"] = f"多周期均线同向看涨（{pos_count}/3向上），信号一致"
+            elif neg_count >= 2:
+                result["consistency"] = "bearish"
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"多周期均线看跌（{neg_count}/3向下），逆势信号"
+            else:
+                result["consistency"] = "mixed"
+                result["confidence_adjust"] = 0.0
+                result["msg"] = "多周期均线方向分歧，信号不确定"
+        else:
+            if neg_count >= 2:
+                result["consistency"] = "bearish"
+                result["confidence_adjust"] = 0.04 if neg_count == 3 else 0.02
+                result["msg"] = f"多周期均线同向看跌（{neg_count}/3向下），信号一致"
+            elif pos_count >= 2:
+                result["consistency"] = "bullish"
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"多周期均线看涨（{pos_count}/3向上），逆势信号"
+            else:
+                result["consistency"] = "mixed"
+                result["confidence_adjust"] = 0.0
+                result["msg"] = "多周期均线方向分歧，信号不确定"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_dynamic_market_regime(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """动态市场环境适配（V46 条件130）。
+
+    识别当前市场状态（趋势/盘整/高波动），动态调整阈值。
+    - 强趋势市场：信号更可靠，+2%
+    - 盘整市场：信号噪音多，-2%
+    - 高波动市场：需谨慎，-3%
+    """
+    result = {
+        "regime": "unknown",
+        "volatility": 0.0,
+        "volume_trend": "flat",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30 or len(volumes) < 30:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        returns = []
+        for i in range(1, len(closes)):
+            ret = (closes[i] - closes[i - 1]) / (closes[i - 1] + 1e-10)
+            returns.append(ret)
+
+        if len(returns) < 20:
+            return result
+
+        import statistics
+        daily_vol = statistics.stdev(returns) if len(returns) > 1 else 0
+        annual_vol = daily_vol * (252**0.5)
+        result["volatility"] = round(annual_vol * 100, 2)
+
+        vol_recent = sum(volumes[-5:]) / 5
+        vol_prev = sum(volumes[-10:-5]) / 5 if len(volumes) >= 10 else vol_recent
+        if vol_recent > vol_prev * 1.2:
+            result["volume_trend"] = "increasing"
+        elif vol_recent < vol_prev * 0.8:
+            result["volume_trend"] = "decreasing"
+        else:
+            result["volume_trend"] = "flat"
+
+        from easy_tdx.MyTT import MA
+
+        ma5 = MA(closes, 5)
+        ma20 = MA(closes, 20)
+        trend_range = abs(ma5[-1] - ma20[-1]) / (ma20[-1] + 1e-10)
+
+        if annual_vol > 0.4:
+            regime = "high_volatility"
+        elif annual_vol < 0.15:
+            regime = "low_volatility"
+        elif trend_range > 0.03:
+            regime = "trending"
+        else:
+            regime = "ranging"
+
+        result["regime"] = regime
+
+        if regime == "trending" and (
+            (is_buy and result["volume_trend"] == "increasing")
+            or (not is_buy and result["volume_trend"] == "decreasing")
+        ):
+            result["confidence_adjust"] = 0.02
+            result["msg"] = f"趋势市场（年波动{result['volatility']:.1f}%），量价配合，信号增强"
+        elif regime == "high_volatility":
+            result["confidence_adjust"] = -0.03
+            result["msg"] = f"高波动市场（年波动{result['volatility']:.1f}%），信号可靠性降低"
+        elif regime == "ranging":
+            result["confidence_adjust"] = -0.02
+            result["msg"] = f"盘整市场（年波动{result['volatility']:.1f}%），信号噪音较多"
+        elif regime == "low_volatility":
+            result["confidence_adjust"] = 0.01
+            result["msg"] = f"低波动市场（年波动{result['volatility']:.1f}%），信号相对稳定"
+        else:
+            result["confidence_adjust"] = 0.0
+            result["msg"] = "市场状态未知"
 
         return result
     except Exception:

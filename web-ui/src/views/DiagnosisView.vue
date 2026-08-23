@@ -2040,6 +2040,154 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V46: 趋势动能强度过滤（条件126）-->
+        <div v-if="diagnosis.chanlun.trend_momentum_strength" class="metric-card v46-momentum">
+          <div class="card-title">🚀 趋势动能强度（V46·条件126）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">ADX值</span>
+              <span class="kv-val">{{ diagnosis.chanlun.trend_momentum_strength.adx_value }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">趋势强度</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_momentum_strength.trend_strength === 'strong' ? 'tag-green' : diagnosis.chanlun.trend_momentum_strength.trend_strength === 'moderate' ? 'tag-blue' : 'tag-orange'">
+                {{ diagnosis.chanlun.trend_momentum_strength.trend_strength }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.trend_momentum_strength.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.trend_momentum_strength.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.trend_momentum_strength.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.trend_momentum_strength.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V46: 量价背离二次确认（条件127）-->
+        <div v-if="diagnosis.chanlun.volume_price_divergence_secondary" class="metric-card v46-volprice">
+          <div class="card-title">📊 量价背离二次确认（V46·条件127）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">突破量价</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_price_divergence_secondary.breakout_vol_price ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.volume_price_divergence_secondary.breakout_vol_price ? '有背离 ✅' : '无背离' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">回踩量价</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_price_divergence_secondary.pullback_vol_price ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.volume_price_divergence_secondary.pullback_vol_price ? '有背离 ✅' : '无背离' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">矛盾状态</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_price_divergence_secondary.conflict ? 'tag-red' : 'tag-green'">
+                {{ diagnosis.chanlun.volume_price_divergence_secondary.conflict ? '⚠️ 矛盾' : '✅ 一致' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.volume_price_divergence_secondary.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.volume_price_divergence_secondary.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volume_price_divergence_secondary.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volume_price_divergence_secondary.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V46: 中枢突破真实性验证（条件128）-->
+        <div v-if="diagnosis.chanlun.zs_breakout_authenticity" class="metric-card v46-zs">
+          <div class="card-title">🎯 中枢突破真实性（V46·条件128）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">站稳K线</span>
+              <span class="kv-val">{{ diagnosis.chanlun.zs_breakout_authenticity.bars_standing }} 根</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">突破有效性</span>
+              <span class="tag" :class="diagnosis.chanlun.zs_breakout_authenticity.authentic ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.zs_breakout_authenticity.authentic ? '有效突破 ✅' : '疑似假突破 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.zs_breakout_authenticity.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.zs_breakout_authenticity.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.zs_breakout_authenticity.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.zs_breakout_authenticity.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V46: 多时间框架信号一致性（条件129）-->
+        <div v-if="diagnosis.chanlun.multi_tf_signal_consistency" class="metric-card v46-tf">
+          <div class="card-title">🔀 多TF信号一致性（V46·条件129）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">MA5斜率</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_signal_consistency.ma5_slope > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.multi_tf_signal_consistency.ma5_slope > 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_tf_signal_consistency.ma5_slope }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">MA10斜率</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_signal_consistency.ma10_slope > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.multi_tf_signal_consistency.ma10_slope > 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_tf_signal_consistency.ma10_slope }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">MA20斜率</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_signal_consistency.ma20_slope > 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.multi_tf_signal_consistency.ma20_slope > 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_tf_signal_consistency.ma20_slope }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">一致性</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_signal_consistency.consistency === 'bullish' ? 'tag-green' : diagnosis.chanlun.multi_tf_signal_consistency.consistency === 'bearish' ? 'tag-red' : 'tag-orange'">
+                {{ diagnosis.chanlun.multi_tf_signal_consistency.consistency }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_signal_consistency.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.multi_tf_signal_consistency.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_signal_consistency.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_tf_signal_consistency.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V46: 动态市场环境适配（条件130）-->
+        <div v-if="diagnosis.chanlun.dynamic_market_regime" class="metric-card v46-regime">
+          <div class="card-title">🌍 动态市场环境适配（V46·条件130）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">市场状态</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.dynamic_market_regime.regime === 'trending', 'tag-red': diagnosis.chanlun.dynamic_market_regime.regime === 'high_volatility', 'tag-blue': diagnosis.chanlun.dynamic_market_regime.regime === 'low_volatility', 'tag-orange': diagnosis.chanlun.dynamic_market_regime.regime === 'ranging' }">
+                {{ diagnosis.chanlun.dynamic_market_regime.regime }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">年波动率</span>
+              <span class="kv-val">{{ diagnosis.chanlun.dynamic_market_regime.volatility }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">量能趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.dynamic_market_regime.volume_trend === 'increasing' ? 'tag-green' : diagnosis.chanlun.dynamic_market_regime.volume_trend === 'decreasing' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.dynamic_market_regime.volume_trend }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.dynamic_market_regime.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.dynamic_market_regime.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.dynamic_market_regime.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.dynamic_market_regime.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -2781,4 +2929,11 @@ onMounted(() => {
 .v44-pullback .kv-val { font-weight: 600; }
 .v44-vol .kv-val { font-weight: 600; }
 .v44-div .kv-val { font-weight: 600; }
+
+/* V46: 趋势动能 + 量价背离 + 突破验证 + 多TF + 动态regime */
+.v46-momentum .kv-val { font-weight: 600; }
+.v46-volprice .kv-val { font-weight: 600; }
+.v46-zs .kv-val { font-weight: 600; }
+.v46-tf .kv-val { font-weight: 600; }
+.v46-regime .kv-val { font-weight: 600; }
 </style>

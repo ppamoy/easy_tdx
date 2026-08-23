@@ -1163,6 +1163,45 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V46: 趋势动能强度过滤（条件126）
+  trend_momentum_strength?: {
+    adx_value: number
+    trend_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V46: 量价背离二次确认（条件127）
+  volume_price_divergence_secondary?: {
+    breakout_vol_price: boolean
+    pullback_vol_price: boolean
+    conflict: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V46: 中枢突破真实性验证（条件128）
+  zs_breakout_authenticity?: {
+    bars_standing: number
+    authentic: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V46: 多时间框架信号一致性（条件129）
+  multi_tf_signal_consistency?: {
+    ma5_slope: number
+    ma10_slope: number
+    ma20_slope: number
+    consistency: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V46: 动态市场环境适配（条件130）
+  dynamic_market_regime?: {
+    regime: string
+    volatility: number
+    volume_trend: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {
