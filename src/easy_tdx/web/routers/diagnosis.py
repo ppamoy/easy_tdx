@@ -829,6 +829,18 @@ async def diagnose_stock(
             "multi_tf_momentum": getattr(latest_mmd, "_multi_tf_momentum", None) if latest_mmd else None,
             # V37: 信号综合质量排名（条件94）
             "quality_ranking": getattr(latest_mmd, "_quality_ranking", None) if latest_mmd else None,
+            # V38: 中枢结构完整性评分（条件95）
+            "zs_structure_integrity": getattr(latest_mmd, "_zs_structure_integrity", None) if latest_mmd else None,
+            # V38: 买卖点位置评分（条件96）
+            "mmd_position_score": getattr(latest_mmd, "_mmd_position_score", None) if latest_mmd else None,
+            # V38: 信号后收益跟踪（条件97）
+            "post_signal_return": getattr(latest_mmd, "_post_signal_return", None) if latest_mmd else None,
+            # V38: 中枢突破力度评估（条件98）
+            "breakout_strength": getattr(latest_mmd, "_breakout_strength", None) if latest_mmd else None,
+            # V38: 多指标偏离度综合评分（条件99）
+            "composite_deviation": getattr(find_mmds, '_last_composite_deviation', None) if latest_mmd else None,
+            # V38: 信号衰减预警（条件100）
+            "signal_decay_warning": getattr(latest_mmd, "_signal_decay_warning", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

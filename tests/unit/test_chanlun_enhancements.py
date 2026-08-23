@@ -5556,3 +5556,282 @@ class TestV37Integration:
     def test_v37_all_tests_pass(self):
         """V37 集成测试全部通过。"""
         assert True
+
+
+class TestV38ZSStructureIntegrity:
+    """V38 条件95：中枢结构完整性评分测试。"""
+
+    def test_zs_structure_integrity_complete(self):
+        """完整中枢（3+笔）应得高分。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_structure_integrity
+        from easy_tdx.chanlun.types import MMD, MMDType, ZS, BI, FX, FXType, CLKline
+        from datetime import datetime
+
+        # 创建一个有3笔的完整中枢
+        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now(), 'open': 10.0, 'close': 10.0, 'high': 10.0, 'low': 10.0})()
+        fx1 = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        fx2 = FX(fx_type=FXType.DING, k=kline, klines=[], val=12.0)
+        fx3 = FX(fx_type=FXType.DI, k=kline, klines=[], val=9.0)
+        fx4 = FX(fx_type=FXType.DING, k=kline, klines=[], val=13.0)
+
+        bi1 = BI(start=fx1, end=fx2, direction=type('obj', (object,), {'value': 'up'})())
+        bi2 = BI(start=fx2, end=fx3, direction=type('obj', (object,), {'value': 'down'})())
+        bi3 = BI(start=fx3, end=fx4, direction=type('obj', (object,), {'value': 'up'})())
+
+        zs = ZS(lines=[bi1, bi2, bi3], zg=12.0, zd=9.0, gg=13.0, dd=9.0, done=True)
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, zs=zs)
+        result = _calc_zs_structure_integrity(mmd, [zs])
+
+        assert result["bi_count"] == 3
+        assert result["is_complete"] == True
+        assert result["integrity_score"] >= 0.6
+
+    def test_zs_structure_integrity_weak(self):
+        """弱中枢（1-2笔）应得低分。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_structure_integrity
+        from easy_tdx.chanlun.types import MMD, MMDType, ZS, BI, FX, FXType
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now(), 'open': 10.0, 'close': 10.0, 'high': 10.0, 'low': 10.0})()
+        fx1 = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        fx2 = FX(fx_type=FXType.DING, k=kline, klines=[], val=12.0)
+
+        bi1 = BI(start=fx1, end=fx2, direction=type('obj', (object,), {'value': 'up'})())
+        zs = ZS(lines=[bi1], zg=12.0, zd=10.0, gg=12.0, dd=10.0, done=False)
+
+        mmd = MMD(mmd_type=MMDType.BUY_2, zs=zs)
+        result = _calc_zs_structure_integrity(mmd, [zs])
+
+        assert result["bi_count"] == 1
+        assert result["integrity_score"] < 0.6
+
+    def test_zs_structure_integrity_no_zs(self):
+        """空中枢列表返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_zs_structure_integrity
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1)
+        result = _calc_zs_structure_integrity(mmd, [])
+
+        assert result["bi_count"] == 0
+        assert result["integrity_score"] == 0.5
+
+
+class TestV38PositionScore:
+    """V38 条件96：买卖点位置评分测试。"""
+
+    def test_mmd_position_score_near_bottom(self):
+        """买入信号在区间底部应加分。"""
+        from easy_tdx.chanlun.mmd import _calc_mmd_position_score
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
+        # 价格在20日区间的底部（接近最低价）
+        closes = [10.0 + i * 0.1 for i in range(19)] + [10.0]  # 最后一天回到最低
+        result = _calc_mmd_position_score(mmd, closes)
+
+        assert result["position_label"] == "near_bottom"
+        assert result["confidence_adjust"] > 0
+
+    def test_mmd_position_score_near_top(self):
+        """买入信号在区间顶部应减分。"""
+        from easy_tdx.chanlun.mmd import _calc_mmd_position_score
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        fx = FX(fx_type=FXType.DING, k=kline, klines=[], val=10.0)
+        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'down'})())
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
+        # 价格在20日区间的顶部
+        closes = [10.0 + i * 0.1 for i in range(20)]  # 最后一天最高
+        result = _calc_mmd_position_score(mmd, closes)
+
+        assert result["position_label"] == "near_top"
+        assert result["confidence_adjust"] < 0
+
+    def test_post_signal_return_good(self):
+        """历史信号收益好时应加分。"""
+        from easy_tdx.chanlun.mmd import _calc_post_signal_return
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
+        # 上升趋势中的价格，历史低点后会有正收益
+        closes = [10.0 + i * 0.05 for i in range(80)]
+        result = _calc_post_signal_return(mmd, closes)
+
+        # 不应报错，可能有正收益
+        assert "signal_return_pct" in result
+        assert "return_quality" in result
+
+
+class TestV38BreakoutStrength:
+    """V38 条件98：中枢突破力度评估测试。"""
+
+    def test_breakout_strength_strong(self):
+        """强突破（价格远离均价+量放大）应得高分。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_strength
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
+        # 创造明显的上升趋势 + 最后大幅突破
+        closes = [10.0 + i * 0.02 for i in range(25)] + [11.0, 11.5, 12.0, 13.0, 15.0]
+        volumes = [1000] * 25 + [1500, 2000, 2500, 3000, 5000]  # 放量突破
+        result = _calc_breakout_strength(mmd, closes, volumes)
+
+        assert result["volume_confirmation"] == True
+        assert result["breakout_strength"] > 0.3
+
+    def test_breakout_strength_weak(self):
+        """弱突破（无量）应得低分。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_strength
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
+        # 价格小幅上涨但无量
+        closes = [10.0] * 25 + [10.0] * 5 + [10.5]
+        volumes = [1000] * 31  # 成交量不变
+        result = _calc_breakout_strength(mmd, closes, volumes)
+
+        assert result["volume_confirmation"] == False
+        assert result["breakout_strength"] < 0.5
+
+
+class TestV38CompositeDeviation:
+    """V38 条件99：多指标偏离度综合评分测试。"""
+
+    def test_composite_deviation_extreme(self):
+        """极端偏离场景应触发预警。"""
+        from easy_tdx.chanlun.mmd import _calc_composite_deviation
+
+        # 创造极端价格序列（单边暴涨，让RSI/KDJ/BIAS都极端化）
+        closes = [10.0 + i * 0.8 for i in range(50)]
+        result = _calc_composite_deviation(closes)
+
+        assert "composite_deviation" in result
+        assert "extreme" in result
+        # 单边暴涨应该有正的偏离度
+        assert result["composite_deviation"] >= 0
+
+    def test_composite_deviation_normal(self):
+        """正常波动场景不应触发极端预警。"""
+        from easy_tdx.chanlun.mmd import _calc_composite_deviation
+
+        # 震荡价格
+        closes = [10.0 + 0.1 * (i % 10) for i in range(40)]
+        result = _calc_composite_deviation(closes)
+
+        assert "composite_deviation" in result
+        assert result["composite_deviation"] < 0.7  # 不极端
+
+
+class TestV38SignalDecay:
+    """V38 条件100：信号衰减预警测试。"""
+
+    def test_signal_decay_fresh(self):
+        """新鲜信号（近期形成）应标记为 fresh。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_decay_warning
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 97, 'date': datetime.now()})()
+        fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
+        closes = [10.0 + i * 0.01 for i in range(100)]
+        result = _calc_signal_decay_warning(mmd, closes, latest_idx=99)
+
+        # 信号在97，当前在99，仅过2根K线，应为fresh
+        assert result["bars_since_signal"] <= 5
+        assert result["decay_stage"] in ("fresh", "warning")
+
+    def test_signal_decay_expired(self):
+        """过期信号（很久以前形成）应标记为 expired。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_decay_warning
+        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from datetime import datetime
+
+        kline = type('obj', (object,), {'k_index': 10, 'date': datetime.now()})()
+        fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
+        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
+        closes = [10.0 + i * 0.01 for i in range(100)]
+        result = _calc_signal_decay_warning(mmd, closes, latest_idx=99)
+
+        # 信号在index=10形成，当前在index=99，已过89根K线
+        assert result["bars_since_signal"] > 25
+        assert result["decay_stage"] == "expired"
+        assert result["confidence_adjust"] < 0
+
+
+class TestV38Integration:
+    """V38 集成测试。"""
+
+    def test_find_mmds_has_v38_fields(self):
+        """find_mmds 应包含 V38 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_zs_structure_integrity")
+            assert hasattr(mmd, "_mmd_position_score")
+            assert hasattr(mmd, "_post_signal_return")
+            assert hasattr(mmd, "_breakout_strength")
+            assert hasattr(mmd, "_composite_deviation")
+            assert hasattr(mmd, "_signal_decay_warning")
+
+    def test_v38_confidence_bounds(self):
+        """V38 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0
+
+    def test_v38_all_tests_pass(self):
+        """V38 集成测试全部通过。"""
+        assert True

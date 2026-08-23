@@ -924,6 +924,47 @@ export interface DiagnosisChanlun {
     total: number
     score: number
   } | null
+  // V38: 中枢结构完整性评分（条件95）
+  zs_structure_integrity?: {
+    integrity_score: number
+    bi_count: number
+    zs_range: number
+    is_complete: boolean
+  } | null
+  // V38: 买卖点位置评分（条件96）
+  mmd_position_score?: {
+    position_pct: number
+    position_label: string
+    confidence_adjust: number
+  } | null
+  // V38: 信号后收益跟踪（条件97）
+  post_signal_return?: {
+    signal_return_pct: number
+    lookback_bars: number
+    return_quality: string
+    sample_signals: number
+  } | null
+  // V38: 中枢突破力度评估（条件98）
+  breakout_strength?: {
+    breakout_strength: number
+    volume_confirmation: boolean
+    obv_trend: string
+  } | null
+  // V38: 多指标偏离度综合评分（条件99）
+  composite_deviation?: {
+    composite_deviation: number
+    rsi_dev: number
+    kdj_dev: number
+    bias_dev: number
+    extreme: boolean
+  } | null
+  // V38: 信号衰减预警（条件100）
+  signal_decay_warning?: {
+    decay_stage: string
+    bars_since_signal: number
+    price_drift_pct: number
+    remaining_window_pct: number
+  } | null
 }
 
 export interface DiagnosisMACD {

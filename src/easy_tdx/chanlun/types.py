@@ -298,6 +298,14 @@ class MMD:
     _multi_tf_momentum: dict[str, Any] | None = None  # 多时间框架动量一致性（条件93）
     _quality_ranking: dict[str, Any] | None = None  # 信号综合质量排名（条件94）
 
+    # V38 enhancement fields
+    _zs_structure_integrity: dict[str, Any] | None = None  # 中枢结构完整性评分（条件95）
+    _mmd_position_score: dict[str, Any] | None = None  # 买卖点位置评分（条件96）
+    _post_signal_return: dict[str, Any] | None = None  # 信号后收益跟踪（条件97）
+    _breakout_strength: dict[str, Any] | None = None  # 中枢突破力度评估（条件98）
+    _composite_deviation: dict[str, Any] | None = None  # 多指标偏离度综合评分（条件99）
+    _signal_decay_warning: dict[str, Any] | None = None  # 信号衰减预警（条件100）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

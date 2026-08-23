@@ -36,6 +36,8 @@
 - V36新增：信号时效性紧急度(条件86)、市场环境综合评分(条件87)、买卖点策略推荐(条件88)
 - V37新增：连续确认过滤(条件89)、价格动能加速度(条件90)、波动率状态转换检测(条件91)
 - V37新增：买卖点时间序列关联分析(条件92)、多时间框架动量一致性(条件93)、信号综合质量排名(条件94)
+- V38新增：中枢结构完整性评分(条件95)、买卖点位置评分(条件96)、信号后收益跟踪(条件97)
+- V38新增：中枢突破力度评估(条件98)、多指标偏离度综合评分(条件99)、信号衰减预警(条件100)
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ import numpy as np
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.macd import calc_macd, calc_macd_force
 from easy_tdx.chanlun.types import BI, BC, BCType, FX, MMD, MMDType, XD, ZS
-from easy_tdx.MyTT import OBV, MA
+from easy_tdx.MyTT import BIAS, KDJ, OBV, MA, RSI
 
 
 @dataclass
@@ -1253,6 +1255,75 @@ def find_mmds(
             mmd._quality_ranking = qr_result
         except Exception:
             pass
+
+        # V38: 条件95-98 逐信号处理
+        # 条件95：中枢结构完整性评分
+        if mmd.bi is not None:
+            try:
+                zs_integrity = _calc_zs_structure_integrity(mmd, zss)
+                mmd._zs_structure_integrity = zs_integrity
+                adj = zs_integrity.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + adj))
+            except Exception:
+                pass
+
+        # 条件96：买卖点位置评分
+        if closes is not None and mmd.bi is not None:
+            try:
+                pos_result = _calc_mmd_position_score(mmd, closes)
+                mmd._mmd_position_score = pos_result
+                if pos_result.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + pos_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+        # 条件97：信号后收益跟踪
+        if closes is not None and mmd.bi is not None:
+            try:
+                ret_result = _calc_post_signal_return(mmd, closes)
+                mmd._post_signal_return = ret_result
+                adj = ret_result.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + adj))
+            except Exception:
+                pass
+
+        # 条件98：中枢突破力度评估
+        if closes is not None and mmd.bi is not None:
+            try:
+                bt_result = _calc_breakout_strength(mmd, closes, volumes)
+                mmd._breakout_strength = bt_result
+                adj = bt_result.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + adj))
+            except Exception:
+                pass
+
+        # 条件100：信号衰减预警
+        if mmd.bi is not None:
+            try:
+                decay_result = _calc_signal_decay_warning(mmd, closes)
+                mmd._signal_decay_warning = decay_result
+                if decay_result.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+    # V38 条件99：多指标偏离度综合评分（全局一次性）
+    composite_dev_result: dict[str, Any] = {}
+    if closes is not None and len(closes) >= 30:
+        try:
+            composite_dev_result = _calc_composite_deviation(closes, volumes, macd_data)
+            adj = composite_dev_result.get("confidence_adjust", 0.0)
+            if adj != 0.0:
+                for m in mmds:
+                    m.confidence = max(0.0, min(1.0, m.confidence + adj))
+        except Exception:
+            pass
+    if not hasattr(find_mmds, '_last_composite_deviation'):
+        find_mmds._last_composite_deviation = {}
+    find_mmds._last_composite_deviation = composite_dev_result
 
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
@@ -10051,6 +10122,398 @@ def _calc_quality_ranking(
             result["grade"] = "C"
         else:
             result["grade"] = "D"
+
+        return result
+    except Exception:
+        return result
+
+
+# ── V38: 条件95-100 缠论模型增强 ────────────────────────────────────────────────
+
+def _calc_zs_structure_integrity(
+    mmd: MMD,
+    zss: list[ZS],
+) -> dict[str, Any]:
+    """中枢结构完整性评分（V38 条件95）。
+
+    评估与当前买卖点相关的最近中枢的结构完整性。
+    - 中枢包含的笔数越多，结构越完整
+    - 中枢上下沿距离越大，结构越清晰
+    - 完成的中枢比未完成的中枢更可靠
+
+    Returns:
+        {"integrity_score": float, "bi_count": int, "zs_range": float, "is_complete": bool}
+    """
+    result = {"integrity_score": 0.5, "bi_count": 0, "zs_range": 0.0, "is_complete": False}
+    try:
+        if not zss or len(zss) == 0:
+            return result
+
+        # 找到与当前买卖点最相关的最近中枢
+        relevant_zs: ZS | None = None
+        if mmd.zs is not None:
+            relevant_zs = mmd.zs
+        elif len(zss) > 0:
+            relevant_zs = zss[-1]
+
+        if relevant_zs is None:
+            return result
+
+        bi_count = relevant_zs.line_count
+        zs_range = relevant_zs.zg - relevant_zs.zd if relevant_zs.zg > relevant_zs.zd else 0.0
+
+        result["bi_count"] = bi_count
+        result["zs_range"] = round(zs_range, 4)
+        result["is_complete"] = relevant_zs.done
+
+        # 计算完整性评分
+        # 笔数评分：3笔=满分，2笔=0.7，1笔=0.4
+        bi_score = min(1.0, bi_count / 3.0) if bi_count > 0 else 0.0
+
+        # 完成状态加分
+        complete_bonus = 0.1 if relevant_zs.done else 0.0
+
+        # 区间宽度评分（相对价格）
+        if relevant_zs.zg > 0:
+            range_ratio = zs_range / relevant_zs.zg
+            range_score = min(1.0, range_ratio * 20)  # 区间宽度占价格20%以上视为充分
+        else:
+            range_score = 0.5
+
+        integrity = (bi_score * 0.5 + complete_bonus + range_score * 0.4)
+        result["integrity_score"] = round(min(1.0, max(0.0, integrity)), 2)
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_mmd_position_score(
+    mmd: MMD,
+    closes: list[float],
+    lookback: int = 20,
+) -> dict[str, Any]:
+    """买卖点位置评分（V38 条件96）。
+
+    评估买卖点在当前价格序列中的相对位置：
+    - 买入信号：价格接近区间下沿 → 加分；接近上沿 → 减分
+    - 卖出信号：价格接近区间上沿 → 加分；接近下沿 → 减分
+    """
+    result = {"position_pct": 0.5, "position_label": "mid", "confidence_adjust": 0.0}
+    try:
+        if not closes or len(closes) < lookback:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        recent_closes = closes[-lookback:]
+        period_high = max(recent_closes)
+        period_low = min(recent_closes)
+        period_range = period_high - period_low
+
+        if period_range <= 0:
+            return result
+
+        current_price = closes[-1]
+        position_pct = (current_price - period_low) / period_range
+        result["position_pct"] = round(position_pct, 3)
+
+        # 确定位置标签
+        if position_pct < 0.3:
+            result["position_label"] = "near_bottom"
+        elif position_pct > 0.7:
+            result["position_label"] = "near_top"
+        else:
+            result["position_label"] = "near_mid"
+
+        # 根据买卖类型和位置调整置信度
+        if is_buy:
+            if position_pct < 0.2:
+                result["confidence_adjust"] = 0.02  # 底部买入，加分
+            elif position_pct > 0.8:
+                result["confidence_adjust"] = -0.03  # 顶部买入，减分
+        else:  # sell
+            if position_pct > 0.8:
+                result["confidence_adjust"] = 0.02  # 顶部卖出，加分
+            elif position_pct < 0.2:
+                result["confidence_adjust"] = -0.03  # 底部卖出，减分
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_post_signal_return(
+    mmd: MMD,
+    closes: list[float],
+    lookback: int = 60,
+) -> dict[str, Any]:
+    """信号后N日实际收益跟踪（V38 条件97）。
+
+    回溯分析历史中同类型信号形成后的实际收益表现，
+    为当前信号提供历史命中率参考。
+    """
+    result = {
+        "signal_return_pct": 0.0,
+        "lookback_bars": 0,
+        "return_quality": "insufficient",
+        "sample_signals": 0,
+    }
+    try:
+        if not closes or len(closes) < lookback + 10:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        mmd_type_str = mmd.mmd_type.value
+
+        # 回溯寻找类似信号并计算收益
+        returns = []
+        min_window = 10
+        max_window = min(30, len(closes) - 1)
+
+        # 从lookback前开始扫描
+        scan_start = max(0, len(closes) - lookback)
+        for i in range(scan_start, len(closes) - max_window):
+            # 简单启发式：找局部极值点作为历史信号近似
+            if is_buy:
+                # 局部低点：当日low是近5日最低
+                window = closes[i - 5:i + 1]
+                if len(window) >= 5 and closes[i] == min(window):
+                    # 检查前一根是否也是低点
+                    if i > 0 and closes[i] <= closes[i - 1]:
+                        # 计算后续N日收益
+                        for n in [10, 20]:
+                            if i + n < len(closes):
+                                ret = (closes[i + n] - closes[i]) / closes[i] * 100
+                                returns.append(ret)
+            else:
+                # 局部高点
+                window = closes[i - 5:i + 1]
+                if len(window) >= 5 and closes[i] == max(window):
+                    if i > 0 and closes[i] >= closes[i - 1]:
+                        for n in [10, 20]:
+                            if i + n < len(closes):
+                                ret = (closes[i] - closes[i + n]) / closes[i] * 100
+                                returns.append(ret)
+
+        if returns:
+            avg_return = sum(returns) / len(returns)
+            result["signal_return_pct"] = round(avg_return, 2)
+            result["lookback_bars"] = len(returns)
+            result["sample_signals"] = len(returns)
+
+            if avg_return > 3.0:
+                result["return_quality"] = "good"
+                result["confidence_adjust"] = 0.02
+            elif avg_return < -2.0:
+                result["return_quality"] = "bad"
+                result["confidence_adjust"] = -0.03
+            else:
+                result["return_quality"] = "moderate"
+                result["confidence_adjust"] = 0.0
+        else:
+            result["return_quality"] = "insufficient"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_breakout_strength(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float] | None,
+    lookback: int = 30,
+) -> dict[str, Any]:
+    """中枢突破力度评估（V38 条件98）。
+
+    评估买卖点所在的中枢突破力度：
+    - 买入信号：突破中枢上沿时的成交量放大程度
+    - 卖出信号：跌破中枢下沿时的成交量放大程度
+    """
+    result = {
+        "breakout_strength": 0.0,
+        "volume_confirmation": False,
+        "obv_trend": "flat",
+    }
+    try:
+        if not closes or len(closes) < lookback:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        recent_closes = closes[-lookback:]
+        recent_volumes = volumes[-lookback:] if volumes else [0] * lookback
+
+        # 计算近期均价和平均成交量
+        avg_price = sum(recent_closes) / len(recent_closes)
+        avg_volume = sum(recent_volumes) / len(recent_volumes) if recent_volumes else 1
+
+        # 计算当前价格相对中枢的位置
+        current_price = closes[-1]
+        price_deviation = (current_price - avg_price) / avg_price if avg_price > 0 else 0
+
+        # 计算OBV趋势
+        if len(closes) >= 20 and volumes and len(volumes) >= 20:
+            try:
+                obv_values = OBV(np.array(closes), np.array(volumes))
+                if len(obv_values) >= 10:
+                    obv_recent = obv_values[-10:]
+                    obv_early = obv_values[:10]
+                    obv_change = (obv_recent[-1] - obv_early[0]) / (abs(obv_early[0]) + 1)
+                    if obv_change > 0.1:
+                        result["obv_trend"] = "up"
+                    elif obv_change < -0.1:
+                        result["obv_trend"] = "down"
+                    else:
+                        result["obv_trend"] = "flat"
+            except Exception:
+                pass
+
+        # 计算突破力度评分
+        # 价格偏离度 + 成交量确认
+        volume_ratio = recent_volumes[-1] / avg_volume if avg_volume > 0 else 1.0
+        volume_confirmed = volume_ratio > 1.5  # 成交量放大50%以上
+
+        result["volume_confirmation"] = volume_confirmed
+
+        # 综合突破力度
+        if is_buy:
+            # 买入：价格上涨 + 成交量放大 = 强突破
+            strength = min(1.0, abs(price_deviation) * 5 + (0.3 if volume_confirmed else 0))
+        else:
+            # 卖出：价格下跌 + 成交量放大 = 强突破
+            strength = min(1.0, abs(price_deviation) * 5 + (0.3 if volume_confirmed else 0))
+
+        result["breakout_strength"] = round(strength, 2)
+
+        # 置信度调整
+        if strength > 0.6 and volume_confirmed:
+            result["confidence_adjust"] = 0.03 if is_buy else 0.03
+        elif strength < 0.3 and not volume_confirmed:
+            result["confidence_adjust"] = -0.02
+        else:
+            result["confidence_adjust"] = 0.0
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_composite_deviation(
+    closes: list[float],
+    volumes: list[float] | None = None,
+    macd_data: dict[str, list[float]] | None = None,
+) -> dict[str, Any]:
+    """多指标偏离度综合评分（V38 条件99，全局一次性计算）。
+
+    综合RSI、KDJ、BIAS三个指标的偏离度，给出极端偏离预警。
+    极端偏离提示市场可能处于超买/超卖状态，信号可靠性降低。
+    """
+    result = {
+        "composite_deviation": 0.0,
+        "rsi_dev": 0.0,
+        "kdj_dev": 0.0,
+        "bias_dev": 0.0,
+        "extreme": False,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if not closes or len(closes) < 30:
+            return result
+
+        # RSI偏离度（远离50的程度）
+        rsi_value = _calc_rsi(closes, period=14)
+        rsi_dev = abs(rsi_value - 50) / 50.0  # 归一化到0-1
+        result["rsi_dev"] = round(rsi_dev, 3)
+
+        # KDJ的J值偏离度
+        highs = []
+        lows = []
+        for i in range(-30, 0):
+            # 用收盘价近似 highs/lows（实际应使用原始OHLC）
+            highs.append(closes[i] * 1.02)
+            lows.append(closes[i] * 0.98)
+        _, _, j_value = KDJ(closes, highs, lows, N=9)
+        kdj_dev = abs(j_value[-1] - 50) / 50.0 if len(j_value) > 0 else 0
+        result["kdj_dev"] = round(min(1.0, kdj_dev), 3)
+
+        # BIAS偏离度
+        bias_values = BIAS(closes, L1=20)
+        bias_dev = abs(bias_values[-1]) / 10.0 if len(bias_values) > 0 else 0
+        bias_dev = min(1.0, bias_dev)
+        result["bias_dev"] = round(bias_dev, 3)
+
+        # 综合偏离度 = 三者的加权平均
+        composite = rsi_dev * 0.4 + kdj_dev * 0.3 + bias_dev * 0.3
+        result["composite_deviation"] = round(composite, 3)
+
+        # 极端偏离判断（>0.7）
+        if composite > 0.7:
+            result["extreme"] = True
+            result["confidence_adjust"] = -0.02  # 极端偏离时降低所有信号置信度
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_decay_warning(
+    mmd: MMD,
+    closes: list[float],
+    latest_idx: int | None = None,
+) -> dict[str, Any]:
+    """信号衰减预警（V38 条件100）。
+
+    基于时间衰减和价格运动综合判断信号是否仍在有效期内。
+    - 买入信号有效期：约20-30根K线
+    - 卖出信号有效期：约15-25根K线
+    - 价格大幅偏离信号形成位置时，信号衰减加速
+    """
+    result = {
+        "decay_stage": "fresh",
+        "bars_since_signal": 0,
+        "price_drift_pct": 0.0,
+        "remaining_window_pct": 1.0,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if not mmd.bi or not closes:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        bi_end_idx = mmd.bi.end.k.k_index
+        bars_since = latest_idx - bi_end_idx if latest_idx is not None else (len(closes) - 1 - bi_end_idx)
+        result["bars_since_signal"] = max(0, bars_since)
+
+        if bars_since < 0:
+            return result
+
+        # 根据买卖类型设定有效期
+        if is_buy:
+            valid_window = 25  # 买入信号有效期25根K线
+        else:
+            valid_window = 20  # 卖出信号有效期20根K线
+
+        # 计算价格漂移（信号形成后价格变化幅度）
+        signal_price = closes[bi_end_idx] if bi_end_idx < len(closes) else closes[-1]
+        current_price = closes[-1]
+        price_drift = abs(current_price - signal_price) / signal_price * 100 if signal_price > 0 else 0
+        result["price_drift_pct"] = round(price_drift, 2)
+
+        # 计算剩余窗口百分比
+        remaining = max(0, valid_window - bars_since)
+        remaining_pct = remaining / valid_window
+        result["remaining_window_pct"] = round(remaining_pct, 2)
+
+        # 判断衰减阶段
+        if remaining_pct >= 0.7:
+            result["decay_stage"] = "fresh"
+            result["confidence_adjust"] = 0.0
+        elif remaining_pct >= 0.3:
+            result["decay_stage"] = "warning"
+            result["confidence_adjust"] = -0.01
+        else:
+            result["decay_stage"] = "expired"
+            result["confidence_adjust"] = -0.05
 
         return result
     except Exception:

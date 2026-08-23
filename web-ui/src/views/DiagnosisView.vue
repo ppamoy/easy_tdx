@@ -1778,6 +1778,131 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V38: 中枢结构完整性（条件95）-->
+        <div v-if="diagnosis.chanlun.zs_structure_integrity" class="metric-card zs-integrity">
+          <div class="card-title">🏗️ 中枢结构完整性（V38）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">完整度评分</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.zs_structure_integrity.integrity_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.zs_structure_integrity.integrity_score < 0.4 ? '#ef4444' : '#f59e0b' }">
+                {{ (diagnosis.chanlun.zs_structure_integrity.integrity_score * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">中枢笔数</span>
+              <span class="kv-val">{{ diagnosis.chanlun.zs_structure_integrity.bi_count }} 笔</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">中枢范围</span>
+              <span class="kv-val">{{ diagnosis.chanlun.zs_structure_integrity.zs_range.toFixed(2) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">结构状态</span>
+              <span class="tag" :class="diagnosis.chanlun.zs_structure_integrity.is_complete ? 'tag-green' : 'tag-yellow'">
+                {{ diagnosis.chanlun.zs_structure_integrity.is_complete ? '已完善 ✅' : '待完善 ⚠️' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V38: 买卖点位置评分（条件96）-->
+        <div v-if="diagnosis.chanlun.mmd_position_score" class="metric-card mmd-position">
+          <div class="card-title">📍 买卖点位置评分（V38）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">当前位置</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.mmd_position_score.position_label === 'near_bottom', 'tag-red': diagnosis.chanlun.mmd_position_score.position_label === 'near_top', 'tag-yellow': diagnosis.chanlun.mmd_position_score.position_label === 'near_mid' }">
+                {{ diagnosis.chanlun.mmd_position_score.position_label === 'near_bottom' ? '区间底部 🟢' : diagnosis.chanlun.mmd_position_score.position_label === 'near_top' ? '区间顶部 🔴' : '区间中部 🟡' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">位置百分位</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.mmd_position_score.position_pct * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.mmd_position_score.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.mmd_position_score.confidence_adjust < 0 ? '#ef4444' : '#888' }">
+                {{ diagnosis.chanlun.mmd_position_score.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.mmd_position_score.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V38: 中枢突破力度（条件98）-->
+        <div v-if="diagnosis.chanlun.breakout_strength" class="metric-card breakout-strength">
+          <div class="card-title">💥 中枢突破力度（V38）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">突破强度</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.breakout_strength.breakout_strength > 0.6 ? '#22c55e' : diagnosis.chanlun.breakout_strength.breakout_strength < 0.3 ? '#ef4444' : '#f59e0b' }">
+                {{ (diagnosis.chanlun.breakout_strength.breakout_strength * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">量能确认</span>
+              <span class="tag" :class="diagnosis.chanlun.breakout_strength.volume_confirmation ? 'tag-green' : 'tag-gray'">
+                {{ diagnosis.chanlun.breakout_strength.volume_confirmation ? '放量 ✅' : '缩量 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">OBV趋势</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.breakout_strength.obv_trend === 'up', 'tag-red': diagnosis.chanlun.breakout_strength.obv_trend === 'down', 'tag-gray': diagnosis.chanlun.breakout_strength.obv_trend === 'flat' }">
+                {{ diagnosis.chanlun.breakout_strength.obv_trend === 'up' ? '上升 📈' : diagnosis.chanlun.breakout_strength.obv_trend === 'down' ? '下降 📉' : '平稳 ➡️' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V38: 多指标偏离度（条件99）-->
+        <div v-if="diagnosis.chanlun.composite_deviation" class="metric-card composite-dev">
+          <div class="card-title">📊 多指标偏离度（V38）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">综合偏离</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.composite_deviation.extreme ? '#ef4444' : '#22c55e' }">
+                {{ diagnosis.chanlun.composite_deviation.extreme ? '⚠️ 极端偏离' : '正常 ✅' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">RSI偏离</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.composite_deviation.rsi_dev * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">KDJ偏离</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.composite_deviation.kdj_dev * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">BIAS偏离</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.composite_deviation.bias_dev * 100).toFixed(0) }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V38: 信号衰减预警（条件100）-->
+        <div v-if="diagnosis.chanlun.signal_decay_warning" class="metric-card signal-decay">
+          <div class="card-title">⏰ 信号衰减预警（V38）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">衰减阶段</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.signal_decay_warning.decay_stage === 'fresh', 'tag-yellow': diagnosis.chanlun.signal_decay_warning.decay_stage === 'warning', 'tag-red': diagnosis.chanlun.signal_decay_warning.decay_stage === 'expired' }">
+                {{ diagnosis.chanlun.signal_decay_warning.decay_stage === 'fresh' ? '新鲜 ✅' : diagnosis.chanlun.signal_decay_warning.decay_stage === 'warning' ? '衰减中 ⚠️' : '已过期 ❌' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">已过K线</span>
+              <span class="kv-val">{{ diagnosis.chanlun.signal_decay_warning.bars_since_signal }} 根</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">价格漂移</span>
+              <span class="kv-val">{{ diagnosis.chanlun.signal_decay_warning.price_drift_pct.toFixed(2) }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">剩余窗口</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.signal_decay_warning.remaining_window_pct * 100).toFixed(0) }}%</span>
+            </div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -2507,4 +2632,9 @@ onMounted(() => {
 .temporal-cor .kv-val { font-weight: 600; }
 .multi-tf-mom .kv-val { font-weight: 600; }
 .quality-rank .kv-val { font-weight: 600; }
+.zs-integrity .kv-val { font-weight: 600; }
+.mmd-position .kv-val { font-weight: 600; }
+.breakout-strength .kv-val { font-weight: 600; }
+.composite-dev .kv-val { font-weight: 600; }
+.signal-decay .kv-val { font-weight: 600; }
 </style>
