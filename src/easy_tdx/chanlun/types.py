@@ -327,6 +327,13 @@ class MMD:
     _quality_tier_classification: dict[str, Any] | None = None  # 动态质量分层（条件114）
     _reversal_risk_assessment: dict[str, Any] | None = None  # 信号反转风险评估（条件115）
 
+    # V42 enhancement fields (2026-08-23)
+    _post_signal_confirmation: dict[str, Any] | None = None  # 后确认验证（条件116）
+    _break_pullback_volume_ratio: dict[str, Any] | None = None  # 突破-回调量比验证（条件117）
+    _zhongshu_distance_validation: dict[str, Any] | None = None  # 中枢距离验证（条件118）
+    _adx_trend_strength: dict[str, Any] | None = None  # ADX趋势强度确认（条件119）
+    _signal_freshness: dict[str, Any] | None = None  # 信号时效性衰减增强（条件120）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

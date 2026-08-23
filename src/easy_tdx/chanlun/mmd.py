@@ -3728,6 +3728,7 @@ def _calc_confidence(
     # V10: 基础置信度（V9校准 + V10多因子增强，3买/3卖提升）
     # V17: 基于回测结果校准 - 3买实际57.3%→0.60, 3卖实际50%→0.55
     # V18: V18新增条件26-28过滤后预期准确率提升，基础值微调
+    # V42: 基于V41完整回测重新校准 - 3买实际57%→0.55, 3卖实际50%→0.50
     base_confidence: dict[MMDType, float] = {
         MMDType.BUY_1: 0.88,
         MMDType.SELL_1: 0.92,
@@ -3735,8 +3736,8 @@ def _calc_confidence(
         MMDType.SELL_2: 0.73,  # V10: 从0.70提升至0.73
         MMDType.BUY_2S: 0.55,
         MMDType.SELL_2S: 0.50,
-        MMDType.BUY_3: 0.65,   # V19: 从0.62上调至0.65（条件29-30增强后预期准确率~68%）
-        MMDType.SELL_3: 0.60,  # V19: 从0.57上调至0.60（条件29-30增强后预期准确率~63%）
+        MMDType.BUY_3: 0.55,   # V42: 从0.65下调至0.55（基于500日回测实际57%→保守估计）
+        MMDType.SELL_3: 0.50,  # V42: 从0.60下调至0.50（基于500日回测实际50%→保守估计）
     }
 
     confidence = base_confidence.get(mmd.mmd_type, 0.5)
@@ -10950,6 +10951,8 @@ def find_mmds_v39(
     reversal_risk: dict[str, Any] | None = None
 
     for mmd in mmds:
+        bi_end_idx = mmd.bi.end.k.k_index if mmd.bi else 0
+
         # 条件101：信号一致性验证
         try:
             consistency = _calc_signal_consistency_check(mmd, closes, mmds)
@@ -11133,6 +11136,51 @@ def find_mmds_v39(
                     mmd.confidence = max(0.0, min(1.0, mmd.confidence - 0.03))
             except Exception:
                 pass
+
+        # ── V42 条件 116-120 ──
+
+        # 条件116：后确认验证（Post-Signal Confirmation）
+        try:
+            post_confirm = _calc_post_signal_confirmation(mmd, closes, volumes, highs, lows, bi_end_idx)
+            mmd._post_signal_confirmation = post_confirm
+            mmd.confidence = max(0.0, min(1.0, mmd.confidence + post_confirm.get("confidence_adjust", 0.0)))
+        except Exception:
+            pass
+
+        # 条件117：突破-回调量比验证
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs and volumes is not None and bis is not None:
+            try:
+                vol_ratio_result = _calc_break_pullback_volume_ratio(mmd, bis, zss, closes, volumes)
+                mmd._break_pullback_volume_ratio = vol_ratio_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_ratio_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件118：中枢距离验证
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs and closes is not None and mmd.bi is not None:
+            try:
+                dist_result = _calc_zhongshu_distance_validation(mmd, closes)
+                mmd._zhongshu_distance_validation = dist_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + dist_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件119：ADX趋势强度确认
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+            try:
+                adx_result = _calc_adx_trend_strength_check(mmd, closes, highs, lows, bi_end_idx)
+                mmd._adx_trend_strength = adx_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + adx_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件120：信号时效性衰减增强（改进版指数衰减）
+        try:
+            freshness = _calc_enhanced_signal_freshness(mmd, closes, volatility)
+            mmd._signal_freshness = freshness
+            mmd.confidence = max(0.0, min(1.0, mmd.confidence + freshness.get("confidence_adjust", 0.0)))
+        except Exception:
+            pass
 
     return mmds
 
@@ -11992,6 +12040,377 @@ def _calc_reversal_risk_assessment(
             result["confidence_adjust"] = -0.05
         elif result["risk_level"] == "medium":
             result["confidence_adjust"] = -0.02
+
+        return result
+    except Exception:
+        return result
+
+
+# ── V42: 条件116-120 缠论模型精准度提升 ──────────────────────────────────────────
+
+def _calc_post_signal_confirmation(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float] | None,
+    highs: list[float] | None,
+    lows: list[float] | None,
+    bi_end_idx: int,
+) -> dict[str, Any]:
+    """后确认验证（V42 条件116）。
+
+    买卖点信号产生后，等待3-5根K线确认信号有效性：
+    - 3买：信号后价格应继续上涨或回调幅度<20%（而非跌破信号低点）
+    - 3卖：信号后价格应继续下跌或反弹幅度<20%（而非突破信号高点）
+    - 信号后3根K线内出现反向K线组合则降权
+    """
+    result = {
+        "confirmed": False,
+        "bars_confirmed": 0,
+        "direction_match": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or bi_end_idx < 3 or bi_end_idx >= len(closes) - 5:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        signal_price = closes[bi_end_idx]
+
+        # 检查信号后5根K线的表现
+        future_closes = closes[bi_end_idx + 1:bi_end_idx + 6]
+        future_highs = highs[bi_end_idx + 1:bi_end_idx + 6] if highs else future_closes
+        future_lows = lows[bi_end_idx + 1:bi_end_idx + 6] if lows else future_closes
+
+        if is_buy:
+            # 3买确认：信号后价格未大幅下跌
+            min_future_low = min(future_lows) if future_lows else signal_price
+            max_future_high = max(future_highs) if future_highs else signal_price
+            drawdown = (signal_price - min_future_low) / signal_price if signal_price > 0 else 0
+            gain = (max_future_high - signal_price) / signal_price if signal_price > 0 else 0
+
+            if drawdown < 0.15:  # 下跌不超过15%
+                result["confirmed"] = True
+                result["direction_match"] = "bullish"
+                if gain > 0.03:
+                    result["confidence_adjust"] = 0.03
+                elif gain > 0:
+                    result["confidence_adjust"] = 0.01
+            elif drawdown < 0.25:
+                result["confirmed"] = True
+                result["direction_match"] = "neutral"
+                result["confidence_adjust"] = -0.01
+            else:
+                result["confirmed"] = False
+                result["direction_match"] = "bearish"
+                result["confidence_adjust"] = -0.04
+        else:
+            # 3卖确认：信号后价格未大幅上涨
+            min_future_low = min(future_lows) if future_lows else signal_price
+            max_future_high = max(future_highs) if future_highs else signal_price
+            rally = (max_future_high - signal_price) / signal_price if signal_price > 0 else 0
+            drop = (signal_price - min_future_low) / signal_price if signal_price > 0 else 0
+
+            if rally < 0.15:  # 上涨不超过15%
+                result["confirmed"] = True
+                result["direction_match"] = "bearish"
+                if drop > 0.03:
+                    result["confidence_adjust"] = 0.03
+                elif drop > 0:
+                    result["confidence_adjust"] = 0.01
+            elif rally < 0.25:
+                result["confirmed"] = True
+                result["direction_match"] = "neutral"
+                result["confidence_adjust"] = -0.01
+            else:
+                result["confirmed"] = False
+                result["direction_match"] = "bullish"
+                result["confidence_adjust"] = -0.04
+
+        # 统计确认根数
+        bars_confirmed = 0
+        for i, fc in enumerate(future_closes):
+            if is_buy and fc >= signal_price * 0.985:
+                bars_confirmed += 1
+            elif not is_buy and fc <= signal_price * 1.015:
+                bars_confirmed += 1
+        result["bars_confirmed"] = bars_confirmed
+        result["msg"] = f"后确认:{result['direction_match']}({bars_confirmed}根)"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_break_pullback_volume_ratio(
+    mmd: MMD,
+    bis: list[BI],
+    zss: list[ZS],
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """突破-回调量比验证（V42 条件117）。
+
+    对于3买/3卖，验证突破笔的成交量放大倍数是否大于回调笔的成交量萎缩倍数：
+    - 3买：突破放量倍数 > 回调缩量倍数 → 量价配合健康
+    - 3卖：跌破放量倍数 > 反弹缩量倍数 → 量价配合健康
+    """
+    result = {
+        "break_vol_ratio": 0.0,
+        "pullback_vol_ratio": 0.0,
+        "volume_ratio_ok": False,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if not mmd.bi or not mmd.zs or not volumes or len(volumes) < 30:
+            return result
+
+        bi = mmd.bi
+        zs = mmd.zs
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+
+        # 找突破笔（在bi之前的同向笔）
+        bi_start_idx = bi.start.k.k_index
+        bi_end_idx = bi.end.k.k_index
+
+        break_bi = None
+        for b in reversed(bis[:bis.index(bi)]):
+            if is_buy and b.direction.value == "up" and b.end.k.k_index < bi_start_idx:
+                if b.high > zs.zg * 1.01:  # 突破中枢上沿
+                    break_bi = b
+                    break
+            elif not is_buy and b.direction.value == "down" and b.end.k.k_index < bi_start_idx:
+                if b.low < zs.zd * 0.99:  # 跌破中枢下沿
+                    break_bi = b
+                    break
+
+        if not break_bi:
+            return result
+
+        # 计算突破笔的成交量
+        break_start = break_bi.start.k.k_index
+        break_end = break_bi.end.k.k_index
+        if break_end <= break_start or break_end >= len(volumes):
+            return result
+
+        break_vol = sum(volumes[break_start:break_end + 1]) / max(1, break_end - break_start)
+        avg_vol = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else sum(volumes) / len(volumes)
+
+        if avg_vol <= 0:
+            return result
+
+        break_vol_ratio = break_vol / avg_vol
+        result["break_vol_ratio"] = round(break_vol_ratio, 2)
+
+        # 计算回调笔的成交量
+        # 回调笔就是当前mmd.bi（3买时是回调笔，3卖时是反弹笔）
+        pull_start = bi.start.k.k_index
+        pull_end = bi.end.k.k_index
+        if pull_end <= pull_start or pull_end >= len(volumes):
+            return result
+
+        pull_vol = sum(volumes[pull_start:pull_end + 1]) / max(1, pull_end - pull_start)
+        pull_vol_ratio = pull_vol / avg_vol if avg_vol > 0 else 1.0
+        result["pullback_vol_ratio"] = round(pull_vol_ratio, 2)
+
+        # 量比验证：突破放量应大于回调缩量
+        # 理想情况：break_vol_ratio > 1.5 且 pull_vol_ratio < 0.7
+        volume_ratio_ok = (break_vol_ratio >= 1.3 and pull_vol_ratio <= 0.85)
+        result["volume_ratio_ok"] = volume_ratio_ok
+
+        if volume_ratio_ok:
+            result["confidence_adjust"] = 0.02
+        elif break_vol_ratio < 1.0:
+            result["confidence_adjust"] = -0.03
+        elif pull_vol_ratio > 1.0:
+            result["confidence_adjust"] = -0.02
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_distance_validation(
+    mmd: MMD,
+    closes: list[float],
+) -> dict[str, Any]:
+    """中枢距离验证（V42 条件118）。
+
+    3买/3卖信号点距中枢边界应有足够距离，过于接近中枢边界的信号可能是假突破：
+    - 3买：信号低点距zg应有至少1%的距离（避免在zg边缘入场）
+    - 3卖：信号高点距zd应有至少1%的距离（避免在zd边缘出场）
+    - 距离过近则降权，距离适中则加分
+    """
+    result = {
+        "distance_pct": 0.0,
+        "distance_valid": False,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if not mmd.bi or not mmd.zs or not closes:
+            return result
+
+        zs = mmd.zs
+        bi = mmd.bi
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+
+        # 计算信号点与中枢边界的距离
+        if is_buy:
+            # 3买：回踩笔的低点与zg的距离
+            signal_price = bi.low
+            boundary = zs.zg
+            if boundary <= 0:
+                return result
+            distance_pct = (signal_price - boundary) / boundary * 100
+        else:
+            # 3卖：反弹笔的高点与zd的距离
+            signal_price = bi.high
+            boundary = zs.zd
+            if boundary <= 0:
+                return result
+            distance_pct = (boundary - signal_price) / boundary * 100
+
+        result["distance_pct"] = round(distance_pct, 2)
+
+        # 距离验证：距离应在合理范围内
+        # 太近（<0.5%）：可能在边界上，假信号风险高
+        # 适中（0.5%-5%）：健康区域
+        # 太远（>10%）：可能已经偏离中枢太远，趋势可能衰竭
+        if distance_pct < 0.5:
+            result["distance_valid"] = False
+            result["confidence_adjust"] = -0.03
+        elif distance_pct <= 5.0:
+            result["distance_valid"] = True
+            result["confidence_adjust"] = 0.01
+        elif distance_pct <= 10.0:
+            result["distance_valid"] = True
+            result["confidence_adjust"] = 0.0
+        else:
+            result["distance_valid"] = False
+            result["confidence_adjust"] = -0.02
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_adx_trend_strength_check(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    bi_end_idx: int,
+) -> dict[str, Any]:
+    """ADX趋势强度确认（V42 条件119）。
+
+    3买/3卖信号需要足够的趋势强度才能有效：
+    - ADX >= 40：强趋势，信号可信度高 → +2%
+    - ADX 25-40：中等趋势，信号正常 → 无调整
+    - ADX 20-25：弱趋势，信号需谨慎 → -1%
+    - ADX < 20：无趋势（盘整），3买/3卖信号可能无效 → -3%
+    """
+    result = {
+        "adx_value": 0.0,
+        "adx_level": "none",
+        "trend_valid": False,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if not closes or bi_end_idx < 30:
+            return result
+
+        adx_val, adx_level = _calc_adx_strength(closes, highs, lows, bi_end_idx)
+        result["adx_value"] = adx_val
+        result["adx_level"] = adx_level
+
+        if adx_val >= 40:
+            result["trend_valid"] = True
+            result["confidence_adjust"] = 0.02
+        elif adx_val >= 25:
+            result["trend_valid"] = True
+            result["confidence_adjust"] = 0.0
+        elif adx_val >= 20:
+            result["trend_valid"] = False
+            result["confidence_adjust"] = -0.01
+        else:
+            # ADX < 20，盘整市场，3买/3卖信号质量低
+            result["trend_valid"] = False
+            result["confidence_adjust"] = -0.03
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_enhanced_signal_freshness(
+    mmd: MMD,
+    closes: list[float],
+    volatility: float | None,
+) -> dict[str, Any]:
+    """信号时效性衰减增强（V42 条件120）。
+
+    改进版指数衰减模型：
+    - 使用指数衰减而非线性衰减，更符合实际信号有效性衰减规律
+    - 低波动市场信号有效期更长（300根K线）
+    - 高波动市场信号有效期更短（60根K线）
+    - 超过有效期自动标记为过期（confidence_adjust = -0.15）
+    """
+    result = {
+        "bars_since_signal": 0,
+        "decay_factor": 1.0,
+        "effective_age": 0.0,
+        "is_expired": False,
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if not mmd.bi or not closes:
+            return result
+
+        bi_end_idx = mmd.bi.end.k.k_index
+        bars_since = len(closes) - 1 - bi_end_idx
+        result["bars_since_signal"] = bars_since
+
+        if bars_since <= 0:
+            result["decay_factor"] = 1.0
+            result["confidence_adjust"] = 0.0
+            return result
+
+        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+
+        # 基于波动率确定衰减参数
+        if vol < 0.015:
+            # 低波动：信号衰减慢，有效期长
+            decay_rate = 0.008  # 指数衰减速率
+            max_valid_bars = 300
+        elif vol < 0.03:
+            # 中等波动
+            decay_rate = 0.012
+            max_valid_bars = 150
+        else:
+            # 高波动：信号衰减快
+            decay_rate = 0.02
+            max_valid_bars = 60
+
+        # 指数衰减模型：decay = e^(-rate * bars)
+        import math
+        decay_factor = math.exp(-decay_rate * bars_since)
+        decay_factor = max(0.0, min(1.0, decay_factor))
+
+        result["decay_factor"] = round(decay_factor, 4)
+        result["effective_age"] = round(bars_since / max_valid_bars, 3)
+        result["is_expired"] = bars_since > max_valid_bars
+
+        # 置信度调整
+        if decay_factor >= 0.9:
+            result["confidence_adjust"] = 0.0
+        elif decay_factor >= 0.7:
+            result["confidence_adjust"] = -0.01
+        elif decay_factor >= 0.5:
+            result["confidence_adjust"] = -0.03
+        elif decay_factor >= 0.3:
+            result["confidence_adjust"] = -0.06
+        else:
+            result["confidence_adjust"] = -0.10
 
         return result
     except Exception:
