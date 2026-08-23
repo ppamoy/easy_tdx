@@ -342,6 +342,10 @@ class MMD:
     _multi_indicator_divergence_resonance: dict[str, Any] | None = None  # 多指标背离共振（条件125）
 
     # V46 enhancement fields (2026-08-23)
+    # V47 enhancement fields (2026-08-24)
+    _post_signal_price_follow_through: dict[str, Any] | None = None  # 后确认价格跟随过滤（条件131）
+    _signal_validity_window: dict[str, Any] | None = None  # 信号有效性窗口（条件132）
+    _confidence_v47_calibrated: float | None = None  # V47 校准后的置信度（条件133）
     _trend_momentum_strength: dict[str, Any] | None = None  # 趋势动能强度过滤（条件126）
     _volume_price_divergence_secondary: dict[str, Any] | None = None  # 量价背离二次确认（条件127）
     _zs_breakout_authenticity: dict[str, Any] | None = None  # 中枢突破真实性验证（条件128）

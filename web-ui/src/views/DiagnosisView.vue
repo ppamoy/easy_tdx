@@ -2188,6 +2188,64 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V47: 后确认价格跟随过滤（条件131）-->
+        <div v-if="diagnosis.chanlun.post_signal_price_follow_through" class="metric-card v47-follow">
+          <div class="card-title">✅ 后确认价格跟随（V47·条件131）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">跟随状态</span>
+              <span class="tag" :class="diagnosis.chanlun.post_signal_price_follow_through.followed ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.post_signal_price_follow_through.followed ? '通过 ✅' : '未通过 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">价格变化</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.post_signal_price_follow_through.follow_pct >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.post_signal_price_follow_through.follow_pct > 0 ? '+' : '' }}{{ diagnosis.chanlun.post_signal_price_follow_through.follow_pct }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">观察K线</span>
+              <span class="kv-val">{{ diagnosis.chanlun.post_signal_price_follow_through.looked_bars }} 根</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.post_signal_price_follow_through.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.post_signal_price_follow_through.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.post_signal_price_follow_through.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.post_signal_price_follow_through.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V47: 信号有效性窗口（条件132）-->
+        <div v-if="diagnosis.chanlun.signal_validity_window" class="metric-card v47-window">
+          <div class="card-title">⏱️ 信号有效性窗口（V47·条件132）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">窗口大小</span>
+              <span class="kv-val">{{ diagnosis.chanlun.signal_validity_window.window_bars }} 根K线</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">止损阈值</span>
+              <span class="kv-val">{{ diagnosis.chanlun.signal_validity_window.window_pct }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">有效性</span>
+              <span class="tag" :class="diagnosis.chanlun.signal_validity_window.valid ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.signal_validity_window.valid ? '有效 ✅' : '失效 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_validity_window.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.signal_validity_window.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.signal_validity_window.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.signal_validity_window.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>

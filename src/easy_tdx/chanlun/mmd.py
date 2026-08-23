@@ -11319,6 +11319,31 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V47 条件 131-133 ──
+
+        # 条件131：后确认价格跟随过滤（Post-Signal Price Follow-Through）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+            try:
+                follow_result = _check_post_signal_price_follow_through(mmd, closes, lookback_bars=5, min_follow_pct=0.02)
+                mmd._post_signal_price_follow_through = follow_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + follow_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件132：信号有效性窗口（Signal Validity Window）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+            try:
+                window_result = _calc_signal_validity_window(mmd, closes, highs, lows, volatility)
+                mmd._signal_validity_window = window_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + window_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件133：置信度动态校准（Confidence Dynamic Calibration）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+            mmd._confidence_v47_calibrated = mmd.confidence
+
+
     return mmds
 
 

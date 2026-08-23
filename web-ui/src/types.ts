@@ -1202,6 +1202,25 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V47: 后确认价格跟随过滤（条件131）
+  post_signal_price_follow_through?: {
+    followed: boolean
+    follow_pct: number
+    signal_bar_idx: number
+    looked_bars: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V47: 信号有效性窗口（条件132）
+  signal_validity_window?: {
+    window_bars: number
+    window_pct: number
+    valid: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V47: 置信度动态校准（条件133）
+  confidence_v47_calibrated?: number | null
 }
 
 export interface DiagnosisMACD {

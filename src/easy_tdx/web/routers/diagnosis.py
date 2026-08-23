@@ -900,6 +900,12 @@ async def diagnose_stock(
             # V46: 多时间框架信号一致性（条件129）
             "multi_tf_signal_consistency": getattr(latest_mmd, "_multi_tf_signal_consistency", None) if latest_mmd else None,
             # V46: 动态市场环境适配（条件130）
+            # V47: 后确认价格跟随过滤（条件131）
+            "post_signal_price_follow_through": getattr(latest_mmd, "_post_signal_price_follow_through", None) if latest_mmd else None,
+            # V47: 信号有效性窗口（条件132）
+            "signal_validity_window": getattr(latest_mmd, "_signal_validity_window", None) if latest_mmd else None,
+            # V47: 置信度动态校准（条件133）
+            "confidence_v47_calibrated": getattr(latest_mmd, "_confidence_v47_calibrated", None) if latest_mmd else None,
             "dynamic_market_regime": getattr(latest_mmd, "_dynamic_market_regime", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
