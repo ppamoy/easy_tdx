@@ -1482,6 +1482,152 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V36: 信号执行窗口（条件83）-->
+        <div v-if="diagnosis.chanlun.execution_window" class="metric-card execution-window">
+          <div class="card-title">🕐 信号执行窗口（V36）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">窗口状态</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.execution_window.window_status === 'optimal', 'tag-yellow': diagnosis.chanlun.execution_window.window_status === 'forming' || diagnosis.chanlun.execution_window.window_status === 'confirming', 'tag-red': diagnosis.chanlun.execution_window.window_status === 'expired' }">
+                {{ diagnosis.chanlun.execution_window.window_status }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">推荐操作</span>
+              <span class="kv-val">{{ diagnosis.chanlun.execution_window.optimal_action }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">信号年龄</span>
+              <span class="kv-val">{{ diagnosis.chanlun.execution_window.bars_since_signal }} 根K线</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">剩余窗口</span>
+              <span class="kv-val">{{ diagnosis.chanlun.execution_window.window_remaining }} 根</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V36: 多时间框架一致性（条件84）-->
+        <div v-if="diagnosis.chanlun.tf_consistency" class="metric-card tf-consistency">
+          <div class="card-title">📐 多时间框架一致性（V36）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">短期趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.tf_consistency.short_term_trend === 'up' ? 'tag-green' : diagnosis.chanlun.tf_consistency.short_term_trend === 'down' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.tf_consistency.short_term_trend }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">中期趋势</span>
+              <span class="tag" :class="diagnosis.chanlun.tf_consistency.mid_term_trend === 'up' ? 'tag-green' : diagnosis.chanlun.tf_consistency.mid_term_trend === 'down' ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.tf_consistency.mid_term_trend }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">一致性</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.tf_consistency.consistency.includes('bullish') && diagnosis.chanlun.tf_consistency.consistency !== 'consistent_bearish', 'tag-red': diagnosis.chanlun.tf_consistency.consistency === 'consistent_bearish' || diagnosis.chanlun.tf_consistency.consistency === 'conflicted', 'tag-yellow': diagnosis.chanlun.tf_consistency.consistency.includes('partial') }">
+                {{ diagnosis.chanlun.tf_consistency.consistency }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V36: 风险调整后收益（条件85）-->
+        <div v-if="diagnosis.chanlun.risk_adjusted_return" class="metric-card rar">
+          <div class="card-title">⚖️ 风险调整后收益（V36）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">预期收益</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.risk_adjusted_return.expected_return_pct >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.risk_adjusted_return.expected_return_pct >= 0 ? '+' : '' }}{{ diagnosis.chanlun.risk_adjusted_return.expected_return_pct }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">风险调整收益</span>
+              <span class="kv-val">{{ diagnosis.chanlun.risk_adjusted_return.risk_adjusted_return }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">预估最大回撤</span>
+              <span class="kv-val" style="color:#ef4444">{{ diagnosis.chanlun.risk_adjusted_return.max_drawdown_est }}%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V36: 信号时效性紧急度（条件86）-->
+        <div v-if="diagnosis.chanlun.urgency_score" class="metric-card urgency">
+          <div class="card-title">🚨 信号紧急度（V36）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">紧急等级</span>
+              <span class="tag" :class="{ 'tag-red': diagnosis.chanlun.urgency_score.urgency_level === 'critical', 'tag-orange': diagnosis.chanlun.urgency_score.urgency_level === 'high', 'tag-yellow': diagnosis.chanlun.urgency_score.urgency_level === 'normal', 'tag-gray': diagnosis.chanlun.urgency_score.urgency_level === 'low' || diagnosis.chanlun.urgency_score.urgency_level === 'expired' }">
+                {{ diagnosis.chanlun.urgency_score.urgency_level }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">紧急度分数</span>
+              <span class="kv-val">{{ diagnosis.chanlun.urgency_score.urgency_score }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">操作建议</span>
+              <span class="kv-val" style="font-size:0.85em;color:#888">{{ diagnosis.chanlun.urgency_score.action_hint }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V36: 市场环境综合评分（条件87）-->
+        <div v-if="diagnosis.chanlun.market_composite" class="metric-card market-composite">
+          <div class="card-title">🌍 市场环境综合（V36）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">市场状态</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.market_composite.market_regime === 'bullish', 'tag-red': diagnosis.chanlun.market_composite.market_regime === 'bearish', 'tag-gray': diagnosis.chanlun.market_composite.market_regime === 'neutral' }">
+                {{ diagnosis.chanlun.market_composite.market_regime }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">综合评分</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.market_composite.market_score >= 0.65 ? '#22c55e' : diagnosis.chanlun.market_composite.market_score <= 0.35 ? '#ef4444' : '#f59e0b' }">
+                {{ (diagnosis.chanlun.market_composite.market_score * 100).toFixed(0) }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">趋势得分</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.market_composite.trend_score * 100).toFixed(0) }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">波动率得分</span>
+              <span class="kv-val">{{ (diagnosis.chanlun.market_composite.vol_score * 100).toFixed(0) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- V36: 买卖点策略推荐（条件88）-->
+        <div v-if="diagnosis.chanlun.strategy_recommendation" class="metric-card strategy-rec">
+          <div class="card-title">🎯 策略推荐（V36）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">推荐策略</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.strategy_recommendation.strategy.includes('buy'), 'tag-red': diagnosis.chanlun.strategy_recommendation.strategy.includes('sell'), 'tag-gray': diagnosis.chanlun.strategy_recommendation.strategy === 'hold' || diagnosis.chanlun.strategy_recommendation.strategy === 'watch' }">
+                {{ diagnosis.chanlun.strategy_recommendation.strategy }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">建议仓位</span>
+              <span class="kv-val">{{ (Math.abs(diagnosis.chanlun.strategy_recommendation.position_size_pct) * 100).toFixed(0) }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">持仓周期</span>
+              <span class="kv-val">{{ diagnosis.chanlun.strategy_recommendation.hold_period }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">风险等级</span>
+              <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.strategy_recommendation.risk_level === 'low', 'tag-yellow': diagnosis.chanlun.strategy_recommendation.risk_level === 'medium', 'tag-red': diagnosis.chanlun.strategy_recommendation.risk_level === 'high' || diagnosis.chanlun.strategy_recommendation.risk_level === 'very_high' }">
+                {{ diagnosis.chanlun.strategy_recommendation.risk_level }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -2195,4 +2341,12 @@ onMounted(() => {
 .sl-tp .kv-val { font-weight: 600; }
 .sector-rotation .kv-val { font-weight: 600; }
 .multi-div .kv-val { font-weight: 600; }
+
+/* V36: 执行窗口 + 多TF一致性 + 风险收益 + 紧急度 + 市场综合 + 策略推荐 */
+.execution-window .kv-val { font-weight: 600; }
+.tf-consistency .kv-val { font-weight: 600; }
+.rar .kv-val { font-weight: 600; }
+.urgency .kv-val { font-weight: 600; }
+.market-composite .kv-val { font-weight: 600; }
+.strategy-rec .kv-val { font-weight: 600; }
 </style>

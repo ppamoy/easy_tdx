@@ -805,6 +805,18 @@ async def diagnose_stock(
             "sector_rotation_context": getattr(latest_mmd, "_sector_rotation_context", None) if latest_mmd else None,
             # V35: 多维背离确认（条件82）
             "multi_dim_divergence": getattr(latest_mmd, "_multi_dim_divergence", None) if latest_mmd else None,
+            # V36: 信号执行窗口优化（条件83）
+            "execution_window": getattr(latest_mmd, "_execution_window", None) if latest_mmd else None,
+            # V36: 多时间框架一致性（条件84）
+            "tf_consistency": getattr(latest_mmd, "_tf_consistency", None) if latest_mmd else None,
+            # V36: 风险调整后收益（条件85）
+            "risk_adjusted_return": getattr(latest_mmd, "_risk_adjusted_return", None) if latest_mmd else None,
+            # V36: 信号时效性紧急度（条件86）
+            "urgency_score": getattr(latest_mmd, "_urgency_score", None) if latest_mmd else None,
+            # V36: 市场环境综合评分（条件87）
+            "market_composite": getattr(find_mmds, '_last_market_composite', None) if latest_mmd else None,
+            # V36: 买卖点策略推荐（条件88）
+            "strategy_recommendation": getattr(latest_mmd, "_strategy_recommendation", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

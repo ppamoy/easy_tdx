@@ -32,6 +32,8 @@
 - V34新增：趋势动能延续(条件74)、多指标共振(条件75)、波动率自适应(条件76)
 - V35新增：市场大环境过滤(条件77)、信号衰减增强(条件78)、假信号过滤(条件79)
 - V35新增：动态止损止盈增强(条件80)、板块轮动上下文(条件81)、多维背离确认(条件82)
+- V36新增：信号执行窗口优化(条件83)、多时间框架一致性(条件84)、风险调整后收益(条件85)
+- V36新增：信号时效性紧急度(条件86)、市场环境综合评分(条件87)、买卖点策略推荐(条件88)
 """
 
 from __future__ import annotations
@@ -1124,6 +1126,65 @@ def find_mmds(
                 mmd._multi_dim_divergence = div_result
                 if div_result.get("confidence_adjust", 0) != 0:
                     mmd.confidence = max(0.0, min(1.0, mmd.confidence + div_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+        # 条件83：信号执行窗口优化（V36）
+        if closes is not None and mmd.bi is not None:
+            try:
+                exec_result = _calc_execution_window(mmd, closes, volatility)
+                mmd._execution_window = exec_result
+                if exec_result.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + exec_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+        # 条件84：多时间框架一致性验证（V36）
+        if closes is not None and mmd.bi is not None and len(closes) >= 60:
+            try:
+                tf_result = _calc_tf_consistency(mmd, closes)
+                mmd._tf_consistency = tf_result
+                if tf_result.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+        # 条件85：风险调整后收益预期（V36）
+        if closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+            try:
+                rar_result = _calc_risk_adjusted_return(mmd, closes, highs, lows, volatility)
+                mmd._risk_adjusted_return = rar_result
+            except Exception:
+                pass
+
+        # 条件86：信号时效性紧急度评分（V36）
+        if closes is not None and mmd.bi is not None:
+            try:
+                urg_result = _calc_urgency_score(mmd, closes, volatility)
+                mmd._urgency_score = urg_result
+                if urg_result.get("confidence_adjust", 0) != 0:
+                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + urg_result["confidence_adjust"]))
+            except Exception:
+                pass
+
+        # 条件87：市场环境综合评分（V36，全局一次性计算）
+        if closes is not None and len(closes) >= 60:
+            try:
+                mkt_result = _calc_market_composite(closes, volumes, macd_data)
+                if mkt_result.get("confidence_adjust", 0) != 0:
+                    for m in mmds:
+                        m.confidence = max(0.0, min(1.0, m.confidence + mkt_result["confidence_adjust"]))
+                if not hasattr(find_mmds, '_last_market_composite'):
+                    find_mmds._last_market_composite = {}
+                find_mmds._last_market_composite = mkt_result
+            except Exception:
+                pass
+
+        # 条件88：买卖点策略推荐（V36）
+        if mmd.bi is not None:
+            try:
+                rec_result = _calc_strategy_recommendation(mmd, closes, volatility)
+                mmd._strategy_recommendation = rec_result
             except Exception:
                 pass
 
@@ -9143,6 +9204,441 @@ def _calc_multi_dim_divergence(
             result["confidence_adjust"] = 0.05 if is_buy else -0.05
         elif pv_div or macd_div:
             result["confidence_adjust"] = 0.02 if is_buy else -0.02
+
+        return result
+    except Exception:
+        return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# V36 增强功能（条件83-88）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _calc_execution_window(
+    mmd: MMD,
+    closes: list[float],
+    volatility: float | None = None,
+) -> dict[str, Any]:
+    """信号执行窗口优化（V36 条件83）。
+
+    根据信号形成时间和当前市场状态，判断最佳执行窗口：
+    - 刚形成的信号 → 等待确认窗口
+    - 已确认的信号 → 立即执行窗口
+    - 老化信号 → 退出窗口
+    """
+    result = {
+        "window_status": "unknown",
+        "optimal_action": "wait",
+        "confidence_adjust": 0.0,
+        "bars_since_signal": 0,
+        "window_remaining": 0,
+    }
+    try:
+        if not mmd.bi or len(closes) < 20:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+
+        # 计算信号形成至今的K线根数
+        bi_index = mmd.bi.index if mmd.bi.index is not None else len(closes)
+        bars_since = len(closes) - bi_index - 1
+        result["bars_since_signal"] = bars_since
+
+        # 基于波动率和信号年龄确定执行窗口
+        if bars_since <= 2:
+            window_status = "forming"
+            optimal_action = "wait"
+            adjust = -0.02
+        elif bars_since <= 5:
+            window_status = "confirming"
+            optimal_action = "prepare"
+            adjust = 0.0
+        elif bars_since <= 10:
+            window_status = "optimal"
+            optimal_action = "execute" if is_buy else "execute"
+            adjust = 0.03
+        elif bars_since <= 20:
+            window_status = "aging"
+            optimal_action = "watch"
+            adjust = -0.02
+        else:
+            window_status = "expired"
+            optimal_action = "exit"
+            adjust = -0.05
+
+        result["window_status"] = window_status
+        result["optimal_action"] = optimal_action
+        result["confidence_adjust"] = round(adjust, 4)
+        result["window_remaining"] = max(0, 20 - bars_since)
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_tf_consistency(
+    mmd: MMD,
+    closes: list[float],
+) -> dict[str, Any]:
+    """多时间框架一致性验证（V36 条件84）。
+
+    通过比较短期和中期均线趋势，判断当前时间框架信号的一致性。
+    多时间框架一致 → 置信度提升；不一致 → 置信度下降。
+    """
+    result = {
+        "short_term_trend": "neutral",
+        "mid_term_trend": "neutral",
+        "consistency": "unknown",
+        "confidence_adjust": 0.0,
+    }
+    try:
+        if len(closes) < 60 or not mmd.bi:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        # 短期趋势：MA5 vs MA20
+        ma5_short = sum(closes[-5:]) / 5
+        ma20_short = sum(closes[-20:]) / 20
+        short_trend = "up" if ma5_short > ma20_short * 1.02 else ("down" if ma5_short < ma20_short * 0.98 else "neutral")
+
+        # 中期趋势：MA20 vs MA60
+        ma60 = sum(closes[-60:]) / 60
+        mid_trend = "up" if ma20_short > ma60 * 1.02 else ("down" if ma20_short < ma60 * 0.98 else "neutral")
+
+        result["short_term_trend"] = short_trend
+        result["mid_term_trend"] = mid_trend
+
+        # 一致性判断
+        if is_buy:
+            if short_trend == "up" and mid_trend == "up":
+                consistency = "consistent_bullish"
+                adjust = 0.04
+            elif short_trend == "down" and mid_trend == "down":
+                consistency = "consistent_bearish"
+                adjust = -0.04
+            elif short_trend == "up" and mid_trend == "neutral":
+                consistency = "partial_bullish"
+                adjust = 0.02
+            elif short_trend == "neutral" and mid_trend == "up":
+                consistency = "partial_bullish"
+                adjust = 0.02
+            else:
+                consistency = "conflicted"
+                adjust = -0.03
+        else:
+            if short_trend == "down" and mid_trend == "down":
+                consistency = "consistent_bearish"
+                adjust = 0.04
+            elif short_trend == "up" and mid_trend == "up":
+                consistency = "consistent_bullish"
+                adjust = -0.04
+            elif short_trend == "down" and mid_trend == "neutral":
+                consistency = "partial_bearish"
+                adjust = 0.02
+            elif short_trend == "neutral" and mid_trend == "down":
+                consistency = "partial_bearish"
+                adjust = 0.02
+            else:
+                consistency = "conflicted"
+                adjust = -0.03
+
+        result["consistency"] = consistency
+        result["confidence_adjust"] = round(adjust, 4)
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_risk_adjusted_return(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    volatility: float | None = None,
+) -> dict[str, Any]:
+    """风险调整后收益预期（V36 条件85）。
+
+    基于历史波动率和信号类型，估算该买卖点的风险调整后预期收益。
+    """
+    result = {
+        "expected_return_pct": 0.0,
+        "risk_adjusted_return": 0.0,
+        "max_drawdown_est": 0.0,
+        "volatility_adj": 0.0,
+    }
+    try:
+        if not mmd.bi or len(closes) < 30:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+
+        lookback = min(30, len(closes))
+
+        # 基于历史波动率估算最大回撤
+        hist_returns = []
+        for i in range(-lookback, 0):
+            if i - 1 < -len(closes):
+                continue
+            ret = (closes[i] - closes[i - 1]) / closes[i - 1] if closes[i - 1] > 0 else 0
+            hist_returns.append(ret)
+
+        max_dd = min(hist_returns) if hist_returns else -0.05
+        avg_return = sum(hist_returns) / len(hist_returns) if hist_returns else 0.001
+
+        # 风险调整后收益 = 预期收益 / 最大回撤
+        if is_buy:
+            expected_up = abs(max_dd) * 1.5  # 预期上涨约为最大回撤的1.5倍
+            sharpe_like = (expected_up / abs(max_dd)) if abs(max_dd) > 0.001 else 1.0
+        else:
+            expected_down = abs(max_dd) * 1.5
+            sharpe_like = (expected_down / abs(max_dd)) if abs(max_dd) > 0.001 else 1.0
+
+        result["expected_return_pct"] = round(expected_up * 100, 2) if is_buy else round(-expected_down * 100, 2)
+        result["risk_adjusted_return"] = round(sharpe_like, 4)
+        result["max_drawdown_est"] = round(abs(max_dd) * 100, 2)
+        result["volatility_adj"] = round(vol, 4)
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_urgency_score(
+    mmd: MMD,
+    closes: list[float],
+    volatility: float | None = None,
+) -> dict[str, Any]:
+    """信号时效性紧急度评分（V36 条件86）。
+
+    评估信号的紧迫程度：
+    - 新鲜信号（刚形成）：高紧急度，需尽快确认
+    - 适中信号：正常紧急度
+    - 老化信号：低紧急度，考虑退出
+    """
+    result = {
+        "urgency_level": "normal",
+        "urgency_score": 0.5,
+        "confidence_adjust": 0.0,
+        "action_hint": "",
+    }
+    try:
+        if not mmd.bi or len(closes) < 20:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+
+        bi_index = mmd.bi.index if mmd.bi.index is not None else len(closes)
+        bars_since = len(closes) - bi_index - 1
+
+        # 紧急度评分
+        if bars_since <= 1:
+            urgency = 0.9
+            level = "critical"
+            hint = "信号刚形成，密切观察后续确认"
+            adjust = 0.02
+        elif bars_since <= 3:
+            urgency = 0.7
+            level = "high"
+            hint = "信号新鲜，置信度较高"
+            adjust = 0.01
+        elif bars_since <= 7:
+            urgency = 0.5
+            level = "normal"
+            hint = "信号正常，按计划执行"
+            adjust = 0.0
+        elif bars_since <= 15:
+            urgency = 0.3
+            level = "low"
+            hint = "信号老化，注意风险"
+            adjust = -0.02
+        else:
+            urgency = 0.1
+            level = "expired"
+            hint = "信号已过时，建议忽略或退出"
+            adjust = -0.04
+
+        result["urgency_level"] = level
+        result["urgency_score"] = round(urgency, 2)
+        result["confidence_adjust"] = round(adjust, 4)
+        result["action_hint"] = hint
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_market_composite(
+    closes: list[float],
+    volumes: list[float] | None,
+    macd_data: dict[str, list[float]] | None,
+) -> dict[str, Any]:
+    """市场环境综合评分（V36 条件87，全局一次性计算）。
+
+    综合多个维度评估市场环境：
+    - 趋势方向（MA斜率）
+    - 波动率水平
+    - 成交量趋势
+    - MACD动能
+    """
+    result = {
+        "market_score": 0.5,
+        "trend_score": 0.5,
+        "vol_score": 0.5,
+        "volume_score": 0.5,
+        "macd_score": 0.5,
+        "confidence_adjust": 0.0,
+        "market_regime": "neutral",
+    }
+    try:
+        if len(closes) < 60:
+            return result
+
+        # 趋势评分：基于MA斜率
+        ma10 = sum(closes[-10:]) / 10
+        ma30 = sum(closes[-30:]) / 30
+        ma60 = sum(closes[-60:]) / 60
+        trend_score = (ma10 - ma60) / ma60 if ma60 > 0 else 0
+        trend_score = max(-1.0, min(1.0, trend_score * 20))  # 归一化到[-1,1]
+        trend_score_norm = (trend_score + 1) / 2  # 归一化到[0,1]
+        result["trend_score"] = round(trend_score_norm, 4)
+
+        # 波动率评分
+        returns = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(-30, 0) if closes[i - 1] > 0]
+        vol_std = float(np.std(returns)) if returns else 0.02
+        vol_score_norm = max(0.0, min(1.0, 1.0 - vol_std * 50))  # 低波动=高评分
+        result["vol_score"] = round(vol_score_norm, 4)
+
+        # 成交量评分
+        vol_score_norm = 0.5
+        if volumes is not None and len(volumes) >= 30:
+            vol_recent = sum(volumes[-10:]) / 10
+            vol_avg = sum(volumes[-30:]) / 30
+            vol_ratio = vol_recent / vol_avg if vol_avg > 0 else 1.0
+            vol_score_norm = max(0.0, min(1.0, vol_ratio / 2))
+        result["volume_score"] = round(vol_score_norm, 4)
+
+        # MACD评分
+        macd_score_norm = 0.5
+        if macd_data:
+            hist = macd_data.get("histogram", [])
+            if len(hist) >= 10:
+                hist_recent = sum(hist[-5:]) / 5
+                hist_avg = sum(abs(h) for h in hist[-20:]) / 20 if hist[-20:] else 1
+                macd_score_norm = max(0.0, min(1.0, 0.5 + hist_recent / (hist_avg * 2 + 0.001) * 0.3))
+        result["macd_score"] = round(macd_score_norm, 4)
+
+        # 综合评分
+        composite = (trend_score_norm * 0.3 + vol_score_norm * 0.2 + vol_score_norm * 0.2 + macd_score_norm * 0.3)
+        result["market_score"] = round(composite, 4)
+
+        # 市场状态判定
+        if composite >= 0.65:
+            regime = "bullish"
+            adjust = 0.02
+        elif composite <= 0.35:
+            regime = "bearish"
+            adjust = -0.02
+        else:
+            regime = "neutral"
+            adjust = 0.0
+
+        result["market_regime"] = regime
+        result["confidence_adjust"] = round(adjust, 4)
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_strategy_recommendation(
+    mmd: MMD,
+    closes: list[float],
+    volatility: float | None = None,
+) -> dict[str, Any]:
+    """买卖点策略推荐（V36 条件88）。
+
+    根据信号类型和市场环境，推荐具体的交易策略：
+    - 仓位建议
+    - 持仓周期预估
+    - 风险管理建议
+    """
+    result = {
+        "strategy": "hold",
+        "position_size_pct": 0.2,
+        "hold_period": "medium",
+        "risk_level": "medium",
+        "action_priority": 0,
+    }
+    try:
+        if not mmd.bi or len(closes) < 20:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+
+        conf = mmd.confidence
+
+        if is_buy:
+            if conf >= 0.85:
+                strategy = "aggressive_buy"
+                position = 0.35
+                hold = "medium"
+                risk = "medium"
+                priority = 1
+            elif conf >= 0.70:
+                strategy = "standard_buy"
+                position = 0.25
+                hold = "medium"
+                risk = "low"
+                priority = 2
+            elif conf >= 0.55:
+                strategy = "cautious_buy"
+                position = 0.15
+                hold = "short"
+                risk = "high"
+                priority = 3
+            else:
+                strategy = "watch"
+                position = 0.05
+                hold = "short"
+                risk = "very_high"
+                priority = 4
+        else:
+            if conf >= 0.85:
+                strategy = "aggressive_sell"
+                position = -0.35
+                hold = "short"
+                risk = "medium"
+                priority = 1
+            elif conf >= 0.70:
+                strategy = "standard_sell"
+                position = -0.25
+                hold = "medium"
+                risk = "low"
+                priority = 2
+            elif conf >= 0.55:
+                strategy = "cautious_sell"
+                position = -0.15
+                hold = "short"
+                risk = "high"
+                priority = 3
+            else:
+                strategy = "watch"
+                position = -0.05
+                hold = "short"
+                risk = "very_high"
+                priority = 4
+
+        result["strategy"] = strategy
+        result["position_size_pct"] = position
+        result["hold_period"] = hold
+        result["risk_level"] = risk
+        result["action_priority"] = priority
 
         return result
     except Exception:

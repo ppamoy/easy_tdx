@@ -282,6 +282,14 @@ class MMD:
     _sector_rotation_context: dict[str, Any] | None = None  # 板块轮动上下文（条件81）
     _multi_dim_divergence: dict[str, Any] | None = None  # 多维度背离确认（条件82）
 
+    # V36 enhancement fields
+    _execution_window: dict[str, Any] | None = None  # 信号执行窗口优化（条件83）
+    _tf_consistency: dict[str, Any] | None = None  # 多时间框架一致性验证（条件84）
+    _risk_adjusted_return: dict[str, Any] | None = None  # 风险调整后收益预期（条件85）
+    _urgency_score: dict[str, Any] | None = None  # 信号时效性紧急度评分（条件86）
+    _market_composite: dict[str, Any] | None = None  # 市场环境综合评分（条件87）
+    _strategy_recommendation: dict[str, Any] | None = None  # 买卖点策略推荐（条件88）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

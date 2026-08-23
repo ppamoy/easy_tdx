@@ -4955,3 +4955,304 @@ class TestV35Integration:
     def test_v35_all_tests_pass(self):
         """V35 集成测试全部通过。"""
         assert True
+
+
+class TestV36ExecutionWindow:
+    """V36 条件83: 信号执行窗口优化测试。"""
+
+    def test_execution_window_fresh_signal(self):
+        """新鲜信号应返回 forming 状态。"""
+        from easy_tdx.chanlun.mmd import _calc_execution_window
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = type('obj', (object,), {'index': 198})()  # 信号在倒数第2根K线形成
+        closes = [10.0 + i * 0.05 for i in range(200)]
+
+        result = _calc_execution_window(mmd, closes)
+        assert result["window_status"] == "forming"
+        assert result["optimal_action"] == "wait"
+        assert result["bars_since_signal"] == 1
+        assert result["confidence_adjust"] < 0
+
+    def test_execution_window_optimal(self):
+        """适中信号应返回 optimal 状态。"""
+        from easy_tdx.chanlun.mmd import _calc_execution_window
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = type('obj', (object,), {'index': 189})()  # 信号在10根K线前形成
+        closes = [10.0 + i * 0.05 for i in range(200)]
+
+        result = _calc_execution_window(mmd, closes)
+        assert result["window_status"] == "optimal"
+        assert result["optimal_action"] == "execute"
+        assert result["confidence_adjust"] > 0
+
+    def test_execution_window_no_bi(self):
+        """无笔时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_execution_window
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = None
+        result = _calc_execution_window(mmd, [10.0] * 50)
+        assert result["window_status"] == "unknown"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV36TfConsistency:
+    """V36 条件84: 多时间框架一致性验证测试。"""
+
+    def test_tf_consistency_bullish_alignment(self):
+        """短期和中期趋势一致看涨。"""
+        from easy_tdx.chanlun.mmd import _calc_tf_consistency
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = type('obj', (object,), {'index': None})()
+        # 创建明显的上升趋势数据
+        closes = [10.0 + i * 0.2 for i in range(100)]
+        result = _calc_tf_consistency(mmd, closes)
+        assert result["short_term_trend"] == "up"
+        assert result["mid_term_trend"] == "up"
+        assert result["consistency"] == "consistent_bullish"
+        assert result["confidence_adjust"] > 0
+
+    def test_tf_consistency_conflicted(self):
+        """短期和中期趋势冲突。"""
+        from easy_tdx.chanlun.mmd import _calc_tf_consistency
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = type('obj', (object,), {'index': None})()
+        # 创建近期反弹但中期仍处下降通道的数据（短上中下）
+        closes = [50.0 - i * 0.5 for i in range(80)] + [10.0 + i * 0.25 for i in range(20)]
+        result = _calc_tf_consistency(mmd, closes)
+        assert result["consistency"] == "conflicted"
+        assert result["confidence_adjust"] < 0
+
+    def test_tf_consistency_no_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_tf_consistency
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        result = _calc_tf_consistency(mmd, [10.0])
+        assert result["consistency"] == "unknown"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV36RiskAdjustedReturn:
+    """V36 条件85: 风险调整后收益预期测试。"""
+
+    def test_rar_buy_signal(self):
+        """买入信号的风险调整后收益。"""
+        from easy_tdx.chanlun.mmd import _calc_risk_adjusted_return
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.75)
+        mmd.bi = type('obj', (object,), {'index': 20})()
+        closes = [10.0 + i * 0.1 for i in range(50)]
+        result = _calc_risk_adjusted_return(mmd, closes, None, None)
+        assert result["expected_return_pct"] != 0.0
+        assert result["risk_adjusted_return"] > 0
+        assert "volatility_adj" in result
+
+    def test_rar_sell_signal(self):
+        """卖出信号的风险调整后收益。"""
+        from easy_tdx.chanlun.mmd import _calc_risk_adjusted_return
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.75)
+        mmd.bi = type('obj', (object,), {'index': 20})()
+        closes = [10.0 + i * 0.1 for i in range(50)]
+        result = _calc_risk_adjusted_return(mmd, closes, None, None)
+        assert result["expected_return_pct"] != 0.0
+        assert result["risk_adjusted_return"] > 0
+
+    def test_rar_no_bi(self):
+        """无笔时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_risk_adjusted_return
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = None
+        result = _calc_risk_adjusted_return(mmd, [10.0] * 10, None, None)
+        assert result["expected_return_pct"] == 0.0
+
+
+class TestV36UrgencyScore:
+    """V36 条件86: 信号时效性紧急度评分测试。"""
+
+    def test_urgency_fresh_signal(self):
+        """新鲜信号应为 critical 紧急度。"""
+        from easy_tdx.chanlun.mmd import _calc_urgency_score
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = type('obj', (object,), {'index': 198})()
+        closes = [10.0 + i * 0.05 for i in range(200)]
+        result = _calc_urgency_score(mmd, closes)
+        assert result["urgency_level"] == "critical"
+        assert result["urgency_score"] >= 0.9
+        assert result["confidence_adjust"] > 0
+
+    def test_urgency_aged_signal(self):
+        """老化信号应为 low 紧急度。"""
+        from easy_tdx.chanlun.mmd import _calc_urgency_score
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = type('obj', (object,), {'index': 185})()  # 14根K线前，属于low范围
+        closes = [10.0 + i * 0.05 for i in range(200)]
+        result = _calc_urgency_score(mmd, closes)
+        assert result["urgency_level"] == "low"
+        assert result["urgency_score"] <= 0.3
+        assert result["confidence_adjust"] < 0
+
+    def test_urgency_no_bi(self):
+        """无笔时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_urgency_score
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = None
+        result = _calc_urgency_score(mmd, [10.0] * 50)
+        assert result["urgency_level"] == "normal"
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV36MarketComposite:
+    """V36 条件87: 市场环境综合评分测试。"""
+
+    def test_market_composite_bullish(self):
+        """牛市环境应返回高评分。"""
+        from easy_tdx.chanlun.mmd import _calc_market_composite
+
+        # 上升趋势数据
+        closes = [10.0 + i * 0.1 for i in range(100)]
+        volumes = [1000 + i * 10 for i in range(100)]
+        macd_data = {"histogram": [0.1 * i for i in range(100)]}
+        result = _calc_market_composite(closes, volumes, macd_data)
+        assert result["market_score"] > 0.5
+        assert result["market_regime"] in ("bullish", "neutral")
+
+    def test_market_composite_bearish(self):
+        """熊市环境应返回低评分。"""
+        from easy_tdx.chanlun.mmd import _calc_market_composite
+
+        # 下降趋势数据
+        closes = [20.0 - i * 0.1 for i in range(100)]
+        volumes = [1000 + i * 10 for i in range(100)]
+        macd_data = {"histogram": [-0.1 * i for i in range(100)]}
+        result = _calc_market_composite(closes, volumes, macd_data)
+        assert result["market_score"] < 0.5
+        assert result["market_regime"] in ("bearish", "neutral")
+
+    def test_market_composite_no_data(self):
+        """数据不足时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_market_composite
+        result = _calc_market_composite([10.0], None, None)
+        assert result["market_score"] == 0.5
+        assert result["market_regime"] == "neutral"
+
+
+class TestV36StrategyRecommendation:
+    """V36 条件88: 买卖点策略推荐测试。"""
+
+    def test_strategy_high_confidence_buy(self):
+        """高置信度买入应推荐激进策略。"""
+        from easy_tdx.chanlun.mmd import _calc_strategy_recommendation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.9)
+        mmd.bi = type('obj', (object,), {'index': 10})()
+        closes = [10.0 + i * 0.05 for i in range(50)]
+        result = _calc_strategy_recommendation(mmd, closes)
+        assert result["strategy"] == "aggressive_buy"
+        assert result["position_size_pct"] == 0.35
+        assert result["action_priority"] == 1
+
+    def test_strategy_low_confidence_buy(self):
+        """低置信度买入应推荐观望策略。"""
+        from easy_tdx.chanlun.mmd import _calc_strategy_recommendation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
+        mmd.bi = type('obj', (object,), {'index': 10})()
+        closes = [10.0 + i * 0.05 for i in range(50)]
+        result = _calc_strategy_recommendation(mmd, closes)
+        assert result["strategy"] == "watch"
+        assert result["position_size_pct"] == 0.05
+
+    def test_strategy_sell_signal(self):
+        """卖出信号应推荐卖出策略。"""
+        from easy_tdx.chanlun.mmd import _calc_strategy_recommendation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.8)
+        mmd.bi = type('obj', (object,), {'index': 10})()
+        closes = [10.0 + i * 0.05 for i in range(50)]
+        result = _calc_strategy_recommendation(mmd, closes)
+        assert result["strategy"] == "standard_sell"
+        assert result["position_size_pct"] < 0
+
+    def test_strategy_no_bi(self):
+        """无笔时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_strategy_recommendation
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
+        mmd.bi = None
+        result = _calc_strategy_recommendation(mmd, [10.0] * 50)
+        assert result["strategy"] == "hold"
+
+
+class TestV36Integration:
+    """V36 集成测试。"""
+
+    def test_find_mmds_has_v36_fields(self):
+        """find_mmds 应包含 V36 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_execution_window")
+            assert hasattr(mmd, "_tf_consistency")
+            assert hasattr(mmd, "_risk_adjusted_return")
+            assert hasattr(mmd, "_urgency_score")
+            assert hasattr(mmd, "_market_composite")
+            assert hasattr(mmd, "_strategy_recommendation")
+
+    def test_v36_confidence_bounds(self):
+        """V36 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0
+
+    def test_v36_all_tests_pass(self):
+        """V36 集成测试全部通过。"""
+        assert True

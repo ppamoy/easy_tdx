@@ -838,6 +838,53 @@ export interface DiagnosisChanlun {
     divergence_count: number
     confidence_adjust: number
   } | null
+  // V36: 信号执行窗口优化（条件83）
+  execution_window?: {
+    window_status: string
+    optimal_action: string
+    confidence_adjust: number
+    bars_since_signal: number
+    window_remaining: number
+  } | null
+  // V36: 多时间框架一致性验证（条件84）
+  tf_consistency?: {
+    short_term_trend: string
+    mid_term_trend: string
+    consistency: string
+    confidence_adjust: number
+  } | null
+  // V36: 风险调整后收益预期（条件85）
+  risk_adjusted_return?: {
+    expected_return_pct: number
+    risk_adjusted_return: number
+    max_drawdown_est: number
+    volatility_adj: number
+  } | null
+  // V36: 信号时效性紧急度评分（条件86）
+  urgency_score?: {
+    urgency_level: string
+    urgency_score: number
+    confidence_adjust: number
+    action_hint: string
+  } | null
+  // V36: 市场环境综合评分（条件87）
+  market_composite?: {
+    market_score: number
+    trend_score: number
+    vol_score: number
+    volume_score: number
+    macd_score: number
+    confidence_adjust: number
+    market_regime: string
+  } | null
+  // V36: 买卖点策略推荐（条件88）
+  strategy_recommendation?: {
+    strategy: string
+    position_size_pct: number
+    hold_period: string
+    risk_level: string
+    action_priority: number
+  } | null
 }
 
 export interface DiagnosisMACD {
