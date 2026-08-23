@@ -334,6 +334,13 @@ class MMD:
     _adx_trend_strength: dict[str, Any] | None = None  # ADX趋势强度确认（条件119）
     _signal_freshness: dict[str, Any] | None = None  # 信号时效性衰减增强（条件120）
 
+    # V44 enhancement fields (2026-08-23)
+    _trend_direction_alignment: dict[str, Any] | None = None  # 趋势方向对齐验证（条件121）
+    _breakout_bi_strength_compare: dict[str, Any] | None = None  # 突破笔力度对比（条件122）
+    _pullback_time_window: dict[str, Any] | None = None  # 回踩时间窗口过滤（条件123）
+    _volatility_adaptive_threshold: dict[str, Any] | None = None  # 波动率自适应阈值（条件124）
+    _multi_indicator_divergence_resonance: dict[str, Any] | None = None  # 多指标背离共振（条件125）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

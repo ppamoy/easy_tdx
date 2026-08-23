@@ -881,6 +881,16 @@ async def diagnose_stock(
             "adx_trend_strength": getattr(latest_mmd, "_adx_trend_strength", None) if latest_mmd else None,
             # V42: 信号时效性衰减增强（条件120）
             "signal_freshness": getattr(latest_mmd, "_signal_freshness", None) if latest_mmd else None,
+            # V44: 趋势方向对齐验证（条件121）
+            "trend_direction_alignment": getattr(latest_mmd, "_trend_direction_alignment", None) if latest_mmd else None,
+            # V44: 突破笔力度对比（条件122）
+            "breakout_bi_strength_compare": getattr(latest_mmd, "_breakout_bi_strength_compare", None) if latest_mmd else None,
+            # V44: 回踩时间窗口过滤（条件123）
+            "pullback_time_window": getattr(latest_mmd, "_pullback_time_window", None) if latest_mmd else None,
+            # V44: 波动率自适应阈值（条件124）
+            "volatility_adaptive_threshold": getattr(latest_mmd, "_volatility_adaptive_threshold", None) if latest_mmd else None,
+            # V44: 多指标背离共振（条件125）
+            "multi_indicator_divergence_resonance": getattr(latest_mmd, "_multi_indicator_divergence_resonance", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

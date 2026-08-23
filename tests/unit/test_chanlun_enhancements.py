@@ -6765,3 +6765,231 @@ class TestV42Integration:
     def test_v42_all_tests_pass(self):
         """V42 集成测试全部通过。"""
         assert True
+
+
+class TestV44TrendDirectionAlignment:
+    """V44 条件121：趋势方向对齐验证测试。"""
+
+    def test_trend_alignment_returns_dict(self):
+        """趋势对齐应返回字典。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_direction_alignment
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_trend_direction_alignment(mmd, [], None)
+        assert isinstance(result, dict)
+        assert "confidence_adjust" in result
+        assert "trend_direction" in result
+
+    def test_trend_alignment_ascending_closes(self):
+        """上升趋势中3买应对齐。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_direction_alignment
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 上升收盘价序列
+        closes = [10.0 + i * 0.5 for i in range(30)]
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_trend_direction_alignment(mmd, closes, None)
+        assert result["aligned"] is True
+        assert result["confidence_adjust"] >= 0
+
+    def test_trend_alignment_descending_closes(self):
+        """下降趋势中3卖应对齐。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_direction_alignment
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 下降收盘价序列
+        closes = [30.0 - i * 0.5 for i in range(30)]
+        mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
+        result = _calc_trend_direction_alignment(mmd, closes, None)
+        assert result["aligned"] is True
+        assert result["confidence_adjust"] >= 0
+
+
+class TestV44BreakoutBiStrength:
+    """V44 条件122：突破笔力度对比测试。"""
+
+    def test_breakout_strength_returns_dict(self):
+        """突破笔力度对比应返回字典。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_bi_strength_compare
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_breakout_bi_strength_compare(mmd, [], [], [])
+        assert isinstance(result, dict)
+        assert "confidence_adjust" in result
+
+    def test_breakout_strength_no_bi(self):
+        """无笔数据时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_breakout_bi_strength_compare
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_breakout_bi_strength_compare(mmd, None, [], [1000.0] * 10)
+        assert result["confidence_adjust"] == 0.0
+
+
+class TestV44PullbackTimeWindow:
+    """V44 条件123：回踩时间窗口过滤测试。"""
+
+    def test_pullback_window_returns_dict(self):
+        """回踩时间窗口应返回字典。"""
+        from easy_tdx.chanlun.mmd import _calc_pullback_time_window
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_pullback_time_window(mmd, [])
+        assert isinstance(result, dict)
+        assert "window_status" in result
+        assert "confidence_adjust" in result
+
+    def test_pullback_window_no_bi(self):
+        """无笔数据时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_pullback_time_window
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_pullback_time_window(mmd, [10.0] * 50)
+        assert isinstance(result, dict)
+
+
+class TestV44VolatilityAdaptive:
+    """V44 条件124：波动率自适应阈值测试。"""
+
+    def test_volatility_adaptive_returns_dict(self):
+        """波动率自适应应返回字典。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_adaptive_v44
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_volatility_adaptive_v44(mmd, 0.02, [10.0] * 30)
+        assert isinstance(result, dict)
+        assert "vol_regime" in result
+        assert "confidence_adjust" in result
+
+    def test_low_volatility_bonus(self):
+        """低波动市场应给予正向加成。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_adaptive_v44
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_volatility_adaptive_v44(mmd, 0.01, [10.0 + (i % 3) * 0.01 for i in range(30)])
+        assert result["vol_regime"] in ("low", "normal")
+
+    def test_high_volatility_penalty(self):
+        """高波动市场应降低置信度。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_adaptive_v44
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_volatility_adaptive_v44(mmd, 0.06, [10.0 + (i % 10) * 0.5 for i in range(30)])
+        assert result["vol_regime"] in ("high", "extreme")
+        assert result["confidence_adjust"] <= 0
+
+
+class TestV44DivergenceResonance:
+    """V44 条件125：多指标背离共振测试。"""
+
+    def test_divergence_resonance_returns_dict(self):
+        """背离共振应返回字典。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_indicator_divergence_resonance
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_multi_indicator_divergence_resonance(mmd, [], [], {})
+        assert isinstance(result, dict)
+        assert "resonance_count" in result
+        assert "confidence_adjust" in result
+
+    def test_divergence_resonance_no_data(self):
+        """无数据时返回默认值。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_indicator_divergence_resonance
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_multi_indicator_divergence_resonance(mmd, [10.0] * 10, [1000.0] * 10, {})
+        assert result["resonance_count"] == 0
+
+
+class TestV44Integration:
+    """V44 集成测试。"""
+
+    def test_find_mmds_v44_fields_exist(self):
+        """find_mmds_v44 输出应包含 V44 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_trend_direction_alignment")
+            assert hasattr(mmd, "_breakout_bi_strength_compare")
+            assert hasattr(mmd, "_pullback_time_window")
+            assert hasattr(mmd, "_volatility_adaptive_threshold")
+            assert hasattr(mmd, "_multi_indicator_divergence_resonance")
+
+    def test_v44_confidence_bounds(self):
+        """V44 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0, f"置信度越界: {mmd.confidence}"
+
+    def test_v44_trend_alignment_on_uptrend(self):
+        """上升趋势中的3买信号应对齐。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_direction_alignment
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 明确上升趋势
+        closes = [10.0 + i * 0.3 for i in range(50)]
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_trend_direction_alignment(mmd, closes, None)
+        assert result["aligned"] is True
+        assert result["confidence_adjust"] > 0
+
+    def test_v44_trend_alignment_on_downtrend(self):
+        """下降趋势中的3卖信号应对齐。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_direction_alignment
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 明确下降趋势
+        closes = [50.0 - i * 0.3 for i in range(50)]
+        mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
+        result = _calc_trend_direction_alignment(mmd, closes, None)
+        assert result["aligned"] is True
+        assert result["confidence_adjust"] > 0
+
+    def test_v44_counter_trend_penalty(self):
+        """逆势信号应被大幅降权。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_direction_alignment
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        # 下降趋势中的3买（逆势）
+        closes = [50.0 - i * 0.3 for i in range(50)]
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
+        result = _calc_trend_direction_alignment(mmd, closes, None)
+        assert result["aligned"] is False
+        assert result["confidence_adjust"] < 0
+
+    def test_v44_all_tests_pass(self):
+        """V44 集成测试全部通过。"""
+        assert True

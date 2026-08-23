@@ -1122,6 +1122,47 @@ export interface DiagnosisChanlun {
     is_expired: boolean
     confidence_adjust: number
   } | null
+  // V44: 趋势方向对齐验证（条件121）
+  trend_direction_alignment?: {
+    trend_direction: string
+    aligned: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V44: 突破笔力度对比（条件122）
+  breakout_bi_strength_compare?: {
+    breakout_bi_idx: number
+    entry_bi_idx: number
+    vol_ratio: number
+    price_ratio: number
+    strength_ok: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V44: 回踩时间窗口过滤（条件123）
+  pullback_time_window?: {
+    bars_since_signal: number
+    window_status: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V44: 波动率自适应阈值（条件124）
+  volatility_adaptive_threshold?: {
+    volatility: number
+    vol_regime: string
+    threshold_multiplier: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V44: 多指标背离共振（条件125）
+  multi_indicator_divergence_resonance?: {
+    macd_divergence: boolean
+    rsi_divergence: boolean
+    kdj_divergence: boolean
+    resonance_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {
