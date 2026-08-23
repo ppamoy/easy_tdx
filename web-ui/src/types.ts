@@ -1048,6 +1048,44 @@ export interface DiagnosisChanlun {
     distribution_stats: Record<string, number>
     z_score?: number
   } | null
+  // V41: 量价能量分布分析（条件111）
+  volume_price_energy_dist?: {
+    energy_zone: string
+    volume_rank: number
+    support_distance: number
+    resistance_distance: number
+    confidence_adjust: number
+  } | null
+  // V41: 量能周期检测（条件112）
+  volume_cycle_detection?: {
+    cycle_state: string
+    volume_trend: string
+    volume_price_alignment: boolean
+    confidence_adjust: number
+  } | null
+  // V41: 走势预测（条件113）
+  post_signal_trajectory?: {
+    predicted_direction: string
+    prediction_confidence: number
+    expected_return_range: number[]
+    momentum_score: number
+    confidence_adjust: number
+  } | null
+  // V41: 动态质量分层（条件114）
+  quality_tier_classification?: {
+    tier: string
+    rank: number
+  } | null
+  // V41: 反转风险评估（条件115）
+  reversal_risk_assessment?: {
+    risk_level: string
+    divergence_strength: number
+    rsi_overbought: boolean
+    volume_divergence: boolean
+    momentum_decay: boolean
+    risk_score: number
+    confidence_adjust: number
+  } | null
 }
 
 export interface DiagnosisMACD {

@@ -320,6 +320,13 @@ class MMD:
     _kline_pattern_composite: dict[str, Any] | None = None  # K线形态综合评分（条件109）
     _confidence_calibration: dict[str, Any] | None = None  # 置信度动态校准（条件110）
 
+    # V41 enhancement fields (2026-08-23)
+    _volume_price_energy_dist: dict[str, Any] | None = None  # 量价能量分布分析（条件111）
+    _volume_cycle_detection: dict[str, Any] | None = None  # 量能周期检测（条件112）
+    _post_signal_trajectory: dict[str, Any] | None = None  # 信号后走势预测（条件113）
+    _quality_tier_classification: dict[str, Any] | None = None  # 动态质量分层（条件114）
+    _reversal_risk_assessment: dict[str, Any] | None = None  # 信号反转风险评估（条件115）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

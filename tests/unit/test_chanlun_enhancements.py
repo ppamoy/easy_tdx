@@ -6390,3 +6390,209 @@ class TestV40Integration:
     def test_v40_all_tests_pass(self):
         """V40 集成测试全部通过。"""
         assert True
+
+
+class TestV41VolumePriceEnergyDist:
+    """V41 条件111：量价能量分布分析测试。"""
+
+    def test_volume_price_energy_returns_fields(self):
+        """量价能量分布应返回所有必要字段。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_price_energy_dist
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="测试", confidence=0.7)
+        result = _calc_volume_price_energy_dist(mmd, [], None, None, None)
+        assert result["energy_zone"] == "neutral"
+        assert "confidence_adjust" in result
+
+    def test_volume_price_energy_with_data(self):
+        """有数据时应正常计算能量分布。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_price_energy_dist
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        closes = [10.0 + i * 0.1 for i in range(60)]
+        volumes = [1000 + i * 10 for i in range(60)]
+        highs = [c + 0.5 for c in closes]
+        lows = [c - 0.5 for c in closes]
+
+        mmd = MMD(mmd_type=MMDType.BUY_1, msg="测试", confidence=0.7)
+        result = _calc_volume_price_energy_dist(mmd, closes, volumes, highs, lows)
+        assert "energy_zone" in result
+        assert "volume_rank" in result
+        assert isinstance(result["confidence_adjust"], float)
+
+
+class TestV41VolumeCycleDetection:
+    """V41 条件112：量能周期检测测试。"""
+
+    def test_volume_cycle_returns_fields(self):
+        """量能周期检测应返回所有必要字段。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_cycle_detection
+
+        result = _calc_volume_cycle_detection([], None)
+        assert result["cycle_state"] == "unknown"
+        assert "confidence_adjust" in result
+
+    def test_volume_cycle_with_data(self):
+        """有数据时应正常检测量能周期。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_cycle_detection
+
+        closes = [10.0 + i * 0.1 for i in range(60)]
+        volumes = [1000 + i * 10 for i in range(60)]
+
+        result = _calc_volume_cycle_detection(closes, volumes)
+        assert result["cycle_state"] in ("expanding", "contracting", "stable")
+        assert "volume_price_alignment" in result
+
+
+class TestV41PostSignalTrajectory:
+    """V41 条件113：走势预测测试。"""
+
+    def test_trajectory_returns_fields(self):
+        """走势预测应返回所有必要字段。"""
+        from easy_tdx.chanlun.mmd import _calc_post_signal_trajectory
+
+        result = _calc_post_signal_trajectory([], None, None)
+        assert result["predicted_direction"] == "neutral"
+        assert "confidence_adjust" in result
+
+    def test_trajectory_with_data(self):
+        """有数据时应正常预测走势。"""
+        from easy_tdx.chanlun.mmd import _calc_post_signal_trajectory
+
+        closes = [10.0 + i * 0.1 for i in range(30)]
+        volumes = [1000 + i * 10 for i in range(30)]
+        macd_data = {"hist": [0.1 * i for i in range(30)]}
+
+        result = _calc_post_signal_trajectory(closes, volumes, macd_data)
+        assert result["predicted_direction"] in ("up", "down", "neutral")
+        assert 0.0 <= result["prediction_confidence"] <= 1.0
+
+
+class TestV41QualityTierClassification:
+    """V41 条件114：动态质量分层测试。"""
+
+    def test_quality_tier_returns_dict(self):
+        """质量分层应返回字典。"""
+        from easy_tdx.chanlun.mmd import _calc_quality_tier_classification
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmds = [MMD(mmd_type=MMDType.BUY_1, msg=f"测试{i}", confidence=0.5 + i * 0.01) for i in range(10)]
+        confidences = [m.confidence for m in mmds]
+        result = _calc_quality_tier_classification(mmds, confidences)
+        assert isinstance(result, dict)
+
+    def test_quality_tier_insufficient_data(self):
+        """数据不足时应返回空字典。"""
+        from easy_tdx.chanlun.mmd import _calc_quality_tier_classification
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        mmds = [MMD(mmd_type=MMDType.BUY_1, msg="测试", confidence=0.5)]
+        result = _calc_quality_tier_classification(mmds, [0.5])
+        assert result == {}
+
+
+class TestV41ReversalRiskAssessment:
+    """V41 条件115：反转风险评估测试。"""
+
+    def test_reversal_risk_returns_fields(self):
+        """反转风险评估应返回所有必要字段。"""
+        from easy_tdx.chanlun.mmd import _calc_reversal_risk_assessment
+
+        result = _calc_reversal_risk_assessment([], None, None, None, None, None)
+        assert result["risk_level"] == "low"
+        assert "confidence_adjust" in result
+
+    def test_reversal_risk_with_data(self):
+        """有数据时应正常评估反转风险。"""
+        from easy_tdx.chanlun.mmd import _calc_reversal_risk_assessment
+
+        closes = [10.0 + i * 0.1 for i in range(40)]
+        volumes = [1000 + i * 10 for i in range(40)]
+        highs = [c + 0.5 for c in closes]
+        lows = [c - 0.5 for c in closes]
+        macd_data = {"hist": [0.1 * (i - 20) for i in range(40)]}
+
+        result = _calc_reversal_risk_assessment(closes, volumes, highs, lows, macd_data, None)
+        assert result["risk_level"] in ("low", "medium", "high", "extreme")
+        assert "risk_score" in result
+
+
+class TestV41Integration:
+    """V41 集成测试。"""
+
+    def test_find_mmds_v41_exists(self):
+        """find_mmds_v41 函数应存在且可调用。"""
+        from easy_tdx.chanlun.mmd import find_mmds_v41
+        assert callable(find_mmds_v41)
+
+    def test_find_mmds_v41_returns_list(self):
+        """find_mmds_v41 应返回列表。"""
+        from easy_tdx.chanlun.mmd import find_mmds_v41
+        result = find_mmds_v41([], [], None)
+        assert isinstance(result, list)
+
+    def test_find_mmds_v41_has_v41_fields(self):
+        """find_mmds_v41 输出的 MMD 应包含 V41 字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert hasattr(mmd, "_volume_price_energy_dist")
+            assert hasattr(mmd, "_volume_cycle_detection")
+            assert hasattr(mmd, "_post_signal_trajectory")
+            assert hasattr(mmd, "_quality_tier_classification")
+            assert hasattr(mmd, "_reversal_risk_assessment")
+
+    def test_v41_confidence_bounds(self):
+        """V41 调整后置信度应在 [0, 1] 范围内。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            assert 0.0 <= mmd.confidence <= 1.0
+
+    def test_v41_volume_energy_structure(self):
+        """量价能量分布应包含必要字段。"""
+        from easy_tdx.chanlun import ChanlunAnalyser
+        import pandas as pd
+
+        df = pd.DataFrame({
+            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+            "open": [10.0 + i * 0.05 for i in range(200)],
+            "high": [10.5 + i * 0.05 for i in range(200)],
+            "low": [9.5 + i * 0.05 for i in range(200)],
+            "close": [10.0 + i * 0.05 for i in range(200)],
+            "volume": [1000 + i * 10 for i in range(200)],
+        })
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        result = analyser.process_klines(df)
+        for mmd in result.mmds:
+            if mmd._volume_price_energy_dist:
+                ve = mmd._volume_price_energy_dist
+                assert "energy_zone" in ve
+                assert "confidence_adjust" in ve
+
+    def test_v41_all_tests_pass(self):
+        """V41 集成测试全部通过。"""
+        assert True

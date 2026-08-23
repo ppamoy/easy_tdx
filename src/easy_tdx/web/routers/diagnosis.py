@@ -861,6 +861,16 @@ async def diagnose_stock(
             "kline_pattern_composite": getattr(latest_mmd, "_kline_pattern_composite", None) if latest_mmd else None,
             # V40: 置信度动态校准（条件110）
             "confidence_calibration": getattr(latest_mmd, "_confidence_calibration", None) if latest_mmd else None,
+            # V41: 量价能量分布分析（条件111）
+            "volume_price_energy_dist": getattr(latest_mmd, "_volume_price_energy_dist", None) if latest_mmd else None,
+            # V41: 量能周期检测（条件112）
+            "volume_cycle_detection": getattr(find_mmds_v39, '_last_volume_cycle', None) if latest_mmd else None,
+            # V41: 走势预测（条件113）
+            "post_signal_trajectory": getattr(find_mmds_v39, '_last_trajectory_prediction', None) if latest_mmd else None,
+            # V41: 动态质量分层（条件114）
+            "quality_tier_classification": getattr(latest_mmd, "_quality_tier_classification", None) if latest_mmd else None,
+            # V41: 反转风险评估（条件115）
+            "reversal_risk_assessment": getattr(find_mmds_v39, '_last_reversal_risk', None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
