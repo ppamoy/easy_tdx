@@ -871,6 +871,16 @@ async def diagnose_stock(
             "quality_tier_classification": getattr(latest_mmd, "_quality_tier_classification", None) if latest_mmd else None,
             # V41: 反转风险评估（条件115）
             "reversal_risk_assessment": getattr(find_mmds_v39, '_last_reversal_risk', None) if latest_mmd else None,
+            # V42: 后确认验证（条件116）
+            "post_signal_confirmation": getattr(latest_mmd, "_post_signal_confirmation", None) if latest_mmd else None,
+            # V42: 突破-回调量比验证（条件117）
+            "break_pullback_volume_ratio": getattr(latest_mmd, "_break_pullback_volume_ratio", None) if latest_mmd else None,
+            # V42: 中枢距离验证（条件118）
+            "zhongshu_distance_validation": getattr(latest_mmd, "_zhongshu_distance_validation", None) if latest_mmd else None,
+            # V42: ADX趋势强度确认（条件119）
+            "adx_trend_strength": getattr(latest_mmd, "_adx_trend_strength", None) if latest_mmd else None,
+            # V42: 信号时效性衰减增强（条件120）
+            "signal_freshness": getattr(latest_mmd, "_signal_freshness", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

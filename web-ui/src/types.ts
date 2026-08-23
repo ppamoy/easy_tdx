@@ -1086,6 +1086,42 @@ export interface DiagnosisChanlun {
     risk_score: number
     confidence_adjust: number
   } | null
+  // V42: 后确认验证（条件116）
+  post_signal_confirmation?: {
+    confirmed: boolean
+    bars_confirmed: number
+    direction_match: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V42: 突破-回调量比验证（条件117）
+  break_pullback_volume_ratio?: {
+    break_vol_ratio: number
+    pullback_vol_ratio: number
+    volume_ratio_ok: boolean
+    confidence_adjust: number
+  } | null
+  // V42: 中枢距离验证（条件118）
+  zhongshu_distance_validation?: {
+    distance_pct: number
+    distance_valid: boolean
+    confidence_adjust: number
+  } | null
+  // V42: ADX趋势强度确认（条件119）
+  adx_trend_strength?: {
+    adx_value: number
+    adx_level: string
+    trend_valid: boolean
+    confidence_adjust: number
+  } | null
+  // V42: 信号时效性衰减增强（条件120）
+  signal_freshness?: {
+    bars_since_signal: number
+    decay_factor: number
+    effective_age: number
+    is_expired: boolean
+    confidence_adjust: number
+  } | null
 }
 
 export interface DiagnosisMACD {

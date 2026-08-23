@@ -11218,9 +11218,33 @@ def find_mmds_v41(
     highs: list[float] | None = None,
     lows: list[float] | None = None,
 ) -> list[MMD]:
-    """V41 版本的 find_mmds：完整集成条件101-115。
+    """V41 版本的 find_mmds：完整集成条件101-120（含V42）。
 
     在 V40 基础上新增：量价能量分布(111)+量能周期(112)+走势预测(113)+质量分层(114)+反转风险(115)。
+    V42 条件(116-120)已集成至 find_mmds_v39，故本函数同样生效。
+    """
+    return find_mmds_v39(
+        bis=bis, zss=zss, closes=closes, config=config,
+        volumes=volumes, macd_data=macd_data, volatility=volatility,
+        highs=highs, lows=lows,
+    )
+
+
+def find_mmds_v42(
+    bis: list[BI],
+    zss: list[ZS],
+    closes: list[float] | None = None,
+    config: ChanlunConfig | None = None,
+    volumes: list[float] | None = None,
+    macd_data: dict[str, list[float]] | None = None,
+    volatility: float | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
+) -> list[MMD]:
+    """V42 版本的 find_mmds：完整集成条件101-120。
+
+    在 V41 基础上新增：后确认验证(116)+突破-回调量比(117)+中枢距离验证(118)+ADX趋势确认(119)+指数衰减(120)。
+    基础置信度已重新校准：BUY_3 0.65→0.55，SELL_3 0.60→0.50。
     """
     return find_mmds_v39(
         bis=bis, zss=zss, closes=closes, config=config,
