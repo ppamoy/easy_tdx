@@ -11635,6 +11635,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V56 条件 164-167 ──
+
+        # 条件164：假突破识别（False Breakout Detection）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+            try:
+                fake_result = _calc_false_breakout_detection_v56(mmd, closes, volumes, highs, lows)
+                mmd._false_breakout_detection_v56 = fake_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + fake_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件165：中枢结构复杂度分析（Zhongshu Structure Complexity）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and mmd.zs is not None:
+            try:
+                zs_complexity = _calc_zhongshu_structure_complexity_v56(mmd, zss)
+                mmd._zhongshu_structure_complexity_v56 = zs_complexity
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_complexity.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件166：波动率自适应仓位建议（Volatility Adaptive Position Sizing）
+        if closes is not None and highs is not None and lows is not None:
+            try:
+                pos_size = _calc_volatility_adaptive_position_v56(mmd, closes, highs, lows)
+                mmd._volatility_adaptive_position_v56 = pos_size
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pos_size.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件167：多信号共振评分（Multi-Signal Resonance Score）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+            try:
+                resonance = _calc_multi_signal_resonance_v56(mmd, closes, volumes)
+                mmd._multi_signal_resonance_v56 = resonance
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + resonance.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -16565,3 +16603,416 @@ def _calc_signal_trend_alignment_v55(
     except Exception:
         return result
 
+
+
+# ── V56: 条件164-167 缠论模型精准度与决策帮助进一步提升 ───────────────────────────
+
+def _calc_false_breakout_detection_v56(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """假突破识别（V56 条件164）。
+
+    通过信号后量价行为识别假突破信号：
+    - 3买信号：突破后5根K线内回撤超过突破幅度的50% → 假突破风险
+    - 3买信号：突破后成交量持续放大（>1.2倍均量）+ 价格继续上涨 → 真突破确认
+    - 3卖信号：跌破后5根K线内反弹超过跌幅的50% → 假跌破风险
+    - 3卖信号：跌破后成交量放大 + 价格继续下跌 → 真跌破确认
+    """
+    result = {
+        "is_fake": False,
+        "breakout_valid": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+        "retracement_pct": 0.0,
+        "volume_ratio": 1.0,
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 20 or not volumes or len(volumes) < 20:
+            result["msg"] = "数据不足，跳过假突破检测"
+            return result
+
+        bi_end_idx = 0
+        if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
+            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else len(closes) - 1
+        else:
+            bi_end_idx = max(0, len(closes) - 20)
+
+        signal_price = closes[bi_end_idx] if bi_end_idx < len(closes) else closes[-1]
+
+        check_bars = min(5, len(closes) - 1 - bi_end_idx)
+        if check_bars == 0:
+            result["msg"] = "信号后无K线数据，无法验证"
+            return result
+
+        post_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
+        post_highs = highs[bi_end_idx + 1:bi_end_idx + 1 + check_bars] if highs else post_closes
+        post_lows = lows[bi_end_idx + 1:bi_end_idx + 1 + check_bars] if lows else post_closes
+        post_volumes = volumes[bi_end_idx + 1:bi_end_idx + 1 + check_bars] if volumes else [1.0] * check_bars
+
+        if is_buy:
+            breakout_range = max(post_highs) - signal_price if post_highs else 0
+            lowest_after = min(post_lows) if post_lows else signal_price
+            retracement = (signal_price - lowest_after) / (signal_price + 1e-10) if signal_price > 0 else 0
+        else:
+            breakout_range = signal_price - min(post_lows) if post_lows else 0
+            highest_after = max(post_highs) if post_highs else signal_price
+            retracement = (highest_after - signal_price) / (signal_price + 1e-10) if signal_price > 0 else 0
+
+        result["retracement_pct"] = round(retracement * 100, 2)
+
+        avg_vol = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else sum(volumes) / max(1, len(volumes))
+        recent_vol = sum(post_volumes) / max(1, len(post_volumes))
+        volume_ratio = recent_vol / (avg_vol + 1e-10)
+        result["volume_ratio"] = round(volume_ratio, 2)
+
+        if is_buy:
+            latest_close = post_closes[-1] if post_closes else signal_price
+            if breakout_range > 0:
+                if retracement > 0.5 * (breakout_range / (signal_price + 1e-10)):
+                    result["is_fake"] = True
+                    result["breakout_valid"] = False
+                    result["confidence_adjust"] = -0.06
+                    result["msg"] = f"假突破风险：回撤{retracement:.1%}>突破幅度50%，-6%置信度"
+                elif volume_ratio > 1.2 and latest_close > signal_price * 1.02:
+                    result["is_fake"] = False
+                    result["breakout_valid"] = True
+                    result["confidence_adjust"] = 0.04
+                    result["msg"] = f"真突破确认：量比{volume_ratio:.2f}>1.2且涨幅>2%，+4%置信度"
+                else:
+                    result["is_fake"] = False
+                    result["breakout_valid"] = True
+                    result["confidence_adjust"] = 0.01
+                    result["msg"] = f"突破待确认：量比{volume_ratio:.2f}，回撤{retracement:.1%}"
+            else:
+                result["msg"] = "突破幅度不足，无法判断"
+        else:
+            latest_close = post_closes[-1] if post_closes else signal_price
+            if breakout_range > 0:
+                if retracement > 0.5 * (breakout_range / (signal_price + 1e-10)):
+                    result["is_fake"] = True
+                    result["breakout_valid"] = False
+                    result["confidence_adjust"] = -0.06
+                    result["msg"] = f"假跌破风险：反弹{retracement:.1%}>跌幅50%，-6%置信度"
+                elif volume_ratio > 1.2 and latest_close < signal_price * 0.98:
+                    result["is_fake"] = False
+                    result["breakout_valid"] = True
+                    result["confidence_adjust"] = 0.04
+                    result["msg"] = f"真跌破确认：量比{volume_ratio:.2f}>1.2且跌幅>2%，+4%置信度"
+                else:
+                    result["is_fake"] = False
+                    result["breakout_valid"] = True
+                    result["confidence_adjust"] = 0.01
+                    result["msg"] = f"跌破待确认：量比{volume_ratio:.2f}，反弹{retracement:.1%}"
+            else:
+                result["msg"] = "跌破幅度不足，无法判断"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_structure_complexity_v56(
+    mmd: "MMD",
+    zss: list[Any],
+) -> dict[str, Any]:
+    """中枢结构复杂度分析（V56 条件165）。
+
+    分析信号中枢前后的结构复杂度：
+    - 简单结构：单一中枢突破，信号可信度高
+    - 复杂结构：多重重叠中枢，信号噪音大
+    """
+    result = {
+        "complexity": "unknown",
+        "overlap_count": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not zss or len(zss) < 2:
+            result["msg"] = "中枢数据不足，跳过复杂度分析"
+            return result
+
+        if mmd.zs is None:
+            result["msg"] = "当前信号无中枢信息"
+            return result
+
+        curr_zs_idx = -1
+        for i, zs in enumerate(zss):
+            if hasattr(zs, "start") and hasattr(zs, "end") and hasattr(mmd.zs, "start"):
+                if zs.start == mmd.zs.start and zs.end == mmd.zs.end:
+                    curr_zs_idx = i
+                    break
+
+        if curr_zs_idx < 0:
+            for i, zs in enumerate(zss):
+                if hasattr(zs, "zg") and hasattr(zs, "zd") and hasattr(mmd.zs, "zg"):
+                    if abs(getattr(zs, "zg", 0) - getattr(mmd.zs, "zg", 0)) < 1e-6:
+                        curr_zs_idx = i
+                        break
+
+        if curr_zs_idx < 0:
+            result["msg"] = "无法定位当前中枢"
+            return result
+
+        window_size = 5
+        start_idx = max(0, curr_zs_idx - window_size)
+        end_idx = min(len(zss), curr_zs_idx + window_size + 1)
+        nearby_zss = zss[start_idx:end_idx]
+
+        overlap_count = 0
+        for i in range(len(nearby_zss)):
+            for j in range(i + 1, len(nearby_zss)):
+                zs_i = nearby_zss[i]
+                zs_j = nearby_zss[j]
+                if hasattr(zs_i, "zg") and hasattr(zs_i, "zd") and hasattr(zs_j, "zg") and hasattr(zs_j, "zd"):
+                    zg_i, zd_i = zs_i.zg, zs_i.zd
+                    zg_j, zd_j = zs_j.zg, zs_j.zd
+                    if zd_i < zg_j and zd_j < zg_i:
+                        overlap_count += 1
+
+        result["overlap_count"] = overlap_count
+
+        if overlap_count == 0:
+            result["complexity"] = "simple"
+            result["confidence_adjust"] = 0.03
+            result["msg"] = "简单结构：无重叠中枢，+3%置信度"
+        elif overlap_count <= 1:
+            result["complexity"] = "moderate"
+            result["confidence_adjust"] = 0.0
+            result["msg"] = "中等复杂度：少量重叠，暂不调整"
+        elif overlap_count <= 3:
+            result["complexity"] = "complex"
+            result["confidence_adjust"] = -0.03
+            result["msg"] = "复杂结构：多处重叠，-3%置信度"
+        else:
+            result["complexity"] = "very_complex"
+            result["confidence_adjust"] = -0.06
+            result["msg"] = "高度复杂：严重重叠，-6%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volatility_adaptive_position_v56(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """波动率自适应仓位建议（V56 条件166）。
+
+    根据ATR波动率自适应调整建议仓位：
+    - 低波动(<1.5%)：建议重仓(70-100%)
+    - 正常波动(1.5%-3%)：建议中等仓位(40-70%)
+    - 高波动(3%-5%)：建议轻仓(20-40%)
+    - 极高波动(>5%)：建议观望(0-20%)
+    """
+    result = {
+        "atr_value": 0.0,
+        "volatility_level": "unknown",
+        "position_suggestion": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 20 or len(highs) < 20 or len(lows) < 20:
+            result["msg"] = "数据不足，跳过波动率分析"
+            return result
+
+        tr_list = []
+        for i in range(1, min(15, len(closes))):
+            high = highs[i]
+            low = lows[i]
+            prev_close = closes[i - 1]
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            tr_list.append(tr)
+
+        if not tr_list:
+            result["msg"] = "无法计算ATR"
+            return result
+
+        atr = sum(tr_list) / len(tr_list)
+        atr_pct = atr / (closes[-1] + 1e-10) * 100
+        result["atr_value"] = round(atr_pct, 2)
+
+        if atr_pct < 1.5:
+            result["volatility_level"] = "low"
+            base_position = "high"
+            base_adjust = 0.01
+        elif atr_pct < 3.0:
+            result["volatility_level"] = "normal"
+            base_position = "medium"
+            base_adjust = 0.0
+        elif atr_pct < 5.0:
+            result["volatility_level"] = "high"
+            base_position = "cautious"
+            base_adjust = -0.01
+        else:
+            result["volatility_level"] = "extreme"
+            base_position = "wait"
+            base_adjust = -0.02
+
+        result["position_suggestion"] = base_position
+        result["confidence_adjust"] = base_adjust
+
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+
+        if is_buy and atr_pct > 3.0:
+            result["confidence_adjust"] -= 0.01
+            result["msg"] = f"高波动买入({atr_pct:.1f}%)：建议轻仓，-1%置信度"
+        elif is_sell and atr_pct > 3.0:
+            result["confidence_adjust"] += 0.01
+            result["msg"] = f"高波动卖出({atr_pct:.1f}%)：可适当减仓，+1%置信度"
+        elif is_buy:
+            result["msg"] = f"低波动买入({atr_pct:.1f}%)：建议重仓，+1%置信度"
+        elif is_sell:
+            result["msg"] = f"低波动卖出({atr_pct:.1f}%)：建议持仓，+1%置信度"
+        else:
+            result["msg"] = f"波动率{atr_pct:.1f}%，{base_position}仓位建议"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_signal_resonance_v56(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """多信号共振评分（V56 条件167）。
+
+    综合多个技术指标验证信号质量：
+    - MACD：DIF/DEA金叉/死叉确认
+    - KDJ：超买/超卖状态
+    - RSI：相对强弱状态
+    - 成交量：量比确认
+    - 价格动量：短中期趋势确认
+
+    共振规则：
+    - 3个以上指标同向确认 → +4%（强共振）
+    - 2个指标同向确认 → +2%（弱共振）
+    - 1个指标确认 → 0%
+    - 无指标确认 → -2%（风险信号）
+    """
+    result = {
+        "resonance_count": 0,
+        "confirming_indicators": [],
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30:
+            result["msg"] = "数据不足，跳过共振分析"
+            return result
+
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        confirming = []
+
+        # 1. MACD 确认
+        if len(closes) >= 27:
+            fast = sum(closes[-12:]) / 12
+            slow = sum(closes[-26:]) / 26
+            dif = fast - slow
+            prev_fast = sum(closes[-13:-1]) / 12 if len(closes) >= 28 else fast
+            prev_slow = sum(closes[-27:-1]) / 26 if len(closes) >= 28 else slow
+            prev_dif = prev_fast - prev_slow
+            if is_buy and dif > 0 and prev_dif <= 0:
+                confirming.append("MACD金叉")
+            elif is_buy and dif > 0 and prev_dif < dif:
+                confirming.append("MACD多头增强")
+            elif is_sell and dif < 0 and prev_dif >= 0:
+                confirming.append("MACD死叉")
+            elif is_sell and dif < 0 and prev_dif > dif:
+                confirming.append("MACD空头增强")
+
+        # 2. KDJ 确认
+        if len(closes) >= 10:
+            low_9 = min(closes[-9:])
+            high_9 = max(closes[-9:])
+            latest = closes[-1]
+            rsv = (latest - low_9) / (high_9 - low_9 + 1e-10) * 100
+            if is_buy and rsv < 20:
+                confirming.append("KDJ超卖")
+            elif is_sell and rsv > 80:
+                confirming.append("KDJ超买")
+
+        # 3. RSI 确认
+        if len(closes) >= 15:
+            gains = []
+            losses = []
+            for i in range(-14, 0):
+                change = closes[i] - closes[i - 1]
+                if change > 0:
+                    gains.append(change)
+                    losses.append(0)
+                else:
+                    gains.append(0)
+                    losses.append(abs(change))
+            avg_gain = sum(gains) / 14
+            avg_loss = sum(losses) / 14
+            rs = avg_gain / (avg_loss + 1e-10)
+            rsi = 100 - (100 / (1 + rs))
+            if is_buy and rsi < 30:
+                confirming.append("RSI超卖")
+            elif is_buy and 40 < rsi < 60:
+                confirming.append("RSI中性偏强")
+            elif is_sell and rsi > 70:
+                confirming.append("RSI超买")
+            elif is_sell and 40 < rsi < 60:
+                confirming.append("RSI中性偏弱")
+
+        # 4. 成交量确认
+        if volumes and len(volumes) >= 20:
+            avg_vol = sum(volumes[-20:]) / 20
+            recent_vol = sum(volumes[-5:]) / 5
+            vol_ratio = recent_vol / (avg_vol + 1e-10)
+            if is_buy and vol_ratio > 1.0:
+                confirming.append("放量上涨")
+            elif is_sell and vol_ratio > 1.0:
+                confirming.append("放量下跌")
+
+        # 5. 价格动量确认
+        momentum_5 = (closes[-1] - closes[-6]) / (closes[-6] + 1e-10) * 100 if len(closes) >= 6 else 0
+        momentum_10 = (closes[-1] - closes[-11]) / (closes[-11] + 1e-10) * 100 if len(closes) >= 11 else 0
+        if is_buy and momentum_5 > 0 and momentum_10 > 0:
+            confirming.append("短中期动量向上")
+        elif is_sell and momentum_5 < 0 and momentum_10 < 0:
+            confirming.append("短中期动量向下")
+
+        result["confirming_indicators"] = confirming
+        result["resonance_count"] = len(confirming)
+
+        if len(confirming) >= 3:
+            result["confidence_adjust"] = 0.04
+            result["msg"] = f"强共振确认({len(confirming)}项)：{', '.join(confirming[:3])}，+4%置信度"
+        elif len(confirming) >= 2:
+            result["confidence_adjust"] = 0.02
+            result["msg"] = f"弱共振确认({len(confirming)}项)：{', '.join(confirming)}，+2%置信度"
+        elif len(confirming) == 1:
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"单指标确认：{confirming[0]}，暂不调整"
+        else:
+            result["confidence_adjust"] = -0.02
+            result["msg"] = "无指标确认：缺乏共振支持，-2%置信度"
+
+        return result
+    except Exception:
+        return result

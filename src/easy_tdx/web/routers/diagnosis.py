@@ -967,6 +967,14 @@ async def diagnose_stock(
             "weak_stock_risk_v55": getattr(latest_mmd, "_weak_stock_risk_v55", None) if latest_mmd else None,
             # V55: 信号与趋势方向对齐验证（条件163）
             "signal_trend_alignment_v55": getattr(latest_mmd, "_signal_trend_alignment_v55", None) if latest_mmd else None,
+            # V56: 假突破识别（条件164）
+            "false_breakout_detection_v56": getattr(latest_mmd, "_false_breakout_detection_v56", None) if latest_mmd else None,
+            # V56: 中枢结构复杂度分析（条件165）
+            "zhongshu_structure_complexity_v56": getattr(latest_mmd, "_zhongshu_structure_complexity_v56", None) if latest_mmd else None,
+            # V56: 波动率自适应仓位建议（条件166）
+            "volatility_adaptive_position_v56": getattr(latest_mmd, "_volatility_adaptive_position_v56", None) if latest_mmd else None,
+            # V56: 多信号共振评分（条件167）
+            "multi_signal_resonance_v56": getattr(latest_mmd, "_multi_signal_resonance_v56", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

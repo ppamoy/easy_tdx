@@ -3122,6 +3122,100 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V56: 假突破识别 -->
+        <div v-if="diagnosis.chanlun.false_breakout_detection_v56" class="metric-card v56-fake">
+          <div class="card-title">🔍 假突破识别 (164)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">状态</span>
+              <span class="tag" :class="diagnosis.chanlun.false_breakout_detection_v56.is_fake ? 'tag-red' : (diagnosis.chanlun.false_breakout_detection_v56.breakout_valid ? 'tag-green' : 'tag-yellow')">
+                {{ diagnosis.chanlun.false_breakout_detection_v56.is_fake ? '🚨 假突破' : (diagnosis.chanlun.false_breakout_detection_v56.breakout_valid ? '✅ 真突破' : '➡️ 待确认') }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">回撤幅度</span><span class="kv-val">{{ diagnosis.chanlun.false_breakout_detection_v56.retracement_pct }}%</span></div>
+            <div class="kv-row"><span class="kv-key">量比</span><span class="kv-val">{{ diagnosis.chanlun.false_breakout_detection_v56.volume_ratio }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.false_breakout_detection_v56.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.false_breakout_detection_v56.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.false_breakout_detection_v56.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.false_breakout_detection_v56.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.false_breakout_detection_v56.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V56: 中枢结构复杂度 -->
+        <div v-if="diagnosis.chanlun.zhongshu_structure_complexity_v56" class="metric-card v56-zs">
+          <div class="card-title">🏗️ 中枢结构复杂度 (165)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">复杂度</span>
+              <span class="tag" :class="diagnosis.chanlun.zhongshu_structure_complexity_v56.complexity === 'simple' ? 'tag-green' : (diagnosis.chanlun.zhongshu_structure_complexity_v56.complexity === 'moderate' ? 'tag-yellow' : (diagnosis.chanlun.zhongshu_structure_complexity_v56.complexity === 'complex' ? 'tag-orange' : 'tag-red'))">
+                {{ diagnosis.chanlun.zhongshu_structure_complexity_v56.complexity === 'simple' ? '简单' : (diagnosis.chanlun.zhongshu_structure_complexity_v56.complexity === 'moderate' ? '中等' : (diagnosis.chanlun.zhongshu_structure_complexity_v56.complexity === 'complex' ? '复杂' : '高度复杂')) }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">重叠数</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_structure_complexity_v56.overlap_count }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.zhongshu_structure_complexity_v56.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.zhongshu_structure_complexity_v56.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.zhongshu_structure_complexity_v56.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.zhongshu_structure_complexity_v56.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.zhongshu_structure_complexity_v56.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V56: 波动率仓位建议 -->
+        <div v-if="diagnosis.chanlun.volatility_adaptive_position_v56" class="metric-card v56-vol">
+          <div class="card-title">📊 波动率仓位建议 (166)</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">ATR</span><span class="kv-val">{{ diagnosis.chanlun.volatility_adaptive_position_v56.atr_value }}%</span></div>
+            <div class="kv-row">
+              <span class="kv-key">波动等级</span>
+              <span class="tag" :class="diagnosis.chanlun.volatility_adaptive_position_v56.volatility_level === 'low' ? 'tag-green' : (diagnosis.chanlun.volatility_adaptive_position_v56.volatility_level === 'normal' ? 'tag-blue' : (diagnosis.chanlun.volatility_adaptive_position_v56.volatility_level === 'high' ? 'tag-orange' : 'tag-red'))">
+                {{ diagnosis.chanlun.volatility_adaptive_position_v56.volatility_level === 'low' ? '低波动' : (diagnosis.chanlun.volatility_adaptive_position_v56.volatility_level === 'normal' ? '正常' : (diagnosis.chanlun.volatility_adaptive_position_v56.volatility_level === 'high' ? '高波动' : '极高波动')) }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">仓位建议</span>
+              <span class="tag" :class="diagnosis.chanlun.volatility_adaptive_position_v56.position_suggestion === 'high' ? 'tag-green' : (diagnosis.chanlun.volatility_adaptive_position_v56.position_suggestion === 'medium' ? 'tag-blue' : (diagnosis.chanlun.volatility_adaptive_position_v56.position_suggestion === 'cautious' ? 'tag-orange' : 'tag-red'))">
+                {{ diagnosis.chanlun.volatility_adaptive_position_v56.position_suggestion === 'high' ? '重仓(70-100%)' : (diagnosis.chanlun.volatility_adaptive_position_v56.position_suggestion === 'medium' ? '中等(40-70%)' : (diagnosis.chanlun.volatility_adaptive_position_v56.position_suggestion === 'cautious' ? '轻仓(20-40%)' : '观望(0-20%)')) }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.volatility_adaptive_position_v56.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.volatility_adaptive_position_v56.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.volatility_adaptive_position_v56.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.volatility_adaptive_position_v56.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volatility_adaptive_position_v56.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V56: 多信号共振 -->
+        <div v-if="diagnosis.chanlun.multi_signal_resonance_v56" class="metric-card v56-res">
+          <div class="card-title">🎯 多信号共振评分 (167)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">共振数</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_signal_resonance_v56.resonance_count >= 3 ? 'tag-green' : (diagnosis.chanlun.multi_signal_resonance_v56.resonance_count >= 2 ? 'tag-blue' : (diagnosis.chanlun.multi_signal_resonance_v56.resonance_count >= 1 ? 'tag-yellow' : 'tag-red'))">
+                {{ diagnosis.chanlun.multi_signal_resonance_v56.resonance_count >= 3 ? '强共振' : (diagnosis.chanlun.multi_signal_resonance_v56.resonance_count >= 2 ? '弱共振' : (diagnosis.chanlun.multi_signal_resonance_v56.resonance_count >= 1 ? '单指标' : '无共振')) }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">确认指标</span>
+              <span class="kv-val" style="font-size:12px">{{ diagnosis.chanlun.multi_signal_resonance_v56.confirming_indicators.join(', ') || '无' }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_signal_resonance_v56.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.multi_signal_resonance_v56.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_signal_resonance_v56.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_signal_resonance_v56.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_signal_resonance_v56.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>

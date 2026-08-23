@@ -398,6 +398,12 @@ class MMD:
     _weak_stock_risk_v55: dict[str, Any] | None = None  # 弱势股专项风险检测（条件162）
     _signal_trend_alignment_v55: dict[str, Any] | None = None  # 信号与趋势方向对齐验证（条件163）
 
+    # V56 enhancement fields (2026-08-26)
+    _false_breakout_detection_v56: dict[str, Any] | None = None  # 假突破识别（条件164）
+    _zhongshu_structure_complexity_v56: dict[str, Any] | None = None  # 中枢结构复杂度分析（条件165）
+    _volatility_adaptive_position_v56: dict[str, Any] | None = None  # 波动率自适应仓位建议（条件166）
+    _multi_signal_resonance_v56: dict[str, Any] | None = None  # 多信号共振评分（条件167）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

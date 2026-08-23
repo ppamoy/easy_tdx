@@ -1473,6 +1473,37 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V56: 假突破识别（条件164）
+  false_breakout_detection_v56?: {
+    is_fake: boolean
+    breakout_valid: boolean
+    confidence_adjust: number
+    msg: string
+    retracement_pct: number
+    volume_ratio: number
+  } | null
+  // V56: 中枢结构复杂度分析（条件165）
+  zhongshu_structure_complexity_v56?: {
+    complexity: string
+    overlap_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V56: 波动率自适应仓位建议（条件166）
+  volatility_adaptive_position_v56?: {
+    atr_value: number
+    volatility_level: string
+    position_suggestion: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V56: 多信号共振评分（条件167）
+  multi_signal_resonance_v56?: {
+    resonance_count: number
+    confirming_indicators: string[]
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {
