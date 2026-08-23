@@ -380,6 +380,12 @@ class MMD:
     _recent_extreme_price_v52: dict[str, Any] | None = None  # 近期极端价位检测（条件150）
     _market_regime_score_v52: dict[str, Any] | None = None  # 市场环境健康评分（条件151）
 
+    # V53 enhancement fields (2026-08-25)
+    _trend_stage_follow_confirmation_v53: dict[str, Any] | None = None  # 趋势阶段识别与顺势确认（条件152）
+    _atr_adaptive_stop_v53: dict[str, Any] | None = None  # ATR自适应止损距离（条件153）
+    _zs_breakout_strength_v53: dict[str, Any] | None = None  # 中枢突破力度验证（条件154）
+    _signal_quality_tier_v53: dict[str, Any] | None = None  # 信号质量综合分层（条件155）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

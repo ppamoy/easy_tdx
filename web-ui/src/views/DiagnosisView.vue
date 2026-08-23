@@ -2788,6 +2788,124 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V53: 趋势阶段识别与顺势确认（条件152）-->
+        <div v-if="diagnosis.chanlun.trend_stage_follow_confirmation_v53" class="metric-card v53-trend">
+          <div class="card-title">📈 趋势阶段识别（V53·条件152）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">趋势方向</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_direction === 'strong_uptrend' ? 'tag-green' : diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_direction === 'strong_downtrend' ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_direction === 'strong_uptrend' ? '📈 强上升趋势' : diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_direction === 'strong_downtrend' ? '📉 强下降趋势' : diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_direction === 'sideways' ? '➡️ 震荡' : '🔄 弱趋势' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">趋势阶段</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_stage === 'early' ? 'tag-green' : diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_stage === 'late' ? 'tag-yellow' : 'tag-gray'">
+                {{ diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_stage === 'early' ? '🟢 初期' : diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_stage === 'mid' ? '🟡 中期' : diagnosis.chanlun.trend_stage_follow_confirmation_v53.trend_stage === 'late' ? '🟠 晚期' : '🔵 震荡' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">顺势确认</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_stage_follow_confirmation_v53.is_following_trend ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.trend_stage_follow_confirmation_v53.is_following_trend ? '✅ 顺势' : '⚠️ 逆势' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_stage_follow_confirmation_v53.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.trend_stage_follow_confirmation_v53.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.trend_stage_follow_confirmation_v53.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.trend_stage_follow_confirmation_v53.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.trend_stage_follow_confirmation_v53.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V53: ATR自适应止损距离（条件153）-->
+        <div v-if="diagnosis.chanlun.atr_adaptive_stop_v53" class="metric-card v53-atr">
+          <div class="card-title">📏 ATR自适应止损（V53·条件153）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">ATR(14)</span>
+              <span class="kv-val">{{ diagnosis.chanlun.atr_adaptive_stop_v53.atr_value }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">ATR占比</span>
+              <span class="kv-val">{{ diagnosis.chanlun.atr_adaptive_stop_v53.stop_distance_pct }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">建议仓位</span>
+              <span class="tag" :class="diagnosis.chanlun.atr_adaptive_stop_v53.position_suggestion === 'high' ? 'tag-green' : diagnosis.chanlun.atr_adaptive_stop_v53.position_suggestion === 'cautious' ? 'tag-yellow' : 'tag-red'">
+                {{ diagnosis.chanlun.atr_adaptive_stop_v53.position_suggestion === 'high' ? '🟢 重仓(70-100%)' : diagnosis.chanlun.atr_adaptive_stop_v53.position_suggestion === 'medium' ? '🟡 中等(40-70%)' : diagnosis.chanlun.atr_adaptive_stop_v53.position_suggestion === 'cautious' ? '🟠 轻仓(20-40%)' : '🔴 观望(0-20%)' }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.atr_adaptive_stop_v53.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V53: 中枢突破力度验证（条件154）-->
+        <div v-if="diagnosis.chanlun.zs_breakout_strength_v53" class="metric-card v53-breakout">
+          <div class="card-title">💪 中枢突破力度验证（V53·条件154）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">突破笔强度</span>
+              <span class="kv-val">{{ diagnosis.chanlun.zs_breakout_strength_v53.breakout_strength }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">进入笔强度</span>
+              <span class="kv-val">{{ diagnosis.chanlun.zs_breakout_strength_v53.entry_bi_strength }}%</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">强度比值</span>
+              <span class="tag" :class="diagnosis.chanlun.zs_breakout_strength_v53.confirmed ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.zs_breakout_strength_v53.strength_ratio }}x {{ diagnosis.chanlun.zs_breakout_strength_v53.confirmed ? '✅' : '⚠️' }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.zs_breakout_strength_v53.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V53: 信号质量综合分层（条件155）-->
+        <div v-if="diagnosis.chanlun.signal_quality_tier_v53" class="metric-card v53-quality">
+          <div class="card-title">🏆 信号质量分层（V53·条件155）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">质量等级</span>
+              <span class="tag" :class="{
+                'tag-green': diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'S',
+                'tag-blue': diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'A',
+                'tag-yellow': diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'B',
+                'tag-orange': diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'C',
+                'tag-red': diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'D',
+              }">
+                {{ diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'S' ? '⭐ S级' : diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'A' ? '🥇 A级' : diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'B' ? '🥈 B级' : diagnosis.chanlun.signal_quality_tier_v53.quality_tier === 'C' ? '🥉 C级' : '❌ D级' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">综合评分</span>
+              <span class="kv-val">{{ diagnosis.chanlun.signal_quality_tier_v53.tier_score }}/100</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">评级标签</span>
+              <span class="tag" :class="diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'aggressive' ? 'tag-green' : diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'cautious' ? 'tag-yellow' : 'tag-red'">
+                {{ diagnosis.chanlun.signal_quality_tier_v53.tier_label }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">建议操作</span>
+              <span class="tag" :class="{
+                'tag-green': diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'aggressive',
+                'tag-blue': diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'moderate',
+                'tag-yellow': diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'cautious',
+                'tag-gray': diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'wait',
+                'tag-red': diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'avoid',
+              }">
+                {{ diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'aggressive' ? '积极买入' : diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'moderate' ? '适度买入' : diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'cautious' ? '谨慎买入' : diagnosis.chanlun.signal_quality_tier_v53.position_recommendation === 'wait' ? '观望' : '回避' }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.signal_quality_tier_v53.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>

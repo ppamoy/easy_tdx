@@ -11519,6 +11519,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V53 条件 152-155 ──
+
+        # 条件152：趋势阶段识别与顺势确认（Trend Stage Follow Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+            try:
+                trend_follow = _calc_trend_stage_follow_confirmation_v53(mmd, closes, highs, lows)
+                mmd._trend_stage_follow_confirmation_v53 = trend_follow
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_follow.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件153：ATR自适应止损距离（ATR Adaptive Stop Loss）
+        if closes is not None and highs is not None and lows is not None:
+            try:
+                atr_result = _calc_atr_adaptive_stop_v53(closes, highs, lows)
+                mmd._atr_adaptive_stop_v53 = atr_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + atr_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件154：中枢突破力度验证（Zhongshu Breakout Strength）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and bis is not None and zss is not None and closes is not None:
+            try:
+                breakout_strength = _calc_zs_breakout_strength_v53(mmd, bis, zss, closes)
+                mmd._zs_breakout_strength_v53 = breakout_strength
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout_strength.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件155：信号质量综合分层（Signal Quality Tier）
+        if closes is not None:
+            try:
+                quality_tier = _calc_signal_quality_tier_v53(mmd, closes[-1])
+                mmd._signal_quality_tier_v53 = quality_tier
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + quality_tier.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -15236,6 +15274,360 @@ def _calc_market_regime_score_v52(
             result["msg"] = f"⚠️ 市场环境较差（波动{vol_regime}+趋势{trend_health}），建议谨慎"
         else:
             result["msg"] = f"市场环境中性（波动{vol_regime}+趋势{trend_health}）"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_trend_stage_follow_confirmation_v53(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """趋势阶段识别与顺势确认（V53 条件152）。
+
+    判断股票当前处于上涨/下跌/震荡阶段，并对与趋势方向一致的3买/3卖给予加分，
+    对逆势信号给予降权（避免接飞刀/逆势做空）。
+
+    Returns:
+        dict with keys: trend_stage, trend_direction, is_following_trend, confidence_adjust, msg
+    """
+    result = {
+        "trend_stage": "unknown",
+        "trend_direction": "unknown",
+        "is_following_trend": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 60:
+            return result
+
+        ma5 = sum(closes[-5:]) / 5
+        ma10 = sum(closes[-10:]) / 10
+        ma20 = sum(closes[-20:]) / 20
+        ma60 = sum(closes[-60:]) / 60
+
+        # 判断趋势方向
+        if ma5 > ma10 > ma20 > ma60:
+            trend_direction = "strong_uptrend"
+        elif ma5 < ma10 < ma20 < ma60:
+            trend_direction = "strong_downtrend"
+        elif abs(ma5 - ma20) / ma20 < 0.03 and abs(ma20 - ma60) / ma60 < 0.05:
+            trend_direction = "sideways"
+        else:
+            trend_direction = "weak_trend"
+        result["trend_direction"] = trend_direction
+
+        # 判断趋势阶段
+        price_change_20d = (closes[-1] - closes[-21]) / (closes[-21] + 1e-10)
+        price_change_60d = (closes[-1] - closes[-61]) / (closes[-61] + 1e-10)
+        if trend_direction == "strong_uptrend":
+            if price_change_20d > 0.10:
+                trend_stage = "early"
+            elif price_change_20d > 0.03:
+                trend_stage = "mid"
+            else:
+                trend_stage = "late"
+        elif trend_direction == "strong_downtrend":
+            if price_change_20d < -0.10:
+                trend_stage = "early"
+            elif price_change_20d < -0.03:
+                trend_stage = "mid"
+            else:
+                trend_stage = "late"
+        else:
+            trend_stage = "consolidation"
+        result["trend_stage"] = trend_stage
+
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+
+        # 顺势确认逻辑
+        if is_buy and trend_direction in ("strong_uptrend", "weak_trend"):
+            result["is_following_trend"] = True
+            if trend_direction == "strong_uptrend":
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"✅ 3买信号符合强上升趋势，顺势确认 +3%置信度"
+            else:
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"3买信号符合弱上升趋势，轻微确认 +1%置信度"
+        elif is_sell and trend_direction in ("strong_downtrend", "weak_trend"):
+            result["is_following_trend"] = True
+            if trend_direction == "strong_downtrend":
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"✅ 3卖信号符合强下降趋势，顺势确认 +3%置信度"
+            else:
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"3卖信号符合弱下降趋势，轻微确认 +1%置信度"
+        elif is_buy and trend_direction == "strong_downtrend":
+            result["is_following_trend"] = False
+            result["confidence_adjust"] = -0.05
+            result["msg"] = f"⚠️ 3买信号逆势（强下降趋势），可能接飞刀，-5%置信度"
+        elif is_sell and trend_direction == "strong_uptrend":
+            result["is_following_trend"] = False
+            result["confidence_adjust"] = -0.05
+            result["msg"] = f"⚠️ 3卖信号逆势（强上升趋势），可能逆势做空，-5%置信度"
+        elif trend_direction == "sideways":
+            result["is_following_trend"] = False
+            result["confidence_adjust"] = -0.02
+            result["msg"] = f"⚠️ 当前处于震荡阶段，趋势不明确，-2%置信度"
+        else:
+            result["msg"] = f"趋势阶段正常（{trend_direction}+{trend_stage}）"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_atr_adaptive_stop_v53(
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """ATR自适应止损距离（V53 条件153）。
+
+    根据ATR(14)动态计算止损距离，低波动股票用 tighter stop，高波动股票用 wider stop。
+    同时评估当前信号价格相对于止损位的距离，提供仓位建议。
+
+    Returns:
+        dict with keys: atr_value, stop_distance_pct, stop_level, position_suggestion, confidence_adjust, msg
+    """
+    result = {
+        "atr_value": 0.0,
+        "stop_distance_pct": 0.0,
+        "stop_level": 0.0,
+        "position_suggestion": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 30 or not highs or not lows:
+            return result
+
+        n = len(closes)
+        current_price = closes[-1]
+
+        # 计算ATR(14)
+        tr_list = []
+        for i in range(1, max(15, n)):
+            high = highs[i]
+            low = lows[i]
+            prev_close = closes[i - 1]
+            tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
+            tr_list.append(tr)
+
+        if len(tr_list) < 14:
+            return result
+
+        atr = sum(tr_list[-14:]) / 14
+        result["atr_value"] = round(atr, 4)
+
+        # ATR占价格比例
+        atr_pct = atr / (current_price + 1e-10)
+        result["stop_distance_pct"] = round(atr_pct * 100, 2)
+
+        # 动态止损位
+        stop_distance = atr * 2
+        result["stop_level"] = round(current_price - stop_distance, 2)
+
+        # 根据ATR百分比给出仓位建议
+        if atr_pct < 0.015:
+            position_suggestion = "high"
+            position_pct = "70-100%"
+        elif atr_pct < 0.025:
+            position_suggestion = "medium"
+            position_pct = "40-70%"
+        elif atr_pct < 0.04:
+            position_suggestion = "cautious"
+            position_pct = "20-40%"
+        else:
+            position_suggestion = "avoid"
+            position_pct = "0-20%"
+        result["position_suggestion"] = position_suggestion
+
+        if atr_pct < 0.015:
+            result["confidence_adjust"] = 0.02
+            result["msg"] = f"✅ ATR={atr_pct:.2%}低波动，趋势交易环境良好，+2%置信度，建议仓位{position_pct}"
+        elif atr_pct < 0.025:
+            result["msg"] = f"ATR={atr_pct:.2%}中等波动，建议仓位{position_pct}"
+        elif atr_pct < 0.04:
+            result["confidence_adjust"] = -0.02
+            result["msg"] = f"⚠️ ATR={atr_pct:.2%}高波动，建议仓位{position_pct}，-2%置信度"
+        else:
+            result["confidence_adjust"] = -0.03
+            result["msg"] = f"🚨 ATR={atr_pct:.2%}极高波动，建议观望，-3%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zs_breakout_strength_v53(
+    mmd: "MMD",
+    bis: list["BI"],
+    zss: list["ZS"],
+    closes: list[float],
+) -> dict[str, Any]:
+    """中枢突破力度验证（V53 条件154）。
+
+    对于3买/3卖，验证突破笔的力度是否显著强于进入中枢前的笔。
+    力度不足的突破往往是假突破，需要降权。
+
+    Returns:
+        dict with keys: breakout_strength, entry_bi_strength, strength_ratio, confirmed, confidence_adjust, msg
+    """
+    result = {
+        "breakout_strength": 0.0,
+        "entry_bi_strength": 0.0,
+        "strength_ratio": 0.0,
+        "confirmed": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or bis is None or zss is None or not closes:
+            return result
+
+        bi_idx = mmd.bi.index if hasattr(mmd.bi, "index") else 0
+
+        # 找到突破笔（信号笔）的幅度
+        breakout_bi = mmd.bi
+        breakout_range = breakout_bi.high - breakout_bi.low
+        breakout_strength = breakout_range / (breakout_bi.low + 1e-10)
+        result["breakout_strength"] = round(breakout_strength * 100, 2)
+
+        # 找到进入中枢前的最后一根同向笔（强度对照基准）
+        entry_bi_strength = 0.0
+        strength_ratio = 1.0
+        if bi_idx >= 2:
+            for i in range(bi_idx - 1, max(0, bi_idx - 5), -1):
+                candidate_bi = bis[i] if i < len(bis) else None
+                if candidate_bi is not None:
+                    same_direction = (breakout_bi.direction.value == candidate_bi.direction.value)
+                    if same_direction:
+                        entry_range = candidate_bi.high - candidate_bi.low
+                        entry_bi_strength = entry_range / (candidate_bi.low + 1e-10)
+                        result["entry_bi_strength"] = round(entry_bi_strength * 100, 2)
+                        strength_ratio = breakout_strength / (entry_bi_strength + 1e-10)
+                        result["strength_ratio"] = round(strength_ratio, 2)
+                        break
+
+        if strength_ratio >= 1.2:
+            result["confirmed"] = True
+            result["confidence_adjust"] = 0.03
+            result["msg"] = f"✅ 突破力度充分（比值{strength_ratio:.2f}），突破笔比进入笔强{strength_ratio:.0%}，+3%置信度"
+        elif strength_ratio >= 0.8:
+            result["confirmed"] = True
+            result["confidence_adjust"] = 0.01
+            result["msg"] = f"突破力度正常（比值{strength_ratio:.2f}），+1%置信度"
+        elif strength_ratio >= 0.5:
+            result["confirmed"] = False
+            result["confidence_adjust"] = -0.02
+            result["msg"] = f"⚠️ 突破力度偏弱（比值{strength_ratio:.2f}），可能存在假突破，-2%置信度"
+        else:
+            result["confirmed"] = False
+            result["confidence_adjust"] = -0.04
+            result["msg"] = f"🚨 突破力度严重不足（比值{strength_ratio:.2f}），极可能是假突破，-4%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_quality_tier_v53(
+    mmd: "MMD",
+    close: float,
+) -> dict[str, Any]:
+    """信号质量综合分层（V53 条件155）。
+
+    综合所有已有条件结果，给出信号的最终质量等级（S/A/B/C/D），
+    帮助用户优先关注高质量信号。
+
+    Returns:
+        dict with keys: quality_tier, tier_score, tier_label, position_recommendation, confidence_adjust, msg
+    """
+    result = {
+        "quality_tier": "D",
+        "tier_score": 0,
+        "tier_label": "观望",
+        "position_recommendation": "wait",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd is None:
+            return result
+
+        base_score = mmd.confidence * 100
+
+        has_trend_follow = getattr(mmd, "_trend_stage_follow_confirmation_v53", None)
+        has_atr = getattr(mmd, "_atr_adaptive_stop_v53", None)
+        has_breakout = getattr(mmd, "_zs_breakout_strength_v53", None)
+
+        adjustment = 0.0
+
+        if has_trend_follow and has_trend_follow.get("is_following_trend"):
+            adjustment += 3
+        elif has_trend_follow and not has_trend_follow.get("is_following_trend"):
+            adjustment -= 3
+
+        if has_atr:
+            atr_sug = has_atr.get("position_suggestion", "unknown")
+            if atr_sug == "high":
+                adjustment += 2
+            elif atr_sug == "cautious":
+                adjustment -= 2
+            elif atr_sug == "avoid":
+                adjustment -= 3
+
+        if has_breakout and has_breakout.get("confirmed"):
+            adjustment += 2
+        elif has_breakout and not has_breakout.get("confirmed"):
+            adjustment -= 2
+
+        tier_score = max(0, min(100, base_score + adjustment))
+        result["tier_score"] = tier_score
+
+        if tier_score >= 80:
+            tier = "S"
+            tier_label = "强烈推荐"
+            pos_rec = "aggressive"
+        elif tier_score >= 65:
+            tier = "A"
+            tier_label = "推荐"
+            pos_rec = "moderate"
+        elif tier_score >= 50:
+            tier = "B"
+            tier_label = "谨慎"
+            pos_rec = "cautious"
+        elif tier_score >= 35:
+            tier = "C"
+            tier_label = "观望"
+            pos_rec = "wait"
+        else:
+            tier = "D"
+            tier_label = "回避"
+            pos_rec = "avoid"
+
+        result["quality_tier"] = tier
+        result["tier_label"] = tier_label
+        result["position_recommendation"] = pos_rec
+
+        if tier in ("S", "A"):
+            result["confidence_adjust"] = 0.02
+        elif tier == "D":
+            result["confidence_adjust"] = -0.03
+
+        mmd_type_str = mmd.mmd_type.value if mmd.mmd_type else "unknown"
+        result["msg"] = (
+            f"📊 [{tier}] {tier_label} | "
+            f"综合评分{tier_score:.0f}/100 | "
+            f"建议操作:{pos_rec} | "
+            f"基准置信度{mmd.confidence:.0%}+调整{adjustment:+.0f}分"
+        )
 
         return result
     except Exception:

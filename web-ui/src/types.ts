@@ -1376,6 +1376,41 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V53: 趋势阶段识别与顺势确认（条件152）
+  trend_stage_follow_confirmation_v53?: {
+    trend_stage: string
+    trend_direction: string
+    is_following_trend: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V53: ATR自适应止损距离（条件153）
+  atr_adaptive_stop_v53?: {
+    atr_value: number
+    stop_distance_pct: number
+    stop_level: number
+    position_suggestion: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V53: 中枢突破力度验证（条件154）
+  zs_breakout_strength_v53?: {
+    breakout_strength: number
+    entry_bi_strength: number
+    strength_ratio: number
+    confirmed: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V53: 信号质量综合分层（条件155）
+  signal_quality_tier_v53?: {
+    quality_tier: string
+    tier_score: number
+    tier_label: string
+    position_recommendation: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

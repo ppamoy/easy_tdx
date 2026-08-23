@@ -943,6 +943,14 @@ async def diagnose_stock(
             "recent_extreme_price_v52": getattr(latest_mmd, "_recent_extreme_price_v52", None) if latest_mmd else None,
             # V52: 市场环境健康评分（条件151）
             "market_regime_score_v52": getattr(latest_mmd, "_market_regime_score_v52", None) if latest_mmd else None,
+            # V53: 趋势阶段识别与顺势确认（条件152）
+            "trend_stage_follow_confirmation_v53": getattr(latest_mmd, "_trend_stage_follow_confirmation_v53", None) if latest_mmd else None,
+            # V53: ATR自适应止损距离（条件153）
+            "atr_adaptive_stop_v53": getattr(latest_mmd, "_atr_adaptive_stop_v53", None) if latest_mmd else None,
+            # V53: 中枢突破力度验证（条件154）
+            "zs_breakout_strength_v53": getattr(latest_mmd, "_zs_breakout_strength_v53", None) if latest_mmd else None,
+            # V53: 信号质量综合分层（条件155）
+            "signal_quality_tier_v53": getattr(latest_mmd, "_signal_quality_tier_v53", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
