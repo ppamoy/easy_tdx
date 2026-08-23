@@ -1298,6 +1298,51 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V51: 突破笔力度二次确认增强（条件144）
+  breakout_bi_strength_enhanced_v51?: {
+    vol_ratio: number
+    price_ratio: number
+    macd_area_ratio: number
+    vol_ok: boolean
+    price_ok: boolean
+    macd_ok: boolean
+    score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V51: 回踩笔深度+时间综合验证（条件145）
+  pullback_depth_time_v51?: {
+    pullback_depth_pct: number
+    pullback_bars: number
+    depth_ok: boolean
+    time_ok: boolean
+    combined_status: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V51: 趋势强度综合评分（条件146）
+  trend_strength_composite_v51?: {
+    adx_value: number
+    adx_level: string
+    ma_slope: string
+    momentum_5d: number
+    total_score: number
+    trend_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V51: 交易决策建议（条件147）
+  trading_decision_v51?: {
+    entry_price: number
+    stop_loss: number
+    take_profit_1: number
+    take_profit_2: number
+    risk_reward_ratio: number
+    quality_tier: string
+    decision: string
+    atr: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

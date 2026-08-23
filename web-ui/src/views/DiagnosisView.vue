@@ -2526,6 +2526,160 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V51: 突破笔力度二次确认增强（条件144）-->
+        <div v-if="diagnosis.chanlun.breakout_bi_strength_enhanced_v51" class="metric-card v51-breakout">
+          <div class="card-title">⚡ 突破笔力度增强（V51·条件144）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">维度评分</span>
+              <span class="tag" :class="diagnosis.chanlun.breakout_bi_strength_enhanced_v51.score >= 2 ? 'tag-green' : diagnosis.chanlun.breakout_bi_strength_enhanced_v51.score >= 1 ? 'tag-yellow' : 'tag-red'">
+                {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.score }}/3 维度
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">成交量比</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.breakout_bi_strength_enhanced_v51.vol_ok ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.vol_ratio }} {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.vol_ok ? '✅' : '⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">价格比</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.breakout_bi_strength_enhanced_v51.price_ok ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.price_ratio }} {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.price_ok ? '✅' : '⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">MACD面积比</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.breakout_bi_strength_enhanced_v51.macd_ok ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.macd_area_ratio }} {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.macd_ok ? '✅' : '⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.breakout_bi_strength_enhanced_v51.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.breakout_bi_strength_enhanced_v51.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.breakout_bi_strength_enhanced_v51.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V51: 回踩笔深度+时间综合验证（条件145）-->
+        <div v-if="diagnosis.chanlun.pullback_depth_time_v51" class="metric-card v51-pullback">
+          <div class="card-title">📏 回踩深度+时间（V51·条件145）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">回踩深度</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.pullback_depth_time_v51.depth_ok ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.pullback_depth_time_v51.pullback_depth_pct }}% {{ diagnosis.chanlun.pullback_depth_time_v51.depth_ok ? '✅' : '⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">回踩时间</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.pullback_depth_time_v51.time_ok ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.pullback_depth_time_v51.pullback_bars }} 根K线 {{ diagnosis.chanlun.pullback_depth_time_v51.time_ok ? '✅' : '⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">综合状态</span>
+              <span class="tag" :class="diagnosis.chanlun.pullback_depth_time_v51.combined_status === 'strong' ? 'tag-green' : diagnosis.chanlun.pullback_depth_time_v51.combined_status === 'normal' ? 'tag-blue' : 'tag-red'">
+                {{ diagnosis.chanlun.pullback_depth_time_v51.combined_status === 'strong' ? '强确认 ✅' : diagnosis.chanlun.pullback_depth_time_v51.combined_status === 'normal' ? '中等' : '弱 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.pullback_depth_time_v51.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.pullback_depth_time_v51.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.pullback_depth_time_v51.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.pullback_depth_time_v51.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V51: 趋势强度综合评分（条件146）-->
+        <div v-if="diagnosis.chanlun.trend_strength_composite_v51" class="metric-card v51-trend">
+          <div class="card-title">📊 趋势强度综合评分（V51·条件146）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">综合评分</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_strength_composite_v51.total_score >= 3 ? 'tag-green' : diagnosis.chanlun.trend_strength_composite_v51.total_score >= 0 ? 'tag-yellow' : 'tag-red'">
+                {{ diagnosis.chanlun.trend_strength_composite_v51.total_score }} 分
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">ADX值</span>
+              <span class="kv-val">{{ diagnosis.chanlun.trend_strength_composite_v51.adx_value }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">MA斜率</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_strength_composite_v51.ma_slope === 'up' ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.trend_strength_composite_v51.ma_slope === 'up' ? '向上 ↑' : '向下 ↓' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">5日动量</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.trend_strength_composite_v51.momentum_5d >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.trend_strength_composite_v51.momentum_5d >= 0 ? '+' : '' }}{{ diagnosis.chanlun.trend_strength_composite_v51.momentum_5d }}%
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">趋势强度</span>
+              <span class="tag" :class="diagnosis.chanlun.trend_strength_composite_v51.trend_strength === 'strong' ? 'tag-green' : diagnosis.chanlun.trend_strength_composite_v51.trend_strength === 'medium' ? 'tag-blue' : diagnosis.chanlun.trend_strength_composite_v51.trend_strength === 'weak' ? 'tag-yellow' : 'tag-red'">
+                {{ diagnosis.chanlun.trend_strength_composite_v51.trend_strength === 'strong' ? '强趋势 ✅' : diagnosis.chanlun.trend_strength_composite_v51.trend_strength === 'medium' ? '中趋势' : diagnosis.chanlun.trend_strength_composite_v51.trend_strength === 'weak' ? '弱趋势' : '逆势 ⚠️' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.trend_strength_composite_v51.confidence_adjust >= 0 ? '#22c55e' : '#ef4444' }">
+                {{ diagnosis.chanlun.trend_strength_composite_v51.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.trend_strength_composite_v51.confidence_adjust * 100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.trend_strength_composite_v51.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V51: 交易决策建议（条件147）-->
+        <div v-if="diagnosis.chanlun.trading_decision_v51" class="metric-card v51-decision">
+          <div class="card-title">💰 交易决策建议（V51·条件147）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">决策建议</span>
+              <span class="tag" :class="diagnosis.chanlun.trading_decision_v51.decision.includes('buy') ? 'tag-green' : diagnosis.chanlun.trading_decision_v51.decision.includes('sell') ? 'tag-red' : 'tag-yellow'">
+                {{ diagnosis.chanlun.trading_decision_v51.decision.includes('aggressive') ? '🟢 积极' : diagnosis.chanlun.trading_decision_v51.decision.includes('cautious') ? '🟡 谨慎' : '⚪ 观望' }}
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">质量评级</span>
+              <span class="tag" :class="diagnosis.chanlun.trading_decision_v51.quality_tier === 'S' ? 'tag-green' : diagnosis.chanlun.trading_decision_v51.quality_tier === 'A' ? 'tag-blue' : diagnosis.chanlun.trading_decision_v51.quality_tier === 'B' ? 'tag-yellow' : 'tag-red'">
+                {{ diagnosis.chanlun.trading_decision_v51.quality_tier }}级
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">建议入场价</span>
+              <span class="kv-val">{{ diagnosis.chanlun.trading_decision_v51.entry_price }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">止损位</span>
+              <span class="kv-val" style="color:#ef4444">{{ diagnosis.chanlun.trading_decision_v51.stop_loss }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">止盈1 / 止盈2</span>
+              <span class="kv-val" style="color:#22c55e">{{ diagnosis.chanlun.trading_decision_v51.take_profit_1 }} / {{ diagnosis.chanlun.trading_decision_v51.take_profit_2 }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">风险收益比</span>
+              <span class="tag" :class="diagnosis.chanlun.trading_decision_v51.risk_reward_ratio >= 2 ? 'tag-green' : diagnosis.chanlun.trading_decision_v51.risk_reward_ratio >= 1.5 ? 'tag-blue' : 'tag-red'">
+                {{ diagnosis.chanlun.trading_decision_v51.risk_reward_ratio }}:1
+              </span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">ATR波动</span>
+              <span class="kv-val">{{ diagnosis.chanlun.trading_decision_v51.atr }}</span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.trading_decision_v51.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>

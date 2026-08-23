@@ -927,6 +927,14 @@ async def diagnose_stock(
             "level_recursive_validation_v50": getattr(latest_mmd, "_level_recursive_validation_v50", None) if latest_mmd else None,
             # V50: 市场情绪指标融合（条件143）
             "market_sentiment_fusion_v50": getattr(latest_mmd, "_market_sentiment_fusion_v50", None) if latest_mmd else None,
+            # V51: 突破笔力度二次确认增强（条件144）
+            "breakout_bi_strength_enhanced_v51": getattr(latest_mmd, "_breakout_bi_strength_enhanced_v51", None) if latest_mmd else None,
+            # V51: 回踩笔深度+时间综合验证（条件145）
+            "pullback_depth_time_v51": getattr(latest_mmd, "_pullback_depth_time_v51", None) if latest_mmd else None,
+            # V51: 趋势强度综合评分（条件146）
+            "trend_strength_composite_v51": getattr(latest_mmd, "_trend_strength_composite_v51", None) if latest_mmd else None,
+            # V51: 交易决策建议（条件147）
+            "trading_decision_v51": getattr(latest_mmd, "_trading_decision_v51", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

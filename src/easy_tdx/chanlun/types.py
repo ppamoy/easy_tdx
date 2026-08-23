@@ -368,6 +368,12 @@ class MMD:
     _level_recursive_validation_v50: dict[str, Any] | None = None  # 缠论级别递归验证（条件142）
     _market_sentiment_fusion_v50: dict[str, Any] | None = None  # 市场情绪指标融合（条件143）
 
+    # V51 enhancement fields (2026-08-25)
+    _breakout_bi_strength_enhanced_v51: dict[str, Any] | None = None  # 突破笔力度二次确认增强（条件144）
+    _pullback_depth_time_v51: dict[str, Any] | None = None  # 回踩笔深度+时间综合验证（条件145）
+    _trend_strength_composite_v51: dict[str, Any] | None = None  # 趋势强度综合评分（条件146）
+    _trading_decision_v51: dict[str, Any] | None = None  # 交易决策建议（条件147）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

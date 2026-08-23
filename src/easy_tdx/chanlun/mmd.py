@@ -11442,6 +11442,43 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V51 条件 144-147 ──
+
+        # 条件144：突破笔力度二次确认增强（Breakout Bi Strength Enhanced）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and bis is not None and zss is not None and volumes is not None:
+            try:
+                breakout_enhanced = _calc_breakout_bi_strength_enhanced_v51(mmd, bis, zss, volumes, macd_data)
+                mmd._breakout_bi_strength_enhanced_v51 = breakout_enhanced
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout_enhanced.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件145：回踩笔深度+时间综合验证（Pullback Depth+Time）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and volatility is not None:
+            try:
+                pullback_dt = _calc_pullback_depth_time_v51(mmd, closes, highs, lows, volatility)
+                mmd._pullback_depth_time_v51 = pullback_dt
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pullback_dt.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件146：趋势强度综合评分（Trend Strength Composite）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+            try:
+                trend_composite = _calc_trend_strength_composite_v51(mmd, closes, highs, lows, volumes)
+                mmd._trend_strength_composite_v51 = trend_composite
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_composite.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件147：交易决策建议（Trading Decision Recommendation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+            try:
+                decision = _calc_trading_decision_v51(mmd, closes, highs, lows, zss)
+                mmd._trading_decision_v51 = decision
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -14488,3 +14525,385 @@ def _calc_market_sentiment_fusion_v50(
         return result
     except Exception:
         return result
+
+
+# ── V51: 条件144-147 缠论模型精准度与决策帮助进一步提升 ────────────────────────────────
+
+def _calc_breakout_bi_strength_enhanced_v51(
+    mmd: MMD,
+    bis: list[Any],
+    zss: list[Any],
+    volumes: list[float],
+    macd_data: dict[str, list[float]] | None,
+) -> dict[str, Any]:
+    """突破笔力度二次确认增强（V51 条件144）。
+
+    在条件122基础上增加MACD柱状图验证：
+    - 成交量对比 >= 0.9 → 部分确认
+    - 价格幅度对比 >= 0.8 → 部分确认
+    - MACD柱面积对比 >= 0.8 → 动能确认
+    - 综合评分：3/3通过 → +4%，2/3通过 → +2%，1/3 → 0%，0/3 → -5%
+    """
+    result = {
+        "vol_ratio": 0.0,
+        "price_ratio": 0.0,
+        "macd_area_ratio": 0.0,
+        "vol_ok": False,
+        "price_ok": False,
+        "macd_ok": False,
+        "score": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not mmd.bi or not mmd.zs or not bis or len(bis) < 2:
+            return result
+
+        mmd_bi = mmd.bi
+        mmd_bi_idx = None
+        for i, bi in enumerate(bis):
+            if bi is mmd_bi:
+                mmd_bi_idx = i
+                break
+
+        if mmd_bi_idx is None or mmd_bi_idx < 1:
+            return result
+
+        entry_bi = bis[mmd_bi_idx - 1]
+        breakout_bi = mmd_bi
+
+        def bi_avg_volume(bi: Any) -> float:
+            start_idx = bi.start.k.k_index
+            end_idx = bi.end.k.k_index
+            if start_idx >= len(volumes) or end_idx >= len(volumes) or start_idx < 0:
+                return 0.0
+            vol_slice = volumes[start_idx:end_idx + 1]
+            return sum(vol_slice) / len(vol_slice) if vol_slice else 0.0
+
+        entry_vol = bi_avg_volume(entry_bi)
+        breakout_vol = bi_avg_volume(breakout_bi)
+        entry_range = entry_bi.end.k.high - entry_bi.start.k.low
+        breakout_range = breakout_bi.end.k.high - breakout_bi.start.k.low
+
+        result["vol_ratio"] = round(breakout_vol / entry_vol, 2) if entry_vol > 0 else 0.0
+        result["price_ratio"] = round(breakout_range / entry_range, 2) if entry_range > 0 else 0.0
+
+        vol_ok = breakout_vol >= entry_vol * 0.9
+        result["vol_ok"] = vol_ok
+
+        price_ok = breakout_range >= entry_range * 0.8
+        result["price_ok"] = price_ok
+
+        # MACD柱状图面积对比
+        macd_ok = False
+        if macd_data and "hist" in macd_data and len(macd_data["hist"]) >= 20:
+            entry_start = max(0, entry_bi.start.k.k_index)
+            entry_end = min(len(macd_data["hist"]) - 1, entry_bi.end.k.k_index)
+            breakout_start = max(0, breakout_bi.start.k.k_index)
+            breakout_end = min(len(macd_data["hist"]) - 1, breakout_bi.end.k.k_index)
+
+            def macd_area(start: int, end: int) -> float:
+                if end <= start or start < 0 or end >= len(macd_data["hist"]):
+                    return 0.0
+                hist = macd_data["hist"][start:end + 1]
+                return sum(abs(h) for h in hist)
+
+            entry_area = macd_area(entry_start, entry_end)
+            breakout_area = macd_area(breakout_start, breakout_end)
+            result["macd_area_ratio"] = round(breakout_area / entry_area, 2) if entry_area > 0 else 0.0
+
+            is_buy = "buy" in mmd.mmd_type.value
+            if is_buy:
+                macd_ok = breakout_area >= entry_area * 0.8
+            else:
+                macd_ok = breakout_area >= entry_area * 0.8
+
+        result["macd_ok"] = macd_ok
+
+        score = sum([vol_ok, price_ok, macd_ok])
+        result["score"] = score
+
+        if score == 3:
+            result["confidence_adjust"] = 0.04
+            result["msg"] = "突破笔力度充分确认（量价MACD三维度一致）"
+        elif score == 2:
+            result["confidence_adjust"] = 0.02
+            result["msg"] = "突破笔力度部分确认（2/3维度一致）"
+        elif score == 1:
+            result["confidence_adjust"] = 0.0
+            result["msg"] = "突破笔力度一般确认（仅1/3维度一致）"
+        else:
+            result["confidence_adjust"] = -0.05
+            result["msg"] = "⚠️ 突破笔力度不足，警惕假突破"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_pullback_depth_time_v51(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    volatility: float | None,
+) -> dict[str, Any]:
+    """回踩笔深度+时间综合验证（V51 条件145）。
+
+    结合回踩深度和回踩时间两个维度：
+    - 回踩深度：回踩笔相对中枢ZD/ZG的距离，不超过3%
+    - 回踩时间：基于波动率动态调整上限（高波动20根/正常15根/低波动10根）
+    """
+    result = {
+        "pullback_depth_pct": 0.0,
+        "pullback_bars": 0,
+        "depth_ok": False,
+        "time_ok": False,
+        "combined_status": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not mmd.bi or not mmd.zs or not closes or not highs or not lows:
+            return result
+
+        zs = mmd.zs
+        bi = mmd.bi
+        is_buy = "buy" in mmd.mmd_type.value
+
+        zs_zd = zs.zd
+        bi_low = bi.low
+        mid_price = (zs.zg + zs.zd) / 2
+
+        if is_buy:
+            depth_pct = (zs_zd - bi_low) / mid_price if mid_price > 0 else 0.0
+            depth_ok = depth_pct <= 0.03
+        else:
+            depth_pct = (bi.high - zs.zg) / mid_price if mid_price > 0 else 0.0
+            depth_ok = depth_pct <= 0.03
+
+        result["pullback_depth_pct"] = round(depth_pct * 100, 2)
+        result["depth_ok"] = depth_ok
+
+        bi_end_idx = bi.end.k.k_index
+        pullback_bars = len(closes) - 1 - bi_end_idx
+        result["pullback_bars"] = pullback_bars
+
+        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+        if vol > 0.04:
+            max_pullback_bars = 20
+        elif vol > 0.02:
+            max_pullback_bars = 15
+        else:
+            max_pullback_bars = 10
+
+        time_ok = pullback_bars <= max_pullback_bars
+        result["time_ok"] = time_ok
+
+        if depth_ok and time_ok:
+            result["combined_status"] = "strong"
+            result["confidence_adjust"] = 0.03
+            result["msg"] = f"回踩深度{depth_pct*100:.1f}%在安全范围，时间{pullback_bars}根K线符合预期"
+        elif depth_ok or time_ok:
+            result["combined_status"] = "normal"
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"回踩深度{'符合' if depth_ok else '偏深'}，时间{'符合' if time_ok else '偏长'}"
+        else:
+            result["combined_status"] = "weak"
+            result["confidence_adjust"] = -0.04
+            result["msg"] = f"回踩深度{depth_pct*100:.1f}%过大且时间{pullback_bars}根K线过长，信号质量差"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_trend_strength_composite_v51(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """趋势强度综合评分（V51 条件146）。
+
+    综合ADX、MA斜率、动量三个维度评估趋势强度：
+    - ADX >= 25：+3分，20-25：+1分，<20：-1分
+    - MA斜率与信号一致：+2分，相反：-2分
+    - 5日动量与信号一致：+2分，相反：-2分
+    - 总分>=5：强趋势(+4%)，3-4：中等(+2%)，<3：趋势不明(0%)，<0：逆势(-5%)
+    """
+    result = {
+        "adx_value": 0.0,
+        "adx_level": "unknown",
+        "ma_slope": "unknown",
+        "momentum_5d": 0.0,
+        "total_score": 0,
+        "trend_strength": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        from easy_tdx.MyTT import MA
+
+        adx_val, adx_level = _calc_adx_strength(closes, highs, lows, len(closes) - 1)
+        result["adx_value"] = round(adx_val, 1)
+        result["adx_level"] = adx_level
+
+        adx_score = 3 if adx_val >= 25 else (1 if adx_val >= 20 else -1)
+
+        ma20 = MA(closes, 20)
+        if len(ma20) >= 2:
+            ma_slope = "up" if ma20[-1] > ma20[-2] else "down"
+            result["ma_slope"] = ma_slope
+            ma_score = 2 if (ma_slope == "up" and is_buy) or (ma_slope == "down" and not is_buy) else -2
+        else:
+            ma_score = 0
+
+        if len(closes) >= 6:
+            momentum_5d = (closes[-1] - closes[-6]) / closes[-6] if closes[-6] > 0 else 0.0
+            result["momentum_5d"] = round(momentum_5d * 100, 2)
+            mom_score = 2 if (momentum_5d > 0 and is_buy) or (momentum_5d < 0 and not is_buy) else -2
+        else:
+            mom_score = 0
+
+        total_score = adx_score + ma_score + mom_score
+        result["total_score"] = total_score
+
+        if total_score >= 5:
+            trend_strength = "strong"
+            confidence_adjust = 0.04
+            msg = f"趋势强度综合评分{total_score}分（ADX={adx_val:.1f}强趋势+方向一致），强确认"
+        elif total_score >= 3:
+            trend_strength = "medium"
+            confidence_adjust = 0.02
+            msg = f"趋势强度综合评分{total_score}分（ADX={adx_val:.1f}，MA{ma_slope}，动量{momentum_5d*100:.1f}%），中等确认"
+        elif total_score >= 0:
+            trend_strength = "weak"
+            confidence_adjust = 0.0
+            msg = f"趋势强度综合评分{total_score}分（ADX={adx_val:.1f}，方向中性）"
+        else:
+            trend_strength = "contrarian"
+            confidence_adjust = -0.05
+            msg = f"⚠️ 趋势强度综合评分{total_score}分（ADX={adx_val:.1f}弱趋势+方向相反），逆势需谨慎"
+
+        result["trend_strength"] = trend_strength
+        result["confidence_adjust"] = confidence_adjust
+        result["msg"] = msg
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_trading_decision_v51(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    zss: list[Any],
+) -> dict[str, Any]:
+    """交易决策建议（V51 条件147）。
+
+    提供完整交易决策参考：
+    - 建议入场价、止损位、两级止盈位
+    - 风险收益比（RRR）
+    - 质量评级（S/A/B/C）
+    - 综合决策建议（买入/观望/卖出）
+    """
+    result = {
+        "entry_price": 0.0,
+        "stop_loss": 0.0,
+        "take_profit_1": 0.0,
+        "take_profit_2": 0.0,
+        "risk_reward_ratio": 0.0,
+        "quality_tier": "C",
+        "decision": "hold",
+        "atr": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 20:
+            return result
+
+        latest_price = closes[-1]
+        is_buy = "buy" in mmd.mmd_type.value
+
+        atr = _calc_atr(closes, highs, lows, len(closes) - 1, period=14)
+        result["atr"] = round(atr, 2)
+
+        if is_buy:
+            entry_price = latest_price
+            stop_loss = entry_price - 2 * atr
+            if mmd.zs:
+                zs_height = mmd.zs.zg - mmd.zs.zd
+                tp1 = entry_price + zs_height * 0.5
+                tp2 = entry_price + zs_height * 1.0
+            else:
+                tp1 = entry_price + atr * 3
+                tp2 = entry_price + atr * 5
+        else:
+            entry_price = latest_price
+            stop_loss = entry_price + 2 * atr
+            if mmd.zs:
+                zs_height = mmd.zs.zg - mmd.zs.zd
+                tp1 = entry_price - zs_height * 0.5
+                tp2 = entry_price - zs_height * 1.0
+            else:
+                tp1 = entry_price - atr * 3
+                tp2 = entry_price - atr * 5
+
+        result["entry_price"] = round(entry_price, 2)
+        result["stop_loss"] = round(stop_loss, 2)
+        result["take_profit_1"] = round(tp1, 2)
+        result["take_profit_2"] = round(tp2, 2)
+
+        risk = abs(entry_price - stop_loss)
+        reward = abs(tp1 - entry_price)
+        rrr = reward / risk if risk > 0 else 0.0
+        result["risk_reward_ratio"] = round(rrr, 2)
+
+        if rrr >= 2.5:
+            quality_tier = "S"
+        elif rrr >= 2.0:
+            quality_tier = "A"
+        elif rrr >= 1.5:
+            quality_tier = "B"
+        else:
+            quality_tier = "C"
+        result["quality_tier"] = quality_tier
+
+        if is_buy:
+            if quality_tier in ("S", "A") and mmd.confidence >= 0.6:
+                decision = "buy_aggressive"
+                msg = f"建议买入（{quality_tier}级，RRR={rrr}:1，置信度{mmd.confidence:.0%}），止损{stop_loss:.2f}，止盈1:{tp1:.2f}，止盈2:{tp2:.2f}"
+            elif quality_tier == "B" and mmd.confidence >= 0.5:
+                decision = "buy_cautious"
+                msg = f"谨慎买入（{quality_tier}级，RRR={rrr}:1，置信度{mmd.confidence:.0%}），严格止损{stop_loss:.2f}"
+            else:
+                decision = "wait"
+                msg = f"观望（{quality_tier}级，RRR={rrr}:1，置信度{mmd.confidence:.0%}，风险收益比不足）"
+        else:
+            if quality_tier in ("S", "A") and mmd.confidence >= 0.6:
+                decision = "sell_aggressive"
+                msg = f"建议卖出（{quality_tier}级，RRR={rrr}:1，置信度{mmd.confidence:.0%}），止损{stop_loss:.2f}，止盈1:{tp1:.2f}"
+            elif quality_tier == "B" and mmd.confidence >= 0.5:
+                decision = "sell_cautious"
+                msg = f"谨慎卖出（{quality_tier}级，RRR={rrr}:1，置信度{mmd.confidence:.0%}）"
+            else:
+                decision = "wait"
+                msg = f"观望（{quality_tier}级，RRR={rrr}:1，置信度{mmd.confidence:.0%}）"
+
+        result["decision"] = decision
+        result["msg"] = msg
+
+        return result
+    except Exception:
+        return result
+
+
+
