@@ -1221,6 +1221,55 @@ export interface DiagnosisChanlun {
   } | null
   // V47: 置信度动态校准（条件133）
   confidence_v47_calibrated?: number | null
+  // V48: 量价背离二次确认（条件134）
+  volume_price_divergence_secondary_v48?: {
+    confirmed: boolean
+    divergence_pct: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V48: 趋势强度加权（条件135）
+  trend_strength_weighting?: {
+    adx_value: number
+    adx_level: string
+    ma_alignment: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V48: 动态风险收益比（条件136）
+  dynamic_risk_reward_ratio?: {
+    entry_price: number
+    stop_loss: number
+    take_profit_1: number
+    risk_reward_ratio: number
+    quality_tier: string
+    atr: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V49: 突破力度二次验证（条件137）
+  breakout_strength_revalidation_v49?: {
+    confirmed: boolean
+    hist_area_ratio: number
+    break_force_before: number
+    break_force_after: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V49: 回踩结构完整性（条件138）
+  pullback_structure_integrity_v49?: {
+    confirmed: boolean
+    structure_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V49: 中枢级别权重（条件139）
+  zhongshu_level_weight_v49?: {
+    level: string
+    line_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

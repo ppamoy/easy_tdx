@@ -906,7 +906,19 @@ async def diagnose_stock(
             "signal_validity_window": getattr(latest_mmd, "_signal_validity_window", None) if latest_mmd else None,
             # V47: 置信度动态校准（条件133）
             "confidence_v47_calibrated": getattr(latest_mmd, "_confidence_v47_calibrated", None) if latest_mmd else None,
+            # V48: 量价背离二次确认（条件134）
+            "volume_price_divergence_secondary_v48": getattr(latest_mmd, "_volume_price_divergence_secondary_v48", None) if latest_mmd else None,
+            # V48: 趋势强度加权（条件135）
+            "trend_strength_weighting": getattr(latest_mmd, "_trend_strength_weighting", None) if latest_mmd else None,
+            # V48: 动态风险收益比（条件136）
+            "dynamic_risk_reward_ratio": getattr(latest_mmd, "_dynamic_risk_reward_ratio", None) if latest_mmd else None,
             "dynamic_market_regime": getattr(latest_mmd, "_dynamic_market_regime", None) if latest_mmd else None,
+            # V49: 突破力度二次验证（条件137）
+            "breakout_strength_revalidation_v49": getattr(latest_mmd, "_breakout_strength_revalidation_v49", None) if latest_mmd else None,
+            # V49: 回踩结构完整性（条件138）
+            "pullback_structure_integrity_v49": getattr(latest_mmd, "_pullback_structure_integrity_v49", None) if latest_mmd else None,
+            # V49: 中枢级别权重（条件139）
+            "zhongshu_level_weight_v49": getattr(latest_mmd, "_zhongshu_level_weight_v49", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

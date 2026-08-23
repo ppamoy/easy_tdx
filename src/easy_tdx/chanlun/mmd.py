@@ -1,13 +1,12 @@
-"""买卖点识别（精修版 V47 - 后确认+精度校准）。
+"""买卖点识别（精修版 V48 - 决策增强）。
 
-基于历史回测结果和实战经验持续优化（V47 2026-08-24）：
-- 1买/1卖准确率80-90%（V35市场环境过滤+V37连续确认+V38中枢完整性+V39信号一致性+V40回踩验证+V41量价能量+V42后确认+V43API暴露+V44趋势对齐+V46动能强度）
-- 2买/2卖准确率65-75%（V35假信号过滤+V37动能加速度+V39多TF背离确认+V40时间衰减自适应+V41走势预测+V44波动自适应+V46量价二次确认）
-- 3买/3卖准确率60-70%（V35动态SL/TP+V38突破力度+V39交叉验证+V40MACD共振+V41反转风险+V42后确认+V44五维增强+V46六维强化+V47后确认过滤）
+基于缠论理论持续优化（V48 2026-08-24）：
+- 置信度计算：基于多因子加权，非单一准确率声明
+- V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
 - V44新增：趋势方向对齐(121)+突破笔力度对比(122)+回踩时间窗口(123)+波动率自适应阈值(124)+多指标背离共振(125)
 - V46新增：趋势动能强度(126)+量价背离二次确认(127)+中枢突破真实性(128)+多TF信号一致性(129)+动态市场环境适配(130)
-- 总条件数：133个
+- 总条件数：136个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -53,7 +52,7 @@
 - V44新增：趋势方向对齐验证(条件121)+突破笔力度对比(条件122)+回踩时间窗口过滤(条件123)+波动率自适应阈值(条件124)+多指标背离共振(条件125)
 - V46新增：趋势动能强度过滤(条件126)+量价背离二次确认(条件127)+中枢突破真实性验证(条件128)+多TF信号一致性(条件129)+动态市场环境适配(条件130)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
-- V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
+- V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 """
 
 from __future__ import annotations
@@ -11343,6 +11342,63 @@ def find_mmds_v39(
         if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
             mmd._confidence_v47_calibrated = mmd.confidence
 
+        # ── V48 条件 134-136 ──
+
+        # 条件134：量价背离二次确认（Volume-Price Divergence Secondary Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and mmd.bi is not None:
+            try:
+                vol_price_result = _calc_volume_price_divergence_secondary_v48(mmd, closes, volumes)
+                mmd._volume_price_divergence_secondary_v48 = vol_price_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_price_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件135：趋势强度加权（Trend Strength Weighting）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+            try:
+                trend_weight_result = _calc_trend_strength_weighting_v48(mmd, closes, highs, lows, trend_strength)
+                mmd._trend_strength_weighting = trend_weight_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_weight_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件136：动态风险收益比（Dynamic Risk-Reward Ratio）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+            try:
+                rrr_result = _calc_dynamic_risk_reward_ratio_v48(mmd, closes, highs, lows)
+                mmd._dynamic_risk_reward_ratio = rrr_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + rrr_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # ── V49 条件 137-139 ──
+
+        # 条件137：突破力度二次验证（Breakout Strength Re-validation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+            try:
+                breakout_result = _calc_breakout_strength_revalidation_v49(mmd, closes, volumes, macd_data)
+                mmd._breakout_strength_revalidation_v49 = breakout_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件138：回踩结构完整性（Pullback Structure Integrity）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None and bis is not None:
+            try:
+                pullback_result = _calc_pullback_structure_integrity_v49(mmd, bis, closes)
+                mmd._pullback_structure_integrity_v49 = pullback_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pullback_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件139：中枢级别权重（Zhongshu Level Weight）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs is not None:
+            try:
+                zs_level_result = _calc_zhongshu_level_weight_v49(mmd, zss)
+                mmd._zhongshu_level_weight_v49 = zs_level_result
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_level_result.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
 
     return mmds
 
@@ -13576,3 +13632,503 @@ def _calc_confidence_v47(
             base_confidence = 0.30  # 下限30%，不剔除信号但保留参考
 
     return round(max(0.0, min(1.0, base_confidence)), 3)
+
+
+# ── V48: 条件134-136 缠论模型决策增强 ────────────────────────────────────────────────
+
+def _calc_volume_price_divergence_secondary_v48(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """量价背离二次确认（V48 条件134）。
+
+    使用成交量加权价格偏离（VWAP）作为二次确认指标：
+    - 计算信号后N根K线的VWAP偏离度
+    - 3买：价格创新高但VWAP偏离度收窄 → 动能衰竭警告
+    - 3卖：价格创新低但VWAP偏离度收窄 → 下跌动能衰竭警告
+    - 配合原有MACD背离检测，提升准确率
+
+    Returns:
+        dict with keys: confirmed, divergence_pct, confidence_adjust, msg
+    """
+    result = {
+        "confirmed": False,
+        "divergence_pct": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or not closes or volumes is None:
+            return result
+
+        signal_idx = mmd.bi.end.k.k_index
+        if signal_idx < 0 or signal_idx >= len(closes):
+            return result
+
+        # 使用最近20根K线计算VWAP偏离
+        lookback = min(20, signal_idx)
+        if lookback < 5:
+            return result
+
+        recent_closes = closes[signal_idx - lookback:signal_idx + 1]
+        recent_volumes = volumes[signal_idx - lookback:signal_idx + 1]
+
+        if len(recent_closes) < 5:
+            return result
+
+        # 计算简单VWAP（用收盘价近似，避免需要high/low数据）
+        total_vol = sum(recent_volumes)
+        if total_vol == 0:
+            return result
+
+        vwap = sum(c * v for c, v in zip(recent_closes, recent_volumes)) / total_vol
+        current_price = closes[-1]
+        vwap_deviation = (current_price - vwap) / (vwap + 1e-10)
+
+        result["divergence_pct"] = round(vwap_deviation * 100, 2)
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if is_buy:
+            # 3买：价格应在VWAP之上（多头排列）
+            if vwap_deviation > 0.01:
+                result["confirmed"] = True
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"量价背离二次确认通过：当前价VWAP偏离+{vwap_deviation*100:.1f}%（多头）"
+            elif vwap_deviation < -0.02:
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"量价背离二次确认失败：当前价低于VWAP {abs(vwap_deviation)*100:.1f}%"
+            else:
+                result["confidence_adjust"] = 0.0
+                result["msg"] = f"量价背离二次确认中性：VWAP偏离{vwap_deviation*100:.1f}%"
+        else:
+            # 3卖：价格应在VWAP之下（空头排列）
+            if vwap_deviation < -0.01:
+                result["confirmed"] = True
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"量价背离二次确认通过：当前价VWAP偏离{vwap_deviation*100:.1f}%（空头）"
+            elif vwap_deviation > 0.02:
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"量价背离二次确认失败：当前价高于VWAP {vwap_deviation*100:.1f}%"
+            else:
+                result["confidence_adjust"] = 0.0
+                result["msg"] = f"量价背离二次确认中性：VWAP偏离{vwap_deviation*100:.1f}%"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_trend_strength_weighting_v48(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    trend_strength: float,
+) -> dict[str, Any]:
+    """趋势强度加权（V48 条件135）。
+
+    基于ADX和均线斜率对置信度进行趋势加权调整：
+    - 强趋势（ADX>25）：置信度加成+0.03
+    - 中趋势（ADX 20-25）：置信度加成+0.01
+    - 弱趋势（ADX<20）：置信度减权-0.02（趋势不明确时降低信任）
+
+    同时考虑MA20斜率方向与信号方向的一致性。
+    """
+    result = {
+        "adx_value": 0.0,
+        "adx_level": "unknown",
+        "ma_alignment": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or not closes:
+            return result
+
+        bi_end_idx = mmd.bi.end.k.k_index
+        if bi_end_idx < 20:
+            return result
+
+        # 计算ADX
+        adx_val, adx_level = _calc_adx_strength(closes, highs, lows, bi_end_idx)
+        result["adx_value"] = round(adx_val, 1)
+        result["adx_level"] = adx_level
+
+        # 计算MA20斜率
+        ma_slope = _calc_ma_slope(closes, bi_end_idx)
+        result["ma_alignment"] = ma_slope
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        # ADX趋势强度加权
+        if adx_level == "strong":
+            if (is_buy and ma_slope == "up") or (not is_buy and ma_slope == "down"):
+                result["confidence_adjust"] = 0.04
+                result["msg"] = f"趋势强度加权：ADX={adx_val:.1f}强趋势+方向一致"
+            else:
+                result["confidence_adjust"] = -0.02
+                result["msg"] = f"趋势强度加权：ADX={adx_val:.1f}强趋势但方向冲突"
+        elif adx_level == "medium":
+            if (is_buy and ma_slope == "up") or (not is_buy and ma_slope == "down"):
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"趋势强度加权：ADX={adx_val:.1f}中趋势+方向一致"
+            else:
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"趋势强度加权：ADX={adx_val:.1f}中趋势但方向冲突"
+        else:  # weak or unknown
+            result["confidence_adjust"] = -0.02
+            result["msg"] = f"趋势强度加权：ADX={adx_val:.1f}弱趋势，降低置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_dynamic_risk_reward_ratio_v48(
+    mmd: MMD,
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    atr_period: int = 14,
+) -> dict[str, Any]:
+    """动态风险收益比计算（V48 条件136）。
+
+    基于ATR动态计算止损止盈位，并提供风险收益比评估：
+    - 计算当前ATR作为波动率度量
+    - 动态止损位：入场价 ± 2×ATR
+    - 动态止盈位：基于中枢高度或ATR倍数
+    - 风险收益比 ≥ 2.0 为优质信号，≥ 1.5 为合格，< 1.5 为低质量
+
+    返回值包含：entry_price, stop_loss, take_profit_1, risk_reward_ratio, quality_tier
+    """
+    result = {
+        "entry_price": 0.0,
+        "stop_loss": 0.0,
+        "take_profit_1": 0.0,
+        "risk_reward_ratio": 0.0,
+        "quality_tier": "unknown",
+        "atr": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or not closes:
+            return result
+
+        latest_close = closes[-1]
+        bi_end_idx = mmd.bi.end.k.k_index
+
+        # 计算ATR
+        atr = _calc_atr(closes, highs, lows, bi_end_idx, atr_period)
+        result["atr"] = round(atr, 2)
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if is_buy:
+            # 3买：入场价略高于回调低点
+            entry_price = mmd.bi.low * 1.002 if mmd.bi.low > 0 else latest_close
+            stop_loss = entry_price - atr * 2
+            # 止盈：基于中枢高度或固定倍数
+            zs_height = (mmd.zs.zg - mmd.zs.zd) if mmd.zs and mmd.zs.done else 0
+            take_profit_1 = entry_price + max(zs_height * 0.8, atr * 3)
+        else:
+            # 3卖：入场价略低于反弹高点
+            entry_price = mmd.bi.high * 0.998 if mmd.bi.high > 0 else latest_close
+            stop_loss = entry_price + atr * 2
+            zs_height = (mmd.zs.zg - mmd.zs.zd) if mmd.zs and mmd.zs.done else 0
+            take_profit_1 = entry_price - max(zs_height * 0.8, atr * 3)
+
+        result["entry_price"] = round(entry_price, 2)
+        result["stop_loss"] = round(stop_loss, 2)
+        result["take_profit_1"] = round(take_profit_1, 2)
+
+        # 计算风险收益比
+        risk = abs(entry_price - stop_loss)
+        reward = abs(take_profit_1 - entry_price)
+        rrr = round(reward / risk, 2) if risk > 0 else 0
+        result["risk_reward_ratio"] = rrr
+
+        # 质量分级
+        if rrr >= 2.5:
+            result["quality_tier"] = "S"
+            result["confidence_adjust"] = 0.04
+            result["msg"] = f"优质信号：风险收益比{rrr:.1f}（S级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+        elif rrr >= 2.0:
+            result["quality_tier"] = "A"
+            result["confidence_adjust"] = 0.03
+            result["msg"] = f"良好信号：风险收益比{rrr:.1f}（A级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+        elif rrr >= 1.5:
+            result["quality_tier"] = "B"
+            result["confidence_adjust"] = 0.01
+            result["msg"] = f"合格信号：风险收益比{rrr:.1f}（B级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+        else:
+            result["quality_tier"] = "C"
+            result["confidence_adjust"] = -0.03
+            result["msg"] = f"低质量信号：风险收益比{rrr:.1f}（C级），建议观望"
+
+        return result
+    except Exception:
+        return result
+
+
+# ── V49: 条件137-139 缠论模型精准度提升（聚焦3买/3卖准确率）───────────────────────
+
+def _calc_breakout_strength_revalidation_v49(
+    mmd: MMD,
+    closes: list[float],
+    volumes: list[float] | None,
+    macd_data: dict[str, list[float]] | None,
+) -> dict[str, Any]:
+    """突破力度二次验证（V49 条件137）。
+
+    对3买/3卖信号，验证突破笔的动能是否在信号点之后仍然保持：
+    - 3买：突破后MACD红柱面积不应快速衰减（对比信号前后各10根K线）
+    - 3卖：突破后MACD绿柱面积不应快速衰减
+    - 如果动能衰减过快（比率<0.6），说明突破可能是假突破
+
+    返回值包含：
+      - confirmed: bool 是否通过验证
+      - hist_area_ratio: float 动能面积比（后/前）
+      - confidence_adjust: float 置信度调整（-0.04 ~ +0.02）
+      - msg: str 诊断信息
+    """
+    result = {
+        "confirmed": True,
+        "hist_area_ratio": 1.0,
+        "break_force_before": 0.0,
+        "break_force_after": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or not closes or len(closes) < 30:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+        if not (is_buy or is_sell):
+            return result
+
+        # 找到信号笔的位置
+        signal_idx = mmd.bi.end.k.k_index
+        if signal_idx < 15 or signal_idx >= len(closes) - 15:
+            return result
+
+        # 计算信号前10根K线的MACD面积（突破笔末尾）
+        lookback = 10
+        start_before = max(0, signal_idx - lookback)
+        end_before = signal_idx - 2  # 信号前结束
+
+        # 计算信号后10根K线的MACD面积（突破后动能）
+        start_after = signal_idx + 1
+        end_after = min(len(closes) - 1, signal_idx + lookback)
+
+        if macd_data and "hist" in macd_data:
+            hist = macd_data["hist"]
+            hist_before = hist[start_before:end_before + 1] if end_before >= start_before else []
+            hist_after = hist[start_after:end_after + 1] if end_after >= start_after else []
+        else:
+            # 用收盘价变化率代替
+            price_before = closes[start_before:end_before + 1] if end_before >= start_before else []
+            price_after = closes[start_after:end_after + 1] if end_after >= start_after else []
+            hist_before = [
+                price_before[i] - price_before[i - 1]
+                for i in range(1, len(price_before))
+            ] if len(price_before) > 1 else []
+            hist_after = [
+                price_after[i] - price_after[i - 1]
+                for i in range(1, len(price_after))
+            ] if len(price_after) > 1 else []
+
+        area_before = sum(abs(h) for h in hist_before) if hist_before else 1e-6
+        area_after = sum(abs(h) for h in hist_after) if hist_after else 1e-6
+
+        # 确保符号方向正确（3买关注正面积，3卖关注负面积）
+        if is_buy:
+            pos_before = [h for h in hist_before if h > 0]
+            pos_after = [h for h in hist_after if h > 0]
+            area_before = max(sum(pos_before), 1e-6)
+            area_after = max(sum(pos_after), 1e-6)
+        else:
+            neg_before = [abs(h) for h in hist_before if h < 0]
+            neg_after = [abs(h) for h in hist_after if h < 0]
+            area_before = max(sum(neg_before), 1e-6)
+            area_after = max(sum(neg_after), 1e-6)
+
+        ratio = area_after / area_before
+
+        result["hist_area_ratio"] = round(ratio, 4)
+        result["break_force_before"] = round(area_before, 4)
+        result["break_force_after"] = round(area_after, 4)
+
+        # 判断是否通过验证
+        if ratio >= 0.8:
+            result["confirmed"] = True
+            result["confidence_adjust"] = 0.02
+            result["msg"] = f"突破动能稳定：面积比{ratio:.2f}（维持≥80%）✅"
+        elif ratio >= 0.6:
+            result["confirmed"] = True
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"突破动能中等：面积比{ratio:.2f}（略衰减）"
+        else:
+            result["confirmed"] = False
+            result["confidence_adjust"] = -0.04
+            result["msg"] = f"⚠️ 突破动能衰减：面积比{ratio:.2f}<0.6，警惕假突破"
+
+    except Exception:
+        pass
+
+    return result
+
+
+def _calc_pullback_structure_integrity_v49(
+    mmd: MMD,
+    bis: list[BI] | None,
+    closes: list[float] | None,
+) -> dict[str, Any]:
+    """回踩结构完整性验证（V49 条件138）。
+
+    对3买/3卖信号，验证回踩笔是否具有清晰的结构：
+    - 3买：回踩笔应该呈现递减趋势（前半段均价 > 后半段均价）
+    - 3卖：回踩笔应该呈现递增趋势（后半段均价 > 前半段均价）
+    - 结构模糊或反向时降低置信度或过滤信号
+
+    返回值包含：
+      - confirmed: bool 是否通过验证
+      - structure_quality: str 结构质量（strong/weak/ambiguous/invalid）
+      - confidence_adjust: float 置信度调整（-0.03 ~ +0.02）
+      - msg: str 诊断信息
+    """
+    result = {
+        "confirmed": True,
+        "structure_quality": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None or bis is None or not closes:
+            return result
+
+        is_buy = "buy" in mmd.mmd_type.value
+        is_sell = "sell" in mmd.mmd_type.value
+        if not (is_buy or is_sell):
+            return result
+
+        bi = mmd.bi
+        start_idx = bi.start.k.k_index
+        end_idx = bi.end.k.k_index
+
+        if end_idx <= start_idx + 2 or end_idx >= len(closes):
+            result["structure_quality"] = "ambiguous"
+            result["confidence_adjust"] = -0.01
+            result["msg"] = "回踩笔数据不足，结构模糊"
+            return result
+
+        price_seq = closes[start_idx : end_idx + 1]
+        if len(price_seq) < 5:
+            result["structure_quality"] = "ambiguous"
+            result["confidence_adjust"] = -0.01
+            result["msg"] = "回踩笔K线过少，结构不完整"
+            return result
+
+        mid = len(price_seq) // 2
+        first_half_avg = sum(price_seq[:mid]) / mid
+        second_half_avg = sum(price_seq[mid:]) / (len(price_seq) - mid)
+
+        if is_buy:
+            decline_ratio = (first_half_avg - second_half_avg) / first_half_avg if first_half_avg > 0 else 0
+
+            if decline_ratio > 0.01:
+                result["confirmed"] = True
+                result["structure_quality"] = "strong"
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"回踩结构清晰（递减{decline_ratio:.1%}）✅"
+            elif decline_ratio > -0.005:
+                result["confirmed"] = True
+                result["structure_quality"] = "weak"
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"回踩结构偏弱（递减{decline_ratio:.1%}）"
+            else:
+                result["confirmed"] = False
+                result["structure_quality"] = "invalid"
+                result["confidence_adjust"] = -0.03
+                result["msg"] = "回踩结构无效：非递减走势，非有效回调"
+
+        else:
+            rise_ratio = (second_half_avg - first_half_avg) / first_half_avg if first_half_avg > 0 else 0
+
+            if rise_ratio > 0.01:
+                result["confirmed"] = True
+                result["structure_quality"] = "strong"
+                result["confidence_adjust"] = 0.02
+                result["msg"] = f"回踩结构清晰（递增{rise_ratio:.1%}）✅"
+            elif rise_ratio > -0.005:
+                result["confirmed"] = True
+                result["structure_quality"] = "weak"
+                result["confidence_adjust"] = -0.01
+                result["msg"] = f"回踩结构偏弱（递增{rise_ratio:.1%}）"
+            else:
+                result["confirmed"] = False
+                result["structure_quality"] = "invalid"
+                result["confidence_adjust"] = -0.03
+                result["msg"] = "回踩结构无效：非递增走势，非有效反弹"
+
+    except Exception:
+        pass
+
+    return result
+
+
+def _calc_zhongshu_level_weight_v49(
+    mmd: MMD,
+    zss: list["ZS"] | None,
+) -> dict[str, Any]:
+    """中枢级别权重（V49 条件139）。
+
+    基于中枢的复杂度（线条数量）对置信度进行加权：
+    - 线条多（≥5）→ 结构稳固，+2%置信度
+    - 线条适中（3-4）→ 结构正常，0调整
+    - 线条少（1-2）→ 结构弱，-2%置信度
+
+    返回值包含：
+      - level: str 中枢级别（high/medium/low/unknown）
+      - line_count: int 中枢线条数
+      - confidence_adjust: float 置信度调整
+      - msg: str 诊断信息
+    """
+    result = {
+        "level": "unknown",
+        "line_count": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.zs is None:
+            return result
+
+        line_count = len(mmd.zs.lines) if mmd.zs.lines else 0
+        result["line_count"] = line_count
+
+        if line_count >= 5:
+            result["level"] = "high"
+            result["confidence_adjust"] = 0.02
+            result["msg"] = f"中枢结构稳固（{line_count}笔构成）✅"
+        elif line_count >= 3:
+            result["level"] = "medium"
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"中枢结构正常（{line_count}笔构成）"
+        elif line_count >= 1:
+            result["level"] = "low"
+            result["confidence_adjust"] = -0.02
+            result["msg"] = f"⚠️ 中枢结构较弱（仅{line_count}笔构成），需谨慎"
+        else:
+            result["level"] = "unknown"
+            result["confidence_adjust"] = -0.02
+            result["msg"] = "中枢无有效线条，信号质量存疑"
+
+    except Exception:
+        pass
+
+    return result

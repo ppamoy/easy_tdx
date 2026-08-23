@@ -352,6 +352,16 @@ class MMD:
     _multi_tf_signal_consistency: dict[str, Any] | None = None  # 多时间框架信号一致性（条件129）
     _dynamic_market_regime: dict[str, Any] | None = None  # 动态市场环境适配（条件130）
 
+    # V48 enhancement fields (2026-08-24)
+    _volume_price_divergence_secondary_v48: dict[str, Any] | None = None  # 量价背离二次确认（条件134）
+    _trend_strength_weighting: dict[str, Any] | None = None  # 趋势强度加权（条件135）
+    _dynamic_risk_reward_ratio: dict[str, Any] | None = None  # 动态风险收益比（条件136）
+
+    # V49 enhancement fields (2026-08-25)
+    _breakout_strength_revalidation_v49: dict[str, Any] | None = None  # 突破力度二次验证（条件137）
+    _pullback_structure_integrity_v49: dict[str, Any] | None = None  # 回踩结构完整性（条件138）
+    _zhongshu_level_weight_v49: dict[str, Any] | None = None  # 中枢级别权重（条件139）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
