@@ -991,6 +991,14 @@ async def diagnose_stock(
             "atr_adaptive_stop_v58": getattr(latest_mmd, "_atr_adaptive_stop_v58", None) if latest_mmd else None,
             # V58: 信号质量综合评分（条件175）
             "composite_quality_score_v58": getattr(latest_mmd, "_composite_quality_score_v58", None) if latest_mmd else None,
+            # V59: 波动率自适应MA周期（条件176）
+            "volatility_adaptive_ma_v59": getattr(latest_mmd, "_volatility_adaptive_ma_v59", None) if latest_mmd else None,
+            # V59: ATR倍数自适应（条件177）
+            "atr_multiplier_adapt_v59": getattr(latest_mmd, "_atr_multiplier_adapt_v59", None) if latest_mmd else None,
+            # V59: 多时间框架共振信号（条件178）
+            "multi_tf_resonance_signal_v59": getattr(latest_mmd, "_multi_tf_resonance_signal_v59", None) if latest_mmd else None,
+            # V59: 信号衰减速度评估（条件179）
+            "signal_decay_speed_v59": getattr(latest_mmd, "_signal_decay_speed_v59", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

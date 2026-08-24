@@ -3394,6 +3394,114 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V59: 波动率自适应MA周期 -->
+        <div v-if="diagnosis.chanlun.volatility_adaptive_ma_v59" class="metric-card v59-vol-ma">
+          <div class="card-title">📐 V59 波动率自适应MA周期（条件176）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">波动率</span>
+              <span class="tag" :class="{
+                'tag-red': diagnosis.chanlun.volatility_adaptive_ma_v59.volatility_regime === 'high',
+                'tag-green': diagnosis.chanlun.volatility_adaptive_ma_v59.volatility_regime === 'low',
+                'tag-blue': diagnosis.chanlun.volatility_adaptive_ma_v59.volatility_regime === 'normal'
+              }">{{ diagnosis.chanlun.volatility_adaptive_ma_v59.volatility_regime }}</span>
+            </div>
+            <div class="kv-row"><span class="kv-key">自适应MA</span><span class="kv-val">MA{{ diagnosis.chanlun.volatility_adaptive_ma_v59.adaptive_ma_short }} / MA{{ diagnosis.chanlun.volatility_adaptive_ma_v59.adaptive_ma_mid }} / MA{{ diagnosis.chanlun.volatility_adaptive_ma_v59.adaptive_ma_long }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.volatility_adaptive_ma_v59.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.volatility_adaptive_ma_v59.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.volatility_adaptive_ma_v59.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volatility_adaptive_ma_v59.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volatility_adaptive_ma_v59.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V59: ATR倍数自适应 -->
+        <div v-if="diagnosis.chanlun.atr_multiplier_adapt_v59" class="metric-card v59-atr-mult">
+          <div class="card-title">🎯 V59 ATR倍数自适应（条件177）</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">ATR(14)</span><span class="kv-val">{{ diagnosis.chanlun.atr_multiplier_adapt_v59.atr_14 }}</span></div>
+            <div class="kv-row"><span class="kv-key">最优倍数</span><span class="kv-val">{{ diagnosis.chanlun.atr_multiplier_adapt_v59.optimal_multiplier }}x</span></div>
+            <div class="kv-row"><span class="kv-key">止损距离</span><span class="kv-val">{{ diagnosis.chanlun.atr_multiplier_adapt_v59.stop_distance_pct }}%</span></div>
+            <div class="kv-row">
+              <span class="kv-key">波动率</span>
+              <span class="tag" :class="{
+                'tag-red': diagnosis.chanlun.atr_multiplier_adapt_v59.volatility_regime === 'extreme',
+                'tag-orange': diagnosis.chanlun.atr_multiplier_adapt_v59.volatility_regime === 'high',
+                'tag-green': diagnosis.chanlun.atr_multiplier_adapt_v59.volatility_regime === 'low',
+                'tag-blue': diagnosis.chanlun.atr_multiplier_adapt_v59.volatility_regime === 'normal'
+              }">{{ diagnosis.chanlun.atr_multiplier_adapt_v59.volatility_regime }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.atr_multiplier_adapt_v59.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.atr_multiplier_adapt_v59.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.atr_multiplier_adapt_v59.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.atr_multiplier_adapt_v59.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.atr_multiplier_adapt_v59.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V59: 多时间框架共振信号 -->
+        <div v-if="diagnosis.chanlun.multi_tf_resonance_signal_v59" class="metric-card v59-resonance">
+          <div class="card-title">🔀 V59 多TF共振信号（条件178）</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">短周期趋势</span><span class="kv-val">{{ diagnosis.chanlun.multi_tf_resonance_signal_v59.short_tf_trend }}</span></div>
+            <div class="kv-row"><span class="kv-key">短周期动量</span><span class="kv-val">{{ diagnosis.chanlun.multi_tf_resonance_signal_v59.short_tf_momentum }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">共振强度</span>
+              <span class="tag" :class="{
+                'tag-green': diagnosis.chanlun.multi_tf_resonance_signal_v59.resonance_strength === 'strong',
+                'tag-blue': diagnosis.chanlun.multi_tf_resonance_signal_v59.resonance_strength === 'moderate',
+                'tag-orange': diagnosis.chanlun.multi_tf_resonance_signal_v59.resonance_strength === 'weak_opposite',
+                'tag-red': diagnosis.chanlun.multi_tf_resonance_signal_v59.resonance_strength === 'strong_opposite'
+              }">{{ diagnosis.chanlun.multi_tf_resonance_signal_v59.resonance_strength }}</span>
+            </div>
+            <div class="kv-row"><span class="kv-key">共振评分</span><span class="kv-val">{{ diagnosis.chanlun.multi_tf_resonance_signal_v59.resonance_score }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.multi_tf_resonance_signal_v59.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.multi_tf_resonance_signal_v59.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.multi_tf_resonance_signal_v59.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_resonance_signal_v59.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_tf_resonance_signal_v59.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V59: 信号衰减速度评估 -->
+        <div v-if="diagnosis.chanlun.signal_decay_speed_v59" class="metric-card v59-decay-speed">
+          <div class="card-title">⏱️ V59 信号衰减速度（条件179）</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">价格变化</span><span class="kv-val">{{ diagnosis.chanlun.signal_decay_speed_v59.price_speed_after_signal }}%</span></div>
+            <div class="kv-row">
+              <span class="kv-key">衰减状态</span>
+              <span class="tag" :class="{
+                'tag-green': diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'fast_rise' || diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'fast_fall',
+                'tag-blue': diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'moderate_rise' || diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'moderate_fall',
+                'tag-orange': diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'slow_rise' || diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'slow_fall',
+                'tag-red': diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'reversal' || diagnosis.chanlun.signal_decay_speed_v59.decay_rate === 'rebound'
+              }">{{ diagnosis.chanlun.signal_decay_speed_v59.decay_rate }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">信号强度</span>
+              <span class="tag" :class="{
+                'tag-green': diagnosis.chanlun.signal_decay_speed_v59.signal_strength === 'strong',
+                'tag-blue': diagnosis.chanlun.signal_decay_speed_v59.signal_strength === 'moderate',
+                'tag-orange': diagnosis.chanlun.signal_decay_speed_v59.signal_strength === 'weak',
+                'tag-red': diagnosis.chanlun.signal_decay_speed_v59.signal_strength === 'fake'
+              }">{{ diagnosis.chanlun.signal_decay_speed_v59.signal_strength }}</span>
+            </div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.signal_decay_speed_v59.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.signal_decay_speed_v59.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.signal_decay_speed_v59.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.signal_decay_speed_v59.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.signal_decay_speed_v59.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -4181,4 +4289,10 @@ onMounted(() => {
 .v58-vol .kv-val { font-weight: 600; }
 .v58-atr .kv-val { font-weight: 600; }
 .v58-quality .kv-val { font-weight: 600; }
+
+/* V59: 波动率自适应MA + ATR倍数 + 多TF共振 + 信号衰减速度 */
+.v59-vol-ma .kv-val { font-weight: 600; }
+.v59-atr-mult .kv-val { font-weight: 600; }
+.v59-resonance .kv-val { font-weight: 600; }
+.v59-decay-speed .kv-val { font-weight: 600; }
 </style>

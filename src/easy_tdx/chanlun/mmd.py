@@ -11747,6 +11747,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V59 条件 176-179 ──
+
+        # 条件176：波动率自适应MA周期（Volatility-Adaptive MA Period）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 90:
+            try:
+                vol_adapt = _calc_volatility_adaptive_ma_v59(mmd, closes)
+                mmd._volatility_adaptive_ma_v59 = vol_adapt
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_adapt.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件177：ATR倍数自适应（ATR Multiplier Adaptation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and highs is not None and lows is not None:
+            try:
+                atr_mult = _calc_atr_multiplier_adapt_v59(mmd, highs, lows)
+                mmd._atr_multiplier_adapt_v59 = atr_mult
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + atr_mult.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件178：多时间框架共振信号（Multi-TF Resonance Signal）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 25:
+            try:
+                tf_resonance = _calc_multi_tf_resonance_signal_v59(mmd, closes, volumes)
+                mmd._multi_tf_resonance_signal_v59 = tf_resonance
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_resonance.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件179：信号衰减速度评估（Signal Decay Speed）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 15:
+            try:
+                decay_speed = _calc_signal_decay_speed_v59(mmd, closes)
+                mmd._signal_decay_speed_v59 = decay_speed
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay_speed.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -17735,6 +17773,374 @@ def _calc_composite_quality_score_v58(
             f"明细：{detail_str}"
         )
 
+        return result
+    except Exception:
+        return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V59 条件176-179：参数自适应 + 多TF共振 + 信号衰减速度评估
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _calc_volatility_adaptive_ma_v59(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """波动率自适应MA周期（V59 条件176）。
+
+    根据当前波动率动态调整MA周期，使均线更适应当前市场环境：
+    - 高波动：缩短MA周期（MA5→MA3, MA20→MA10, MA60→MA30），提高响应速度
+    - 低波动：延长MA周期（MA5→MA8, MA20→MA30, MA60→MA90），减少噪音干扰
+    - 正常波动：保持默认周期
+    """
+    result = {
+        "adaptive_ma_short": 5,
+        "adaptive_ma_mid": 20,
+        "adaptive_ma_long": 60,
+        "volatility_regime": "normal",
+        "recommended_period": "",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 90:
+            result["msg"] = "数据不足，需要至少90根K线"
+            return result
+
+        # 计算实际波动率（近20日收盘价标准差/均值）
+        recent_20 = closes[-20:]
+        mean_20 = sum(recent_20) / 20
+        var_20 = sum((x - mean_20) ** 2 for x in recent_20) / 20
+        std_20 = var_20 ** 0.5
+        vol_pct = (std_20 / (mean_20 + 1e-10)) * 100
+
+        # 波动率分级并调整MA周期
+        if vol_pct > 4.0:
+            regime = "high"
+            short_p, mid_p, long_p = 3, 10, 30
+            adj = -0.02  # 高波动环境信号噪音大，略降置信度
+        elif vol_pct < 1.0:
+            regime = "low"
+            short_p, mid_p, long_p = 8, 30, 90
+            adj = +0.02  # 低波动环境趋势更稳定，略升置信度
+        else:
+            regime = "normal"
+            short_p, mid_p, long_p = 5, 20, 60
+            adj = 0.0
+
+        result["adaptive_ma_short"] = short_p
+        result["adaptive_ma_mid"] = mid_p
+        result["adaptive_ma_long"] = long_p
+        result["volatility_regime"] = regime
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"波动率={vol_pct:.2f}%({regime}) | "
+            f"自适应MA周期：MA{short_p}/{mid_p}/{long_p} | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_atr_multiplier_adapt_v59(
+    mmd: "MMD",
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """ATR倍数自适应（V59 条件177）。
+
+    根据波动率环境动态调整ATR止损倍数：
+    - 高波动：使用更大ATR倍数（3x），避免频繁触发止损
+    - 低波动：使用更小ATR倍数（1.5x），收紧止损减少损失
+    - 正常波动：使用默认倍数（2x）
+    """
+    result = {
+        "atr_14": 0.0,
+        "optimal_multiplier": 2.0,
+        "stop_distance_pct": 0.0,
+        "volatility_regime": "normal",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if not highs or not lows or len(highs) < 15:
+            result["msg"] = "数据不足"
+            return result
+
+        # 计算ATR(14)
+        tr_list: list[float] = []
+        for i in range(1, len(highs)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - lows[i - 1]),
+                abs(lows[i] - highs[i - 1]),
+            )
+            tr_list.append(tr)
+        if len(tr_list) < 14:
+            result["msg"] = "TR数据不足"
+            return result
+
+        atr_14 = sum(tr_list[-14:]) / 14
+        current_price = highs[-1]
+        atr_pct = atr_14 / (current_price + 1e-10) * 100
+
+        # 根据ATR百分比确定波动率层级和最优倍数
+        if atr_pct > 5.0:
+            regime = "extreme"
+            multiplier = 3.0
+            adj = -0.02
+        elif atr_pct > 3.0:
+            regime = "high"
+            multiplier = 2.5
+            adj = -0.01
+        elif atr_pct < 1.0:
+            regime = "low"
+            multiplier = 1.5
+            adj = +0.01
+        else:
+            regime = "normal"
+            multiplier = 2.0
+            adj = 0.0
+
+        stop_distance = multiplier * atr_14
+        stop_pct = stop_distance / (current_price + 1e-10) * 100
+
+        result["atr_14"] = round(atr_14, 4)
+        result["optimal_multiplier"] = multiplier
+        result["stop_distance_pct"] = round(stop_pct, 2)
+        result["volatility_regime"] = regime
+        result["confidence_adjust"] = adj
+
+        direction = "买入" if is_buy else "卖出"
+        result["msg"] = (
+            f"{direction}信号 | ATR={atr_14:.4f}({atr_pct:.2f}%) | "
+            f"最优倍数={multiplier}x | 止损距离={stop_pct:.1f}% | "
+            f"波动率={regime} | 置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_tf_resonance_signal_v59(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float] | None = None,
+) -> dict[str, Any]:
+    """多时间框架共振信号（V59 条件178）。
+
+    通过比较短期（近5根K线）与中期（近20根K线）趋势和动量，
+    验证日线信号是否有短周期共振支持：
+    - 短期上涨+中期上涨 → 共振强，+4%置信度
+    - 短期上涨+中期下跌 → 共振弱（逆势），-4%置信度
+    - 仅一级共振 → +1%置信度
+    """
+    result = {
+        "short_tf_trend": "unknown",
+        "short_tf_momentum": "unknown",
+        "resonance_score": 0,
+        "resonance_strength": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 25:
+            result["msg"] = "数据不足，需要至少25根K线"
+            return result
+
+        # 短期趋势：近5根K线收盘价变化
+        close_5 = closes[-5:]
+        short_trend = "up" if close_5[-1] > close_5[0] else ("down" if close_5[-1] < close_5[0] else "flat")
+
+        # 短期动量：近5根K线的涨跌比例
+        up_bars = sum(1 for i in range(1, len(close_5)) if close_5[i] > close_5[i - 1])
+        momentum_ratio = up_bars / 4.0 if len(close_5) > 1 else 0.5
+
+        if momentum_ratio >= 0.75:
+            short_mom = "strong"
+        elif momentum_ratio >= 0.5:
+            short_mom = "weak"
+        else:
+            short_mom = "negative"
+
+        # 中期趋势：近20根K线 vs 前20根
+        if len(closes) >= 40:
+            recent_20 = closes[-20:]
+            prior_20 = closes[-40:-20]
+            recent_avg = sum(recent_20) / 20
+            prior_avg = sum(prior_20) / 20
+            mid_trend = "up" if recent_avg > prior_avg else ("down" if recent_avg < prior_avg else "flat")
+        else:
+            mid_trend = "unknown"
+
+        result["short_tf_trend"] = short_trend
+        result["short_tf_momentum"] = short_mom
+
+        # 共振评分：短期与中期趋势一致性
+        resonance_score = 0
+        if is_buy:
+            if short_trend == "up" and mid_trend == "up":
+                resonance_score = 2
+            elif short_trend == "up" or mid_trend == "up":
+                resonance_score = 1
+            elif short_trend == "down" and mid_trend == "down":
+                resonance_score = -2
+            else:
+                resonance_score = 0
+        else:  # sell
+            if short_trend == "down" and mid_trend == "down":
+                resonance_score = 2
+            elif short_trend == "down" or mid_trend == "down":
+                resonance_score = 1
+            elif short_trend == "up" and mid_trend == "up":
+                resonance_score = -2
+            else:
+                resonance_score = 0
+
+        result["resonance_score"] = resonance_score
+
+        if resonance_score >= 2:
+            strength = "strong"
+            adj = 0.04
+        elif resonance_score == 1:
+            strength = "moderate"
+            adj = 0.01
+        elif resonance_score <= -2:
+            strength = "strong_opposite"
+            adj = -0.04
+        elif resonance_score == -1:
+            strength = "weak_opposite"
+            adj = -0.01
+        else:
+            strength = "neutral"
+            adj = 0.0
+
+        result["resonance_strength"] = strength
+        result["confidence_adjust"] = adj
+
+        dir_label = "买入" if is_buy else "卖出"
+        result["msg"] = (
+            f"{dir_label}共振验证 | "
+            f"短周期：{short_trend}({short_mom}) | "
+            f"中周期：{mid_trend} | "
+            f"共振分={resonance_score}({strength}) | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_decay_speed_v59(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """信号衰减速度评估（V59 条件179）。
+
+    测量信号产生后价格远离信号点的速度，快速远离 = 强信号，
+    缓慢或回退 = 弱信号/假信号。
+    """
+    result = {
+        "price_speed_after_signal": 0.0,
+        "decay_rate": "unknown",
+        "signal_strength": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 15:
+            result["msg"] = "数据不足，需要至少15根K线"
+            return result
+
+        # 取信号点价格（倒数第15根到倒数第1根之间）
+        signal_idx = len(closes) - 15
+        if signal_idx < 0:
+            signal_idx = 0
+        signal_price = closes[signal_idx]
+
+        # 计算信号后N根K线的平均日涨幅
+        lookback = min(10, len(closes) - signal_idx - 1)
+        if lookback < 3:
+            result["msg"] = "信号后K线不足，无法评估"
+            return result
+
+        post_signal = closes[signal_idx + 1: signal_idx + 1 + lookback]
+        changes = [(post_signal[i] - post_signal[i - 1]) / (post_signal[i - 1] + 1e-10) * 100
+                   for i in range(1, len(post_signal))]
+        avg_change = sum(changes) / len(changes) if changes else 0.0
+        total_change = (post_signal[-1] - signal_price) / (signal_price + 1e-10) * 100
+
+        result["price_speed_after_signal"] = round(abs(total_change), 2)
+
+        # 根据价格变化速度评估信号强度
+        if is_buy:
+            if total_change >= 3.0:
+                decay = "fast_rise"
+                strength = "strong"
+                adj = 0.03
+            elif total_change >= 1.5:
+                decay = "moderate_rise"
+                strength = "moderate"
+                adj = 0.01
+            elif total_change >= 0.0:
+                decay = "slow_rise"
+                strength = "weak"
+                adj = -0.01
+            else:
+                decay = "reversal"
+                strength = "fake"
+                adj = -0.04
+        else:  # sell
+            if total_change <= -3.0:
+                decay = "fast_fall"
+                strength = "strong"
+                adj = 0.03
+            elif total_change <= -1.5:
+                decay = "moderate_fall"
+                strength = "moderate"
+                adj = 0.01
+            elif total_change <= 0.0:
+                decay = "slow_fall"
+                strength = "weak"
+                adj = -0.01
+            else:
+                decay = "rebound"
+                strength = "fake"
+                adj = -0.04
+
+        result["decay_rate"] = decay
+        result["signal_strength"] = strength
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"信号后{lookback}根K线 | 总变化={total_change:+.2f}% | "
+            f"衰减={decay} | 强度={strength} | "
+            f"置信度调整{adj:+.0%}"
+        )
         return result
     except Exception:
         return result

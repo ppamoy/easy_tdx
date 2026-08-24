@@ -416,6 +416,12 @@ class MMD:
     _atr_adaptive_stop_v58: dict[str, Any] | None = None  # ATR自适应止损距离（条件174）
     _composite_quality_score_v58: dict[str, Any] | None = None  # 信号质量综合评分（条件175）
 
+    # V59 enhancement fields (2026-08-26)
+    _volatility_adaptive_ma_v59: dict[str, Any] | None = None  # 波动率自适应MA周期（条件176）
+    _atr_multiplier_adapt_v59: dict[str, Any] | None = None  # ATR倍数自适应（条件177）
+    _multi_tf_resonance_signal_v59: dict[str, Any] | None = None  # 多时间框架共振信号（条件178）
+    _signal_decay_speed_v59: dict[str, Any] | None = None  # 信号衰减速度评估（条件179）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

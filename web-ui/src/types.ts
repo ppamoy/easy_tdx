@@ -1571,6 +1571,42 @@ export interface DiagnosisChanlun {
     detail_scores: Record<string, number>
     msg: string
   } | null
+  // V59: 波动率自适应MA周期（条件176）
+  volatility_adaptive_ma_v59?: {
+    adaptive_ma_short: number
+    adaptive_ma_mid: number
+    adaptive_ma_long: number
+    volatility_regime: string
+    recommended_period: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V59: ATR倍数自适应（条件177）
+  atr_multiplier_adapt_v59?: {
+    atr_14: number
+    optimal_multiplier: number
+    stop_distance_pct: number
+    volatility_regime: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V59: 多时间框架共振信号（条件178）
+  multi_tf_resonance_signal_v59?: {
+    short_tf_trend: string
+    short_tf_momentum: string
+    resonance_score: number
+    resonance_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V59: 信号衰减速度评估（条件179）
+  signal_decay_speed_v59?: {
+    price_speed_after_signal: number
+    decay_rate: string
+    signal_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {
