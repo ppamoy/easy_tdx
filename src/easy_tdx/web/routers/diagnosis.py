@@ -1007,6 +1007,10 @@ async def diagnose_stock(
             "zs_distance_enhanced_v60": getattr(latest_mmd, "_zs_distance_enhanced_v60", None) if latest_mmd else None,
             # V60: KDJ超买超卖确认（条件183）
             "kdj_ob_os_confirm_v60": getattr(latest_mmd, "_kdj_ob_os_confirm_v60", None) if latest_mmd else None,
+            # V61: MACD柱状图背离融合（条件184）
+            "macd_hist_divergence_v61": getattr(latest_mmd, "_macd_hist_divergence_v61", None) if latest_mmd else None,
+            # V61: 综合多信号评分（条件185）
+            "composite_signal_score_v61": getattr(latest_mmd, "_composite_signal_score_v61", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

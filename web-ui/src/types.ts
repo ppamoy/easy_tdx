@@ -1654,6 +1654,31 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V61: MACD柱状图背离融合（条件184）
+  macd_hist_divergence_v61?: {
+    divergence_type: string
+    macd_hist_curr: number
+    macd_hist_prev: number
+    price_curr_low: number
+    price_prev_low: number
+    price_curr_high: number
+    price_prev_high: number
+    divergence_depth: string
+    rsi_fusion: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V61: 综合多信号评分（条件185）
+  composite_signal_score_v61?: {
+    composite_score: number
+    quality_tier: string
+    tier_color: string
+    condition_count: number
+    total_adjustment: number
+    breakdown: Record<string, number>
+    decision_help: string
+    recommendation: string
+  } | null
 }
 
 export interface DiagnosisMACD {

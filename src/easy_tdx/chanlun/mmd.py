@@ -11823,6 +11823,25 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V61 条件 184-185 ──
+
+        # 条件184：MACD柱状图背离融合（MACD Histogram Divergence Fusion）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and macd_data is not None:
+            try:
+                macd_div = _calc_macd_histogram_divergence_v61(mmd, closes, macd_data)
+                mmd._macd_hist_divergence_v61 = macd_div
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + macd_div.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件185：综合多信号评分（Composite Signal Score）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+            try:
+                comp_score = _calc_composite_signal_score_v61(mmd)
+                mmd._composite_signal_score_v61 = comp_score
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -18680,6 +18699,323 @@ def _calc_kdj_ob_os_confirm_v60(
             f"信号对齐={signal_aligned} | "
             f"置信度调整{adj:+.0%}"
         )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_macd_histogram_divergence_v61(
+    mmd: "MMD",
+    closes: list[float],
+    macd_data: dict[str, list[float]],
+) -> dict[str, Any]:
+    """MACD柱状图背离融合（V61 条件184）。
+
+    检测价格与MACD柱状图的背离信号，并与RSI背离融合：
+    - 深度底背离（价格新低+MACD柱未新低）→ 强烈确认3买
+    - 深度顶背离（价格新高+MACD柱未新高）→ 强烈确认3卖
+    - 与RSI背离双确认 → 额外加分
+
+    返回：
+        {
+            "divergence_type": str,       # "none"/"bullish_macd"/"bearish_macd"
+            "macd_hist_curr": float,      # 当前MACD柱值
+            "macd_hist_prev": float,      # 前期MACD柱值
+            "divergence_depth": str,      # "deep"/"moderate"/"shallow"
+            "rsi_fusion": str,            # "none"/"fused_bullish"/"fused_bearish"
+            "confidence_adjust": float,   # 置信度调整
+            "msg": str,
+        }
+    """
+    result = {
+        "divergence_type": "none",
+        "macd_hist_curr": 0.0,
+        "macd_hist_prev": 0.0,
+        "price_curr_low": 0.0,
+        "price_prev_low": 0.0,
+        "price_curr_high": 0.0,
+        "price_prev_high": 0.0,
+        "divergence_depth": "none",
+        "rsi_fusion": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        hist = macd_data.get("hist", [])
+        if len(hist) < 40:
+            result["msg"] = "MACD柱状图数据不足，需要至少40根K线"
+            return result
+
+        if len(closes) < 40:
+            result["msg"] = "价格数据不足"
+            return result
+
+        result["macd_hist_curr"] = round(float(hist[-1]), 6)
+        result["macd_hist_prev"] = round(float(hist[-21]) if len(hist) >= 21 else hist[-1], 6)
+
+        # MACD背离检测窗口
+        window = 20
+        if len(closes) < window * 2:
+            window = len(closes) // 2
+        if window < 10:
+            result["msg"] = "数据不足进行MACD背离检测"
+            return result
+
+        recent = closes[-window:]
+        prior = closes[-window * 2:-window] if len(closes) >= window * 2 else closes[:window]
+
+        price_curr_low = min(recent)
+        price_prev_low = min(prior)
+        price_curr_high = max(recent)
+        price_prev_high = max(prior)
+
+        hist_curr_window = hist[-window:]
+        hist_prior_window = hist[-window * 2:-window] if len(hist) >= window * 2 else hist[:window]
+
+        hist_curr_low = min(hist_curr_window)
+        hist_prev_low = min(hist_prior_window)
+        hist_curr_high = max(hist_curr_window)
+        hist_prev_high = max(hist_prior_window)
+
+        result["price_curr_low"] = round(price_curr_low, 2)
+        result["price_prev_low"] = round(price_prev_low, 2)
+        result["price_curr_high"] = round(price_curr_high, 2)
+        result["price_prev_high"] = round(price_prev_high, 2)
+
+        divergence_type = "none"
+        divergence_depth = "none"
+        adj = 0.0
+
+        if is_buy:
+            # 3买：价格创新低 + MACD柱未创新低 → 底背离
+            if price_curr_low < price_prev_low * 0.995 and hist_curr_low > hist_prev_low:
+                divergence_type = "bullish_macd"
+                price_drop_pct = (price_prev_low - price_curr_low) / (price_prev_low + 1e-10) * 100
+                if price_drop_pct > 5.0:
+                    divergence_depth = "deep"
+                    adj = 0.04
+                elif price_drop_pct > 2.0:
+                    divergence_depth = "moderate"
+                    adj = 0.02
+                else:
+                    divergence_depth = "shallow"
+                    adj = 0.01
+            elif price_curr_low < price_prev_low * 0.995:
+                divergence_type = "no_divergence"
+                divergence_depth = "none"
+                adj = -0.01
+            else:
+                divergence_type = "no_divergence"
+                adj = 0.0
+        else:  # sell
+            # 3卖：价格创新高 + MACD柱未创新高 → 顶背离
+            if price_curr_high > price_prev_high * 1.005 and hist_curr_high < hist_prev_high:
+                divergence_type = "bearish_macd"
+                price_rise_pct = (price_curr_high - price_prev_high) / (price_prev_high + 1e-10) * 100
+                if price_rise_pct > 5.0:
+                    divergence_depth = "deep"
+                    adj = 0.04
+                elif price_rise_pct > 2.0:
+                    divergence_depth = "moderate"
+                    adj = 0.02
+                else:
+                    divergence_depth = "shallow"
+                    adj = 0.01
+            elif price_curr_high > price_prev_high * 1.005:
+                divergence_type = "no_divergence"
+                adj = -0.01
+            else:
+                divergence_type = "no_divergence"
+                adj = 0.0
+
+        result["divergence_type"] = divergence_type
+        result["divergence_depth"] = divergence_depth
+
+        # RSI融合：检查RSI背离是否存在
+        rsi_div = getattr(mmd, "_rsi_deep_divergence_v60", None)
+        rsi_fusion = "none"
+        if rsi_div and rsi_div.get("divergence_type") in ("bullish_deep", "bearish_deep"):
+            if is_buy and rsi_div.get("divergence_type") == "bullish_deep" and divergence_type == "bullish_macd":
+                rsi_fusion = "fused_bullish"
+                adj += 0.02  # 双指标确认额外加分
+            elif not is_buy and rsi_div.get("divergence_type") == "bearish_deep" and divergence_type == "bearish_macd":
+                rsi_fusion = "fused_bearish"
+                adj += 0.02  # 双指标确认额外加分
+
+        result["rsi_fusion"] = rsi_fusion
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"MACD柱={result['macd_hist_curr']:.4f}/{result['macd_hist_prev']:.4f} | "
+            f"背离类型={divergence_type} | 深度={divergence_depth} | "
+            f"RSI融合={rsi_fusion} | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_composite_signal_score_v61(
+    mmd: "MMD",
+) -> dict[str, Any]:
+    """综合多信号评分（V61 条件185）。
+
+    聚合V58-V60所有条件的置信度调整，生成综合质量评分和等级：
+    - S级（综合分≥0.75）：金色边框，强烈推荐
+    - A级（综合分≥0.60）：绿色边框，推荐
+    - B级（综合分≥0.45）：蓝色边框，一般
+    - C级（综合分≥0.30）：橙色边框，谨慎
+    - D级（综合分<0.30）：红色边框，不推荐
+
+    返回：
+        {
+            "composite_score": float,       # 综合评分（0.0~1.0）
+            "quality_tier": str,            # S/A/B/C/D
+            "tier_color": str,              # 边框颜色
+            "condition_count": int,         # 有效条件数
+            "total_adjustment": float,      # 总置信度调整
+            "breakdown": dict,              # 各条件贡献明细
+            "decision_help": str,           # 决策帮助建议
+            "recommendation": str,          # 推荐操作
+        }
+    """
+    result = {
+        "composite_score": 0.0,
+        "quality_tier": "unknown",
+        "tier_color": "#9ca3af",
+        "condition_count": 0,
+        "total_adjustment": 0.0,
+        "breakdown": {},
+        "decision_help": "",
+        "recommendation": "",
+    }
+    try:
+        # 收集V58-V60所有条件的置信度调整
+        adjustments = {}
+        total_adj = 0.0
+        valid_count = 0
+
+        # V58 条件172-175
+        for field_name in [
+            "_multi_tf_trend_consistency_v58",
+            "_volume_accumulation_validation_v58",
+            "_atr_adaptive_stop_v58",
+            "_composite_quality_score_v58",
+        ]:
+            val = getattr(mmd, field_name, None)
+            if val and isinstance(val, dict):
+                adj = val.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    adjustments[field_name.replace("_", "").replace("v58", "V58")] = adj
+                    total_adj += adj
+                    valid_count += 1
+
+        # V59 条件176-179
+        for field_name in [
+            "_volatility_adaptive_ma_v59",
+            "_atr_multiplier_adapt_v59",
+            "_multi_tf_resonance_signal_v59",
+            "_signal_decay_speed_v59",
+        ]:
+            val = getattr(mmd, field_name, None)
+            if val and isinstance(val, dict):
+                adj = val.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    adjustments[field_name.replace("_", "").replace("v59", "V59")] = adj
+                    total_adj += adj
+                    valid_count += 1
+
+        # V60 条件180-183
+        for field_name in [
+            "_rsi_deep_divergence_v60",
+            "_ma_spacing_strength_v60",
+            "_zs_distance_enhanced_v60",
+            "_kdj_ob_os_confirm_v60",
+        ]:
+            val = getattr(mmd, field_name, None)
+            if val and isinstance(val, dict):
+                adj = val.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    adjustments[field_name.replace("_", "").replace("v60", "V60")] = adj
+                    total_adj += adj
+                    valid_count += 1
+
+        # V61 条件184
+        macd_div = getattr(mmd, "_macd_hist_divergence_v61", None)
+        if macd_div and isinstance(macd_div, dict):
+            adj = macd_div.get("confidence_adjust", 0.0)
+            if adj != 0.0:
+                adjustments["MACDhist_divergence"] = adj
+                total_adj += adj
+                valid_count += 1
+
+        # 计算综合评分
+        base_confidence = mmd.confidence
+        # 综合评分 = 基础置信度 + 平均调整量（上限±10%）
+        avg_adjustment = total_adj / max(1, valid_count) if valid_count > 0 else 0.0
+        composite_score = base_confidence + avg_adjustment * 0.5
+        composite_score = max(0.0, min(1.0, composite_score))
+
+        # 确定质量等级和颜色
+        if composite_score >= 0.75:
+            quality_tier = "S"
+            tier_color = "#f59e0b"  # 金色
+            recommendation = "强烈建议操作"
+        elif composite_score >= 0.60:
+            quality_tier = "A"
+            tier_color = "#22c55e"  # 绿色
+            recommendation = "建议操作"
+        elif composite_score >= 0.45:
+            quality_tier = "B"
+            tier_color = "#3b82f6"  # 蓝色
+            recommendation = "可考虑操作"
+        elif composite_score >= 0.30:
+            quality_tier = "C"
+            tier_color = "#f97316"  # 橙色
+            recommendation = "谨慎操作"
+        else:
+            quality_tier = "D"
+            tier_color = "#ef4444"  # 红色
+            recommendation = "不建议操作"
+
+        # 生成决策帮助
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        signals_positive = sum(1 for v in adjustments.values() if v > 0)
+        signals_negative = sum(1 for v in adjustments.values() if v < 0)
+
+        if is_buy:
+            if signals_negative > signals_positive:
+                decision_help = f"多方信号{signals_positive}个，空方信号{signals_negative}个，建议观望等待更多确认"
+            elif signals_positive >= 3:
+                decision_help = f"多方信号强劲（{signals_positive}个确认），可在支撑位附近轻仓试探"
+            else:
+                decision_help = f"多方信号{signals_positive}个，可逢低布局但需设好止损"
+        elif is_sell:
+            if signals_negative > signals_positive:
+                decision_help = f"空方信号{signals_negative}个，多方信号{signals_positive}个，建议果断离场"
+            elif signals_positive >= 3:
+                decision_help = f"空方信号强劲（{signals_negative}个确认），可在反弹时减仓"
+            else:
+                decision_help = f"空方信号{signals_negative}个，可考虑分批减仓"
+        else:
+            decision_help = "非买卖点信号，仅供参考"
+
+        result["composite_score"] = round(composite_score, 3)
+        result["quality_tier"] = quality_tier
+        result["tier_color"] = tier_color
+        result["condition_count"] = valid_count
+        result["total_adjustment"] = round(total_adj, 3)
+        result["breakdown"] = {k: round(v, 3) for k, v in adjustments.items()}
+        result["decision_help"] = decision_help
+        result["recommendation"] = recommendation
+
         return result
     except Exception:
         return result

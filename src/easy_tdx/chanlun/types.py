@@ -428,6 +428,10 @@ class MMD:
     _zs_distance_enhanced_v60: dict[str, Any] | None = None  # 中枢支撑/阻力距离评分增强（条件182）
     _kdj_ob_os_confirm_v60: dict[str, Any] | None = None  # KDJ超买超卖确认（条件183）
 
+    # V61 enhancement fields (2026-08-27)
+    _macd_hist_divergence_v61: dict[str, Any] | None = None  # MACD柱状图背离融合（条件184）
+    _composite_signal_score_v61: dict[str, Any] | None = None  # 综合多信号评分（条件185）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

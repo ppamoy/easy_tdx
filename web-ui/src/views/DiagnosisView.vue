@@ -3576,7 +3576,46 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- MACD -->
+        <!-- V61: MACD柱状图背离融合 -->
+        <div v-if="diagnosis.chanlun.macd_hist_divergence_v61" class="metric-card v61-macd-div">
+           <div class="card-title">🔍 V61 MACD柱状图背离融合（条件184）</div>
+           <div class="card-body">
+             <div class="kv-row"><span class="kv-key">MACD柱当前/前期</span><span class="kv-val">{{ diagnosis.chanlun.macd_hist_divergence_v61.macd_hist_curr }} / {{ diagnosis.chanlun.macd_hist_divergence_v61.macd_hist_prev }}</span></div>
+             <div class="kv-row"><span class="kv-key">背离类型</span><span class="tag" :class="diagnosis.chanlun.macd_hist_divergence_v61.divergence_type === 'bullish_macd' ? 'tag-green' : diagnosis.chanlun.macd_hist_divergence_v61.divergence_type === 'bearish_macd' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.macd_hist_divergence_v61.divergence_type }}</span></div>
+             <div class="kv-row"><span class="kv-key">背离深度</span><span class="tag" :class="diagnosis.chanlun.macd_hist_divergence_v61.divergence_depth === 'deep' ? 'tag-green' : diagnosis.chanlun.macd_hist_divergence_v61.divergence_depth === 'moderate' ? 'tag-blue' : 'tag-gray'">{{ diagnosis.chanlun.macd_hist_divergence_v61.divergence_depth }}</span></div>
+             <div class="kv-row"><span class="kv-key">RSI融合</span><span class="tag" :class="diagnosis.chanlun.macd_hist_divergence_v61.rsi_fusion === 'fused_bullish' || diagnosis.chanlun.macd_hist_divergence_v61.rsi_fusion === 'fused_bearish' ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.macd_hist_divergence_v61.rsi_fusion }}</span></div>
+             <div class="kv-row"><span class="kv-key">置信度调整</span>
+               <span :style="{ color: diagnosis.chanlun.macd_hist_divergence_v61.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.macd_hist_divergence_v61.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                 {{ diagnosis.chanlun.macd_hist_divergence_v61.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.macd_hist_divergence_v61.confidence_adjust*100).toFixed(0) }}%
+               </span>
+             </div>
+             <div class="kv-note">{{ diagnosis.chanlun.macd_hist_divergence_v61.msg }}</div>
+           </div>
+         </div>
+
+        <!-- V61: 综合多信号评分 -->
+        <div v-if="diagnosis.chanlun.composite_signal_score_v61" class="metric-card v61-composite" :style="{ borderColor: diagnosis.chanlun.composite_signal_score_v61.tier_color + '40', borderWidth: '2px', borderStyle: 'solid' }">
+           <div class="card-title">⭐ V61 综合多信号评分（条件185）</div>
+           <div class="card-body">
+             <div class="kv-row">
+               <span class="kv-key">质量等级</span>
+               <span class="tag" :style="{ backgroundColor: diagnosis.chanlun.composite_signal_score_v61.tier_color, color: '#fff', fontWeight: 700, fontSize: '14px', padding: '2px 10px' }">
+                 {{ diagnosis.chanlun.composite_signal_score_v61.quality_tier }}级
+               </span>
+               <span class="kv-key">综合评分</span>
+               <span class="kv-val" :style="{ color: diagnosis.chanlun.composite_signal_score_v61.tier_color, fontWeight: 700 }">{{ (diagnosis.chanlun.composite_signal_score_v61.composite_score*100).toFixed(0) }}%</span>
+             </div>
+             <div class="kv-row"><span class="kv-key">有效条件数</span><span class="kv-val">{{ diagnosis.chanlun.composite_signal_score_v61.condition_count }} 个</span></div>
+             <div class="kv-row"><span class="kv-key">总调整量</span><span :style="{ color: diagnosis.chanlun.composite_signal_score_v61.total_adjustment > 0 ? '#22c55e' : diagnosis.chanlun.composite_signal_score_v61.total_adjustment < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">{{ diagnosis.chanlun.composite_signal_score_v61.total_adjustment > 0 ? '+' : '' }}{{ (diagnosis.chanlun.composite_signal_score_v61.total_adjustment*100).toFixed(0) }}%</span></div>
+             <div class="kv-row"><span class="kv-key">推荐操作</span><span class="tag" :class="diagnosis.chanlun.composite_signal_score_v61.quality_tier === 'S' || diagnosis.chanlun.composite_signal_score_v61.quality_tier === 'A' ? 'tag-green' : diagnosis.chanlun.composite_signal_score_v61.quality_tier === 'D' ? 'tag-red' : 'tag-orange'">{{ diagnosis.chanlun.composite_signal_score_v61.recommendation }}</span></div>
+             <div class="kv-row"><span class="kv-key">决策帮助</span><span class="kv-val" style="font-size:12px">{{ diagnosis.chanlun.composite_signal_score_v61.decision_help }}</span></div>
+             <div v-if="Object.keys(diagnosis.chanlun.composite_signal_score_v61.breakdown).length > 0" class="kv-note" style="font-size:11px; color:#9ca3af">
+               贡献明细: {{ Object.entries(diagnosis.chanlun.composite_signal_score_v61.breakdown).map(([k,v]) => `${k}=${v>0?'+':''}${(v*100).toFixed(0)}%`).join(' | ') }}
+             </div>
+           </div>
+         </div>
+
+         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -4375,4 +4414,9 @@ onMounted(() => {
 .v60-ma-spacing .kv-val { font-weight: 600; }
 .v60-zs-dist .kv-val { font-weight: 600; }
 .v60-kdj .kv-val { font-weight: 600; }
+
+/* V61: MACD柱状图背离融合 + 综合多信号评分 */
+.v61-macd-div .kv-val { font-weight: 600; }
+.v61-composite .card-title { font-weight: 700; }
+.v61-composite .kv-val { font-weight: 600; }
 </style>
