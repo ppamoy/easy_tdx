@@ -3216,6 +3216,93 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V57: 回踩幅度与时间双重过滤 -->
+        <div v-if="diagnosis.chanlun.pullback_filter_v57" class="metric-card v57-pullback">
+          <div class="card-title">📐 回踩过滤检测 (168)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">过滤结果</span>
+              <span class="tag" :class="diagnosis.chanlun.pullback_filter_v57.pass_filter ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.pullback_filter_v57.pass_filter ? '✅ 通过' : '🚨 未通过' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">回踩深度</span><span class="kv-val">{{ diagnosis.chanlun.pullback_filter_v57.pullback_depth_pct }}%</span></div>
+            <div class="kv-row"><span class="kv-key">检查K线</span><span class="kv-val">{{ diagnosis.chanlun.pullback_filter_v57.pullback_bars }}根</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.pullback_filter_v57.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.pullback_filter_v57.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.pullback_filter_v57.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.pullback_filter_v57.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.pullback_filter_v57.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V57: 突破力度验证 -->
+        <div v-if="diagnosis.chanlun.breakout_strength_validation_v57" class="metric-card v57-breakout">
+          <div class="card-title">💪 突破力度验证 (169)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">力度达标</span>
+              <span class="tag" :class="diagnosis.chanlun.breakout_strength_validation_v57.strength_adequate ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.breakout_strength_validation_v57.strength_adequate ? '✅ 充足' : '⚠️ 不足' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">力度比</span><span class="kv-val">{{ diagnosis.chanlun.breakout_strength_validation_v57.force_ratio }}</span></div>
+            <div class="kv-row"><span class="kv-key">量比</span><span class="kv-val">{{ diagnosis.chanlun.breakout_strength_validation_v57.volume_ratio }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.breakout_strength_validation_v57.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.breakout_strength_validation_v57.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.breakout_strength_validation_v57.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.breakout_strength_validation_v57.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.breakout_strength_validation_v57.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V57: 中枢背驰检测 -->
+        <div v-if="diagnosis.chanlun.zs_divergence_check_v57" class="metric-card v57-div">
+          <div class="card-title">🔍 中枢背驰检测 (170)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">背驰状态</span>
+              <span class="tag" :class="!diagnosis.chanlun.zs_divergence_check_v57.has_divergence ? 'tag-green' : 'tag-orange'">
+                {{ diagnosis.chanlun.zs_divergence_check_v57.has_divergence ? '⚠️ 有背驰' : '✅ 无背驰' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">背驰类型</span><span class="kv-val">{{ diagnosis.chanlun.zs_divergence_check_v57.divergence_type }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.zs_divergence_check_v57.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.zs_divergence_check_v57.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.zs_divergence_check_v57.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.zs_divergence_check_v57.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.zs_divergence_check_v57.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V57: 信号衰减检测 -->
+        <div v-if="diagnosis.chanlun.signal_decay_detection_v57" class="metric-card v57-decay">
+          <div class="card-title">📉 信号衰减检测 (171)</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">衰减状态</span>
+              <span class="tag" :class="!diagnosis.chanlun.signal_decay_detection_v57.is_decaying ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.signal_decay_detection_v57.is_decaying ? '🚨 衰减中' : '✅ 有效' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">价格趋势</span><span class="kv-val">{{ diagnosis.chanlun.signal_decay_detection_v57.price_trend }}</span></div>
+            <div class="kv-row"><span class="kv-key">动量</span><span class="kv-val">{{ diagnosis.chanlun.signal_decay_detection_v57.trend_momentum }}%</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度</span>
+              <span class="tag" :class="diagnosis.chanlun.signal_decay_detection_v57.confidence_adjust > 0 ? 'tag-green' : diagnosis.chanlun.signal_decay_detection_v57.confidence_adjust < 0 ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.signal_decay_detection_v57.confidence_adjust > 0 ? '+' : '' }}{{ diagnosis.chanlun.signal_decay_detection_v57.confidence_adjust }}
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.signal_decay_detection_v57.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>

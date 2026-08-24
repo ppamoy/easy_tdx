@@ -1504,6 +1504,37 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V57: 回踩幅度与时间双重过滤（条件168）
+  pullback_filter_v57?: {
+    pass_filter: boolean
+    pullback_depth_pct: number
+    pullback_bars: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V57: 突破力度验证（条件169）
+  breakout_strength_validation_v57?: {
+    strength_adequate: boolean
+    force_ratio: number
+    volume_ratio: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V57: 中枢背驰检测（条件170）
+  zs_divergence_check_v57?: {
+    has_divergence: boolean
+    divergence_type: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V57: 信号衰减检测（条件171）
+  signal_decay_detection_v57?: {
+    is_decaying: boolean
+    price_trend: string
+    trend_momentum: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

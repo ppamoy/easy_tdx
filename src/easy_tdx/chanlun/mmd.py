@@ -11673,6 +11673,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V57 条件 168-171 ──
+
+        # 条件168：回踩幅度与时间双重过滤（Pullback Depth & Time Filter）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+            try:
+                pullback = _calc_pullback_filter_v57(mmd, closes, highs, lows)
+                mmd._pullback_filter_v57 = pullback
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pullback.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件169：突破力度验证（Breakout Strength Validation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+            try:
+                breakout = _calc_breakout_strength_validation_v57(mmd, closes, volumes)
+                mmd._breakout_strength_validation_v57 = breakout
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件170：中枢背驰检测（Zhongshu Divergence Check）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and bis is not None and bc_list is not None:
+            try:
+                divergence = _calc_zs_divergence_check_v57(mmd, bis, bc_list)
+                mmd._zs_divergence_check_v57 = divergence
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + divergence.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件171：信号衰减检测（Signal Decay Detection）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None:
+            try:
+                decay = _calc_signal_decay_detection_v57(mmd, closes)
+                mmd._signal_decay_detection_v57 = decay
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -17012,6 +17050,355 @@ def _calc_multi_signal_resonance_v56(
         else:
             result["confidence_adjust"] = -0.02
             result["msg"] = "无指标确认：缺乏共振支持，-2%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+# ── V57: 条件168-171 缠论模型精准度与决策帮助进一步提升 ───────────────────────────
+
+def _calc_pullback_filter_v57(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """回踩幅度与时间双重过滤（V57 条件168）。
+
+    对3买/3卖信号的破/跌破后进行回踩深度和时间的双重过滤：
+    - 3买：回踩深度不超过突破幅度的60%，回踩时间不超过15根K线
+    - 3卖：反弹幅度不超过跌幅的60%，反弹时间不超过15根K线
+    """
+    result = {
+        "pass_filter": True,
+        "pullback_depth_pct": 0.0,
+        "pullback_bars": 0,
+        "max_allowable_depth_pct": 60.0,
+        "max_allowable_bars": 15,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 25 or not lows or not highs:
+            result["msg"] = "数据不足，跳过回踩过滤"
+            return result
+
+        bi_end_idx = 0
+        if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
+            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 25)
+        else:
+            bi_end_idx = max(0, len(closes) - 25)
+
+        signal_price = closes[bi_end_idx] if bi_end_idx < len(closes) else closes[-1]
+
+        check_bars = min(15, len(closes) - 1 - bi_end_idx)
+        if check_bars == 0:
+            result["msg"] = "信号后无K线数据，无法验证回踩"
+            return result
+
+        post_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
+        post_highs = highs[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
+        post_lows = lows[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
+
+        if is_buy:
+            breakout_peak = max(post_highs) if post_highs else signal_price
+            pullback_low = min(post_lows) if post_lows else signal_price
+            breakout_range = breakout_peak - signal_price if breakout_peak > signal_price else 0.01
+
+            if breakout_range > 0:
+                pullback_depth = (breakout_peak - pullback_low) / (breakout_range + 1e-10)
+                result["pullback_depth_pct"] = round(pullback_depth * 100, 1)
+
+                max_depth_ratio = 0.6
+                if pullback_depth > max_depth_ratio:
+                    result["pass_filter"] = False
+                    result["confidence_adjust"] = -0.05
+                    result["msg"] = f"回踩过深({pullback_depth:.0%}>60%)，信号弱化，-5%置信度"
+                elif pullback_depth > 0.4:
+                    result["confidence_adjust"] = -0.02
+                    result["msg"] = f"回踩较深({pullback_depth:.0%})，谨慎对待，-2%置信度"
+                else:
+                    result["confidence_adjust"] = 0.02
+                    result["msg"] = f"回踩可控({pullback_depth:.0%}<60%)，+2%置信度"
+            else:
+                result["msg"] = "突破幅度不足，无法计算回踩深度"
+
+            result["pullback_bars"] = check_bars
+        else:
+            breakout_trough = min(post_lows) if post_lows else signal_price
+            pullback_high = max(post_highs) if post_highs else signal_price
+            breakout_range = signal_price - breakout_trough if signal_price > breakout_trough else 0.01
+
+            if breakout_range > 0:
+                pullback_depth = (pullback_high - signal_price) / (breakout_range + 1e-10)
+                result["pullback_depth_pct"] = round(pullback_depth * 100, 1)
+
+                max_depth_ratio = 0.6
+                if pullback_depth > max_depth_ratio:
+                    result["pass_filter"] = False
+                    result["confidence_adjust"] = -0.05
+                    result["msg"] = f"反弹过深({pullback_depth:.0%}>60%)，信号弱化，-5%置信度"
+                elif pullback_depth > 0.4:
+                    result["confidence_adjust"] = -0.02
+                    result["msg"] = f"反弹较深({pullback_depth:.0%})，谨慎对待，-2%置信度"
+                else:
+                    result["confidence_adjust"] = 0.02
+                    result["msg"] = f"反弹可控({pullback_depth:.0%}<60%)，+2%置信度"
+            else:
+                result["msg"] = "跌破幅度不足，无法计算反弹深度"
+
+            result["pullback_bars"] = check_bars
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_breakout_strength_validation_v57(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """突破力度验证（V57 条件169）。
+
+    验证3买/3卖信号的突破笔力度是否足够：
+    - 突破笔收盘价变化必须大于进入中枢最后一笔的70%
+    - 突破时成交量必须大于中枢内平均成交量的1.2倍
+    """
+    result = {
+        "strength_adequate": False,
+        "force_ratio": 0.0,
+        "volume_ratio": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 30 or not volumes or len(volumes) < 30:
+            result["msg"] = "数据不足，跳过突破力度验证"
+            return result
+
+        bi_end_idx = 0
+        if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
+            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 30)
+        else:
+            bi_end_idx = max(0, len(closes) - 30)
+
+        if bi_end_idx < 10:
+            result["msg"] = "信号位置太早，无法计算力度"
+            return result
+
+        breakout_bi_force = abs(closes[bi_end_idx] - closes[bi_end_idx - 5]) / (closes[bi_end_idx - 5] + 1e-10) * 100
+        enter_bi_force = abs(closes[bi_end_idx - 5] - closes[bi_end_idx - 10]) / (closes[bi_end_idx - 10] + 1e-10) * 100
+
+        force_ratio = breakout_bi_force / (enter_bi_force + 1e-10)
+        result["force_ratio"] = round(force_ratio, 2)
+
+        recent_vol = sum(volumes[bi_end_idx - 5:bi_end_idx]) / 5 if bi_end_idx >= 5 else sum(volumes[-5:]) / 5
+        avg_zs_vol = sum(volumes[-30:-5]) / 25 if len(volumes) >= 30 else sum(volumes) / max(1, len(volumes))
+        volume_ratio = recent_vol / (avg_zs_vol + 1e-10)
+        result["volume_ratio"] = round(volume_ratio, 2)
+
+        strength_score = 0
+        if force_ratio >= 0.7:
+            strength_score += 1
+        if volume_ratio >= 1.2:
+            strength_score += 1
+
+        if strength_score == 2:
+            result["strength_adequate"] = True
+            result["confidence_adjust"] = 0.04
+            result["msg"] = f"突破力度充分：力度比{force_ratio:.2f}≥0.7 + 量比{volume_ratio:.2f}≥1.2，+4%置信度"
+        elif strength_score == 1:
+            result["confidence_adjust"] = 0.01
+            force_note = "≥0.7" if force_ratio >= 0.7 else "<0.7"
+            vol_note = "≥1.2" if volume_ratio >= 1.2 else "<1.2"
+            result["msg"] = f"突破力度部分达标：力度比{force_ratio:.2f}{force_note} + 量比{volume_ratio:.2f}{vol_note}，+1%置信度"
+        else:
+            result["confidence_adjust"] = -0.04
+            result["msg"] = f"突破力度不足：力度比{force_ratio:.2f}<0.7 且 量比{volume_ratio:.2f}<1.2，-4%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zs_divergence_check_v57(
+    mmd: "MMD",
+    bis: list[Any],
+    bc_list: list[Any] | None,
+) -> dict[str, Any]:
+    """中枢背驰检测（V57 条件170）。
+
+    检测突破笔之前中枢内是否出现背驰信号：
+    - 中枢内有背驰时，突破信号可信度降低
+    - 中枢内无背驰时，突破信号更可靠
+    """
+    result = {
+        "has_divergence": False,
+        "divergence_type": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if not bis or mmd.zs is None:
+            result["msg"] = "中枢或笔数据不足，跳过背驰检测"
+            return result
+
+        zs_start = getattr(mmd.zs, "start", None)
+        zs_end = getattr(mmd.zs, "end", None)
+        if zs_start is None or zs_end is None:
+            result["msg"] = "无法获取中枢边界"
+            return result
+
+        if not bc_list or len(bc_list) == 0:
+            result["msg"] = "无背驰数据，跳过检测"
+            return result
+
+        in_zs_divergence = False
+        div_type = "none"
+        for bc in bc_list:
+            bc_curr = getattr(bc, "curr", None)
+            bc_prev = getattr(bc, "prev", None)
+            if bc_curr is None or bc_prev is None:
+                continue
+            curr_idx = getattr(getattr(bc_curr, "k", None), "k_index", None)
+            prev_idx = getattr(getattr(bc_prev, "k", None), "k_index", None)
+            if curr_idx is None or prev_idx is None:
+                continue
+            if zs_start <= prev_idx and curr_idx <= zs_end:
+                in_zs_divergence = True
+                div_type = getattr(bc, "bc_type", "unknown")
+                break
+
+        result["has_divergence"] = in_zs_divergence
+        result["divergence_type"] = str(div_type)
+
+        if in_zs_divergence:
+            result["confidence_adjust"] = -0.03
+            result["msg"] = f"中枢内存在{div_type}背驰，突破信号可信度降低，-3%置信度"
+        else:
+            result["confidence_adjust"] = 0.02
+            result["msg"] = "中枢内无背驰，突破信号更可靠，+2%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_decay_detection_v57(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """信号衰减检测（V57 条件171）。
+
+    检测信号发生后的价格持续性：
+    - 信号后5-10根K线持续走弱 → 信号衰减，降低置信度
+    - 信号后价格稳定/走强 → 信号有效，提升置信度
+    """
+    result = {
+        "is_decaying": False,
+        "price_trend": "unknown",
+        "trend_momentum": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 20:
+            result["msg"] = "数据不足，跳过信号衰减检测"
+            return result
+
+        bi_end_idx = 0
+        if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
+            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 20)
+        else:
+            bi_end_idx = max(0, len(closes) - 20)
+
+        if bi_end_idx + 10 >= len(closes):
+            result["msg"] = "信号后数据不足"
+            return result
+
+        signal_price = closes[bi_end_idx]
+        check_bars = min(10, len(closes) - 1 - bi_end_idx)
+        post_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
+
+        if not post_closes:
+            result["msg"] = "无后续价格数据"
+            return result
+
+        latest_price = post_closes[-1]
+        if is_buy:
+            price_change = (latest_price - signal_price) / (signal_price + 1e-10) * 100
+            mid_price = post_closes[len(post_closes) // 2]
+            mid_change = (mid_price - signal_price) / (signal_price + 1e-10) * 100
+
+            result["trend_momentum"] = round(price_change, 2)
+
+            if price_change < -2.0 and mid_change > 0:
+                result["is_decaying"] = True
+                result["price_trend"] = "declining"
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"信号衰减：买入后价格下跌{price_change:.1f}%，{mid_change:.1f}%→{price_change:.1f}%，-4%置信度"
+            elif price_change > 1.0:
+                result["price_trend"] = "strong"
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"信号强效：买入后价格上涨{price_change:.1f}%，+3%置信度"
+            elif price_change > -1.0:
+                result["price_trend"] = "stable"
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"信号稳定：买入后价格变动{price_change:.1f}%，+1%置信度"
+            else:
+                result["price_trend"] = "weak"
+                result["confidence_adjust"] = -0.02
+                result["msg"] = f"信号偏弱：买入后价格下跌{price_change:.1f}%，-2%置信度"
+        else:
+            price_change = (signal_price - latest_price) / (signal_price + 1e-10) * 100
+            mid_price = post_closes[len(post_closes) // 2]
+            mid_change = (signal_price - mid_price) / (signal_price + 1e-10) * 100
+
+            result["trend_momentum"] = round(price_change, 2)
+
+            if price_change < -2.0 and mid_change > 0:
+                result["is_decaying"] = True
+                result["price_trend"] = "recovering"
+                result["confidence_adjust"] = -0.04
+                result["msg"] = f"信号衰减：卖出后价格反弹{price_change:.1f}%，{mid_change:.1f}%→{price_change:.1f}%，-4%置信度"
+            elif price_change > 1.0:
+                result["price_trend"] = "strong"
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"信号强效：卖出后价格下跌{price_change:.1f}%，+3%置信度"
+            elif price_change > -1.0:
+                result["price_trend"] = "stable"
+                result["confidence_adjust"] = 0.01
+                result["msg"] = f"信号稳定：卖出后价格变动{price_change:.1f}%，+1%置信度"
+            else:
+                result["price_trend"] = "weak"
+                result["confidence_adjust"] = -0.02
+                result["msg"] = f"信号偏弱：卖出后价格反弹{price_change:.1f}%，-2%置信度"
 
         return result
     except Exception:

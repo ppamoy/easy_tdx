@@ -975,6 +975,14 @@ async def diagnose_stock(
             "volatility_adaptive_position_v56": getattr(latest_mmd, "_volatility_adaptive_position_v56", None) if latest_mmd else None,
             # V56: 多信号共振评分（条件167）
             "multi_signal_resonance_v56": getattr(latest_mmd, "_multi_signal_resonance_v56", None) if latest_mmd else None,
+            # V57: 回踩幅度与时间双重过滤（条件168）
+            "pullback_filter_v57": getattr(latest_mmd, "_pullback_filter_v57", None) if latest_mmd else None,
+            # V57: 突破力度验证（条件169）
+            "breakout_strength_validation_v57": getattr(latest_mmd, "_breakout_strength_validation_v57", None) if latest_mmd else None,
+            # V57: 中枢背驰检测（条件170）
+            "zs_divergence_check_v57": getattr(latest_mmd, "_zs_divergence_check_v57", None) if latest_mmd else None,
+            # V57: 信号衰减检测（条件171）
+            "signal_decay_detection_v57": getattr(latest_mmd, "_signal_decay_detection_v57", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

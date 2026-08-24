@@ -404,6 +404,12 @@ class MMD:
     _volatility_adaptive_position_v56: dict[str, Any] | None = None  # 波动率自适应仓位建议（条件166）
     _multi_signal_resonance_v56: dict[str, Any] | None = None  # 多信号共振评分（条件167）
 
+    # V57 enhancement fields (2026-08-26)
+    _pullback_filter_v57: dict[str, Any] | None = None  # 回踩幅度与时间双重过滤（条件168）
+    _breakout_strength_validation_v57: dict[str, Any] | None = None  # 突破力度验证（条件169）
+    _zs_divergence_check_v57: dict[str, Any] | None = None  # 中枢背驰检测（条件170）
+    _signal_decay_detection_v57: dict[str, Any] | None = None  # 信号衰减检测（条件171）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
