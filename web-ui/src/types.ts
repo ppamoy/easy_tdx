@@ -1877,3 +1877,22 @@ export interface DiagnosisResult {
   position_suggestion: DiagnosisPositionSuggestion
   fibonacci: DiagnosisFibonacci
 }
+
+// ── V64: 多股票对比分析 ────────────────────────────────────────────────────────
+
+export interface MultiStockResult {
+  stock_code: string
+  stock_name: string
+  total_bars?: number
+  signal_count: number
+  buy_count: number
+  sell_count: number
+  avg_confidence: number
+  condition_breakdown: Record<string, number>
+  error?: string
+}
+
+export interface MultiStockComparisonResponse {
+  stocks: MultiStockResult[]
+  count: number
+}

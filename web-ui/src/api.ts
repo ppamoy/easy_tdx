@@ -22,6 +22,7 @@ import type {
   TaskListResponse,
   TaskState,
   TaskSubmitResponse,
+  MultiStockComparisonResponse,
 } from './types'
 
 const BASE = '/api/v1'
@@ -307,4 +308,19 @@ export async function fetchDiagnosis(market: string, code: string): Promise<Diag
   const resp = await fetch(`${BASE}/diagnosis/quick?market=${market}&code=${code}`)
   if (!resp.ok) await throwError(resp)
   return (await resp.json()) as DiagnosisResult
+}
+
+// ── V64: 多股票对比分析 ──────────────────────────────────────────────────────
+
+/** 多股票信号质量对比（V64 新增）。 */
+export async function fetchMultiStockComparison(
+  stocks: Array<{ market: string; code: string }>,
+): Promise<MultiStockComparisonResponse> {
+  const resp = await fetch(`${BASE}/diagnosis/multi-stock`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(stocks),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as MultiStockComparisonResponse
 }

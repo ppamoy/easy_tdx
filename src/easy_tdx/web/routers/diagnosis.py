@@ -28,6 +28,7 @@ from easy_tdx.web.convert import category_from_str, market_from_str
 from easy_tdx.web.deps import get_client
 from easy_tdx.web.schemas import StockIdentifier
 
+
 # V13: 延迟导入成交量剖面分析（避免循环导入）
 def _calc_volume_profile_for_diagnosis(
     closes: list[float] | None,
@@ -214,9 +215,9 @@ async def diagnose_stock(
     - market: 市场 (SZ/SH)
     - code: 6位股票代码
     """
-    from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-    from easy_tdx.chanlun.mmd import calc_signal_quality_report, _calc_atr_volatility, find_mmds_v39
-    from easy_tdx.MyTT import MACD, MA, BOLL, ATR, KDJ, RSI, DMI, OBV
+    from easy_tdx.chanlun import ChanlunAnalyser
+    from easy_tdx.chanlun.mmd import _calc_atr_volatility, calc_signal_quality_report, find_mmds_v39
+    from easy_tdx.MyTT import ATR, BOLL, DMI, KDJ, MA, MACD, OBV, RSI
 
     market = req.market
     code = req.code
@@ -1233,3 +1234,101 @@ async def quick_diagnosis(
         return {"error": "请提供股票代码"}
     req = StockIdentifier(market=market, code=code)
     return await diagnose_stock(req, client)
+
+
+@router.post("/diagnosis/multi-stock")
+async def multi_stock_comparison(
+    stocks: list[StockIdentifier],
+    client: Any = Depends(get_client),
+) -> dict[str, Any]:
+    """多股票信号质量对比分析（V64 新增）。
+
+    在同一请求中获取多只股票的缠论信号质量评分，便于横向比较。
+    返回每只股票的信号数量、平均置信度、各条件组命中次数。
+    """
+    if not stocks:
+        return {"error": "请提供至少一只股票"}
+
+    from easy_tdx.backtest.chanlun_validator import ConditionGroup
+
+    results: list[dict[str, Any]] = []
+    for stock in stocks:
+        try:
+            bar_data = client.get_security_bars(
+                category=stock.category,
+                exchange=stock.exchange,
+                code=stock.code,
+                start=-1,
+                end=-1,
+                count=500,
+            )
+            if not bar_data:
+                results.append({
+                    "stock_code": stock.code,
+                    "stock_name": stock.code,
+                    "error": "无K线数据",
+                })
+                continue
+
+            import pandas as pd
+            df = pd.DataFrame(bar_data)
+            if len(df) < 100:
+                results.append({
+                    "stock_code": stock.code,
+                    "stock_name": stock.code,
+                    "error": f"数据不足（{len(df)} bars）",
+                })
+                continue
+
+            from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+            config = ChanlunConfig()
+            analyser = ChanlunAnalyser(code=stock.code, frequency="daily", config=config)
+            chanlun_result = analyser.process_klines(df)
+
+            valid_signals = [
+                mmd for mmd in chanlun_result.mmds
+                if mmd.mmd_type.name in ("BUY_1", "BUY_2", "BUY_3", "SELL_1", "SELL_2", "SELL_3")
+                and mmd.bi is not None
+                and mmd.confidence >= 0.0
+            ]
+
+            # 条件命中统计
+            condition_counts: dict[str, int] = {}
+            for mmd in valid_signals:
+                for g in ConditionGroup:
+                    low, high = g.condition_range
+                    for c in range(low, high + 1):
+                        attr = f"_condition_{c}"
+                        if hasattr(mmd, attr):
+                            key = f"{g.value}_cond{c}"
+                            condition_counts[key] = condition_counts.get(key, 0) + 1
+                        # V63 特有字段
+                        if c == 190 and hasattr(mmd, "_zhongshu_level_weight_enhanced_v63"):
+                            condition_counts["v63_cond190"] = condition_counts.get("v63_cond190", 0) + 1
+                        if c == 191 and hasattr(mmd, "_multi_period_signal_decay_v63"):
+                            condition_counts["v63_cond191"] = condition_counts.get("v63_cond191", 0) + 1
+
+            buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
+            sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
+            avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0
+
+            results.append({
+                "stock_code": stock.code,
+                "stock_name": stock.code,
+                "total_bars": len(df),
+                "signal_count": len(valid_signals),
+                "buy_count": buy_count,
+                "sell_count": sell_count,
+                "avg_confidence": round(avg_conf, 4),
+                "condition_breakdown": condition_counts,
+            })
+        except Exception as e:
+            results.append({
+                "stock_code": stock.code,
+                "error": str(e),
+            })
+
+    return {
+        "stocks": results,
+        "count": len(results),
+    }

@@ -4,8 +4,8 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchDiagnosis, formatError } from '../api'
-import type { DiagnosisResult } from '../types'
+import { fetchDiagnosis, fetchMultiStockComparison, formatError } from '../api'
+import type { DiagnosisResult, MultiStockResult } from '../types'
 import KlineChart from '../components/KlineChart.vue'
 import type { Bar } from '../types'
 import { fetchBars } from '../api'
@@ -17,6 +17,18 @@ const code = ref('000001')
 const loading = ref(false)
 const error = ref('')
 const diagnosis = ref<DiagnosisResult | null>(null)
+
+// V64: 多股票对比模式
+type MultiStockEntry = { market: 'SZ' | 'SH'; code: string }
+const multiMode = ref(false)
+const multiInputs = ref<MultiStockEntry[]>([
+  { market: 'SZ', code: '000001' },
+  { market: 'SZ', code: '000002' },
+  { market: 'SH', code: '600000' },
+])
+const multiLoading = ref(false)
+const multiError = ref('')
+const multiResults = ref<MultiStockResult[]>([])
 
 // 评分颜色
 const SCORE_COLORS: Record<string, string> = {
@@ -65,6 +77,41 @@ async function loadBars() {
   }
 }
 
+// V64: 多股票对比分析
+function addStockEntry() {
+  multiInputs.value.push({ market: 'SZ', code: '' })
+}
+
+function removeStockEntry(index: number) {
+  if (multiInputs.value.length > 1) {
+    multiInputs.value.splice(index, 1)
+  }
+}
+
+async function runMultiStockComparison() {
+  const valid = multiInputs.value.filter(e => e.code.trim().match(/^\d{6}$/))
+  if (valid.length === 0) {
+    multiError.value = '请至少输入一个有效的 6 位股票代码'
+    return
+  }
+  multiLoading.value = true
+  multiError.value = ''
+  multiResults.value = []
+  try {
+    multiResults.value = (await fetchMultiStockComparison(valid.map(e => ({ market: e.market, code: e.code })))).stocks
+  } catch (e) {
+    multiError.value = formatError(e)
+  } finally {
+    multiLoading.value = false
+  }
+}
+
+const confLevelColor = (conf: number): string => {
+  if (conf >= 0.7) return '#22c55e'
+  if (conf >= 0.5) return '#f59e0b'
+  return '#ef4444'
+}
+
 const PATTERN_LABELS: Record<string, string> = {
   doji: '十字星',
   hammer: '锤子线',
@@ -97,6 +144,11 @@ onMounted(() => {
   <div class="diagnosis-page">
     <!-- 输入区 -->
     <div class="input-bar">
+      <div class="mode-toggle">
+        <button :class="{ active: !multiMode }" @click="multiMode = false">单股诊断</button>
+        <button :class="{ active: multiMode }" @click="multiMode = !multiMode">V64 多股对比</button>
+      </div>
+      <template v-if="!multiMode">
       <div class="input-group">
         <select v-model="market" class="market-select">
           <option value="SZ">深市</option>
@@ -114,6 +166,29 @@ onMounted(() => {
         </button>
       </div>
       <span v-if="error" class="error-msg">{{ error }}</span>
+      </template>
+      <template v-else>
+      <div class="multi-input-area">
+        <div v-for="(entry, idx) in multiInputs" :key="idx" class="multi-entry">
+          <select v-model="entry.market" class="market-select">
+            <option value="SZ">深市</option>
+            <option value="SH">沪市</option>
+          </select>
+          <input
+            v-model="entry.code"
+            placeholder="6 位代码"
+            maxlength="6"
+            class="code-input"
+          />
+          <button class="ghost btn-remove" :disabled="multiInputs.length <= 1" @click="removeStockEntry(idx)">✕</button>
+        </div>
+        <button class="ghost" @click="addStockEntry">+ 添加股票</button>
+        <button class="primary" :disabled="multiLoading" @click="runMultiStockComparison">
+          {{ multiLoading ? '对比中…' : '📊 多股对比' }}
+        </button>
+      </div>
+      <span v-if="multiError" class="error-msg">{{ multiError }}</span>
+      </template>
     </div>
 
     <!-- 加载态 -->
@@ -4037,6 +4112,69 @@ onMounted(() => {
       </div>
     </template>
 
+    <!-- V64: 多股票对比结果 -->
+    <template v-if="multiMode && multiResults.length > 0">
+      <div class="multi-compare-section">
+        <div class="section-title">📊 V64 多股票信号质量对比</div>
+        <div class="multi-table-wrap">
+          <table class="multi-table">
+            <thead>
+              <tr>
+                <th>股票代码</th>
+                <th>K线数</th>
+                <th>总信号</th>
+                <th>买入</th>
+                <th>卖出</th>
+                <th>平均置信度</th>
+                <th>V63-190命中</th>
+                <th>V63-191命中</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in multiResults" :key="r.stock_code">
+                <td class="code-cell">{{ r.stock_code }}</td>
+                <td>{{ r.total_bars ?? '—' }}</td>
+                <td>{{ r.signal_count }}</td>
+                <td class="buy-cell">{{ r.buy_count }}</td>
+                <td class="sell-cell">{{ r.sell_count }}</td>
+                <td>
+                  <span class="conf-badge" :style="{ background: confLevelColor(r.avg_confidence) + '22', color: confLevelColor(r.avg_confidence) }">
+                    {{ r.avg_confidence.toFixed(2) }}
+                  </span>
+                </td>
+                <td>{{ r.condition_breakdown?.v63_cond190 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v63_cond191 ?? 0 }}</td>
+                <td>
+                  <span v-if="r.error" class="status-err">❌ {{ r.error }}</span>
+                  <span v-else class="status-ok">✅ 正常</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- 条件命中详情 -->
+        <div v-if="multiResults.some(r => Object.keys(r.condition_breakdown || {}).length > 0)" class="condition-detail">
+          <div class="section-title">条件命中详情（V58-V63）</div>
+          <div class="cond-grid">
+            <div v-for="r in multiResults" :key="r.stock_code" class="cond-card" v-if="Object.keys(r.condition_breakdown || {}).length > 0">
+              <div class="cond-card-title">{{ r.stock_code }}</div>
+              <div v-for="(count, key) in r.condition_breakdown" :key="key" class="cond-row">
+                <span class="cond-key">{{ key }}</span>
+                <span class="cond-val">{{ count }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- 多股对比加载态 -->
+    <div v-else-if="multiMode && multiLoading" class="state-center">
+      <div class="spinner"></div>
+      <p>正在对比分析多只股票…</p>
+    </div>
+
     <!-- 错误 -->
     <div v-else class="state-center error-state">
       <p>⚠️ {{ error }}</p>
@@ -4529,7 +4667,70 @@ onMounted(() => {
 .v62-boll-rev .kv-val { font-weight: 600; }
 .v62-dyn-threshold .kv-val { font-weight: 600; }
 .v62-atr-mult .kv-val { font-weight: 600; }
-</style>
+
 /* V63: 中枢级别权重优化 + 多周期信号衰减追踪 */
 .v63-zs-weight .kv-val { font-weight: 600; }
 .v63-signal-decay .kv-val { font-weight: 600; }
+
+/* V64: 多股票对比分析 */
+.mode-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
+.mode-toggle button {
+  padding: 6px 16px; border-radius: 6px; border: 1px solid #d1d5db;
+  background: #f9fafb; cursor: pointer; font-size: 13px; color: #374151;
+  transition: all 0.15s;
+}
+.mode-toggle button.active {
+  background: #3b82f6; color: #fff; border-color: #3b82f6;
+}
+.multi-input-area {
+  display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 500px;
+}
+.multi-entry {
+  display: flex; gap: 8px; align-items: center;
+}
+.btn-remove {
+  width: 32px; height: 32px; padding: 0; font-size: 14px; flex-shrink: 0;
+}
+.multi-compare-section { width: 100%; margin-top: 24px; }
+.multi-table-wrap { overflow-x: auto; }
+.multi-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+  background: #fff; border-radius: 8px; overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.multi-table th {
+  background: #f3f4f6; padding: 10px 12px; text-align: left;
+  font-weight: 600; color: #374151; border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.multi-table td {
+  padding: 9px 12px; border-bottom: 1px solid #f3f4f6; vertical-align: middle;
+}
+.multi-table tr:last-child td { border-bottom: none; }
+.code-cell { font-family: monospace; font-weight: 600; color: #1f2937; }
+.buy-cell { color: #16a34a; }
+.sell-cell { color: #dc2626; }
+.conf-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 12px; font-weight: 600;
+}
+.status-ok { color: #16a34a; font-size: 12px; }
+.status-err { color: #dc2626; font-size: 12px; }
+.cond-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px; margin-top: 12px;
+}
+.cond-card {
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 12px; font-size: 12px;
+}
+.cond-card-title {
+  font-weight: 700; font-size: 13px; color: #1f2937;
+  margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #f3f4f6;
+}
+.cond-row {
+  display: flex; justify-content: space-between; padding: 3px 0;
+}
+.cond-key { color: #6b7280; }
+.cond-val { font-weight: 600; color: #374151; }
+</style>
