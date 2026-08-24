@@ -3303,6 +3303,97 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V58: 多时间框架趋势一致性 -->
+        <div v-if="diagnosis.chanlun.multi_tf_trend_consistency_v58" class="metric-card v58-tf">
+          <div class="card-title">📊 V58 多时间框架趋势一致性（条件172）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">排列状态</span>
+              <span class="tag" :class="diagnosis.chanlun.multi_tf_trend_consistency_v58.bullish_alignment ? 'tag-green' : diagnosis.chanlun.multi_tf_trend_consistency_v58.bearish_alignment ? 'tag-red' : 'tag-gray'">
+                {{ diagnosis.chanlun.multi_tf_trend_consistency_v58.bullish_alignment ? '✅ 多头排列' : diagnosis.chanlun.multi_tf_trend_consistency_v58.bearish_alignment ? '🔴 空头排列' : '⚪ 交错' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">MA5</span><span class="kv-val">{{ diagnosis.chanlun.multi_tf_trend_consistency_v58.short_ma }}</span></div>
+            <div class="kv-row"><span class="kv-key">MA20</span><span class="kv-val">{{ diagnosis.chanlun.multi_tf_trend_consistency_v58.mid_ma }}</span></div>
+            <div class="kv-row"><span class="kv-key">MA60</span><span class="kv-val">{{ diagnosis.chanlun.multi_tf_trend_consistency_v58.long_ma }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_tf_trend_consistency_v58.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.multi_tf_trend_consistency_v58.confidence_adjust < 0 ? '#ef4444' : '#9ca3af' }">
+                {{ diagnosis.chanlun.multi_tf_trend_consistency_v58.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_trend_consistency_v58.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.multi_tf_trend_consistency_v58.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V58: 成交量堆积验证 -->
+        <div v-if="diagnosis.chanlun.volume_accumulation_validation_v58" class="metric-card v58-vol">
+          <div class="card-title">📈 V58 成交量堆积验证（条件173）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">量能状态</span>
+              <span class="tag" :class="diagnosis.chanlun.volume_accumulation_validation_v58.volume_adequate ? 'tag-green' : 'tag-red'">
+                {{ diagnosis.chanlun.volume_accumulation_validation_v58.volume_adequate ? '✅ 量能充足' : '🚨 无量突破' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">量比</span><span class="kv-val">{{ diagnosis.chanlun.volume_accumulation_validation_v58.volume_ratio }}</span></div>
+            <div class="kv-row"><span class="kv-key">近5日均量</span><span class="kv-val">{{ diagnosis.chanlun.volume_accumulation_validation_v58.recent_vol }}</span></div>
+            <div class="kv-row"><span class="kv-key">近20日均量</span><span class="kv-val">{{ diagnosis.chanlun.volume_accumulation_validation_v58.avg_vol_20 }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.volume_accumulation_validation_v58.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.volume_accumulation_validation_v58.confidence_adjust < 0 ? '#ef4444' : '#9ca3af' }">
+                {{ diagnosis.chanlun.volume_accumulation_validation_v58.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volume_accumulation_validation_v58.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.volume_accumulation_validation_v58.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V58: ATR自适应止损 -->
+        <div v-if="diagnosis.chanlun.atr_adaptive_stop_v58" class="metric-card v58-atr">
+          <div class="card-title">🛡️ V58 ATR自适应止损距离（条件174）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">波动率等级</span>
+              <span class="tag" :class="diagnosis.chanlun.atr_adaptive_stop_v58.volatility_level === 'low' ? 'tag-green' : diagnosis.chanlun.atr_adaptive_stop_v58.volatility_level === 'medium' ? 'tag-blue' : diagnosis.chanlun.atr_adaptive_stop_v58.volatility_level === 'high' ? 'tag-orange' : 'tag-red'">
+                {{ { low: '低波动', medium: '正常', high: '高波动', extreme: '极高波动', unknown: '未知' }[diagnosis.chanlun.atr_adaptive_stop_v58.volatility_level] || '未知' }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">ATR(14)</span><span class="kv-val">{{ diagnosis.chanlun.atr_adaptive_stop_v58.atr_14 }}</span></div>
+            <div class="kv-row"><span class="kv-key">建议止损位</span><span class="kv-val">{{ diagnosis.chanlun.atr_adaptive_stop_v58.stop_loss_price }}</span></div>
+            <div class="kv-row"><span class="kv-key">止损距离</span><span class="kv-val">{{ diagnosis.chanlun.atr_adaptive_stop_v58.stop_distance_pct }}%</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span class="kv-val" :style="{ color: diagnosis.chanlun.atr_adaptive_stop_v58.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.atr_adaptive_stop_v58.confidence_adjust < 0 ? '#ef4444' : '#9ca3af' }">
+                {{ diagnosis.chanlun.atr_adaptive_stop_v58.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.atr_adaptive_stop_v58.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.atr_adaptive_stop_v58.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V58: 信号质量综合评分 -->
+        <div v-if="diagnosis.chanlun.composite_quality_score_v58" class="metric-card v58-quality">
+          <div class="card-title">⭐ V58 信号质量综合评分（条件175）</div>
+          <div class="card-body">
+            <div class="kv-row">
+              <span class="kv-key">质量等级</span>
+              <span class="tag" :class="{
+                'tag-green': diagnosis.chanlun.composite_quality_score_v58.grade === 'S',
+                'tag-blue': diagnosis.chanlun.composite_quality_score_v58.grade === 'A',
+                'tag-gray': diagnosis.chanlun.composite_quality_score_v58.grade === 'B',
+                'tag-orange': diagnosis.chanlun.composite_quality_score_v58.grade === 'C',
+                'tag-red': diagnosis.chanlun.composite_quality_score_v58.grade === 'D'
+              }">
+                {{ diagnosis.chanlun.composite_quality_score_v58.grade }}档 — {{ diagnosis.chanlun.composite_quality_score_v58.grade_desc }}
+              </span>
+            </div>
+            <div class="kv-row"><span class="kv-key">综合调整</span><span class="kv-val" :style="{ color: diagnosis.chanlun.composite_quality_score_v58.total_adjust >= 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.composite_quality_score_v58.total_adjust >= 0 ? '+' : '' }}{{ (diagnosis.chanlun.composite_quality_score_v58.total_adjust*100).toFixed(0) }}%</span></div>
+            <div class="kv-row"><span class="kv-key">明细</span><span class="kv-val" style="font-size:12px;word-break:break-all">{{ Object.entries(diagnosis.chanlun.composite_quality_score_v58.detail_scores).map(([k,v])=>`${k}=${v>=0?'+':''}${(v*100).toFixed(0)}%`).join(' | ') || '无有效条件' }}</span></div>
+            <div class="kv-note">{{ diagnosis.chanlun.composite_quality_score_v58.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -4084,4 +4175,10 @@ onMounted(() => {
 
 /* V55 custom tag colors */
 .tag-gold { background: #f59e0b; color: #fff; }
+
+/* V58: 多时间框架 + 成交量堆积 + ATR止损 + 质量评分 */
+.v58-tf .kv-val { font-weight: 600; }
+.v58-vol .kv-val { font-weight: 600; }
+.v58-atr .kv-val { font-weight: 600; }
+.v58-quality .kv-val { font-weight: 600; }
 </style>

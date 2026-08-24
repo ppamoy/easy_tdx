@@ -11711,6 +11711,42 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V58 条件 172-175 ──
+
+        # 条件172：多时间框架趋势一致性验证（Multi-Timeframe Trend Consistency）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 60:
+            try:
+                tf_consistency = _calc_multi_tf_trend_consistency_v58(mmd, closes)
+                mmd._multi_tf_trend_consistency_v58 = tf_consistency
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_consistency.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件173：成交量堆积验证（Volume Accumulation Validation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and len(closes) >= 30:
+            try:
+                vol_accum = _calc_volume_accumulation_validation_v58(mmd, closes, volumes)
+                mmd._volume_accumulation_validation_v58 = vol_accum
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_accum.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件174：ATR自适应止损距离（ATR Adaptive Stop Distance）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+            try:
+                atr_stop = _calc_atr_adaptive_stop_v58(mmd, highs, lows)
+                mmd._atr_adaptive_stop_v58 = atr_stop
+            except Exception:
+                pass
+
+        # 条件175：信号质量综合评分（Composite Quality Score）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
+            try:
+                quality = _calc_composite_quality_score_v58(mmd)
+                mmd._composite_quality_score_v58 = quality
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -17399,6 +17435,305 @@ def _calc_signal_decay_detection_v57(
                 result["price_trend"] = "weak"
                 result["confidence_adjust"] = -0.02
                 result["msg"] = f"信号偏弱：卖出后价格反弹{price_change:.1f}%，-2%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_tf_trend_consistency_v58(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多时间框架趋势一致性验证（V58 条件172）。
+
+    通过短/中/长期均线的方向判断当前趋势是否与信号方向一致：
+    - 3买信号：短期MA(5)>中期MA(20)>长期MA(60) = 多头排列 → +3%
+    - 3买信号：短期MA(5)<中期MA(20)<长期MA(60) = 空头排列 → -3%
+    - 3卖信号方向相反
+    """
+    result = {
+        "short_ma": 0.0,
+        "mid_ma": 0.0,
+        "long_ma": 0.0,
+        "bullish_alignment": False,
+        "bearish_alignment": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 65:
+            result["msg"] = "数据不足，需要至少65根K线"
+            return result
+
+        def ma(data: list[float], period: int) -> float:
+            return sum(data[-period:]) / period
+
+        short_ma = ma(closes, 5)
+        mid_ma = ma(closes, 20)
+        long_ma = ma(closes, 60)
+
+        result["short_ma"] = round(short_ma, 2)
+        result["mid_ma"] = round(mid_ma, 2)
+        result["long_ma"] = round(long_ma, 2)
+
+        bullish = short_ma > mid_ma > long_ma
+        bearish = short_ma < mid_ma < long_ma
+        result["bullish_alignment"] = bullish
+        result["bearish_alignment"] = bearish
+
+        if is_buy:
+            if bullish:
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"多头排列确认( MA5={short_ma:.2f} > MA20={mid_ma:.2f} > MA60={long_ma:.2f} )，+3%置信度"
+            elif bearish:
+                result["confidence_adjust"] = -0.03
+                result["msg"] = f"空头排列确认( MA5={short_ma:.2f} < MA20={mid_ma:.2f} < MA60={long_ma:.2f} )，-3%置信度"
+            else:
+                result["msg"] = f"均线交错( MA5={short_ma:.2f}, MA20={mid_ma:.2f}, MA60={long_ma:.2f} )，无明确方向，0%调整"
+        else:
+            if bearish:
+                result["confidence_adjust"] = 0.03
+                result["msg"] = f"空头排列确认，卖出信号增强，+3%置信度"
+            elif bullish:
+                result["confidence_adjust"] = -0.03
+                result["msg"] = f"多头排列确认，卖出信号弱化，-3%置信度"
+            else:
+                result["msg"] = f"均线交错，无明确方向，0%调整"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_accumulation_validation_v58(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """成交量堆积验证（V58 条件173）。
+
+    通过近期成交量与历史平均成交量的比值，验证价格突破时是否有量能配合：
+    - 量比 ≥ 1.5（放量突破）→ +3%置信度
+    - 量比 1.0-1.5（温和放量）→ +1%置信度
+    - 量比 < 1.0（缩量突破）→ -3%置信度（无量突破可信度低）
+    """
+    result = {
+        "volume_ratio": 0.0,
+        "recent_vol": 0.0,
+        "avg_vol_20": 0.0,
+        "volume_adequate": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 25 or not volumes or len(volumes) < 25:
+            result["msg"] = "数据不足，需要至少25根K线和成交量"
+            return result
+
+        recent_vol = sum(volumes[-5:]) / 5
+        avg_vol_20 = sum(volumes[-20:]) / 20
+
+        result["recent_vol"] = round(recent_vol, 2)
+        result["avg_vol_20"] = round(avg_vol_20, 2)
+
+        volume_ratio = recent_vol / (avg_vol_20 + 1e-10)
+        result["volume_ratio"] = round(volume_ratio, 2)
+
+        if volume_ratio >= 1.5:
+            result["volume_adequate"] = True
+            result["confidence_adjust"] = 0.03
+            result["msg"] = f"放量突破(量比={volume_ratio:.2f}≥1.5)，量能配合良好，+3%置信度"
+        elif volume_ratio >= 1.0:
+            result["volume_adequate"] = True
+            result["confidence_adjust"] = 0.01
+            result["msg"] = f"温和放量(量比={volume_ratio:.2f})，+1%置信度"
+        else:
+            result["volume_adequate"] = False
+            result["confidence_adjust"] = -0.03
+            result["msg"] = f"缩量突破(量比={volume_ratio:.2f}<1.0)，无量突破可信度低，-3%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_atr_adaptive_stop_v58(
+    mmd: "MMD",
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """ATR自适应止损距离（V58 条件174）。
+
+    基于ATR(14)计算动态止损距离，帮助投资者设置合理止损位：
+    - 输出建议止损价位（3买：止损位；3卖：反弹止损位）
+    - 波动率等级分类（低/中/高/极高）
+    - 置信度微调（高波动时-1%，极高波动时-2%）
+    """
+    result = {
+        "atr_14": 0.0,
+        "stop_loss_price": 0.0,
+        "stop_distance_pct": 0.0,
+        "volatility_level": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if not highs or not lows or len(highs) < 15 or len(lows) < 15:
+            result["msg"] = "数据不足，需要至少15根K线"
+            return result
+
+        # 计算ATR(14)
+        tr_list: list[float] = []
+        for i in range(1, len(highs)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - lows[i - 1]),
+                abs(lows[i] - highs[i - 1]),
+            )
+            tr_list.append(tr)
+
+        if len(tr_list) < 14:
+            result["msg"] = "TR数据不足"
+            return result
+
+        atr_14 = sum(tr_list[-14:]) / 14
+        result["atr_14"] = round(atr_14, 4)
+
+        current_price = highs[-1]
+
+        # 波动率等级
+        atr_pct = atr_14 / (current_price + 1e-10) * 100
+        if atr_pct < 1.5:
+            vol_level = "low"
+        elif atr_pct < 3.0:
+            vol_level = "medium"
+        elif atr_pct < 5.0:
+            vol_level = "high"
+        else:
+            vol_level = "extreme"
+
+        result["volatility_level"] = vol_level
+
+        # 止损距离 = 2倍ATR
+        stop_distance = 2 * atr_14
+        stop_pct = stop_distance / (current_price + 1e-10) * 100
+        result["stop_distance_pct"] = round(stop_pct, 2)
+
+        if is_buy:
+            stop_price = current_price - stop_distance
+            result["stop_loss_price"] = round(stop_price, 2)
+            result["msg"] = (
+                f"3买信号 | ATR={atr_14:.4f}({atr_pct:.2f}%) | "
+                f"建议止损位={stop_price:.2f}({stop_distance:.2f}元,{stop_pct:.1f}%) | "
+                f"波动率={vol_level}"
+            )
+            if vol_level in ("high", "extreme"):
+                result["confidence_adjust"] = -0.01 if vol_level == "high" else -0.02
+                result["msg"] += "，高波动，-1%/-2%置信度"
+        else:
+            stop_price = current_price + stop_distance
+            result["stop_loss_price"] = round(stop_price, 2)
+            result["msg"] = (
+                f"3卖信号 | ATR={atr_14:.4f}({atr_pct:.2f}%) | "
+                f"建议反弹止损位={stop_price:.2f}({stop_distance:.2f}元,{stop_pct:.1f}%) | "
+                f"波动率={vol_level}"
+            )
+            if vol_level in ("high", "extreme"):
+                result["confidence_adjust"] = -0.01 if vol_level == "high" else -0.02
+                result["msg"] += "，高波动，-1%/-2%置信度"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_composite_quality_score_v58(
+    mmd: "MMD",
+) -> dict[str, Any]:
+    """信号质量综合评分（V58 条件175）。
+
+    综合所有V57和V58条件的结果，给出一个综合质量评分：
+    - 汇总所有confidence_adjust
+    - 评分等级：S(≥+10%) / A(+5~+10%) / B(0~+5%) / C(-5~0%) / D(<-5%)
+    - 不直接调整confidence，仅作为参考输出
+    """
+    result = {
+        "total_adjust": 0.0,
+        "grade": "C",
+        "grade_desc": "",
+        "detail_scores": {},
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        fields_to_sum = [
+            ("pullback_filter_v57", "_pullback_filter_v57"),
+            ("breakout_strength_v57", "_breakout_strength_validation_v57"),
+            ("zs_divergence_v57", "_zs_divergence_check_v57"),
+            ("signal_decay_v57", "_signal_decay_detection_v57"),
+            ("multi_tf_v58", "_multi_tf_trend_consistency_v58"),
+            ("volume_accum_v58", "_volume_accumulation_validation_v58"),
+            ("atr_stop_v58", "_atr_adaptive_stop_v58"),
+        ]
+
+        total = 0.0
+        details: dict[str, float] = {}
+        for label, attr in fields_to_sum:
+            val = getattr(mmd, attr, None)
+            if isinstance(val, dict):
+                adj = val.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    details[label] = round(adj, 4)
+                    total += adj
+
+        result["total_adjust"] = round(total, 4)
+        result["detail_scores"] = details
+
+        # 评级
+        if total >= 0.10:
+            grade, desc = "S", "极强信号"
+        elif total >= 0.05:
+            grade, desc = "A", "强信号"
+        elif total >= 0.0:
+            grade, desc = "B", "中等信号"
+        elif total >= -0.05:
+            grade, desc = "C", "偏弱信号"
+        else:
+            grade, desc = "D", "弱信号，需谨慎"
+
+        result["grade"] = grade
+        result["grade_desc"] = desc
+
+        detail_str = "，".join(f"{k}={v:+.0%}" for k, v in details.items()) if details else "无有效条件"
+        result["msg"] = (
+            f"综合质量评分：{grade}档({desc}) | "
+            f"总调整={total:+.0%} | "
+            f"明细：{detail_str}"
+        )
 
         return result
     except Exception:

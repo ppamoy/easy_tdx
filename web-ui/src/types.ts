@@ -1535,6 +1535,42 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V58: 多时间框架趋势一致性验证（条件172）
+  multi_tf_trend_consistency_v58?: {
+    short_ma: number
+    mid_ma: number
+    long_ma: number
+    bullish_alignment: boolean
+    bearish_alignment: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V58: 成交量堆积验证（条件173）
+  volume_accumulation_validation_v58?: {
+    volume_ratio: number
+    recent_vol: number
+    avg_vol_20: number
+    volume_adequate: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V58: ATR自适应止损距离（条件174）
+  atr_adaptive_stop_v58?: {
+    atr_14: number
+    stop_loss_price: number
+    stop_distance_pct: number
+    volatility_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V58: 信号质量综合评分（条件175）
+  composite_quality_score_v58?: {
+    total_adjust: number
+    grade: string
+    grade_desc: string
+    detail_scores: Record<string, number>
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

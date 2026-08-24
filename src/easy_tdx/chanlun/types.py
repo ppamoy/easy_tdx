@@ -410,6 +410,12 @@ class MMD:
     _zs_divergence_check_v57: dict[str, Any] | None = None  # 中枢背驰检测（条件170）
     _signal_decay_detection_v57: dict[str, Any] | None = None  # 信号衰减检测（条件171）
 
+    # V58 enhancement fields (2026-08-26)
+    _multi_tf_trend_consistency_v58: dict[str, Any] | None = None  # 多时间框架趋势一致性验证（条件172）
+    _volume_accumulation_validation_v58: dict[str, Any] | None = None  # 成交量堆积验证（条件173）
+    _atr_adaptive_stop_v58: dict[str, Any] | None = None  # ATR自适应止损距离（条件174）
+    _composite_quality_score_v58: dict[str, Any] | None = None  # 信号质量综合评分（条件175）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

@@ -983,6 +983,14 @@ async def diagnose_stock(
             "zs_divergence_check_v57": getattr(latest_mmd, "_zs_divergence_check_v57", None) if latest_mmd else None,
             # V57: 信号衰减检测（条件171）
             "signal_decay_detection_v57": getattr(latest_mmd, "_signal_decay_detection_v57", None) if latest_mmd else None,
+            # V58: 多时间框架趋势一致性验证（条件172）
+            "multi_tf_trend_consistency_v58": getattr(latest_mmd, "_multi_tf_trend_consistency_v58", None) if latest_mmd else None,
+            # V58: 成交量堆积验证（条件173）
+            "volume_accumulation_validation_v58": getattr(latest_mmd, "_volume_accumulation_validation_v58", None) if latest_mmd else None,
+            # V58: ATR自适应止损距离（条件174）
+            "atr_adaptive_stop_v58": getattr(latest_mmd, "_atr_adaptive_stop_v58", None) if latest_mmd else None,
+            # V58: 信号质量综合评分（条件175）
+            "composite_quality_score_v58": getattr(latest_mmd, "_composite_quality_score_v58", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
