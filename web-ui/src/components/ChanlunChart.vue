@@ -313,7 +313,6 @@ function buildOption(): echarts.EChartsCoreOption {
       axisLabel: { formatter: (v: number) => fmt2(v), color: '#5c6370' },
     },
     dataZoom: [
-      { type: 'inside', start: 50, end: 100 },
       { type: 'slider', bottom: 10, start: 50, end: 100, textStyle: { color: '#5c6370' } },
     ],
     series: [
@@ -436,6 +435,11 @@ function resize() {
 onMounted(() => {
   render()
   window.addEventListener('resize', resize)
+  // 在捕获阶段阻止图表容器吞没滚轮事件，确保页面可以滚动
+  const el = container.value
+  if (el) {
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resize)

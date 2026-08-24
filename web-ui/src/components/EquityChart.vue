@@ -60,7 +60,7 @@ function buildOption(): echarts.EChartsCoreOption {
         axisLabel: { formatter: (v: number) => fmt2(v) },
       },
     ],
-    dataZoom: [{ type: 'inside', start: 0, end: 100 }],
+    dataZoom: [],
     series: [
       {
         name: '净值',
@@ -91,6 +91,10 @@ function resize() {
 onMounted(() => {
   render()
   window.addEventListener('resize', resize)
+  const el = container.value
+  if (el) {
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resize)

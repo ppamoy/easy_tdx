@@ -1679,6 +1679,43 @@ export interface DiagnosisChanlun {
     decision_help: string
     recommendation: string
   } | null
+  // V62: BOLL带宽突破确认（条件186）
+  boll_bandwidth_breakout_v62?: {
+    boll_upper: number
+    boll_lower: number
+    band_width: number
+    price_position: string
+    breakout_confirmed: boolean
+    band_trend: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V62: BOLL带宽压缩反弹确认（条件187）
+  boll_bandwidth_reversal_v62?: {
+    band_width_rank: number
+    squeeze_active: boolean
+    reversal_confirmed: boolean
+    reversal_type: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V62: 动态阈值-波动率状态切换（条件188）
+  dynamic_threshold_volatility_regime_v62?: {
+    atr_pct: number
+    volatility_regime: string
+    threshold_adjustment: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V62: 动态阈值-ATR倍数自适应（条件189）
+  dynamic_threshold_atr_multiplier_v62?: {
+    atr_14: number
+    optimal_multiplier: number
+    stop_distance_pct: number
+    volatility_regime: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

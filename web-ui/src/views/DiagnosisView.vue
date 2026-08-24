@@ -3615,7 +3615,74 @@ onMounted(() => {
            </div>
          </div>
 
-         <!-- MACD -->
+          <!-- V62: BOLL带宽突破确认 -->
+          <div v-if="diagnosis.chanlun.boll_bandwidth_breakout_v62" class="metric-card v62-boll-bw">
+             <div class="card-title">📊 V62 BOLL带宽突破确认（条件186）</div>
+             <div class="card-body">
+               <div class="kv-row"><span class="kv-key">BOLL上轨/下轨</span><span class="kv-val">{{ diagnosis.chanlun.boll_bandwidth_breakout_v62.boll_upper }} / {{ diagnosis.chanlun.boll_bandwidth_breakout_v62.boll_lower }}</span></div>
+               <div class="kv-row"><span class="kv-key">带宽</span><span class="kv-val">{{ diagnosis.chanlun.boll_bandwidth_breakout_v62.band_width.toFixed(2) }}%</span></div>
+               <div class="kv-row"><span class="kv-key">价格位置</span><span class="tag" :class="diagnosis.chanlun.boll_bandwidth_breakout_v62.price_position === 'upper' ? 'tag-green' : diagnosis.chanlun.boll_bandwidth_breakout_v62.price_position === 'lower' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.boll_bandwidth_breakout_v62.price_position }}</span></div>
+               <div class="kv-row"><span class="kv-key">带宽趋势</span><span class="tag" :class="diagnosis.chanlun.boll_bandwidth_breakout_v62.band_trend === 'expanding' ? 'tag-green' : diagnosis.chanlun.boll_bandwidth_breakout_v62.band_trend === 'contracting' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.boll_bandwidth_breakout_v62.band_trend }}</span></div>
+               <div class="kv-row"><span class="kv-key">突破确认</span><span class="tag" :class="diagnosis.chanlun.boll_bandwidth_breakout_v62.breakout_confirmed ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.boll_bandwidth_breakout_v62.breakout_confirmed ? '是' : '否' }}</span></div>
+               <div class="kv-row"><span class="kv-key">置信度调整</span>
+                 <span :style="{ color: diagnosis.chanlun.boll_bandwidth_breakout_v62.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.boll_bandwidth_breakout_v62.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                   {{ diagnosis.chanlun.boll_bandwidth_breakout_v62.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.boll_bandwidth_breakout_v62.confidence_adjust*100).toFixed(0) }}%
+                 </span>
+               </div>
+               <div class="kv-note">{{ diagnosis.chanlun.boll_bandwidth_breakout_v62.msg }}</div>
+             </div>
+           </div>
+
+           <!-- V62: BOLL带宽压缩反弹确认 -->
+           <div v-if="diagnosis.chanlun.boll_bandwidth_reversal_v62" class="metric-card v62-boll-rev">
+              <div class="card-title">🔄 V62 BOLL带宽压缩反弹确认（条件187）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">带宽分位</span><span class="kv-val">{{ (diagnosis.chanlun.boll_bandwidth_reversal_v62.band_width_rank*100).toFixed(0) }}%</span></div>
+                <div class="kv-row"><span class="kv-key">压缩状态</span><span class="tag" :class="diagnosis.chanlun.boll_bandwidth_reversal_v62.squeeze_active ? 'tag-orange' : 'tag-gray'">{{ diagnosis.chanlun.boll_bandwidth_reversal_v62.squeeze_active ? '压缩中' : '正常' }}</span></div>
+                <div class="kv-row"><span class="kv-key">反弹确认</span><span class="tag" :class="diagnosis.chanlun.boll_bandwidth_reversal_v62.reversal_confirmed ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.boll_bandwidth_reversal_v62.reversal_confirmed ? '是' : '否' }}</span></div>
+                <div class="kv-row"><span class="kv-key">反弹类型</span><span class="tag" :class="diagnosis.chanlun.boll_bandwidth_reversal_v62.reversal_type === 'bullish_reversal' ? 'tag-green' : diagnosis.chanlun.boll_bandwidth_reversal_v62.reversal_type === 'bearish_reversal' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.boll_bandwidth_reversal_v62.reversal_type }}</span></div>
+                <div class="kv-row"><span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.boll_bandwidth_reversal_v62.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.boll_bandwidth_reversal_v62.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.boll_bandwidth_reversal_v62.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.boll_bandwidth_reversal_v62.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.boll_bandwidth_reversal_v62.msg }}</div>
+              </div>
+           </div>
+
+           <!-- V62: 动态阈值-波动率状态切换 -->
+           <div v-if="diagnosis.chanlun.dynamic_threshold_volatility_regime_v62" class="metric-card v62-dyn-threshold">
+              <div class="card-title">⚡ V62 动态阈值-波动率状态切换（条件188）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">ATR(14)%</span><span class="kv-val">{{ diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.atr_pct.toFixed(2) }}%</span></div>
+                <div class="kv-row"><span class="kv-key">波动率状态</span><span class="tag" :class="diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.volatility_regime === 'high' ? 'tag-red' : diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.volatility_regime === 'low' ? 'tag-green' : 'tag-blue'">{{ diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.volatility_regime }}</span></div>
+                <div class="kv-row"><span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.dynamic_threshold_volatility_regime_v62.msg }}</div>
+              </div>
+           </div>
+
+           <!-- V62: 动态阈值-ATR倍数自适应 -->
+           <div v-if="diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62" class="metric-card v62-atr-mult">
+              <div class="card-title">🎯 V62 动态阈值-ATR倍数自适应（条件189）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">ATR(14)</span><span class="kv-val">{{ diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.atr_14.toFixed(4) }}</span></div>
+                <div class="kv-row"><span class="kv-key">最优倍数</span><span class="kv-val">{{ diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.optimal_multiplier }}x</span></div>
+                <div class="kv-row"><span class="kv-key">止损距离</span><span class="kv-val">{{ diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.stop_distance_pct.toFixed(1) }}%</span></div>
+                <div class="kv-row"><span class="kv-key">波动率状态</span><span class="tag" :class="diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.volatility_regime === 'extreme' ? 'tag-red' : diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.volatility_regime === 'high' ? 'tag-orange' : diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.volatility_regime === 'low' ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.volatility_regime }}</span></div>
+                <div class="kv-row"><span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.msg }}</div>
+              </div>
+           </div>
+
+          <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -4419,4 +4486,9 @@ onMounted(() => {
 .v61-macd-div .kv-val { font-weight: 600; }
 .v61-composite .card-title { font-weight: 700; }
 .v61-composite .kv-val { font-weight: 600; }
+/* V62: BOLL带宽确认 + 动态阈值 */
+.v62-boll-bw .kv-val { font-weight: 600; }
+.v62-boll-rev .kv-val { font-weight: 600; }
+.v62-dyn-threshold .kv-val { font-weight: 600; }
+.v62-atr-mult .kv-val { font-weight: 600; }
 </style>

@@ -53,7 +53,7 @@ function buildOption(): echarts.EChartsCoreOption {
       name: '归一化净值',
       axisLabel: { formatter: (v: number) => fmt2(v) },
     },
-    dataZoom: [{ type: 'inside', start: 0, end: 100 }],
+    dataZoom: [],
     series: seriesData.map((s) => {
       const valMap = new Map(s.dates.map((d, i) => [d, s.values[i]]))
       let last = 1
@@ -79,6 +79,10 @@ function resize() {
 onMounted(() => {
   render()
   window.addEventListener('resize', resize)
+  const el = container.value
+  if (el) {
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resize)

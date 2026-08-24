@@ -1011,6 +1011,14 @@ async def diagnose_stock(
             "macd_hist_divergence_v61": getattr(latest_mmd, "_macd_hist_divergence_v61", None) if latest_mmd else None,
             # V61: 综合多信号评分（条件185）
             "composite_signal_score_v61": getattr(latest_mmd, "_composite_signal_score_v61", None) if latest_mmd else None,
+            # V62: BOLL带宽突破确认（条件186）
+            "boll_bandwidth_breakout_v62": getattr(latest_mmd, "_boll_bandwidth_breakout_v62", None) if latest_mmd else None,
+            # V62: BOLL带宽压缩反弹确认（条件187）
+            "boll_bandwidth_reversal_v62": getattr(latest_mmd, "_boll_bandwidth_reversal_v62", None) if latest_mmd else None,
+            # V62: 动态阈值-波动率状态切换（条件188）
+            "dynamic_threshold_volatility_regime_v62": getattr(latest_mmd, "_dynamic_threshold_volatility_regime_v62", None) if latest_mmd else None,
+            # V62: 动态阈值-ATR倍数自适应（条件189）
+            "dynamic_threshold_atr_multiplier_v62": getattr(latest_mmd, "_dynamic_threshold_atr_multiplier_v62", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

@@ -99,7 +99,6 @@ function buildOption(): echarts.EChartsCoreOption {
       axisLabel: { formatter: (v: number) => fmt2(v) },
     },
     dataZoom: [
-      { type: 'inside', start: 60, end: 100 },
       { type: 'slider', bottom: 10, start: 60, end: 100 },
     ],
     series: [
@@ -129,6 +128,10 @@ function resize() {
 onMounted(() => {
   render()
   window.addEventListener('resize', resize)
+  const el = container.value
+  if (el) {
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resize)

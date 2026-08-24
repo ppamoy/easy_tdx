@@ -228,7 +228,6 @@ function renderChart() {
       axisLabel: { formatter: fmt2, color: '#5c6370' },
     },
     dataZoom: [
-      { type: 'inside', start: 50, end: 100 },
       { type: 'slider', bottom: 10, start: 50, end: 100 },
     ],
     series: [
@@ -291,6 +290,11 @@ const filteredStocks = computed(() => {
 onMounted(() => {
   analyze()
   window.addEventListener('resize', resize)
+  // 阻止图表容器吞没滚轮事件，确保页面可以滚动
+  const el = chartRef.value
+  if (el) {
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+  }
 })
 
 watch([code, category], () => {

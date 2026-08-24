@@ -33,6 +33,9 @@ body,
     Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 1.5;
+  /* 允许页面垂直滚动，防止图表区域吞没滚轮事件 */
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
 }
 
 button {

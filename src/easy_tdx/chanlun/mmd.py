@@ -69,7 +69,7 @@ import numpy as np
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.macd import calc_macd, calc_macd_force
 from easy_tdx.chanlun.types import BI, BC, BCType, FX, MMD, MMDType, XD, ZS
-from easy_tdx.MyTT import BIAS, KDJ, OBV, MA, RSI
+from easy_tdx.MyTT import BIAS, KDJ, OBV, MA, RSI, BOLL, ATR, STD
 
 
 @dataclass
@@ -11842,6 +11842,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V62 条件 186-189 ──
+
+        # 条件186：BOLL带宽突破确认（BOLL Bandwidth Breakout Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 40:
+            try:
+                boll_bw = _calc_boll_bandwidth_breakout_confirm_v62(mmd, closes)
+                mmd._boll_bandwidth_breakout_v62 = boll_bw
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + boll_bw.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件187：BOLL带宽压缩反弹确认（BOLL Bandwidth Reversal Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 60:
+            try:
+                boll_rev = _calc_boll_bandwidth_reversal_confirm_v62(mmd, closes)
+                mmd._boll_bandwidth_reversal_v62 = boll_rev
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + boll_rev.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件188：动态阈值-波动率状态切换（Dynamic Threshold Volatility Regime）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 30:
+            try:
+                vol_regime = _calc_dynamic_threshold_volatility_regime_v62(mmd, closes)
+                mmd._dynamic_threshold_volatility_regime_v62 = vol_regime
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_regime.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件189：动态阈值-ATR倍数自适应（Dynamic Threshold ATR Multiplier Adaptive）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 30:
+            try:
+                atr_mult = _calc_dynamic_threshold_atr_multiplier_v62(mmd, closes)
+                mmd._dynamic_threshold_atr_multiplier_v62 = atr_mult
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + atr_mult.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -19016,6 +19054,369 @@ def _calc_composite_signal_score_v61(
         result["decision_help"] = decision_help
         result["recommendation"] = recommendation
 
+        return result
+    except Exception:
+        return result
+
+
+# =============================================================================
+# V62: 条件 186-189（BOLL带宽确认 + 动态阈值）
+# =============================================================================
+
+def _calc_boll_bandwidth_breakout_confirm_v62(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """BOLL带宽突破确认（V62 条件186）。
+
+    检测3买/3卖时BOLL带宽是否处于有效突破状态：
+    - 3买：价格突破BOLL上轨 + 带宽较前期扩张 → 突破有效，+3%
+    - 3卖：价格跌破BOLL下轨 + 带宽较前期扩张 → 突破有效，+3%
+    - 价格接近轨道但未突破 → +1%（潜在突破）
+    - 带宽持续收缩 → -1%（可能即将反转，信号质量下降）
+    """
+    result = {
+        "boll_upper": 0.0,
+        "boll_lower": 0.0,
+        "band_width": 0.0,
+        "price_position": "mid",
+        "breakout_confirmed": False,
+        "band_trend": "stable",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 40:
+            result["msg"] = "数据不足，需要至少40根K线"
+            return result
+
+        # 计算BOLL(20,2)
+        period = 20
+        window = closes[-period:]
+        mid = sum(window) / period
+        std = (sum((x - mid) ** 2 for x in window) / period) ** 0.5
+        upper = mid + 2 * std
+        lower = mid - 2 * std
+        current_price = closes[-1]
+
+        # 计算带宽和价格位置
+        band_width = (upper - lower) / (mid + 1e-10) * 100 if mid > 0 else 0
+        percent_b = (current_price - lower) / (upper - lower) if upper > lower else 0.5
+
+        result["boll_upper"] = round(upper, 2)
+        result["boll_lower"] = round(lower, 2)
+        result["band_width"] = round(band_width, 3)
+        result["price_position"] = "upper" if percent_b > 0.8 else ("lower" if percent_b < 0.2 else "mid")
+
+        # 带宽趋势：比较当前带宽与10根K线前的带宽
+        prev_window = closes[-(period + 10):-(10)] if len(closes) >= period + 10 else closes[:period]
+        if len(prev_window) >= period:
+            prev_mid = sum(prev_window) / period
+            prev_std = (sum((x - prev_mid) ** 2 for x in prev_window) / period) ** 0.5
+            prev_upper = prev_mid + 2 * prev_std
+            prev_lower = prev_mid - 2 * prev_std
+            prev_band_width = (prev_upper - prev_lower) / (prev_mid + 1e-10) * 100 if prev_mid > 0 else 0
+            band_change = (band_width - prev_band_width) / (prev_band_width + 1e-10) * 100
+
+            if band_change > 10:
+                band_trend = "expanding"
+            elif band_change < -10:
+                band_trend = "contracting"
+            else:
+                band_trend = "stable"
+            result["band_trend"] = band_trend
+        else:
+            band_trend = "insufficient_data"
+
+        # 置信度调整
+        adj = 0.0
+        breakout_confirmed = False
+        if is_buy:
+            if percent_b > 1.0 and band_trend == "expanding":
+                adj = 0.03
+                breakout_confirmed = True
+            elif percent_b > 0.85 and band_trend in ("expanding", "stable"):
+                adj = 0.01
+            elif band_trend == "contracting":
+                adj = -0.01
+        else:
+            if percent_b < 0.0 and band_trend == "expanding":
+                adj = 0.03
+                breakout_confirmed = True
+            elif percent_b < 0.15 and band_trend in ("expanding", "stable"):
+                adj = 0.01
+            elif band_trend == "contracting":
+                adj = -0.01
+
+        result["breakout_confirmed"] = breakout_confirmed
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"BOLL带宽={band_width:.2f}%({band_trend}) | "
+            f"%b={percent_b:.2f}({result['price_position']}) | "
+            f"突破确认={breakout_confirmed} | 置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_boll_bandwidth_reversal_confirm_v62(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """BOLL带宽压缩反弹确认（V62 条件187）。
+
+    在BOLL带宽压缩后，检测价格是否出现有效反弹/回踩确认：
+    - 3买：带宽低位(分位数<30%) + 价格从下轨附近反弹 → 反弹有效，+2%
+    - 3卖：带宽低位(分位数<30%) + 价格从上轨附近回落 → 回落有效，+2%
+    - 带宽低位但无反弹/回落确认 → +0.5%
+    """
+    result = {
+        "band_width_rank": 0.5,
+        "squeeze_active": False,
+        "reversal_confirmed": False,
+        "reversal_type": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 60:
+            result["msg"] = "数据不足，需要至少60根K线"
+            return result
+
+        period = 20
+        lookback = min(60, len(closes))
+
+        # 计算过去lookback期内各期BOLL带宽
+        widths = []
+        for i in range(period, lookback + 1):
+            segment = closes[i - period:i]
+            mid = sum(segment) / period
+            std = (sum((x - mid) ** 2 for x in segment) / period) ** 0.5
+            bw = (4 * std / (mid + 1e-10)) * 100
+            widths.append(bw)
+
+        if not widths:
+            result["msg"] = "带宽数据不足"
+            return result
+
+        current_width = widths[-1]
+        sorted_widths = sorted(widths)
+        rank = sum(1 for w in sorted_widths if w <= current_width) / len(sorted_widths)
+        result["band_width_rank"] = round(rank, 3)
+
+        squeeze_active = rank < 0.3
+        result["squeeze_active"] = squeeze_active
+
+        # 检测反弹/回踩确认
+        recent_closes = closes[-10:] if len(closes) >= 10 else closes
+        if len(recent_closes) < 5:
+            result["msg"] = "近期数据不足"
+            return result
+
+        reversal_confirmed = False
+        reversal_type = "none"
+        adj = 0.0
+
+        if squeeze_active:
+            if is_buy:
+                lows_recent = [min(recent_closes[i:i+3]) for i in range(0, len(recent_closes)-2, 2)]
+                if len(lows_recent) >= 2 and lows_recent[-1] > lows_recent[0] * 1.01:
+                    reversal_confirmed = True
+                    reversal_type = "bullish_reversal"
+                    adj = 0.02
+                else:
+                    reversal_type = "no_reversal"
+                    adj = 0.005
+            else:
+                highs_recent = [max(recent_closes[i:i+3]) for i in range(0, len(recent_closes)-2, 2)]
+                if len(highs_recent) >= 2 and highs_recent[-1] < highs_recent[0] * 0.99:
+                    reversal_confirmed = True
+                    reversal_type = "bearish_reversal"
+                    adj = 0.02
+                else:
+                    reversal_type = "no_reversal"
+                    adj = 0.005
+
+        result["reversal_confirmed"] = reversal_confirmed
+        result["reversal_type"] = reversal_type
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"带宽分位={rank:.0%}({('压缩' if squeeze_active else '正常')}) | "
+            f"反弹确认={reversal_confirmed}({reversal_type}) | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_dynamic_threshold_volatility_regime_v62(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """动态阈值-波动率状态切换（V62 条件188）。
+
+    根据当前波动率环境动态调整信号阈值：
+    - 高波动（ATR%>3%）：放宽阈值，降低置信度要求（-2%）
+    - 低波动（ATR%<1%）：收紧阈值，提高置信度要求（+2%）
+    - 正常波动：保持默认阈值
+    """
+    result = {
+        "atr_pct": 0.0,
+        "volatility_regime": "normal",
+        "threshold_adjustment": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 30:
+            result["msg"] = "数据不足，需要至少30根K线"
+            return result
+
+        # 近似计算ATR(14)
+        tr_list = []
+        for i in range(1, len(closes)):
+            tr = abs(closes[i] - closes[i - 1])
+            tr_list.append(tr)
+
+        if len(tr_list) < 14:
+            result["msg"] = "TR数据不足"
+            return result
+
+        atr_14 = sum(tr_list[-14:]) / 14
+        current_price = closes[-1]
+        atr_pct = atr_14 / (current_price + 1e-10) * 100
+
+        result["atr_pct"] = round(atr_pct, 2)
+
+        if atr_pct > 3.0:
+            regime = "high"
+            adj = -0.02
+        elif atr_pct < 1.0:
+            regime = "low"
+            adj = +0.02
+        else:
+            regime = "normal"
+            adj = 0.0
+
+        result["volatility_regime"] = regime
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"ATR(14)={atr_14:.4f}({atr_pct:.2f}%) | "
+            f"波动率={regime} | 置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_dynamic_threshold_atr_multiplier_v62(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
+) -> dict[str, Any]:
+    """动态阈值-ATR倍数自适应（V62 条件189）。
+
+    根据当前ATR动态调整止损距离的倍数：
+    - 高波动：使用更大ATR倍数（2.5x），避免频繁触发止损
+    - 低波动：使用更小ATR倍数（1.5x），收紧止损减少损失
+    - 正常波动：使用默认倍数（2x）
+    """
+    result = {
+        "atr_14": 0.0,
+        "optimal_multiplier": 2.0,
+        "stop_distance_pct": 0.0,
+        "volatility_regime": "normal",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        # 如果没有提供highs/lows，从closes推导
+        if not highs or not lows:
+            if len(closes) < 2:
+                result["msg"] = "数据不足"
+                return result
+            highs = [max(closes[i-1], closes[i]) for i in range(1, len(closes))]
+            lows = [min(closes[i-1], closes[i]) for i in range(1, len(closes))]
+
+        if len(highs) < 15 or len(lows) < 15:
+            result["msg"] = "highs/lows数据不足"
+            return result
+
+        tr_list = []
+        for i in range(1, len(highs)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - highs[i - 1]),
+                abs(lows[i] - lows[i - 1]),
+            )
+            tr_list.append(tr)
+
+        if len(tr_list) < 14:
+            result["msg"] = "TR数据不足"
+            return result
+
+        atr_14 = sum(tr_list[-14:]) / 14
+        current_price = highs[-1]
+        atr_pct = atr_14 / (current_price + 1e-10) * 100
+
+        result["atr_14"] = round(atr_14, 4)
+
+        if atr_pct > 4.0:
+            regime = "extreme"
+            multiplier = 2.5
+            adj = -0.01
+        elif atr_pct > 2.5:
+            regime = "high"
+            multiplier = 2.2
+            adj = -0.005
+        elif atr_pct < 0.8:
+            regime = "low"
+            multiplier = 1.5
+            adj = +0.01
+        else:
+            regime = "normal"
+            multiplier = 2.0
+            adj = 0.0
+
+        stop_distance = multiplier * atr_14
+        stop_pct = stop_distance / (current_price + 1e-10) * 100
+
+        result["optimal_multiplier"] = multiplier
+        result["stop_distance_pct"] = round(stop_pct, 2)
+        result["volatility_regime"] = regime
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"ATR={atr_14:.4f}({atr_pct:.2f}%) | "
+            f"最优倍数={multiplier}x | 止损距离={stop_pct:.1f}% | "
+            f"波动率={regime} | 置信度调整{adj:+.0%}"
+        )
         return result
     except Exception:
         return result

@@ -432,6 +432,12 @@ class MMD:
     _macd_hist_divergence_v61: dict[str, Any] | None = None  # MACD柱状图背离融合（条件184）
     _composite_signal_score_v61: dict[str, Any] | None = None  # 综合多信号评分（条件185）
 
+    # V62 enhancement fields (2026-08-28)
+    _boll_bandwidth_breakout_v62: dict[str, Any] | None = None  # BOLL带宽突破确认（条件186）
+    _boll_bandwidth_reversal_v62: dict[str, Any] | None = None  # BOLL带宽压缩反弹确认（条件187）
+    _dynamic_threshold_volatility_regime_v62: dict[str, Any] | None = None  # 动态阈值-波动率状态切换（条件188）
+    _dynamic_threshold_atr_multiplier_v62: dict[str, Any] | None = None  # 动态阈值-ATR倍数自适应（条件189）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
