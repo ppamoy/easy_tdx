@@ -422,6 +422,12 @@ class MMD:
     _multi_tf_resonance_signal_v59: dict[str, Any] | None = None  # 多时间框架共振信号（条件178）
     _signal_decay_speed_v59: dict[str, Any] | None = None  # 信号衰减速度评估（条件179）
 
+    # V60 enhancement fields (2026-08-27)
+    _rsi_deep_divergence_v60: dict[str, Any] | None = None  # RSI深度背离过滤（条件180）
+    _ma_spacing_strength_v60: dict[str, Any] | None = None  # MA排列间距强度评分（条件181）
+    _zs_distance_enhanced_v60: dict[str, Any] | None = None  # 中枢支撑/阻力距离评分增强（条件182）
+    _kdj_ob_os_confirm_v60: dict[str, Any] | None = None  # KDJ超买超卖确认（条件183）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

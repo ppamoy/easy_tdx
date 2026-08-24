@@ -3502,6 +3502,80 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- V60: RSI深度背离过滤 -->
+        <div v-if="diagnosis.chanlun.rsi_deep_divergence_v60" class="metric-card v60-rsi-div">
+          <div class="card-title">📉 V60 RSI深度背离（条件180）</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">当前RSI</span><span class="kv-val">{{ diagnosis.chanlun.rsi_deep_divergence_v60.rsi_current }}</span></div>
+            <div class="kv-row"><span class="kv-key">背离类型</span><span class="tag" :class="diagnosis.chanlun.rsi_deep_divergence_v60.divergence_type === 'bullish_deep' ? 'tag-green' : diagnosis.chanlun.rsi_deep_divergence_v60.divergence_type === 'bearish_deep' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.rsi_deep_divergence_v60.divergence_type }}</span></div>
+            <div class="kv-row"><span class="kv-key">背离深度</span><span class="tag" :class="diagnosis.chanlun.rsi_deep_divergence_v60.divergence_depth === 'deep' ? 'tag-green' : diagnosis.chanlun.rsi_deep_divergence_v60.divergence_depth === 'moderate' ? 'tag-blue' : 'tag-gray'">{{ diagnosis.chanlun.rsi_deep_divergence_v60.divergence_depth }}</span></div>
+            <div class="kv-row"><span class="kv-key">价格低点</span><span class="kv-val">{{ diagnosis.chanlun.rsi_deep_divergence_v60.price_prev_low }} → {{ diagnosis.chanlun.rsi_deep_divergence_v60.price_curr_low }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.rsi_deep_divergence_v60.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.rsi_deep_divergence_v60.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.rsi_deep_divergence_v60.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.rsi_deep_divergence_v60.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.rsi_deep_divergence_v60.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V60: MA排列间距强度评分 -->
+        <div v-if="diagnosis.chanlun.ma_spacing_strength_v60" class="metric-card v60-ma-spacing">
+          <div class="card-title">📐 V60 MA排列间距（条件181）</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">MA5/MA20/MA60</span><span class="kv-val">{{ diagnosis.chanlun.ma_spacing_strength_v60.ma5 }} / {{ diagnosis.chanlun.ma_spacing_strength_v60.ma20 }} / {{ diagnosis.chanlun.ma_spacing_strength_v60.ma60 }}</span></div>
+            <div class="kv-row"><span class="kv-key">排列方向</span><span class="tag" :class="diagnosis.chanlun.ma_spacing_strength_v60.alignment === 'bullish' ? 'tag-green' : diagnosis.chanlun.ma_spacing_strength_v60.alignment === 'bearish' ? 'tag-red' : 'tag-orange'">{{ diagnosis.chanlun.ma_spacing_strength_v60.alignment }}</span></div>
+            <div class="kv-row"><span class="kv-key">间距比例</span><span class="kv-val">{{ diagnosis.chanlun.ma_spacing_strength_v60.spacing_ratio }}%</span></div>
+            <div class="kv-row"><span class="kv-key">间距强度</span><span class="tag" :class="diagnosis.chanlun.ma_spacing_strength_v60.spacing_strength === 'strong' ? 'tag-green' : diagnosis.chanlun.ma_spacing_strength_v60.spacing_strength === 'moderate' ? 'tag-blue' : 'tag-orange'">{{ diagnosis.chanlun.ma_spacing_strength_v60.spacing_strength }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.ma_spacing_strength_v60.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.ma_spacing_strength_v60.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.ma_spacing_strength_v60.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.ma_spacing_strength_v60.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.ma_spacing_strength_v60.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V60: 中枢支撑/阻力距离评分增强 -->
+        <div v-if="diagnosis.chanlun.zs_distance_enhanced_v60" class="metric-card v60-zs-dist">
+          <div class="card-title">🏛️ V60 中枢距离增强（条件182）</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">当前价格</span><span class="kv-val">{{ diagnosis.chanlun.zs_distance_enhanced_v60.price }}</span></div>
+            <div class="kv-row"><span class="kv-key">中枢区间</span><span class="kv-val">[{{ diagnosis.chanlun.zs_distance_enhanced_v60.zs_zd }}, {{ diagnosis.chanlun.zs_distance_enhanced_v60.zs_zg }}]</span></div>
+            <div class="kv-row"><span class="kv-key">价格位置</span><span class="tag" :class="diagnosis.chanlun.zs_distance_enhanced_v60.position === 'above_zs' ? 'tag-green' : diagnosis.chanlun.zs_distance_enhanced_v60.position === 'below_zs' ? 'tag-red' : 'tag-orange'">{{ diagnosis.chanlun.zs_distance_enhanced_v60.position }}</span></div>
+            <div class="kv-row"><span class="kv-key">距上沿</span><span class="kv-val">{{ diagnosis.chanlun.zs_distance_enhanced_v60.distance_to_zg_pct }}%</span></div>
+            <div class="kv-row"><span class="kv-key">距下沿</span><span class="kv-val">{{ diagnosis.chanlun.zs_distance_enhanced_v60.distance_to_zd_pct }}%</span></div>
+            <div class="kv-row"><span class="kv-key">回踩确认</span><span class="tag" :class="diagnosis.chanlun.zs_distance_enhanced_v60.pullback_confirmed ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.zs_distance_enhanced_v60.pullback_confirmed ? '✅ 已确认' : '⚪ 未确认' }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.zs_distance_enhanced_v60.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.zs_distance_enhanced_v60.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.zs_distance_enhanced_v60.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.zs_distance_enhanced_v60.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.zs_distance_enhanced_v60.msg }}</div>
+          </div>
+        </div>
+
+        <!-- V60: KDJ超买超卖确认 -->
+        <div v-if="diagnosis.chanlun.kdj_ob_os_confirm_v60" class="metric-card v60-kdj">
+          <div class="card-title">💹 V60 KDJ超买超卖（条件183）</div>
+          <div class="card-body">
+            <div class="kv-row"><span class="kv-key">K/D/J</span><span class="kv-val">{{ diagnosis.chanlun.kdj_ob_os_confirm_v60.kdj_k }} / {{ diagnosis.chanlun.kdj_ob_os_confirm_v60.kdj_d }} / {{ diagnosis.chanlun.kdj_ob_os_confirm_v60.kdj_j }}</span></div>
+            <div class="kv-row"><span class="kv-key">J值趋势</span><span class="tag" :class="diagnosis.chanlun.kdj_ob_os_confirm_v60.j_trend === 'rising' ? 'tag-green' : diagnosis.chanlun.kdj_ob_os_confirm_v60.j_trend === 'falling' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.kdj_ob_os_confirm_v60.j_trend }}</span></div>
+            <div class="kv-row"><span class="kv-key">超买超卖区</span><span class="tag" :class="diagnosis.chanlun.kdj_ob_os_confirm_v60.ob_os_zone === 'oversold' || diagnosis.chanlun.kdj_ob_os_confirm_v60.ob_os_zone === 'extreme_oversold' ? 'tag-green' : diagnosis.chanlun.kdj_ob_os_confirm_v60.ob_os_zone === 'overbought' || diagnosis.chanlun.kdj_ob_os_confirm_v60.ob_os_zone === 'extreme_overbought' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.kdj_ob_os_confirm_v60.ob_os_zone }}</span></div>
+            <div class="kv-row"><span class="kv-key">信号对齐</span><span class="tag" :class="diagnosis.chanlun.kdj_ob_os_confirm_v60.signal_aligned ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.kdj_ob_os_confirm_v60.signal_aligned ? '✅ 对齐' : '⚪ 未对齐' }}</span></div>
+            <div class="kv-row">
+              <span class="kv-key">置信度调整</span>
+              <span :style="{ color: diagnosis.chanlun.kdj_ob_os_confirm_v60.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.kdj_ob_os_confirm_v60.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                {{ diagnosis.chanlun.kdj_ob_os_confirm_v60.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.kdj_ob_os_confirm_v60.confidence_adjust*100).toFixed(0) }}%
+              </span>
+            </div>
+            <div class="kv-note">{{ diagnosis.chanlun.kdj_ob_os_confirm_v60.msg }}</div>
+          </div>
+        </div>
+
         <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -4295,4 +4369,10 @@ onMounted(() => {
 .v59-atr-mult .kv-val { font-weight: 600; }
 .v59-resonance .kv-val { font-weight: 600; }
 .v59-decay-speed .kv-val { font-weight: 600; }
+
+/* V60: RSI深度背离 + MA间距 + 中枢距离 + KDJ超买超卖 */
+.v60-rsi-div .kv-val { font-weight: 600; }
+.v60-ma-spacing .kv-val { font-weight: 600; }
+.v60-zs-dist .kv-val { font-weight: 600; }
+.v60-kdj .kv-val { font-weight: 600; }
 </style>

@@ -1607,6 +1607,53 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V60: RSI深度背离过滤（条件180）
+  rsi_deep_divergence_v60?: {
+    rsi_current: number
+    rsi_prev_low: number
+    price_curr_low: number
+    price_prev_low: number
+    divergence_type: string
+    divergence_depth: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V60: MA排列间距强度评分（条件181）
+  ma_spacing_strength_v60?: {
+    ma5: number
+    ma20: number
+    ma60: number
+    spacing_ratio: number
+    alignment: string
+    spacing_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V60: 中枢支撑/阻力距离评分增强（条件182）
+  zs_distance_enhanced_v60?: {
+    zs_zg: number
+    zs_zd: number
+    price: number
+    distance_to_zg_pct: number
+    distance_to_zd_pct: number
+    zs_width_pct: number
+    position: string
+    pullback_confirmed: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V60: KDJ超买超卖确认（条件183）
+  kdj_ob_os_confirm_v60?: {
+    kdj_k: number
+    kdj_d: number
+    kdj_j: number
+    j_prev: number
+    j_trend: string
+    ob_os_zone: string
+    signal_aligned: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

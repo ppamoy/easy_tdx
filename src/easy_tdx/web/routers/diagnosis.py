@@ -999,6 +999,14 @@ async def diagnose_stock(
             "multi_tf_resonance_signal_v59": getattr(latest_mmd, "_multi_tf_resonance_signal_v59", None) if latest_mmd else None,
             # V59: 信号衰减速度评估（条件179）
             "signal_decay_speed_v59": getattr(latest_mmd, "_signal_decay_speed_v59", None) if latest_mmd else None,
+            # V60: RSI深度背离过滤（条件180）
+            "rsi_deep_divergence_v60": getattr(latest_mmd, "_rsi_deep_divergence_v60", None) if latest_mmd else None,
+            # V60: MA排列间距强度评分（条件181）
+            "ma_spacing_strength_v60": getattr(latest_mmd, "_ma_spacing_strength_v60", None) if latest_mmd else None,
+            # V60: 中枢支撑/阻力距离评分增强（条件182）
+            "zs_distance_enhanced_v60": getattr(latest_mmd, "_zs_distance_enhanced_v60", None) if latest_mmd else None,
+            # V60: KDJ超买超卖确认（条件183）
+            "kdj_ob_os_confirm_v60": getattr(latest_mmd, "_kdj_ob_os_confirm_v60", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

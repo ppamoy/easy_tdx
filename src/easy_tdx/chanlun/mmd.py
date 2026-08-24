@@ -11785,6 +11785,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V60 条件 180-183 ──
+
+        # 条件180：RSI深度背离过滤（RSI Deep Divergence Filter）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 40:
+            try:
+                rsi_div = _calc_rsi_deep_divergence_v60(mmd, closes)
+                mmd._rsi_deep_divergence_v60 = rsi_div
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + rsi_div.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件181：MA排列间距强度评分（MA Alignment Spacing Score）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 60:
+            try:
+                ma_spacing = _calc_ma_spacing_strength_v60(mmd, closes)
+                mmd._ma_spacing_strength_v60 = ma_spacing
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_spacing.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件182：中枢支撑/阻力距离评分增强（ZhongShu Distance Score Enhanced）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs is not None and closes is not None and mmd.bi is not None:
+            try:
+                zs_dist = _calc_zs_distance_enhanced_v60(mmd, closes)
+                mmd._zs_distance_enhanced_v60 = zs_dist
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_dist.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件183：KDJ超买超卖确认（KDJ Overbought/Oversold Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 15:
+            try:
+                kdj_conf = _calc_kdj_ob_os_confirm_v60(mmd, closes)
+                mmd._kdj_ob_os_confirm_v60 = kdj_conf
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + kdj_conf.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -18139,6 +18177,507 @@ def _calc_signal_decay_speed_v59(
         result["msg"] = (
             f"信号后{lookback}根K线 | 总变化={total_change:+.2f}% | "
             f"衰减={decay} | 强度={strength} | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ── V60 条件 180-183 ──
+
+def _calc_rsi_deep_divergence_v60(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """RSI深度背离过滤（V60 条件180）。
+
+    检测价格与RSI的深度背离信号：
+    - 深度底背离：价格创新低但RSI未创新低（两次低点比较），强烈确认3买
+    - 深度顶背离：价格创新高但RSI未创新高，强烈确认3卖
+    - 轻微背离：仅单次低点比较，温和确认
+    """
+    result = {
+        "rsi_current": 0.0,
+        "rsi_prev_low": 0.0,
+        "price_curr_low": 0.0,
+        "price_prev_low": 0.0,
+        "divergence_type": "none",
+        "divergence_depth": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 60:
+            result["msg"] = "数据不足，需要至少60根K线"
+            return result
+
+        # 计算RSI序列
+        rsi_values = RSI(closes, N=14)
+        if len(rsi_values) < 40:
+            result["msg"] = "RSI数据不足"
+            return result
+
+        result["rsi_current"] = round(float(rsi_values[-1]), 1)
+
+        # 深度背离检测窗口：比较近40根与之前40根的极值
+        window = 40
+        if len(closes) < window * 2:
+            window = len(closes) // 2
+        if window < 20:
+            result["msg"] = "数据不足进行背离检测"
+            return result
+
+        recent = closes[-window:]
+        prior = closes[-window * 2:-window] if len(closes) >= window * 2 else closes[:window]
+
+        price_curr_low = min(recent)
+        price_prev_low = min(prior)
+        price_curr_high = max(recent)
+        price_prev_high = max(prior)
+
+        rsi_curr_window = rsi_values[-window:]
+        rsi_prior_window = rsi_values[-window * 2:-window] if len(rsi_values) >= window * 2 else rsi_values[:window]
+
+        rsi_curr_low = min(rsi_curr_window)
+        rsi_prev_low = min(rsi_prior_window)
+        rsi_curr_high = max(rsi_curr_window)
+        rsi_prev_high = max(rsi_prior_window)
+
+        result["price_curr_low"] = round(price_curr_low, 2)
+        result["price_prev_low"] = round(price_prev_low, 2)
+        result["rsi_prev_low"] = round(rsi_prev_low, 1)
+
+        divergence_type = "none"
+        divergence_depth = "none"
+        adj = 0.0
+
+        if is_buy:
+            # 3买：价格创新低 + RSI未创新低 → 底背离
+            if price_curr_low < price_prev_low * 0.995 and rsi_curr_low > rsi_prev_low:
+                divergence_type = "bullish_deep"
+                # 深度：价格新低幅度
+                price_drop_pct = (price_prev_low - price_curr_low) / (price_prev_low + 1e-10) * 100
+                if price_drop_pct > 5.0:
+                    divergence_depth = "deep"
+                    adj = 0.04
+                elif price_drop_pct > 2.0:
+                    divergence_depth = "moderate"
+                    adj = 0.02
+                else:
+                    divergence_depth = "shallow"
+                    adj = 0.01
+            elif price_curr_low < price_prev_low * 0.995:
+                # 价格新低但RSI也新低 → 无背离，正常趋势延续
+                divergence_type = "no_divergence"
+                divergence_depth = "none"
+                adj = -0.01
+            else:
+                divergence_type = "no_divergence"
+                adj = 0.0
+        else:  # sell
+            # 3卖：价格创新高 + RSI未创新高 → 顶背离
+            if price_curr_high > price_prev_high * 1.005 and rsi_curr_high < rsi_prev_high:
+                divergence_type = "bearish_deep"
+                price_rise_pct = (price_curr_high - price_prev_high) / (price_prev_high + 1e-10) * 100
+                if price_rise_pct > 5.0:
+                    divergence_depth = "deep"
+                    adj = 0.04
+                elif price_rise_pct > 2.0:
+                    divergence_depth = "moderate"
+                    adj = 0.02
+                else:
+                    divergence_depth = "shallow"
+                    adj = 0.01
+            elif price_curr_high > price_prev_high * 1.005:
+                divergence_type = "no_divergence"
+                adj = -0.01
+            else:
+                divergence_type = "no_divergence"
+                adj = 0.0
+
+        result["divergence_type"] = divergence_type
+        result["divergence_depth"] = divergence_depth
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"RSI={result['rsi_current']:.1f} | "
+            f"背离={divergence_type}({divergence_depth}) | "
+            f"价格低点{result['price_prev_low']:.2f}→{result['price_curr_low']:.2f} | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_ma_spacing_strength_v60(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """MA排列间距强度评分（V60 条件181）。
+
+    计算MA5/MA20/MA60之间的间距比例，评估均线排列的健康程度：
+    - 多头排列间距大 → 强趋势，+3%置信度
+    - 均线纠缠（间距小）→ 震荡，-2%置信度
+    - 空头排列 → 对3买不利
+    """
+    result = {
+        "ma5": 0.0,
+        "ma20": 0.0,
+        "ma60": 0.0,
+        "spacing_ratio": 0.0,
+        "alignment": "unknown",
+        "spacing_strength": "weak",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 60:
+            result["msg"] = "数据不足，需要至少60根K线"
+            return result
+
+        ma5 = MA(closes, 5)
+        ma20 = MA(closes, 20)
+        ma60 = MA(closes, 60)
+
+        if len(ma5) < 1 or len(ma20) < 1 or len(ma60) < 1:
+            result["msg"] = "MA计算失败"
+            return result
+
+        m5 = float(ma5[-1])
+        m20 = float(ma20[-1])
+        m60 = float(ma60[-1])
+        price = closes[-1]
+
+        result["ma5"] = round(m5, 2)
+        result["ma20"] = round(m20, 2)
+        result["ma60"] = round(m60, 2)
+
+        # 计算间距比例（相对均值的百分比）
+        mean_ma = (m5 + m20 + m60) / 3.0
+        spread_5_20 = abs(m5 - m20) / (mean_ma + 1e-10) * 100
+        spread_20_60 = abs(m20 - m60) / (mean_ma + 1e-10) * 100
+        spacing_ratio = (spread_5_20 + spread_20_60) / 2.0
+        result["spacing_ratio"] = round(spacing_ratio, 2)
+
+        # 判断排列方向
+        if m5 > m20 > m60:
+            alignment = "bullish"
+        elif m5 < m20 < m60:
+            alignment = "bearish"
+        else:
+            alignment = "entangled"
+
+        result["alignment"] = alignment
+
+        # 评估间距强度
+        if spacing_ratio > 3.0:
+            spacing_strength = "strong"
+        elif spacing_ratio > 1.5:
+            spacing_strength = "moderate"
+        else:
+            spacing_strength = "weak"
+        result["spacing_strength"] = spacing_strength
+
+        # 根据排列和间距给出置信度调整
+        if is_buy:
+            if alignment == "bullish" and spacing_strength == "strong":
+                adj = 0.03
+            elif alignment == "bullish" and spacing_strength == "moderate":
+                adj = 0.015
+            elif alignment == "bullish" and spacing_strength == "weak":
+                adj = 0.005
+            elif alignment == "entangled":
+                adj = -0.02  # 均线纠缠，不确定性强
+            else:  # bearish
+                adj = -0.03  # 空头排列，3买信号不可靠
+        else:  # sell
+            if alignment == "bearish" and spacing_strength == "strong":
+                adj = 0.03
+            elif alignment == "bearish" and spacing_strength == "moderate":
+                adj = 0.015
+            elif alignment == "bearish" and spacing_strength == "weak":
+                adj = 0.005
+            elif alignment == "entangled":
+                adj = -0.02
+            else:
+                adj = -0.03
+
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"MA5={m5:.2f}/MA20={m20:.2f}/MA60={m60:.2f} | "
+            f"排列={alignment} | 间距={spacing_ratio:.2f}%({spacing_strength}) | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zs_distance_enhanced_v60(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """中枢支撑/阻力距离评分增强（V60 条件182）。
+
+    在原有中枢距离评分基础上增加多维度评估：
+    - 价格与中枢上下沿的距离比
+    - 突破/跌破后的回踩/反弹确认
+    - 中枢宽度与当前价格波动的关系
+    """
+    result = {
+        "zs_zg": 0.0,
+        "zs_zd": 0.0,
+        "price": 0.0,
+        "distance_to_zg_pct": 0.0,
+        "distance_to_zd_pct": 0.0,
+        "zs_width_pct": 0.0,
+        "position": "unknown",
+        "pullback_confirmed": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if mmd.zs is None:
+            result["msg"] = "无中枢数据"
+            return result
+
+        if len(closes) < 20:
+            result["msg"] = "数据不足，需要至少20根K线"
+            return result
+
+        zg = mmd.zs.zg
+        zd = mmd.zs.zd
+        price = closes[-1]
+
+        result["zs_zg"] = round(zg, 2)
+        result["zs_zd"] = round(zd, 2)
+        result["price"] = round(price, 2)
+
+        # 计算距离百分比
+        price_range = zg - zd if zg != zd else price * 0.01
+        dist_zg_pct = (price - zg) / (price_range + 1e-10) * 100
+        dist_zd_pct = (price - zd) / (price_range + 1e-10) * 100
+        zs_width_pct = price_range / (price + 1e-10) * 100
+
+        result["distance_to_zg_pct"] = round(dist_zg_pct, 2)
+        result["distance_to_zd_pct"] = round(dist_zd_pct, 2)
+        result["zs_width_pct"] = round(zs_width_pct, 2)
+
+        # 判断价格位置
+        if price > zg:
+            position = "above_zs"
+        elif price < zd:
+            position = "below_zs"
+        else:
+            position = "inside_zs"
+        result["position"] = position
+
+        # 回踩/反弹确认检测
+        pullback_confirmed = False
+        if is_buy and position == "above_zs":
+            # 3买：突破中枢后回踩确认
+            lookback = min(10, len(closes) - 1)
+            if lookback >= 3:
+                recent_lows = [min(closes[-i:-i+2]) if i < len(closes) else closes[-1] for i in range(1, lookback + 1, 2)]
+                if recent_lows and min(recent_lows) >= zd * 0.98:
+                    pullback_confirmed = True
+
+        if is_sell and position == "below_zs":
+            lookback = min(10, len(closes) - 1)
+            if lookback >= 3:
+                recent_highs = [max(closes[-i:-i+2]) if i < len(closes) else closes[-1] for i in range(1, lookback + 1, 2)]
+                if recent_highs and max(recent_highs) <= zg * 1.02:
+                    pullback_confirmed = True
+        result["pullback_confirmed"] = pullback_confirmed
+
+        # 综合评分
+        adj = 0.0
+        if is_buy:
+            if position == "above_zs":
+                if dist_zg_pct < 5.0:  # 刚突破，距离近
+                    adj = 0.02
+                elif dist_zg_pct < 15.0:
+                    adj = 0.01
+                else:
+                    adj = -0.01  # 偏离过大，可能回调
+            elif position == "inside_zs":
+                if dist_zd_pct < 20.0:  # 接近下沿，可能3买
+                    adj = 0.015
+                else:
+                    adj = 0.0
+            else:  # below_zs
+                adj = -0.03  # 仍在中枢下方，不是有效的3买
+            if pullback_confirmed:
+                adj = min(0.05, adj + 0.02)
+        else:  # sell
+            if position == "below_zs":
+                if dist_zd_pct > -5.0:  # 刚跌破
+                    adj = 0.02
+                elif dist_zd_pct > -15.0:
+                    adj = 0.01
+                else:
+                    adj = -0.01
+            elif position == "inside_zs":
+                if dist_zg_pct > -20.0:  # 接近上沿
+                    adj = 0.015
+                else:
+                    adj = 0.0
+            else:
+                adj = -0.03
+            if pullback_confirmed:
+                adj = min(0.05, adj + 0.02)
+
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"价格={price:.2f} | 中枢[{zd:.2f},{zg:.2f}] | "
+            f"位置={position} | 距上沿{dist_zg_pct:+.1f}% | "
+            f"回踩确认={pullback_confirmed} | "
+            f"置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_kdj_ob_os_confirm_v60(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """KDJ超买超卖确认（V60 条件183）。
+
+    利用KDJ的J值验证买卖信号的合理性：
+    - 3买：J值应处于超卖区或刚从超卖区回升（J<30或J从低位拐头向上）
+    - 3卖：J值应处于超买区或刚从超买区回落（J>70或J从高位拐头向下）
+    - J值极端区域但方向错误 → 假信号预警
+    """
+    result = {
+        "kdj_k": 0.0,
+        "kdj_d": 0.0,
+        "kdj_j": 0.0,
+        "j_prev": 0.0,
+        "j_trend": "unknown",
+        "ob_os_zone": "neutral",
+        "signal_aligned": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 15:
+            result["msg"] = "数据不足，需要至少15根K线"
+            return result
+
+        # 使用收盘价近似计算KDJ（精度足够用于方向确认）
+        n = len(closes)
+        highs = [closes[i] * (1.0 + 0.005 * (i % 3)) for i in range(n)]
+        lows = [closes[i] * (1.0 - 0.005 * ((i + 1) % 3)) for i in range(n)]
+
+        k_val, d_val, j_val = KDJ(closes, highs, lows, N=9)
+
+        if len(j_val) < 3:
+            result["msg"] = "KDJ数据不足"
+            return result
+
+        j_current = float(j_val[-1])
+        j_prev = float(j_val[-2]) if len(j_val) >= 2 else j_current
+        j_prev2 = float(j_val[-3]) if len(j_val) >= 3 else j_prev
+        k_current = float(k_val[-1])
+        d_current = float(d_val[-1])
+
+        result["kdj_k"] = round(k_current, 1)
+        result["kdj_d"] = round(d_current, 1)
+        result["kdj_j"] = round(j_current, 1)
+        result["j_prev"] = round(j_prev, 1)
+
+        # 判断J值趋势
+        if j_current > j_prev > j_prev2:
+            j_trend = "rising"
+        elif j_current < j_prev < j_prev2:
+            j_trend = "falling"
+        else:
+            j_trend = "flat"
+        result["j_trend"] = j_trend
+
+        # 判断超买超卖区域
+        if j_current >= 100:
+            ob_os_zone = "extreme_overbought"
+        elif j_current >= 80:
+            ob_os_zone = "overbought"
+        elif j_current <= -20:
+            ob_os_zone = "extreme_oversold"
+        elif j_current <= 20:
+            ob_os_zone = "oversold"
+        else:
+            ob_os_zone = "neutral"
+        result["ob_os_zone"] = ob_os_zone
+
+        # 信号对齐判断
+        signal_aligned = False
+        adj = 0.0
+
+        if is_buy:
+            # 3买：J值应在超卖区或刚从超卖区回升
+            if ob_os_zone in ("oversold", "extreme_oversold"):
+                if j_trend == "rising":
+                    signal_aligned = True
+                    adj = 0.03
+                else:
+                    adj = 0.01  # 超卖但未回升，中性
+            elif ob_os_zone == "neutral" and j_trend == "rising" and j_prev < 30:
+                # J值从中性区刚从超卖回升
+                signal_aligned = True
+                adj = 0.02
+            elif ob_os_zone in ("overbought", "extreme_overbought"):
+                # 超买区出现买入信号，警惕
+                adj = -0.03
+            else:
+                adj = 0.0
+        else:  # sell
+            # 3卖：J值应在超买区或刚从超买区回落
+            if ob_os_zone in ("overbought", "extreme_overbought"):
+                if j_trend == "falling":
+                    signal_aligned = True
+                    adj = 0.03
+                else:
+                    adj = 0.01
+            elif ob_os_zone == "neutral" and j_trend == "falling" and j_prev > 70:
+                signal_aligned = True
+                adj = 0.02
+            elif ob_os_zone in ("oversold", "extreme_oversold"):
+                adj = -0.03
+            else:
+                adj = 0.0
+
+        result["signal_aligned"] = signal_aligned
+        result["confidence_adjust"] = adj
+        result["msg"] = (
+            f"K={k_current:.1f}/D={d_current:.1f}/J={j_current:.1f} | "
+            f"J趋势={j_trend} | 区域={ob_os_zone} | "
+            f"信号对齐={signal_aligned} | "
             f"置信度调整{adj:+.0%}"
         )
         return result
