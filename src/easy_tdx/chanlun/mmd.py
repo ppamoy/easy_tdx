@@ -11880,6 +11880,26 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V63 条件 190-191 ──
+
+        # 条件190：中枢级别权重优化增强（Zhongshu Level Weight Optimization Enhanced）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None:
+            try:
+                zs_weight_enh = _calc_zhongshu_level_weight_enhanced_v63(mmd, zss, closes)
+                mmd._zhongshu_level_weight_enhanced_v63 = zs_weight_enh
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_weight_enh.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件191：多周期信号衰减追踪（Multi-Period Signal Decay Tracking）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 25:
+            try:
+                multi_decay = _calc_multi_period_signal_decay_v63(mmd, closes)
+                mmd._multi_period_signal_decay_v63 = multi_decay
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + multi_decay.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -19416,6 +19436,326 @@ def _calc_dynamic_threshold_atr_multiplier_v62(
             f"ATR={atr_14:.4f}({atr_pct:.2f}%) | "
             f"最优倍数={multiplier}x | 止损距离={stop_pct:.1f}% | "
             f"波动率={regime} | 置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# =============================================================================
+# V63: 条件 190-191（中枢级别权重优化增强 + 多周期信号衰减追踪）
+# =============================================================================
+
+def _calc_zhongshu_level_weight_enhanced_v63(
+    mmd: "MMD",
+    zss: list["ZS"],
+    closes: list[float] | None = None,
+) -> dict[str, Any]:
+    """中枢级别权重优化增强（V63 条件190）。
+
+    在条件161（中枢级别权重自适应）基础上，增加：
+    - 价格与中枢距离评分：信号越接近中枢上沿/下沿，权重越高
+    - 中枢结构质量评分：完成的、笔数充足的中枢质量更高
+    - 近期测试次数评分：近期被测试过的中枢更可靠
+
+    返回字段：level, distance_score, quality_score, recent_test_score,
+              total_weight_bonus, confidence_adjust, msg
+    """
+    result = {
+        "level": "unknown",
+        "distance_score": 0,
+        "quality_score": 0,
+        "recent_test_score": 0,
+        "total_weight_bonus": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if not zss or len(zss) == 0:
+            result["msg"] = "无中枢数据，跳过此条件"
+            return result
+
+        if not closes or len(closes) < 20:
+            result["msg"] = "K线数据不足"
+            return result
+
+        # 找到最相关的已完成中枢
+        relevant_zs = None
+        for zs in reversed(zss):
+            if zs.line_count >= 3 and zs.done:
+                relevant_zs = zs
+                break
+        if relevant_zs is None:
+            for zs in reversed(zss):
+                if zs.line_count >= 3:
+                    relevant_zs = zs
+                    break
+        if relevant_zs is None:
+            result["msg"] = "无可用的中枢数据"
+            return result
+
+        line_count = relevant_zs.line_count
+        current_price = closes[-1]
+
+        # ── 1. 中枢级别基础权重 ──────────────────────────────────────
+        if line_count >= 13:
+            level = "月线"
+            base_bonus = 8
+        elif line_count >= 8:
+            level = "周线"
+            base_bonus = 6
+        elif line_count >= 4:
+            level = "日线"
+            base_bonus = 4
+        elif line_count >= 3:
+            level = "小级别"
+            base_bonus = 2
+        else:
+            level = "未知"
+            base_bonus = 0
+
+        # ── 2. 价格距离评分（0-4分）─────────────────────────────────
+        distance_score = 0
+        zs_range = relevant_zs.zg - relevant_zs.zd
+        if zs_range > 0 and current_price > 0:
+            if is_buy:
+                ratio = (current_price - relevant_zs.zg) / (relevant_zs.zg + 1e-10) * 100
+                if 0 < ratio <= 3:
+                    distance_score = 4
+                elif 3 < ratio <= 8:
+                    distance_score = 3
+                elif 8 < ratio <= 15:
+                    distance_score = 2
+                elif ratio > 15:
+                    distance_score = 0
+                else:
+                    distance_score = 1
+            else:
+                zd_val = relevant_zs.zd
+                ratio = (zd_val - current_price) / (zd_val + 1e-10) * 100 if zd_val > 0 else 0
+                if 0 < ratio <= 3:
+                    distance_score = 4
+                elif 3 < ratio <= 8:
+                    distance_score = 3
+                elif 8 < ratio <= 15:
+                    distance_score = 2
+                elif ratio > 15:
+                    distance_score = 0
+                else:
+                    distance_score = 1
+
+        result["distance_score"] = distance_score
+
+        # ── 3. 中枢结构质量评分（0-3分）─────────────────────────────
+        quality_score = 0
+        if relevant_zs.done:
+            quality_score += 2
+        if line_count >= 5:
+            quality_score += 1
+
+        result["quality_score"] = quality_score
+
+        # ── 4. 近期测试次数评分（0-2分）─────────────────────────────
+        recent_tests = 0
+        if len(closes) >= 10:
+            recent_window = closes[-10:]
+            for price in recent_window:
+                if relevant_zs.zd <= price <= relevant_zs.zg:
+                    recent_tests += 1
+        if recent_tests >= 2:
+            recent_test_score = 2
+        elif recent_tests >= 1:
+            recent_test_score = 1
+        else:
+            recent_test_score = 0
+
+        result["recent_test_score"] = recent_test_score
+
+        # ── 5. 综合权重计算 ─────────────────────────────────────────
+        total_bonus = base_bonus + distance_score + quality_score + recent_test_score
+
+        if total_bonus >= 15:
+            confidence_adj = 0.05
+        elif total_bonus >= 12:
+            confidence_adj = 0.04
+        elif total_bonus >= 10:
+            confidence_adj = 0.03
+        elif total_bonus >= 8:
+            confidence_adj = 0.02
+        elif total_bonus >= 6:
+            confidence_adj = 0.01
+        else:
+            confidence_adj = 0.0
+
+        result["level"] = level
+        result["total_weight_bonus"] = total_bonus
+        result["confidence_adjust"] = confidence_adj
+
+        direction_hint = "买入" if is_buy else "卖出"
+        result["msg"] = (
+            f"中枢级别权重优化：{level}中枢({line_count}笔)"
+            f"，距离分={distance_score}/4"
+            f"，质量分={quality_score}/3"
+            f"，近期测试={recent_test_score}/2"
+            f"，总分={total_bonus}"
+            f" → +{confidence_adj:.0%}置信度"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_period_signal_decay_v63(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多周期信号衰减追踪（V63 条件191）。
+
+    在V57/V59单周期衰减基础上，增加多周期窗口分析：
+    - 短期（5根）：即时衰减，快速判断信号有效性
+    - 中期（10根）：趋势持续性
+    - 长期（20根）：大周期稳定性
+
+    返回字段：short_term_momentum, mid_term_momentum, long_term_momentum,
+              overall_health, decay_detected, confidence_adjust, msg
+    """
+    result = {
+        "short_term_momentum": 0.0,
+        "mid_term_momentum": 0.0,
+        "long_term_momentum": 0.0,
+        "overall_health": "unknown",
+        "decay_detected": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号，跳过此条件"
+            return result
+
+        if len(closes) < 25:
+            result["msg"] = "数据不足，需要至少25根K线"
+            return result
+
+        # 计算信号点位置
+        bi_end_idx = 0
+        if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
+            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 25)
+        else:
+            bi_end_idx = max(0, len(closes) - 25)
+
+        if bi_end_idx + 5 >= len(closes):
+            result["msg"] = "信号后数据不足"
+            return result
+
+        signal_price = closes[bi_end_idx]
+
+        # ── 短期（5根K线）───────────────────────────────────────────
+        short_window = min(5, len(closes) - bi_end_idx - 1)
+        if short_window >= 2:
+            short_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + short_window]
+            short_change = (short_closes[-1] - signal_price) / (signal_price + 1e-10) * 100
+            result["short_term_momentum"] = round(short_change, 2)
+        else:
+            result["short_term_momentum"] = 0.0
+
+        # ── 中期（10根K线）──────────────────────────────────────────
+        mid_window = min(10, len(closes) - bi_end_idx - 1)
+        if mid_window >= 3:
+            mid_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + mid_window]
+            mid_change = (mid_closes[-1] - signal_price) / (signal_price + 1e-10) * 100
+            result["mid_term_momentum"] = round(mid_change, 2)
+        else:
+            result["mid_term_momentum"] = 0.0
+
+        # ── 长期（20根K线）──────────────────────────────────────────
+        long_window = min(20, len(closes) - bi_end_idx - 1)
+        if long_window >= 5:
+            long_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + long_window]
+            long_change = (long_closes[-1] - signal_price) / (signal_price + 1e-10) * 100
+            result["long_term_momentum"] = round(long_change, 2)
+        else:
+            result["long_term_momentum"] = 0.0
+
+        # ── 综合健康度评估 ──────────────────────────────────────────
+        if is_buy:
+            short_ok = result["short_term_momentum"] >= -1.0
+            mid_ok = result["mid_term_momentum"] >= -2.0
+            long_ok = result["long_term_momentum"] >= -3.0
+
+            if result["short_term_momentum"] >= 3.0 and result["mid_term_momentum"] >= 2.0:
+                health = "strong"
+                decay = False
+                adj = 0.04
+            elif short_ok and mid_ok and long_ok:
+                health = "healthy"
+                decay = False
+                adj = 0.02
+            elif short_ok and mid_ok:
+                health = "stable"
+                decay = False
+                adj = 0.01
+            elif not long_ok:
+                health = "declining"
+                decay = True
+                adj = -0.03
+            elif not mid_ok:
+                health = "weak"
+                decay = True
+                adj = -0.02
+            else:
+                health = "decaying"
+                decay = True
+                adj = -0.04
+        else:
+            short_ok = result["short_term_momentum"] <= 1.0
+            mid_ok = result["mid_term_momentum"] <= 2.0
+            long_ok = result["long_term_momentum"] <= 3.0
+
+            if result["short_term_momentum"] <= -3.0 and result["mid_term_momentum"] <= -2.0:
+                health = "strong"
+                decay = False
+                adj = 0.04
+            elif short_ok and mid_ok and long_ok:
+                health = "healthy"
+                decay = False
+                adj = 0.02
+            elif short_ok and mid_ok:
+                health = "stable"
+                decay = False
+                adj = 0.01
+            elif not long_ok:
+                health = "declining"
+                decay = True
+                adj = -0.03
+            elif not mid_ok:
+                health = "weak"
+                decay = True
+                adj = -0.02
+            else:
+                health = "decaying"
+                decay = True
+                adj = -0.04
+
+        result["overall_health"] = health
+        result["decay_detected"] = decay
+        result["confidence_adjust"] = adj
+
+        result["msg"] = (
+            f"多周期衰减追踪 | 短={result['short_term_momentum']:+.1f}%"
+            f" 中={result['mid_term_momentum']:+.1f}%"
+            f" 长={result['long_term_momentum']:+.1f}%"
+            f" | 健康度={health}"
+            f"{' | ⚠️衰减中' if decay else ''}"
+            f" | 置信度调整{adj:+.0%}"
         )
         return result
     except Exception:

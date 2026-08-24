@@ -3681,6 +3681,44 @@ onMounted(() => {
                 <div class="kv-note">{{ diagnosis.chanlun.dynamic_threshold_atr_multiplier_v62.msg }}</div>
               </div>
            </div>
+          <!-- V63: 中枢级别权重优化增强 -->
+          <div v-if="diagnosis.chanlun.zhongshu_level_weight_enhanced_v63" class="metric-card v63-zs-weight">
+             <div class="card-title">💎 V63 中枢级别权重优化（条件190）</div>
+             <div class="card-body">
+               <div class="kv-row"><span class="kv-key">中枢级别</span><span class="tag" :class="diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.level === '月线' ? 'tag-gold' : diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.level === '周线' ? 'tag-green' : diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.level === '日线' ? 'tag-blue' : 'tag-gray'">{{ diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.level }}</span></div>
+               <div class="kv-row"><span class="kv-key">距离评分</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.distance_score }}/4</span></div>
+               <div class="kv-row"><span class="kv-key">质量评分</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.quality_score }}/3</span></div>
+               <div class="kv-row"><span class="kv-key">近期测试</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.recent_test_score }}/2</span></div>
+               <div class="kv-row"><span class="kv-key">总权重分</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.total_weight_bonus }}</span></div>
+               <div class="kv-row" style="margin-top:6px">
+                 <span class="kv-key">置信度调整</span>
+                 <span :style="{ color: diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                   {{ diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.confidence_adjust*100).toFixed(0) }}%
+                 </span>
+               </div>
+               <div class="kv-note">{{ diagnosis.chanlun.zhongshu_level_weight_enhanced_v63.msg }}</div>
+             </div>
+          </div>
+
+          <!-- V63: 多周期信号衰减追踪 -->
+          <div v-if="diagnosis.chanlun.multi_period_signal_decay_v63" class="metric-card v63-signal-decay">
+             <div class="card-title">📉 V63 多周期信号衰减追踪（条件191）</div>
+             <div class="card-body">
+               <div class="kv-row"><span class="kv-key">短期(5根)</span><span class="kv-val" :style="{ color: diagnosis.chanlun.multi_period_signal_decay_v63.short_term_momentum >= 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.multi_period_signal_decay_v63.short_term_momentum >= 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_period_signal_decay_v63.short_term_momentum.toFixed(1) }}%</span></div>
+               <div class="kv-row"><span class="kv-key">中期(10根)</span><span class="kv-val" :style="{ color: diagnosis.chanlun.multi_period_signal_decay_v63.mid_term_momentum >= 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.multi_period_signal_decay_v63.mid_term_momentum >= 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_period_signal_decay_v63.mid_term_momentum.toFixed(1) }}%</span></div>
+               <div class="kv-row"><span class="kv-key">长期(20根)</span><span class="kv-val" :style="{ color: diagnosis.chanlun.multi_period_signal_decay_v63.long_term_momentum >= 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.multi_period_signal_decay_v63.long_term_momentum >= 0 ? '+' : '' }}{{ diagnosis.chanlun.multi_period_signal_decay_v63.long_term_momentum.toFixed(1) }}%</span></div>
+               <div class="kv-row"><span class="kv-key">健康度</span><span class="tag" :class="diagnosis.chanlun.multi_period_signal_decay_v63.overall_health === 'strong' ? 'tag-green' : diagnosis.chanlun.multi_period_signal_decay_v63.overall_health === 'healthy' ? 'tag-blue' : diagnosis.chanlun.multi_period_signal_decay_v63.overall_health === 'stable' ? 'tag-gray' : 'tag-red'">{{ diagnosis.chanlun.multi_period_signal_decay_v63.overall_health }}</span></div>
+               <div class="kv-row"><span class="kv-key">衰减检测</span><span class="tag" :class="diagnosis.chanlun.multi_period_signal_decay_v63.decay_detected ? 'tag-red' : 'tag-green'">{{ diagnosis.chanlun.multi_period_signal_decay_v63.decay_detected ? '⚠️ 是' : '✅ 否' }}</span></div>
+               <div class="kv-row" style="margin-top:6px">
+                 <span class="kv-key">置信度调整</span>
+                 <span :style="{ color: diagnosis.chanlun.multi_period_signal_decay_v63.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.multi_period_signal_decay_v63.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                   {{ diagnosis.chanlun.multi_period_signal_decay_v63.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_period_signal_decay_v63.confidence_adjust*100).toFixed(0) }}%
+                 </span>
+               </div>
+               <div class="kv-note">{{ diagnosis.chanlun.multi_period_signal_decay_v63.msg }}</div>
+             </div>
+          </div>
+
 
           <!-- MACD -->
         <div class="metric-card">
@@ -4492,3 +4530,6 @@ onMounted(() => {
 .v62-dyn-threshold .kv-val { font-weight: 600; }
 .v62-atr-mult .kv-val { font-weight: 600; }
 </style>
+/* V63: 中枢级别权重优化 + 多周期信号衰减追踪 */
+.v63-zs-weight .kv-val { font-weight: 600; }
+.v63-signal-decay .kv-val { font-weight: 600; }

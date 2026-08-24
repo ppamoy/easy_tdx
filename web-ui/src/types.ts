@@ -1716,6 +1716,26 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V63: 中枢级别权重优化增强（条件190）
+  zhongshu_level_weight_enhanced_v63?: {
+    level: string
+    distance_score: number
+    quality_score: number
+    recent_test_score: number
+    total_weight_bonus: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V63: 多周期信号衰减追踪（条件191）
+  multi_period_signal_decay_v63?: {
+    short_term_momentum: number
+    mid_term_momentum: number
+    long_term_momentum: number
+    overall_health: string
+    decay_detected: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

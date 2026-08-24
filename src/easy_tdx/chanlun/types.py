@@ -438,6 +438,10 @@ class MMD:
     _dynamic_threshold_volatility_regime_v62: dict[str, Any] | None = None  # 动态阈值-波动率状态切换（条件188）
     _dynamic_threshold_atr_multiplier_v62: dict[str, Any] | None = None  # 动态阈值-ATR倍数自适应（条件189）
 
+    # V63 enhancement fields (2026-08-28)
+    _zhongshu_level_weight_enhanced_v63: dict[str, Any] | None = None  # 中枢级别权重优化增强（条件190）
+    _multi_period_signal_decay_v63: dict[str, Any] | None = None  # 多周期信号衰减追踪（条件191）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

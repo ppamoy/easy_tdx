@@ -1019,6 +1019,10 @@ async def diagnose_stock(
             "dynamic_threshold_volatility_regime_v62": getattr(latest_mmd, "_dynamic_threshold_volatility_regime_v62", None) if latest_mmd else None,
             # V62: 动态阈值-ATR倍数自适应（条件189）
             "dynamic_threshold_atr_multiplier_v62": getattr(latest_mmd, "_dynamic_threshold_atr_multiplier_v62", None) if latest_mmd else None,
+            # V63: 中枢级别权重优化增强（条件190）
+            "zhongshu_level_weight_enhanced_v63": getattr(latest_mmd, "_zhongshu_level_weight_enhanced_v63", None) if latest_mmd else None,
+            # V63: 多周期信号衰减追踪（条件191）
+            "multi_period_signal_decay_v63": getattr(latest_mmd, "_multi_period_signal_decay_v63", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
