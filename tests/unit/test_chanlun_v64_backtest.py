@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V68 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71", "V72"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71", "V72", "V73"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -1263,3 +1263,188 @@ class TestV72Functions:
         assert result2["msg"] != ""
         result3 = _calc_volume_structure_quality_v72(mmd, short_closes, None)
         assert result3["msg"] != ""
+
+
+class TestV73ConditionGroup:
+    """V73 ConditionGroup 枚举测试。"""
+
+    def test_v73_group_exists(self):
+        assert hasattr(ConditionGroup, 'V73')
+        assert ConditionGroup.V73.value == "v73"
+
+    def test_v73_condition_range(self):
+        group = ConditionGroup.V73
+        start, end = group.condition_range
+        assert start == 224
+        assert end == 227
+
+    def test_v73_description(self):
+        desc = ConditionGroup.V73.description
+        assert "买卖点位置" in desc or "中枢突破" in desc or "多指标" in desc or "波动率" in desc
+
+
+class TestV73MMDFields:
+    """V73 MMD 增强字段存在性测试。"""
+
+    def test_v73_fields_exist_on_mmd(self):
+        from easy_tdx.chanlun.types import MMD
+        mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
+        assert hasattr(mmd, "_mmd_position_risk_v73")
+        assert hasattr(mmd, "_zhongshu_breakout_validity_v73")
+        assert hasattr(mmd, "_multi_indicator_consistency_v73")
+        assert hasattr(mmd, "_volatility_regime_adaptation_v73")
+
+
+class TestV73BacktestValidator:
+    """V73 回测验证器测试。"""
+
+    def test_v73_validator_usage(self):
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V73])
+        assert len(results) >= 1
+        assert results[0].group == ConditionGroup.V73
+
+    def test_v73_multi_group_validation(self):
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V72, ConditionGroup.V73])
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V72, ConditionGroup.V73}
+
+    def test_v73_summary_output(self):
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V73])
+        summary = results[0].summary()
+        assert "V73" in summary
+
+
+class TestV73Functions:
+    """V73 计算函数功能测试。"""
+
+    def test_mmd_position_risk(self):
+        """买卖点位置风险评估应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_mmd_position_risk_v73
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(11)
+        closes = [100.0]
+        highs = [100.0]
+        lows = [100.0]
+        for _ in range(80):
+            c = closes[-1] * (1 + np.random.randn() * 0.015)
+            h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
+            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            closes.append(c)
+            highs.append(h)
+            lows.append(l)
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_mmd_position_risk_v73(mmd, closes, highs, lows)
+        assert "position_pct" in result
+        assert "risk_level" in result
+        assert "risk_score" in result
+        assert "confidence_adjust" in result
+        assert "msg" in result
+        assert result["risk_level"] in ("low", "medium", "high", "unknown")
+        assert 0 <= result["position_pct"] <= 1
+
+    def test_zhongshu_breakout_validity(self):
+        """中枢突破有效性验证应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_zhongshu_breakout_validity_v73
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(22)
+        closes = [100.0]
+        highs = [100.0]
+        lows = [100.0]
+        volumes = [1e6]
+        for _ in range(80):
+            c = closes[-1] * (1 + np.random.randn() * 0.015)
+            h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
+            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            closes.append(c)
+            highs.append(h)
+            lows.append(l)
+            volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.3))
+        # 构造一个有笔索引的MMD
+        from easy_tdx.chanlun.bi import BI
+        # 构造一个有笔索引的MMD
+        class MockK:
+            k_index = 50
+            close = 105.0
+        from easy_tdx.chanlun.bi import BI
+        from easy_tdx.chanlun.fractal import FX
+        fx1 = FX(fx_type="low", k=MockK(), klines=[], val=99.0, index=10)
+        fx2 = FX(fx_type="high", k=MockK(), klines=[], val=105.0, index=50)
+        bi = BI(start=fx1, end=fx2, direction="up", index=30)
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=bi)
+        result = _calc_zhongshu_breakout_validity_v73(mmd, closes, volumes, highs, lows)
+        assert "breakout_valid" in result
+        assert "confirm_bars" in result
+        assert "sustain_ratio" in result
+        assert "volume_ratio" in result
+        assert "confidence_adjust" in result
+
+    def test_multi_indicator_consistency(self):
+        """多指标确认一致性应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_indicator_consistency_v73
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(33)
+        closes = [100.0]
+        for _ in range(50):
+            closes.append(closes[-1] * (1 + np.random.randn() * 0.01))
+        macd_data = {"dif": [0.1]*50, "dea": [0.08]*50, "hist": [0.04, *([0.03]*49)], "rsi": [40+i*0.5 for i in range(50)], "k": [50+i*0.3 for i in range(50)], "d": [48+i*0.3 for i in range(50)]}
+        kdj_data = {"k": [50+i*0.3 for i in range(50)], "d": [48+i*0.3 for i in range(50)]}
+        rsi_vals = [40 + i * 0.5 for i in range(50)]
+        boll_data = {"upper": [105]*50, "lower": [95]*50, "mid": [100]*50}
+        volumes = [1e6 * (1 + abs(np.random.randn()) * 0.3) for _ in range(50)]
+
+        mmd_buy = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_multi_indicator_consistency_v73(mmd_buy, closes, macd_data, kdj_data, rsi_vals, boll_data, volumes)
+        assert "agreement_count" in result
+        assert "agreement_ratio" in result
+        assert "consistency_score" in result
+        assert "confidence_adjust" in result
+        assert "msg" in result
+
+        mmd_sell = MMD(mmd_type=MMDType.SELL_3, confidence=0.5, bi=None)
+        result_sell = _calc_multi_indicator_consistency_v73(mmd_sell, closes, macd_data, kdj_data, rsi_vals, boll_data, volumes)
+        assert "confidence_adjust" in result_sell
+
+    def test_volatility_regime_adaptation(self):
+        """波动率环境适配应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_volatility_regime_adaptation_v73
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(44)
+        closes = [100.0]
+        highs = [100.5]
+        lows = [99.5]
+        for _ in range(100):
+            c = closes[-1] * (1 + np.random.randn() * 0.015)
+            h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
+            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            closes.append(c)
+            highs.append(h)
+            lows.append(l)
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_volatility_regime_adaptation_v73(mmd, closes, highs, lows)
+        assert "atr_pct" in result
+        assert "atr_rank" in result
+        assert "vol_regime" in result
+        assert "regime_score" in result
+        assert "confidence_adjust" in result
+        assert "msg" in result
+        assert result["vol_regime"] in ("low", "normal", "high", "extreme", "unknown")
+
+    def test_v73_data_insufficient(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import (
+            _calc_mmd_position_risk_v73,
+            _calc_volatility_regime_adaptation_v73,
+        )
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        short_closes = [100.0, 101.0, 102.0]
+        result = _calc_mmd_position_risk_v73(mmd, short_closes, None, None)
+        assert result["msg"] != ""
+        result2 = _calc_volatility_regime_adaptation_v73(mmd, short_closes, None, None)
+        assert result2["msg"] != ""

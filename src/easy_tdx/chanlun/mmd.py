@@ -12217,6 +12217,64 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V73 条件 224-227 ──
+
+        # 条件224：买卖点位置风险评估（MMD Position Risk Assessment）
+        # 评估信号在近期价格区间中的位置风险
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                pos_risk = _calc_mmd_position_risk_v73(mmd, closes, highs, lows)
+                mmd._mmd_position_risk_v73 = pos_risk
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pos_risk.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件225：中枢突破有效性验证（Zhongshu Breakout Validity）
+        # 验证突破后价格是否持续维持在外侧且量能配合
+        if mmd.bi is not None and closes is not None and len(closes) >= 30:
+            try:
+                bo_valid = _calc_zhongshu_breakout_validity_v73(mmd, closes, volumes, highs, lows)
+                mmd._zhongshu_breakout_validity_v73 = bo_valid
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + bo_valid.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件226：多指标确认一致性（Multi-Indicator Confirmation Consistency）
+        # 检查MACD/KDJ/RSI/BOLL/Volume五个独立指标是否同向
+        if mmd.bi is not None and closes is not None and len(closes) >= 20:
+            try:
+                # 本地计算 KDJ/RSI/BOLL（macd_data 默认不含这些）
+                _mi_rsi: list[float] | None = None
+                _mi_kdj: dict[str, list[float]] | None = None
+                _mi_boll: dict[str, list[float]] | None = None
+                if len(closes) >= 14:
+                    from easy_tdx.MyTT import RSI as _mytt_rsi, KDJ as _mytt_kdj, BOLL as _mytt_boll
+                    _mi_rsi = _mytt_rsi(closes, N=14)
+                if len(closes) >= 30:
+                    _k, _d, _j = _mytt_kdj(closes, highs or closes, lows or closes, N=9, M1=3, M2=3)
+                    _mi_kdj = {"k": _k, "d": _d}
+                if highs is not None and lows is not None and len(closes) >= 20:
+                    _b = _mytt_boll(closes, N=20)
+                    if any(_b):
+                        _mi_boll = {"upper": _b[0], "lower": _b[1], "mid": _b[2]}
+                mi_cons = _calc_multi_indicator_consistency_v73(
+                    mmd, closes, macd_data, _mi_kdj, _mi_rsi, _mi_boll, volumes
+                )
+                mmd._multi_indicator_consistency_v73 = mi_cons
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mi_cons.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件227：波动率环境适配（Volatility Regime Adaptation）
+        # 根据当前ATR分位动态调整置信度
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 60:
+            try:
+                vol_reg = _calc_volatility_regime_adaptation_v73(mmd, closes, highs, lows)
+                mmd._volatility_regime_adaptation_v73 = vol_reg
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_reg.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -22997,6 +23055,384 @@ def _calc_signal_decay_velocity_v72(
         result["msg"] = (
             f"趋势={trend} 速度={velocity:+.3f} 波动={vol:.3f} "
             f"置信度{adjust:+.0%} (样本: {', '.join(str(c) for c in result['recent_confidences'])})"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# V73: 条件 224-227（买卖点位置风险+中枢突破验证+多指标一致性+波动率适配）
+def _calc_mmd_position_risk_v73(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """买卖点位置风险评估（V73 条件224）。
+
+    评估当前买卖信号在近期价格区间中的位置风险：
+    - 买入信号：若出现在近期区间高位（>80%分位），风险较高；低位（<20%分位）风险较低
+    - 卖出信号：若出现在近期区间低位（<20%分位），风险较高；高位（>80%分位）风险较低
+    - 中间区域：风险中性
+
+    返回：position_pct, risk_level, risk_score, confidence_adjust, msg
+    """
+    result = {
+        "position_pct": 0.0,
+        "risk_level": "unknown",
+        "risk_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        lookback = min(60, n)
+        if n < 30 or highs is None or lows is None:
+            result["msg"] = "数据不足（需≥30根且有highs/lows）"
+            return result
+
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+        range_high = max(recent_highs)
+        range_low = min(recent_lows)
+        price_range = range_high - range_low
+
+        current_price = closes[-1]
+        if price_range < 1e-10:
+            result["msg"] = "近期价格区间过窄"
+            return result
+
+        position_pct = (current_price - range_low) / price_range
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        if position_pct > 0.8:
+            risk_level = "high"
+            risk_score = 0.8 if is_buy else 0.2
+            adjust = -0.04 if is_buy else 0.02
+        elif position_pct < 0.2:
+            risk_level = "low"
+            risk_score = 0.2 if is_buy else 0.8
+            adjust = 0.04 if is_buy else -0.02
+        else:
+            risk_level = "medium"
+            risk_score = 0.5
+            adjust = 0.0
+
+        result["position_pct"] = round(position_pct, 3)
+        result["risk_level"] = risk_level
+        result["risk_score"] = round(risk_score, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"价格位于区间{position_pct:.0%}处 "
+            f"({range_low:.2f}~{range_high:.2f}) "
+            f"风险={risk_level} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_breakout_validity_v73(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float] | None,
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """中枢突破有效性验证（V73 条件225）。
+
+    验证中枢突破是否为真实突破：
+    - 真实突破：突破后价格持续维持在外侧，且伴随放量
+    - 假突破：突破后价格快速回穿中枢，或突破时量能不足
+
+    返回：breakout_valid, confirm_bars, sustain_ratio, volume_ratio, confidence_adjust, msg
+    """
+    result = {
+        "breakout_valid": False,
+        "confirm_bars": 0,
+        "sustain_ratio": 0.0,
+        "volume_ratio": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 30 or highs is None or lows is None:
+            result["msg"] = "数据不足（需≥30根且有highs/lows）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        if mmd.bi is None or mmd.bi.index is None:
+            result["msg"] = "无笔索引信息"
+            return result
+
+        bi_idx = mmd.bi.index
+        if bi_idx < 5 or bi_idx >= n - 5:
+            result["msg"] = "笔索引越界"
+            return result
+
+        breakout_price = closes[bi_idx]
+        confirm_period = min(10, n - bi_idx - 1)
+        if confirm_period < 3:
+            result["msg"] = "突破后K线不足"
+            return result
+
+        if is_buy:
+            sustain_count = sum(
+                1 for i in range(bi_idx + 1, min(bi_idx + 1 + confirm_period, n))
+                if closes[i] > breakout_price * 1.001
+            )
+        else:
+            sustain_count = sum(
+                1 for i in range(bi_idx + 1, min(bi_idx + 1 + confirm_period, n))
+                if closes[i] < breakout_price * 0.999
+            )
+
+        sustain_ratio = sustain_count / confirm_period if confirm_period > 0 else 0
+
+        vol_ratio = 1.0
+        if volumes and len(volumes) > bi_idx:
+            recent_end = max(0, bi_idx - 10)
+            recent_vol = volumes[recent_end:bi_idx]
+            post_end = min(len(volumes), bi_idx + confirm_period + 1)
+            post_vol = volumes[bi_idx:post_end]
+            if recent_vol and post_vol:
+                avg_recent = sum(recent_vol) / len(recent_vol)
+                avg_post = sum(post_vol) / len(post_vol) if sum(post_vol) > 0 else avg_recent
+                vol_ratio = avg_post / max(avg_recent, 1e-10)
+
+        valid = sustain_ratio >= 0.7 and vol_ratio >= 0.8
+        result["breakout_valid"] = valid
+        result["confirm_bars"] = sustain_count
+        result["sustain_ratio"] = round(sustain_ratio, 3)
+        result["volume_ratio"] = round(vol_ratio, 3)
+
+        if valid:
+            adjust = 0.05
+            result["msg"] = f"突破有效（维持{sustain_count}/{confirm_period}根，量能比{vol_ratio:.2f}）"
+        else:
+            adjust = -0.03
+            result["msg"] = f"突破可疑（维持{sustain_count}/{confirm_period}根，量能比{vol_ratio:.2f}）"
+
+        result["confidence_adjust"] = round(adjust, 3)
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_indicator_consistency_v73(
+    mmd: "MMD",
+    closes: list[float],
+    macd_data: dict[str, list[float]] | None,
+    kdj_data: dict[str, list[float]] | None,
+    rsi_values: list[float] | None,
+    boll_data: dict[str, list[float]] | None,
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """多指标确认一致性评估（V73 条件226）。
+
+    检查MACD、KDJ、RSI、BOLL、Volume五个独立指标是否发出同向信号：
+    - 一致性强（≥4个指标同向）：增强置信度
+    - 一致性弱（≤2个指标同向）：降低置信度
+    - 分歧明显：显著降低置信度
+
+    返回：agreement_count, agreement_ratio, consistency_score, confidence_adjust, msg
+    """
+    result = {
+        "agreement_count": 0,
+        "agreement_ratio": 0.0,
+        "consistency_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 20:
+            result["msg"] = "数据不足（需≥20根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        agree_count = 0
+        total_indicators = 0
+
+        # MACD确认
+        if macd_data and "hist" in macd_data and len(macd_data["hist"]) >= 2:
+            total_indicators += 1
+            hist = macd_data["hist"]
+            macd_bullish = hist[-1] > 0 and hist[-1] > hist[-2]
+            if is_buy and macd_bullish:
+                agree_count += 1
+            elif not is_buy and not macd_bullish:
+                agree_count += 1
+
+        # KDJ确认
+        if kdj_data and "k" in kdj_data and "d" in kdj_data:
+            total_indicators += 1
+            k_vals = kdj_data["k"]
+            d_vals = kdj_data["d"]
+            if len(k_vals) >= 2 and len(d_vals) >= 2:
+                kdj_bullish = k_vals[-1] > d_vals[-1] and k_vals[-1] > k_vals[-2]
+                if is_buy and kdj_bullish:
+                    agree_count += 1
+                elif not is_buy and not kdj_bullish:
+                    agree_count += 1
+
+        # RSI确认
+        if rsi_values and len(rsi_values) >= 2:
+            total_indicators += 1
+            rsi_bullish = rsi_values[-1] > rsi_values[-2] and rsi_values[-1] < 70
+            if is_buy and rsi_bullish:
+                agree_count += 1
+            elif not is_buy and not rsi_bullish:
+                agree_count += 1
+
+        # BOLL确认
+        if boll_data and "upper" in boll_data and "lower" in boll_data:
+            total_indicators += 1
+            upper = boll_data["upper"]
+            lower = boll_data["lower"]
+            mid = boll_data.get("mid", [])
+            if len(upper) >= 1 and len(lower) >= 1:
+                if is_buy:
+                    center = mid[-1] if len(mid) >= 1 else (upper[-1] + lower[-1]) / 2
+                    boll_bullish = closes[-1] > center
+                else:
+                    center = mid[-1] if len(mid) >= 1 else (upper[-1] + lower[-1]) / 2
+                    boll_bullish = closes[-1] < center
+                if is_buy and boll_bullish:
+                    agree_count += 1
+                elif not is_buy and not boll_bullish:
+                    agree_count += 1
+
+        # Volume确认
+        if volumes and len(volumes) >= 2:
+            total_indicators += 1
+            vol_bullish = volumes[-1] > volumes[-2] and closes[-1] > closes[-2]
+            if is_buy and vol_bullish:
+                agree_count += 1
+            elif not is_buy and not vol_bullish:
+                agree_count += 1
+
+        agreement_ratio = agree_count / total_indicators if total_indicators > 0 else 0.5
+        consistency_score = agreement_ratio
+
+        if agreement_ratio >= 0.8:
+            adjust = 0.06
+        elif agreement_ratio >= 0.6:
+            adjust = 0.03
+        elif agreement_ratio <= 0.2:
+            adjust = -0.06
+        elif agreement_ratio <= 0.4:
+            adjust = -0.03
+        else:
+            adjust = 0.0
+
+        result["agreement_count"] = agree_count
+        result["agreement_ratio"] = round(agreement_ratio, 3)
+        result["consistency_score"] = round(consistency_score, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"{agree_count}/{total_indicators}个指标一致 "
+            f"（一致率{agreement_ratio:.0%}）"
+            f" 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volatility_regime_adaptation_v73(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """波动率环境适配（V73 条件227）。
+
+    根据当前市场波动率环境调整置信度：
+    - 低波动环境（ATR历史分位<30%）：趋势信号更可靠，增强置信度
+    - 正常波动（30%-60%）：中性
+    - 高波动（60%-80%）：噪音增加，适度降低
+    - 极端波动（≥80%）：显著降权
+
+    返回：atr_pct, atr_rank, vol_regime, regime_score, confidence_adjust, msg
+    """
+    result = {
+        "atr_pct": 0.0,
+        "atr_rank": 0.0,
+        "vol_regime": "unknown",
+        "regime_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 60 or highs is None or lows is None:
+            result["msg"] = "数据不足（需≥60根且有highs/lows）"
+            return result
+
+        # 计算近期ATR（使用真实波幅的移动平均）
+        tr_list = []
+        for i in range(max(1, n - 30), n):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i - 1]),
+                abs(lows[i] - closes[i - 1]),
+            )
+            tr_list.append(tr)
+
+        if len(tr_list) < 5:
+            result["msg"] = "TR数据不足"
+            return result
+
+        atr = sum(tr_list) / len(tr_list)
+        atr_pct = atr / max(closes[-1], 1e-10) * 100
+
+        # 计算历史ATR分位（用更长的lookback）
+        all_tr = []
+        lookback = min(120, n)
+        for i in range(n - lookback, n):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - closes[i - 1]),
+                abs(lows[i] - closes[i - 1]),
+            )
+            all_tr.append(tr)
+
+        if all_tr:
+            sorted_tr = sorted(all_tr)
+            atr_rank = sum(1 for v in sorted_tr if v <= atr) / len(sorted_tr)
+        else:
+            atr_rank = 0.5
+
+        # 判定波动率环境
+        if atr_rank < 0.3:
+            vol_regime = "low"
+            regime_score = 0.8
+            adjust = 0.03
+        elif atr_rank < 0.6:
+            vol_regime = "normal"
+            regime_score = 0.5
+            adjust = 0.0
+        elif atr_rank < 0.8:
+            vol_regime = "high"
+            regime_score = 0.3
+            adjust = -0.02
+        else:
+            vol_regime = "extreme"
+            regime_score = 0.1
+            adjust = -0.05
+
+        result["atr_pct"] = round(atr_pct, 3)
+        result["atr_rank"] = round(atr_rank, 3)
+        result["vol_regime"] = vol_regime
+        result["regime_score"] = round(regime_score, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"ATR={atr_pct:.2f}% 历史分位={atr_rank:.0%} "
+            f"环境={vol_regime} 置信度{adjust:+.0%}"
         )
         return result
     except Exception:

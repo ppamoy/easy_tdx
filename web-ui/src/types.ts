@@ -2012,6 +2012,40 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V73: 买卖点位置风险评估（条件224）
+  mmd_position_risk_v73?: {
+    position_pct: number
+    risk_level: string
+    risk_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V73: 中枢突破有效性验证（条件225）
+  zhongshu_breakout_validity_v73?: {
+    breakout_valid: boolean
+    confirm_bars: number
+    sustain_ratio: number
+    volume_ratio: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V73: 多指标确认一致性（条件226）
+  multi_indicator_consistency_v73?: {
+    agreement_count: number
+    agreement_ratio: number
+    consistency_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V73: 波动率环境适配（条件227）
+  volatility_regime_adaptation_v73?: {
+    atr_pct: number
+    atr_rank: number
+    vol_regime: string
+    regime_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

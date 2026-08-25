@@ -490,6 +490,12 @@ class MMD:
     _volume_structure_quality_v72: dict[str, Any] | None = None  # 量价结构质量评分（条件222）
     _signal_decay_velocity_v72: dict[str, Any] | None = None  # 信号衰减速度评估（条件223）
 
+    # V73 enhancement fields (2026-08-26)
+    _mmd_position_risk_v73: dict[str, Any] | None = None  # 买卖点位置风险评估（条件224）
+    _zhongshu_breakout_validity_v73: dict[str, Any] | None = None  # 中枢突破有效性验证（条件225）
+    _multi_indicator_consistency_v73: dict[str, Any] | None = None  # 多指标确认一致性（条件226）
+    _volatility_regime_adaptation_v73: dict[str, Any] | None = None  # 波动率环境适配（条件227）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

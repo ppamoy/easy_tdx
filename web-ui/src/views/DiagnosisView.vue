@@ -4313,6 +4313,45 @@ onMounted(() => {
                    <div class="kv-note">{{ diagnosis.chanlun.signal_decay_velocity_v72.msg }}</div>
                  </div>
               </div>
+               <!-- V73: 买卖点位置风险评估 -->
+               <div v-if="diagnosis.chanlun.mmd_position_risk_v73" class="metric-card v73-pr">
+                  <div class="card-title">🎯 V73 买卖点位置风险（条件224）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">风险等级</span><span class="tag" :class="{ 'tag-red': diagnosis.chanlun.mmd_position_risk_v73.risk_level === 'high', 'tag-green': diagnosis.chanlun.mmd_position_risk_v73.risk_level === 'low', 'tag-orange': diagnosis.chanlun.mmd_position_risk_v73.risk_level === 'medium' }">{{ {high:'🔴 高风险',low:'🟢 低风险',medium:'🟠 中风险'}[diagnosis.chanlun.mmd_position_risk_v73.risk_level] ?? '—' }}</span></div>
+                    <div class="kv-row"><span class="kv-key">价格位置</span><span class="kv-val">{{ (diagnosis.chanlun.mmd_position_risk_v73.position_pct * 100).toFixed(1) }}%</span></div>
+                    <div class="kv-row"><span class="kv-key">风险分</span><span class="kv-val">{{ diagnosis.chanlun.mmd_position_risk_v73.risk_score.toFixed(3) }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.mmd_position_risk_v73.msg }}</div>
+                  </div>
+               </div>
+               <!-- V73: 中枢突破有效性验证 -->
+               <div v-if="diagnosis.chanlun.zhongshu_breakout_validity_v73" class="metric-card v73-zb">
+                  <div class="card-title">🔍 V73 中枢突破验证（条件225）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">有效性</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.zhongshu_breakout_validity_v73.breakout_valid, 'tag-red': !diagnosis.chanlun.zhongshu_breakout_validity_v73.breakout_valid }">{{ diagnosis.chanlun.zhongshu_breakout_validity_v73.breakout_valid ? '✅ 有效' : '⚠️ 可疑' }}</span></div>
+                    <div class="kv-row"><span class="kv-key">维持率</span><span class="kv-val" :style="{ color: diagnosis.chanlun.zhongshu_breakout_validity_v73.sustain_ratio >= 0.7 ? '#22c55e' : '#ef4444' }">{{ (diagnosis.chanlun.zhongshu_breakout_validity_v73.sustain_ratio * 100).toFixed(0) }}%</span></div>
+                    <div class="kv-row"><span class="kv-key">量能比</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_breakout_validity_v73.volume_ratio.toFixed(2) }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.zhongshu_breakout_validity_v73.msg }}</div>
+                  </div>
+               </div>
+               <!-- V73: 多指标确认一致性 -->
+               <div v-if="diagnosis.chanlun.multi_indicator_consistency_v73" class="metric-card v73-mic">
+                  <div class="card-title">🔗 V73 多指标一致性（条件226）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">一致率</span><span class="kv-val" :style="{ color: diagnosis.chanlun.multi_indicator_consistency_v73.agreement_ratio >= 0.6 ? '#22c55e' : diagnosis.chanlun.multi_indicator_consistency_v73.agreement_ratio <= 0.4 ? '#ef4444' : '#f59e0b' }">{{ (diagnosis.chanlun.multi_indicator_consistency_v73.agreement_ratio * 100).toFixed(0) }}%</span></div>
+                    <div class="kv-row"><span class="kv-key">一致分</span><span class="kv-val">{{ diagnosis.chanlun.multi_indicator_consistency_v73.consistency_score.toFixed(3) }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.multi_indicator_consistency_v73.msg }}</div>
+                  </div>
+               </div>
+               <!-- V73: 波动率环境适配 -->
+               <div v-if="diagnosis.chanlun.volatility_regime_adaptation_v73" class="metric-card v73-vra">
+                  <div class="card-title">🌊 V73 波动率环境（条件227）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">波动环境</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volatility_regime_adaptation_v73.vol_regime === 'low', 'tag-blue': diagnosis.chanlun.volatility_regime_adaptation_v73.vol_regime === 'normal', 'tag-orange': diagnosis.chanlun.volatility_regime_adaptation_v73.vol_regime === 'high', 'tag-red': diagnosis.chanlun.volatility_regime_adaptation_v73.vol_regime === 'extreme' }">{{ {low:'🟢 低波动',normal:'🔵 正常',high:'🟠 高波动',extreme:'🔴 极端'}[diagnosis.chanlun.volatility_regime_adaptation_v73.vol_regime] ?? '—' }}</span></div>
+                    <div class="kv-row"><span class="kv-key">ATR占比</span><span class="kv-val">{{ diagnosis.chanlun.volatility_regime_adaptation_v73.atr_pct.toFixed(2) }}%</span></div>
+                    <div class="kv-row"><span class="kv-key">历史分位</span><span class="kv-val">{{ (diagnosis.chanlun.volatility_regime_adaptation_v73.atr_rank * 100).toFixed(0) }}%</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.volatility_regime_adaptation_v73.msg }}</div>
+                  </div>
+               </div>
 <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -5303,4 +5342,8 @@ onMounted(() => {
 .v72-sr .kv-val { font-weight: 600; }
 .v72-vsq .kv-val { font-weight: 600; }
 .v72-sdv .kv-val { font-weight: 600; }
+.v73-pr .kv-val { font-weight: 600; }
+.v73-zb .kv-val { font-weight: 600; }
+.v73-mic .kv-val { font-weight: 600; }
+.v73-vra .kv-val { font-weight: 600; }
 </style>
