@@ -1768,6 +1768,41 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V66: MACD动能锥加速确认（条件196）
+  macd_momentum_acceleration_v66?: {
+    acceleration_detected: boolean
+    acceleration_direction: string
+    cone_bars: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V66: 量价配合深度评分（条件197）
+  volume_price_coordination_deep_v66?: {
+    short_score: number
+    mid_score: number
+    extreme_flag: string
+    overall_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V66: 多时间框架共振强度（条件198）
+  multi_tf_convergence_intensity_v66?: {
+    short_trend: string
+    mid_trend: string
+    long_trend: string
+    convergence_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V66: 信号执行优先级建议（条件199）
+  signal_execution_priority_v66?: {
+    priority: number
+    priority_label: string
+    risk_level: string
+    suggested_action: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

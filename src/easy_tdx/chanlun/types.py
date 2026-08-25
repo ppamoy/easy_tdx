@@ -448,6 +448,12 @@ class MMD:
     _volatility_compression_breakout_v65: dict[str, Any] | None = None  # 波动率压缩突破信号（条件194）
     _signal_time_window_freshness_v65: dict[str, Any] | None = None  # 买卖点时间窗口新鲜度（条件195）
 
+    # V66 enhancement fields (2026-08-28)
+    _macd_momentum_acceleration_v66: dict[str, Any] | None = None  # MACD动能锥加速确认（条件196）
+    _volume_price_coordination_deep_v66: dict[str, Any] | None = None  # 量价配合深度评分（条件197）
+    _multi_tf_convergence_intensity_v66: dict[str, Any] | None = None  # 多时间框架共振强度评分（条件198）
+    _signal_execution_priority_v66: dict[str, Any] | None = None  # 信号执行优先级建议（条件199）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

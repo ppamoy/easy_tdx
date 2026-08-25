@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V65 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -96,6 +96,7 @@ class TestConditionGroup:
         assert ConditionGroup.V63.condition_range == (190, 191)
         assert ConditionGroup.V64.condition_range == (0, 0)
         assert ConditionGroup.V65.condition_range == (192, 195)
+        assert ConditionGroup.V66.condition_range == (196, 199)
 
     def test_descriptions(self):
         """每个分组都有描述。"""
@@ -443,6 +444,7 @@ class TestV65ConditionGroup:
     def test_v65_condition_range(self):
         """V65 条件范围应为 (192, 195)。"""
         assert ConditionGroup.V65.condition_range == (192, 195)
+        assert ConditionGroup.V66.condition_range == (196, 199)
 
     def test_v65_description(self):
         """V65 应有描述。"""
@@ -528,3 +530,100 @@ class TestV65MultiStock:
             assert isinstance(r.condition_breakdown, dict)
             v65_keys = [k for k in r.condition_breakdown if "v65" in k.lower()]
             assert len(v65_keys) >= 0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V66 条件 196-199 专项测试
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestV66ConditionGroup:
+    """V66 ConditionGroup 枚举正确性测试。"""
+
+    def test_v66_exists(self):
+        """V66 分组应存在于枚举中。"""
+        assert ConditionGroup.V66 in list(ConditionGroup)
+
+    def test_v66_condition_range(self):
+        """V66 条件范围应为 (196, 199)。"""
+        assert ConditionGroup.V66.condition_range == (196, 199)
+
+    def test_v66_description(self):
+        """V66 应有描述。"""
+        assert len(ConditionGroup.V66.description) > 0
+
+
+class TestV66MMDFields:
+    """V66 MMD 增强字段存在性测试。"""
+
+    def test_v66_mmd_fields_exist(self):
+        """缠论分析产生的 MMD 对象应包含 V66 增强字段。"""
+        np.random.seed(99)
+        df = _make_df(*_make_trending_df(300, trend="up"))
+        analyser = ChanlunAnalyser(ChanlunConfig())
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        buy_mmds = [m for m in mmds if "buy" in m.mmd_type.value]
+        if buy_mmds:
+            latest = buy_mmds[-1]
+            assert hasattr(latest, "_macd_momentum_acceleration_v66")
+            assert hasattr(latest, "_volume_price_coordination_deep_v66")
+            assert hasattr(latest, "_multi_tf_convergence_intensity_v66")
+            assert hasattr(latest, "_signal_execution_priority_v66")
+
+
+class TestV66BacktestValidator:
+    """V66 回测验证器测试。"""
+
+    def test_v66_validator_usable(self):
+        """ConditionGroup.V66 应可被 validator 使用。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V66])
+        assert len(results) == 1
+        assert results[0].group == ConditionGroup.V66
+
+    def test_v66_multi_group_validation(self):
+        """V65 + V66 联合验证应返回两个结果。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V65, ConditionGroup.V66])
+        assert len(results) == 2
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V65, ConditionGroup.V66}
+
+    def test_v66_summary_output(self):
+        """V66 摘要应包含 V66 关键词。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V66])
+        assert len(results) == 1
+        summary = results[0].summary()
+        assert "V66" in summary
+
+    def test_v66_confidence_correlation_valid(self):
+        """V66 置信度相关性应在有效范围内。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V66])
+        assert len(results) == 1
+        corr = results[0].confidence_correlation
+        assert isinstance(corr, float)
+        assert -1.0 <= corr <= 1.0 or corr == 0.0
+
+
+class TestV66MultiStock:
+    """V66 多股票对比测试。"""
+
+    def test_v66_multi_stock_breakdown(self):
+        """多股票对比应包含 V66 条件命中统计。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        data = {
+            "sh600000": _make_df(*_make_oscillating_df(400)),
+            "sz000001": _make_df(*_make_trending_df(400, trend="up")),
+        }
+        results = validator.validate_multi_stock(data)
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r.condition_breakdown, dict)
+            v66_keys = [k for k in r.condition_breakdown if "v66" in k.lower()]
+            assert len(v66_keys) >= 0

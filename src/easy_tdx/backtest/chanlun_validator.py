@@ -50,6 +50,8 @@ class ConditionGroup(str, Enum):
     V64 = "v64"
     # V65: 条件192-195（量价背离二次确认+突破回踩+波动率压缩+时间窗口）
     V65 = "v65"
+    # V66: 条件196-199（MACD加速+量价配合+多TF共振+执行优先级）
+    V66 = "v66"
 
     @property
     def condition_range(self) -> tuple[int, int]:
@@ -63,6 +65,7 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V63: (190, 191),
             ConditionGroup.V64: (0, 0),
             ConditionGroup.V65: (192, 195),
+            ConditionGroup.V66: (196, 199),
         }
         return mapping[self]
 
@@ -78,6 +81,7 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V63: "中枢级别权重优化+多周期信号衰减追踪",
             ConditionGroup.V64: "回测验证框架（基础设施）",
             ConditionGroup.V65: "量价背离二次确认+突破回踩+波动率压缩+时间窗口",
+            ConditionGroup.V66: "MACD加速+量价配合+多TF共振+执行优先级",
         }
         return mapping[self]
 

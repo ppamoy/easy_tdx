@@ -11938,6 +11938,43 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V66 条件 196-199 ──
+
+        # 条件196：MACD动能锥加速确认（MACD Momentum Acceleration Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and macd_data is not None and len(macd_data.get("hist", [])) >= 20:
+            try:
+                macd_acc = _calc_macd_momentum_acceleration_v66(mmd, macd_data)
+                mmd._macd_momentum_acceleration_v66 = macd_acc
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + macd_acc.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件197：量价配合深度评分（Volume-Price Coordination Deep Score）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and len(closes) >= 60:
+            try:
+                vp_coord = _calc_volume_price_coordination_deep_v66(mmd, closes, volumes)
+                mmd._volume_price_coordination_deep_v66 = vp_coord
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_coord.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件198：多时间框架共振强度评分（Multi-Timeframe Convergence Intensity）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 100:
+            try:
+                tf_conv = _calc_multi_tf_convergence_intensity_v66(mmd, closes)
+                mmd._multi_tf_convergence_intensity_v66 = tf_conv
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_conv.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件199：信号执行优先级建议（Signal Execution Priority Recommendation）
+        if mmd.bi is not None and closes is not None and len(closes) >= 30:
+            try:
+                exec_pri = _calc_signal_execution_priority_v66(mmd, closes)
+                mmd._signal_execution_priority_v66 = exec_pri
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -20206,6 +20243,339 @@ def _calc_signal_time_window_freshness_v65(
             f"信号新鲜度 | {bars_since}根前 健康={health} 评分={score:.2f}"
             f" 时间衰减={time_decay:.0%} | 置信度{'+' if adj >= 0 else ''}{adj:.0%}"
         )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_macd_momentum_acceleration_v66(
+    mmd: "MMD",
+    macd_data: dict[str, list[float]],
+) -> dict[str, Any]:
+    """MACD动能锥加速确认（V66 条件196）。
+
+    检测MACD柱状图的加速度变化，判断趋势动能是否正在加速或减速：
+    - 买入信号：MACD柱连续放大（动能增强）或柱状图由负转正（金叉确认）
+    - 卖出信号：MACD柱连续缩小（动能衰减）或柱状图由正转负（死叉确认）
+    - 锥形态：连续多根K线柱状图单调变化，代表动能稳定释放
+
+    返回：acceleration_detected, acceleration_direction, cone_bars, confidence_adjust, msg
+    """
+    result = {
+        "acceleration_detected": False,
+        "acceleration_direction": "unknown",
+        "cone_bars": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        hist = macd_data.get("hist", [])
+        dif = macd_data.get("dif", [])
+        if len(hist) < 10:
+            result["msg"] = "MACD数据不足"
+            return result
+
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+
+        hist_changes = [hist[-i] - hist[-i - 1] for i in range(1, min(10, len(hist)))]
+        hist_changes.reverse()
+
+        if is_buy:
+            accelerating = all(c > 0 for c in hist_changes[-3:]) if len(hist_changes) >= 3 else False
+            golden_cross = len(dif) >= 2 and dif[-2] <= 0 and dif[-1] > 0
+            turning_positive = hist[-1] > 0 and hist[-2] <= 0
+            strong_confirm = accelerating or (golden_cross and hist[-1] > 0) or turning_positive
+        else:
+            decelerating = all(c < 0 for c in hist_changes[-3:]) if len(hist_changes) >= 3 else False
+            dead_cross = len(dif) >= 2 and dif[-2] >= 0 and dif[-1] < 0
+            turning_negative = hist[-1] < 0 and hist[-2] >= 0
+            strong_confirm = decelerating or (dead_cross and hist[-1] < 0) or turning_negative
+
+        cone_count = 0
+        for i in range(len(hist_changes) - 1):
+            if hist_changes[i] * hist_changes[i + 1] > 0:
+                cone_count += 1
+            else:
+                break
+        cone_count = min(cone_count, 9)
+
+        if strong_confirm and cone_count >= 2:
+            result["acceleration_detected"] = True
+            result["acceleration_direction"] = "up" if is_buy else "down"
+            result["cone_bars"] = cone_count
+            adj = min(0.06, cone_count * 0.015 + 0.02)
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = (
+                f"MACD动能加速 | 方向={'↑' if is_buy else '↓'} 锥={cone_count}根"
+                f" | 置信度+{adj:.0%}"
+            )
+        elif strong_confirm:
+            result["acceleration_detected"] = True
+            result["acceleration_direction"] = "up" if is_buy else "down"
+            result["confidence_adjust"] = 0.01
+            result["msg"] = f"MACD动能{'增强' if is_buy else '减弱'} | 置信度+1%"
+        else:
+            result["confidence_adjust"] = -0.01
+            result["msg"] = "MACD动能无明确加速信号 | 置信度-1%"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_price_coordination_deep_v66(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量价配合深度评分（V66 条件197）。
+
+    多维度评估量价关系质量：短期5日/中期20日配合+极端量能检测。
+
+    返回：short_score, mid_score, extreme_flag, overall_score, confidence_adjust, msg
+    """
+    result = {
+        "short_score": 0.0,
+        "mid_score": 0.0,
+        "extreme_flag": "normal",
+        "overall_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 30 or len(volumes) < n:
+            result["msg"] = "数据不足"
+            return result
+
+        short_closes = closes[-5:]
+        short_vols = volumes[-5:]
+        short_price_dir = short_closes[-1] - short_closes[0]
+        short_vol_avg = sum(short_vols[:-1]) / max(len(short_vols) - 1, 1)
+        short_vol_dir = short_vols[-1] - short_vol_avg
+
+        if is_buy:
+            short_ok = (short_price_dir < 0 and short_vol_dir < 0) or (short_price_dir > 0 and short_vol_dir > 0)
+        else:
+            short_ok = (short_price_dir > 0 and short_vol_dir < 0) or (short_price_dir < 0 and short_vol_dir > 0)
+
+        short_score = 0.8 if short_ok else 0.3
+
+        mid_closes = closes[-20:]
+        mid_vols = volumes[-20:]
+        mid_price_dir = mid_closes[-1] - mid_closes[0]
+        mid_vol_trend = sum(mid_vols[-5:]) / 5 - sum(mid_vols[:5]) / 5
+
+        if is_buy:
+            mid_ok = (mid_price_dir <= 0 and mid_vol_trend <= 0) or (mid_price_dir > 0 and mid_vol_trend > 0)
+        else:
+            mid_ok = (mid_price_dir >= 0 and mid_vol_trend <= 0) or (mid_price_dir < 0 and mid_vol_trend > 0)
+
+        mid_score = 0.75 if mid_ok else 0.35
+
+        recent_vol = sum(volumes[-5:]) / 5
+        avg_vol = sum(volumes) / len(volumes) if volumes else 1.0
+        vol_ratio = recent_vol / max(avg_vol, 1e-10)
+
+        if vol_ratio > 3.0:
+            extreme_flag = "extreme_high"
+        elif vol_ratio < 0.3:
+            extreme_flag = "extreme_low"
+        else:
+            extreme_flag = "normal"
+
+        overall = short_score * 0.3 + mid_score * 0.5 + (0.2 if extreme_flag == "normal" else 0.0)
+        overall = min(1.0, max(0.0, overall))
+
+        result["short_score"] = round(short_score, 2)
+        result["mid_score"] = round(mid_score, 2)
+        result["extreme_flag"] = extreme_flag
+        result["overall_score"] = round(overall, 2)
+
+        if overall >= 0.7:
+            adj = 0.04
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = f"量价配合良好 | 短={short_score:.0%} 中={mid_score:.0%} 极端={extreme_flag} | 置信度+{adj:.0%}"
+        elif overall >= 0.5:
+            adj = 0.01
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = f"量价配合一般 | 综合={overall:.0%} | 置信度+1%"
+        else:
+            adj = -0.02
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = f"量价配合较差 | 综合={overall:.0%} 极端={extreme_flag} | 置信度-2%"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_tf_convergence_intensity_v66(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多时间框架共振强度评分（V66 条件198）。
+
+    通过模拟多周期均线系统，检测短(5日)/中(20日)/长(60日)趋势一致性。
+
+    返回：short_trend, mid_trend, long_trend, convergence_score, confidence_adjust, msg
+    """
+    result = {
+        "short_trend": "unknown",
+        "mid_trend": "unknown",
+        "long_trend": "unknown",
+        "convergence_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 60:
+            result["msg"] = "数据不足（需≥60根）"
+            return result
+
+        ma5 = sum(closes[-5:]) / 5
+        ma10 = sum(closes[-10:]) / 10
+        ma20 = sum(closes[-20:]) / 20
+        ma60 = sum(closes[-60:]) / 60
+        current = closes[-1]
+
+        short_trend = "up" if ma5 > ma10 else "down"
+        mid_trend = "up" if ma20 > ma10 else "down"
+        long_trend = "up" if current > ma60 else "down"
+
+        result["short_trend"] = short_trend
+        result["mid_trend"] = mid_trend
+        result["long_trend"] = long_trend
+
+        if is_buy:
+            aligned_up = short_trend == "up" and mid_trend == "up" and long_trend == "up"
+            aligned_cnt = sum(1 for t in [short_trend, mid_trend, long_trend] if t == "up")
+        else:
+            aligned_up = short_trend == "down" and mid_trend == "down" and long_trend == "down"
+            aligned_cnt = sum(1 for t in [short_trend, mid_trend, long_trend] if t == "down")
+
+        convergence_score = aligned_cnt / 3.0
+
+        if aligned_up:
+            adj = 0.05
+            result["convergence_score"] = 1.0
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = f"三周期共振 {'↑' if is_buy else '↓'} | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振=1.0 | 置信度+{adj:.0%}"
+        elif convergence_score >= 0.6:
+            adj = 0.02
+            result["convergence_score"] = round(convergence_score, 2)
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = f"双周期共振 {'↑' if is_buy else '↓'} | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振={convergence_score:.0%} | 置信度+{adj:.0%}"
+        else:
+            adj = -0.02
+            result["convergence_score"] = round(convergence_score, 2)
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = f"周期分歧 | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振={convergence_score:.0%} | 置信度-2%"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_execution_priority_v66(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """信号执行优先级建议（V66 条件199）。
+
+    基于信号质量综合评估给出P0-P3执行优先级：
+    P0=立即执行 P1=尽快执行 P2=观察等待 P3=暂缓执行
+
+    返回：priority, priority_label, risk_level, suggested_action, confidence_adjust, msg
+    """
+    result = {
+        "priority": 3,
+        "priority_label": "P3",
+        "risk_level": "high",
+        "suggested_action": "观望",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 20 or mmd.bi is None:
+            result["msg"] = "数据不足"
+            return result
+
+        current = closes[-1]
+        ma5 = sum(closes[-5:]) / 5
+        ma20 = sum(closes[-20:]) / 20
+        recent_high = max(closes[-20:])
+        recent_low = min(closes[-20:])
+        price_range = recent_high - recent_low if recent_high != recent_low else recent_high * 0.05
+        price_position = (current - recent_low) / price_range if price_range > 0 else 0.5
+        ma_spread = abs(ma5 - ma20) / max(ma20, 1e-10)
+
+        returns = [
+            (closes[-i] - closes[-i - 1]) / max(closes[-i - 1], 1e-10)
+            for i in range(1, min(11, n))
+        ]
+        avg_return = sum(abs(r) for r in returns) / len(returns) if returns else 0.02
+
+        score = 0.0
+        if is_buy:
+            if ma5 > ma20:
+                score += 0.25
+            if price_position < 0.4:
+                score += 0.20
+            if ma_spread > 0.02:
+                score += 0.15
+            if avg_return < 0.03:
+                score += 0.10
+            if mmd.bi and mmd.bi.end.k.k_index is not None:
+                score += 0.15
+            if mmd.confidence > 0.7:
+                score += 0.15
+        else:
+            if ma5 < ma20:
+                score += 0.25
+            if price_position > 0.6:
+                score += 0.20
+            if ma_spread > 0.02:
+                score += 0.15
+            if avg_return < 0.03:
+                score += 0.10
+            if mmd.bi and mmd.bi.end.k.k_index is not None:
+                score += 0.15
+            if mmd.confidence > 0.7:
+                score += 0.15
+
+        score = min(1.0, max(0.0, score))
+
+        if score >= 0.75:
+            priority, label, risk, action = 0, "P0", "low", "立即执行"
+        elif score >= 0.55:
+            priority, label, risk, action = 1, "P1", "medium", "尽快执行"
+        elif score >= 0.35:
+            priority, label, risk, action = 2, "P2", "medium-high", "观察等待"
+        else:
+            priority, label, risk, action = 3, "P3", "high", "暂缓执行"
+
+        result["priority"] = priority
+        result["priority_label"] = label
+        result["risk_level"] = risk
+        result["suggested_action"] = action
+        result["msg"] = f"执行优先级 {label} | 评分={score:.0%} 风险={risk} | 建议:{action}"
+
+        if priority == 0:
+            adj = 0.05
+        elif priority == 1:
+            adj = 0.02
+        elif priority == 2:
+            adj = 0.0
+        else:
+            adj = -0.03
+
+        result["confidence_adjust"] = round(adj, 3)
         return result
     except Exception:
         return result

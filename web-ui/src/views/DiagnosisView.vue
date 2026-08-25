@@ -3866,6 +3866,70 @@ onMounted(() => {
               </div>
            </div>
 
+           <!-- V66: MACD动能锥加速确认 -->
+           <div v-if="diagnosis.chanlun.macd_momentum_acceleration_v66" class="metric-card v66-macd-acc">
+              <div class="card-title">⚡ V66 MACD动能锥加速（条件196）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">加速确认</span><span class="tag" :class="diagnosis.chanlun.macd_momentum_acceleration_v66.acceleration_detected ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.macd_momentum_acceleration_v66.acceleration_detected ? '✅ 已加速' : '⚠️ 未加速' }}</span></div>
+                <div class="kv-row"><span class="kv-key">加速方向</span><span class="tag" :class="diagnosis.chanlun.macd_momentum_acceleration_v66.acceleration_direction === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.macd_momentum_acceleration_v66.acceleration_direction === 'up' ? '↑ 向上' : '↓ 向下' }}</span></div>
+                <div class="kv-row"><span class="kv-key">动能锥</span><span class="kv-val">{{ diagnosis.chanlun.macd_momentum_acceleration_v66.cone_bars }} 根K线</span></div>
+                <div class="kv-row" style="margin-top:6px">
+                  <span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.macd_momentum_acceleration_v66.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.macd_momentum_acceleration_v66.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.macd_momentum_acceleration_v66.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.macd_momentum_acceleration_v66.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.macd_momentum_acceleration_v66.msg }}</div>
+              </div>
+           </div>
+
+           <!-- V66: 量价配合深度评分 -->
+           <div v-if="diagnosis.chanlun.volume_price_coordination_deep_v66" class="metric-card v66-vp-coord">
+              <div class="card-title">📈 V66 量价配合深度评分（条件197）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">短期配合</span><span class="kv-val">{{ diagnosis.chanlun.volume_price_coordination_deep_v66.short_score.toFixed(2) }}</span></div>
+                <div class="kv-row"><span class="kv-key">中期配合</span><span class="kv-val">{{ diagnosis.chanlun.volume_price_coordination_deep_v66.mid_score.toFixed(2) }}</span></div>
+                <div class="kv-row"><span class="kv-key">极端量能</span><span class="tag" :class="diagnosis.chanlun.volume_price_coordination_deep_v66.extreme_flag === 'normal' ? 'tag-gray' : diagnosis.chanlun.volume_price_coordination_deep_v66.extreme_flag === 'extreme_high' ? 'tag-orange' : 'tag-blue'">{{ diagnosis.chanlun.volume_price_coordination_deep_v66.extreme_flag }}</span></div>
+                <div class="kv-row"><span class="kv-key">综合评分</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.volume_price_coordination_deep_v66.overall_score.toFixed(2) }}</span></div>
+                <div class="kv-row" style="margin-top:6px">
+                  <span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.volume_price_coordination_deep_v66.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.volume_price_coordination_deep_v66.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.volume_price_coordination_deep_v66.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volume_price_coordination_deep_v66.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.volume_price_coordination_deep_v66.msg }}</div>
+              </div>
+           </div>
+
+           <!-- V66: 多时间框架共振强度 -->
+           <div v-if="diagnosis.chanlun.multi_tf_convergence_intensity_v66" class="metric-card v66-tf-conv">
+              <div class="card-title">🔄 V66 多时间框架共振强度（条件198）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">短期趋势</span><span class="tag" :class="diagnosis.chanlun.multi_tf_convergence_intensity_v66.short_trend === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_tf_convergence_intensity_v66.short_trend === 'up' ? '↑ 上升' : '↓ 下降' }}</span></div>
+                <div class="kv-row"><span class="kv-key">中期趋势</span><span class="tag" :class="diagnosis.chanlun.multi_tf_convergence_intensity_v66.mid_trend === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_tf_convergence_intensity_v66.mid_trend === 'up' ? '↑ 上升' : '↓ 下降' }}</span></div>
+                <div class="kv-row"><span class="kv-key">长期趋势</span><span class="tag" :class="diagnosis.chanlun.multi_tf_convergence_intensity_v66.long_trend === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_tf_convergence_intensity_v66.long_trend === 'up' ? '↑ 上升' : '↓ 下降' }}</span></div>
+                <div class="kv-row"><span class="kv-key">共振评分</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.multi_tf_convergence_intensity_v66.convergence_score.toFixed(2) }}</span></div>
+                <div class="kv-row" style="margin-top:6px">
+                  <span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.multi_tf_convergence_intensity_v66.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.multi_tf_convergence_intensity_v66.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.multi_tf_convergence_intensity_v66.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_convergence_intensity_v66.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.multi_tf_convergence_intensity_v66.msg }}</div>
+              </div>
+           </div>
+
+           <!-- V66: 信号执行优先级 -->
+           <div v-if="diagnosis.chanlun.signal_execution_priority_v66" class="metric-card v66-priority">
+              <div class="card-title">🚦 V66 信号执行优先级（条件199）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">执行优先级</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.signal_execution_priority_v66.priority === 0, 'tag-blue': diagnosis.chanlun.signal_execution_priority_v66.priority === 1, 'tag-orange': diagnosis.chanlun.signal_execution_priority_v66.priority === 2, 'tag-red': diagnosis.chanlun.signal_execution_priority_v66.priority === 3 }">{{ diagnosis.chanlun.signal_execution_priority_v66.priority_label }}</span></div>
+                <div class="kv-row"><span class="kv-key">风险等级</span><span class="tag" :class="diagnosis.chanlun.signal_execution_priority_v66.risk_level === 'low' ? 'tag-green' : diagnosis.chanlun.signal_execution_priority_v66.risk_level === 'medium' ? 'tag-blue' : 'tag-orange'">{{ diagnosis.chanlun.signal_execution_priority_v66.risk_level }}</span></div>
+                <div class="kv-row"><span class="kv-key">建议操作</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.signal_execution_priority_v66.suggested_action }}</span></div>
+                <div class="kv-note">{{ diagnosis.chanlun.signal_execution_priority_v66.msg }}</div>
+              </div>
+           </div>
+
 
            <!-- MACD -->
         <div class="metric-card">
@@ -4225,6 +4289,10 @@ onMounted(() => {
                 <td>{{ r.condition_breakdown?.v65_cond193 ?? 0 }}</td>
                 <td>{{ r.condition_breakdown?.v65_cond194 ?? 0 }}</td>
                 <td>{{ r.condition_breakdown?.v65_cond195 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v66_cond196 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v66_cond197 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v66_cond198 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v66_cond199 ?? 0 }}</td>
                 <td>
                   <span v-if="r.error" class="status-err">❌ {{ r.error }}</span>
                   <span v-else class="status-ok">✅ 正常</span>
@@ -4235,7 +4303,7 @@ onMounted(() => {
         </div>
         <!-- 条件命中详情 -->
         <div v-if="multiResultsHaveConditionData" class="condition-detail">
-          <div class="section-title">条件命中详情（V58-V63）</div>
+          <div class="section-title">条件命中详情（V58-V66）</div>
           <div class="cond-grid">
             <template v-for="r in multiResults" :key="r.stock_code">
               <div v-if="getConditionBreakdown(r).length > 0" class="cond-card">
@@ -4821,4 +4889,8 @@ onMounted(() => {
 .v65-breakout .kv-val { font-weight: 600; }
 .v65-squeeze .kv-val { font-weight: 600; }
 .v65-freshness .kv-val { font-weight: 600; }
+.v66-macd-acc .kv-val { font-weight: 600; }
+.v66-vp-coord .kv-val { font-weight: 600; }
+.v66-tf-conv .kv-val { font-weight: 600; }
+.v66-priority .kv-val { font-weight: 700; }
 </style>

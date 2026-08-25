@@ -1032,6 +1032,14 @@ async def diagnose_stock(
             "volatility_compression_breakout_v65": getattr(latest_mmd, "_volatility_compression_breakout_v65", None) if latest_mmd else None,
             # V65: 买卖点时间窗口新鲜度（条件195）
             "signal_time_window_freshness_v65": getattr(latest_mmd, "_signal_time_window_freshness_v65", None) if latest_mmd else None,
+            # V66: MACD动能加速确认（条件196）
+            "macd_momentum_acceleration_v66": getattr(latest_mmd, "_macd_momentum_acceleration_v66", None) if latest_mmd else None,
+            # V66: 量价配合深度评分（条件197）
+            "volume_price_coordination_deep_v66": getattr(latest_mmd, "_volume_price_coordination_deep_v66", None) if latest_mmd else None,
+            # V66: 多时间框架共振强度（条件198）
+            "multi_tf_convergence_intensity_v66": getattr(latest_mmd, "_multi_tf_convergence_intensity_v66", None) if latest_mmd else None,
+            # V66: 信号执行优先级（条件199）
+            "signal_execution_priority_v66": getattr(latest_mmd, "_signal_execution_priority_v66", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1324,7 +1332,14 @@ async def multi_stock_comparison(
                             condition_counts["v65_cond194"] = condition_counts.get("v65_cond194", 0) + 1
                         if c == 195 and hasattr(mmd, "_signal_time_window_freshness_v65"):
                             condition_counts["v65_cond195"] = condition_counts.get("v65_cond195", 0) + 1
-
+                        if c == 196 and hasattr(mmd, "_macd_momentum_acceleration_v66"):
+                            condition_counts["v66_cond196"] = condition_counts.get("v66_cond196", 0) + 1
+                        if c == 197 and hasattr(mmd, "_volume_price_coordination_deep_v66"):
+                            condition_counts["v66_cond197"] = condition_counts.get("v66_cond197", 0) + 1
+                        if c == 198 and hasattr(mmd, "_multi_tf_convergence_intensity_v66"):
+                            condition_counts["v66_cond198"] = condition_counts.get("v66_cond198", 0) + 1
+                        if c == 199 and hasattr(mmd, "_signal_execution_priority_v66"):
+                            condition_counts["v66_cond199"] = condition_counts.get("v66_cond199", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0
