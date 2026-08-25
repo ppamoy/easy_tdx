@@ -1838,6 +1838,41 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V68: 缺口方向与趋势一致性验证（条件204）
+  gap_trend_consistency_v68?: {
+    gap_detected: boolean
+    gap_direction: string
+    trend_alignment: string
+    gap_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V68: 多级别区间套一致性验证（条件205）
+  range_set_multi_level_v68?: {
+    zhongshu_count: number
+    zs_above_price: number
+    zs_below_price: number
+    multi_level_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V68: 信号后资金流向确认（条件206）
+  post_signal_fund_flow_v68?: {
+    fund_flow_direction: string
+    avg_volume_ratio: number
+    flow_confidence: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V68: 市场风格适配评分（条件207）
+  market_regime_adaptation_v68?: {
+    atr_pct: number
+    volatility_regime: string
+    trend_strength: string
+    adaptation_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

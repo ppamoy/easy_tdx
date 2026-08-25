@@ -3930,8 +3930,150 @@ onMounted(() => {
               </div>
            </div>
 
+            <!-- V67: 中枢背驰力度量化 -->
+            <div v-if="diagnosis.chanlun.zhongshu_divergence_strength_v67" class="metric-card v67-zs-div">
+               <div class="card-title">🎯 V67 中枢背驰力度量化（条件200）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">背驰类型</span><span class="tag" :class="diagnosis.chanlun.zhongshu_divergence_strength_v67.divergence_type === 'none' ? 'tag-gray' : diagnosis.chanlun.zhongshu_divergence_strength_v67.divergence_type.includes('strong') ? 'tag-green' : 'tag-blue'">{{ {strong_down:'↓ 强背驰',moderate_down:'↘ 中背驰',strong_up:'↑ 强背驰(卖)',moderate_up:'↗ 中背驰(卖)',none:'无背驰'}[diagnosis.chanlun.zhongshu_divergence_strength_v67.divergence_type] ?? '—' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">中枢强度</span><span class="tag" :class="diagnosis.chanlun.zhongshu_divergence_strength_v67.zhongshu_strength === 'weak' ? 'tag-orange' : diagnosis.chanlun.zhongshu_divergence_strength_v67.zhongshu_strength === 'strong' ? 'tag-green' : 'tag-gray'">{{ {weak:'弱',normal:'中',strong:'强'}[diagnosis.chanlun.zhongshu_divergence_strength_v67.zhongshu_strength] ?? '—' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">背驰面积比</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_divergence_strength_v67.backchi_ratio.toFixed(3) }}</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.zhongshu_divergence_strength_v67.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.zhongshu_divergence_strength_v67.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                     {{ diagnosis.chanlun.zhongshu_divergence_strength_v67.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.zhongshu_divergence_strength_v67.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.zhongshu_divergence_strength_v67.msg }}</div>
+               </div>
+            </div>
 
-           <!-- MACD -->
+            <!-- V67: 多级别买卖点一致性 -->
+            <div v-if="diagnosis.chanlun.multi_level_mmd_consistency_v67" class="metric-card v67-ml-cons">
+               <div class="card-title">🔗 V67 多级别买卖点一致性（条件201）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">短期趋势</span><span class="tag" :class="diagnosis.chanlun.multi_level_mmd_consistency_v67.short_dir === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_level_mmd_consistency_v67.short_dir === 'up' ? '↑ 上升' : '↓ 下降' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">中期趋势</span><span class="tag" :class="diagnosis.chanlun.multi_level_mmd_consistency_v67.mid_dir === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_level_mmd_consistency_v67.mid_dir === 'up' ? '↑ 上升' : '↓ 下降' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">长期趋势</span><span class="tag" :class="diagnosis.chanlun.multi_level_mmd_consistency_v67.long_dir === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_level_mmd_consistency_v67.long_dir === 'up' ? '↑ 上升' : '↓ 下降' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">一致评分</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.multi_level_mmd_consistency_v67.consistency_score.toFixed(2) }}</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.multi_level_mmd_consistency_v67.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.multi_level_mmd_consistency_v67.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                     {{ diagnosis.chanlun.multi_level_mmd_consistency_v67.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_level_mmd_consistency_v67.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.multi_level_mmd_consistency_v67.msg }}</div>
+               </div>
+            </div>
+
+            <!-- V67: 信号后价格轨迹健康度 -->
+            <div v-if="diagnosis.chanlun.post_signal_trajectory_health_v67" class="metric-card v67-traj">
+               <div class="card-title">📊 V67 信号后价格轨迹健康度（条件202）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">趋势质量</span><span class="tag" :class="diagnosis.chanlun.post_signal_trajectory_health_v67.trend_quality === 'excellent' ? 'tag-green' : diagnosis.chanlun.post_signal_trajectory_health_v67.trend_quality === 'good' ? 'tag-blue' : diagnosis.chanlun.post_signal_trajectory_health_v67.trend_quality === 'fair' ? 'tag-orange' : 'tag-red'">{{ {excellent:'⭐ 优秀',good:'✅ 良好',fair:'⚠️ 一般',poor:'❌ 较差'}[diagnosis.chanlun.post_signal_trajectory_health_v67.trend_quality] ?? '—' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">上涨K线</span><span class="kv-val" style="color:#22c55e">{{ diagnosis.chanlun.post_signal_trajectory_health_v67.up_bars }} 根</span></div>
+                 <div class="kv-row"><span class="kv-key">下跌K线</span><span class="kv-val" style="color:#ef4444">{{ diagnosis.chanlun.post_signal_trajectory_health_v67.down_bars }} 根</span></div>
+                 <div class="kv-row"><span class="kv-key">最大回撤</span><span class="kv-val">{{ diagnosis.chanlun.post_signal_trajectory_health_v67.max_drawdown_pct.toFixed(2) }}%</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.post_signal_trajectory_health_v67.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.post_signal_trajectory_health_v67.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                     {{ diagnosis.chanlun.post_signal_trajectory_health_v67.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.post_signal_trajectory_health_v67.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.post_signal_trajectory_health_v67.msg }}</div>
+               </div>
+            </div>
+
+            <!-- V67: 动态止损止盈推荐 -->
+            <div v-if="diagnosis.chanlun.dynamic_sl_tp_recommendation_v67" class="metric-card v67-sltp">
+               <div class="card-title">🛡️ V67 动态止损止盈推荐（条件203）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">止损位</span><span class="kv-val" style="color: #ef4444">{{ diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.stop_loss }}</span></div>
+                 <div class="kv-row"><span class="kv-key">止盈位</span><span class="kv-val" style="color: #22c55e">{{ diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.take_profit }}</span></div>
+                 <div class="kv-row"><span class="kv-key">风险收益比</span><span class="kv-val" style="color:#3b82f6;font-weight:700">{{ diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.risk_reward_ratio.toFixed(2) }}:1</span></div>
+                 <div class="kv-row"><span class="kv-key">建议仓位</span><span class="kv-val">{{ (diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.position_size_pct * 100).toFixed(0) }}%</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 700 }">
+                     {{ diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.dynamic_sl_tp_recommendation_v67.msg }}</div>
+               </div>
+            </div>
+
+            <!-- V68: 缺口方向与趋势一致性验证 -->
+            <div v-if="diagnosis.chanlun.gap_trend_consistency_v68" class="metric-card v68-gap">
+               <div class="card-title">🕳️ V68 缺口趋势一致性（条件204）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">缺口检测</span><span class="tag" :class="diagnosis.chanlun.gap_trend_consistency_v68.gap_detected ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.gap_trend_consistency_v68.gap_detected ? '✅ 发现' : '❌ 无' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">缺口方向</span><span class="tag" :class="diagnosis.chanlun.gap_trend_consistency_v68.gap_direction === 'up' ? 'tag-green' : diagnosis.chanlun.gap_trend_consistency_v68.gap_direction === 'down' ? 'tag-red' : 'tag-gray'">{{ {up:'↑ 向上',down:'↓ 向下',none:'—'}[diagnosis.chanlun.gap_trend_consistency_v68.gap_direction] ?? '—' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">趋势方向</span><span class="tag" :class="diagnosis.chanlun.gap_trend_consistency_v68.trend_alignment === 'up' ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.gap_trend_consistency_v68.trend_alignment === 'up' ? '↑ 上升' : '↓ 下降' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">质量评级</span><span class="tag" :class="diagnosis.chanlun.gap_trend_consistency_v68.gap_quality === 'strong' ? 'tag-green' : diagnosis.chanlun.gap_trend_consistency_v68.gap_quality === 'weak' ? 'tag-red' : 'tag-orange'">{{ {strong:'⭐ 强',moderate:'⚡ 中',weak:'⚠️ 弱',no_gap_trend_ok:'→ 无缺趋势正',no_gap_trend_bad:'↓ 无缺趋势负'}[diagnosis.chanlun.gap_trend_consistency_v68.gap_quality] ?? '—' }}</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.gap_trend_consistency_v68.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.gap_trend_consistency_v68.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                     {{ diagnosis.chanlun.gap_trend_consistency_v68.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.gap_trend_consistency_v68.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.gap_trend_consistency_v68.msg }}</div>
+               </div>
+            </div>
+
+            <!-- V68: 多级别区间套一致性 -->
+            <div v-if="diagnosis.chanlun.range_set_multi_level_v68" class="metric-card v68-range">
+               <div class="card-title">🔲 V68 区间套一致性（条件205）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">中枢数量</span><span class="kv-val">{{ diagnosis.chanlun.range_set_multi_level_v68.zhongshu_count }}</span></div>
+                 <div class="kv-row"><span class="kv-key">价格上方中枢</span><span class="tag tag-red">{{ diagnosis.chanlun.range_set_multi_level_v68.zs_above_price }} 个</span></div>
+                 <div class="kv-row"><span class="kv-key">价格下方中枢</span><span class="tag tag-green">{{ diagnosis.chanlun.range_set_multi_level_v68.zs_below_price }} 个</span></div>
+                 <div class="kv-row"><span class="kv-key">区间套评分</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.range_set_multi_level_v68.multi_level_score.toFixed(3) }}</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.range_set_multi_level_v68.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.range_set_multi_level_v68.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                     {{ diagnosis.chanlun.range_set_multi_level_v68.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.range_set_multi_level_v68.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.range_set_multi_level_v68.msg }}</div>
+               </div>
+            </div>
+
+            <!-- V68: 信号后资金流向确认 -->
+            <div v-if="diagnosis.chanlun.post_signal_fund_flow_v68" class="metric-card v68-fund">
+               <div class="card-title">💰 V68 资金流向确认（条件206）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">资金流向</span><span class="tag" :class="diagnosis.chanlun.post_signal_fund_flow_v68.fund_flow_direction.includes('inflow') && !diagnosis.chanlun.post_signal_fund_flow_v68.fund_flow_direction.includes('outflow') ? 'tag-green' : diagnosis.chanlun.post_signal_fund_flow_v68.fund_flow_direction.includes('outflow') ? 'tag-red' : 'tag-gray'">{{ {inflow_strong:'↑↑ 大幅流入',inflow_moderate:'↑ 中等流入',inflow_weak:'↑ 微弱流入',outflow_strong:'↓↓ 大幅流出',outflow_moderate:'↓ 中等流出',outflow_weak:'↓ 微弱流出',neutral:'→ 中性'}[diagnosis.chanlun.post_signal_fund_flow_v68.fund_flow_direction] ?? diagnosis.chanlun.post_signal_fund_flow_v68.fund_flow_direction }}</span></div>
+                 <div class="kv-row"><span class="kv-key">平均量比</span><span class="kv-val">{{ diagnosis.chanlun.post_signal_fund_flow_v68.avg_volume_ratio.toFixed(2) }}</span></div>
+                 <div class="kv-row"><span class="kv-key">流向置信</span><span class="tag" :class="diagnosis.chanlun.post_signal_fund_flow_v68.flow_confidence === 'strong' ? 'tag-green' : diagnosis.chanlun.post_signal_fund_flow_v68.flow_confidence === 'moderate' ? 'tag-blue' : diagnosis.chanlun.post_signal_fund_flow_v68.flow_confidence === 'warning' ? 'tag-orange' : 'tag-gray'">{{ {strong:'⭐ 强',moderate:'✅ 中',weak:'⚡ 弱',warning:'⚠️ 警示',neutral:'→ 中性'}[diagnosis.chanlun.post_signal_fund_flow_v68.flow_confidence] ?? '—' }}</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.post_signal_fund_flow_v68.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.post_signal_fund_flow_v68.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                     {{ diagnosis.chanlun.post_signal_fund_flow_v68.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.post_signal_fund_flow_v68.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.post_signal_fund_flow_v68.msg }}</div>
+               </div>
+            </div>
+
+            <!-- V68: 市场风格适配评分 -->
+            <div v-if="diagnosis.chanlun.market_regime_adaptation_v68" class="metric-card v68-regime">
+               <div class="card-title">🌊 V68 市场风格适配（条件207）</div>
+               <div class="card-body">
+                 <div class="kv-row"><span class="kv-key">ATR占比</span><span class="kv-val">{{ diagnosis.chanlun.market_regime_adaptation_v68.atr_pct.toFixed(2) }}%</span></div>
+                 <div class="kv-row"><span class="kv-key">波动率状态</span><span class="tag" :class="diagnosis.chanlun.market_regime_adaptation_v68.volatility_regime === 'low' ? 'tag-blue' : diagnosis.chanlun.market_regime_adaptation_v68.volatility_regime === 'normal' ? 'tag-gray' : 'tag-orange'">{{ {low:'🟢 低波',normal:'🟡 正常',high:'🟠 高波'}[diagnosis.chanlun.market_regime_adaptation_v68.volatility_regime] ?? '—' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">趋势强度</span><span class="tag" :class="diagnosis.chanlun.market_regime_adaptation_v68.trend_strength === 'strong' ? 'tag-green' : diagnosis.chanlun.market_regime_adaptation_v68.trend_strength === 'moderate' ? 'tag-blue' : 'tag-gray'">{{ {strong:'⭐ 强趋势',moderate:'⚡ 中趋势',weak:'→ 弱趋势'}[diagnosis.chanlun.market_regime_adaptation_v68.trend_strength] ?? '—' }}</span></div>
+                 <div class="kv-row"><span class="kv-key">适配评分</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.market_regime_adaptation_v68.adaptation_score.toFixed(2) }}</span></div>
+                 <div class="kv-row" style="margin-top:6px">
+                   <span class="kv-key">置信度调整</span>
+                   <span :style="{ color: diagnosis.chanlun.market_regime_adaptation_v68.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.market_regime_adaptation_v68.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 700 }">
+                     {{ diagnosis.chanlun.market_regime_adaptation_v68.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.market_regime_adaptation_v68.confidence_adjust*100).toFixed(0) }}%
+                   </span>
+                 </div>
+                 <div class="kv-note">{{ diagnosis.chanlun.market_regime_adaptation_v68.msg }}</div>
+               </div>
+            </div>
+
+
+            <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -4901,4 +5043,8 @@ onMounted(() => {
 .v67-ml-cons .kv-val { font-weight: 600; }
 .v67-traj .kv-val { font-weight: 600; }
 .v67-sltp .kv-val { font-weight: 700; }
+.v68-gap .kv-val { font-weight: 600; }
+.v68-range .kv-val { font-weight: 700; }
+.v68-fund .kv-val { font-weight: 600; }
+.v68-regime .kv-val { font-weight: 700; }
 </style>

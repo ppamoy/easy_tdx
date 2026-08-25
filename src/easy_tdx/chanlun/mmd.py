@@ -12012,6 +12012,45 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+
+        # ── V68 条件 204-207 ──
+
+        # 条件204：缺口方向与趋势一致性验证（Gap-Trend Consistency）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 30:
+            try:
+                gap_res = _calc_gap_trend_consistency_v68(mmd, closes)
+                mmd._gap_trend_consistency_v68 = gap_res
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + gap_res.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件205：多级别区间套一致性验证（Range Set Multi-level Consistency）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None and len(closes) >= 40:
+            try:
+                rs_cons = _calc_range_set_multi_level_v68(mmd, zss, closes)
+                mmd._range_set_multi_level_v68 = rs_cons
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + rs_cons.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件206：信号后资金流向确认（Post-signal Fund Flow）
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 30:
+            try:
+                fund_flow = _calc_post_signal_fund_flow_v68(mmd, closes, volumes)
+                mmd._post_signal_fund_flow_v68 = fund_flow
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + fund_flow.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件207：市场风格适配评分（Market Regime Adaptation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and highs is not None and lows is not None and len(closes) >= 60:
+            try:
+                regime_adapt = _calc_market_regime_adaptation_v68(mmd, closes, volumes, highs, lows)
+                mmd._market_regime_adaptation_v68 = regime_adapt
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + regime_adapt.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -20972,6 +21011,425 @@ def _calc_dynamic_sl_tp_recommendation_v67(
             f"ATR={atr_14:.2f}({atr_pct:.1f}%) | {direction}止损={stop_loss:.2f} "
             f"止盈={take_profit:.2f} 风险比={risk_reward:.1f} "
             f"仓位{position_size:.0%} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_gap_trend_consistency_v68(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """缺口方向与趋势一致性验证（V68 条件204）。
+
+    检测买卖点信号附近的缺口，并验证缺口方向是否与趋势一致：
+    - 买入信号：应存在向上跳空缺口（股价跳空高开）
+    - 卖出信号：应存在向下跳空缺口（股价跳空低开）
+    - 缺口方向与趋势一致时增加置信度
+
+    返回：gap_detected, gap_direction, trend_alignment, gap_quality, confidence_adjust, msg
+    """
+    result = {
+        "gap_detected": False,
+        "gap_direction": "none",
+        "trend_alignment": "none",
+        "gap_quality": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 30:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        current = closes[-1]
+
+        # 检测最近5根K线内的缺口
+        gap_found = False
+        gap_dir = "none"
+        gap_magnitude = 0.0
+
+        for i in range(max(0, n - 5), n):
+            if i == 0:
+                continue
+            prev_close = closes[i - 1]
+            curr_open = closes[i]
+            price_change = (curr_open - prev_close) / max(prev_close, 1e-10)
+            if abs(price_change) > 0.015:
+                gap_found = True
+                if price_change > 0:
+                    gap_dir = "up"
+                else:
+                    gap_dir = "down"
+                gap_magnitude = abs(price_change)
+                break
+
+        result["gap_detected"] = gap_found
+        result["gap_direction"] = gap_dir
+
+        # 趋势判断（基于MA5 vs MA20）
+        ma5 = sum(closes[-5:]) / 5
+        ma20 = sum(closes[-20:]) / 20
+        trend_dir = "up" if ma5 > ma20 else "down"
+        result["trend_alignment"] = trend_dir
+
+        # 一致性评估
+        if gap_found:
+            if (is_buy and gap_dir == "up" and trend_dir == "up") or \
+               (not is_buy and gap_dir == "down" and trend_dir == "down"):
+                alignment = "aligned"
+                quality = "strong"
+                adj = 0.04 if gap_magnitude > 0.03 else 0.03
+            elif (is_buy and gap_dir == "down") or (not is_buy and gap_dir == "up"):
+                alignment = "opposing"
+                quality = "weak"
+                adj = -0.04
+            else:
+                alignment = "neutral"
+                quality = "moderate"
+                adj = 0.01
+        else:
+            if trend_dir == ("up" if is_buy else "down"):
+                alignment = "neutral"
+                quality = "no_gap_trend_ok"
+                adj = 0.01
+            else:
+                alignment = "opposing"
+                quality = "no_gap_trend_bad"
+                adj = -0.02
+
+        result["gap_quality"] = quality
+        result["confidence_adjust"] = round(adj, 3)
+
+        gap_info = f"缺口{gap_dir}({gap_magnitude:.1%})" if gap_found else "无显著缺口"
+        align_label = "一致" if alignment == "aligned" else "背离" if alignment == "opposing" else "中性"
+        result["msg"] = (
+            f"{gap_info} | 趋势={trend_dir} | 一致性={align_label} "
+            f"质量={quality} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_range_set_multi_level_v68(
+    mmd: "MMD",
+    zss: list["ZS"],
+    closes: list[float],
+) -> dict[str, Any]:
+    """多级别区间套一致性验证（V68 条件205）。
+
+    基于中枢结构分析，判断当前价格相对各中枢的位置，
+    评估区间套（多级别共振）的有效性：
+    - 买入：价格应位于最近中枢上方（突破后回踩确认）
+    - 卖出：价格应位于最近中枢下方（跌破后反抽确认）
+    - 中枢数量越多、距离越近，区间套效果越好
+
+    返回：zhongshu_count, zs_above_price, zs_below_price, multi_level_score, confidence_adjust, msg
+    """
+    result = {
+        "zhongshu_count": 0,
+        "zs_above_price": 0.0,
+        "zs_below_price": 0.0,
+        "multi_level_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 40 or not zss:
+            result["msg"] = "数据不足（需≥40根且有机枢）"
+            return result
+
+        current = closes[-1]
+
+        # 统计中枢信息
+        zs_list = []
+        for zs in zss:
+            zs_mid = (zs.zg + zs.zd) / 2
+            zs_dist = (current - zs_mid) / max(current, 1e-10)
+            zs_list.append({
+                "mid": zs_mid,
+                "zg": zs.zg,
+                "zd": zs.zd,
+                "dist_pct": zs_dist,
+                "above": current > zs.zg,
+                "below": current < zs.zd,
+            })
+
+        result["zhongshu_count"] = len(zs_list)
+        zs_above = sum(1 for z in zs_list if z["above"])
+        zs_below = sum(1 for z in zs_list if z["below"])
+        result["zs_above_price"] = float(zs_above)
+        result["zs_below_price"] = float(zs_below)
+
+        # 区间套评分
+        # 买入信号：中枢在下方（被突破），且价格远离中枢上沿（确认突破）
+        # 卖出信号：中枢在上方（被跌破），且价格远离中枢下沿（确认跌破）
+        if is_buy:
+            # 最近中枢应在价格下方
+            if zs_list:
+                latest = zs_list[-1]
+                # 价格在最新中枢上方
+                breakout_confirm = latest["above"]
+                # 价格离中枢有一定距离（非刚突破）
+                distance_factor = max(0, min(1.0, latest["dist_pct"] * 5))
+                # 多个中枢提供支撑
+                support_level = zs_above / max(len(zs_list), 1)
+                score = 0.3 * breakout_confirm + 0.3 * distance_factor + 0.4 * support_level
+            else:
+                score = 0.3
+        else:
+            if zs_list:
+                latest = zs_list[-1]
+                breakdown_confirm = latest["below"]
+                distance_factor = max(0, min(1.0, abs(latest["dist_pct"]) * 5))
+                resistance_level = zs_below / max(len(zs_list), 1)
+                score = 0.3 * breakdown_confirm + 0.3 * distance_factor + 0.4 * resistance_level
+            else:
+                score = 0.3
+
+        score = min(1.0, max(0.0, score))
+        result["multi_level_score"] = round(score, 3)
+
+        if score >= 0.7:
+            adj = 0.05
+        elif score >= 0.5:
+            adj = 0.03
+        elif score >= 0.3:
+            adj = 0.0
+        else:
+            adj = -0.03
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"中枢数={len(zs_list)} 上方={zs_above} 下方={zs_below} "
+            f"区间套评分={score:.2f} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_post_signal_fund_flow_v68(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """信号后资金流向确认（V68 条件206）。
+
+    通过量价关系判断信号后的资金动向：
+    - 买入信号后：价格上涨伴随成交量放大 = 资金流入确认
+    - 卖出信号后：价格下跌伴随成交量放大 = 资金流出确认
+    - 价升量缩 = 资金背离（需警惕）
+
+    返回：fund_flow_direction, avg_volume_ratio, flow_confidence, confidence_adjust, msg
+    """
+    result = {
+        "fund_flow_direction": "none",
+        "avg_volume_ratio": 0.0,
+        "flow_confidence": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 30 or not volumes:
+            result["msg"] = "数据不足（需≥30根且有成交量）"
+            return result
+
+        recent_closes = closes[-20:]
+        recent_vols = volumes[-20:]
+
+        # 计算量比（相对于均量）
+        avg_vol = sum(recent_vols) / len(recent_vols)
+        vol_ratios = [v / max(avg_vol, 1e-10) for v in recent_vols]
+        avg_vol_ratio = sum(vol_ratios) / len(vol_ratios)
+        result["avg_volume_ratio"] = round(avg_vol_ratio, 3)
+
+        # 价量配合分析
+        up_days = 0
+        down_days = 0
+        high_vol_up = 0  # 涨且放量
+        high_vol_down = 0  # 跌且放量
+
+        for i in range(1, len(recent_closes)):
+            price_change = recent_closes[i] - recent_closes[i - 1]
+            vol_ratio = vol_ratios[i] if i < len(vol_ratios) else 1.0
+
+            if price_change > 0:
+                up_days += 1
+                if vol_ratio > 1.2:
+                    high_vol_up += 1
+            else:
+                down_days += 1
+                if vol_ratio > 1.2:
+                    high_vol_down += 1
+
+        # 判断资金流向
+        if is_buy:
+            # 买入后应该：涨多跌少 + 放量上涨
+            if up_days >= 12 and high_vol_up >= 8:
+                flow_dir = "inflow_strong"
+                confidence = "strong"
+                adj = 0.05
+            elif up_days >= 10 and high_vol_up >= 5:
+                flow_dir = "inflow_moderate"
+                confidence = "moderate"
+                adj = 0.03
+            elif up_days >= 8:
+                flow_dir = "inflow_weak"
+                confidence = "weak"
+                adj = 0.01
+            elif down_days > up_days:
+                flow_dir = "outflow"
+                confidence = "warning"
+                adj = -0.05
+            else:
+                flow_dir = "neutral"
+                confidence = "neutral"
+                adj = 0.0
+        else:
+            if down_days >= 12 and high_vol_down >= 8:
+                flow_dir = "outflow_strong"
+                confidence = "strong"
+                adj = 0.05
+            elif down_days >= 10 and high_vol_down >= 5:
+                flow_dir = "outflow_moderate"
+                confidence = "moderate"
+                adj = 0.03
+            elif down_days >= 8:
+                flow_dir = "outflow_weak"
+                confidence = "weak"
+                adj = 0.01
+            elif up_days > down_days:
+                flow_dir = "inflow"
+                confidence = "warning"
+                adj = -0.05
+            else:
+                flow_dir = "neutral"
+                confidence = "neutral"
+                adj = 0.0
+
+        result["fund_flow_direction"] = flow_dir
+        result["flow_confidence"] = confidence
+        result["confidence_adjust"] = round(adj, 3)
+
+        result["msg"] = (
+            f"量比={avg_vol_ratio:.2f} 涨{up_days}跌{down_days} "
+            f"资金流向={flow_dir} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_market_regime_adaptation_v68(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """市场风格适配评分（V68 条件207）。
+
+    评估当前市场环境（波动率状态、趋势强度），判断信号是否适配当前风格：
+    - 趋势市：适合趋势跟踪策略（第三类买卖点）
+    - 震荡市：适合区间策略，趋势信号需打折
+    - 高波动：需谨慎，降低仓位建议
+
+    返回：atr_pct, volatility_regime, trend_strength, adaptation_score, confidence_adjust, msg
+    """
+    result = {
+        "atr_pct": 0.0,
+        "volatility_regime": "normal",
+        "trend_strength": "weak",
+        "adaptation_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 60 or not highs or not lows:
+            result["msg"] = "数据不足（需≥60根）"
+            return result
+
+        current = closes[-1]
+
+        # 计算ATR(14)
+        tr_list = []
+        for i in range(1, len(highs)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - highs[i - 1]),
+                abs(lows[i] - lows[i - 1]),
+            )
+            tr_list.append(tr)
+        atr_14 = sum(tr_list[-14:]) / 14
+        atr_pct = atr_14 / max(current, 1e-10) * 100
+        result["atr_pct"] = round(atr_pct, 2)
+
+        # 波动率状态判断（基于ATR百分比）
+        if atr_pct > 4.0:
+            vol_regime = "high"
+        elif atr_pct > 2.0:
+            vol_regime = "normal"
+        else:
+            vol_regime = "low"
+        result["volatility_regime"] = vol_regime
+
+        # 趋势强度（ADX简化版：用MA发散度）
+        ma5 = sum(closes[-5:]) / 5
+        ma20 = sum(closes[-20:]) / 20
+        ma60 = sum(closes[-60:]) / 60
+        ma_spread = abs(ma5 - ma20) / max(ma20, 1e-10) * 100
+        trend_aligned = (ma5 > ma20 > ma60) if is_buy else (ma5 < ma20 < ma60)
+
+        if ma_spread > 3.0 and trend_aligned:
+            trend_strength = "strong"
+        elif ma_spread > 1.5:
+            trend_strength = "moderate"
+        else:
+            trend_strength = "weak"
+        result["trend_strength"] = trend_strength
+
+        # 适配评分
+        # 趋势信号在趋势市中表现最好，在震荡市中表现差
+        if trend_strength == "strong" and vol_regime in ("low", "normal"):
+            adaptation = 0.9
+            adj = 0.05
+        elif trend_strength == "strong" and vol_regime == "high":
+            adaptation = 0.6
+            adj = 0.02
+        elif trend_strength == "moderate" and vol_regime in ("low", "normal"):
+            adaptation = 0.7
+            adj = 0.03
+        elif trend_strength == "moderate" and vol_regime == "high":
+            adaptation = 0.4
+            adj = 0.0
+        else:  # weak trend
+            if vol_regime == "high":
+                adaptation = 0.2
+                adj = -0.05
+            elif vol_regime == "normal":
+                adaptation = 0.4
+                adj = -0.02
+            else:  # low vol + weak trend = 震荡市
+                adaptation = 0.3
+                adj = -0.03
+
+        result["adaptation_score"] = round(adaptation, 2)
+        result["confidence_adjust"] = round(adj, 3)
+
+        result["msg"] = (
+            f"ATR={atr_pct:.1f}% 波动率={vol_regime} 趋势={trend_strength} "
+            f"适配分={adaptation:.0%} | 置信度{adj:+.0%}"
         )
         return result
     except Exception:

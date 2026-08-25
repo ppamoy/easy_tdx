@@ -460,6 +460,12 @@ class MMD:
     _post_signal_trajectory_health_v67: dict[str, Any] | None = None  # 信号后价格轨迹健康度（条件202）
     _dynamic_sl_tp_recommendation_v67: dict[str, Any] | None = None  # 动态止损止盈推荐（条件203）
 
+    # V68 enhancement fields (2026-08-29)
+    _gap_trend_consistency_v68: dict[str, Any] | None = None  # 缺口方向与趋势一致性验证（条件204）
+    _range_set_multi_level_v68: dict[str, Any] | None = None  # 多级别区间套一致性验证（条件205）
+    _post_signal_fund_flow_v68: dict[str, Any] | None = None  # 信号后资金流向确认（条件206）
+    _market_regime_adaptation_v68: dict[str, Any] | None = None  # 市场风格适配评分（条件207）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
