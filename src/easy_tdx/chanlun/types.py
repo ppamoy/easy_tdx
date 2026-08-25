@@ -484,6 +484,12 @@ class MMD:
     _mmd_history_winrate_v71: dict[str, Any] | None = None  # 买卖点历史胜率回溯（条件218）
     _dynamic_rr_optimization_v71: dict[str, Any] | None = None  # 动态风险收益比优化（条件219）
 
+    # V72 enhancement fields (2026-08-26)
+    _ma_convergence_divergence_v72: dict[str, Any] | None = None  # 均线收敛发散状态评估（条件220）
+    _support_resistance_proximity_v72: dict[str, Any] | None = None  # 支撑/阻力位距离评估（条件221）
+    _volume_structure_quality_v72: dict[str, Any] | None = None  # 量价结构质量评分（条件222）
+    _signal_decay_velocity_v72: dict[str, Any] | None = None  # 信号衰减速度评估（条件223）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

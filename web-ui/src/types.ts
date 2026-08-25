@@ -1974,6 +1974,44 @@ export interface DiagnosisChanlun {
     atr_based_tp: number
     msg: string
   } | null
+  // V72: 均线收敛发散状态评估（条件220）
+  ma_convergence_divergence_v72?: {
+    state: string
+    spread_pct: number
+    spread_change_pct: number
+    convergence_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V72: 支撑/阻力位距离评估（条件221）
+  support_resistance_proximity_v72?: {
+    current_price: number
+    nearest_support: number
+    nearest_resistance: number
+    support_dist_pct: number
+    resistance_dist_pct: number
+    proximity_bonus: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V72: 量价结构质量评分（条件222）
+  volume_structure_quality_v72?: {
+    up_vol_ratio: number
+    down_vol_ratio: number
+    volume_health: number
+    stability_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V72: 信号衰减速度评估（条件223）
+  signal_decay_velocity_v72?: {
+    recent_confidences: number[]
+    trend_direction: string
+    velocity: number
+    volatility: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

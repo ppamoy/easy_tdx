@@ -1080,6 +1080,14 @@ async def diagnose_stock(
             "mmd_history_winrate_v71": getattr(latest_mmd, "_mmd_history_winrate_v71", None) if latest_mmd else None,
             # V71: 动态风险收益比优化（条件219）
             "dynamic_rr_optimization_v71": getattr(latest_mmd, "_dynamic_rr_optimization_v71", None) if latest_mmd else None,
+            # V72: 均线收敛发散状态评估（条件220）
+            "ma_convergence_divergence_v72": getattr(latest_mmd, "_ma_convergence_divergence_v72", None) if latest_mmd else None,
+            # V72: 支撑/阻力位距离评估（条件221）
+            "support_resistance_proximity_v72": getattr(latest_mmd, "_support_resistance_proximity_v72", None) if latest_mmd else None,
+            # V72: 量价结构质量评分（条件222）
+            "volume_structure_quality_v72": getattr(latest_mmd, "_volume_structure_quality_v72", None) if latest_mmd else None,
+            # V72: 信号衰减速度评估（条件223）
+            "signal_decay_velocity_v72": getattr(latest_mmd, "_signal_decay_velocity_v72", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1424,6 +1432,14 @@ async def multi_stock_comparison(
                             condition_counts["v71_cond218"] = condition_counts.get("v71_cond218", 0) + 1
                         if c == 219 and hasattr(mmd, "_dynamic_rr_optimization_v71"):
                             condition_counts["v71_cond219"] = condition_counts.get("v71_cond219", 0) + 1
+                        if c == 220 and hasattr(mmd, "_ma_convergence_divergence_v72"):
+                            condition_counts["v72_cond220"] = condition_counts.get("v72_cond220", 0) + 1
+                        if c == 221 and hasattr(mmd, "_support_resistance_proximity_v72"):
+                            condition_counts["v72_cond221"] = condition_counts.get("v72_cond221", 0) + 1
+                        if c == 222 and hasattr(mmd, "_volume_structure_quality_v72"):
+                            condition_counts["v72_cond222"] = condition_counts.get("v72_cond222", 0) + 1
+                        if c == 223 and hasattr(mmd, "_signal_decay_velocity_v72"):
+                            condition_counts["v72_cond223"] = condition_counts.get("v72_cond223", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

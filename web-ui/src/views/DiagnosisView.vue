@@ -4269,6 +4269,50 @@ onMounted(() => {
                    <div class="kv-note">{{ diagnosis.chanlun.dynamic_rr_optimization_v71.msg }}</div>
                  </div>
               </div>
+              <!-- V72: 均线收敛发散状态评估 -->
+              <div v-if="diagnosis.chanlun.ma_convergence_divergence_v72" class="metric-card v72-ma">
+                 <div class="card-title">📊 V72 均线收敛发散（条件220）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">状态</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.ma_convergence_divergence_v72.state === 'converging', 'tag-red': diagnosis.chanlun.ma_convergence_divergence_v72.state === 'diverging', 'tag-orange': diagnosis.chanlun.ma_convergence_divergence_v72.state === 'entangled' }">{{ {converging:'🟢 收敛',diverging:'🔴 发散',entangled:'🟠 纠缠'}[diagnosis.chanlun.ma_convergence_divergence_v72.state] ?? '—' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">MA间距</span><span class="kv-val">{{ diagnosis.chanlun.ma_convergence_divergence_v72.spread_pct.toFixed(3) }}%</span></div>
+                   <div class="kv-row"><span class="kv-key">间距变化</span><span class="kv-val" :style="{ color: diagnosis.chanlun.ma_convergence_divergence_v72.spread_change_pct < 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.ma_convergence_divergence_v72.spread_change_pct >= 0 ? '+' : '' }}{{ diagnosis.chanlun.ma_convergence_divergence_v72.spread_change_pct.toFixed(3) }}%</span></div>
+                   <div class="kv-row"><span class="kv-key">收敛分</span><span class="kv-val">{{ diagnosis.chanlun.ma_convergence_divergence_v72.convergence_score.toFixed(3) }}</span></div>
+                   <div class="kv-note">{{ diagnosis.chanlun.ma_convergence_divergence_v72.msg }}</div>
+                 </div>
+              </div>
+              <!-- V72: 支撑/阻力位距离评估 -->
+              <div v-if="diagnosis.chanlun.support_resistance_proximity_v72" class="metric-card v72-sr">
+                 <div class="card-title">📐 V72 支撑阻力距离（条件221）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">当前价</span><span class="kv-val">{{ diagnosis.chanlun.support_resistance_proximity_v72.current_price }}</span></div>
+                   <div class="kv-row"><span class="kv-key">最近支撑</span><span class="kv-val" style="color:#22c55e">{{ diagnosis.chanlun.support_resistance_proximity_v72.nearest_support }} ({{ diagnosis.chanlun.support_resistance_proximity_v72.support_dist_pct >= 0 ? '+' : '' }}{{ diagnosis.chanlun.support_resistance_proximity_v72.support_dist_pct }}%)</span></div>
+                   <div class="kv-row"><span class="kv-key">最近阻力</span><span class="kv-val" style="color:#ef4444">{{ diagnosis.chanlun.support_resistance_proximity_v72.nearest_resistance }} ({{ diagnosis.chanlun.support_resistance_proximity_v72.resistance_dist_pct >= 0 ? '+' : '' }}{{ diagnosis.chanlun.support_resistance_proximity_v72.resistance_dist_pct }}%)</span></div>
+                   <div class="kv-row"><span class="kv-key">距离 bonus</span><span class="kv-val">{{ diagnosis.chanlun.support_resistance_proximity_v72.proximity_bonus.toFixed(3) }}</span></div>
+                   <div class="kv-note">{{ diagnosis.chanlun.support_resistance_proximity_v72.msg }}</div>
+                 </div>
+              </div>
+              <!-- V72: 量价结构质量评分 -->
+              <div v-if="diagnosis.chanlun.volume_structure_quality_v72" class="metric-card v72-vsq">
+                 <div class="card-title">📈 V72 量价结构质量（条件222）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">上涨量能比</span><span class="kv-val" :style="{ color: diagnosis.chanlun.volume_structure_quality_v72.up_vol_ratio > 1 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.volume_structure_quality_v72.up_vol_ratio.toFixed(3) }}</span></div>
+                   <div class="kv-row"><span class="kv-key">下跌量能比</span><span class="kv-val" :style="{ color: diagnosis.chanlun.volume_structure_quality_v72.down_vol_ratio < 1 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.volume_structure_quality_v72.down_vol_ratio.toFixed(3) }}</span></div>
+                   <div class="kv-row"><span class="kv-key">健康分</span><span class="kv-val" :style="{ color: diagnosis.chanlun.volume_structure_quality_v72.volume_health > 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.volume_structure_quality_v72.volume_health >= 0 ? '+' : '' }}{{ diagnosis.chanlun.volume_structure_quality_v72.volume_health.toFixed(3) }}</span></div>
+                   <div class="kv-row"><span class="kv-key">稳定分</span><span class="kv-val">{{ diagnosis.chanlun.volume_structure_quality_v72.stability_score.toFixed(3) }}</span></div>
+                   <div class="kv-note">{{ diagnosis.chanlun.volume_structure_quality_v72.msg }}</div>
+                 </div>
+              </div>
+              <!-- V72: 信号衰减速度评估 -->
+              <div v-if="diagnosis.chanlun.signal_decay_velocity_v72" class="metric-card v72-sdv">
+                 <div class="card-title">⏱️ V72 信号衰减速度（条件223）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">趋势</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.signal_decay_velocity_v72.trend_direction === 'strengthening', 'tag-red': diagnosis.chanlun.signal_decay_velocity_v72.trend_direction === 'weakening', 'tag-blue': diagnosis.chanlun.signal_decay_velocity_v72.trend_direction === 'stable' }">{{ {strengthening:'🟢 强化',weakening:'🔴 衰退',stable:'🔵 稳定'}[diagnosis.chanlun.signal_decay_velocity_v72.trend_direction] ?? '—' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">速度</span><span class="kv-val" :style="{ color: diagnosis.chanlun.signal_decay_velocity_v72.velocity > 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.signal_decay_velocity_v72.velocity >= 0 ? '+' : '' }}{{ diagnosis.chanlun.signal_decay_velocity_v72.velocity.toFixed(4) }}</span></div>
+                   <div class="kv-row"><span class="kv-key">波动</span><span class="kv-val">{{ diagnosis.chanlun.signal_decay_velocity_v72.volatility.toFixed(4) }}</span></div>
+                   <div class="kv-row"><span class="kv-key">样本</span><span class="kv-val">{{ diagnosis.chanlun.signal_decay_velocity_v72.recent_confidences.join(', ') }}</span></div>
+                   <div class="kv-note">{{ diagnosis.chanlun.signal_decay_velocity_v72.msg }}</div>
+                 </div>
+              </div>
 <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -5253,4 +5297,10 @@ onMounted(() => {
 .v70-decay .kv-val { font-weight: 700; }
 .v70-fb .kv-val { font-weight: 600; }
 .v70-cali .kv-val { font-weight: 700; }
+
+/* V72: 均线收敛发散+支撑阻力距离+量价结构质量+信号衰减速度 */
+.v72-ma .kv-val { font-weight: 600; }
+.v72-sr .kv-val { font-weight: 600; }
+.v72-vsq .kv-val { font-weight: 600; }
+.v72-sdv .kv-val { font-weight: 600; }
 </style>

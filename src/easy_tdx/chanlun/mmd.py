@@ -12175,6 +12175,48 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V72 条件 220-223 ──
+
+        # 条件220：均线收敛发散状态评估（MA Convergence/Divergence）
+        # 评估短期MA(20)与长期MA(60)之间的收敛/发散状态
+        if mmd.bi is not None and closes is not None and len(closes) >= 80:
+            try:
+                ma_cd = _calc_ma_convergence_divergence_v72(mmd, closes)
+                mmd._ma_convergence_divergence_v72 = ma_cd
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_cd.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件221：支撑/阻力位距离评估（Support/Resistance Proximity）
+        # 计算当前价格相对于最近支撑/阻力位的距离
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                sr_prox = _calc_support_resistance_proximity_v72(mmd, closes, highs, lows)
+                mmd._support_resistance_proximity_v72 = sr_prox
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sr_prox.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件222：量价结构质量评分（Volume Structure Quality）
+        # 评估近期量价配合的健康程度
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 60:
+            try:
+                vsq = _calc_volume_structure_quality_v72(mmd, closes, volumes)
+                mmd._volume_structure_quality_v72 = vsq
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vsq.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件223：信号衰减速度评估（Signal Decay Velocity）
+        # 分析最近同类型买卖点信号的置信度变化趋势
+        if mmd.bi is not None and closes is not None and len(closes) >= 50:
+            try:
+                sdv = _calc_signal_decay_velocity_v72(mmd, closes, mmds)
+                mmd._signal_decay_velocity_v72 = sdv
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sdv.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -22651,6 +22693,310 @@ def _calc_dynamic_rr_optimization_v71(
         result["msg"] = (
             f"ATR={atr_pct:.2%} SL={sl_pct:.2%} TP={tp_pct:.2%} "
             f"R:R={rr:.1f}x (低波={sl_mult}x/{tp_mult}x)"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# V72: 条件 220-223（均线收敛发散+支撑阻力距离+量价结构质量+信号衰减速度）
+def _calc_ma_convergence_divergence_v72(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """均线收敛发散状态评估（V72 条件220）。
+
+    评估短期MA(20)与长期MA(60)之间的收敛/发散状态：
+    - 收敛（距离缩小）：趋势方向即将选择，突破概率高，增强信号
+    - 发散（距离扩大）：趋势延续确认，增强信号方向性
+    - 纠缠（距离持平）：无明显方向，降低置信度
+
+    返回：state, spread_pct, spread_change_pct, convergence_score, confidence_adjust, msg
+    """
+    result = {
+        "state": "unknown",
+        "spread_pct": 0.0,
+        "spread_change_pct": 0.0,
+        "convergence_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 80:
+            result["msg"] = "数据不足（需≥80根）"
+            return result
+
+        from easy_tdx.MyTT import MA
+
+        ma20 = MA(closes, 20)
+        ma60 = MA(closes, 60)
+
+        current_spread = abs(ma20[-1] - ma60[-1]) / max(ma60[-1], 1e-10)
+        prev_spread = abs(ma20[-5] - ma60[-5]) / max(ma60[-5], 1e-10) if n >= 85 else current_spread
+        spread_change = (current_spread - prev_spread) / max(prev_spread, 1e-10)
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        if abs(spread_change) < 0.005:
+            state = "entangled"
+            convergence_score = 0.0
+            adjust = -0.02
+        elif spread_change < 0:
+            state = "converging"
+            convergence_score = min(1.0, abs(spread_change) * 50)
+            adjust = 0.04 if is_buy else -0.02
+        else:
+            state = "diverging"
+            convergence_score = 0.5
+            adjust = 0.03 if is_buy else 0.0
+
+        result["state"] = state
+        result["spread_pct"] = round(current_spread * 100, 3)
+        result["spread_change_pct"] = round(spread_change * 100, 3)
+        result["convergence_score"] = round(convergence_score, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"MA20/60={current_spread:.2%} 变化={spread_change:+.2%} "
+            f"状态={'收敛' if state == 'converging' else '发散' if state == 'diverging' else '纠缠'} "
+            f"置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_support_resistance_proximity_v72(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """支撑/阻力位距离评估（V72 条件221）。
+
+    计算当前价格相对于最近支撑位（前低）和阻力位（前高）的距离百分比：
+    - 买入信号：靠近支撑位（<3%）增强买入信号
+    - 卖出信号：靠近阻力位（<3%）增强卖出信号
+    - 远离支撑/阻力：中性
+
+    返回：current_price, nearest_support, nearest_resistance, support_dist_pct, resistance_dist_pct, proximity_bonus, confidence_adjust, msg
+    """
+    result = {
+        "current_price": 0.0,
+        "nearest_support": 0.0,
+        "nearest_resistance": 0.0,
+        "support_dist_pct": 0.0,
+        "resistance_dist_pct": 0.0,
+        "proximity_bonus": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 30 or not highs or not lows:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        current = closes[-1]
+        result["current_price"] = round(current, 4)
+
+        lookback = min(30, n)
+        recent_lows = lows[-lookback:]
+        recent_highs = highs[-lookback:]
+
+        nearest_support = min(recent_lows)
+        nearest_resistance = max(recent_highs)
+
+        support_dist = (current - nearest_support) / max(nearest_support, 1e-10)
+        resistance_dist = (nearest_resistance - current) / max(nearest_resistance, 1e-10)
+
+        result["nearest_support"] = round(nearest_support, 4)
+        result["nearest_resistance"] = round(nearest_resistance, 4)
+        result["support_dist_pct"] = round(support_dist * 100, 2)
+        result["resistance_dist_pct"] = round(resistance_dist * 100, 2)
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        if is_buy:
+            proximity_bonus = max(0, 1.0 - support_dist * 10)
+            adjust = 0.03 * proximity_bonus if support_dist < 0.05 else 0.0
+        else:
+            proximity_bonus = max(0, 1.0 - resistance_dist * 10)
+            adjust = 0.03 * proximity_bonus if resistance_dist < 0.05 else 0.0
+
+        result["proximity_bonus"] = round(proximity_bonus, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"支撑={nearest_support:.2f}({support_dist:+.1%}) 阻力={nearest_resistance:.2f}({resistance_dist:+.1%}) "
+            f"距离 bonus={proximity_bonus:.2f} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_structure_quality_v72(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量价结构质量评分（V72 条件222）。
+
+    评估近期量价配合的健康程度：
+    - 上涨放量、下跌缩量：健康趋势，增强信号
+    - 上涨缩量、下跌放量：危险信号，降低置信度
+    - 整体量能分布稳定性（标准差）作为辅助评分
+
+    返回：up_vol_ratio, down_vol_ratio, volume_health, stability_score, confidence_adjust, msg
+    """
+    result = {
+        "up_vol_ratio": 0.0,
+        "down_vol_ratio": 0.0,
+        "volume_health": 0.0,
+        "stability_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 60 or not volumes:
+            result["msg"] = "数据不足（需≥60根）"
+            return result
+
+        recent = min(30, n)
+        price_changes = [closes[-i] - closes[-i-1] for i in range(1, recent + 1)]
+        recent_volumes = volumes[-recent:]
+        avg_vol = sum(recent_volumes) / max(len(recent_volumes), 1)
+
+        up_vol_sum = sum(v for v, p in zip(recent_volumes, price_changes) if p > 0)
+        down_vol_sum = sum(v for v, p in zip(recent_volumes, price_changes) if p < 0)
+        up_count = sum(1 for p in price_changes if p > 0)
+        down_count = sum(1 for p in price_changes if p < 0)
+
+        up_vol_ratio = up_vol_sum / max(avg_vol * up_count, 1e-10) if up_count > 0 else 1.0
+        down_vol_ratio = down_vol_sum / max(avg_vol * down_count, 1e-10) if down_count > 0 else 1.0
+
+        health = 0.0
+        if up_vol_ratio > 1.0 and down_vol_ratio < 1.0:
+            health = min(1.0, (up_vol_ratio - 1.0) * 2 + (1.0 - down_vol_ratio) * 2)
+        elif up_vol_ratio < 1.0 and down_vol_ratio > 1.0:
+            health = max(0.0, -((1.0 - up_vol_ratio) * 2 + (down_vol_ratio - 1.0) * 2))
+
+        vol_std = (sum((v - avg_vol) ** 2 for v in recent_volumes) / max(len(recent_volumes), 1)) ** 0.5
+        vol_cv = vol_std / max(avg_vol, 1e-10)
+        stability = max(0.0, 1.0 - vol_cv)
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        adjust = 0.0
+
+        if health > 0.3 and stability > 0.5:
+            adjust = 0.04 if is_buy else -0.02
+        elif health < -0.3 and stability > 0.5:
+            adjust = -0.04 if is_buy else 0.02
+
+        result["up_vol_ratio"] = round(up_vol_ratio, 3)
+        result["down_vol_ratio"] = round(down_vol_ratio, 3)
+        result["volume_health"] = round(health, 3)
+        result["stability_score"] = round(stability, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"上涨量能比={up_vol_ratio:.2f} 下跌量能比={down_vol_ratio:.2f} "
+            f"健康={health:+.2f} 稳定={stability:.2f} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_decay_velocity_v72(
+    mmd: "MMD",
+    closes: list[float],
+    mmds_all: list["MMD"] | None = None,
+) -> dict[str, Any]:
+    """信号衰减速度评估（V72 条件223）。
+
+    分析最近同类型买卖点信号的置信度变化趋势：
+    - 置信度递增：信号正在强化，增强当前信号
+    - 置信度递减：信号正在衰退，降低当前信号
+    - 波动剧烈：不稳定，降低调整幅度
+
+    返回：recent_confidences, trend_direction, velocity, volatility, confidence_adjust, msg
+    """
+    result = {
+        "recent_confidences": [],
+        "trend_direction": "unknown",
+        "velocity": 0.0,
+        "volatility": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 50 or not mmds_all:
+            result["msg"] = "数据不足（需≥50根且有历史信号）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        target_type_val = "BUY" if is_buy else "SELL"
+
+        recent_conf = []
+        for other_mmd in reversed(mmds_all):
+            if target_type_val in other_mmd.mmd_type.value and other_mmd.confidence > 0:
+                recent_conf.append(other_mmd.confidence)
+                if len(recent_conf) >= 5:
+                    break
+
+        if len(recent_conf) < 2:
+            result["msg"] = f"同类信号样本不足（{len(recent_conf)}个）"
+            return result
+
+        result["recent_confidences"] = [round(c, 3) for c in recent_conf]
+
+        if len(recent_conf) >= 3:
+            half = len(recent_conf) // 2
+            first_avg = sum(recent_conf[:half]) / half
+            second_avg = sum(recent_conf[half:]) / (len(recent_conf) - half)
+            diff = second_avg - first_avg
+            if diff > 0.02:
+                trend = "strengthening"
+                velocity = diff
+            elif diff < -0.02:
+                trend = "weakening"
+                velocity = diff
+            else:
+                trend = "stable"
+                velocity = 0.0
+        else:
+            trend = "insufficient"
+            velocity = 0.0
+
+        if len(recent_conf) >= 2:
+            mean_c = sum(recent_conf) / len(recent_conf)
+            var_c = sum((c - mean_c) ** 2 for c in recent_conf) / len(recent_conf)
+            vol = var_c ** 0.5
+        else:
+            vol = 0.0
+
+        result["trend_direction"] = trend
+        result["velocity"] = round(velocity, 4)
+        result["volatility"] = round(vol, 4)
+
+        if trend == "strengthening":
+            adjust = 0.04
+        elif trend == "weakening":
+            adjust = -0.05
+        elif trend == "stable":
+            adjust = 0.01
+        else:
+            adjust = 0.0
+
+        if vol > 0.1:
+            adjust *= 0.5
+
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"趋势={trend} 速度={velocity:+.3f} 波动={vol:.3f} "
+            f"置信度{adjust:+.0%} (样本: {', '.join(str(c) for c in result['recent_confidences'])})"
         )
         return result
     except Exception:

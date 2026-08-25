@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V68 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71", "V72"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -1103,3 +1103,163 @@ class TestV71Functions:
         assert "lookback_winrate" in result
         assert "sample_count" in result
         assert "confidence_adjust" in result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V72: 条件 220-223（均线收敛发散+支撑阻力距离+量价结构质量+信号衰减速度）
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestV72ConditionGroup:
+    """V72 ConditionGroup 枚举测试。"""
+
+    def test_v72_group_exists(self):
+        assert hasattr(ConditionGroup, 'V72')
+        assert ConditionGroup.V72.value == "v72"
+
+    def test_v72_condition_range(self):
+        group = ConditionGroup.V72
+        start, end = group.condition_range
+        assert start == 220
+        assert end == 223
+
+    def test_v72_description(self):
+        desc = ConditionGroup.V72.description
+        assert "均线收敛发散" in desc or "支撑阻力" in desc or "量价结构" in desc or "信号衰减" in desc
+
+
+class TestV72MMDFields:
+    """V72 MMD 增强字段存在性测试。"""
+
+    def test_v72_fields_exist_on_mmd(self):
+        """MMD 对象应包含 V72 增强字段。"""
+        from easy_tdx.chanlun.types import MMD
+        mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
+        assert hasattr(mmd, "_ma_convergence_divergence_v72")
+        assert hasattr(mmd, "_support_resistance_proximity_v72")
+        assert hasattr(mmd, "_volume_structure_quality_v72")
+        assert hasattr(mmd, "_signal_decay_velocity_v72")
+
+
+class TestV72BacktestValidator:
+    """V72 回测验证器测试。"""
+
+    def test_v72_validator_usage(self):
+        """ConditionGroup.V72 应可被 validator 使用。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V72])
+        assert len(results) >= 1
+        assert results[0].group == ConditionGroup.V72
+
+    def test_v72_multi_group_validation(self):
+        """V71 + V72 联合验证应返回两个结果。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V71, ConditionGroup.V72])
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V71, ConditionGroup.V72}
+
+    def test_v72_summary_output(self):
+        """V72 摘要应包含 V72 关键词。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V72])
+        summary = results[0].summary()
+        assert "V72" in summary
+
+class TestV72Functions:
+    """V72 计算函数功能测试。"""
+
+    def test_ma_convergence_divergence(self):
+        """均线收敛发散评估应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_ma_convergence_divergence_v72
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(99)
+        closes = [100.0]
+        for _ in range(100):
+            closes.append(closes[-1] * (1 + np.random.randn() * 0.01))
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_ma_convergence_divergence_v72(mmd, closes)
+        assert "state" in result
+        assert "spread_pct" in result
+        assert "confidence_adjust" in result
+        assert "msg" in result
+        assert result["state"] in ("converging", "diverging", "entangled", "unknown")
+
+    def test_support_resistance_proximity(self):
+        """支撑阻力位距离评估应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_support_resistance_proximity_v72
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(77)
+        closes = [50.0]
+        highs = [50.0]
+        lows = [50.0]
+        for _ in range(50):
+            c = closes[-1] * (1 + np.random.randn() * 0.02)
+            h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
+            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            closes.append(c)
+            highs.append(h)
+            lows.append(l)
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_support_resistance_proximity_v72(mmd, closes, highs, lows)
+        assert "current_price" in result
+        assert "nearest_support" in result
+        assert "nearest_resistance" in result
+        assert "support_dist_pct" in result
+        assert "confidence_adjust" in result
+
+    def test_volume_structure_quality(self):
+        """量价结构质量评分应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_structure_quality_v72
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(55)
+        closes = [100.0]
+        volumes = [1e6]
+        for _ in range(80):
+            closes.append(closes[-1] * (1 + np.random.randn() * 0.015))
+            volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.5))
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_volume_structure_quality_v72(mmd, closes, volumes)
+        assert "up_vol_ratio" in result
+        assert "down_vol_ratio" in result
+        assert "volume_health" in result
+        assert "stability_score" in result
+        assert "confidence_adjust" in result
+
+    def test_signal_decay_velocity(self):
+        """信号衰减速度评估应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_decay_velocity_v72
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(33)
+        closes = [100.0]
+        for _ in range(80):
+            closes.append(closes[-1] * (1 + np.random.randn() * 0.01))
+        # 构造历史信号
+        mmds_all = []
+        for i in range(5):
+            mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.4 + i * 0.05, bi=None)
+            mmds_all.append(mmd)
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.65, bi=None)
+        result = _calc_signal_decay_velocity_v72(mmd, closes, mmds_all)
+        assert "recent_confidences" in result
+        assert "trend_direction" in result
+        assert "velocity" in result
+        assert "confidence_adjust" in result
+
+    def test_v72_data_insufficient(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import (
+            _calc_ma_convergence_divergence_v72,
+            _calc_support_resistance_proximity_v72,
+            _calc_volume_structure_quality_v72,
+        )
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        short_closes = [100.0, 101.0, 102.0]
+        result = _calc_ma_convergence_divergence_v72(mmd, short_closes)
+        assert result["msg"] != ""
+        result2 = _calc_support_resistance_proximity_v72(mmd, short_closes, None, None)
+        assert result2["msg"] != ""
+        result3 = _calc_volume_structure_quality_v72(mmd, short_closes, None)
+        assert result3["msg"] != ""
