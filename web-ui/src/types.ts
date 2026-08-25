@@ -1908,6 +1908,40 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V70: 分时量峰检测（条件212）
+  volume_peak_detection_v70?: {
+    peak_ratio: number
+    peak_detected: boolean
+    volume_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V70: 买卖点时间窗口衰减（条件213）
+  signal_time_decay_v70?: {
+    bar_count: number
+    decay_factor: number
+    signal_age: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V70: 假突破二次过滤（条件214）
+  false_breakout_filter_v70?: {
+    sustained_bars: number
+    is_sustained: boolean
+    breakout_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V70: 信号置信度最终校准（条件215）
+  final_confidence_calibration_v70?: {
+    total_adjust: number
+    calibrated_confidence: number
+    calibration_level: string
+    adjust_count: number
+    positive_adjusts: number
+    negative_adjusts: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

@@ -472,6 +472,12 @@ class MMD:
     _multi_indicator_divergence_v69: dict[str, Any] | None = None  # 多指标背离融合（条件210）
     _retracement_depth_v69: dict[str, Any] | None = None  # 回踩深度量化（条件211）
 
+    # V70 enhancement fields (2026-08-29)
+    _volume_peak_detection_v70: dict[str, Any] | None = None  # 分时量峰检测（条件212）
+    _signal_time_decay_v70: dict[str, Any] | None = None  # 买卖点时间窗口衰减（条件213）
+    _false_breakout_filter_v70: dict[str, Any] | None = None  # 假突破二次过滤（条件214）
+    _final_confidence_calibration_v70: dict[str, Any] | None = None  # 信号置信度最终校准（条件215）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

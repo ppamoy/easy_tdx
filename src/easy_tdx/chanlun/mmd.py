@@ -12093,6 +12093,47 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V70 条件 212-215 ──
+
+        # 条件212：分时量峰检测（Volume Peak Detection）
+        # 检测突破/反转时的成交量峰值，确认信号真实性
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 30:
+            try:
+                vol_peak = _calc_volume_peak_detection_v70(mmd, closes, volumes)
+                mmd._volume_peak_detection_v70 = vol_peak
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_peak.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件213：买卖点时间窗口衰减（Signal Time Decay）
+        # 根据信号出现后的K线数量应用指数衰减
+        if mmd.bi is not None and closes is not None and len(closes) >= 10:
+            try:
+                time_decay = _calc_signal_time_decay_v70(mmd, closes)
+                mmd._signal_time_decay_v70 = time_decay
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + time_decay.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件214：假突破二次过滤（False Breakout Secondary Filter）
+        # 突破后价格需持续N根K线维持在突破水平之上/之下
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 15:
+            try:
+                false_break = _calc_false_breakout_filter_v70(mmd, closes, highs, lows)
+                mmd._false_breakout_filter_v70 = false_break
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + false_break.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件215：信号置信度最终校准（Final Confidence Calibration）
+        # 综合所有累积的置信度调整，输出最终校准分数
+        if mmd.bi is not None and closes is not None and len(closes) >= 20:
+            try:
+                final_cal = _calc_final_confidence_calibration_v70(mmd, closes)
+                mmd._final_confidence_calibration_v70 = final_cal
+            except Exception:
+                pass
+
     return mmds
 
 

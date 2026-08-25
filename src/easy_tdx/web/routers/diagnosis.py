@@ -1064,6 +1064,14 @@ async def diagnose_stock(
             "multi_indicator_divergence_v69": getattr(latest_mmd, "_multi_indicator_divergence_v69", None) if latest_mmd else None,
             # V69: 回踩深度量化（条件211）
             "retracement_depth_v69": getattr(latest_mmd, "_retracement_depth_v69", None) if latest_mmd else None,
+            # V70: 分时量峰检测（条件212）
+            "volume_peak_detection_v70": getattr(latest_mmd, "_volume_peak_detection_v70", None) if latest_mmd else None,
+            # V70: 买卖点时间窗口衰减（条件213）
+            "signal_time_decay_v70": getattr(latest_mmd, "_signal_time_decay_v70", None) if latest_mmd else None,
+            # V70: 假突破二次过滤（条件214）
+            "false_breakout_filter_v70": getattr(latest_mmd, "_false_breakout_filter_v70", None) if latest_mmd else None,
+            # V70: 信号置信度最终校准（条件215）
+            "final_confidence_calibration_v70": getattr(latest_mmd, "_final_confidence_calibration_v70", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1391,6 +1399,15 @@ async def multi_stock_comparison(
                             condition_counts["v69_cond210"] = condition_counts.get("v69_cond210", 0) + 1
                         if c == 211 and hasattr(mmd, "_retracement_depth_v69"):
                             condition_counts["v69_cond211"] = condition_counts.get("v69_cond211", 0) + 1
+                        # V70 特有字段
+                        if c == 212 and hasattr(mmd, "_volume_peak_detection_v70"):
+                            condition_counts["v70_cond212"] = condition_counts.get("v70_cond212", 0) + 1
+                        if c == 213 and hasattr(mmd, "_signal_time_decay_v70"):
+                            condition_counts["v70_cond213"] = condition_counts.get("v70_cond213", 0) + 1
+                        if c == 214 and hasattr(mmd, "_false_breakout_filter_v70"):
+                            condition_counts["v70_cond214"] = condition_counts.get("v70_cond214", 0) + 1
+                        if c == 215 and hasattr(mmd, "_final_confidence_calibration_v70"):
+                            condition_counts["v70_cond215"] = condition_counts.get("v70_cond215", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

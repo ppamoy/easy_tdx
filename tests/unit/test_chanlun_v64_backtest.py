@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V68 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -882,3 +882,82 @@ class TestV69MultiStock:
             assert isinstance(r.condition_breakdown, dict)
             v69_keys = [k for k in r.condition_breakdown if "v69" in k.lower()]
             assert len(v69_keys) >= 0
+
+
+class TestV70ConditionGroup:
+    """V70 条件组枚举测试。"""
+
+    def test_v70_group_exists(self):
+        """ConditionGroup.V70 应存在。"""
+        assert hasattr(ConditionGroup, "V70")
+
+    def test_v70_condition_range(self):
+        """V70 应覆盖条件212-215。"""
+        start, end = ConditionGroup.V70.condition_range
+        assert start == 212
+        assert end == 215
+
+    def test_v70_description(self):
+        """V70 应有描述。"""
+        assert len(ConditionGroup.V70.description) > 0
+        desc = ConditionGroup.V70.description
+        assert "量峰" in desc or "时间" in desc or "假突破" in desc or "校准" in desc
+
+
+class TestV70MMDFields:
+    """V70 MMD 增强字段存在性测试。"""
+
+    def test_v70_fields_exist_on_mmd(self):
+        """缠论分析产生的 MMD 对象应包含 V70 增强字段。"""
+        from easy_tdx.chanlun.types import MMD
+        mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
+        assert hasattr(mmd, "_volume_peak_detection_v70")
+        assert hasattr(mmd, "_signal_time_decay_v70")
+        assert hasattr(mmd, "_false_breakout_filter_v70")
+        assert hasattr(mmd, "_final_confidence_calibration_v70")
+
+
+class TestV70BacktestValidator:
+    """V70 回测验证器测试。"""
+
+    def test_v70_validator_usage(self):
+        """ConditionGroup.V70 应可被 validator 使用。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V70])
+        assert len(results) >= 1
+        assert results[0].group == ConditionGroup.V70
+
+    def test_v70_multi_group_validation(self):
+        """V69 + V70 联合验证应返回两个结果。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V69, ConditionGroup.V70])
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V69, ConditionGroup.V70}
+
+    def test_v70_summary_output(self):
+        """V70 摘要应包含 V70 关键词。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V70])
+        summary = results[0].summary()
+        assert "V70" in summary
+
+
+class TestV70MultiStock:
+    """V70 多股票对比测试。"""
+
+    def test_v70_multi_stock_breakdown(self):
+        """多股票对比应包含 V70 条件命中统计。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        data = {
+            "sh600000": _make_df(*_make_oscillating_df(400)),
+            "sz000001": _make_df(*_make_trending_df(400, trend="up")),
+        }
+        results = validator.validate_multi_stock(data)
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r.condition_breakdown, dict)
+            v70_keys = [k for k in r.condition_breakdown if "v70" in k.lower()]
+            assert len(v70_keys) >= 0
