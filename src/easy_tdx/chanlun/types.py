@@ -442,6 +442,12 @@ class MMD:
     _zhongshu_level_weight_enhanced_v63: dict[str, Any] | None = None  # 中枢级别权重优化增强（条件190）
     _multi_period_signal_decay_v63: dict[str, Any] | None = None  # 多周期信号衰减追踪（条件191）
 
+    # V65 enhancement fields (2026-08-28)
+    _volume_price_divergence_secondary_v65: dict[str, Any] | None = None  # 量价背离二次确认增强（条件192）
+    _breakout_retest_confirmation_v65: dict[str, Any] | None = None  # 中枢突破回踩确认（条件193）
+    _volatility_compression_breakout_v65: dict[str, Any] | None = None  # 波动率压缩突破信号（条件194）
+    _signal_time_window_freshness_v65: dict[str, Any] | None = None  # 买卖点时间窗口新鲜度（条件195）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

@@ -1024,6 +1024,14 @@ async def diagnose_stock(
             "zhongshu_level_weight_enhanced_v63": getattr(latest_mmd, "_zhongshu_level_weight_enhanced_v63", None) if latest_mmd else None,
             # V63: 多周期信号衰减追踪（条件191）
             "multi_period_signal_decay_v63": getattr(latest_mmd, "_multi_period_signal_decay_v63", None) if latest_mmd else None,
+            # V65: 量价背离二次确认增强（条件192）
+            "volume_price_divergence_secondary_v65": getattr(latest_mmd, "_volume_price_divergence_secondary_v65", None) if latest_mmd else None,
+            # V65: 中枢突破回踩确认（条件193）
+            "breakout_retest_confirmation_v65": getattr(latest_mmd, "_breakout_retest_confirmation_v65", None) if latest_mmd else None,
+            # V65: 波动率压缩突破信号（条件194）
+            "volatility_compression_breakout_v65": getattr(latest_mmd, "_volatility_compression_breakout_v65", None) if latest_mmd else None,
+            # V65: 买卖点时间窗口新鲜度（条件195）
+            "signal_time_window_freshness_v65": getattr(latest_mmd, "_signal_time_window_freshness_v65", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1307,6 +1315,15 @@ async def multi_stock_comparison(
                             condition_counts["v63_cond190"] = condition_counts.get("v63_cond190", 0) + 1
                         if c == 191 and hasattr(mmd, "_multi_period_signal_decay_v63"):
                             condition_counts["v63_cond191"] = condition_counts.get("v63_cond191", 0) + 1
+                        # V65 特有字段
+                        if c == 192 and hasattr(mmd, "_volume_price_divergence_secondary_v65"):
+                            condition_counts["v65_cond192"] = condition_counts.get("v65_cond192", 0) + 1
+                        if c == 193 and hasattr(mmd, "_breakout_retest_confirmation_v65"):
+                            condition_counts["v65_cond193"] = condition_counts.get("v65_cond193", 0) + 1
+                        if c == 194 and hasattr(mmd, "_volatility_compression_breakout_v65"):
+                            condition_counts["v65_cond194"] = condition_counts.get("v65_cond194", 0) + 1
+                        if c == 195 and hasattr(mmd, "_signal_time_window_freshness_v65"):
+                            condition_counts["v65_cond195"] = condition_counts.get("v65_cond195", 0) + 1
 
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)

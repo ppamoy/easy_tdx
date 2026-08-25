@@ -1736,6 +1736,38 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V65: 量价背离二次确认增强（条件192）
+  volume_price_divergence_secondary_v65?: {
+    diverge_confirmed: boolean
+    divergence_strength: number
+    duration_bars: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V65: 中枢突破回踩确认（条件193）
+  breakout_retest_confirmation_v65?: {
+    retest_confirmed: boolean
+    retest_depth: number
+    breakout_valid: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V65: 波动率压缩突破信号（条件194）
+  volatility_compression_breakout_v65?: {
+    compression_detected: boolean
+    squeeze_score: number
+    breakout_strength: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V65: 买卖点时间窗口新鲜度（条件195）
+  signal_time_window_freshness_v65?: {
+    bars_since_signal: number
+    trend_health: string
+    freshness_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

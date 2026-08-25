@@ -11900,6 +11900,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V65 条件 192-195 ──
+
+        # 条件192：量价背离二次确认增强（Volume-Price Divergence Secondary Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and len(closes) >= 60:
+            try:
+                vp_div = _calc_volume_price_divergence_secondary_v65(mmd, closes, volumes)
+                mmd._volume_price_divergence_secondary_v65 = vp_div
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_div.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件193：中枢突破回踩确认（Breakout Retest Confirmation）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None and len(closes) >= 40:
+            try:
+                retest = _calc_breakout_retest_confirmation_v65(mmd, zss, closes)
+                mmd._breakout_retest_confirmation_v65 = retest
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + retest.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件194：波动率压缩突破信号（Volatility Compression Breakout）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 80:
+            try:
+                vol_comp = _calc_volatility_compression_breakout_v65(mmd, closes)
+                mmd._volatility_compression_breakout_v65 = vol_comp
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_comp.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件195：买卖点时间窗口新鲜度（Signal Time Window Freshness）
+        if mmd.bi is not None and closes is not None and len(closes) >= 20:
+            try:
+                freshness = _calc_signal_time_window_freshness_v65(mmd, closes)
+                mmd._signal_time_window_freshness_v65 = freshness
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + freshness.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -19756,6 +19794,417 @@ def _calc_multi_period_signal_decay_v63(
             f" | 健康度={health}"
             f"{' | ⚠️衰减中' if decay else ''}"
             f" | 置信度调整{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ── V65: 条件 192-195（精准度进一步提升）────────────────────────────────
+
+def _calc_volume_price_divergence_secondary_v65(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量价背离二次确认增强（V65 条件192）。
+
+    在V48/V52量价背离基础上，增加二次确认机制：
+    - 第一层：基础量价背离检测（价格创新低但成交量萎缩）
+    - 第二层：背离强度量化（量比 + 价格斜率）
+    - 第三层：背离持续时间（连续N根K线维持背离状态）
+
+    返回：diverge_confirmed, divergence_strength, duration_bars, confidence_adjust, msg
+    """
+    result = {
+        "diverge_confirmed": False,
+        "divergence_strength": 0.0,
+        "duration_bars": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号"
+            return result
+
+        n = len(closes)
+        lookback = min(30, n - 1)
+        recent_closes = closes[-lookback:]
+        recent_vols = volumes[-lookback:] if len(volumes) >= n else volumes[-lookback:] if volumes else []
+
+        if len(recent_vols) < 10:
+            result["msg"] = "成交量数据不足"
+            return result
+
+        # 第一层：基础量价背离
+        price_trend = (recent_closes[-1] - recent_closes[0]) / max(recent_closes[0], 1e-10)
+        vol_trend = (recent_vols[-1] - recent_vols[0]) / max(sum(recent_vols) / len(recent_vols), 1e-10)
+
+        if is_buy:
+            # 买入信号：价格下跌但成交量萎缩（卖压衰竭）
+            diverge = price_trend < -0.02 and vol_trend < -0.1
+        else:
+            # 卖出信号：价格上涨但成交量萎缩（买盘衰竭）
+            diverge = price_trend > 0.02 and vol_trend < -0.1
+
+        # 第二层：背离强度量化
+        avg_vol = sum(recent_vols) / len(recent_vols) if recent_vols else 1.0
+        vol_ratio = recent_vols[-1] / max(avg_vol, 1e-10)
+        price_slope = (recent_closes[-1] - recent_closes[-5]) / max(recent_closes[-5], 1e-10) if len(recent_closes) >= 5 else 0.0
+
+        strength = abs(price_slope) * 10 + (1.0 - vol_ratio) * 0.5
+        strength = min(1.0, max(0.0, strength))
+
+        # 第三层：背离持续时间
+        duration = 0
+        for i in range(1, min(10, len(recent_closes))):
+            prev_price = recent_closes[-i - 1]
+            curr_price = recent_closes[-i]
+            prev_vol = recent_vols[-i - 1] if i + 1 <= len(recent_vols) else recent_vols[-1]
+            curr_vol = recent_vols[-i] if i <= len(recent_vols) else recent_vols[-1]
+            if is_buy:
+                if curr_price < prev_price and curr_vol < prev_vol * 1.2:
+                    duration += 1
+                else:
+                    break
+            else:
+                if curr_price > prev_price and curr_vol < prev_vol * 1.2:
+                    duration += 1
+                else:
+                    break
+
+        # 综合判断
+        if diverge and strength > 0.3 and duration >= 3:
+            result["diverge_confirmed"] = True
+            result["divergence_strength"] = round(strength, 2)
+            result["duration_bars"] = duration
+            adj = min(0.06, strength * 0.04 + duration * 0.005)
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = (
+                f"量价背离二次确认 | 强度={strength:.2f} 持续{duration}根"
+                f" | 量比={vol_ratio:.2f} | 置信度+{adj:.0%}"
+            )
+        else:
+            result["confidence_adjust"] = -0.01
+            result["msg"] = (
+                f"量价背离未确认 | 强度={strength:.2f} 持续{duration}根 | 置信度-1%"
+            )
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_breakout_retest_confirmation_v65(
+    mmd: "MMD",
+    zss: list["ZS"],
+    closes: list[float],
+) -> dict[str, Any]:
+    """中枢突破回踩确认（V65 条件193）。
+
+    验证3买/3卖信号的中枢突破后是否有回踩确认：
+    - 找到最近的中枢，检查突破后的回踩是否在中枢区间内
+    - 回踩幅度越小，信号质量越高
+    - 无回踩直接延续也视为有效突破
+
+    返回：retest_confirmed, retest_depth, breakout_valid, confidence_adjust, msg
+    """
+    result = {
+        "retest_confirmed": False,
+        "retest_depth": 0.0,
+        "breakout_valid": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号"
+            return result
+
+        if not zss or len(zss) < 1:
+            result["msg"] = "无中枢数据"
+            return result
+
+        n = len(closes)
+        # 找到离信号最近的活跃中枢
+        recent_zs = zss[-1] if zss else None
+        if recent_zs is None:
+            result["msg"] = "无有效中枢"
+            return result
+
+        # 获取中枢区间
+        if hasattr(recent_zs, 'high') and hasattr(recent_zs, 'low'):
+            zs_high = recent_zs.high
+            zs_low = recent_zs.low
+        elif hasattr(recent_zs, 'zg') and hasattr(recent_zs, 'zd'):
+            zs_high = recent_zs.zg
+            zs_low = recent_zs.zd
+        else:
+            result["msg"] = "中枢数据结构未知"
+            return result
+
+        zs_range = zs_high - zs_low if zs_high != zs_low else zs_high * 0.1
+        if zs_range <= 0:
+            zs_range = zs_high * 0.1
+
+        # 检查突破后的价格走势
+        signal_bar = mmd.bi.end.k.k_index if mmd.bi else n - 1
+        post_bars = closes[signal_bar:n] if signal_bar < n else closes[-10:]
+
+        if len(post_bars) < 3:
+            result["msg"] = "突破后数据不足"
+            return result
+
+        # 计算突破后最低/最高回撤
+        if is_buy:
+            # 3买：突破后回踩，看是否回到中枢附近但不跌破
+            breakout_level = zs_high
+            lowest_post = min(post_bars)
+            highest_post = max(post_bars)
+            retest_depth = (breakout_level - lowest_post) / breakout_level if breakout_level > 0 else 0
+            # 回踩确认：最低点在中枢上沿附近（回撤不超过20%）或直接上涨
+            retest_valid = lowest_post >= zs_low * 0.95 or (highest_post - breakout_level) / breakout_level > 0.02
+            result["breakout_valid"] = retest_valid
+            result["retest_depth"] = round(max(0, retest_depth), 4)
+        else:
+            # 3卖：突破后反弹，看是否回到中枢附近但不涨破
+            breakout_level = zs_low
+            lowest_post = min(post_bars)
+            highest_post = max(post_bars)
+            retest_depth = (highest_post - breakout_level) / breakout_level if breakout_level > 0 else 0
+            retest_valid = highest_post <= zs_high * 1.05 or (breakout_level - lowest_post) / breakout_level > 0.02
+            result["breakout_valid"] = retest_valid
+            result["retest_depth"] = round(max(0, retest_depth), 4)
+
+        if result["breakout_valid"]:
+            depth_factor = max(0, 1.0 - retest_depth * 3)  # 回撤越小越好
+            adj = depth_factor * 0.05
+            result["confidence_adjust"] = round(adj, 3)
+            result["retest_confirmed"] = True
+            result["msg"] = (
+                f"突破回踩确认 | 回撤={retest_depth:.1%} 有效={retest_valid}"
+                f" | 置信度+{adj:.0%}"
+            )
+        else:
+            result["confidence_adjust"] = -0.03
+            result["msg"] = (
+                f"突破回踩失败 | 回撤={retest_depth:.1%} 可能假突破"
+                f" | 置信度-3%"
+            )
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volatility_compression_breakout_v65(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """波动率压缩突破信号（V65 条件194）。
+
+    基于BOLL带宽压缩理论，检测波动率压缩后的突破信号：
+    - 压缩阶段：带宽低于历史20%分位
+    - 突破确认：价格突破压缩区间，伴随成交量放大
+    - 质量评分：压缩时间越长、突破力度越大，评分越高
+
+    返回：compression_detected, squeeze_score, breakout_strength, confidence_adjust, msg
+    """
+    result = {
+        "compression_detected": False,
+        "squeeze_score": 0.0,
+        "breakout_strength": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        is_sell = mmd.mmd_type == MMDType.SELL_3
+        if not is_buy and not is_sell:
+            result["msg"] = "非3买/3卖信号"
+            return result
+
+        n = len(closes)
+        if n < 50:
+            result["msg"] = "数据不足"
+            return result
+
+        # 计算BOLL带宽（20日）
+        period = 20
+        upper, mid, lower = [], [], []
+        for i in range(period - 1, n):
+            window = closes[i - period + 1:i + 1]
+            m_val = sum(window) / period
+            std_val = (sum((x - m_val) ** 2 for x in window) / period) ** 0.5
+            upper.append(m_val + 2 * std_val)
+            mid.append(m_val)
+            lower.append(m_val - 2 * std_val)
+
+        if not upper:
+            result["msg"] = "BOLL计算失败"
+            return result
+
+        widths = [(u - l) / m if m > 0 else 0 for u, l, m in zip(upper, lower, mid)]
+        if not widths:
+            result["msg"] = "带宽计算失败"
+            return result
+
+        # 检测压缩状态
+        current_width = widths[-1]
+        hist_percentile = sum(1 for w in widths[:-1] if w <= current_width) / max(len(widths) - 1, 1)
+
+        # 压缩判定：当前带宽处于历史25%分位以下
+        is_squeeze = hist_percentile < 0.25
+        squeeze_score = 1.0 - hist_percentile if is_squeeze else hist_percentile
+
+        # 突破力度计算
+        latest_close = closes[-1]
+        latest_upper = upper[-1]
+        latest_lower = lower[-1]
+        latest_mid = mid[-1]
+
+        if is_buy:
+            # 买入：价格从压缩区向上突破
+            breakout_strength = (latest_close - latest_lower) / (latest_upper - latest_lower) if latest_upper != latest_lower else 0.5
+            breakout_valid = latest_close > latest_mid * 1.01  # 突破中轨
+        else:
+            breakout_strength = (latest_upper - latest_close) / (latest_upper - latest_lower) if latest_upper != latest_lower else 0.5
+            breakout_valid = latest_close < latest_mid * 0.99  # 跌破中轨
+
+        if is_squeeze and breakout_valid:
+            adj = min(0.07, squeeze_score * 0.04 + breakout_strength * 0.03)
+            result["compression_detected"] = True
+            result["squeeze_score"] = round(squeeze_score, 2)
+            result["breakout_strength"] = round(breakout_strength, 2)
+            result["confidence_adjust"] = round(adj, 3)
+            result["msg"] = (
+                f"波动率压缩突破 | 压缩评分={squeeze_score:.2f} 突破力度={breakout_strength:.2f}"
+                f" | 置信度+{adj:.0%}"
+            )
+        elif is_squeeze:
+            result["compression_detected"] = True
+            result["squeeze_score"] = round(squeeze_score, 2)
+            result["confidence_adjust"] = -0.01
+            result["msg"] = (
+                f"波动率压缩中 | 评分={squeeze_score:.2f} 等待突破确认 | 置信度-1%"
+            )
+        else:
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"无压缩状态（分位={hist_percentile:.0%}）"
+
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_time_window_freshness_v65(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """买卖点时间窗口新鲜度（V65 条件195）。
+
+    评估信号的时效性：
+    - 信号产生后到最新K线的天数（时间衰减）
+    - 信号后价格走势健康度（趋势是否延续）
+    - 综合新鲜度评分，用于决定是否仍应执行该信号
+
+    返回：bars_since_signal, trend_health, freshness_score, confidence_adjust, msg
+    """
+    result = {
+        "bars_since_signal": 0,
+        "trend_health": "unknown",
+        "freshness_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmd.bi is None:
+            result["msg"] = "无笔数据"
+            return result
+
+        n = len(closes)
+        signal_bar = mmd.bi.end.k.k_index
+        if signal_bar is None or signal_bar >= n:
+            result["msg"] = "信号bar超出范围"
+            return result
+
+        bars_since = n - 1 - signal_bar
+        result["bars_since_signal"] = bars_since
+
+        if bars_since > 60:
+            result["freshness_score"] = 0.0
+            result["confidence_adjust"] = -0.08
+            result["trend_health"] = "expired"
+            result["msg"] = f"信号已过期（{bars_since}根K线前）| 置信度-8%"
+            return result
+
+        # 计算信号后的趋势健康度
+        post_closes = closes[signal_bar:n]
+        if len(post_closes) < 5:
+            result["freshness_score"] = 0.5
+            result["confidence_adjust"] = 0.0
+            result["trend_health"] = "insufficient_data"
+            result["msg"] = "信号后数据不足"
+            return result
+
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        price_change = (post_closes[-1] - post_closes[0]) / max(post_closes[0], 1e-10)
+
+        # 计算信号后的回撤
+        peak = max(post_closes)
+        trough = min(post_closes)
+        max_drawdown = (peak - trough) / max(peak, 1e-10)
+
+        if is_buy:
+            # 买入信号：价格应上涨或小幅回撤
+            if price_change > 0.03:
+                health = "strong_uptrend"
+                score = min(1.0, 0.7 + price_change * 5)
+            elif price_change > -0.02:
+                health = "neutral"
+                score = 0.5
+            else:
+                health = "weak"
+                score = max(0.0, 0.5 + price_change * 10)
+        else:
+            # 卖出信号：价格应下跌或小幅反弹
+            if price_change < -0.03:
+                health = "strong_downtrend"
+                score = min(1.0, 0.7 - price_change * 5)
+            elif price_change < 0.02:
+                health = "neutral"
+                score = 0.5
+            else:
+                health = "weak"
+                score = max(0.0, 0.5 - price_change * 10)
+
+        # 回撤惩罚
+        if max_drawdown > 0.15:
+            score = max(0.0, score - 0.15)
+            health = f"{health}_high_dd"
+
+        result["trend_health"] = health
+        result["freshness_score"] = round(score, 2)
+
+        # 基于新鲜度调整置信度
+        time_decay = max(0, 1.0 - bars_since / 60.0)  # 60根K线内线性衰减
+        combined = score * 0.6 + time_decay * 0.4
+        if combined > 0.7:
+            adj = 0.03
+        elif combined > 0.5:
+            adj = 0.0
+        else:
+            adj = -0.04
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"信号新鲜度 | {bars_since}根前 健康={health} 评分={score:.2f}"
+            f" 时间衰减={time_decay:.0%} | 置信度{'+' if adj >= 0 else ''}{adj:.0%}"
         )
         return result
     except Exception:

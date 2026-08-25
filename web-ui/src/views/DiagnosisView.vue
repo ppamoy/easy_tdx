@@ -41,6 +41,10 @@ const SCORE_COLORS: Record<string, string> = {
 
 const scoreColor = computed(() => diagnosis.value ? SCORE_COLORS[diagnosis.value.action] || '#6b7280' : '#6b7280')
 const scoreValue = computed(() => diagnosis.value ? diagnosis.value.score : 0)
+const multiResultsHaveConditionData = computed(() =>
+  multiResults.value.some((r: MultiStockResult) => Object.keys(r.condition_breakdown || {}).length > 0)
+)
+const getConditionBreakdown = (r: MultiStockResult): Record<string, number> => r.condition_breakdown || {}
 
 // 最新 K 线
 const bars = ref<Bar[]>([])
@@ -3794,8 +3798,76 @@ onMounted(() => {
              </div>
           </div>
 
+           <!-- V65: 量价背离二次确认增强 -->
+           <div v-if="diagnosis.chanlun.volume_price_divergence_secondary_v65" class="metric-card v65-vp-div">
+              <div class="card-title">📊 V65 量价背离二次确认（条件192）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">背离确认</span><span class="tag" :class="diagnosis.chanlun.volume_price_divergence_secondary_v65.diverge_confirmed ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.volume_price_divergence_secondary_v65.diverge_confirmed ? '✅ 已确认' : '⚠️ 未确认' }}</span></div>
+                <div class="kv-row"><span class="kv-key">背离强度</span><span class="kv-val">{{ diagnosis.chanlun.volume_price_divergence_secondary_v65.divergence_strength.toFixed(2) }}</span></div>
+                <div class="kv-row"><span class="kv-key">持续K线</span><span class="kv-val">{{ diagnosis.chanlun.volume_price_divergence_secondary_v65.duration_bars }} 根</span></div>
+                <div class="kv-row" style="margin-top:6px">
+                  <span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.volume_price_divergence_secondary_v65.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.volume_price_divergence_secondary_v65.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.volume_price_divergence_secondary_v65.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volume_price_divergence_secondary_v65.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.volume_price_divergence_secondary_v65.msg }}</div>
+              </div>
+           </div>
 
-          <!-- MACD -->
+           <!-- V65: 中枢突破回踩确认 -->
+           <div v-if="diagnosis.chanlun.breakout_retest_confirmation_v65" class="metric-card v65-breakout">
+              <div class="card-title">🎯 V65 中枢突破回踩确认（条件193）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">回踩确认</span><span class="tag" :class="diagnosis.chanlun.breakout_retest_confirmation_v65.retest_confirmed ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.breakout_retest_confirmation_v65.retest_confirmed ? '✅ 已确认' : '⚠️ 未确认' }}</span></div>
+                <div class="kv-row"><span class="kv-key">突破有效</span><span class="tag" :class="diagnosis.chanlun.breakout_retest_confirmation_v65.breakout_valid ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.breakout_retest_confirmation_v65.breakout_valid ? '✅ 有效' : '❌ 假突破' }}</span></div>
+                <div class="kv-row"><span class="kv-key">回撤幅度</span><span class="kv-val">{{ (diagnosis.chanlun.breakout_retest_confirmation_v65.retest_depth * 100).toFixed(1) }}%</span></div>
+                <div class="kv-row" style="margin-top:6px">
+                  <span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.breakout_retest_confirmation_v65.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.breakout_retest_confirmation_v65.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.breakout_retest_confirmation_v65.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.breakout_retest_confirmation_v65.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.breakout_retest_confirmation_v65.msg }}</div>
+              </div>
+           </div>
+
+           <!-- V65: 波动率压缩突破 -->
+           <div v-if="diagnosis.chanlun.volatility_compression_breakout_v65" class="metric-card v65-squeeze">
+              <div class="card-title">🔥 V65 波动率压缩突破（条件194）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">压缩状态</span><span class="tag" :class="diagnosis.chanlun.volatility_compression_breakout_v65.compression_detected ? 'tag-blue' : 'tag-gray'">{{ diagnosis.chanlun.volatility_compression_breakout_v65.compression_detected ? '🔴 压缩中' : '⚪ 无压缩' }}</span></div>
+                <div class="kv-row"><span class="kv-key">压缩评分</span><span class="kv-val">{{ diagnosis.chanlun.volatility_compression_breakout_v65.squeeze_score.toFixed(2) }}</span></div>
+                <div class="kv-row"><span class="kv-key">突破力度</span><span class="kv-val">{{ diagnosis.chanlun.volatility_compression_breakout_v65.breakout_strength.toFixed(2) }}</span></div>
+                <div class="kv-row" style="margin-top:6px">
+                  <span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.volatility_compression_breakout_v65.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.volatility_compression_breakout_v65.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.volatility_compression_breakout_v65.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volatility_compression_breakout_v65.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.volatility_compression_breakout_v65.msg }}</div>
+              </div>
+           </div>
+
+           <!-- V65: 信号新鲜度 -->
+           <div v-if="diagnosis.chanlun.signal_time_window_freshness_v65" class="metric-card v65-freshness">
+              <div class="card-title">⏰ V65 信号时间窗口新鲜度（条件195）</div>
+              <div class="card-body">
+                <div class="kv-row"><span class="kv-key">信号年龄</span><span class="kv-val">{{ diagnosis.chanlun.signal_time_window_freshness_v65.bars_since_signal }} 根K线前</span></div>
+                <div class="kv-row"><span class="kv-key">趋势健康</span><span class="tag" :class="diagnosis.chanlun.signal_time_window_freshness_v65.trend_health === 'strong_uptrend' || diagnosis.chanlun.signal_time_window_freshness_v65.trend_health === 'strong_downtrend' ? 'tag-green' : diagnosis.chanlun.signal_time_window_freshness_v65.trend_health === 'expired' ? 'tag-red' : 'tag-gray'">{{ diagnosis.chanlun.signal_time_window_freshness_v65.trend_health }}</span></div>
+                <div class="kv-row"><span class="kv-key">新鲜度评分</span><span class="kv-val">{{ diagnosis.chanlun.signal_time_window_freshness_v65.freshness_score.toFixed(2) }}</span></div>
+                <div class="kv-row" style="margin-top:6px">
+                  <span class="kv-key">置信度调整</span>
+                  <span :style="{ color: diagnosis.chanlun.signal_time_window_freshness_v65.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.signal_time_window_freshness_v65.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                    {{ diagnosis.chanlun.signal_time_window_freshness_v65.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.signal_time_window_freshness_v65.confidence_adjust*100).toFixed(0) }}%
+                  </span>
+                </div>
+                <div class="kv-note">{{ diagnosis.chanlun.signal_time_window_freshness_v65.msg }}</div>
+              </div>
+           </div>
+
+
+           <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -4128,6 +4200,10 @@ onMounted(() => {
                 <th>平均置信度</th>
                 <th>V63-190命中</th>
                 <th>V63-191命中</th>
+                <th>V65-192命中</th>
+                <th>V65-193命中</th>
+                <th>V65-194命中</th>
+                <th>V65-195命中</th>
                 <th>状态</th>
               </tr>
             </thead>
@@ -4145,6 +4221,10 @@ onMounted(() => {
                 </td>
                 <td>{{ r.condition_breakdown?.v63_cond190 ?? 0 }}</td>
                 <td>{{ r.condition_breakdown?.v63_cond191 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v65_cond192 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v65_cond193 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v65_cond194 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v65_cond195 ?? 0 }}</td>
                 <td>
                   <span v-if="r.error" class="status-err">❌ {{ r.error }}</span>
                   <span v-else class="status-ok">✅ 正常</span>
@@ -4154,16 +4234,18 @@ onMounted(() => {
           </table>
         </div>
         <!-- 条件命中详情 -->
-        <div v-if="multiResults.some(r => Object.keys(r.condition_breakdown || {}).length > 0)" class="condition-detail">
+        <div v-if="multiResultsHaveConditionData" class="condition-detail">
           <div class="section-title">条件命中详情（V58-V63）</div>
           <div class="cond-grid">
-            <div v-for="r in multiResults" :key="r.stock_code" class="cond-card" v-if="Object.keys(r.condition_breakdown || {}).length > 0">
-              <div class="cond-card-title">{{ r.stock_code }}</div>
-              <div v-for="(count, key) in r.condition_breakdown" :key="key" class="cond-row">
-                <span class="cond-key">{{ key }}</span>
-                <span class="cond-val">{{ count }}</span>
+            <template v-for="r in multiResults" :key="r.stock_code">
+              <div v-if="getConditionBreakdown(r).length > 0" class="cond-card">
+                <div class="cond-card-title">{{ r.stock_code }}</div>
+                <div v-for="(count, key) in getConditionBreakdown(r)" :key="key" class="cond-row">
+                  <span class="cond-key">{{ key }}</span>
+                  <span class="cond-val">{{ count }}</span>
+                </div>
               </div>
-            </div>
+            </template>
           </div>
         </div>
       </div>
@@ -4733,4 +4815,10 @@ onMounted(() => {
 }
 .cond-key { color: #6b7280; }
 .cond-val { font-weight: 600; color: #374151; }
+
+/* V65: 量价背离二次确认 + 突破回踩 + 波动率压缩 + 信号新鲜度 */
+.v65-vp-div .kv-val { font-weight: 600; }
+.v65-breakout .kv-val { font-weight: 600; }
+.v65-squeeze .kv-val { font-weight: 600; }
+.v65-freshness .kv-val { font-weight: 600; }
 </style>

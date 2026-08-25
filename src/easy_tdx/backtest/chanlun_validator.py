@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 class ConditionGroup(str, Enum):
     """缠论条件分组枚举。
 
-    每个分组对应 V58-V63 中一组相关的增强条件。
+    每个分组对应 V58-V65 中一组相关的增强条件。
+    V64 是回测验证框架本身，不对应具体条件编号。
     """
 
     # V58: 条件172-175（多TF趋势+量能验证+ATR止损+综合评分）
@@ -45,10 +46,14 @@ class ConditionGroup(str, Enum):
     V62 = "v62"
     # V63: 条件190-191（中枢级别权重优化+多周期信号衰减追踪）
     V63 = "v63"
+    # V64: 回测验证框架（无具体条件编号，代表回测基础设施）
+    V64 = "v64"
+    # V65: 条件192-195（量价背离二次确认+突破回踩+波动率压缩+时间窗口）
+    V65 = "v65"
 
     @property
     def condition_range(self) -> tuple[int, int]:
-        """返回该分组对应的条件编号范围。"""
+        """返回该分组对应的条件编号范围。V64无具体条件，返回(0, 0)。"""
         mapping = {
             ConditionGroup.V58: (172, 175),
             ConditionGroup.V59: (176, 179),
@@ -56,6 +61,8 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V61: (184, 185),
             ConditionGroup.V62: (186, 189),
             ConditionGroup.V63: (190, 191),
+            ConditionGroup.V64: (0, 0),
+            ConditionGroup.V65: (192, 195),
         }
         return mapping[self]
 
@@ -69,6 +76,8 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V61: "RSI+MACD双指标融合+质量分层",
             ConditionGroup.V62: "BOLL带宽确认+动态阈值增强",
             ConditionGroup.V63: "中枢级别权重优化+多周期信号衰减追踪",
+            ConditionGroup.V64: "回测验证框架（基础设施）",
+            ConditionGroup.V65: "量价背离二次确认+突破回踩+波动率压缩+时间窗口",
         }
         return mapping[self]
 

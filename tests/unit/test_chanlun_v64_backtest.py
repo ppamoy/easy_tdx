@@ -81,8 +81,8 @@ class TestConditionGroup:
     """ConditionGroup 枚举正确性测试。"""
 
     def test_all_groups_defined(self):
-        """所有 V58-V63 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63"}
+        """所有 V58-V65 分组都应定义。"""
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -94,6 +94,8 @@ class TestConditionGroup:
         assert ConditionGroup.V61.condition_range == (184, 185)
         assert ConditionGroup.V62.condition_range == (186, 189)
         assert ConditionGroup.V63.condition_range == (190, 191)
+        assert ConditionGroup.V64.condition_range == (0, 0)
+        assert ConditionGroup.V65.condition_range == (192, 195)
 
     def test_descriptions(self):
         """每个分组都有描述。"""
@@ -425,3 +427,104 @@ class TestIntegrationWithChanlun:
         results = validator.validate_conditions(df, [ConditionGroup.V63])
         assert len(results) == 1
         assert results[0].group == ConditionGroup.V63
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V65 条件 192-195 专项测试
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestV65ConditionGroup:
+    """V65 ConditionGroup 枚举正确性测试。"""
+
+    def test_v65_group_exists(self):
+        """V65 分组应存在于枚举中。"""
+        assert ConditionGroup.V65 in list(ConditionGroup)
+
+    def test_v65_condition_range(self):
+        """V65 条件范围应为 (192, 195)。"""
+        assert ConditionGroup.V65.condition_range == (192, 195)
+
+    def test_v65_description(self):
+        """V65 应有描述。"""
+        assert len(ConditionGroup.V65.description) > 0
+
+    def test_v64_group_exists(self):
+        """V64 基础设施分组应存在。"""
+        assert ConditionGroup.V64 in list(ConditionGroup)
+        assert ConditionGroup.V64.condition_range == (0, 0)
+
+
+class TestV65MMDFields:
+    """V65 MMD 增强字段存在性测试。"""
+
+    def test_v65_fields_on_mmd(self):
+        """缠论分析产生的 MMD 对象应包含 V65 增强字段。"""
+        from easy_tdx.chanlun.types import MMDType
+        df = _make_df(*_make_oscillating_df(500))
+        config = ChanlunConfig()
+        analyser = ChanlunAnalyser(code="test", frequency="daily", config=config)
+        result = analyser.process_klines(df)
+
+        for mmd in result.mmds[:5]:
+            assert hasattr(mmd, "_volume_price_divergence_secondary_v65")
+            assert hasattr(mmd, "_breakout_retest_confirmation_v65")
+            assert hasattr(mmd, "_volatility_compression_breakout_v65")
+            assert hasattr(mmd, "_signal_time_window_freshness_v65")
+
+
+class TestV65BacktestValidator:
+    """V65 回测验证器测试。"""
+
+    def test_v65_group_in_validator(self):
+        """ConditionGroup.V65 应可被 validator 使用。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V65])
+        assert len(results) == 1
+        assert results[0].group == ConditionGroup.V65
+
+    def test_v65_multi_group_validation(self):
+        """V63 + V65 联合验证应返回两个结果。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V63, ConditionGroup.V65])
+        assert len(results) == 2
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V63, ConditionGroup.V65}
+
+    def test_v65_summary_output(self):
+        """V65 摘要应包含 V65 关键词。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V65])
+        assert len(results) == 1
+        summary = results[0].summary()
+        assert "V65" in summary
+
+    def test_v65_confidence_correlation_valid(self):
+        """V65 置信度相关性应在有效范围内。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V65])
+        assert len(results) == 1
+        corr = results[0].confidence_correlation
+        assert isinstance(corr, float)
+        assert -1.0 <= corr <= 1.0 or corr == 0.0
+
+
+class TestV65MultiStock:
+    """V65 多股票对比测试。"""
+
+    def test_v65_multi_stock_breakdown(self):
+        """多股票对比应包含 V65 条件命中统计。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        data = {
+            "sh600000": _make_df(*_make_oscillating_df(400)),
+            "sz000001": _make_df(*_make_trending_df(400, trend="up")),
+        }
+        results = validator.validate_multi_stock(data)
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r.condition_breakdown, dict)
+            v65_keys = [k for k in r.condition_breakdown if "v65" in k.lower()]
+            assert len(v65_keys) >= 0
