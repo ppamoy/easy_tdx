@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V68 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -803,3 +803,82 @@ class TestV68MultiStock:
             assert isinstance(r.condition_breakdown, dict)
             v68_keys = [k for k in r.condition_breakdown if "v68" in k.lower()]
             assert len(v68_keys) >= 0
+
+
+class TestV69ConditionGroup:
+    """V69 条件组枚举测试。"""
+
+    def test_v69_group_exists(self):
+        """ConditionGroup.V69 应存在。"""
+        assert hasattr(ConditionGroup, "V69")
+
+    def test_v69_condition_range(self):
+        """V69 应覆盖条件208-211。"""
+        start, end = ConditionGroup.V69.condition_range
+        assert start == 208
+        assert end == 211
+
+    def test_v69_description(self):
+        """V69 应有描述。"""
+        assert len(ConditionGroup.V69.description) > 0
+        desc = ConditionGroup.V69.description
+        assert "量价" in desc or "结构" in desc or "背离" in desc or "回踩" in desc
+
+
+class TestV69MMDFields:
+    """V69 MMD 增强字段存在性测试。"""
+
+    def test_v69_fields_exist_on_mmd(self):
+        """缠论分析产生的 MMD 对象应包含 V69 增强字段。"""
+        from easy_tdx.chanlun.types import MMD
+        mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
+        assert hasattr(mmd, "_price_volume_divergence_v69")
+        assert hasattr(mmd, "_structural_integrity_v69")
+        assert hasattr(mmd, "_multi_indicator_divergence_v69")
+        assert hasattr(mmd, "_retracement_depth_v69")
+
+
+class TestV69BacktestValidator:
+    """V69 回测验证器测试。"""
+
+    def test_v69_validator_usage(self):
+        """ConditionGroup.V69 应可被 validator 使用。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V69])
+        assert len(results) >= 1
+        assert results[0].group == ConditionGroup.V69
+
+    def test_v69_multi_group_validation(self):
+        """V68 + V69 联合验证应返回两个结果。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V68, ConditionGroup.V69])
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V68, ConditionGroup.V69}
+
+    def test_v69_summary_output(self):
+        """V69 摘要应包含 V69 关键词。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V69])
+        summary = results[0].summary()
+        assert "V69" in summary
+
+
+class TestV69MultiStock:
+    """V69 多股票对比测试。"""
+
+    def test_v69_multi_stock_breakdown(self):
+        """多股票对比应包含 V69 条件命中统计。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        data = {
+            "sh600000": _make_df(*_make_oscillating_df(400)),
+            "sz000001": _make_df(*_make_trending_df(400, trend="up")),
+        }
+        results = validator.validate_multi_stock(data)
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r.condition_breakdown, dict)
+            v69_keys = [k for k in r.condition_breakdown if "v69" in k.lower()]
+            assert len(v69_keys) >= 0

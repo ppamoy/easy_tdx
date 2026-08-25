@@ -1873,6 +1873,41 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V69: 量价背离二次确认（条件208）
+  price_volume_divergence_v69?: {
+    divergence_type: string
+    price_trend: string
+    volume_trend: string
+    divergence_strength: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V69: 结构完整性评分（条件209）
+  structural_integrity_v69?: {
+    bi_complete: boolean
+    bi_sequence_valid: boolean
+    zhongshu_valid: boolean
+    structural_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V69: 多指标背离融合（条件210）
+  multi_indicator_divergence_v69?: {
+    macd_divergence: string
+    rsi_divergence: string
+    kdj_divergence: string
+    resonance_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V69: 回踩深度量化（条件211）
+  retracement_depth_v69?: {
+    retracement_depth_pct: number
+    retracement_type: string
+    optimal_range: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

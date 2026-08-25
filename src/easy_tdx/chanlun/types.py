@@ -466,6 +466,12 @@ class MMD:
     _post_signal_fund_flow_v68: dict[str, Any] | None = None  # 信号后资金流向确认（条件206）
     _market_regime_adaptation_v68: dict[str, Any] | None = None  # 市场风格适配评分（条件207）
 
+    # V69 enhancement fields (2026-08-29)
+    _price_volume_divergence_v69: dict[str, Any] | None = None  # 量价背离二次确认（条件208）
+    _structural_integrity_v69: dict[str, Any] | None = None  # 结构完整性评分（条件209）
+    _multi_indicator_divergence_v69: dict[str, Any] | None = None  # 多指标背离融合（条件210）
+    _retracement_depth_v69: dict[str, Any] | None = None  # 回踩深度量化（条件211）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

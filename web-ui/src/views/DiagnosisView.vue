@@ -4069,11 +4069,82 @@ onMounted(() => {
                    </span>
                  </div>
                  <div class="kv-note">{{ diagnosis.chanlun.market_regime_adaptation_v68.msg }}</div>
-               </div>
+                </div>
             </div>
 
+            
+             <!-- V69: 量价背离二次确认 -->
+             <div v-if="diagnosis.chanlun.price_volume_divergence_v69" class="metric-card v69-pv">
+                <div class="card-title">📊 V69 量价背离确认（条件208）</div>
+                <div class="card-body">
+                  <div class="kv-row"><span class="kv-key">价格趋势</span><span class="tag" :class="diagnosis.chanlun.price_volume_divergence_v69.price_trend === 'up' ? 'tag-green' : diagnosis.chanlun.price_volume_divergence_v69.price_trend === 'down' ? 'tag-red' : 'tag-gray'">{{ {up:'↑ 上涨',down:'↓ 下跌',flat:'→ 盘整'}[diagnosis.chanlun.price_volume_divergence_v69.price_trend] ?? '—' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">量能趋势</span><span class="tag" :class="diagnosis.chanlun.price_volume_divergence_v69.volume_trend === 'expanding' ? 'tag-green' : diagnosis.chanlun.price_volume_divergence_v69.volume_trend === 'shrinking' ? 'tag-blue' : 'tag-gray'">{{ {expanding:'📈 放量',shrinking:'📉 缩量',stable:'➡️ 平稳'}[diagnosis.chanlun.price_volume_divergence_v69.volume_trend] ?? '—' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">背离类型</span><span class="tag" :class="diagnosis.chanlun.price_volume_divergence_v69.divergence_type.includes('bullish') ? 'tag-green' : diagnosis.chanlun.price_volume_divergence_v69.divergence_type.includes('bearish') ? 'tag-red' : 'tag-gray'">{{ {bullish:'🟢 看涨背离',weak_bullish:'🔵 弱看涨',bearish:'🔴 看跌背离',weak_bearish:'🟠 弱看跌',none:'⚪ 无背离'}[diagnosis.chanlun.price_volume_divergence_v69.divergence_type] ?? '—' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">背离强度</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.price_volume_divergence_v69.divergence_strength.toFixed(3) }}</span></div>
+                  <div class="kv-row" style="margin-top:6px">
+                    <span class="kv-key">置信度调整</span>
+                    <span :style="{ color: diagnosis.chanlun.price_volume_divergence_v69.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.price_volume_divergence_v69.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                      {{ diagnosis.chanlun.price_volume_divergence_v69.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.price_volume_divergence_v69.confidence_adjust*100).toFixed(0) }}%
+                    </span>
+                  </div>
+                  <div class="kv-note">{{ diagnosis.chanlun.price_volume_divergence_v69.msg }}</div>
+                </div>
+             </div>
 
-            <!-- MACD -->
+             <!-- V69: 结构完整性评分 -->
+             <div v-if="diagnosis.chanlun.structural_integrity_v69" class="metric-card v69-struct">
+                <div class="card-title">🏗️ V69 结构完整性（条件209）</div>
+                <div class="card-body">
+                  <div class="kv-row"><span class="kv-key">笔完成</span><span class="tag" :class="diagnosis.chanlun.structural_integrity_v69.bi_complete ? 'tag-green' : 'tag-orange'">{{ diagnosis.chanlun.structural_integrity_v69.bi_complete ? '✅ 已完成' : '⏳ 未完成' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">笔序列</span><span class="tag" :class="diagnosis.chanlun.structural_integrity_v69.bi_sequence_valid ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.structural_integrity_v69.bi_sequence_valid ? '✅ 连续' : '❌ 断裂' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">中枢有效</span><span class="tag" :class="diagnosis.chanlun.structural_integrity_v69.zhongshu_valid ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.structural_integrity_v69.zhongshu_valid ? '✅ 有效' : '⚪ 无效' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">结构评分</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.structural_integrity_v69.structural_score.toFixed(3) }}</span></div>
+                  <div class="kv-row" style="margin-top:6px">
+                    <span class="kv-key">置信度调整</span>
+                    <span :style="{ color: diagnosis.chanlun.structural_integrity_v69.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.structural_integrity_v69.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                      {{ diagnosis.chanlun.structural_integrity_v69.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.structural_integrity_v69.confidence_adjust*100).toFixed(0) }}%
+                    </span>
+                  </div>
+                  <div class="kv-note">{{ diagnosis.chanlun.structural_integrity_v69.msg }}</div>
+                </div>
+             </div>
+
+             <!-- V69: 多指标背离融合 -->
+             <div v-if="diagnosis.chanlun.multi_indicator_divergence_v69" class="metric-card v69-multi">
+                <div class="card-title">🔀 V69 多指标背离融合（条件210）</div>
+                <div class="card-body">
+                  <div class="kv-row"><span class="kv-key">MACD背离</span><span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_v69.macd_divergence === 'bullish' ? 'tag-green' : diagnosis.chanlun.multi_indicator_divergence_v69.macd_divergence === 'bearish' ? 'tag-red' : 'tag-gray'">{{ {bullish:'🟢 看涨',bearish:'🔴 看跌',none:'⚪ 无'}[diagnosis.chanlun.multi_indicator_divergence_v69.macd_divergence] ?? '—' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">RSI背离</span><span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_v69.rsi_divergence === 'bullish' ? 'tag-green' : diagnosis.chanlun.multi_indicator_divergence_v69.rsi_divergence === 'bearish' ? 'tag-red' : 'tag-gray'">{{ {bullish:'🟢 看涨',bearish:'🔴 看跌',none:'⚪ 无'}[diagnosis.chanlun.multi_indicator_divergence_v69.rsi_divergence] ?? '—' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">KDJ背离</span><span class="tag" :class="diagnosis.chanlun.multi_indicator_divergence_v69.kdj_divergence === 'bullish' ? 'tag-green' : diagnosis.chanlun.multi_indicator_divergence_v69.kdj_divergence === 'bearish' ? 'tag-red' : 'tag-gray'">{{ {bullish:'🟢 看涨',bearish:'🔴 看跌',none:'⚪ 无'}[diagnosis.chanlun.multi_indicator_divergence_v69.kdj_divergence] ?? '—' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">共振数</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.multi_indicator_divergence_v69.resonance_count }} / 3</span></div>
+                  <div class="kv-row" style="margin-top:6px">
+                    <span class="kv-key">置信度调整</span>
+                    <span :style="{ color: diagnosis.chanlun.multi_indicator_divergence_v69.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.multi_indicator_divergence_v69.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                      {{ diagnosis.chanlun.multi_indicator_divergence_v69.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_indicator_divergence_v69.confidence_adjust*100).toFixed(0) }}%
+                    </span>
+                  </div>
+                  <div class="kv-note">{{ diagnosis.chanlun.multi_indicator_divergence_v69.msg }}</div>
+                </div>
+             </div>
+
+             <!-- V69: 回踩深度量化 -->
+             <div v-if="diagnosis.chanlun.retracement_depth_v69" class="metric-card v69-ret">
+                <div class="card-title">📐 V69 回踩深度量化（条件211）</div>
+                <div class="card-body">
+                  <div class="kv-row"><span class="kv-key">回踩深度</span><span class="kv-val">{{ diagnosis.chanlun.retracement_depth_v69.retracement_depth_pct.toFixed(1) }}%</span></div>
+                  <div class="kv-row"><span class="kv-key">回踩类型</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.retracement_depth_v69.retracement_type === 'optimal', 'tag-blue': diagnosis.chanlun.retracement_depth_v69.retracement_type === 'shallow', 'tag-orange': diagnosis.chanlun.retracement_depth_v69.retracement_type === 'deep', 'tag-red': diagnosis.chanlun.retracement_depth_v69.retracement_type === 'breakdown' }">{{ {optimal:'✅ 理想',shallow:'🔵 偏浅',deep:'🟠 偏深',breakdown:'🔴 过度'}[diagnosis.chanlun.retracement_depth_v69.retracement_type] ?? '—' }}</span></div>
+                  <div class="kv-row"><span class="kv-key">最优区间</span><span class="tag" :class="diagnosis.chanlun.retracement_depth_v69.optimal_range === 'yes' ? 'tag-green' : diagnosis.chanlun.retracement_depth_v69.optimal_range === 'partial' ? 'tag-blue' : 'tag-red'">{{ {yes:'✅ 是',partial:'△ 部分',no:'❌ 否'}[diagnosis.chanlun.retracement_depth_v69.optimal_range] ?? '—' }}</span></div>
+                  <div class="kv-row" style="margin-top:6px">
+                    <span class="kv-key">置信度调整</span>
+                    <span :style="{ color: diagnosis.chanlun.retracement_depth_v69.confidence_adjust > 0 ? '#22c55e' : diagnosis.chanlun.retracement_depth_v69.confidence_adjust < 0 ? '#ef4444' : '#9ca3af', fontWeight: 600 }">
+                      {{ diagnosis.chanlun.retracement_depth_v69.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.retracement_depth_v69.confidence_adjust*100).toFixed(0) }}%
+                    </span>
+                  </div>
+                  <div class="kv-note">{{ diagnosis.chanlun.retracement_depth_v69.msg }}</div>
+                </div>
+             </div>
+
+             <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -5047,4 +5118,8 @@ onMounted(() => {
 .v68-range .kv-val { font-weight: 700; }
 .v68-fund .kv-val { font-weight: 600; }
 .v68-regime .kv-val { font-weight: 700; }
+.v69-pv .kv-val { font-weight: 600; }
+.v69-struct .kv-val { font-weight: 700; }
+.v69-multi .kv-val { font-weight: 600; }
+.v69-ret .kv-val { font-weight: 700; }
 </style>

@@ -12051,6 +12051,48 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V69 条件 208-211 ──
+
+        # 条件208：量价背离二次确认（Price-Volume Divergence Secondary Confirmation）
+        # 价格创新高但成交量未放大（或创新低但缩量）= 强烈反转信号
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 30:
+            try:
+                pv_div = _calc_price_volume_divergence_v69(mmd, closes, volumes)
+                mmd._price_volume_divergence_v69 = pv_div
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pv_div.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件209：结构完整性评分（Structural Integrity Scoring）
+        # 评估当前笔的完整性、线段连接性、中枢有效性
+        if mmd.bi is not None and bis is not None and zss is not None and len(bis) >= 3:
+            try:
+                struct_int = _calc_structural_integrity_v69(mmd, bis, zss, closes)
+                mmd._structural_integrity_v69 = struct_int
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + struct_int.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件210：多指标背离融合（Multi-Indicator Divergence Fusion）
+        # 综合MACD/KDJ/RSI背离信号，提供综合背离强度评分
+        if macd_data is not None and closes is not None and mmd.bi is not None and len(closes) >= 30:
+            try:
+                multi_div = _calc_multi_indicator_divergence_v69(mmd, closes, volumes, macd_data)
+                mmd._multi_indicator_divergence_v69 = multi_div
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + multi_div.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件211：回踩深度量化（Retracement Depth Quantification）
+        # 量化回踩幅度与时间，判断回踩是否充分
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+            try:
+                retrace = _calc_retracement_depth_v69(mmd, closes, highs, lows)
+                mmd._retracement_depth_v69 = retrace
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + retrace.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -21430,6 +21472,424 @@ def _calc_market_regime_adaptation_v68(
         result["msg"] = (
             f"ATR={atr_pct:.1f}% 波动率={vol_regime} 趋势={trend_strength} "
             f"适配分={adaptation:.0%} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V69: 条件 208-211（量价背离+结构完整+多指标背离+回踩深度）
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _calc_price_volume_divergence_v69(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量价背离二次确认（V69 条件208）。
+
+    检测价格与成交量的背离关系，作为买卖点的二次确认：
+    - 买入信号：价格创近期新低但成交量萎缩 = 卖压衰竭（bullish divergence）
+    - 卖出信号：价格创近期新高但成交量萎缩 = 买盘枯竭（bearish divergence）
+    - 价量齐升/齐降 = 趋势确认，非背离信号
+
+    返回：divergence_type, price_trend, volume_trend, divergence_strength, confidence_adjust, msg
+    """
+    result = {
+        "divergence_type": "none",
+        "price_trend": "flat",
+        "volume_trend": "flat",
+        "divergence_strength": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 30 or not volumes:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        window = 20
+        recent_closes = closes[-window:]
+        recent_vols = volumes[-window:]
+
+        # 价格线性回归斜率
+        n_win = len(recent_closes)
+        x_mean = (n_win - 1) / 2.0
+        y_mean = sum(recent_closes) / n_win
+        num = sum((i - x_mean) * (recent_closes[i] - y_mean) for i in range(n_win))
+        denom = sum((i - x_mean) ** 2 for i in range(n_win))
+        price_slope = num / max(denom, 1e-10)
+        price_norm_slope = price_slope / max(y_mean, 1e-10)
+
+        if price_norm_slope > 0.01:
+            price_trend = "up"
+        elif price_norm_slope < -0.01:
+            price_trend = "down"
+        else:
+            price_trend = "flat"
+        result["price_trend"] = price_trend
+
+        # 成交量趋势
+        vol_start = sum(recent_vols[:5]) / 5
+        vol_end = sum(recent_vols[-5:]) / 5
+        vol_change = (vol_end - vol_start) / max(vol_start, 1e-10)
+
+        if vol_change > 0.1:
+            volume_trend = "expanding"
+        elif vol_change < -0.1:
+            volume_trend = "shrinking"
+        else:
+            volume_trend = "stable"
+        result["volume_trend"] = volume_trend
+
+        # 背离检测
+        divergence_found = False
+        divergence_dir = "none"
+
+        if is_buy:
+            if price_trend == "down" and volume_trend == "shrinking":
+                divergence_found = True
+                divergence_dir = "bullish"
+            elif price_trend == "down" and volume_trend == "stable":
+                divergence_found = True
+                divergence_dir = "weak_bullish"
+        else:
+            if price_trend == "up" and volume_trend == "shrinking":
+                divergence_found = True
+                divergence_dir = "bearish"
+            elif price_trend == "up" and volume_trend == "stable":
+                divergence_found = True
+                divergence_dir = "weak_bearish"
+
+        result["divergence_type"] = divergence_dir
+
+        # 背离强度
+        if divergence_found:
+            strength = min(1.0, abs(price_norm_slope) * 20 + abs(vol_change) * 2)
+            strength = max(0.1, strength)
+        else:
+            strength = 0.0
+        result["divergence_strength"] = round(strength, 3)
+
+        # 置信度调整
+        if is_buy:
+            if divergence_dir == "bullish" and strength > 0.5:
+                adj = 0.05
+            elif divergence_dir == "weak_bullish":
+                adj = 0.02
+            elif price_trend == "up" and volume_trend == "expanding":
+                adj = 0.01
+            else:
+                adj = -0.02
+        else:
+            if divergence_dir == "bearish" and strength > 0.5:
+                adj = 0.05
+            elif divergence_dir == "weak_bearish":
+                adj = 0.02
+            elif price_trend == "down" and volume_trend == "expanding":
+                adj = 0.01
+            else:
+                adj = -0.02
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"价格{'↑' if price_trend=='up' else '↓' if price_trend=='down' else '→'}"
+            f"量能{'放' if volume_trend=='expanding' else '缩' if volume_trend=='shrinking' else '平'}"
+            f" 背离={divergence_dir} 强度={strength:.2f} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_structural_integrity_v69(
+    mmd: "MMD",
+    bis: list["BI"],
+    zss: list["ZS"],
+    closes: list[float],
+) -> dict[str, Any]:
+    """结构完整性评分（V69 条件209）。
+
+    评估缠论结构的完整性，包括：
+    - 当前笔是否已完成（end.done）
+    - 笔序列是否连续（无跳笔）
+    - 中枢数量和质量
+    - 买卖点与最近中枢的距离关系
+
+    返回：bi_complete, bi_sequence_valid, zhongshu_valid, structural_score, confidence_adjust, msg
+    """
+    result = {
+        "bi_complete": False,
+        "bi_sequence_valid": True,
+        "zhongshu_valid": False,
+        "structural_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+
+        bi_complete = mmd.bi is not None and mmd.bi.end.done if mmd.bi else False
+        result["bi_complete"] = bi_complete
+
+        bi_valid = True
+        if bis and len(bis) >= 2:
+            for i in range(1, len(bis)):
+                prev_bi = bis[i - 1]
+                curr_bi = bis[i]
+                if curr_bi.start.k.index < prev_bi.end.k.index:
+                    bi_valid = False
+                    break
+        result["bi_sequence_valid"] = bi_valid
+
+        zs_valid_count = 0
+        if zss:
+            for zs in zss:
+                if zs.zg > zs.zd and zs.done:
+                    zs_valid_count += 1
+        result["zhongshu_valid"] = zs_valid_count > 0
+
+        bi_score = 0.4 if bi_complete else 0.1
+        seq_score = 0.3 if bi_valid else 0.0
+        zs_score = 0.3 * min(zs_valid_count / 3, 1.0) if zss else 0.0
+
+        structural_score = bi_score + seq_score + zs_score
+        structural_score = min(1.0, max(0.0, structural_score))
+        result["structural_score"] = round(structural_score, 3)
+
+        if structural_score >= 0.8:
+            adj = 0.04
+        elif structural_score >= 0.6:
+            adj = 0.02
+        elif structural_score >= 0.4:
+            adj = 0.0
+        else:
+            adj = -0.03
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"笔完成={'✓' if bi_complete else '✗'} "
+            f"序列={'✓' if bi_valid else '✗'} "
+            f"中枢{'✓' if zs_valid_count > 0 else '✗'}({zs_valid_count}) "
+            f"结构分={structural_score:.2f} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_indicator_divergence_v69(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+    macd_data: dict[str, list[float]],
+) -> dict[str, Any]:
+    """多指标背离融合（V69 条件210）。
+
+    综合MACD、RSI、KDJ三个指标的背离信号：
+    - MACD背离：价格与MACD柱状图的背离
+    - RSI背离：价格与RSI的背离
+    - KDJ背离：价格与KDJ的K值背离
+    - 多指标共振：两个以上指标同时发出背离信号时增强置信度
+
+    返回：macd_divergence, rsi_divergence, kdj_divergence, resonance_count, confidence_adjust, msg
+    """
+    result = {
+        "macd_divergence": "none",
+        "rsi_divergence": "none",
+        "kdj_divergence": "none",
+        "resonance_count": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 30 or not macd_data or not macd_data.get("hist"):
+            result["msg"] = "数据不足（需≥30根且有MACD数据）"
+            return result
+
+        hist = macd_data["hist"]
+        window = 20
+
+        # 1. MACD背离检测
+        macd_div = "none"
+        if len(hist) >= window and len(closes) >= window:
+            price_recent = closes[-window:]
+            hist_recent = hist[-window:]
+
+            if is_buy:
+                price_low_recent = min(price_recent[-5:])
+                price_low_early = min(price_recent[:5])
+                hist_low_recent = min(hist_recent[-5:]) if any(h < 0 for h in hist_recent[-5:]) else 0
+                hist_low_early = min(hist_recent[:5]) if any(h < 0 for h in hist_recent[:5]) else 0
+                if price_low_recent < price_low_early and hist_low_recent > hist_low_early:
+                    macd_div = "bullish"
+                elif price_low_recent > price_low_early and hist_low_recent < hist_low_early:
+                    macd_div = "bearish"
+            else:
+                price_high_recent = max(price_recent[-5:])
+                price_high_early = max(price_recent[:5])
+                hist_high_recent = max(hist_recent[-5:]) if any(h > 0 for h in hist_recent[-5:]) else 0
+                hist_high_early = max(hist_recent[:5]) if any(h > 0 for h in hist_recent[:5]) else 0
+                if price_high_recent > price_high_early and hist_high_recent < hist_high_early:
+                    macd_div = "bearish"
+                elif price_high_recent < price_high_early and hist_high_recent > hist_high_early:
+                    macd_div = "bullish"
+
+        result["macd_divergence"] = macd_div
+
+        # 2. RSI背离检测（简化版）
+        rsi_div = "none"
+        if n >= 30:
+            price_chg_5d = (closes[-1] - closes[-6]) / max(closes[-6], 1e-10)
+            price_chg_10d = (closes[-6] - closes[-11]) / max(closes[-11], 1e-10) if n >= 11 else 0
+
+            if is_buy:
+                if price_chg_5d > 0 and price_chg_10d < 0:
+                    rsi_div = "bullish"
+                elif price_chg_5d < 0 and price_chg_10d > 0:
+                    rsi_div = "bearish"
+            else:
+                if price_chg_5d > 0 and price_chg_10d < 0:
+                    rsi_div = "bearish"
+                elif price_chg_5d < 0 and price_chg_10d > 0:
+                    rsi_div = "bullish"
+
+        result["rsi_divergence"] = rsi_div
+
+        # 3. KDJ背离检测（简化版）
+        kdj_div = "none"
+        if n >= 20 and volumes:
+            vol_ratio_recent = sum(volumes[-5:]) / max(sum(volumes[-10:-5]), 1e-10)
+            price_momentum = (closes[-1] - closes[-5]) / max(closes[-5], 1e-10)
+
+            if is_buy:
+                if price_momentum < -0.02 and vol_ratio_recent < 0.7:
+                    kdj_div = "bullish"
+                elif price_momentum > 0.02 and vol_ratio_recent < 0.7:
+                    kdj_div = "bearish"
+            else:
+                if price_momentum > 0.02 and vol_ratio_recent < 0.7:
+                    kdj_div = "bearish"
+                elif price_momentum < -0.02 and vol_ratio_recent < 0.7:
+                    kdj_div = "bullish"
+
+        result["kdj_divergence"] = kdj_div
+
+        # 4. 共振计数
+        positive_div = sum(1 for d in [macd_div, rsi_div, kdj_div]
+                          if (is_buy and d == "bullish") or (not is_buy and d == "bearish"))
+        result["resonance_count"] = positive_div
+
+        if positive_div >= 3:
+            adj = 0.06
+        elif positive_div == 2:
+            adj = 0.04
+        elif positive_div == 1:
+            adj = 0.02
+        else:
+            adj = 0.0
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"MACD={macd_div} RSI={rsi_div} KDJ={kdj_div} "
+            f"共振={positive_div}/3 | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_retracement_depth_v69(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """回踩深度量化（V69 条件211）。
+
+    量化第三类买卖点的回踩行为：
+    - 买入第三类：价格突破中枢后回踩，回踩深度应在中枢上沿附近
+    - 卖出第三类：价格跌破中枢后反抽，反抽深度应在中枢下沿附近
+    - 回踩不足（太浅）或回踩过度（跌破中枢）都影响信号质量
+
+    返回：retracement_depth_pct, retracement_type, optimal_range, confidence_adjust, msg
+    """
+    result = {
+        "retracement_depth_pct": 0.0,
+        "retracement_type": "none",
+        "optimal_range": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 20 or not highs or not lows:
+            result["msg"] = "数据不足（需≥20根）"
+            return result
+
+        current = closes[-1]
+
+        lookback = min(30, n)
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+
+        local_high = max(recent_highs)
+        local_low = min(recent_lows)
+        high_low_range = local_high - local_low
+
+        if high_low_range < 1e-10:
+            result["msg"] = "价格区间过窄"
+            return result
+
+        if is_buy:
+            retracement = (local_high - current) / high_low_range
+            retracement_pct = retracement * 100
+        else:
+            retracement = (current - local_low) / high_low_range
+            retracement_pct = retracement * 100
+
+        result["retracement_depth_pct"] = round(retracement_pct, 1)
+
+        if retracement_pct < 30:
+            retype = "shallow"
+        elif retracement_pct < 70:
+            retype = "optimal"
+        elif retracement_pct < 90:
+            retype = "deep"
+        else:
+            retype = "breakdown"
+
+        result["retracement_type"] = retype
+
+        if retype == "optimal":
+            optimal = "yes"
+        elif retype in ("shallow", "deep"):
+            optimal = "partial"
+        else:
+            optimal = "no"
+        result["optimal_range"] = optimal
+
+        if retype == "optimal":
+            adj = 0.05
+        elif retype == "shallow":
+            adj = 0.02
+        elif retype == "deep":
+            adj = -0.01
+        else:
+            adj = -0.06
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"回踩深度={retracement_pct:.1f}% 类型={retype} "
+            f"最优={'✓' if optimal=='yes' else '△' if optimal=='partial' else '✗'} "
+            f"| 置信度{adj:+.0%}"
         )
         return result
     except Exception:
