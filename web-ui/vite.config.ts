@@ -15,5 +15,6 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    allowedHosts: ['easy.ppamoy.fun', 'api.ppamoy.fun', 'ppamoy.fun'],
   },
 })

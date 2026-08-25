@@ -1040,6 +1040,14 @@ async def diagnose_stock(
             "multi_tf_convergence_intensity_v66": getattr(latest_mmd, "_multi_tf_convergence_intensity_v66", None) if latest_mmd else None,
             # V66: 信号执行优先级（条件199）
             "signal_execution_priority_v66": getattr(latest_mmd, "_signal_execution_priority_v66", None) if latest_mmd else None,
+            # V67: 中枢背驰力度量化（条件200）
+            "zhongshu_divergence_strength_v67": getattr(latest_mmd, "_zhongshu_divergence_strength_v67", None) if latest_mmd else None,
+            # V67: 多级别买卖点一致性验证（条件201）
+            "multi_level_mmd_consistency_v67": getattr(latest_mmd, "_multi_level_mmd_consistency_v67", None) if latest_mmd else None,
+            # V67: 信号后价格轨迹健康度（条件202）
+            "post_signal_trajectory_health_v67": getattr(latest_mmd, "_post_signal_trajectory_health_v67", None) if latest_mmd else None,
+            # V67: 动态止损止盈推荐（条件203）
+            "dynamic_sl_tp_recommendation_v67": getattr(latest_mmd, "_dynamic_sl_tp_recommendation_v67", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1340,6 +1348,15 @@ async def multi_stock_comparison(
                             condition_counts["v66_cond198"] = condition_counts.get("v66_cond198", 0) + 1
                         if c == 199 and hasattr(mmd, "_signal_execution_priority_v66"):
                             condition_counts["v66_cond199"] = condition_counts.get("v66_cond199", 0) + 1
+                        # V67 特有字段
+                        if c == 200 and hasattr(mmd, "_zhongshu_divergence_strength_v67"):
+                            condition_counts["v67_cond200"] = condition_counts.get("v67_cond200", 0) + 1
+                        if c == 201 and hasattr(mmd, "_multi_level_mmd_consistency_v67"):
+                            condition_counts["v67_cond201"] = condition_counts.get("v67_cond201", 0) + 1
+                        if c == 202 and hasattr(mmd, "_post_signal_trajectory_health_v67"):
+                            condition_counts["v67_cond202"] = condition_counts.get("v67_cond202", 0) + 1
+                        if c == 203 and hasattr(mmd, "_dynamic_sl_tp_recommendation_v67"):
+                            condition_counts["v67_cond203"] = condition_counts.get("v67_cond203", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

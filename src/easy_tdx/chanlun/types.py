@@ -454,6 +454,12 @@ class MMD:
     _multi_tf_convergence_intensity_v66: dict[str, Any] | None = None  # 多时间框架共振强度评分（条件198）
     _signal_execution_priority_v66: dict[str, Any] | None = None  # 信号执行优先级建议（条件199）
 
+    # V67 enhancement fields (2026-08-28)
+    _zhongshu_divergence_strength_v67: dict[str, Any] | None = None  # 中枢背驰力度量化（条件200）
+    _multi_level_mmd_consistency_v67: dict[str, Any] | None = None  # 多级别买卖点一致性验证（条件201）
+    _post_signal_trajectory_health_v67: dict[str, Any] | None = None  # 信号后价格轨迹健康度（条件202）
+    _dynamic_sl_tp_recommendation_v67: dict[str, Any] | None = None  # 动态止损止盈推荐（条件203）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

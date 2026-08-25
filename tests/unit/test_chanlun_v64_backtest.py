@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V65 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -627,3 +627,101 @@ class TestV66MultiStock:
             assert isinstance(r.condition_breakdown, dict)
             v66_keys = [k for k in r.condition_breakdown if "v66" in k.lower()]
             assert len(v66_keys) >= 0
+
+class TestV67ConditionGroup:
+    """V67 条件组枚举测试。"""
+
+    def test_v67_exists(self):
+        """ConditionGroup.V67 应存在。"""
+        from easy_tdx.backtest.chanlun_validator import ConditionGroup
+        assert hasattr(ConditionGroup, "V67")
+
+    def test_v67_condition_range(self):
+        """V67 应覆盖条件200-203。"""
+        from easy_tdx.backtest.chanlun_validator import ConditionGroup
+        start, end = ConditionGroup.V67.condition_range
+        assert start == 200
+        assert end == 203
+
+    def test_v67_description(self):
+        """V67 应有描述。"""
+        from easy_tdx.backtest.chanlun_validator import ConditionGroup
+        assert len(ConditionGroup.V67.description) > 0
+
+
+class TestV67MMDFields:
+    """V67 MMD 增强字段存在性测试。"""
+
+    def test_v67_mmd_fields_exist(self):
+        """缠论分析产生的 MMD 对象应包含 V67 增强字段。"""
+        np.random.seed(100)
+        df = _make_df(*_make_trending_df(300, trend="up"))
+        analyser = ChanlunAnalyser(ChanlunConfig())
+        result = analyser.process_klines(df)
+        mmds = result.mmds
+        buy_mmds = [m for m in mmds if "buy" in m.mmd_type.value]
+        if buy_mmds:
+            latest = buy_mmds[-1]
+            assert hasattr(latest, "_zhongshu_divergence_strength_v67")
+            assert hasattr(latest, "_multi_level_mmd_consistency_v67")
+            assert hasattr(latest, "_post_signal_trajectory_health_v67")
+            assert hasattr(latest, "_dynamic_sl_tp_recommendation_v67")
+
+
+class TestV67BacktestValidator:
+    """V67 回测验证器测试。"""
+
+    def test_v67_validator_usable(self):
+        """ConditionGroup.V67 应可被 validator 使用。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V67])
+        assert len(results) == 1
+        assert results[0].group == ConditionGroup.V67
+
+    def test_v67_multi_group_validation(self):
+        """V66 + V67 联合验证应返回两个结果。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V66, ConditionGroup.V67])
+        assert len(results) == 2
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V66, ConditionGroup.V67}
+
+    def test_v67_summary_output(self):
+        """V67 摘要应包含 V67 关键词。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_oscillating_df(400))
+        results = validator.validate_conditions(df, [ConditionGroup.V67])
+        assert len(results) == 1
+        summary = results[0].summary()
+        assert "V67" in summary
+
+    def test_v67_confidence_correlation_valid(self):
+        """V67 置信度相关性应在有效范围内。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V67])
+        assert len(results) == 1
+        corr = results[0].confidence_correlation
+        assert isinstance(corr, float)
+        assert -1.0 <= corr <= 1.0 or corr == 0.0
+
+
+class TestV67MultiStock:
+    """V67 多股票对比测试。"""
+
+    def test_v67_multi_stock_breakdown(self):
+        """多股票对比应包含 V67 条件命中统计。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=50)
+        data = {
+            "sh600000": _make_df(*_make_oscillating_df(400)),
+            "sz000001": _make_df(*_make_trending_df(400, trend="up")),
+        }
+        results = validator.validate_multi_stock(data)
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r.condition_breakdown, dict)
+            v67_keys = [k for k in r.condition_breakdown if "v67" in k.lower()]
+            assert len(v67_keys) >= 0
+

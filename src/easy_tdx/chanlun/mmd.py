@@ -11975,6 +11975,43 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V67 条件 200-203 ──
+
+        # 条件200：中枢背驰力度量化（Zhongshu Divergence Strength Quantification）
+        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None and len(closes) >= 30:
+            try:
+                zs_div = _calc_zhongshu_divergence_strength_v67(mmd, zss, closes, macd_data)
+                mmd._zhongshu_divergence_strength_v67 = zs_div
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_div.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件201：多级别买卖点一致性验证（Multi-level MMD Consistency）
+        if mmd.bi is not None and closes is not None and len(closes) >= 60:
+            try:
+                ml_cons = _calc_multi_level_mmd_consistency_v67(mmd, closes)
+                mmd._multi_level_mmd_consistency_v67 = ml_cons
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ml_cons.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件202：信号后价格轨迹健康度（Post-signal Price Trajectory Health）
+        if mmd.bi is not None and closes is not None and len(closes) >= 40:
+            try:
+                traj_health = _calc_post_signal_trajectory_health_v67(mmd, closes)
+                mmd._post_signal_trajectory_health_v67 = traj_health
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + traj_health.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件203：动态止损止盈推荐（Dynamic SL/TP Recommendation）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+            try:
+                sl_tp = _calc_dynamic_sl_tp_recommendation_v67(mmd, closes, highs, lows)
+                mmd._dynamic_sl_tp_recommendation_v67 = sl_tp
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -20576,6 +20613,366 @@ def _calc_signal_execution_priority_v66(
             adj = -0.03
 
         result["confidence_adjust"] = round(adj, 3)
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_divergence_strength_v67(
+    mmd: "MMD",
+    zss: list["ZS"],
+    closes: list[float],
+    macd_data: dict[str, list[float]],
+) -> dict[str, Any]:
+    """中枢背驰力度量化（V67 条件200）。
+
+    针对第三类买卖点，量化中枢区域的背驰强度：
+    - 对比突破前最后一笔与突破后第一笔的MACD面积
+    - 面积比越小（背驰越明显），置信度调整越大
+    - 结合成交量变化辅助判断
+
+    返回：backchi_ratio, zhongshu_strength, divergence_type, confidence_adjust, msg
+    """
+    result = {
+        "backchi_ratio": 0.0,
+        "zhongshu_strength": "normal",
+        "divergence_type": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        hist = macd_data.get("hist", [])
+        if len(hist) < 20 or len(zss) == 0:
+            result["msg"] = "数据不足"
+            return result
+
+        # 找到最近的中枢
+        latest_zs = zss[-1]
+        zs_high = max(bc.high for bc in latest_zs.bcs) if latest_zs.bcs else 0
+        zs_low = min(bc.low for bc in latest_zs.bcs) if latest_zs.bcs else 0
+        zs_range = zs_high - zs_low if zs_high != zs_low else 1.0
+
+        # 计算突破前最后一笔的MACD面积（中枢内）
+        pre_break_idx = max(0, len(hist) - 20)
+        post_break_idx = min(len(hist) - 1, pre_break_idx + 10)
+
+        # 简化：用最近10根与之前10根的MACD柱面积对比
+        recent_hist = hist[-10:] if len(hist) >= 10 else hist
+        prev_hist = hist[-20:-10] if len(hist) >= 20 else hist[:-10]
+
+        if not prev_hist:
+            result["msg"] = "历史数据不足"
+            return result
+
+        recent_area = sum(abs(h) for h in recent_hist)
+        prev_area = sum(abs(h) for h in prev_hist)
+        backchi_ratio = prev_area / max(recent_area, 1e-10)
+
+        current_price = closes[-1]
+        zs_mid = (zs_high + zs_low) / 2
+
+        result["backchi_ratio"] = round(backchi_ratio, 3)
+
+        # 判断背驰类型
+        if is_buy:
+            if backchi_ratio < 0.6 and current_price > zs_high:
+                divergence_type = "strong_down"
+                zhongshu_strength = "weak"
+                adj = 0.05
+            elif backchi_ratio < 0.8:
+                divergence_type = "moderate_down"
+                zhongshu_strength = "normal"
+                adj = 0.03
+            elif current_price > zs_high * 1.05:
+                divergence_type = "none"
+                zhongshu_strength = "strong"
+                adj = 0.02
+            else:
+                divergence_type = "none"
+                zhongshu_strength = "normal"
+                adj = -0.01
+        else:
+            if backchi_ratio < 0.6 and current_price < zs_low:
+                divergence_type = "strong_up"
+                zhongshu_strength = "weak"
+                adj = 0.05
+            elif backchi_ratio < 0.8:
+                divergence_type = "moderate_up"
+                zhongshu_strength = "normal"
+                adj = 0.03
+            elif current_price < zs_low * 0.95:
+                divergence_type = "none"
+                zhongshu_strength = "strong"
+                adj = 0.02
+            else:
+                divergence_type = "none"
+                zhongshu_strength = "normal"
+                adj = -0.01
+
+        result["divergence_type"] = divergence_type
+        result["zhongshu_strength"] = zhongshu_strength
+        result["confidence_adjust"] = round(adj, 3)
+
+        dir_str = "↑" if is_buy else "↓"
+        result["msg"] = (
+            f"中枢背驰 {dir_str} | 面积比={backchi_ratio:.2f} "
+            f"中枢强度={zhongshu_strength} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_level_mmd_consistency_v67(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多级别买卖点一致性验证（V67 条件201）。
+
+    通过模拟多时间框架的信号一致性：
+    - 短期（5日）、中期（20日）、长期（60日）趋势方向
+    - 判断当前买卖点是否与各时间框架方向一致
+    - 一致度高则增强信心，分歧则降低信心
+
+    返回：short_dir, mid_dir, long_dir, consistency_score, confidence_adjust, msg
+    """
+    result = {
+        "short_dir": "unknown",
+        "mid_dir": "unknown",
+        "long_dir": "unknown",
+        "consistency_score": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 60:
+            result["msg"] = "数据不足（需≥60根）"
+            return result
+
+        # 计算多周期趋势
+        ma5 = sum(closes[-5:]) / 5
+        ma10 = sum(closes[-10:]) / 10
+        ma20 = sum(closes[-20:]) / 20
+        ma60 = sum(closes[-60:]) / 60
+
+        # 短期趋势：MA5 vs MA10
+        short_dir = "up" if ma5 > ma10 else "down"
+        # 中期趋势：MA20 vs MA10
+        mid_dir = "up" if ma20 > ma10 else "down"
+        # 长期趋势：当前价 vs MA60
+        long_dir = "up" if closes[-1] > ma60 else "down"
+
+        result["short_dir"] = short_dir
+        result["mid_dir"] = mid_dir
+        result["long_dir"] = long_dir
+
+        # 一致性评分
+        if is_buy:
+            aligned = sum(1 for d in [short_dir, mid_dir, long_dir] if d == "up")
+        else:
+            aligned = sum(1 for d in [short_dir, mid_dir, long_dir] if d == "down")
+
+        consistency_score = aligned / 3.0
+        result["consistency_score"] = round(consistency_score, 2)
+
+        # 置信度调整
+        if consistency_score >= 0.8:
+            adj = 0.04
+            level = "high"
+        elif consistency_score >= 0.5:
+            adj = 0.02
+            level = "medium"
+        else:
+            adj = -0.03
+            level = "low"
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"多级别一致性={level} | 短{short_dir}中{mid_dir}长{long_dir} "
+            f"评分={consistency_score:.0%} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_post_signal_trajectory_health_v67(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """信号后价格轨迹健康度（V67 条件202）。
+
+    评估买卖点信号后的价格走势质量：
+    - 上涨趋势中的最大回撤比例
+    - 连续上涨/下跌天数
+    - 波动率稳定性
+
+    返回：max_drawdown_pct, up_bars, down_bars, trend_quality, confidence_adjust, msg
+    """
+    result = {
+        "max_drawdown_pct": 0.0,
+        "up_bars": 0,
+        "down_bars": 0,
+        "trend_quality": "poor",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 40:
+            result["msg"] = "数据不足（需≥40根）"
+            return result
+
+        recent = closes[-20:]
+        high_point = max(recent)
+        low_point = min(recent)
+        max_drawdown = (high_point - low_point) / max(high_point, 1e-10) * 100
+
+        result["max_drawdown_pct"] = round(max_drawdown, 2)
+
+        # 统计涨跌K线
+        up_count = 0
+        down_count = 0
+        for i in range(1, len(recent)):
+            if recent[i] > recent[i - 1]:
+                up_count += 1
+            else:
+                down_count += 1
+
+        result["up_bars"] = up_count
+        result["down_bars"] = down_count
+
+        # 趋势质量评估
+        if is_buy:
+            if up_count >= 12 and max_drawdown < 5:
+                trend_quality = "excellent"
+                adj = 0.06
+            elif up_count >= 10 and max_drawdown < 8:
+                trend_quality = "good"
+                adj = 0.03
+            elif up_count >= 8:
+                trend_quality = "fair"
+                adj = 0.01
+            else:
+                trend_quality = "poor"
+                adj = -0.04
+        else:
+            if down_count >= 12 and max_drawdown < 5:
+                trend_quality = "excellent"
+                adj = 0.06
+            elif down_count >= 10 and max_drawdown < 8:
+                trend_quality = "good"
+                adj = 0.03
+            elif down_count >= 8:
+                trend_quality = "fair"
+                adj = 0.01
+            else:
+                trend_quality = "poor"
+                adj = -0.04
+
+        result["trend_quality"] = trend_quality
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"轨迹健康度={trend_quality} | 涨{up_count}跌{down_count}根 "
+            f"回撤={max_drawdown:.1f}% | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_dynamic_sl_tp_recommendation_v67(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """动态止损止盈推荐（V67 条件203）。
+
+    基于ATR和近期价格行为动态计算止损止盈位：
+    - 止损位：基于ATR的动态距离
+    - 止盈位：基于波动率的合理目标
+    - 风险收益比评估
+
+    返回：stop_loss, take_profit, risk_reward_ratio, position_size_pct, confidence_adjust, msg
+    """
+    result = {
+        "stop_loss": 0.0,
+        "take_profit": 0.0,
+        "risk_reward_ratio": 0.0,
+        "position_size_pct": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 20 or not highs or not lows:
+            result["msg"] = "数据不足"
+            return result
+
+        current = closes[-1]
+
+        # 计算ATR（14日）
+        tr_list = []
+        for i in range(1, len(highs)):
+            tr = max(
+                highs[i] - lows[i],
+                abs(highs[i] - highs[i - 1]),
+                abs(lows[i] - lows[i - 1]),
+            )
+            tr_list.append(tr)
+
+        if len(tr_list) < 14:
+            result["msg"] = "ATR数据不足"
+            return result
+
+        atr_14 = sum(tr_list[-14:]) / 14
+        atr_pct = atr_14 / max(current, 1e-10) * 100
+
+        # 动态止损止盈
+        if is_buy:
+            stop_loss = current - atr_14 * 2.0
+            take_profit = current + atr_14 * 4.0
+        else:
+            stop_loss = current + atr_14 * 2.0
+            take_profit = current - atr_14 * 4.0
+
+        risk = abs(current - stop_loss)
+        reward = abs(take_profit - current)
+        risk_reward = reward / max(risk, 1e-10)
+
+        result["stop_loss"] = round(stop_loss, 2)
+        result["take_profit"] = round(take_profit, 2)
+        result["risk_reward_ratio"] = round(risk_reward, 2)
+
+        # 根据风险收益比调整仓位建议
+        if risk_reward >= 3.0:
+            position_size = 0.30
+            adj = 0.03
+        elif risk_reward >= 2.0:
+            position_size = 0.20
+            adj = 0.02
+        elif risk_reward >= 1.5:
+            position_size = 0.15
+            adj = 0.01
+        else:
+            position_size = 0.10
+            adj = -0.02
+
+        result["position_size_pct"] = position_size
+        result["confidence_adjust"] = round(adj, 3)
+
+        direction = "买" if is_buy else "卖"
+        result["msg"] = (
+            f"ATR={atr_14:.2f}({atr_pct:.1f}%) | {direction}止损={stop_loss:.2f} "
+            f"止盈={take_profit:.2f} 风险比={risk_reward:.1f} "
+            f"仓位{position_size:.0%} | 置信度{adj:+.0%}"
+        )
         return result
     except Exception:
         return result

@@ -1803,6 +1803,41 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V67: 中枢背驰力度量化（条件200）
+  zhongshu_divergence_strength_v67?: {
+    backchi_ratio: number
+    zhongshu_strength: string
+    divergence_type: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V67: 多级别买卖点一致性验证（条件201）
+  multi_level_mmd_consistency_v67?: {
+    short_dir: string
+    mid_dir: string
+    long_dir: string
+    consistency_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V67: 信号后价格轨迹健康度（条件202）
+  post_signal_trajectory_health_v67?: {
+    max_drawdown_pct: number
+    up_bars: number
+    down_bars: number
+    trend_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V67: 动态止损止盈推荐（条件203）
+  dynamic_sl_tp_recommendation_v67?: {
+    stop_loss: number
+    take_profit: number
+    risk_reward_ratio: number
+    position_size_pct: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

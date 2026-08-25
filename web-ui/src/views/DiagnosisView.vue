@@ -4293,6 +4293,10 @@ onMounted(() => {
                 <td>{{ r.condition_breakdown?.v66_cond197 ?? 0 }}</td>
                 <td>{{ r.condition_breakdown?.v66_cond198 ?? 0 }}</td>
                 <td>{{ r.condition_breakdown?.v66_cond199 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v67_cond200 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v67_cond201 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v67_cond202 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v67_cond203 ?? 0 }}</td>
                 <td>
                   <span v-if="r.error" class="status-err">❌ {{ r.error }}</span>
                   <span v-else class="status-ok">✅ 正常</span>
@@ -4303,7 +4307,7 @@ onMounted(() => {
         </div>
         <!-- 条件命中详情 -->
         <div v-if="multiResultsHaveConditionData" class="condition-detail">
-          <div class="section-title">条件命中详情（V58-V66）</div>
+          <div class="section-title">条件命中详情（V58-V67）</div>
           <div class="cond-grid">
             <template v-for="r in multiResults" :key="r.stock_code">
               <div v-if="getConditionBreakdown(r).length > 0" class="cond-card">
@@ -4893,4 +4897,8 @@ onMounted(() => {
 .v66-vp-coord .kv-val { font-weight: 600; }
 .v66-tf-conv .kv-val { font-weight: 600; }
 .v66-priority .kv-val { font-weight: 700; }
+.v67-zs-div .kv-val { font-weight: 600; }
+.v67-ml-cons .kv-val { font-weight: 600; }
+.v67-traj .kv-val { font-weight: 600; }
+.v67-sltp .kv-val { font-weight: 700; }
 </style>
