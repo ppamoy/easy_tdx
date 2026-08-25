@@ -4144,7 +4144,132 @@ onMounted(() => {
                 </div>
              </div>
 
-             <!-- MACD -->
+              <!-- V70: 分时量峰检测 -->
+              <div v-if="diagnosis.chanlun.volume_peak_detection_v70" class="metric-card v70-vp">
+                 <div class="card-title">📊 V70 量峰检测（条件212）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">量峰比</span><span class="kv-val">{{ diagnosis.chanlun.volume_peak_detection_v70.peak_ratio.toFixed(2) }}x</span></div>
+                   <div class="kv-row"><span class="kv-key">量峰确认</span><span class="tag" :class="diagnosis.chanlun.volume_peak_detection_v70.peak_detected ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.volume_peak_detection_v70.peak_detected ? '✅ 确认' : '❌ 未确认' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">量能强度</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volume_peak_detection_v70.volume_strength === 'strong', 'tag-blue': diagnosis.chanlun.volume_peak_detection_v70.volume_strength === 'moderate', 'tag-gray': diagnosis.chanlun.volume_peak_detection_v70.volume_strength === 'weak' }">{{ {strong:'📈 强',moderate:'📉 中',weak:'⚪ 弱'}[diagnosis.chanlun.volume_peak_detection_v70.volume_strength] ?? '—' }}</span></div>
+                   <div class="kv-row" style="margin-top:6px">
+                     <span class="kv-key">置信度调整</span>
+                     <span :style="{ color: diagnosis.chanlun.volume_peak_detection_v70.confidence_adjust > 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }">
+                       {{ diagnosis.chanlun.volume_peak_detection_v70.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volume_peak_detection_v70.confidence_adjust*100).toFixed(0) }}%
+                     </span>
+                   </div>
+                   <div class="kv-note">{{ diagnosis.chanlun.volume_peak_detection_v70.msg }}</div>
+                 </div>
+              </div>
+
+              <!-- V70: 信号时间衰减 -->
+              <div v-if="diagnosis.chanlun.signal_time_decay_v70" class="metric-card v70-decay">
+                 <div class="card-title">⏱️ V70 信号衰减（条件213）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">信号后K线</span><span class="kv-val">{{ diagnosis.chanlun.signal_time_decay_v70.bar_count }} 根</span></div>
+                   <div class="kv-row"><span class="kv-key">衰减因子</span><span class="kv-val">{{ diagnosis.chanlun.signal_time_decay_v70.decay_factor.toFixed(3) }}</span></div>
+                   <div class="kv-row"><span class="kv-key">时效等级</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.signal_time_decay_v70.signal_age === 'fresh', 'tag-blue': diagnosis.chanlun.signal_time_decay_v70.signal_age === 'moderate', 'tag-orange': diagnosis.chanlun.signal_time_decay_v70.signal_age === 'aging', 'tag-red': diagnosis.chanlun.signal_time_decay_v70.signal_age === 'old' }">{{ {fresh:'🟢 新鲜',moderate:'🔵 中期',aging:'🟠 衰退',old:'🔴 过期'}[diagnosis.chanlun.signal_time_decay_v70.signal_age] ?? '—' }}</span></div>
+                   <div class="kv-row" style="margin-top:6px">
+                     <span class="kv-key">置信度调整</span>
+                     <span :style="{ color: diagnosis.chanlun.signal_time_decay_v70.confidence_adjust >= 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }">
+                       {{ diagnosis.chanlun.signal_time_decay_v70.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.signal_time_decay_v70.confidence_adjust*100).toFixed(0) }}%
+                     </span>
+                   </div>
+                   <div class="kv-note">{{ diagnosis.chanlun.signal_time_decay_v70.msg }}</div>
+                 </div>
+              </div>
+
+              <!-- V70: 假突破过滤 -->
+              <div v-if="diagnosis.chanlun.false_breakout_filter_v70" class="metric-card v70-fb">
+                 <div class="card-title">🛡️ V70 假突破过滤（条件214）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">持续根数</span><span class="kv-val">{{ diagnosis.chanlun.false_breakout_filter_v70.sustained_bars }} 根</span></div>
+                   <div class="kv-row"><span class="kv-key">突破确认</span><span class="tag" :class="diagnosis.chanlun.false_breakout_filter_v70.is_sustained ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.false_breakout_filter_v70.is_sustained ? '✅ 真突破' : '❌ 疑似假突破' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">突破质量</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.false_breakout_filter_v70.breakout_quality === 'strong', 'tag-blue': diagnosis.chanlun.false_breakout_filter_v70.breakout_quality === 'good', 'tag-orange': diagnosis.chanlun.false_breakout_filter_v70.breakout_quality === 'moderate', 'tag-gray': diagnosis.chanlun.false_breakout_filter_v70.breakout_quality === 'weak', 'tag-red': diagnosis.chanlun.false_breakout_filter_v70.breakout_quality === 'fake' }">{{ {strong:'🟢 强',good:'🔵 良',moderate:'🟠 中',weak:'⚪ 弱',fake:'🔴 假'}[diagnosis.chanlun.false_breakout_filter_v70.breakout_quality] ?? '—' }}</span></div>
+                   <div class="kv-row" style="margin-top:6px">
+                     <span class="kv-key">置信度调整</span>
+                     <span :style="{ color: diagnosis.chanlun.false_breakout_filter_v70.confidence_adjust > 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }">
+                       {{ diagnosis.chanlun.false_breakout_filter_v70.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.false_breakout_filter_v70.confidence_adjust*100).toFixed(0) }}%
+                     </span>
+                   </div>
+                   <div class="kv-note">{{ diagnosis.chanlun.false_breakout_filter_v70.msg }}</div>
+                 </div>
+              </div>
+
+              <!-- V70: 置信度最终校准 -->
+              <div v-if="diagnosis.chanlun.final_confidence_calibration_v70" class="metric-card v70-cali">
+                 <div class="card-title">🎯 V70 置信度校准（条件215）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">总调整</span><span class="kv-val" :style="{ color: diagnosis.chanlun.final_confidence_calibration_v70.total_adjust > 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.final_confidence_calibration_v70.total_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.final_confidence_calibration_v70.total_adjust*100).toFixed(0) }}%</span></div>
+                   <div class="kv-row"><span class="kv-key">校准后置信</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.final_confidence_calibration_v70.calibrated_confidence.toFixed(3) }}</span></div>
+                   <div class="kv-row"><span class="kv-key">校准等级</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.final_confidence_calibration_v70.calibration_level === 'high', 'tag-blue': diagnosis.chanlun.final_confidence_calibration_v70.calibration_level === 'medium', 'tag-orange': diagnosis.chanlun.final_confidence_calibration_v70.calibration_level === 'low', 'tag-red': diagnosis.chanlun.final_confidence_calibration_v70.calibration_level === 'critical' }">{{ {high:'🟢 高',medium:'🔵 中',low:'🟠 低',critical:'🔴 危'}[diagnosis.chanlun.final_confidence_calibration_v70.calibration_level] ?? '—' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">调整统计</span><span class="kv-val">共{{ diagnosis.chanlun.final_confidence_calibration_v70.adjust_count }}项 (+{{ diagnosis.chanlun.final_confidence_calibration_v70.positive_adjusts }}/-{{ diagnosis.chanlun.final_confidence_calibration_v70.negative_adjusts }})</span></div>
+                   <div class="kv-note">{{ diagnosis.chanlun.final_confidence_calibration_v70.msg }}</div>
+                 </div>
+              </div>
+
+             
+              <!-- V71: 均线排列强度评估 -->
+              <div v-if="diagnosis.chanlun.ma_alignment_strength_v71" class="metric-card v71-ma">
+                 <div class="card-title">📊 V71 均线排列强度（条件216）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">排列状态</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.ma_alignment_strength_v71.alignment === 'bullish', 'tag-red': diagnosis.chanlun.ma_alignment_strength_v71.alignment === 'bearish', 'tag-orange': diagnosis.chanlun.ma_alignment_strength_v71.alignment === 'mixed' }">{{ {bullish:'🟢 多头排列',bearish:'🔴 空头排列',mixed:'🟠 混合排列'}[diagnosis.chanlun.ma_alignment_strength_v71.alignment] ?? '—' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">趋势强度</span><span class="kv-val">{{ diagnosis.chanlun.ma_alignment_strength_v71.strength.toFixed(3) }}</span></div>
+                   <div class="kv-row" style="margin-top:6px">
+                     <span class="kv-key">置信度调整</span>
+                     <span :style="{ color: diagnosis.chanlun.ma_alignment_strength_v71.confidence_adjust > 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }">
+                       {{ diagnosis.chanlun.ma_alignment_strength_v71.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.ma_alignment_strength_v71.confidence_adjust*100).toFixed(0) }}%
+                     </span>
+                   </div>
+                   <div class="kv-note">{{ diagnosis.chanlun.ma_alignment_strength_v71.msg }}</div>
+                 </div>
+              </div>
+
+              <!-- V71: 多周期均线共振 -->
+              <div v-if="diagnosis.chanlun.multi_tf_ma_resonance_v71" class="metric-card v71-res">
+                 <div class="card-title">🔗 V71 多周期均线共振（条件217）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">短期共振</span><span class="tag" :class="diagnosis.chanlun.multi_tf_ma_resonance_v71.short_aligned ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_tf_ma_resonance_v71.short_aligned ? '✅ 同向' : '❌ 反向' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">中期共振</span><span class="tag" :class="diagnosis.chanlun.multi_tf_ma_resonance_v71.mid_aligned ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_tf_ma_resonance_v71.mid_aligned ? '✅ 同向' : '❌ 反向' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">长期共振</span><span class="tag" :class="diagnosis.chanlun.multi_tf_ma_resonance_v71.long_aligned ? 'tag-green' : 'tag-red'">{{ diagnosis.chanlun.multi_tf_ma_resonance_v71.long_aligned ? '✅ 同向' : '❌ 反向' }}</span></div>
+                   <div class="kv-row"><span class="kv-key">共振数</span><span class="kv-val">{{ diagnosis.chanlun.multi_tf_ma_resonance_v71.resonance_count }} / 3</span></div>
+                   <div class="kv-row" style="margin-top:6px">
+                     <span class="kv-key">置信度调整</span>
+                     <span :style="{ color: diagnosis.chanlun.multi_tf_ma_resonance_v71.confidence_adjust > 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }">
+                       {{ diagnosis.chanlun.multi_tf_ma_resonance_v71.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.multi_tf_ma_resonance_v71.confidence_adjust*100).toFixed(0) }}%
+                     </span>
+                   </div>
+                   <div class="kv-note">{{ diagnosis.chanlun.multi_tf_ma_resonance_v71.msg }}</div>
+                 </div>
+              </div>
+
+              <!-- V71: 历史胜率回溯 -->
+              <div v-if="diagnosis.chanlun.mmd_history_winrate_v71" class="metric-card v71-win">
+                 <div class="card-title">📈 V71 历史胜率回溯（条件218）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">回溯胜率</span><span class="kv-val" :style="{ color: diagnosis.chanlun.mmd_history_winrate_v71.lookback_winrate >= 0.5 ? '#22c55e' : '#ef4444', fontWeight: 700 }">{{ (diagnosis.chanlun.mmd_history_winrate_v71.lookback_winrate * 100).toFixed(1) }}%</span></div>
+                   <div class="kv-row"><span class="kv-key">样本数量</span><span class="kv-val">{{ diagnosis.chanlun.mmd_history_winrate_v71.sample_count }} 个形态</span></div>
+                   <div class="kv-row" style="margin-top:6px">
+                     <span class="kv-key">置信度调整</span>
+                     <span :style="{ color: diagnosis.chanlun.mmd_history_winrate_v71.confidence_adjust > 0 ? '#22c55e' : '#ef4444', fontWeight: 600 }">
+                       {{ diagnosis.chanlun.mmd_history_winrate_v71.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.mmd_history_winrate_v71.confidence_adjust*100).toFixed(0) }}%
+                     </span>
+                   </div>
+                   <div class="kv-note">{{ diagnosis.chanlun.mmd_history_winrate_v71.msg }}</div>
+                 </div>
+              </div>
+
+              <!-- V71: 动态风险收益比 -->
+              <div v-if="diagnosis.chanlun.dynamic_rr_optimization_v71" class="metric-card v71-rr">
+                 <div class="card-title">⚖️ V71 动态风险收益（条件219）</div>
+                 <div class="card-body">
+                   <div class="kv-row"><span class="kv-key">止损幅度</span><span class="kv-val" style="color:#ef4444">-{{ diagnosis.chanlun.dynamic_rr_optimization_v71.stop_loss_pct.toFixed(2) }}%</span></div>
+                   <div class="kv-row"><span class="kv-key">止盈幅度</span><span class="kv-val" style="color:#22c55e">+{{ diagnosis.chanlun.dynamic_rr_optimization_v71.take_profit_pct.toFixed(2) }}%</span></div>
+                   <div class="kv-row"><span class="kv-key">风险收益比</span><span class="kv-val" style="font-weight:700">{{ diagnosis.chanlun.dynamic_rr_optimization_v71.rr_ratio.toFixed(1) }}x</span></div>
+                   <div class="kv-row"><span class="kv-key">ATR基准</span><span class="kv-val">SL={{ diagnosis.chanlun.dynamic_rr_optimization_v71.atr_based_sl.toFixed(2) }}% TP={{ diagnosis.chanlun.dynamic_rr_optimization_v71.atr_based_tp.toFixed(2) }}%</span></div>
+                   <div class="kv-note">{{ diagnosis.chanlun.dynamic_rr_optimization_v71.msg }}</div>
+                 </div>
+              </div>
+<!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -5122,4 +5247,10 @@ onMounted(() => {
 .v69-struct .kv-val { font-weight: 700; }
 .v69-multi .kv-val { font-weight: 600; }
 .v69-ret .kv-val { font-weight: 700; }
+
+/* V70: 量峰检测+时间衰减+假突破过滤+置信度校准 */
+.v70-vp .kv-val { font-weight: 600; }
+.v70-decay .kv-val { font-weight: 700; }
+.v70-fb .kv-val { font-weight: 600; }
+.v70-cali .kv-val { font-weight: 700; }
 </style>

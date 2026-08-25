@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V68 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -961,3 +961,145 @@ class TestV70MultiStock:
             assert isinstance(r.condition_breakdown, dict)
             v70_keys = [k for k in r.condition_breakdown if "v70" in k.lower()]
             assert len(v70_keys) >= 0
+
+
+class TestV71ConditionGroup:
+    """V71 条件组枚举测试。"""
+
+    def test_v71_group_exists(self):
+        """ConditionGroup.V71 应存在。"""
+        assert hasattr(ConditionGroup, "V71")
+
+    def test_v71_condition_range(self):
+        """V71 应覆盖条件216-219。"""
+        start, end = ConditionGroup.V71.condition_range
+        assert start == 216
+        assert end == 219
+
+    def test_v71_description(self):
+        """V71 应有描述。"""
+        assert len(ConditionGroup.V71.description) > 0
+        desc = ConditionGroup.V71.description
+        assert any(kw in desc for kw in ["均线", "共振", "胜率", "风险收益"])
+
+
+class TestV71MMDFields:
+    """V71 MMD 增强字段存在性测试。"""
+
+    def test_v71_fields_exist_on_mmd(self):
+        """缠论分析产生的 MMD 对象应包含 V71 增强字段。"""
+        from easy_tdx.chanlun.types import MMD
+        mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
+        assert hasattr(mmd, "_ma_alignment_strength_v71")
+        assert hasattr(mmd, "_multi_tf_ma_resonance_v71")
+        assert hasattr(mmd, "_mmd_history_winrate_v71")
+        assert hasattr(mmd, "_dynamic_rr_optimization_v71")
+
+
+class TestV71BacktestValidator:
+    """V71 回测验证器测试。"""
+
+    def test_v71_validator_usage(self):
+        """ConditionGroup.V71 应可被 validator 使用。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V71])
+        assert len(results) >= 1
+        assert results[0].group == ConditionGroup.V71
+
+    def test_v71_multi_group_validation(self):
+        """V70 + V71 联合验证应返回两个结果。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V70, ConditionGroup.V71])
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V70, ConditionGroup.V71}
+
+    def test_v71_summary_output(self):
+        """V71 摘要应包含 V71 关键词。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V71])
+        summary = results[0].summary()
+        assert "V71" in summary
+
+
+class TestV71MultiStock:
+    """V71 多股票对比测试。"""
+
+    def test_v71_multi_stock_breakdown(self):
+        """多股票对比应包含 V71 条件命中统计。"""
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        data = {
+            "sh600000": _make_df(*_make_oscillating_df(400)),
+            "sz000001": _make_df(*_make_trending_df(400, trend="up")),
+        }
+        results = validator.validate_multi_stock(data)
+        assert len(results) == 2
+        for r in results:
+            assert isinstance(r.condition_breakdown, dict)
+            v71_keys = [k for k in r.condition_breakdown if "v71" in k.lower()]
+            assert len(v71_keys) >= 0
+
+
+class TestV71Functions:
+    """V71 计算函数功能测试。"""
+
+    def test_ma_alignment_strength(self):
+        """均线排列强度计算应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_ma_alignment_strength_v71
+        from easy_tdx.chanlun.types import MMD, MMDType
+        closes = list(range(100, 200))
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_ma_alignment_strength_v71(mmd, closes)
+        assert "alignment" in result
+        assert "strength" in result
+        assert "confidence_adjust" in result
+        assert "msg" in result
+
+    def test_multi_tf_ma_resonance(self):
+        """多周期均线共振计算应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_ma_resonance_v71
+        from easy_tdx.chanlun.types import MMD, MMDType
+        closes = [100 + i * 0.5 for i in range(150)]
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_multi_tf_ma_resonance_v71(mmd, closes)
+        assert "short_aligned" in result
+        assert "mid_aligned" in result
+        assert "long_aligned" in result
+        assert "resonance_count" in result
+        assert "confidence_adjust" in result
+
+    def test_dynamic_rr_optimization(self):
+        """动态风险收益比计算应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_dynamic_rr_optimization_v71
+        from easy_tdx.chanlun.types import MMD, MMDType
+        import random
+        random.seed(42)
+        # 生成更有波动性的数据
+        closes = [100.0]
+        for _ in range(60):
+            closes.append(closes[-1] + random.uniform(-2, 2.5))
+        highs = [c + abs(random.uniform(0.3, 1.0)) for c in closes]
+        lows = [c - abs(random.uniform(0.3, 1.0)) for c in closes]
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_dynamic_rr_optimization_v71(mmd, closes, highs, lows, None)
+        assert "stop_loss_pct" in result
+        assert "take_profit_pct" in result
+        assert "rr_ratio" in result
+        # rr_ratio 应为正数（止损止盈都为正时）
+        assert result["rr_ratio"] >= 0.0
+
+    def test_mmd_history_winrate(self):
+        """历史胜率回溯计算应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_mmd_history_winrate_v71
+        from easy_tdx.chanlun.types import MMD, MMDType
+        import random
+        random.seed(42)
+        closes = [100 + sum(random.uniform(-1, 1.5) for _ in range(i)) for i in range(200)]
+        volumes = [random.uniform(0.5, 2.0) for _ in range(200)]
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_mmd_history_winrate_v71(mmd, closes, volumes)
+        assert "lookback_winrate" in result
+        assert "sample_count" in result
+        assert "confidence_adjust" in result

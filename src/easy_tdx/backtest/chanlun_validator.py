@@ -60,6 +60,8 @@ class ConditionGroup(str, Enum):
     V69 = "v69"
     # V70: 条件212-215（量峰检测+时间衰减+假突破过滤+置信度校准）
     V70 = "v70"
+    # V71: 条件216-219（均线排列强度+多周期均线共振+历史胜率回溯+动态风险收益比）
+    V71 = "v71"
 
     @property
     def condition_range(self) -> tuple[int, int]:
@@ -78,6 +80,7 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V68: (204, 207),
             ConditionGroup.V69: (208, 211),
             ConditionGroup.V70: (212, 215),
+            ConditionGroup.V71: (216, 219),
         }
         return mapping[self]
 
@@ -98,6 +101,7 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V68: "缺口趋势一致+区间套验证+资金流向确认+市场风格适配",
             ConditionGroup.V69: "量价背离二次确认+结构完整性评分+多指标背离融合+回踩深度量化",
             ConditionGroup.V70: "分时量峰检测+信号时间衰减+假突破过滤+置信度最终校准",
+            ConditionGroup.V71: "均线排列强度+多周期均线共振+历史胜率回溯+动态风险收益比",
         }
         return mapping[self]
 

@@ -12134,6 +12134,47 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V71 条件 216-219 ──
+
+        # 条件216：均线排列强度评估（MA Alignment Strength）
+        # 评估当前价格相对于多条均线的排列状态
+        if mmd.bi is not None and closes is not None and len(closes) >= 60:
+            try:
+                ma_align = _calc_ma_alignment_strength_v71(mmd, closes)
+                mmd._ma_alignment_strength_v71 = ma_align
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_align.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件217：多周期均线共振（Multi-TF MA Resonance）
+        # 短中长期均线同时发出同向信号时增强置信度
+        if mmd.bi is not None and closes is not None and len(closes) >= 120:
+            try:
+                ma_res = _calc_multi_tf_ma_resonance_v71(mmd, closes)
+                mmd._multi_tf_ma_resonance_v71 = ma_res
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_res.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件218：买卖点历史胜率回溯（MMD History Winrate）
+        # 对历史类似形态的胜率进行回溯分析
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 100:
+            try:
+                winrate = _calc_mmd_history_winrate_v71(mmd, closes, volumes)
+                mmd._mmd_history_winrate_v71 = winrate
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + winrate.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件219：动态风险收益比优化（Dynamic RR Optimization）
+        # 根据当前波动率和市场环境动态调整止损止盈比例
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                rr_opt = _calc_dynamic_rr_optimization_v71(mmd, closes, highs, lows, volatility)
+                mmd._dynamic_rr_optimization_v71 = rr_opt
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -21931,6 +21972,685 @@ def _calc_retracement_depth_v69(
             f"回踩深度={retracement_pct:.1f}% 类型={retype} "
             f"最优={'✓' if optimal=='yes' else '△' if optimal=='partial' else '✗'} "
             f"| 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V70: 条件 212-215（量峰检测+时间衰减+假突破过滤+置信度校准）
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _calc_volume_peak_detection_v70(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """分时量峰检测（V70 条件212）。
+
+    检测突破/反转时的成交量峰值，确认信号真实性：
+    - 买入信号：突破时成交量需显著放大（>1.5倍均值）= 量峰确认
+    - 卖出信号：下跌时成交量放大 = 抛压确认
+    - 无量突破 = 假突破风险高
+
+    返回：peak_ratio, peak_detected, volume_strength, confidence_adjust, msg
+    """
+    result = {
+        "peak_ratio": 0.0,
+        "peak_detected": False,
+        "volume_strength": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 30 or not volumes:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        # 计算近期平均成交量
+        lookback = min(20, n)
+        avg_vol = sum(volumes[-lookback:]) / lookback
+
+        # 最近5根K线成交量
+        recent_vol = sum(volumes[-5:]) / 5
+        peak_ratio = recent_vol / max(avg_vol, 1e-10)
+        result["peak_ratio"] = round(peak_ratio, 2)
+
+        # 量峰检测阈值
+        if peak_ratio >= 1.5:
+            peak_detected = True
+            strength = "strong"
+        elif peak_ratio >= 1.2:
+            peak_detected = True
+            strength = "moderate"
+        else:
+            peak_detected = False
+            strength = "weak"
+        result["peak_detected"] = peak_detected
+        result["volume_strength"] = strength
+
+        # 置信度调整
+        if is_buy:
+            if peak_detected and strength == "strong":
+                adj = 0.06
+            elif peak_detected and strength == "moderate":
+                adj = 0.03
+            elif not peak_detected:
+                adj = -0.04
+            else:
+                adj = 0.0
+        else:
+            if peak_detected and strength == "strong":
+                adj = 0.06
+            elif peak_detected and strength == "moderate":
+                adj = 0.03
+            elif not peak_detected:
+                adj = -0.04
+            else:
+                adj = 0.0
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"量峰比={peak_ratio:.2f}x {'✅量峰确认' if peak_detected else '⚠️无量突破'} "
+            f"强度={strength} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_time_decay_v70(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """买卖点时间窗口衰减（V70 条件213）。
+
+    根据信号出现后的K线数量应用指数衰减：
+    - 新信号（≤5根）：完整置信度
+    - 中期（6-15根）：线性衰减
+    - 长期（>15根）：指数快速衰减
+
+    返回：bar_count, decay_factor, signal_age, confidence_adjust, msg
+    """
+    result = {
+        "bar_count": 0,
+        "decay_factor": 1.0,
+        "signal_age": "fresh",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 10:
+            result["msg"] = "数据不足（需≥10根）"
+            return result
+
+        # 估算信号出现后的K线数（基于信号后价格变动幅度）
+        if mmd.bi is not None and mmd.bi.end.k.index is not None:
+            signal_idx = mmd.bi.end.k.index
+            bar_count = max(0, n - 1 - signal_idx)
+        else:
+            # 无笔信息时，用价格变化估算
+            price_chg = abs(closes[-1] - closes[-10]) / max(closes[-10], 1e-10) if n >= 10 else 0
+            bar_count = min(int(price_chg * 500), n - 1)  # 粗略估算
+
+        bar_count = min(bar_count, n - 1)
+        result["bar_count"] = bar_count
+
+        # 指数衰减计算
+        if bar_count <= 5:
+            decay = 1.0
+            age = "fresh"
+        elif bar_count <= 15:
+            decay = max(0.5, 1.0 - (bar_count - 5) * 0.03)
+            age = "moderate"
+        elif bar_count <= 30:
+            decay = max(0.2, 0.7 * np.exp(-(bar_count - 15) * 0.05))
+            age = "aging"
+        else:
+            decay = max(0.05, 0.7 * np.exp(-(bar_count - 15) * 0.08))
+            age = "old"
+
+        result["decay_factor"] = round(decay, 3)
+        result["signal_age"] = age
+
+        # 置信度调整（相对于基准1.0）
+        adj = decay - 1.0
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"信号后{bar_count}根K线 衰减因子={decay:.2f} "
+            f"时效={age} | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_false_breakout_filter_v70(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """假突破二次过滤（V70 条件214）。
+
+    突破后价格需持续N根K线维持在突破水平之上/之下：
+    - 买入突破：突破后需站稳N根K线在突破位上方
+    - 卖出跌破：跌破后需持续N根K线在突破位下方
+    - 快速回归 = 假突破，降低置信度
+
+    返回：sustained_bars, is_sustained, breakout_quality, confidence_adjust, msg
+    """
+    result = {
+        "sustained_bars": 0,
+        "is_sustained": False,
+        "breakout_quality": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 15 or not highs or not lows:
+            result["msg"] = "数据不足（需≥15根）"
+            return result
+
+        # 找到突破位（最近30根的最高/最低点）
+        lookback = min(30, n)
+        breakout_level = max(highs[-lookback:]) if is_buy else min(lows[-lookback:])
+
+        # 计算突破后的持续根数
+        sustained = 0
+        for i in range(n - 1, max(n - lookback - 1, -1), -1):
+            if is_buy:
+                if closes[i] > breakout_level * 0.998:  # 允许0.2%误差
+                    sustained += 1
+                else:
+                    break
+            else:
+                if closes[i] < breakout_level * 1.002:
+                    sustained += 1
+                else:
+                    break
+
+        sustained = min(sustained, lookback - 1)
+        result["sustained_bars"] = sustained
+
+        # 判断是否持续（需持续至少3根）
+        is_sustained = sustained >= 3
+        result["is_sustained"] = is_sustained
+
+        # 突破质量评级
+        if sustained >= 8:
+            quality = "strong"
+        elif sustained >= 5:
+            quality = "good"
+        elif sustained >= 3:
+            quality = "moderate"
+        elif sustained >= 1:
+            quality = "weak"
+        else:
+            quality = "fake"
+        result["breakout_quality"] = quality
+
+        # 置信度调整
+        if is_buy:
+            if quality == "strong":
+                adj = 0.07
+            elif quality == "good":
+                adj = 0.04
+            elif quality == "moderate":
+                adj = 0.01
+            elif quality == "weak":
+                adj = -0.02
+            else:
+                adj = -0.08
+        else:
+            if quality == "strong":
+                adj = 0.07
+            elif quality == "good":
+                adj = 0.04
+            elif quality == "moderate":
+                adj = 0.01
+            elif quality == "weak":
+                adj = -0.02
+            else:
+                adj = -0.08
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"突破位={breakout_level:.2f} 持续{sustained}根 "
+            f"质量={quality} {'✅真突破' if is_sustained else '⚠️疑似假突破'} "
+            f"| 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_final_confidence_calibration_v70(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """信号置信度最终校准（V70 条件215）。
+
+    综合所有累积的置信度调整，输出最终校准分数：
+    - 收集所有前置条件的置信度调整
+    - 计算正负调整数量
+    - 输出校准等级（high/medium/low/critical）
+    - 提供最终校准后的置信度
+
+    返回：total_adjust, calibrated_confidence, calibration_level, adjust_count,
+          positive_adjusts, negative_adjusts, msg
+    """
+    result = {
+        "total_adjust": 0.0,
+        "calibrated_confidence": 0.0,
+        "calibration_level": "unknown",
+        "adjust_count": 0,
+        "positive_adjusts": 0,
+        "negative_adjusts": 0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 20:
+            result["msg"] = "数据不足（需≥20根）"
+            return result
+
+        # 收集所有置信度调整字段
+        adjust_fields = [
+            "_price_volume_divergence_v69",
+            "_structural_integrity_v69",
+            "_multi_indicator_divergence_v69",
+            "_retracement_depth_v69",
+            "_volume_peak_detection_v70",
+            "_signal_time_decay_v70",
+            "_false_breakout_filter_v70",
+        ]
+
+        total_adjust = 0.0
+        positive = 0
+        negative = 0
+        count = 0
+
+        for field in adjust_fields:
+            if hasattr(mmd, field):
+                val = getattr(mmd, field)
+                if val and isinstance(val, dict):
+                    adj = val.get("confidence_adjust", 0.0)
+                    if adj is not None:
+                        total_adjust += adj
+                        count += 1
+                        if adj > 0:
+                            positive += 1
+                        elif adj < 0:
+                            negative += 1
+
+        result["total_adjust"] = round(total_adjust, 3)
+        result["adjust_count"] = count
+        result["positive_adjusts"] = positive
+        result["negative_adjusts"] = negative
+
+        # 校准置信度
+        base_confidence = mmd.confidence if mmd.confidence else 0.5
+        calibrated = max(0.0, min(1.0, base_confidence + total_adjust))
+        result["calibrated_confidence"] = round(calibrated, 3)
+
+        # 校准等级
+        if calibrated >= 0.75:
+            level = "high"
+        elif calibrated >= 0.55:
+            level = "medium"
+        elif calibrated >= 0.35:
+            level = "low"
+        else:
+            level = "critical"
+        result["calibration_level"] = level
+
+        result["msg"] = (
+            f"基础={base_confidence:.0%} 调整{total_adjust:+.0%} "
+            f"(+{positive}/-{negative}) → 校准={calibrated:.0%} "
+            f"等级={level}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V71: 条件 216-219（均线排列强度+多周期共振+历史胜率+动态风险收益）
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _calc_ma_alignment_strength_v71(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """均线排列强度评估（V71 条件216）。
+
+    评估当前价格相对于多条均线（MA20/MA60/MA120）的排列状态：
+    - 多头排列：MA20 > MA60 > MA120，价格在所有均线上方 = 强趋势
+    - 空头排列：MA20 < MA60 < MA120，价格在所有均线下方 = 弱趋势
+    - 混合排列：均线交叉，趋势不明确
+    - 价格与均线的偏离度也会影响信号质量
+
+    返回：alignment, strength, confidence_adjust, msg
+    """
+    result = {
+        "alignment": "unknown",
+        "strength": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 60:
+            result["msg"] = "数据不足（需≥60根）"
+            return result
+
+        # 计算多条均线
+        ma20 = MA(closes, 20)[-1]
+        ma60 = MA(closes, 60)[-1]
+        ma120 = MA(closes, 120)[-1] if n >= 120 else ma60 * 1.02  # 数据不足时用MA60估算
+
+        current = closes[-1]
+
+        # 判断均线排列
+        if ma20 > ma60 > ma120:
+            alignment = "bullish"
+        elif ma20 < ma60 < ma120:
+            alignment = "bearish"
+        else:
+            alignment = "mixed"
+        result["alignment"] = alignment
+
+        # 计算价格与均线的偏离度（归一化）
+        price_dist_ma20 = (current - ma20) / max(ma20, 1e-10)
+        price_dist_ma60 = (current - ma60) / max(ma60, 1e-10)
+        price_dist_ma120 = (current - ma120) / max(ma120, 1e-10)
+
+        # 强度评分
+        if alignment == "bullish":
+            avg_dist = (abs(price_dist_ma20) + abs(price_dist_ma60) + abs(price_dist_ma120)) / 3
+            strength = min(1.0, avg_dist * 5 + 0.5)  # 偏离度越大趋势越强
+            if is_buy:
+                # 3买需要价格在MA20上方
+                if current > ma20 > ma60 > ma120:
+                    adj = 0.05
+                elif current > ma20:
+                    adj = 0.02
+                else:
+                    adj = -0.03
+            else:
+                adj = -0.02  # 空头排列对卖出信号有负面含义（趋势确认但无背离）
+        elif alignment == "bearish":
+            avg_dist = (abs(price_dist_ma20) + abs(price_dist_ma60) + abs(price_dist_ma120)) / 3
+            strength = min(1.0, avg_dist * 5 + 0.5)
+            if is_buy:
+                adj = -0.05  # 空头排列对买入信号负面
+            else:
+                if current < ma20 < ma60 < ma120:
+                    adj = 0.05
+                elif current < ma20:
+                    adj = 0.02
+                else:
+                    adj = -0.03
+        else:
+            strength = 0.3
+            adj = -0.02  # 混合排列不确定性高
+
+        result["strength"] = round(strength, 3)
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"排列={alignment} 强度={strength:.2f} "
+            f"MA20={ma20:.2f} MA60={ma60:.2f} MA120={ma120:.2f} "
+            f"| 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_tf_ma_resonance_v71(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多周期均线共振确认（V71 条件217）。
+
+    短中长期均线同时发出同向信号时增强置信度：
+    - 短期均线（MA5/MA10）与中期均线（MA20/MA60）同向
+    - 中期均线与长期均线（MA120/MA250）同向
+    - 共振数 = 同时同向的对数
+
+    返回：short_aligned, mid_aligned, long_aligned, resonance_count, confidence_adjust, msg
+    """
+    result = {
+        "short_aligned": False,
+        "mid_aligned": False,
+        "long_aligned": False,
+        "resonance_count": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 120:
+            result["msg"] = "数据不足（需≥120根）"
+            return result
+
+        # 计算各周期均线
+        ma5 = MA(closes, 5)[-1]
+        ma10 = MA(closes, 10)[-1]
+        ma20 = MA(closes, 20)[-1]
+        ma60 = MA(closes, 60)[-1]
+        ma120 = MA(closes, 120)[-1]
+
+        # 短期共振：MA5 > MA10（多头）或 MA5 < MA10（空头）
+        short_up = ma5 > ma10
+        result["short_aligned"] = short_up if is_buy else (not short_up)
+
+        # 中期共振：MA20 > MA60
+        mid_up = ma20 > ma60
+        result["mid_aligned"] = mid_up if is_buy else (not mid_up)
+
+        # 长期共振：MA60 > MA120
+        long_up = ma60 > ma120
+        result["long_aligned"] = long_up if is_buy else (not long_up)
+
+        # 共振计数
+        alignment_count = sum([
+            (short_up if is_buy else not short_up),
+            (mid_up if is_buy else not mid_up),
+            (long_up if is_buy else not long_up),
+        ])
+        result["resonance_count"] = alignment_count
+
+        # 置信度调整
+        if alignment_count >= 3:
+            adj = 0.08
+        elif alignment_count == 2:
+            adj = 0.04
+        elif alignment_count == 1:
+            adj = 0.01
+        else:
+            adj = -0.03
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"短={'✅' if short_up else '❌'} 中={'✅' if mid_up else '❌'} 长={'✅' if long_up else '❌'} "
+            f"共振={alignment_count}/3 | 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_mmd_history_winrate_v71(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """买卖点历史胜率回溯（V71 条件218）。
+
+    对历史类似形态的胜率进行回溯分析：
+    - 在最近N根K线中寻找类似价格形态
+    - 统计这些形态后续的成功率
+    - 胜率越高，当前信号可信度越高
+
+    返回：lookback_winrate, sample_count, confidence_adjust, msg
+    """
+    result = {
+        "lookback_winrate": 0.0,
+        "sample_count": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 100 or not volumes:
+            result["msg"] = "数据不足（需≥100根）"
+            return result
+
+        # 回溯窗口
+        lookback = min(200, n)
+        hist_closes = closes[:-1]  # 排除当前K线
+        hist_volumes = volumes[:-1]
+
+        # 查找历史相似形态（价格在近期低位/高位且成交量萎缩/放大）
+        wins = 0
+        samples = 0
+        pattern_window = 20
+
+        for i in range(0, n - lookback - 1, pattern_window):
+            slice_closes = hist_closes[i:i + pattern_window * 2]
+            slice_volumes = hist_volumes[i:i + pattern_window * 2]
+            if len(slice_closes) < pattern_window * 2:
+                continue
+
+            # 检查形态：前pattern_window根K线的价格趋势
+            start_price = slice_closes[0]
+            mid_price = slice_closes[pattern_window]
+            end_price = slice_closes[-1]
+            mid_vol = sum(slice_volumes[:pattern_window]) / pattern_window
+            end_vol = sum(slice_volumes[pattern_window:]) / pattern_window
+
+            if is_buy:
+                # 买入形态：价格从高位回落到低位后企稳，成交量萎缩
+                price_drop = (start_price - end_price) / max(start_price, 1e-10)
+                vol_shrink = end_vol / max(mid_vol, 1e-10)
+                if 0.03 < price_drop < 0.15 and vol_shrink < 0.8:
+                    # 检查后续表现
+                    future_return = (end_price - slice_closes[-5]) / max(slice_closes[-5], 1e-10) if len(slice_closes) > 5 else 0
+                    if future_return > 0:
+                        wins += 1
+                    samples += 1
+            else:
+                # 卖出形态：价格从低位反弹到高位后遇阻，成交量放大
+                price_rise = (end_price - start_price) / max(start_price, 1e-10)
+                vol_expand = end_vol / max(mid_vol, 1e-10)
+                if 0.03 < price_rise < 0.15 and vol_expand > 1.2:
+                    future_return = (slice_closes[-5] - end_price) / max(end_price, 1e-10) if len(slice_closes) > 5 else 0
+                    if future_return > 0:
+                        wins += 1
+                    samples += 1
+
+        winrate = wins / max(samples, 1)
+        result["lookback_winrate"] = round(winrate, 3)
+        result["sample_count"] = samples
+
+        # 置信度调整
+        if winrate >= 0.6 and samples >= 5:
+            adj = 0.04
+        elif winrate >= 0.5 and samples >= 3:
+            adj = 0.02
+        elif winrate < 0.4:
+            adj = -0.03
+        else:
+            adj = 0.0
+
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"回溯胜率={winrate:.0%} ({samples}样本) "
+            f"| 置信度{adj:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_dynamic_rr_optimization_v71(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    volatility: float | None,
+) -> dict[str, Any]:
+    """动态风险收益比优化（V71 条件219）。
+
+    根据当前波动率和市场环境动态调整止损止盈比例：
+    - 低波动市场：止损可设窄（1x ATR），止盈可设宽（3x ATR）
+    - 高波动市场：止损需设宽（2x ATR），止盈需更宽（4x ATR）
+    - 动态计算最优风险收益比
+
+    返回：stop_loss_pct, take_profit_pct, rr_ratio, atr_based_sl, atr_based_tp, msg
+    """
+    result = {
+        "stop_loss_pct": 0.0,
+        "take_profit_pct": 0.0,
+        "rr_ratio": 0.0,
+        "atr_based_sl": 0.0,
+        "atr_based_tp": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type == MMDType.BUY_3
+        n = len(closes)
+        if n < 30 or not highs or not lows:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        current = closes[-1]
+
+        # 计算ATR（14日）
+        atr = ATR(highs, lows, closes, 14)[-1]
+        atr_pct = atr / max(current, 1e-10)
+
+        # 根据波动率调整止损止盈倍数
+        if atr_pct < 0.01:  # 低波动
+            sl_mult = 1.5
+            tp_mult = 4.0
+        elif atr_pct < 0.03:  # 中等波动
+            sl_mult = 2.0
+            tp_mult = 4.5
+        else:  # 高波动
+            sl_mult = 2.5
+            tp_mult = 5.0
+
+        # 动态止损止盈
+        if is_buy:
+            sl_pct = atr_pct * sl_mult
+            tp_pct = atr_pct * tp_mult
+        else:
+            sl_pct = atr_pct * sl_mult
+            tp_pct = atr_pct * tp_mult
+
+        # 风险收益比
+        rr = tp_pct / max(sl_pct, 1e-10)
+
+        result["stop_loss_pct"] = round(sl_pct * 100, 2)
+        result["take_profit_pct"] = round(tp_pct * 100, 2)
+        result["rr_ratio"] = round(rr, 2)
+        result["atr_based_sl"] = round(atr_pct * 100, 2)
+        result["atr_based_tp"] = round(atr_pct * 100 * tp_mult, 2)
+        result["msg"] = (
+            f"ATR={atr_pct:.2%} SL={sl_pct:.2%} TP={tp_pct:.2%} "
+            f"R:R={rr:.1f}x (低波={sl_mult}x/{tp_mult}x)"
         )
         return result
     except Exception:

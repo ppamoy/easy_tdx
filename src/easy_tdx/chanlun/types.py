@@ -478,6 +478,12 @@ class MMD:
     _false_breakout_filter_v70: dict[str, Any] | None = None  # 假突破二次过滤（条件214）
     _final_confidence_calibration_v70: dict[str, Any] | None = None  # 信号置信度最终校准（条件215）
 
+    # V71 enhancement fields (2026-08-26)
+    _ma_alignment_strength_v71: dict[str, Any] | None = None  # 均线排列强度评估（条件216）
+    _multi_tf_ma_resonance_v71: dict[str, Any] | None = None  # 多周期均线共振（条件217）
+    _mmd_history_winrate_v71: dict[str, Any] | None = None  # 买卖点历史胜率回溯（条件218）
+    _dynamic_rr_optimization_v71: dict[str, Any] | None = None  # 动态风险收益比优化（条件219）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

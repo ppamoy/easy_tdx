@@ -1942,6 +1942,38 @@ export interface DiagnosisChanlun {
     negative_adjusts: number
     msg: string
   } | null
+  // V71: 均线排列强度评估（条件216）
+  ma_alignment_strength_v71?: {
+    alignment: string
+    strength: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V71: 多周期均线共振（条件217）
+  multi_tf_ma_resonance_v71?: {
+    short_aligned: boolean
+    mid_aligned: boolean
+    long_aligned: boolean
+    resonance_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V71: 买卖点历史胜率回溯（条件218）
+  mmd_history_winrate_v71?: {
+    lookback_winrate: number
+    sample_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V71: 动态风险收益比优化（条件219）
+  dynamic_rr_optimization_v71?: {
+    stop_loss_pct: number
+    take_profit_pct: number
+    rr_ratio: number
+    atr_based_sl: number
+    atr_based_tp: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

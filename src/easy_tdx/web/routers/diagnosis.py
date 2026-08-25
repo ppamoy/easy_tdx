@@ -1072,6 +1072,14 @@ async def diagnose_stock(
             "false_breakout_filter_v70": getattr(latest_mmd, "_false_breakout_filter_v70", None) if latest_mmd else None,
             # V70: 信号置信度最终校准（条件215）
             "final_confidence_calibration_v70": getattr(latest_mmd, "_final_confidence_calibration_v70", None) if latest_mmd else None,
+            # V71: 均线排列强度评估（条件216）
+            "ma_alignment_strength_v71": getattr(latest_mmd, "_ma_alignment_strength_v71", None) if latest_mmd else None,
+            # V71: 多周期均线共振（条件217）
+            "multi_tf_ma_resonance_v71": getattr(latest_mmd, "_multi_tf_ma_resonance_v71", None) if latest_mmd else None,
+            # V71: 买卖点历史胜率回溯（条件218）
+            "mmd_history_winrate_v71": getattr(latest_mmd, "_mmd_history_winrate_v71", None) if latest_mmd else None,
+            # V71: 动态风险收益比优化（条件219）
+            "dynamic_rr_optimization_v71": getattr(latest_mmd, "_dynamic_rr_optimization_v71", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1408,6 +1416,14 @@ async def multi_stock_comparison(
                             condition_counts["v70_cond214"] = condition_counts.get("v70_cond214", 0) + 1
                         if c == 215 and hasattr(mmd, "_final_confidence_calibration_v70"):
                             condition_counts["v70_cond215"] = condition_counts.get("v70_cond215", 0) + 1
+                        if c == 216 and hasattr(mmd, "_ma_alignment_strength_v71"):
+                            condition_counts["v71_cond216"] = condition_counts.get("v71_cond216", 0) + 1
+                        if c == 217 and hasattr(mmd, "_multi_tf_ma_resonance_v71"):
+                            condition_counts["v71_cond217"] = condition_counts.get("v71_cond217", 0) + 1
+                        if c == 218 and hasattr(mmd, "_mmd_history_winrate_v71"):
+                            condition_counts["v71_cond218"] = condition_counts.get("v71_cond218", 0) + 1
+                        if c == 219 and hasattr(mmd, "_dynamic_rr_optimization_v71"):
+                            condition_counts["v71_cond219"] = condition_counts.get("v71_cond219", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0
