@@ -66,6 +66,8 @@ class ConditionGroup(str, Enum):
     V72 = "v72"
     # V73: 条件224-227（买卖点位置风险+中枢突破验证+多指标一致性+波动率适配）
     V73 = "v73"
+    # V74: 条件228-231（量价背离二次确认+趋势动能持续+中枢重叠度+信号共振深度）
+    V74 = "v74"
 
     @property
     def condition_range(self) -> tuple[int, int]:
@@ -87,6 +89,7 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V71: (216, 219),
             ConditionGroup.V72: (220, 223),
             ConditionGroup.V73: (224, 227),
+            ConditionGroup.V74: (228, 231),
         }
         return mapping[self]
 
@@ -110,6 +113,7 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V71: "均线排列强度+多周期均线共振+历史胜率回溯+动态风险收益比",
             ConditionGroup.V72: "均线收敛发散+支撑阻力距离+量价结构质量+信号衰减速度",
             ConditionGroup.V73: "买卖点位置风险+中枢突破验证+多指标一致性+波动率适配",
+            ConditionGroup.V74: "量价背离二次确认+趋势动能持续+中枢重叠度+信号共振深度",
         }
         return mapping[self]
 

@@ -4352,7 +4352,47 @@ onMounted(() => {
                     <div class="kv-note">{{ diagnosis.chanlun.volatility_regime_adaptation_v73.msg }}</div>
                   </div>
                </div>
-<!-- MACD -->
+               <!-- V74: 量价背离二次确认 -->
+               <div v-if="diagnosis.chanlun.volume_price_divergence_secondary_v74" class="metric-card v74-vpd">
+                  <div class="card-title">📊 V74 量价背离（条件228）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">背离类型</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volume_price_divergence_secondary_v74.divergence_type === 'bullish_divergence' || diagnosis.chanlun.volume_price_divergence_secondary_v74.divergence_type === 'healthy_rally', 'tag-red': diagnosis.chanlun.volume_price_divergence_secondary_v74.divergence_type === 'bearish_warning' || diagnosis.chanlun.volume_price_divergence_secondary_v74.divergence_type === 'heavy_selling', 'tag-blue': diagnosis.chanlun.volume_price_divergence_secondary_v74.divergence_type === 'none' }">{{ {bullish_divergence:'🟢 bullish背离',healthy_rally:'🟢 健康上涨',bearish_warning:'🔴 警示',heavy_selling:'🔴 放量下跌',none:'⚪ 无背离'}[diagnosis.chanlun.volume_price_divergence_secondary_v74.divergence_type] ?? '—' }}</span></div>
+                    <div class="kv-row"><span class="kv-key">背离强度</span><span class="kv-val">{{ diagnosis.chanlun.volume_price_divergence_secondary_v74.divergence_strength.toFixed(2) }}</span></div>
+                    <div class="kv-row"><span class="kv-key">二次确认</span><span class="tag" :class="diagnosis.chanlun.volume_price_divergence_secondary_v74.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.volume_price_divergence_secondary_v74.confirm_signal ? '✅ 已确认' : '❌ 未确认' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.volume_price_divergence_secondary_v74.msg }}</div>
+                  </div>
+               </div>
+               <!-- V74: 趋势动能持续 -->
+               <div v-if="diagnosis.chanlun.trend_momentum_continuity_v74" class="metric-card v74-tmc">
+                  <div class="card-title">🚀 V74 动能持续（条件229）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">短/中/长期动量</span><span class="kv-val">{{ diagnosis.chanlun.trend_momentum_continuity_v74.short_term >= 0 ? '+' : '' }}{{ diagnosis.chanlun.trend_momentum_continuity_v74.short_term.toFixed(2) }} / {{ diagnosis.chanlun.trend_momentum_continuity_v74.mid_term >= 0 ? '+' : '' }}{{ diagnosis.chanlun.trend_momentum_continuity_v74.mid_term.toFixed(2) }} / {{ diagnosis.chanlun.trend_momentum_continuity_v74.long_term >= 0 ? '+' : '' }}{{ diagnosis.chanlun.trend_momentum_continuity_v74.long_term.toFixed(2) }}</span></div>
+                    <div class="kv-row"><span class="kv-key">动能评分</span><span class="kv-val">{{ diagnosis.chanlun.trend_momentum_continuity_v74.momentum_score.toFixed(3) }}</span></div>
+                    <div class="kv-row"><span class="kv-key">持续状态</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.trend_momentum_continuity_v74.continuity === 'strong', 'tag-blue': diagnosis.chanlun.trend_momentum_continuity_v74.continuity === 'moderate', 'tag-orange': diagnosis.chanlun.trend_momentum_continuity_v74.continuity === 'weakening', 'tag-red': diagnosis.chanlun.trend_momentum_continuity_v74.continuity === 'neutral' }">{{ {strong:'🟢 强势',moderate:'🔵 温和',weakening:'🟠 衰减',neutral:'🔴 中性'}[diagnosis.chanlun.trend_momentum_continuity_v74.continuity] ?? '—' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.trend_momentum_continuity_v74.msg }}</div>
+                  </div>
+               </div>
+               <!-- V74: 中枢重叠度 -->
+               <div v-if="diagnosis.chanlun.zhongshu_overlap_density_v74" class="metric-card v74-zod">
+                  <div class="card-title">🔄 V74 中枢重叠（条件230）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">重叠度</span><span class="kv-val">{{ (diagnosis.chanlun.zhongshu_overlap_density_v74.overlap_density * 100).toFixed(0) }}%</span></div>
+                    <div class="kv-row"><span class="kv-key">附近中枢数</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_overlap_density_v74.nearby_zs_count }} 个</span></div>
+                    <div class="kv-row"><span class="kv-key">信号强度</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.zhongshu_overlap_density_v74.signal_strength === 'strong_support' || diagnosis.chanlun.zhongshu_overlap_density_v74.signal_strength === 'strong_resistance', 'tag-blue': diagnosis.chanlun.zhongshu_overlap_density_v74.signal_strength === 'moderate', 'tag-orange': diagnosis.chanlun.zhongshu_overlap_density_v74.signal_strength === 'near_zone', 'tag-gray': diagnosis.chanlun.zhongshu_overlap_density_v74.signal_strength === 'weak' }">{{ {strong_support:'🟢 强支撑',strong_resistance:'🔴 强阻力',moderate:'🔵 中等',near_zone:'🟠 近区',weak:'⚪ 弱'}[diagnosis.chanlun.zhongshu_overlap_density_v74.signal_strength] ?? '—' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.zhongshu_overlap_density_v74.msg }}</div>
+                  </div>
+               </div>
+               <!-- V74: 信号共振深度 -->
+               <div v-if="diagnosis.chanlun.signal_resonance_depth_v74" class="metric-card v74-srd">
+                  <div class="card-title">🔗 V74 共振深度（条件231）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">共振维度</span><span class="kv-val">{{ diagnosis.chanlun.signal_resonance_depth_v74.confirming_dimensions }} / {{ diagnosis.chanlun.signal_resonance_depth_v74.total_dimensions }}</span></div>
+                    <div class="kv-row"><span class="kv-key">深度得分</span><span class="kv-val">{{ diagnosis.chanlun.signal_resonance_depth_v74.depth_score.toFixed(3) }}</span></div>
+                    <div class="kv-row"><span class="kv-key">共振等级</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.signal_resonance_depth_v74.resonance_level === 'deep', 'tag-blue': diagnosis.chanlun.signal_resonance_depth_v74.resonance_level === 'moderate', 'tag-orange': diagnosis.chanlun.signal_resonance_depth_v74.resonance_level === 'weak', 'tag-red': diagnosis.chanlun.signal_resonance_depth_v74.resonance_level === 'shallow' }">{{ {deep:'🟢 深共振',moderate:'🔵 中共振',weak:'🟠 弱共振',shallow:'🔴 浅共振'}[diagnosis.chanlun.signal_resonance_depth_v74.resonance_level] ?? '—' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.signal_resonance_depth_v74.msg }}</div>
+                  </div>
+               </div>
+               <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -5346,4 +5386,19 @@ onMounted(() => {
 .v73-zb .kv-val { font-weight: 600; }
 .v73-mic .kv-val { font-weight: 600; }
 .v73-vra .kv-val { font-weight: 600; }
+/* V74: 量价背离+动能持续+中枢重叠+共振深度 */
+.v74-vpd .kv-val { font-weight: 600; }
+.v74-tmc .kv-val { font-weight: 600; }
+.v74-zod .kv-val { font-weight: 600; }
+.v74-srd .kv-val { font-weight: 600; }
+/* V74: 量价背离+动能持续+中枢重叠+共振深度 */
+.v74-vpd .kv-val { font-weight: 600; }
+.v74-tmc .kv-val { font-weight: 600; }
+.v74-zod .kv-val { font-weight: 600; }
+.v74-srd .kv-val { font-weight: 600; }
+/* V74: 量价背离+动能持续+中枢重叠+共振深度 */
+.v74-vpd .kv-val { font-weight: 600; }
+.v74-tmc .kv-val { font-weight: 600; }
+.v74-zod .kv-val { font-weight: 600; }
+.v74-srd .kv-val { font-weight: 600; }
 </style>

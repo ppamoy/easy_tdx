@@ -82,7 +82,7 @@ class TestConditionGroup:
 
     def test_all_groups_defined(self):
         """所有 V58-V68 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71", "V72", "V73"}
+        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71", "V72", "V73", "V74"}
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -1448,3 +1448,173 @@ class TestV73Functions:
         assert result["msg"] != ""
         result2 = _calc_volatility_regime_adaptation_v73(mmd, short_closes, None, None)
         assert result2["msg"] != ""
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# V74 条件 228-231 测试
+# ──────────────────────────────────────────────────────────────────────────────
+
+class TestV74ConditionGroup:
+    """V74 ConditionGroup 枚举测试。"""
+
+    def test_v74_group_exists(self):
+        assert hasattr(ConditionGroup, 'V74')
+        assert ConditionGroup.V74.value == "v74"
+
+    def test_v74_condition_range(self):
+        group = ConditionGroup.V74
+        start, end = group.condition_range
+        assert start == 228
+        assert end == 231
+
+    def test_v74_description(self):
+        desc = ConditionGroup.V74.description
+        assert "量价背离" in desc or "趋势动能" in desc or "中枢重叠" in desc or "共振" in desc
+
+
+class TestV74MMDFields:
+    """V74 MMD 增强字段存在性测试。"""
+
+    def test_v74_fields_exist_on_mmd(self):
+        from easy_tdx.chanlun.types import MMD
+        mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
+        assert hasattr(mmd, "_volume_price_divergence_secondary_v74")
+        assert hasattr(mmd, "_trend_momentum_continuity_v74")
+        assert hasattr(mmd, "_zhongshu_overlap_density_v74")
+        assert hasattr(mmd, "_signal_resonance_depth_v74")
+
+
+class TestV74BacktestValidator:
+    """V74 回测验证器测试。"""
+
+    def test_v74_validator_usage(self):
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V74])
+        assert len(results) >= 1
+        assert results[0].group == ConditionGroup.V74
+
+    def test_v74_multi_group_validation(self):
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V73, ConditionGroup.V74])
+        groups = {r.group for r in results}
+        assert groups == {ConditionGroup.V73, ConditionGroup.V74}
+
+    def test_v74_summary_output(self):
+        validator = ChanlunConditionBacktestValidator(min_bars=150)
+        df = _make_df(*_make_trending_df(400, trend="up"))
+        results = validator.validate_conditions(df, [ConditionGroup.V74])
+        summary = results[0].summary()
+        assert "V74" in summary
+
+
+class TestV74Functions:
+    """V74 计算函数功能测试。"""
+
+    def test_volume_price_divergence_secondary(self):
+        """量价背离二次确认应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_volume_price_divergence_secondary_v74
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(55)
+        closes = [100.0]
+        volumes = [1e6]
+        for _ in range(80):
+            c = closes[-1] * (1 + np.random.randn() * 0.015)
+            closes.append(c)
+            volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.3))
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_volume_price_divergence_secondary_v74(mmd, closes, volumes)
+        assert "divergence_type" in result
+        assert "divergence_strength" in result
+        assert "confirm_signal" in result
+        assert "confidence_adjust" in result
+        assert "msg" in result
+        assert result["divergence_type"] in ("bullish_divergence", "healthy_rally", "bearish_warning", "heavy_selling", "none")
+
+    def test_trend_momentum_continuity(self):
+        """趋势动能持续验证应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_trend_momentum_continuity_v74
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(66)
+        closes = [100.0]
+        for _ in range(100):
+            closes.append(closes[-1] * (1 + np.random.randn() * 0.01))
+        mmd_buy = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result_buy = _calc_trend_momentum_continuity_v74(mmd_buy, closes, None, None)
+        assert "momentum_score" in result_buy
+        assert "short_term" in result_buy
+        assert "mid_term" in result_buy
+        assert "long_term" in result_buy
+        assert "continuity" in result_buy
+        assert "confidence_adjust" in result_buy
+        assert result_buy["continuity"] in ("strong", "moderate", "weakening", "neutral", "unknown")
+
+        mmd_sell = MMD(mmd_type=MMDType.SELL_3, confidence=0.5, bi=None)
+        result_sell = _calc_trend_momentum_continuity_v74(mmd_sell, closes, None, None)
+        assert "continuity" in result_sell
+
+    def test_zhongshu_overlap_density(self):
+        """中枢重叠度评估应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_zhongshu_overlap_density_v74
+        from easy_tdx.chanlun.types import MMD, MMDType, ZS
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        zss = [
+            ZS(zg=110.0, zd=90.0, index=0),
+            ZS(zg=105.0, zd=85.0, index=1),
+            ZS(zg=108.0, zd=88.0, index=2),
+        ]
+        result = _calc_zhongshu_overlap_density_v74(mmd, zss, current_price=95.0)
+        assert "overlap_density" in result
+        assert "nearby_zs_count" in result
+        assert "distance_to_zs" in result
+        assert "signal_strength" in result
+        assert "confidence_adjust" in result
+        assert result["signal_strength"] in ("strong_support", "strong_resistance", "moderate", "near_zone", "weak")
+
+    def test_signal_resonance_depth(self):
+        """信号共振深度评分应返回正确结构。"""
+        from easy_tdx.chanlun.mmd import _calc_signal_resonance_depth_v74
+        from easy_tdx.chanlun.types import MMD, MMDType
+        np.random.seed(77)
+        closes = [100.0]
+        highs = [100.5]
+        lows = [99.5]
+        volumes = [1e6]
+        for _ in range(60):
+            c = closes[-1] * (1 + np.random.randn() * 0.01)
+            h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.005)
+            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
+            closes.append(c)
+            highs.append(h)
+            lows.append(l)
+            volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.2))
+        macd_data = {"hist": [0.05] * 60}
+        mmd_buy = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        result = _calc_signal_resonance_depth_v74(mmd_buy, closes, highs, lows, macd_data, volumes)
+        assert "depth_score" in result
+        assert "confirming_dimensions" in result
+        assert "total_dimensions" in result
+        assert "resonance_level" in result
+        assert "confidence_adjust" in result
+        assert result["resonance_level"] in ("deep", "moderate", "weak", "shallow", "none")
+
+    def test_v74_data_insufficient(self):
+        """数据不足时应返回默认值。"""
+        from easy_tdx.chanlun.mmd import (
+            _calc_volume_price_divergence_secondary_v74,
+            _calc_trend_momentum_continuity_v74,
+            _calc_zhongshu_overlap_density_v74,
+            _calc_signal_resonance_depth_v74,
+        )
+        from easy_tdx.chanlun.types import MMD, MMDType
+        mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
+        short_closes = [100.0, 101.0, 102.0]
+        result1 = _calc_volume_price_divergence_secondary_v74(mmd, short_closes, None)
+        assert result1["msg"] != ""
+        result2 = _calc_trend_momentum_continuity_v74(mmd, short_closes, None, None)
+        assert result2["msg"] != ""
+        result3 = _calc_zhongshu_overlap_density_v74(mmd, [], current_price=0.0)
+        assert result3["msg"] != ""
+        result4 = _calc_signal_resonance_depth_v74(mmd, short_closes, None, None, None, None)
+        assert result4["msg"] != ""

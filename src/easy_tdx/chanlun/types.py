@@ -496,6 +496,12 @@ class MMD:
     _multi_indicator_consistency_v73: dict[str, Any] | None = None  # 多指标确认一致性（条件226）
     _volatility_regime_adaptation_v73: dict[str, Any] | None = None  # 波动率环境适配（条件227）
 
+    # V74 enhancement fields (2026-08-26)
+    _volume_price_divergence_secondary_v74: dict[str, Any] | None = None  # 量价背离二次确认（条件228）
+    _trend_momentum_continuity_v74: dict[str, Any] | None = None  # 趋势动能持续验证（条件229）
+    _zhongshu_overlap_density_v74: dict[str, Any] | None = None  # 中枢重叠度评估（条件230）
+    _signal_resonance_depth_v74: dict[str, Any] | None = None  # 信号共振深度评分（条件231）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

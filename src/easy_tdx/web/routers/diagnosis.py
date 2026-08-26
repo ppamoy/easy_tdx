@@ -1096,6 +1096,14 @@ async def diagnose_stock(
             "multi_indicator_consistency_v73": getattr(latest_mmd, "_multi_indicator_consistency_v73", None) if latest_mmd else None,
             # V73: 波动率环境适配（条件227）
             "volatility_regime_adaptation_v73": getattr(latest_mmd, "_volatility_regime_adaptation_v73", None) if latest_mmd else None,
+            # V74: 量价背离二次确认（条件228）
+            "volume_price_divergence_secondary_v74": getattr(latest_mmd, "_volume_price_divergence_secondary_v74", None) if latest_mmd else None,
+            # V74: 趋势动能持续验证（条件229）
+            "trend_momentum_continuity_v74": getattr(latest_mmd, "_trend_momentum_continuity_v74", None) if latest_mmd else None,
+            # V74: 中枢重叠度评估（条件230）
+            "zhongshu_overlap_density_v74": getattr(latest_mmd, "_zhongshu_overlap_density_v74", None) if latest_mmd else None,
+            # V74: 信号共振深度评分（条件231）
+            "signal_resonance_depth_v74": getattr(latest_mmd, "_signal_resonance_depth_v74", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1456,6 +1464,14 @@ async def multi_stock_comparison(
                             condition_counts["v73_cond226"] = condition_counts.get("v73_cond226", 0) + 1
                         if c == 227 and hasattr(mmd, "_volatility_regime_adaptation_v73"):
                             condition_counts["v73_cond227"] = condition_counts.get("v73_cond227", 0) + 1
+                        if c == 228 and hasattr(mmd, "_volume_price_divergence_secondary_v74"):
+                            condition_counts["v74_cond228"] = condition_counts.get("v74_cond228", 0) + 1
+                        if c == 229 and hasattr(mmd, "_trend_momentum_continuity_v74"):
+                            condition_counts["v74_cond229"] = condition_counts.get("v74_cond229", 0) + 1
+                        if c == 230 and hasattr(mmd, "_zhongshu_overlap_density_v74"):
+                            condition_counts["v74_cond230"] = condition_counts.get("v74_cond230", 0) + 1
+                        if c == 231 and hasattr(mmd, "_signal_resonance_depth_v74"):
+                            condition_counts["v74_cond231"] = condition_counts.get("v74_cond231", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

@@ -2046,6 +2046,42 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V74: 量价背离二次确认（条件228）
+  volume_price_divergence_secondary_v74?: {
+    divergence_type: string
+    divergence_strength: number
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V74: 趋势动能持续验证（条件229）
+  trend_momentum_continuity_v74?: {
+    momentum_score: number
+    short_term: number
+    mid_term: number
+    long_term: number
+    continuity: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V74: 中枢重叠度评估（条件230）
+  zhongshu_overlap_density_v74?: {
+    overlap_density: number
+    nearby_zs_count: number
+    distance_to_zs: number
+    signal_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V74: 信号共振深度评分（条件231）
+  signal_resonance_depth_v74?: {
+    depth_score: number
+    confirming_dimensions: number
+    total_dimensions: number
+    resonance_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

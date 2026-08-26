@@ -2,7 +2,8 @@
 
 基于缠论理论持续优化（V55 2026-08-26）：
 - 置信度计算：基于多因子加权，非单一准确率声明
-- V55新增：分钟级多时间框架共振过滤(条件160)+中枢级别权重自适应(条件161)+弱势股专项风险检测(条件162)+信号与趋势方向对齐验证(条件163)
+- V74新增：量价背离二次确认(条件228)+趋势动能持续验证(条件229)+中枢重叠度评估(条件230)+信号共振深度评分(条件231)
+- V73新增：买卖点位置风险评估(条件224)+中枢突破有效性验证(条件225)+多指标确认一致性(条件226)+波动率环境适配(条件227)
 - V54新增：多K线确认后确认(条件156)+缺口风险评估(条件157)+波动率切换检测(条件158)+量价配合度评分(条件159)
 - V53新增：趋势顺势确认(条件152)+ATR自适应止损(条件153)+突破力度验证(条件154)+信号质量分层(条件155)
 - V52新增：量价持续确认(条件148)+多指标背离共振(条件149)+极端价位检测(条件150)+市场环境评分(条件151)
@@ -10,7 +11,7 @@
 - V49新增：突破力度二次验证(条件137)+回踩结构完整性(条件138)+中枢级别权重(条件139)
 - V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
-- 总条件数：163个
+- 总条件数：231个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -12275,6 +12276,46 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V74 条件 228-231 ──
+
+        # 条件228：量价背离二次确认（Volume-Price Divergence Secondary）
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 30:
+            try:
+                vp_div = _calc_volume_price_divergence_secondary_v74(mmd, closes, volumes)
+                mmd._volume_price_divergence_secondary_v74 = vp_div
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_div.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件229：趋势动能持续验证（Trend Momentum Continuity）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                mom = _calc_trend_momentum_continuity_v74(mmd, closes, highs, lows)
+                mmd._trend_momentum_continuity_v74 = mom
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mom.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件230：中枢重叠度评估（Zhongshu Overlap Density）
+        if mmd.bi is not None and zss is not None and closes is not None and len(closes) >= 10:
+            try:
+                overlap = _calc_zhongshu_overlap_density_v74(mmd, zss, closes[-1])
+                mmd._zhongshu_overlap_density_v74 = overlap
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + overlap.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件231：信号共振深度评分（Signal Resonance Depth）
+        if mmd.bi is not None and closes is not None and len(closes) >= 20:
+            try:
+                resonance = _calc_signal_resonance_depth_v74(
+                    mmd, closes, highs, lows, macd_data, volumes
+                )
+                mmd._signal_resonance_depth_v74 = resonance
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + resonance.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -23433,6 +23474,388 @@ def _calc_volatility_regime_adaptation_v73(
         result["msg"] = (
             f"ATR={atr_pct:.2f}% 历史分位={atr_rank:.0%} "
             f"环境={vol_regime} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# V74: 条件 228-231（量价背离二次确认+趋势动能持续+中枢重叠度+信号共振深度）
+
+def _calc_volume_price_divergence_secondary_v74(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """量价背离二次确认（V74 条件228）。
+
+    在已有买卖点信号的基础上，检测量价背离是否提供二次确认。
+
+    返回：divergence_type, divergence_strength, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "divergence_type": "none",
+        "divergence_strength": 0.0,
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 30 or volumes is None or len(volumes) < 30:
+            result["msg"] = "数据不足（需≥30根且有volumes）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        recent_closes = closes[-10:]
+        recent_vols = volumes[-10:]
+        prev_closes = closes[-20:-10]
+        prev_vols = volumes[-20:-10]
+
+        price_trend = (recent_closes[-1] - recent_closes[0]) / max(recent_closes[0], 1e-10)
+        avg_recent_vol = sum(recent_vols) / len(recent_vols)
+        avg_prev_vol = sum(prev_vols) / len(prev_vols)
+        vol_trend = avg_recent_vol / max(avg_prev_vol, 1e-10)
+
+        if is_buy:
+            if price_trend > 0.005 and vol_trend < 0.8:
+                divergence_type = "bullish_divergence"
+                strength = min(abs(vol_trend - 1.0) + abs(price_trend) * 10, 1.0)
+                confirm = True
+            elif price_trend > 0.01 and vol_trend > 1.5:
+                divergence_type = "healthy_rally"
+                strength = min(price_trend * 5, 0.6)
+                confirm = True
+            elif price_trend < -0.01 and vol_trend > 1.3:
+                divergence_type = "bearish_warning"
+                strength = min(vol_trend * 0.3, 1.0)
+                confirm = False
+            else:
+                divergence_type = "none"
+                strength = 0.0
+                confirm = False
+        else:
+            if price_trend < -0.005 and vol_trend < 0.8:
+                divergence_type = "bearish_divergence"
+                strength = min(abs(vol_trend - 1.0) + abs(price_trend) * 10, 1.0)
+                confirm = True
+            elif price_trend < -0.01 and vol_trend > 1.5:
+                divergence_type = "heavy_selling"
+                strength = min(vol_trend * 0.3, 1.0)
+                confirm = True
+            elif price_trend > 0.01 and vol_trend < 0.6:
+                divergence_type = "bearish_warning"
+                strength = min(abs(vol_trend - 1.0), 1.0)
+                confirm = False
+            else:
+                divergence_type = "none"
+                strength = 0.0
+                confirm = False
+
+        if confirm and strength >= 0.5:
+            adjust = 0.04
+        elif confirm and strength >= 0.3:
+            adjust = 0.02
+        elif divergence_type == "bearish_warning" and not is_buy:
+            adjust = -0.03
+        elif divergence_type == "bearish_warning" and is_buy:
+            adjust = -0.05
+        else:
+            adjust = 0.0
+
+        result["divergence_type"] = divergence_type
+        result["divergence_strength"] = round(strength, 3)
+        result["confirm_signal"] = confirm
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"背离={divergence_type} 强度={strength:.2f} "
+            f"价变={price_trend:+.1%} 量变={vol_trend:.2f}x "
+            f"置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_trend_momentum_continuity_v74(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """趋势动能持续验证（V74 条件229）。
+
+    评估当前趋势是否在多个时间窗口内持续保持动能。
+
+    返回：momentum_score, short_term, mid_term, long_term, continuity, confidence_adjust, msg
+    """
+    result = {
+        "momentum_score": 0.0,
+        "short_term": 0.0,
+        "mid_term": 0.0,
+        "long_term": 0.0,
+        "continuity": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 30:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        st = (closes[-1] - closes[-5]) / max(closes[-5], 1e-10) if n >= 5 else 0.0
+        mt = (closes[-1] - closes[-10]) / max(closes[-10], 1e-10) if n >= 10 else 0.0
+        lt = (closes[-1] - closes[-20]) / max(closes[-20], 1e-10) if n >= 20 else 0.0
+
+        if is_buy:
+            scores = [st, mt, lt]
+            aligned = sum(1 for s in scores if s > 0)
+        else:
+            scores = [-st, -mt, -lt]
+            aligned = sum(1 for s in scores if s > 0)
+
+        avg_momentum = sum(abs(s) for s in [st, mt, lt]) / 3
+        momentum_score = min(avg_momentum * 20, 1.0) * (aligned / 3)
+
+        if aligned == 3 and momentum_score >= 0.5:
+            continuity = "strong"
+            adjust = 0.05
+        elif aligned == 2 and momentum_score >= 0.3:
+            continuity = "moderate"
+            adjust = 0.02
+        elif aligned <= 1:
+            continuity = "weakening"
+            adjust = -0.04
+        else:
+            continuity = "neutral"
+            adjust = 0.0
+
+        result["short_term"] = round(st, 4)
+        result["mid_term"] = round(mt, 4)
+        result["long_term"] = round(lt, 4)
+        result["momentum_score"] = round(momentum_score, 3)
+        result["continuity"] = continuity
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"短={st:+.2%} 中={mt:+.2%} 长={lt:+.2%} "
+            f"一致性={aligned}/3 状态={continuity} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_overlap_density_v74(
+    mmd: "MMD",
+    zss: list["ZS"],
+    current_price: float,
+) -> dict[str, Any]:
+    """中枢重叠度评估（V74 条件230）。
+
+    评估当前价格附近历史中枢的重叠密度。
+
+    返回：overlap_density, nearby_zs_count, distance_to_zs, signal_strength, confidence_adjust, msg
+    """
+    result = {
+        "overlap_density": 0.0,
+        "nearby_zs_count": 0,
+        "distance_to_zs": 0.0,
+        "signal_strength": "weak",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not zss or current_price <= 0:
+            result["msg"] = "无中枢数据或价格为零"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        recent_zs = zss[-5:] if len(zss) >= 5 else zss
+        nearby_count = 0
+        total_distance = 0.0
+        inside_zs_count = 0
+
+        for zs in recent_zs:
+            if zs.zg <= 0 or zs.zd <= 0:
+                continue
+            if zs.zd <= current_price <= zs.zg:
+                inside_zs_count += 1
+                nearby_count += 1
+            else:
+                dist = min(abs(current_price - zs.zg), abs(current_price - zs.zd))
+                pct_dist = dist / max(current_price, 1e-10)
+                total_distance += pct_dist
+                if pct_dist < 0.05:
+                    nearby_count += 1
+
+        total_distance /= max(len(recent_zs), 1)
+        overlap_density = inside_zs_count / max(len(recent_zs), 1)
+
+        if overlap_density >= 0.6:
+            signal_strength = "strong_support" if is_buy else "strong_resistance"
+            adjust = 0.06
+        elif overlap_density >= 0.3:
+            signal_strength = "moderate"
+            adjust = 0.03
+        elif nearby_count >= 2 and total_distance < 0.03:
+            signal_strength = "near_zone"
+            adjust = 0.02
+        else:
+            signal_strength = "weak"
+            adjust = -0.02
+
+        result["overlap_density"] = round(overlap_density, 3)
+        result["nearby_zs_count"] = nearby_count
+        result["distance_to_zs"] = round(total_distance, 4)
+        result["signal_strength"] = signal_strength
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"重叠度={overlap_density:.0%} 附近中枢={nearby_count} "
+            f"平均距离={total_distance:.2%} 强度={signal_strength} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_resonance_depth_v74(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    macd_data: dict[str, list[float]] | None,
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """信号共振深度评分（V74 条件231）。
+
+    评估当前信号在多少个独立维度上得到确认。
+
+    返回：depth_score, confirming_dimensions, total_dimensions, resonance_level, confidence_adjust, msg
+    """
+    result = {
+        "depth_score": 0.0,
+        "confirming_dimensions": 0,
+        "total_dimensions": 0,
+        "resonance_level": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 20:
+            result["msg"] = "数据不足（需≥20根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        confirming = 0
+        total = 0
+
+        # 1. MACD方向
+        if macd_data and "hist" in macd_data and len(macd_data["hist"]) >= 2:
+            total += 1
+            hist = macd_data["hist"]
+            if is_buy and hist[-1] > 0 and hist[-1] > hist[-2]:
+                confirming += 1
+            elif not is_buy and hist[-1] < 0 and hist[-1] < hist[-2]:
+                confirming += 1
+
+        # 2. KDJ方向
+        if highs is not None and lows is not None and n >= 30:
+            total += 1
+            from easy_tdx.MyTT import KDJ as _mytt_kdj
+            try:
+                _k, _d, _j = _mytt_kdj(closes, highs, lows, N=9, M1=3, M2=3)
+                if len(_k) >= 2 and len(_d) >= 2:
+                    kdj_bullish = _k[-1] > _d[-1] and _k[-1] > _k[-2]
+                    if is_buy and kdj_bullish:
+                        confirming += 1
+                    elif not is_buy and not kdj_bullish:
+                        confirming += 1
+            except Exception:
+                pass
+
+        # 3. RSI方向
+        if n >= 14:
+            total += 1
+            from easy_tdx.MyTT import RSI as _mytt_rsi
+            try:
+                rsi_vals = _mytt_rsi(closes, N=14)
+                if rsi_vals and len(rsi_vals) >= 2:
+                    rsi_bullish = rsi_vals[-1] > rsi_vals[-2] and rsi_vals[-1] < 75
+                    if is_buy and rsi_bullish:
+                        confirming += 1
+                    elif not is_buy and not rsi_bullish and rsi_vals[-1] > 25:
+                        confirming += 1
+            except Exception:
+                pass
+
+        # 4. 均线排列方向
+        if n >= 20:
+            total += 1
+            from easy_tdx.MyTT import MA as _mytt_ma
+            try:
+                ma5 = _mytt_ma(closes, N=5)
+                ma20 = _mytt_ma(closes, N=20)
+                if ma5 and ma20 and len(ma5) >= 1 and len(ma20) >= 1:
+                    ma_bullish = ma5[-1] > ma20[-1]
+                    if is_buy and ma_bullish:
+                        confirming += 1
+                    elif not is_buy and not ma_bullish:
+                        confirming += 1
+            except Exception:
+                pass
+
+        # 5. 成交量配合
+        if volumes is not None and n >= 2:
+            total += 1
+            vol_bullish = volumes[-1] > volumes[-2] and closes[-1] > closes[-2]
+            if is_buy and vol_bullish:
+                confirming += 1
+            elif not is_buy and not vol_bullish:
+                confirming += 1
+
+        # 6. 价格位置（相对20日区间）
+        if n >= 20:
+            total += 1
+            period_high = max(closes[-20:])
+            period_low = min(closes[-20:])
+            price_range = period_high - period_low
+            if price_range > 0:
+                pos_pct = (closes[-1] - period_low) / price_range
+                if is_buy and pos_pct < 0.4:
+                    confirming += 1
+                elif not is_buy and pos_pct > 0.6:
+                    confirming += 1
+
+        ratio = confirming / total if total > 0 else 0.5
+        depth_score = ratio
+
+        if ratio >= 0.83:
+            resonance_level = "deep"
+            adjust = 0.07
+        elif ratio >= 0.67:
+            resonance_level = "moderate"
+            adjust = 0.03
+        elif ratio <= 0.33:
+            resonance_level = "shallow"
+            adjust = -0.05
+        else:
+            resonance_level = "weak"
+            adjust = -0.02
+
+        result["confirming_dimensions"] = confirming
+        result["total_dimensions"] = total
+        result["depth_score"] = round(depth_score, 3)
+        result["resonance_level"] = resonance_level
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"{confirming}/{total}维度共振 深度={resonance_level} "
+            f"一致率={ratio:.0%} 置信度{adjust:+.0%}"
         )
         return result
     except Exception:
