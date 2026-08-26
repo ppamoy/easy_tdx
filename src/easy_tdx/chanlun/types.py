@@ -508,6 +508,12 @@ class MMD:
     _volume_peak_duration_v75: dict[str, Any] | None = None  # 量峰持续评分（条件234）
     _multi_signal_time_consistency_v75: dict[str, Any] | None = None  # 多信号时间一致性（条件235）
 
+    # V76 enhancement fields (2026-08-26)
+    _price_structure_integrity_v76: dict[str, Any] | None = None  # 价格结构完整性验证（条件236）
+    _trend_alignment_validation_v76: dict[str, Any] | None = None  # 趋势方向对齐验证（条件237）
+    _volatility_adaptive_confidence_v76: dict[str, Any] | None = None  # 波动率自适应置信度（条件238）
+    _signal_final_validity_v76: dict[str, Any] | None = None  # 买卖点最终有效性评分（条件239）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

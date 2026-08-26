@@ -41,6 +41,10 @@ const SCORE_COLORS: Record<string, string> = {
 
 const scoreColor = computed(() => diagnosis.value ? SCORE_COLORS[diagnosis.value.action] || '#6b7280' : '#6b7280')
 const scoreValue = computed(() => diagnosis.value ? diagnosis.value.score : 0)
+const v76IntegrityLabel = (level: string | null | undefined): string => {
+  const map: Record<string, string> = { strong: '强信号', moderate: '中性', weak: '弱信号', invalid: '不建议' }
+  return map[level ?? ''] ?? '—'
+}
 const multiResultsHaveConditionData = computed(() =>
   multiResults.value.some((r: MultiStockResult) => Object.keys(r.condition_breakdown || {}).length > 0)
 )
@@ -219,6 +223,18 @@ onMounted(() => {
         <div class="hero-right">
           <div class="action-badge" :style="{ background: scoreColor }">{{ diagnosis.action_label }}</div>
           <div class="action-reason">{{ diagnosis.reason }}</div>
+          <!-- V76: 四维验证摘要 -->
+          <div v-if="diagnosis.v76_summary" class="v76-summary-row">
+            <span class="v76-tag" :class="{
+              'v76-strong': diagnosis.v76_summary.structure_integrity === 'strong',
+              'v76-moderate': diagnosis.v76_summary.structure_integrity === 'moderate',
+              'v76-weak': diagnosis.v76_summary.structure_integrity === 'weak',
+              'v76-invalid': diagnosis.v76_summary.structure_integrity === 'invalid',
+            }">
+              🎯 V76有效性{{ v76IntegrityLabel(diagnosis.v76_summary.structure_integrity) }}
+              · {{ diagnosis.v76_summary.validity_score != null ? (diagnosis.v76_summary.validity_score * 100).toFixed(0) + '%' : '—' }}
+            </span>
+          </div>
           <div class="meta-info">
             <span>{{ diagnosis.symbol }}</span>
             <span class="sep">·</span>
@@ -4435,7 +4451,53 @@ onMounted(() => {
                     <div class="kv-note">{{ diagnosis.chanlun.multi_signal_time_consistency_v75.msg }}</div>
                   </div>
                </div>
-               <!-- MACD -->
+                <!-- V76: 价格结构完整性验证 -->
+                <div v-if="diagnosis.chanlun.price_structure_integrity_v76" class="metric-card v76-psI">
+                   <div class="card-title">🏗️ V76 结构完整（条件236）</div>
+                   <div class="card-body">
+                     <div class="kv-row"><span class="kv-key">结构评分</span><span class="kv-val">{{ (diagnosis.chanlun.price_structure_integrity_v76.structure_score * 100).toFixed(0) }}%</span></div>
+                     <div class="kv-row"><span class="kv-key">趋势结构</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.price_structure_integrity_v76.trend_structure === 'bottom_accumulation' || diagnosis.chanlun.price_structure_integrity_v76.trend_structure === 'mid_recovery', 'tag-blue': diagnosis.chanlun.price_structure_integrity_v76.trend_structure === 'breakout_attempt', 'tag-orange': diagnosis.chanlun.price_structure_integrity_v76.trend_structure === 'overextended' || diagnosis.chanlun.price_structure_integrity_v76.trend_structure === 'top_distribution' }">{{ {bottom_accumulation:'🟢 底部积累',mid_recovery:'🟢 中期反弹',breakout_attempt:'🔵 突破尝试',overextended:'🟠 过度延伸',top_distribution:'🟠 顶部派发',mid_pullback:'🔵 中期回踩',breakdown_attempt:'🟠 破位尝试',oversold:'🔴 超卖'}[diagnosis.chanlun.price_structure_integrity_v76.trend_structure] ?? '—' }}</span></div>
+                     <div class="kv-row"><span class="kv-key">关键价位</span><span class="tag" :class="diagnosis.chanlun.price_structure_integrity_v76.key_levels_valid ? 'tag-green' : 'tag-orange'">{{ diagnosis.chanlun.price_structure_integrity_v76.key_levels_valid ? '✅ 有效' : '⚠️ 偏离' }}</span></div>
+                     <div class="kv-row"><span class="kv-key">结构确认</span><span class="tag" :class="diagnosis.chanlun.price_structure_integrity_v76.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.price_structure_integrity_v76.confirm_signal ? '✅ 结构完整' : '⚠️ 结构不足' }}</span></div>
+                     <div class="kv-note">{{ diagnosis.chanlun.price_structure_integrity_v76.msg }}</div>
+                   </div>
+                </div>
+                <!-- V76: 趋势方向对齐验证 -->
+                <div v-if="diagnosis.chanlun.trend_alignment_validation_v76" class="metric-card v76-tav">
+                   <div class="card-title">🧭 V76 趋势对齐（条件237）</div>
+                   <div class="card-body">
+                     <div class="kv-row"><span class="kv-key">趋势方向</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.trend_alignment_validation_v76.trend_direction === 'bullish' || diagnosis.chanlun.trend_alignment_validation_v76.trend_direction === 'weak_bullish', 'tag-red': diagnosis.chanlun.trend_alignment_validation_v76.trend_direction === 'bearish' || diagnosis.chanlun.trend_alignment_validation_v76.trend_direction === 'weak_bearish', 'tag-blue': diagnosis.chanlun.trend_alignment_validation_v76.trend_direction === 'neutral' }">{{ {bullish:'🟢 强多头',weak_bullish:'🟢 弱多头',bearish:'🔴 强空头',weak_bearish:'🔴 弱空头',neutral:'🔵 中性'}[diagnosis.chanlun.trend_alignment_validation_v76.trend_direction] ?? '—' }}</span></div>
+                     <div class="kv-row"><span class="kv-key">对齐状态</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.trend_alignment_validation_v76.alignment_status === 'strong_aligned', 'tag-blue': diagnosis.chanlun.trend_alignment_validation_v76.alignment_status === 'moderately_aligned', 'tag-red': diagnosis.chanlun.trend_alignment_validation_v76.alignment_status === 'diverged' }">{{ {strong_aligned:'🟢 强对齐',moderately_aligned:'🔵 中对齐',diverged:'🔴 背离'}[diagnosis.chanlun.trend_alignment_validation_v76.alignment_status] ?? '—' }}</span></div>
+                     <div class="kv-row" v-for="ma in diagnosis.chanlun.trend_alignment_validation_v76.ma_alignment" :key="ma.period">
+                       <span class="kv-key">MA{{ ma.period }}</span>
+                       <span class="tag" :class="ma.trend === 'up' ? 'tag-green' : ma.trend === 'down' ? 'tag-red' : 'tag-gray'">{{ ma.trend === 'up' ? '🟢 向上' : ma.trend === 'down' ? '🔴 向下' : '⚪ 走平' }}</span>
+                     </div>
+                     <div class="kv-row"><span class="kv-key">趋势确认</span><span class="tag" :class="diagnosis.chanlun.trend_alignment_validation_v76.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.trend_alignment_validation_v76.confirm_signal ? '✅ 趋势一致' : '⚠️ 趋势分歧' }}</span></div>
+                     <div class="kv-note">{{ diagnosis.chanlun.trend_alignment_validation_v76.msg }}</div>
+                   </div>
+                </div>
+                <!-- V76: 波动率自适应置信度 -->
+                <div v-if="diagnosis.chanlun.volatility_adaptive_confidence_v76" class="metric-card v76-vac">
+                   <div class="card-title">📊 V76 波动率自适应（条件238）</div>
+                   <div class="card-body">
+                     <div class="kv-row"><span class="kv-key">波动率等级</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volatility_adaptive_confidence_v76.vol_level === 'low', 'tag-blue': diagnosis.chanlun.volatility_adaptive_confidence_v76.vol_level === 'normal', 'tag-orange': diagnosis.chanlun.volatility_adaptive_confidence_v76.vol_level === 'high', 'tag-red': diagnosis.chanlun.volatility_adaptive_confidence_v76.vol_level === 'extreme' }">{{ {low:'🟢 低波动',normal:'🔵 正常波动',high:'🟠 高波动',extreme:'🔴 极端波动'}[diagnosis.chanlun.volatility_adaptive_confidence_v76.vol_level] ?? '—' }}</span></div>
+                     <div class="kv-row"><span class="kv-key">ATR比率</span><span class="kv-val">{{ diagnosis.chanlun.volatility_adaptive_confidence_v76.atr_ratio.toFixed(3) }}</span></div>
+                     <div class="kv-row"><span class="kv-key">自适应置信度</span><span class="kv-val">{{ (diagnosis.chanlun.volatility_adaptive_confidence_v76.adaptive_confidence * 100).toFixed(0) }}%</span></div>
+                     <div class="kv-row"><span class="kv-key">波动确认</span><span class="tag" :class="diagnosis.chanlun.volatility_adaptive_confidence_v76.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.volatility_adaptive_confidence_v76.confirm_signal ? '✅ 置信度达标' : '⚠️ 需更强确认' }}</span></div>
+                     <div class="kv-note">{{ diagnosis.chanlun.volatility_adaptive_confidence_v76.msg }}</div>
+                   </div>
+                </div>
+                <!-- V76: 买卖点最终有效性评分 -->
+                <div v-if="diagnosis.chanlun.signal_final_validity_v76" class="metric-card v76-sfv">
+                   <div class="card-title">🎯 V76 最终有效性（条件239）</div>
+                   <div class="card-body">
+                     <div class="kv-row"><span class="kv-key">有效性等级</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.signal_final_validity_v76.final_validity === 'strong', 'tag-blue': diagnosis.chanlun.signal_final_validity_v76.final_validity === 'moderate', 'tag-orange': diagnosis.chanlun.signal_final_validity_v76.final_validity === 'weak', 'tag-red': diagnosis.chanlun.signal_final_validity_v76.final_validity === 'invalid' }">{{ {strong:'🟢 强信号',moderate:'🔵 中性信号',weak:'🟠 弱信号',invalid:'🔴 不建议操作'}[diagnosis.chanlun.signal_final_validity_v76.final_validity] ?? '—' }}</span></div>
+                     <div class="kv-row"><span class="kv-key">有效性得分</span><span class="kv-val">{{ (diagnosis.chanlun.signal_final_validity_v76.validity_score * 100).toFixed(0) }}%</span></div>
+                     <div class="kv-row"><span class="kv-key">操作建议</span><span class="tag" :class="diagnosis.chanlun.signal_final_validity_v76.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.signal_final_validity_v76.recommendation }}</span></div>
+                     <div class="kv-note">{{ diagnosis.chanlun.signal_final_validity_v76.msg }}</div>
+                   </div>
+                </div>
+                <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
           <div class="card-body">
@@ -4953,6 +5015,16 @@ onMounted(() => {
   line-height: 1.6;
   margin-bottom: 8px;
 }
+.v76-summary-row { margin-bottom: 6px; }
+.v76-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
+  font-size: 12px; font-weight: 600;
+  background: rgba(107,114,128,0.15); color: var(--text-dim);
+}
+.v76-tag.v76-strong  { background: rgba(34,197,94,0.15); color: #22c55e; }
+.v76-tag.v76-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.v76-tag.v76-weak    { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.v76-tag.v76-invalid  { background: rgba(239,68,68,0.15); color: #ef4444; }
 .meta-info {
   font-size: 12px;
   color: var(--text-dim);
@@ -5439,4 +5511,9 @@ onMounted(() => {
 .v75-zrc .kv-val { font-weight: 600; }
 .v75-vpd .kv-val { font-weight: 600; }
 .v75-mstc .kv-val { font-weight: 600; }
+/* V76: 结构完整+趋势对齐+波动率自适应+最终有效性 */
+.v76-psI .kv-val { font-weight: 600; }
+.v76-tav .kv-val { font-weight: 600; }
+.v76-vac .kv-val { font-weight: 600; }
+.v76-sfv .kv-val { font-weight: 700; }
 </style>

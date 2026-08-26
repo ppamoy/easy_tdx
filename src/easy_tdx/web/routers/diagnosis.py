@@ -29,6 +29,23 @@ from easy_tdx.web.deps import get_client
 from easy_tdx.web.schemas import StockIdentifier
 
 
+def _to_json_safe(obj: Any) -> Any:
+    """递归将 numpy 类型转换为 JSON 可序列化的 Python 原生类型。"""
+    if isinstance(obj, dict):
+        return {k: _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(item) for item in obj]
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
 # V13: 延迟导入成交量剖面分析（避免循环导入）
 def _calc_volume_profile_for_diagnosis(
     closes: list[float] | None,
@@ -216,7 +233,7 @@ async def diagnose_stock(
     - code: 6位股票代码
     """
     from easy_tdx.chanlun import ChanlunAnalyser
-    from easy_tdx.chanlun.mmd import _calc_atr_volatility, calc_signal_quality_report, find_mmds_v39
+    from easy_tdx.chanlun.mmd import _calc_atr_volatility, calc_signal_quality_report, find_mmds, find_mmds_v39
     from easy_tdx.MyTT import ATR, BOLL, DMI, KDJ, MA, MACD, OBV, RSI
 
     market = req.market
@@ -616,42 +633,70 @@ async def diagnose_stock(
                 chanlun_desc += f" [{top_reason}]"
 
     # V8: 置信度分层 - 根据置信度和评分共同决定操作建议
-    if score >= 75 and latest_mmd and latest_mmd.confidence >= 0.75:
+    # V76: 基于最终有效性评分调整阈值
+    v76_validity = getattr(latest_mmd, "_signal_final_validity_v76", None) if latest_mmd else None
+    v76_validity_score = v76_validity.get("validity_score", 0.5) if v76_validity else 0.5
+    v76_validity_level = v76_validity.get("final_validity", "unknown") if v76_validity else "unknown"
+
+    # V76 有效性对操作建议的修正：无效信号需降低一级操作建议
+    validity_adjust = 0
+    if v76_validity_level == "invalid":
+        validity_adjust = -15  # 无效信号扣分
+    elif v76_validity_level == "weak":
+        validity_adjust = -8   # 弱信号扣分
+    elif v76_validity_level == "strong":
+        validity_adjust = 5    # 强信号加成
+
+    adjusted_score = max(0, min(100, score + validity_adjust))
+
+    if adjusted_score >= 75 and latest_mmd and latest_mmd.confidence >= 0.75:
         action = "strong_buy"
         action_label = "强烈买入"
         action_color = "#22c55e"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"多指标共振看涨，缠论高置信度信号确认{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
-    elif score >= 60 and latest_mmd and latest_mmd.confidence >= 0.65:
+        v76_note = f"，V76有效性【强信号】确认" if v76_validity_level == "strong" else ""
+        reason = f"多指标共振看涨，缠论高置信度信号确认{extra}{v76_note}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
+    elif adjusted_score >= 60 and latest_mmd and latest_mmd.confidence >= 0.65:
         action = "buy"
         action_label = "买入"
         action_color = "#4ade80"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"技术面偏多，缠论信号可参考{extra}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
-    elif score >= 45:
+        v76_note = f"，V76有效性【强信号】确认" if v76_validity_level == "strong" else ""
+        reason = f"技术面偏多，缠论信号可参考{extra}{v76_note}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
+    elif adjusted_score >= 45:
         action = "hold"
         action_label = "持有观察"
         action_color = "#f59e0b"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"方向不明确，建议观望{extra}。支撑位 {support_1} 元，阻力位 {resistance_1} 元，等待突破方向"
-    elif score >= 30 and latest_mmd and latest_mmd.confidence >= 0.65:
+        v76_note = ""
+        if v76_validity_level == "invalid":
+            v76_note = "，V76有效性【不建议操作】"
+        elif v76_validity_level == "weak":
+            v76_note = "，V76有效性【弱信号需谨慎】"
+        reason = f"方向不明确，建议观望{extra}{v76_note}。支撑位 {support_1} 元，阻力位 {resistance_1} 元，等待突破方向"
+    elif adjusted_score >= 30 and latest_mmd and latest_mmd.confidence >= 0.65:
         action = "sell"
         action_label = "卖出"
         action_color = "#f97316"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"技术面偏空，缠论信号可参考{extra}。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
-    elif score >= 30:
+        v76_note = f"，V76有效性【弱信号】确认" if v76_validity_level == "weak" else ""
+        reason = f"技术面偏空，缠论信号可参考{extra}{v76_note}。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
+    elif adjusted_score >= 30:
         action = "sell"
         action_label = "卖出"
         action_color = "#f97316"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"技术面偏空，建议减仓{extra}。下方支撑 {support_1} 元"
+        v76_note = ""
+        if v76_validity_level == "invalid":
+            v76_note = "，V76有效性【不建议操作】"
+        reason = f"技术面偏空，建议减仓{extra}{v76_note}。下方支撑 {support_1} 元"
     else:
         action = "strong_sell"
         action_label = "强烈卖出"
         action_color = "#ef4444"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        reason = f"多指标共振看跌，建议清仓回避{extra}。止损位 {stop_loss_price} 元，远离多头趋势"
+        v76_note = f"，V76有效性【不建议操作】" if v76_validity_level == "invalid" else ""
+        reason = f"多指标共振看跌，建议清仓回避{extra}{v76_note}。止损位 {stop_loss_price} 元，远离多头趋势"
 
     # ── 仓位建议 ──────────────────────────────────────────────────────
     position_recommendation = _calculate_position_recommendation(
@@ -660,7 +705,7 @@ async def diagnose_stock(
     )
 
     # ── 返回结果 ──────────────────────────────────────────────────────
-    return {
+    return _to_json_safe({
         "symbol": symbol,
         "date": latest_date,
         "close": round(latest_close, 2),
@@ -669,6 +714,12 @@ async def diagnose_stock(
         "action_label": action_label,
         "action_color": action_color,
         "reason": reason,
+        # V76: 四维验证摘要（条件236-239）—— 顶层快速可见
+        "v76_summary": {
+            "structure_integrity": v76_validity_level if v76_validity else None,
+            "validity_score": round(v76_validity_score, 2) if v76_validity else None,
+            "recommendation": v76_validity.get("recommendation", "") if v76_validity else "",
+        },
         "chanlun": {
             "bi_count": len(result.bis),
             "zs_count": len(result.zss),
@@ -1112,6 +1163,14 @@ async def diagnose_stock(
             "volume_peak_duration_v75": getattr(latest_mmd, "_volume_peak_duration_v75", None) if latest_mmd else None,
             # V75: 多信号时间一致性（条件235）
             "multi_signal_time_consistency_v75": getattr(latest_mmd, "_multi_signal_time_consistency_v75", None) if latest_mmd else None,
+            # V76: 价格结构完整性验证（条件236）
+            "price_structure_integrity_v76": getattr(latest_mmd, "_price_structure_integrity_v76", None) if latest_mmd else None,
+            # V76: 趋势方向对齐验证（条件237）
+            "trend_alignment_validation_v76": getattr(latest_mmd, "_trend_alignment_validation_v76", None) if latest_mmd else None,
+            # V76: 波动率自适应置信度（条件238）
+            "volatility_adaptive_confidence_v76": getattr(latest_mmd, "_volatility_adaptive_confidence_v76", None) if latest_mmd else None,
+            # V76: 买卖点最终有效性评分（条件239）
+            "signal_final_validity_v76": getattr(latest_mmd, "_signal_final_validity_v76", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1213,6 +1272,7 @@ async def diagnose_stock(
         },
         "position_suggestion": position_recommendation,
     }
+)
 
 
 def _calculate_position_recommendation(
@@ -1488,6 +1548,14 @@ async def multi_stock_comparison(
                             condition_counts["v75_cond234"] = condition_counts.get("v75_cond234", 0) + 1
                         if c == 235 and hasattr(mmd, "_multi_signal_time_consistency_v75"):
                             condition_counts["v75_cond235"] = condition_counts.get("v75_cond235", 0) + 1
+                        if c == 236 and hasattr(mmd, "_price_structure_integrity_v76"):
+                            condition_counts["v76_cond236"] = condition_counts.get("v76_cond236", 0) + 1
+                        if c == 237 and hasattr(mmd, "_trend_alignment_validation_v76"):
+                            condition_counts["v76_cond237"] = condition_counts.get("v76_cond237", 0) + 1
+                        if c == 238 and hasattr(mmd, "_volatility_adaptive_confidence_v76"):
+                            condition_counts["v76_cond238"] = condition_counts.get("v76_cond238", 0) + 1
+                        if c == 239 and hasattr(mmd, "_signal_final_validity_v76"):
+                            condition_counts["v76_cond239"] = condition_counts.get("v76_cond239", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

@@ -2118,6 +2118,42 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V76: 价格结构完整性验证（条件236）
+  price_structure_integrity_v76?: {
+    structure_score: number
+    trend_structure: string
+    key_levels_valid: boolean
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V76: 趋势方向对齐验证（条件237）
+  trend_alignment_validation_v76?: {
+    alignment_status: string
+    ma_alignment: Array<{ period: number; trend: string }>
+    trend_direction: string
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V76: 波动率自适应置信度（条件238）
+  volatility_adaptive_confidence_v76?: {
+    vol_level: string
+    atr_ratio: number
+    adaptive_confidence: number
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V76: 买卖点最终有效性评分（条件239）
+  signal_final_validity_v76?: {
+    final_validity: string
+    validity_score: number
+    recommendation: string
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {
@@ -2244,6 +2280,12 @@ export interface DiagnosisResult {
   action_label: string
   action_color: string
   reason: string
+  // V76: 四维验证摘要（条件236-239）
+  v76_summary?: {
+    structure_integrity: 'strong' | 'moderate' | 'weak' | 'invalid' | null
+    validity_score: number | null
+    recommendation: string
+  }
   chanlun: DiagnosisChanlun
   macd: DiagnosisMACD
   boll: DiagnosisBOLL

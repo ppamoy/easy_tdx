@@ -2,7 +2,7 @@
 
 基于缠论理论持续优化（V55 2026-08-26）：
 - 置信度计算：基于多因子加权，非单一准确率声明
-- V74新增：量价背离二次确认(条件228)+趋势动能持续验证(条件229)+中枢重叠度评估(条件230)+信号共振深度评分(条件231)
+- V76新增：价格结构完整性验证(条件236)+趋势方向对齐验证(条件237)+波动率自适应置信度(条件238)+买卖点最终有效性评分(条件239)
 - V75新增：回调深度验证(条件232)+中枢回踩确认(条件233)+量峰持续评分(条件234)+多信号时间一致性(条件235)
 - V73新增：买卖点位置风险评估(条件224)+中枢突破有效性验证(条件225)+多指标确认一致性(条件226)+波动率环境适配(条件227)
 - V54新增：多K线确认后确认(条件156)+缺口风险评估(条件157)+波动率切换检测(条件158)+量价配合度评分(条件159)
@@ -12257,7 +12257,7 @@ def find_mmds_v39(
                     _mi_kdj = {"k": _k, "d": _d}
                 if highs is not None and lows is not None and len(closes) >= 20:
                     _b = _mytt_boll(closes, N=20)
-                    if any(_b):
+                    if len(_b) >= 3 and len(_b[0]) > 0:
                         _mi_boll = {"upper": _b[0], "lower": _b[1], "mid": _b[2]}
                 mi_cons = _calc_multi_indicator_consistency_v73(
                     mmd, closes, macd_data, _mi_kdj, _mi_rsi, _mi_boll, volumes
@@ -12355,6 +12355,43 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V76 条件 236-239 ──
+
+        # 条件236：价格结构完整性验证（Price Structure Integrity）
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 30:
+            try:
+                psi = _calc_price_structure_integrity_v76(mmd, closes, volumes)
+                mmd._price_structure_integrity_v76 = psi
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + psi.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件237：趋势方向对齐验证（Trend Alignment Validation）
+        if mmd.bi is not None and closes is not None and len(closes) >= 60:
+            try:
+                tav = _calc_trend_alignment_validation_v76(mmd, closes)
+                mmd._trend_alignment_validation_v76 = tav
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tav.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件238：波动率自适应置信度（Volatility Adaptive Confidence）
+        if mmd.bi is not None and closes is not None and len(closes) >= 60:
+            try:
+                vac = _calc_volatility_adaptive_confidence_v76(mmd, closes)
+                mmd._volatility_adaptive_confidence_v76 = vac
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vac.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件239：买卖点最终有效性评分（Signal Final Validity）
+        if mmd.bi is not None:
+            try:
+                sfv = _calc_signal_final_validity_v76(mmd)
+                mmd._signal_final_validity_v76 = sfv
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -12446,6 +12483,32 @@ def find_mmds_v44(
     - 条件123：回踩时间窗口过滤（避免信号过期）
     - 条件124：波动率自适应阈值（动态调整敏感度）
     - 条件125：多指标背离共振（多指标同时确认）
+    """
+    return find_mmds_v39(
+        bis=bis, zss=zss, closes=closes, config=config,
+        volumes=volumes, macd_data=macd_data, volatility=volatility,
+        highs=highs, lows=lows,
+    )
+
+
+def find_mmds_v76(
+    bis: list[BI],
+    zss: list[ZS],
+    closes: list[float] | None = None,
+    config: ChanlunConfig | None = None,
+    volumes: list[float] | None = None,
+    macd_data: dict[str, list[float]] | None = None,
+    volatility: float | None = None,
+    highs: list[float] | None = None,
+    lows: list[float] | None = None,
+) -> list[MMD]:
+    """V76 版本的 find_mmds：完整集成条件101-239。
+
+    V76 在 V75 基础上新增四维权重验证：
+    - 条件236：价格结构完整性验证（过滤结构不完整的买卖点）
+    - 条件237：趋势方向对齐验证（避免逆势交易）
+    - 条件238：波动率自适应置信度（动态调整敏感度）
+    - 条件239：买卖点最终有效性评分（综合多条件最终确认）
     """
     return find_mmds_v39(
         bis=bis, zss=zss, closes=closes, config=config,
@@ -24386,6 +24449,357 @@ def _calc_multi_signal_time_consistency_v75(
             f"{sig_count}个信号 一致率={consistency:.0%} "
             f"时间窗口={min_days_ago}-{max_days_ago}天前 "
             f"置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# V76: 条件 236-239（价格结构完整性+趋势方向对齐+波动率自适应置信度+买卖点最终有效性）
+
+def _calc_price_structure_integrity_v76(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """价格结构完整性验证（V76 条件236）。
+
+    评估买入/卖出信号前的价格结构是否完整：
+    - 上涨趋势中应有清晰的中枢+突破结构
+    - 下跌趋势中应有清晰的下跌笔+支撑结构
+    - 通过价格序列的连续性和结构评分判断信号可靠性
+
+    返回：structure_score, trend_structure, key_levels_valid, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "structure_score": 0.0,
+        "trend_structure": "unknown",
+        "key_levels_valid": False,
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 30:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 计算近期高低点
+        lookback = min(30, n)
+        recent_high = max(closes[-lookback:])
+        recent_low = min(closes[-lookback:])
+        price_range = recent_high - recent_low
+
+        if price_range <= 0:
+            result["msg"] = "价格区间为零"
+            return result
+
+        current_price = closes[-1]
+        price_position = (current_price - recent_low) / price_range  # 0~1 之间
+
+        # 判断趋势结构完整性
+        if is_buy:
+            if price_position < 0.3:
+                trend_struct = "bottom_accumulation"
+                score = 0.8
+            elif price_position < 0.5:
+                trend_struct = "mid_recovery"
+                score = 0.6
+            elif price_position < 0.7:
+                trend_struct = "breakout_attempt"
+                score = 0.5
+            else:
+                trend_struct = "overextended"
+                score = 0.3
+        else:
+            if price_position > 0.7:
+                trend_struct = "top_distribution"
+                score = 0.8
+            elif price_position > 0.5:
+                trend_struct = "mid_pullback"
+                score = 0.6
+            elif price_position > 0.3:
+                trend_struct = "breakdown_attempt"
+                score = 0.5
+            else:
+                trend_struct = "oversold"
+                score = 0.3
+
+        # 关键价位有效性
+        high_dist = (recent_high - current_price) / recent_high
+        low_dist = (current_price - recent_low) / recent_low
+        key_levels_valid = high_dist < 0.1 or low_dist < 0.1
+
+        # 成交量确认
+        if volumes and len(volumes) >= 20:
+            avg_vol = sum(volumes[-20:]) / 20
+            vol_ratio = volumes[-1] / max(avg_vol, 1e-10)
+            if is_buy and vol_ratio > 1.2:
+                score = min(score + 0.1, 1.0)
+            elif not is_buy and vol_ratio > 1.5:
+                score = min(score + 0.05, 1.0)
+
+        result["structure_score"] = round(score, 3)
+        result["trend_structure"] = trend_struct
+        result["key_levels_valid"] = key_levels_valid
+        result["confirm_signal"] = score >= 0.5 and key_levels_valid
+        result["confidence_adjust"] = round(score * 0.05 - 0.02, 3)
+        result["msg"] = (
+            f"结构评分={score:.0%} {trend_struct} "
+            f"价格位置={price_position:.0%} 关键位={'✅' if key_levels_valid else '⚠️'} "
+            f"置信度{score * 0.05 - 0.02:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_trend_alignment_validation_v76(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """趋势方向对齐验证（V76 条件237）。
+
+    验证当前信号的 trend direction 与多周期均线方向是否一致。
+    趋势对齐→信号更可靠；趋势背离→信号需谨慎。
+
+    返回：alignment_status, ma_alignment, trend_direction, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "alignment_status": "unknown",
+        "ma_alignment": [],
+        "trend_direction": "unknown",
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 60:
+            result["msg"] = "数据不足（需≥60根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 计算多周期均线
+        mas: dict[int, dict[str, str]] = {}
+        for period in [5, 10, 20, 60]:
+            if n >= period:
+                ma_val = sum(closes[-period:]) / period
+                ma_prev = sum(closes[-period - 1:-1]) / period if n >= period + 1 else ma_val
+                ma_trend = "up" if closes[-1] > ma_val and ma_val > ma_prev else (
+                    "down" if closes[-1] < ma_val and ma_val < ma_prev else "flat"
+                )
+                mas[period] = {"trend": ma_trend}
+
+        up_count = sum(1 for m in mas.values() if m["trend"] == "up")
+        down_count = sum(1 for m in mas.values() if m["trend"] == "down")
+        total = len(mas)
+
+        if up_count >= total * 0.7:
+            trend_dir = "bullish"
+        elif down_count >= total * 0.7:
+            trend_dir = "bearish"
+        elif up_count > down_count:
+            trend_dir = "weak_bullish"
+        elif down_count > up_count:
+            trend_dir = "weak_bearish"
+        else:
+            trend_dir = "neutral"
+
+        if is_buy:
+            aligned = trend_dir in ("bullish", "weak_bullish")
+            alignment_pct = up_count / max(total, 1)
+        else:
+            aligned = trend_dir in ("bearish", "weak_bearish")
+            alignment_pct = down_count / max(total, 1)
+
+        if aligned and alignment_pct >= 0.7:
+            status = "strong_aligned"
+        elif aligned:
+            status = "moderately_aligned"
+        else:
+            status = "diverged"
+
+        result["alignment_status"] = status
+        result["ma_alignment"] = [{"period": k, "trend": v["trend"]} for k, v in mas.items()]
+        result["trend_direction"] = trend_dir
+        result["confirm_signal"] = aligned and alignment_pct >= 0.5
+        result["confidence_adjust"] = round(alignment_pct * 0.06 - 0.03, 3)
+        result["msg"] = (
+            f"趋势对齐={status} {trend_dir} "
+            f"置信度{alignment_pct * 0.06 - 0.03:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volatility_adaptive_confidence_v76(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """波动率自适应置信度（V76 条件238）。
+
+    根据当前市场波动率环境调整信号置信度：
+    - 低波动环境→突破信号更可靠
+    - 高波动环境→信号需要更强确认
+
+    返回：vol_level, atr_ratio, adaptive_confidence, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "vol_level": "unknown",
+        "atr_ratio": 0.0,
+        "adaptive_confidence": 0.0,
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 30:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 计算简化 ATR（使用负索引兼容 Python）
+        trs: list[float] = []
+        for i in range(-20, 0):
+            if i >= -n and i - 1 >= -n:
+                tr = abs(closes[i] - closes[i - 1])
+                trs.append(tr)
+        if not trs:
+            result["msg"] = "无法计算波动率"
+            return result
+
+        atr = sum(trs) / len(trs)
+        current_price = closes[-1]
+        atr_ratio = atr / max(current_price, 1e-10)
+
+        # 波动率百分位
+        if n >= 60:
+            trs_full: list[float] = []
+            for i in range(-60, 0):
+                if i >= 0 and i - 1 >= 0:
+                    trs_full.append(abs(closes[i] - closes[i - 1]))
+            avg_tr_full = sum(trs_full) / len(trs_full) if trs_full else atr
+            vol_percentile = atr / max(avg_tr_full, 1e-10)
+        else:
+            vol_percentile = 1.0
+
+        if vol_percentile < 0.5:
+            vol_level = "low"
+        elif vol_percentile < 1.0:
+            vol_level = "normal"
+        elif vol_percentile < 1.5:
+            vol_level = "high"
+        else:
+            vol_level = "extreme"
+
+        base_confidence = mmd.confidence if mmd.confidence else 0.5
+        if vol_level == "low":
+            adaptive_conf = min(base_confidence + 0.08, 1.0)
+            adjust = 0.05
+        elif vol_level == "normal":
+            adaptive_conf = base_confidence
+            adjust = 0.0
+        elif vol_level == "high":
+            adaptive_conf = max(base_confidence - 0.05, 0.0)
+            adjust = -0.03
+        else:
+            adaptive_conf = max(base_confidence - 0.10, 0.0)
+            adjust = -0.06
+
+        confirm = adaptive_conf >= 0.5
+        result["vol_level"] = vol_level
+        result["atr_ratio"] = round(atr_ratio, 4)
+        result["adaptive_confidence"] = round(adaptive_conf, 3)
+        result["confirm_signal"] = confirm
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"波动率={vol_level} ATR比={atr_ratio:.2%} "
+            f"自适应置信度={adaptive_conf:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_final_validity_v76(
+    mmd: "MMD",
+) -> dict[str, Any]:
+    """买卖点最终有效性评分（V76 条件239）。
+
+    综合所有已计算的 V75 和 V76 条件评分，给出最终信号有效性判断。
+    这是整个缠论条件体系的"终审判决"。
+
+    返回：final_validity, validity_score, recommendation, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "final_validity": "unknown",
+        "validity_score": 0.0,
+        "recommendation": "观望",
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        adjustments: list[float] = []
+        adjust_fields = [
+            "_pullback_depth_validation_v75",
+            "_zhongshu_retracement_confirm_v75",
+            "_volume_peak_duration_v75",
+            "_multi_signal_time_consistency_v75",
+            "_price_structure_integrity_v76",
+            "_trend_alignment_validation_v76",
+            "_volatility_adaptive_confidence_v76",
+        ]
+        for field in adjust_fields:
+            val = getattr(mmd, field, None)
+            if val and isinstance(val, dict):
+                adj = val.get("confidence_adjust", 0.0)
+                if adj != 0.0:
+                    adjustments.append(adj)
+
+        base_conf = mmd.confidence if mmd.confidence else 0.5
+        total_adjust = sum(adjustments)
+        final_score = max(0.0, min(1.0, base_conf + total_adjust))
+
+        if final_score >= 0.7:
+            validity = "strong"
+            rec = "强信号"
+            confirm = True
+            adj = 0.05
+        elif final_score >= 0.5:
+            validity = "moderate"
+            rec = "中性信号"
+            confirm = True
+            adj = 0.02
+        elif final_score >= 0.3:
+            validity = "weak"
+            rec = "弱信号"
+            confirm = False
+            adj = -0.02
+        else:
+            validity = "invalid"
+            rec = "不建议操作"
+            confirm = False
+            adj = -0.05
+
+        result["final_validity"] = validity
+        result["validity_score"] = round(final_score, 3)
+        result["recommendation"] = rec
+        result["confirm_signal"] = confirm
+        result["confidence_adjust"] = round(adj, 3)
+        result["msg"] = (
+            f"有效性={validity} 得分={final_score:.0%} "
+            f"建议:{rec} 基础={base_conf:.0%} 调整{total_adjust:+.0%}"
         )
         return result
     except Exception:
