@@ -647,6 +647,36 @@ async def diagnose_stock(
     elif v76_validity_level == "strong":
         validity_adjust = 5    # 强信号加成
 
+    # V77: 四维度量摘要（条件240-243）—— 顶层快速可见
+    v77_vdd = getattr(latest_mmd, "_volume_distribution_depth_v77", None) if latest_mmd else None
+    v77_zsw = getattr(latest_mmd, "_zhongshu_structure_weight_v77", None) if latest_mmd else None
+    v77_sfv = getattr(latest_mmd, "_signal_freshness_validation_v77", None) if latest_mmd else None
+    v77_pma = getattr(latest_mmd, "_price_momentum_acceleration_v77", None) if latest_mmd else None
+
+    # 综合V77四维度量评分
+    v77_adjust_total = 0.0
+    v77_vdd_score = (v77_vdd.get("confidence_adjust", 0) if v77_vdd else 0)
+    v77_zsw_score = (v77_zsw.get("confidence_adjust", 0) if v77_zsw else 0)
+    v77_sfv_score = (v77_sfv.get("confidence_adjust", 0) if v77_sfv else 0)
+    v77_pma_score = (v77_pma.get("confidence_adjust", 0) if v77_pma else 0)
+    v77_adjust_total = v77_vdd_score + v77_zsw_score + v77_sfv_score + v77_pma_score
+
+    # V77 综合质量等级
+    v77_positive_count = sum(1 for s in [v77_vdd_score, v77_zsw_score, v77_sfv_score, v77_pma_score] if s > 0)
+    v77_negative_count = sum(1 for s in [v77_vdd_score, v77_zsw_score, v77_sfv_score, v77_pma_score] if s < 0)
+    if v77_positive_count >= 3 and v77_negative_count == 0:
+        v77_quality_level = "strong"
+        v77_recommendation = "四维信号共振，高置信度"
+    elif v77_positive_count >= 2 and v77_negative_count <= 1:
+        v77_quality_level = "moderate"
+        v77_recommendation = "多数维度支持，中等置信度"
+    elif v77_negative_count >= 2:
+        v77_quality_level = "weak"
+        v77_recommendation = "多维度负面信号，需谨慎"
+    else:
+        v77_quality_level = "mixed"
+        v77_recommendation = "信号混合，等待确认"
+
     adjusted_score = max(0, min(100, score + validity_adjust))
 
     if adjusted_score >= 75 and latest_mmd and latest_mmd.confidence >= 0.75:
@@ -719,6 +749,18 @@ async def diagnose_stock(
             "structure_integrity": v76_validity_level if v76_validity else None,
             "validity_score": round(v76_validity_score, 2) if v76_validity else None,
             "recommendation": v76_validity.get("recommendation", "") if v76_validity else "",
+        },
+        # V77: 四维度量摘要（条件240-243）—— 顶层快速可见
+        "v77_summary": {
+            "quality_level": v77_quality_level,
+            "total_adjust": round(v77_adjust_total, 3),
+            "positive_count": v77_positive_count,
+            "negative_count": v77_negative_count,
+            "recommendation": v77_recommendation,
+            "vdd_energy_zone": v77_vdd.get("energy_zone") if v77_vdd else None,
+            "zs_weight_score": round(v77_zsw.get("weight_score", 0), 2) if v77_zsw else None,
+            "signal_freshness": v77_sfv.get("age_label") if v77_sfv else None,
+            "momentum_direction": v77_pma.get("momentum_direction") if v77_pma else None,
         },
         "chanlun": {
             "bi_count": len(result.bis),
@@ -1179,6 +1221,14 @@ async def diagnose_stock(
             "signal_freshness_validation_v77": getattr(latest_mmd, "_signal_freshness_validation_v77", None) if latest_mmd else None,
             # V77: 价格动能加速度（条件243）
             "price_momentum_acceleration_v77": getattr(latest_mmd, "_price_momentum_acceleration_v77", None) if latest_mmd else None,
+            # V78: 买卖点周期位置评分（条件244）
+            "mmd_cycle_position_v78": getattr(latest_mmd, "_mmd_cycle_position_v78", None) if latest_mmd else None,
+            # V78: 多信号时间窗口一致性（条件245）
+            "multi_signal_consensus_v78": getattr(latest_mmd, "_multi_signal_consensus_v78", None) if latest_mmd else None,
+            # V78: 波动率压缩突破预测（条件246）
+            "volatility_compression_breakout_v78": getattr(latest_mmd, "_volatility_compression_breakout_v78", None) if latest_mmd else None,
+            # V78: 资金流向与价格背离检测（条件247）
+            "fund_flow_divergence_v78": getattr(latest_mmd, "_fund_flow_divergence_v78", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1572,6 +1622,14 @@ async def multi_stock_comparison(
                             condition_counts["v77_cond242"] = condition_counts.get("v77_cond242", 0) + 1
                         if c == 243 and hasattr(mmd, "_price_momentum_acceleration_v77"):
                             condition_counts["v77_cond243"] = condition_counts.get("v77_cond243", 0) + 1
+                        if c == 244 and hasattr(mmd, "_mmd_cycle_position_v78"):
+                            condition_counts["v78_cond244"] = condition_counts.get("v78_cond244", 0) + 1
+                        if c == 245 and hasattr(mmd, "_multi_signal_consensus_v78"):
+                            condition_counts["v78_cond245"] = condition_counts.get("v78_cond245", 0) + 1
+                        if c == 246 and hasattr(mmd, "_volatility_compression_breakout_v78"):
+                            condition_counts["v78_cond246"] = condition_counts.get("v78_cond246", 0) + 1
+                        if c == 247 and hasattr(mmd, "_fund_flow_divergence_v78"):
+                            condition_counts["v78_cond247"] = condition_counts.get("v78_cond247", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

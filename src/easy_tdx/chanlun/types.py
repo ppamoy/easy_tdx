@@ -520,6 +520,12 @@ class MMD:
     _signal_freshness_validation_v77: dict[str, Any] | None = None  # 信号新鲜度验证（条件242）
     _price_momentum_acceleration_v77: dict[str, Any] | None = None  # 价格动能加速度（条件243）
 
+    # V78 enhancement fields (2026-08-28)
+    _mmd_cycle_position_v78: dict[str, Any] | None = None  # 买卖点周期位置评分（条件244）
+    _multi_signal_consensus_v78: dict[str, Any] | None = None  # 多信号时间窗口一致性（条件245）
+    _volatility_compression_breakout_v78: dict[str, Any] | None = None  # 波动率压缩突破预测（条件246）
+    _fund_flow_divergence_v78: dict[str, Any] | None = None  # 资金流向与价格背离检测（条件247）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

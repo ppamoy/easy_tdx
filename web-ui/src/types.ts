@@ -2187,6 +2187,40 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+   // V78: 买卖点周期位置评分（条件244）
+   mmd_cycle_position_v78?: {
+     position_score: number
+     cycle_position: string
+     distance_to_low: number
+     distance_to_high: number
+     confidence_adjust: number
+     msg: string
+   } | null
+   // V78: 多信号时间窗口一致性（条件245）
+   multi_signal_consensus_v78?: {
+     consensus_score: number
+     nearby_buy_count: number
+     nearby_sell_count: number
+     consensus_level: string
+     confidence_adjust: number
+     msg: string
+   } | null
+   // V78: 波动率压缩突破预测（条件246）
+   volatility_compression_breakout_v78?: {
+     compression_score: number
+     boll_width_percentile: number
+     breakout_direction: string
+     confidence_adjust: number
+     msg: string
+   } | null
+   // V78: 资金流向与价格背离检测（条件247）
+   fund_flow_divergence_v78?: {
+     divergence_type: string
+     money_flow_score: number
+     volume_price_correlation: number
+     confidence_adjust: number
+     msg: string
+   } | null
 }
 
 export interface DiagnosisMACD {
@@ -2319,6 +2353,18 @@ export interface DiagnosisResult {
     validity_score: number | null
     recommendation: string
   }
+   // V77: 四维度量摘要（条件240-243）
+   v77_summary?: {
+     quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+     total_adjust: number | null
+     positive_count: number | null
+     negative_count: number | null
+     recommendation: string
+     vdd_energy_zone: string | null
+     zs_weight_score: number | null
+     signal_freshness: string | null
+     momentum_direction: string | null
+   }
   chanlun: DiagnosisChanlun
   macd: DiagnosisMACD
   boll: DiagnosisBOLL

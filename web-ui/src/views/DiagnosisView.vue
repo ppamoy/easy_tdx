@@ -45,6 +45,10 @@ const v76IntegrityLabel = (level: string | null | undefined): string => {
   const map: Record<string, string> = { strong: '强信号', moderate: '中性', weak: '弱信号', invalid: '不建议' }
   return map[level ?? ''] ?? '—'
 }
+const v77QualityLabel = (level: string | null | undefined): string => {
+  const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
+  return map[level ?? ''] ?? '—'
+}
 const multiResultsHaveConditionData = computed(() =>
   multiResults.value.some((r: MultiStockResult) => Object.keys(r.condition_breakdown || {}).length > 0)
 )
@@ -233,6 +237,19 @@ onMounted(() => {
             }">
               🎯 V76有效性{{ v76IntegrityLabel(diagnosis.v76_summary.structure_integrity) }}
               · {{ diagnosis.v76_summary.validity_score != null ? (diagnosis.v76_summary.validity_score * 100).toFixed(0) + '%' : '—' }}
+            </span>
+          </div>
+          <!-- V77: 四维度量摘要 -->
+          <div v-if="diagnosis.v77_summary" class="v77-summary-row">
+            <span class="v77-tag" :class="{
+              'v77-strong': diagnosis.v77_summary.quality_level === 'strong',
+              'v77-moderate': diagnosis.v77_summary.quality_level === 'moderate',
+              'v77-weak': diagnosis.v77_summary.quality_level === 'weak',
+              'v77-mixed': diagnosis.v77_summary.quality_level === 'mixed',
+            }">
+              📊 V77四维度量{{ v77QualityLabel(diagnosis.v77_summary.quality_level) }}
+              · 正{{ diagnosis.v77_summary.positive_count ?? '—' }}/负{{ diagnosis.v77_summary.negative_count ?? '—' }}
+              · 调整{{ diagnosis.v77_summary.total_adjust != null ? (diagnosis.v77_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v77_summary.total_adjust.toFixed(0) + '%' : '—' }}
             </span>
           </div>
           <div class="meta-info">
@@ -4601,6 +4618,92 @@ onMounted(() => {
                      <div class="kv-note">{{ diagnosis.chanlun.price_momentum_acceleration_v77.msg }}</div>
                    </div>
                 </div>
+                 <!-- V78: 买卖点周期位置评分（条件244） -->
+                 <div v-if="diagnosis.chanlun.mmd_cycle_position_v78" class="metric-card v78-mcp">
+                    <div class="card-title">📍 V78 周期位置（条件244）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">周期位置</span>
+                        <span class="tag" :class="{ 'tag-green': ['bottom','lower'].includes(diagnosis.chanlun.mmd_cycle_position_v78.cycle_position), 'tag-red': ['top','upper'].includes(diagnosis.chanlun.mmd_cycle_position_v78.cycle_position), 'tag-gray': diagnosis.chanlun.mmd_cycle_position_v78.cycle_position === 'mid' }">
+                          {{ {bottom:'🟢 波段底部',lower:'🟢 中下部',mid:'⚪ 中部',upper:'🟠 中上部',top:'🔴 波段顶部'}[diagnosis.chanlun.mmd_cycle_position_v78.cycle_position] ?? '—' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">位置评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.mmd_cycle_position_v78.position_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.mmd_cycle_position_v78.position_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                          {{ (diagnosis.chanlun.mmd_cycle_position_v78.position_score * 100).toFixed(0) }}%
+                        </span>
+                        <span class="kv-key">距低位</span><span class="kv-val">{{ (diagnosis.chanlun.mmd_cycle_position_v78.distance_to_low * 100).toFixed(0) }}%</span>
+                        <span class="kv-key">距高位</span><span class="kv-val">{{ (diagnosis.chanlun.mmd_cycle_position_v78.distance_to_high * 100).toFixed(0) }}%</span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.mmd_cycle_position_v78.msg }}</div>
+                    </div>
+                 </div>
+                 <!-- V78: 多信号时间窗口一致性（条件245） -->
+                 <div v-if="diagnosis.chanlun.multi_signal_consensus_v78" class="metric-card v78-msc">
+                    <div class="card-title">🤝 V78 信号共识（条件245）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">共识度</span>
+                        <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.multi_signal_consensus_v78.consensus_level === 'strong_consensus', 'tag-blue': diagnosis.chanlun.multi_signal_consensus_v78.consensus_level === 'moderate_consensus', 'tag-red': diagnosis.chanlun.multi_signal_consensus_v78.consensus_level === 'contradicted', 'tag-gray': diagnosis.chanlun.multi_signal_consensus_v78.consensus_level === 'isolated' }">
+                          {{ {strong_consensus:'🟢 强共识',moderate_consensus:'🔵 中共识',contradicted:'🔴 分歧',isolated:'⚪ 孤立',mixed:'🟡 混合'}[diagnosis.chanlun.multi_signal_consensus_v78.consensus_level] ?? '—' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_signal_consensus_v78.consensus_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.multi_signal_consensus_v78.consensus_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                          {{ (diagnosis.chanlun.multi_signal_consensus_v78.consensus_score * 100).toFixed(0) }}%
+                        </span>
+                        <span class="kv-key">近买</span><span class="kv-val">{{ diagnosis.chanlun.multi_signal_consensus_v78.nearby_buy_count }}</span>
+                        <span class="kv-key">近卖</span><span class="kv-val">{{ diagnosis.chanlun.multi_signal_consensus_v78.nearby_sell_count }}</span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.multi_signal_consensus_v78.msg }}</div>
+                    </div>
+                 </div>
+                 <!-- V78: 波动率压缩突破预测（条件246） -->
+                 <div v-if="diagnosis.chanlun.volatility_compression_breakout_v78" class="metric-card v78-vcb">
+                    <div class="card-title">📊 V78 波动率压缩（条件246）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">压缩评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.volatility_compression_breakout_v78.compression_score >= 0.7 ? '#22c55e' : '#f59e0b' }">
+                          {{ (diagnosis.chanlun.volatility_compression_breakout_v78.compression_score * 100).toFixed(0) }}%
+                        </span>
+                        <span class="kv-key">突破方向</span>
+                        <span class="tag" :class="{ 'tag-green': ['up','up_continuing'].includes(diagnosis.chanlun.volatility_compression_breakout_v78.breakout_direction), 'tag-red': ['down','down_continuing'].includes(diagnosis.chanlun.volatility_compression_breakout_v78.breakout_direction), 'tag-gray': diagnosis.chanlun.volatility_compression_breakout_v78.breakout_direction === 'neutral' || diagnosis.chanlun.volatility_compression_breakout_v78.breakout_direction === 'normal' }">
+                          {{ {up:'📈 向上突破',up_continuing:'📈 延续上涨',down:'📉 向下突破',down_continuing:'📉 延续下跌',neutral:'➡️ 中性',normal:'➡️ 正常'}[diagnosis.chanlun.volatility_compression_breakout_v78.breakout_direction] ?? '—' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">带宽百分位</span><span class="kv-val">{{ (diagnosis.chanlun.volatility_compression_breakout_v78.boll_width_percentile * 100).toFixed(0) }}%</span>
+                        <span class="kv-key">置信度调整</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.volatility_compression_breakout_v78.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                          {{ diagnosis.chanlun.volatility_compression_breakout_v78.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volatility_compression_breakout_v78.confidence_adjust * 100).toFixed(0) }}%
+                        </span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.volatility_compression_breakout_v78.msg }}</div>
+                    </div>
+                 </div>
+                 <!-- V78: 资金流向与价格背离检测（条件247） -->
+                 <div v-if="diagnosis.chanlun.fund_flow_divergence_v78" class="metric-card v78-ffd">
+                    <div class="card-title">💰 V78 资金背离（条件247）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">背离类型</span>
+                        <span class="tag" :class="{ 'tag-red': diagnosis.chanlun.fund_flow_divergence_v78.divergence_type === 'bearish_divergence', 'tag-green': diagnosis.chanlun.fund_flow_divergence_v78.divergence_type === 'bullish_divergence', 'tag-blue': diagnosis.chanlun.fund_flow_divergence_v78.divergence_type === 'confirmed_up', 'tag-orange': diagnosis.chanlun.fund_flow_divergence_v78.divergence_type === 'confirmed_down', 'tag-gray': diagnosis.chanlun.fund_flow_divergence_v78.divergence_type === 'neutral' }">
+                          {{ {bearish_divergence:'🔴 看跌背离',bullish_divergence:'🟢 看涨背离',confirmed_up:'🔵 量价齐升',confirmed_down:'🟠 量价齐跌',neutral:'⚪ 中性'}[diagnosis.chanlun.fund_flow_divergence_v78.divergence_type] ?? '—' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">资金评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.fund_flow_divergence_v78.money_flow_score >= 0.6 ? '#22c55e' : diagnosis.chanlun.fund_flow_divergence_v78.money_flow_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                          {{ (diagnosis.chanlun.fund_flow_divergence_v78.money_flow_score * 100).toFixed(0) }}%
+                        </span>
+                        <span class="kv-key">量价相关</span><span class="kv-val">{{ diagnosis.chanlun.fund_flow_divergence_v78.volume_price_correlation.toFixed(2) }}</span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.fund_flow_divergence_v78.msg }}</div>
+                    </div>
+                 </div>
                 <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -5129,6 +5232,16 @@ onMounted(() => {
 .v76-tag.v76-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
 .v76-tag.v76-weak    { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .v76-tag.v76-invalid  { background: rgba(239,68,68,0.15); color: #ef4444; }
+.v77-summary-row { margin-bottom: 6px; }
+.v77-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
+  font-size: 12px; font-weight: 600;
+  background: rgba(139,92,246,0.15); color: #a78bfa;
+}
+.v77-tag.v77-strong  { background: rgba(34,197,94,0.15); color: #22c55e; }
+.v77-tag.v77-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.v77-tag.v77-weak    { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.v77-tag.v77-mixed  { background: rgba(107,114,128,0.15); color: #9ca3af; }
 .meta-info {
   font-size: 12px;
   color: var(--text-dim);
@@ -5625,4 +5738,8 @@ onMounted(() => {
 .v77-zsw .kv-val { font-weight: 600; }
 .v77-sfsh .kv-val { font-weight: 600; }
 .v77-pma .kv-val { font-weight: 600; }
+.v78-mcp .kv-val { font-weight: 600; }
+.v78-msc .kv-val { font-weight: 600; }
+.v78-vcb .kv-val { font-weight: 600; }
+.v78-ffd .kv-val { font-weight: 600; }
 </style>

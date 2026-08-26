@@ -12431,6 +12431,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V78 条件 244-247 ──
+
+        # 条件244：买卖点周期位置评分（MMD Cycle Position）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                mcp = _calc_mmd_cycle_position_v78(mmd, closes, highs, lows)
+                mmd._mmd_cycle_position_v78 = mcp
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mcp.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件245：多信号时间窗口一致性（Multi-Signal Consensus）
+        if mmd.bi is not None and mmds is not None and closes is not None and len(closes) >= 20:
+            try:
+                msc = _calc_multi_signal_consensus_v78(mmds, mmd, closes)
+                mmd._multi_signal_consensus_v78 = msc
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + msc.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件246：波动率压缩突破预测（Volatility Compression Breakout）
+        if closes is not None and highs is not None and lows is not None and len(closes) >= 50:
+            try:
+                vcb = _calc_volatility_compression_breakout_v78(closes, highs, lows)
+                mmd._volatility_compression_breakout_v78 = vcb
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vcb.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件247：资金流向与价格背离检测（Fund Flow Divergence）
+        if closes is not None and volumes is not None and len(closes) >= 30 and len(volumes) >= 30:
+            try:
+                ffd = _calc_fund_flow_divergence_v78(closes, volumes)
+                mmd._fund_flow_divergence_v78 = ffd
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ffd.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -25196,6 +25234,405 @@ def _calc_price_momentum_acceleration_v77(
         result["msg"] = (
             f"加速度={norm_accel:.4f} 方向={direction} 强度={strength} "
             f"调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ── V78: 条件 244-247（买卖点周期位置+多信号一致性+波动率压缩突破+资金流向背离）────────────
+
+def _calc_mmd_cycle_position_v78(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """买卖点周期位置评分（V78 条件244）。
+
+    评估当前买卖点在完整波段中的相对位置：
+    - 买入点在波段低位（近N日最低附近）→ 更高置信度
+    - 卖出点在波段高位（近N日最高附近）→ 更高置信度
+    - 中部位置 → 中性
+
+    返回：position_score, cycle_position, distance_to_low, distance_to_high, confidence_adjust, msg
+    """
+    result = {
+        "position_score": 0.5,
+        "cycle_position": "mid",
+        "distance_to_low": 0.5,
+        "distance_to_high": 0.5,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(60, len(closes))
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+        current_price = closes[-1]
+
+        period_high = max(recent_highs)
+        period_low = min(recent_lows)
+        price_range = period_high - period_low if period_high != period_low else 1.0
+
+        # 当前位置（0=底部，1=顶部）
+        position = (current_price - period_low) / price_range
+        distance_to_low = position
+        distance_to_high = 1.0 - position
+
+        # 根据信号方向评分
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        if is_buy:
+            if position < 0.2:
+                position_score = 0.9
+                cycle_pos = "bottom"
+                adjust = 0.04
+            elif position < 0.4:
+                position_score = 0.7
+                cycle_pos = "lower"
+                adjust = 0.02
+            elif position < 0.6:
+                position_score = 0.5
+                cycle_pos = "mid"
+                adjust = 0.0
+            elif position < 0.8:
+                position_score = 0.3
+                cycle_pos = "upper"
+                adjust = -0.02
+            else:
+                position_score = 0.1
+                cycle_pos = "top"
+                adjust = -0.04
+        else:  # sell
+            if position > 0.8:
+                position_score = 0.9
+                cycle_pos = "top"
+                adjust = 0.04
+            elif position > 0.6:
+                position_score = 0.7
+                cycle_pos = "upper"
+                adjust = 0.02
+            elif position > 0.4:
+                position_score = 0.5
+                cycle_pos = "mid"
+                adjust = 0.0
+            elif position > 0.2:
+                position_score = 0.3
+                cycle_pos = "lower"
+                adjust = -0.02
+            else:
+                position_score = 0.1
+                cycle_pos = "bottom"
+                adjust = -0.04
+
+        result["position_score"] = position_score
+        result["cycle_position"] = cycle_pos
+        result["distance_to_low"] = round(distance_to_low, 3)
+        result["distance_to_high"] = round(distance_to_high, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"周期位置={cycle_pos} 位置分={position_score:.0%} "
+            f"距低={distance_to_low:.0%} 距高={distance_to_high:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_signal_consensus_v78(
+    mmds: list["MMD"],
+    current_mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多信号时间窗口一致性（V78 条件245）。
+
+    评估当前买卖点与其附近其他买卖点的方向一致性：
+    - 附近信号方向一致 → 高共识度，增强置信度
+    - 附近信号方向分歧 → 低共识度，降低置信度
+
+    返回：consensus_score, nearby_buy_count, nearby_sell_count, consensus_level, confidence_adjust, msg
+    """
+    result = {
+        "consensus_score": 0.5,
+        "nearby_buy_count": 0,
+        "nearby_sell_count": 0,
+        "consensus_level": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not mmds or len(mmds) < 2:
+            result["msg"] = "信号不足"
+            return result
+        if len(closes) < 20:
+            result["msg"] = "K线数据不足"
+            return result
+
+        # 找当前信号的索引
+        try:
+            curr_idx = mmds.index(current_mmd)
+        except ValueError:
+            result["msg"] = "信号未找到"
+            return result
+
+        # 在时间窗口内（最近20根K线）统计附近信号
+        current_bar = current_mmd.bi.index if current_mmd.bi else len(closes)
+        window = 20
+        nearby_buys = 0
+        nearby_sells = 0
+
+        for i, other_mmd in enumerate(mmds):
+            if i == curr_idx:
+                continue
+            other_bar = other_mmd.bi.index if other_mmd.bi else len(closes)
+            if abs(other_bar - current_bar) <= window:
+                if other_mmd.mmd_type.value.startswith("BUY"):
+                    nearby_buys += 1
+                elif other_mmd.mmd_type.value.startswith("SELL"):
+                    nearby_sells += 1
+
+        total_nearby = nearby_buys + nearby_sells
+        result["nearby_buy_count"] = nearby_buys
+        result["nearby_sell_count"] = nearby_sells
+
+        is_buy = current_mmd.mmd_type.value.startswith("BUY")
+
+        if total_nearby == 0:
+            consensus_score = 0.5
+            consensus_level = "isolated"
+            adjust = 0.0
+        elif is_buy:
+            if nearby_buys >= 2 and nearby_sells == 0:
+                consensus_score = 0.9
+                consensus_level = "strong_consensus"
+                adjust = 0.03
+            elif nearby_buys >= 1 and nearby_sells <= 1:
+                consensus_score = 0.7
+                consensus_level = "moderate_consensus"
+                adjust = 0.01
+            elif nearby_sells > nearby_buys:
+                consensus_score = 0.3
+                consensus_level = "contradicted"
+                adjust = -0.03
+            else:
+                consensus_score = 0.5
+                consensus_level = "mixed"
+                adjust = 0.0
+        else:  # sell
+            if nearby_sells >= 2 and nearby_buys == 0:
+                consensus_score = 0.9
+                consensus_level = "strong_consensus"
+                adjust = 0.03
+            elif nearby_sells >= 1 and nearby_buys <= 1:
+                consensus_score = 0.7
+                consensus_level = "moderate_consensus"
+                adjust = 0.01
+            elif nearby_buys > nearby_sells:
+                consensus_score = 0.3
+                consensus_level = "contradicted"
+                adjust = -0.03
+            else:
+                consensus_score = 0.5
+                consensus_level = "mixed"
+                adjust = 0.0
+
+        result["consensus_score"] = consensus_score
+        result["consensus_level"] = consensus_level
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"共识度={consensus_level} 评分={consensus_score:.0%} "
+            f"近买={nearby_buys} 近卖={nearby_sells} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volatility_compression_breakout_v78(
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """波动率压缩突破预测（V78 条件246）。
+
+    基于布林带宽度和ATR识别波动率压缩状态，预测突破方向：
+    - 波动率压缩（低带宽）→ 即将突破，方向由价格位置判断
+    - 波动率扩张 → 趋势延续或反转
+
+    返回：compression_score, boll_width_percentile, breakout_direction, confidence_adjust, msg
+    """
+    result = {
+        "compression_score": 0.5,
+        "boll_width_percentile": 0.5,
+        "breakout_direction": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 50:
+            result["msg"] = "数据不足"
+            return result
+
+        # 计算布林带宽度历史序列
+        window = 50
+        widths = []
+        for i in range(window, len(closes)):
+            period_closes = closes[i-window:i]
+            ma = sum(period_closes) / window
+            std = (sum((x - ma) ** 2 for x in period_closes) / window) ** 0.5
+            width = 4 * std  # 2*2*std = 4*std (上下轨距离)
+            widths.append(width)
+
+        if not widths:
+            result["msg"] = "宽度计算失败"
+            return result
+
+        current_width = widths[-1]
+        sorted_widths = sorted(widths)
+        percentile = sum(1 for w in sorted_widths if w <= current_width) / len(sorted_widths)
+
+        # 判断压缩状态（下四分位为压缩）
+        is_compressed = percentile < 0.25
+        is_expanding = percentile > 0.75
+
+        # 判断突破方向（价格在布林带中的位置）
+        recent_closes = closes[-window:]
+        ma = sum(recent_closes) / window
+        std = (sum((x - ma) ** 2 for x in recent_closes) / window) ** 0.5
+        upper = ma + 2 * std
+        lower = ma - 2 * std
+        current_price = closes[-1]
+        percent_b = (current_price - lower) / (upper - lower) if upper != lower else 0.5
+
+        if is_compressed:
+            if percent_b > 0.8:
+                direction = "up"
+                adjust = 0.03
+            elif percent_b < 0.2:
+                direction = "down"
+                adjust = 0.03
+            else:
+                direction = "neutral"
+                adjust = 0.0
+            compression_score = 0.8
+        elif is_expanding:
+            if percent_b > 0.9:
+                direction = "up_continuing"
+                adjust = 0.02
+            elif percent_b < 0.1:
+                direction = "down_continuing"
+                adjust = 0.02
+            else:
+                direction = "neutral"
+                adjust = 0.0
+            compression_score = 0.3
+        else:
+            direction = "normal"
+            adjust = 0.0
+            compression_score = 0.5
+
+        result["compression_score"] = compression_score
+        result["boll_width_percentile"] = round(percentile, 3)
+        result["breakout_direction"] = direction
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"压缩分={compression_score:.0%} 带宽百分位={percentile:.0%} "
+            f"突破方向={direction} percent_b={percent_b:.2f} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_fund_flow_divergence_v78(
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """资金流向与价格背离检测（V78 条件247）。
+
+    通过成交量加权价格变化检测资金流向与价格的背离：
+    - 价格上涨但成交量萎缩 → 资金流出，看跌背离
+    - 价格下跌但成交量放大 → 资金流入，看涨背离
+    - 量价齐升/齐跌 → 方向确认
+
+    返回：divergence_type, money_flow_score, volume_price_correlation, confidence_adjust, msg
+    """
+    result = {
+        "divergence_type": "none",
+        "money_flow_score": 0.5,
+        "volume_price_correlation": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30 or len(volumes) < 30:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(20, len(closes))
+        recent_closes = closes[-lookback:]
+        recent_vols = volumes[-lookback:]
+
+        # 计算价格变化和成交量变化
+        price_changes = [recent_closes[i] - recent_closes[i-1] for i in range(1, len(recent_closes))]
+        vol_changes = [recent_vols[i] - recent_vols[i-1] for i in range(1, len(recent_vols))]
+
+        if not price_changes or not vol_changes:
+            result["msg"] = "变化计算失败"
+            return result
+
+        # 计算量价相关性
+        n = len(price_changes)
+        mean_pc = sum(price_changes) / n
+        mean_vc = sum(vol_changes) / n
+        cov = sum((price_changes[i] - mean_pc) * (vol_changes[i] - mean_vc) for i in range(n)) / n
+        std_pc = (sum((x - mean_pc) ** 2 for x in price_changes) / n) ** 0.5
+        std_vc = (sum((x - mean_vc) ** 2 for x in vol_changes) / n) ** 0.5
+
+        if std_pc > 0 and std_vc > 0:
+            correlation = cov / (std_pc * std_vc)
+        else:
+            correlation = 0.0
+
+        # 判断整体趋势方向
+        total_price_change = recent_closes[-1] - recent_closes[0]
+        total_vol_change = recent_vols[-1] - recent_vols[0]
+        price_trending_up = total_price_change > 0
+        vol_trending_up = total_vol_change > 0
+
+        # 检测背离
+        if price_trending_up and not vol_trending_up and correlation < -0.3:
+            divergence_type = "bearish_divergence"  # 价格上涨但量能萎缩
+            money_flow_score = 0.3
+            adjust = -0.03
+        elif not price_trending_up and vol_trending_up and correlation < -0.3:
+            divergence_type = "bullish_divergence"  # 价格下跌但量能放大
+            money_flow_score = 0.7
+            adjust = 0.03
+        elif price_trending_up and vol_trending_up and correlation > 0.3:
+            divergence_type = "confirmed_up"  # 量价齐升
+            money_flow_score = 0.8
+            adjust = 0.02
+        elif not price_trending_up and not vol_trending_up and correlation > 0.3:
+            divergence_type = "confirmed_down"  # 量价齐跌
+            money_flow_score = 0.2
+            adjust = -0.02
+        else:
+            divergence_type = "neutral"
+            money_flow_score = 0.5
+            adjust = 0.0
+
+        result["divergence_type"] = divergence_type
+        result["money_flow_score"] = money_flow_score
+        result["volume_price_correlation"] = round(correlation, 3)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"背离类型={divergence_type} 资金分={money_flow_score:.0%} "
+            f"量价相关={correlation:.2f} 调整{adjust:+.0%}"
         )
         return result
     except Exception:
