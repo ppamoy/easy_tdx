@@ -2154,6 +2154,39 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V77: 量能分布深度分析（条件240）
+  volume_distribution_depth_v77?: {
+    energy_zone: string
+    volume_rank: number
+    support_distance: number
+    resistance_distance: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V77: 中枢结构权重评估（条件241）
+  zhongshu_structure_weight_v77?: {
+    weight_score: number
+    nearest_zs_dist: number
+    zs_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V77: 信号新鲜度验证（条件242）
+  signal_freshness_validation_v77?: {
+    freshness_score: number
+    bars_since_signal: number
+    age_label: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V77: 价格动能加速度（条件243）
+  price_momentum_acceleration_v77?: {
+    acceleration: number
+    momentum_direction: string
+    acceleration_strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

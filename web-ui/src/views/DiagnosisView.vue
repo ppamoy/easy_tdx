@@ -4497,6 +4497,110 @@ onMounted(() => {
                      <div class="kv-note">{{ diagnosis.chanlun.signal_final_validity_v76.msg }}</div>
                    </div>
                 </div>
+                <!-- V77: 量能分布深度分析（条件240） -->
+                <div v-if="diagnosis.chanlun.volume_distribution_depth_v77" class="metric-card v77-vdd">
+                   <div class="card-title">📊 V77 量能分布深度（条件240）</div>
+                   <div class="card-body">
+                     <div class="kv-row">
+                       <span class="kv-key">能量区域</span>
+                       <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volume_distribution_depth_v77.energy_zone === 'accumulation', 'tag-red': diagnosis.chanlun.volume_distribution_depth_v77.energy_zone === 'distribution', 'tag-blue': diagnosis.chanlun.volume_distribution_depth_v77.energy_zone === 'low_zone', 'tag-orange': diagnosis.chanlun.volume_distribution_depth_v77.energy_zone === 'high_zone', 'tag-gray': diagnosis.chanlun.volume_distribution_depth_v77.energy_zone === 'neutral' }">
+                         {{ {accumulation:'🟢 筹码收集',distribution:'🔴 筹码派发',low_zone:'🔵 低位区',high_zone:'🟠 高位区',neutral:'⚪ 中性'}[diagnosis.chanlun.volume_distribution_depth_v77.energy_zone] ?? '—' }}
+                       </span>
+                       <span class="kv-key">量分位</span>
+                       <span class="kv-val">{{ (diagnosis.chanlun.volume_distribution_depth_v77.volume_rank * 100).toFixed(0) }}%</span>
+                     </div>
+                     <div class="kv-row">
+                       <span class="kv-key">距支撑</span>
+                       <span class="kv-val">{{ (diagnosis.chanlun.volume_distribution_depth_v77.support_distance * 100).toFixed(1) }}%</span>
+                       <span class="kv-key">距阻力</span>
+                       <span class="kv-val">{{ (diagnosis.chanlun.volume_distribution_depth_v77.resistance_distance * 100).toFixed(1) }}%</span>
+                     </div>
+                     <div class="kv-row">
+                       <span class="kv-key">置信度调整</span>
+                       <span class="kv-val" :style="{ color: diagnosis.chanlun.volume_distribution_depth_v77.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                         {{ diagnosis.chanlun.volume_distribution_depth_v77.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.volume_distribution_depth_v77.confidence_adjust * 100).toFixed(0) }}%
+                       </span>
+                     </div>
+                     <div class="kv-note">{{ diagnosis.chanlun.volume_distribution_depth_v77.msg }}</div>
+                   </div>
+                </div>
+                <!-- V77: 中枢结构权重评估（条件241） -->
+                <div v-if="diagnosis.chanlun.zhongshu_structure_weight_v77" class="metric-card v77-zsw">
+                   <div class="card-title">🏗️ V77 中枢结构权重（条件241）</div>
+                   <div class="card-body">
+                     <div class="kv-row">
+                       <span class="kv-key">结构权重</span>
+                       <span class="kv-val" :style="{ color: diagnosis.chanlun.zhongshu_structure_weight_v77.weight_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.zhongshu_structure_weight_v77.weight_score >= 0.5 ? '#f59e0b' : '#ef4444' }">
+                         {{ (diagnosis.chanlun.zhongshu_structure_weight_v77.weight_score * 100).toFixed(0) }}%
+                       </span>
+                       <span class="kv-key">最近中枢</span>
+                       <span class="tag tag-blue">{{ diagnosis.chanlun.zhongshu_structure_weight_v77.zs_level }}</span>
+                     </div>
+                     <div class="kv-row">
+                       <span class="kv-key">距中枢距离</span>
+                       <span class="kv-val">{{ (diagnosis.chanlun.zhongshu_structure_weight_v77.nearest_zs_dist * 100).toFixed(1) }}%</span>
+                     </div>
+                     <div class="kv-row">
+                       <span class="kv-key">置信度调整</span>
+                       <span class="kv-val" :style="{ color: diagnosis.chanlun.zhongshu_structure_weight_v77.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                         {{ diagnosis.chanlun.zhongshu_structure_weight_v77.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.zhongshu_structure_weight_v77.confidence_adjust * 100).toFixed(0) }}%
+                       </span>
+                     </div>
+                     <div class="kv-note">{{ diagnosis.chanlun.zhongshu_structure_weight_v77.msg }}</div>
+                   </div>
+                </div>
+                <!-- V77: 信号新鲜度验证（条件242） -->
+                <div v-if="diagnosis.chanlun.signal_freshness_validation_v77" class="metric-card v77-sfsh">
+                   <div class="card-title">⏱️ V77 信号新鲜度（条件242）</div>
+                   <div class="card-body">
+                     <div class="kv-row">
+                       <span class="kv-key">新鲜度评分</span>
+                       <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_freshness_validation_v77.freshness_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.signal_freshness_validation_v77.freshness_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                         {{ (diagnosis.chanlun.signal_freshness_validation_v77.freshness_score * 100).toFixed(0) }}%
+                       </span>
+                       <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.signal_freshness_validation_v77.age_label === 'very_fresh', 'tag-blue': diagnosis.chanlun.signal_freshness_validation_v77.age_label === 'fresh', 'tag-yellow': diagnosis.chanlun.signal_freshness_validation_v77.age_label === 'aging', 'tag-red': diagnosis.chanlun.signal_freshness_validation_v77.age_label === 'stale' }">
+                         {{ {very_fresh:'🟢 极新鲜',fresh:'🔵 新鲜',aging:'🟡 衰减中',stale:'🔴 陈旧'}[diagnosis.chanlun.signal_freshness_validation_v77.age_label] ?? '—' }}
+                       </span>
+                     </div>
+                     <div class="kv-row">
+                       <span class="kv-key">信号后K线数</span>
+                       <span class="kv-val">{{ diagnosis.chanlun.signal_freshness_validation_v77.bars_since_signal }} 根</span>
+                     </div>
+                     <div class="kv-row">
+                       <span class="kv-key">置信度调整</span>
+                       <span class="kv-val" :style="{ color: diagnosis.chanlun.signal_freshness_validation_v77.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                         {{ diagnosis.chanlun.signal_freshness_validation_v77.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.signal_freshness_validation_v77.confidence_adjust * 100).toFixed(0) }}%
+                       </span>
+                     </div>
+                     <div class="kv-note">{{ diagnosis.chanlun.signal_freshness_validation_v77.msg }}</div>
+                   </div>
+                </div>
+                <!-- V77: 价格动能加速度（条件243） -->
+                <div v-if="diagnosis.chanlun.price_momentum_acceleration_v77" class="metric-card v77-pma">
+                   <div class="card-title">🚀 V77 动能加速度（条件243）</div>
+                   <div class="card-body">
+                     <div class="kv-row">
+                       <span class="kv-key">加速度</span>
+                       <span class="kv-val" :style="{ color: (diagnosis.chanlun.price_momentum_acceleration_v77.acceleration > 0) ? '#22c55e' : '#ef4444' }">
+                         {{ diagnosis.chanlun.price_momentum_acceleration_v77.acceleration > 0 ? '+' : '' }}{{ diagnosis.chanlun.price_momentum_acceleration_v77.acceleration.toFixed(4) }}
+                       </span>
+                       <span class="tag" :class="{ 'tag-green': ['accelerating_up','growing_up'].includes(diagnosis.chanlun.price_momentum_acceleration_v77.momentum_direction), 'tag-red': ['sharp_reversal','decelerating'].includes(diagnosis.chanlun.price_momentum_acceleration_v77.momentum_direction), 'tag-gray': diagnosis.chanlun.price_momentum_acceleration_v77.momentum_direction === 'flat' }">
+                         {{ {accelerating_up:'📈 加速上涨',growing_up:'📈 稳步上涨',flat:'➡️ 横盘',decelerating:'📉 动能减弱',sharp_reversal:'🔴 急剧反转'}[diagnosis.chanlun.price_momentum_acceleration_v77.momentum_direction] ?? '—' }}
+                       </span>
+                     </div>
+                     <div class="kv-row">
+                       <span class="kv-key">加速度强度</span>
+                       <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.price_momentum_acceleration_v77.acceleration_strength === 'strong', 'tag-yellow': diagnosis.chanlun.price_momentum_acceleration_v77.acceleration_strength === 'moderate', 'tag-gray': diagnosis.chanlun.price_momentum_acceleration_v77.acceleration_strength === 'weak' }">
+                         {{ {strong:'🟢 强',moderate:'🟡 中',weak:'⚪ 弱'}[diagnosis.chanlun.price_momentum_acceleration_v77.acceleration_strength] ?? '—' }}
+                       </span>
+                       <span class="kv-key">置信度调整</span>
+                       <span class="kv-val" :style="{ color: diagnosis.chanlun.price_momentum_acceleration_v77.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">
+                         {{ diagnosis.chanlun.price_momentum_acceleration_v77.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.price_momentum_acceleration_v77.confidence_adjust * 100).toFixed(0) }}%
+                       </span>
+                     </div>
+                     <div class="kv-note">{{ diagnosis.chanlun.price_momentum_acceleration_v77.msg }}</div>
+                   </div>
+                </div>
                 <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -5516,4 +5620,9 @@ onMounted(() => {
 .v76-tav .kv-val { font-weight: 600; }
 .v76-vac .kv-val { font-weight: 600; }
 .v76-sfv .kv-val { font-weight: 700; }
+/* V77: 量能分布+中枢权重+新鲜度+动能加速度 */
+.v77-vdd .kv-val { font-weight: 600; }
+.v77-zsw .kv-val { font-weight: 600; }
+.v77-sfsh .kv-val { font-weight: 600; }
+.v77-pma .kv-val { font-weight: 600; }
 </style>

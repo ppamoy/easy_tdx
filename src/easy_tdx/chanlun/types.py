@@ -514,6 +514,12 @@ class MMD:
     _volatility_adaptive_confidence_v76: dict[str, Any] | None = None  # 波动率自适应置信度（条件238）
     _signal_final_validity_v76: dict[str, Any] | None = None  # 买卖点最终有效性评分（条件239）
 
+    # V77 enhancement fields (2026-08-27)
+    _volume_distribution_depth_v77: dict[str, Any] | None = None  # 量能分布深度分析（条件240）
+    _zhongshu_structure_weight_v77: dict[str, Any] | None = None  # 中枢结构权重评估（条件241）
+    _signal_freshness_validation_v77: dict[str, Any] | None = None  # 信号新鲜度验证（条件242）
+    _price_momentum_acceleration_v77: dict[str, Any] | None = None  # 价格动能加速度（条件243）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

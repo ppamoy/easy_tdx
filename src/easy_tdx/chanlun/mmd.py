@@ -1,7 +1,8 @@
 """买卖点识别（精修版 V55 - 决策增强）。
 
-基于缠论理论持续优化（V55 2026-08-26）：
+基于缠论理论持续优化（V77 2026-08-27）：
 - 置信度计算：基于多因子加权，非单一准确率声明
+- V77新增：量能分布深度分析(条件240)+中枢结构权重评估(条件241)+信号新鲜度验证(条件242)+价格动能加速度(条件243)
 - V76新增：价格结构完整性验证(条件236)+趋势方向对齐验证(条件237)+波动率自适应置信度(条件238)+买卖点最终有效性评分(条件239)
 - V75新增：回调深度验证(条件232)+中枢回踩确认(条件233)+量峰持续评分(条件234)+多信号时间一致性(条件235)
 - V73新增：买卖点位置风险评估(条件224)+中枢突破有效性验证(条件225)+多指标确认一致性(条件226)+波动率环境适配(条件227)
@@ -12,7 +13,7 @@
 - V49新增：突破力度二次验证(条件137)+回踩结构完整性(条件138)+中枢级别权重(条件139)
 - V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
-- 总条件数：235个
+- 总条件数：243个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -12392,6 +12393,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V77 条件 240-243 ──
+
+        # 条件240：量能分布深度分析（Volume Distribution Depth）
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 40:
+            try:
+                vdd = _calc_volume_distribution_depth_v77(mmd, closes, volumes)
+                mmd._volume_distribution_depth_v77 = vdd
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vdd.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件241：中枢结构权重评估（Zhongshu Structure Weight）
+        if mmd.bi is not None and zss is not None and closes is not None and len(closes) >= 10:
+            try:
+                zsw = _calc_zhongshu_structure_weight_v77(mmd, zss, closes)
+                mmd._zhongshu_structure_weight_v77 = zsw
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zsw.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件242：信号新鲜度验证（Signal Freshness Validation）
+        if mmd.bi is not None and closes is not None and len(closes) >= 10:
+            try:
+                sfv = _calc_signal_freshness_validation_v77(mmd, closes)
+                mmd._signal_freshness_validation_v77 = sfv
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sfv.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件243：价格动能加速度（Price Momentum Acceleration）
+        if mmd.bi is not None and closes is not None and len(closes) >= 20:
+            try:
+                pma = _calc_price_momentum_acceleration_v77(mmd, closes)
+                mmd._price_momentum_acceleration_v77 = pma
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pma.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -12502,13 +12541,13 @@ def find_mmds_v76(
     highs: list[float] | None = None,
     lows: list[float] | None = None,
 ) -> list[MMD]:
-    """V76 版本的 find_mmds：完整集成条件101-239。
+    """V77 版本的 find_mmds：完整集成条件101-243。
 
-    V76 在 V75 基础上新增四维权重验证：
-    - 条件236：价格结构完整性验证（过滤结构不完整的买卖点）
-    - 条件237：趋势方向对齐验证（避免逆势交易）
-    - 条件238：波动率自适应置信度（动态调整敏感度）
-    - 条件239：买卖点最终有效性评分（综合多条件最终确认）
+    V77 在 V76 基础上新增四维结构评估：
+    - 条件240：量能分布深度分析（识别筹码集中区）
+    - 条件241：中枢结构权重评估（评估中枢支撑/压制作用）
+    - 条件242：信号新鲜度验证（评估信号时效性）
+    - 条件243：价格动能加速度（评估趋势动能变化）
     """
     return find_mmds_v39(
         bis=bis, zss=zss, closes=closes, config=config,
@@ -24800,6 +24839,363 @@ def _calc_signal_final_validity_v76(
         result["msg"] = (
             f"有效性={validity} 得分={final_score:.0%} "
             f"建议:{rec} 基础={base_conf:.0%} 调整{total_adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ── V77: 条件 240-243（量能分布深度+中枢结构权重+信号新鲜度+价格动能加速度）────────────
+
+def _calc_volume_distribution_depth_v77(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量能分布深度分析（V76 条件240）。
+
+    分析成交量在价格区间的分布深度，识别筹码集中区：
+    - 底部放量堆积 → 筹码收集，看涨信号强化
+    - 顶部放量堆积 → 筹码派发，看跌信号强化
+    - 量价背离 → 信号需谨慎
+
+    返回：energy_zone, volume_rank, support_distance, resistance_distance, confidence_adjust, msg
+    """
+    result = {
+        "energy_zone": "unknown",
+        "volume_rank": 0.5,
+        "support_distance": 0.0,
+        "resistance_distance": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 40 or not volumes or len(volumes) < 40:
+            result["msg"] = "数据不足（需≥40根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        current_price = closes[-1]
+
+        # 计算近期高低点及成交量分布
+        lookback = min(60, n)
+        recent_closes = closes[-lookback:]
+        recent_vols = volumes[-lookback:] if len(volumes) >= lookback else volumes[-len(recent_closes):]
+
+        high_price = max(recent_closes)
+        low_price = min(recent_closes)
+        price_range = high_price - low_price
+        if price_range <= 0:
+            result["msg"] = "价格区间为零"
+            return result
+
+        # 计算成交量加权价格分位
+        total_vol = sum(recent_vols)
+        if total_vol <= 0:
+            result["msg"] = "无成交量数据"
+            return result
+
+        # 计算各价格区间的成交量占比（简化的能量分布）
+        n_bins = 10
+        bin_width = price_range / n_bins
+        vol_by_bin: list[float] = [0.0] * n_bins
+
+        for i, p in enumerate(recent_closes):
+            bin_idx = min(int((p - low_price) / bin_width), n_bins - 1)
+            vol_by_bin[bin_idx] += recent_vols[i] if i < len(recent_vols) else 0.0
+
+        # 当前价格所在成交量分位
+        current_bin = min(int((current_price - low_price) / bin_width), n_bins - 1)
+        current_vol_ratio = vol_by_bin[current_bin] / max(total_vol, 1e-10)
+        volume_rank = sum(vol_by_bin[:current_bin + 1]) / max(total_vol, 1e-10)
+
+        # 支撑/阻力距离
+        support_dist = (current_price - low_price) / current_price
+        resistance_dist = (high_price - current_price) / current_price
+
+        # 判断能量区域
+        avg_vol_ratio = sum(vol_by_bin) / n_bins
+        if current_vol_ratio > avg_vol_ratio * 1.5 and volume_rank < 0.4:
+            energy_zone = "accumulation"
+            adjust = 0.03 if is_buy else -0.02
+        elif current_vol_ratio > avg_vol_ratio * 1.5 and volume_rank > 0.6:
+            energy_zone = "distribution"
+            adjust = -0.03 if is_buy else 0.02
+        elif volume_rank < 0.3:
+            energy_zone = "low_zone"
+            adjust = 0.02 if is_buy else -0.01
+        elif volume_rank > 0.7:
+            energy_zone = "high_zone"
+            adjust = -0.02 if is_buy else 0.01
+        else:
+            energy_zone = "neutral"
+            adjust = 0.0
+
+        result["energy_zone"] = energy_zone
+        result["volume_rank"] = round(volume_rank, 3)
+        result["support_distance"] = round(support_dist, 4)
+        result["resistance_distance"] = round(resistance_dist, 4)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"能量区={energy_zone} 量分位={volume_rank:.0%} "
+            f"支撑距={support_dist:.1%} 阻力距={resistance_dist:.1%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_structure_weight_v77(
+    mmd: "MMD",
+    zss: list[Any],
+    closes: list[float],
+) -> dict[str, Any]:
+    """中枢结构权重评估（V77 条件241）。
+
+    评估当前买卖点最近的中枢对信号的支撑/压制作用：
+    - 买入点在下方中枢上方 → 中枢支撑强，信号更可靠
+    - 卖出点在上方中枢下方 → 中枢阻力强，信号更可靠
+    - 远离中枢 → 信号缺乏结构支撑
+
+    返回：weight_score, nearest_zs_dist, zs_level, confidence_adjust, msg
+    """
+    result = {
+        "weight_score": 0.0,
+        "nearest_zs_dist": 0.0,
+        "zs_level": "none",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not zss or len(closes) < 10:
+            result["msg"] = "无中枢数据或数据不足"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        current_price = closes[-1]
+
+        # 找最近的中枢
+        nearest_zs = None
+        nearest_dist = float("inf")
+        nearest_level = 0
+
+        for zs in zss:
+            zg = getattr(zs, "zg", 0.0)
+            zd = getattr(zs, "zd", 0.0)
+            if zg <= 0 or zd <= 0:
+                continue
+            zs_center = (zg + zd) / 2
+            zs_half_width = (zg - zd) / 2
+            dist = abs(current_price - zs_center) / max(zs_center, 1e-10)
+            if dist < nearest_dist:
+                nearest_dist = dist
+                nearest_zs = zs
+                nearest_level = getattr(zs, "level", 0)
+
+        if nearest_zs is None:
+            result["msg"] = "未找到有效中枢"
+            result["confidence_adjust"] = -0.02
+            return result
+
+        result["nearest_zs_dist"] = round(nearest_dist, 4)
+        result["zs_level"] = f"L{nearest_level}" if nearest_level > 0 else "1F"
+
+        # 评估结构权重
+        if is_buy:
+            # 买入：价格在中枢上方且距离适中
+            if current_price > getattr(nearest_zs, "zg", 0) and nearest_dist < 0.15:
+                weight_score = 0.9
+                adjust = 0.04
+            elif current_price > getattr(nearest_zs, "zd", 0) and nearest_dist < 0.25:
+                weight_score = 0.7
+                adjust = 0.02
+            elif nearest_dist < 0.10:
+                weight_score = 0.5
+                adjust = 0.0
+            else:
+                weight_score = 0.3
+                adjust = -0.02
+        else:
+            # 卖出：价格在中枢下方且距离适中
+            if current_price < getattr(nearest_zs, "zd", 0) and nearest_dist < 0.15:
+                weight_score = 0.9
+                adjust = 0.04
+            elif current_price < getattr(nearest_zs, "zg", 0) and nearest_dist < 0.25:
+                weight_score = 0.7
+                adjust = 0.02
+            elif nearest_dist < 0.10:
+                weight_score = 0.5
+                adjust = 0.0
+            else:
+                weight_score = 0.3
+                adjust = -0.02
+
+        result["weight_score"] = weight_score
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"权重={weight_score:.0%} 最近中枢{result['zs_level']} "
+            f"距离={nearest_dist:.1%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_freshness_validation_v77(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """信号新鲜度验证（V77 条件242）。
+
+    根据信号产生后的K线数量和价格漂移评估信号新鲜度：
+    - 新鲜信号（≤5根K线）→ 完整置信度
+    - 半新鲜（6-15根）→ 线性衰减
+    - 陈旧信号（>15根）→ 显著衰减或失效
+
+    返回：freshness_score, bars_since_signal, age_label, confidence_adjust, msg
+    """
+    result = {
+        "freshness_score": 1.0,
+        "bars_since_signal": 0,
+        "age_label": "fresh",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 10:
+            result["msg"] = "数据不足（需≥10根）"
+            return result
+
+        # 计算信号后经过的K线数
+        if mmd.bi and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k_index"):
+            bi_end_idx = mmd.bi.end.k_index
+            bars_since = n - 1 - bi_end_idx
+        else:
+            # 无笔信息，使用最后5根K线作为近似
+            bars_since = min(5, n - 1)
+
+        result["bars_since_signal"] = bars_since
+
+        # 新鲜度评分
+        if bars_since <= 3:
+            freshness = 1.0
+            age_label = "very_fresh"
+            adjust = 0.03
+        elif bars_since <= 7:
+            freshness = max(0.6, 1.0 - (bars_since - 3) * 0.05)
+            age_label = "fresh"
+            adjust = 0.01
+        elif bars_since <= 15:
+            freshness = max(0.3, 0.6 - (bars_since - 7) * 0.03)
+            age_label = "aging"
+            adjust = -0.02
+        else:
+            freshness = max(0.0, 0.3 - (bars_since - 15) * 0.01)
+            age_label = "stale"
+            adjust = -0.05
+
+        result["freshness_score"] = round(freshness, 3)
+        result["age_label"] = age_label
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"新鲜度={freshness:.0%} 信号后{bars_since}根K线 "
+            f"年龄={age_label} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_price_momentum_acceleration_v77(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """价格动能加速度（V77 条件243）。
+
+    分析信号附近的 price acceleration/deceleration：
+    - 加速度为正且持续 → 动能增强，信号更可信
+    - 加速度为负 → 动能减弱，信号需谨慎
+    - 加速度接近零 → 动能衰竭，观望
+
+    返回：acceleration, momentum_direction, acceleration_strength, confidence_adjust, msg
+    """
+    result = {
+        "acceleration": 0.0,
+        "momentum_direction": "unknown",
+        "acceleration_strength": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 20:
+            result["msg"] = "数据不足（需≥20根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 计算价格加速度（二阶差分）
+        # 短期速度
+        short_vel = closes[-1] - closes[-3] if n >= 3 else 0.0
+        # 中期速度
+        mid_vel = closes[-5] - closes[-10] if n >= 10 else short_vel
+        # 加速度 = 短期速度变化
+        accel = short_vel - mid_vel
+        current_price = closes[-1]
+
+        # 归一化加速度
+        norm_accel = accel / max(abs(current_price), 1e-10)
+
+        # 判断方向
+        if norm_accel > 0.005:
+            direction = "accelerating_up"
+        elif norm_accel > 0.001:
+            direction = "growing_up"
+        elif norm_accel > -0.001:
+            direction = "flat"
+        elif norm_accel > -0.005:
+            direction = "decelerating"
+        else:
+            direction = "sharp_reversal"
+
+        # 判断强度
+        abs_accel = abs(norm_accel)
+        if abs_accel > 0.01:
+            strength = "strong"
+        elif abs_accel > 0.005:
+            strength = "moderate"
+        else:
+            strength = "weak"
+
+        # 置信度调整
+        if is_buy:
+            if direction == "accelerating_up":
+                adjust = 0.04
+            elif direction == "growing_up":
+                adjust = 0.02
+            elif direction == "flat":
+                adjust = 0.0
+            else:
+                adjust = -0.03
+        else:
+            if direction == "sharp_reversal":
+                adjust = 0.04
+            elif direction == "decelerating":
+                adjust = 0.02
+            elif direction == "flat":
+                adjust = 0.0
+            else:
+                adjust = -0.03
+
+        result["acceleration"] = round(norm_accel, 5)
+        result["momentum_direction"] = direction
+        result["acceleration_strength"] = strength
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"加速度={norm_accel:.4f} 方向={direction} 强度={strength} "
+            f"调整{adjust:+.0%}"
         )
         return result
     except Exception:
