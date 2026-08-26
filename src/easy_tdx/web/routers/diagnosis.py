@@ -1104,6 +1104,14 @@ async def diagnose_stock(
             "zhongshu_overlap_density_v74": getattr(latest_mmd, "_zhongshu_overlap_density_v74", None) if latest_mmd else None,
             # V74: 信号共振深度评分（条件231）
             "signal_resonance_depth_v74": getattr(latest_mmd, "_signal_resonance_depth_v74", None) if latest_mmd else None,
+            # V75: 回调深度验证（条件232）
+            "pullback_depth_validation_v75": getattr(latest_mmd, "_pullback_depth_validation_v75", None) if latest_mmd else None,
+            # V75: 中枢区间回踩确认（条件233）
+            "zhongshu_retracement_confirm_v75": getattr(latest_mmd, "_zhongshu_retracement_confirm_v75", None) if latest_mmd else None,
+            # V75: 量峰持续时间评分（条件234）
+            "volume_peak_duration_v75": getattr(latest_mmd, "_volume_peak_duration_v75", None) if latest_mmd else None,
+            # V75: 多信号时间一致性（条件235）
+            "multi_signal_time_consistency_v75": getattr(latest_mmd, "_multi_signal_time_consistency_v75", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1472,6 +1480,14 @@ async def multi_stock_comparison(
                             condition_counts["v74_cond230"] = condition_counts.get("v74_cond230", 0) + 1
                         if c == 231 and hasattr(mmd, "_signal_resonance_depth_v74"):
                             condition_counts["v74_cond231"] = condition_counts.get("v74_cond231", 0) + 1
+                        if c == 232 and hasattr(mmd, "_pullback_depth_validation_v75"):
+                            condition_counts["v75_cond232"] = condition_counts.get("v75_cond232", 0) + 1
+                        if c == 233 and hasattr(mmd, "_zhongshu_retracement_confirm_v75"):
+                            condition_counts["v75_cond233"] = condition_counts.get("v75_cond233", 0) + 1
+                        if c == 234 and hasattr(mmd, "_volume_peak_duration_v75"):
+                            condition_counts["v75_cond234"] = condition_counts.get("v75_cond234", 0) + 1
+                        if c == 235 and hasattr(mmd, "_multi_signal_time_consistency_v75"):
+                            condition_counts["v75_cond235"] = condition_counts.get("v75_cond235", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

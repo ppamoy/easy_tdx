@@ -2082,6 +2082,42 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
+  // V75: 回调深度验证（条件232）
+  pullback_depth_validation_v75?: {
+    pullback_depth: number
+    max_retracement: number
+    fibonacci_level: string
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V75: 中枢区间回踩确认（条件233）
+  zhongshu_retracement_confirm_v75?: {
+    retracement_type: string
+    nearest_zs_dist: number
+    bounce_strength: number
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V75: 量峰持续时间评分（条件234）
+  volume_peak_duration_v75?: {
+    peak_duration: number
+    avg_vol_ratio: number
+    peak_days: number
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V75: 多信号时间一致性（条件235）
+  multi_signal_time_consistency_v75?: {
+    consistency_score: number
+    signal_dates: Array<{ name: string; days_ago: number }>
+    alignment_ratio: number
+    confirm_signal: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisMACD {

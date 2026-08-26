@@ -502,6 +502,12 @@ class MMD:
     _zhongshu_overlap_density_v74: dict[str, Any] | None = None  # 中枢重叠度评估（条件230）
     _signal_resonance_depth_v74: dict[str, Any] | None = None  # 信号共振深度评分（条件231）
 
+    # V75 enhancement fields (2026-08-26)
+    _pullback_depth_validation_v75: dict[str, Any] | None = None  # 回调深度验证（条件232）
+    _zhongshu_retracement_confirm_v75: dict[str, Any] | None = None  # 中枢回踩确认（条件233）
+    _volume_peak_duration_v75: dict[str, Any] | None = None  # 量峰持续评分（条件234）
+    _multi_signal_time_consistency_v75: dict[str, Any] | None = None  # 多信号时间一致性（条件235）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

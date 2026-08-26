@@ -4392,6 +4392,49 @@ onMounted(() => {
                     <div class="kv-note">{{ diagnosis.chanlun.signal_resonance_depth_v74.msg }}</div>
                   </div>
                </div>
+               <!-- V75: 回调深度验证 -->
+               <div v-if="diagnosis.chanlun.pullback_depth_validation_v75" class="metric-card v75-pdv">
+                  <div class="card-title">📉 V75 回调深度（条件232）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">回调深度</span><span class="kv-val">{{ (diagnosis.chanlun.pullback_depth_validation_v75.pullback_depth * 100).toFixed(1) }}%</span></div>
+                    <div class="kv-row"><span class="kv-key">斐波那契位</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.pullback_depth_validation_v75.fibonacci_level === 'shallow_15' || diagnosis.chanlun.pullback_depth_validation_v75.fibonacci_level === 'fib_236', 'tag-blue': diagnosis.chanlun.pullback_depth_validation_v75.fibonacci_level === 'fib_382', 'tag-orange': diagnosis.chanlun.pullback_depth_validation_v75.fibonacci_level === 'fib_50', 'tag-red': diagnosis.chanlun.pullback_depth_validation_v75.fibonacci_level === 'deep_over_50' }">{{ {shallow_15:'🟢 浅回(≤15%)',fib_236:'🟢 斐波23.6%',fib_382:'🔵 斐波38.2%',fib_50:'🟠 过度回调',deep_over_50:'🔴 深度回调>50%'}[diagnosis.chanlun.pullback_depth_validation_v75.fibonacci_level] ?? '—' }}</span></div>
+                    <div class="kv-row"><span class="kv-key">回调确认</span><span class="tag" :class="diagnosis.chanlun.pullback_depth_validation_v75.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.pullback_depth_validation_v75.confirm_signal ? '✅ 回调健康' : '⚠️ 回调过深' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.pullback_depth_validation_v75.msg }}</div>
+                  </div>
+               </div>
+               <!-- V75: 中枢回踩确认 -->
+               <div v-if="diagnosis.chanlun.zhongshu_retracement_confirm_v75" class="metric-card v75-zrc">
+                  <div class="card-title">🔄 V75 中枢回踩（条件233）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">回踩类型</span><span class="tag" :class="{ 'tag-green': diagnosis.chanlun.zhongshu_retracement_confirm_v75.retracement_type === 'zs_support_bounce' || diagnosis.chanlun.zhongshu_retracement_confirm_v75.retracement_type === 'above_zs_confirmed', 'tag-blue': diagnosis.chanlun.zhongshu_retracement_confirm_v75.retracement_type === 'inside_zs', 'tag-orange': diagnosis.chanlun.zhongshu_retracement_confirm_v75.retracement_type === 'below_zs', 'tag-red': diagnosis.chanlun.zhongshu_retracement_confirm_v75.retracement_type === 'none' }">{{ {zs_support_bounce:'🟢 支撑反弹',above_zs_confirmed:'🟢 中枢上方确认',inside_zs:'🔵 中枢内部',below_zs:'🟠 跌破中枢',none:'⚪ 无回踩'}[diagnosis.chanlun.zhongshu_retracement_confirm_v75.retracement_type] ?? '—' }}</span></div>
+                    <div class="kv-row"><span class="kv-key">反弹强度</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_retracement_confirm_v75.bounce_strength.toFixed(3) }}</span></div>
+                    <div class="kv-row"><span class="kv-key">距最近中枢</span><span class="kv-val">{{ diagnosis.chanlun.zhongshu_retracement_confirm_v75.nearest_zs_dist.toFixed(2) }}x 区间</span></div>
+                    <div class="kv-row"><span class="kv-key">回踩确认</span><span class="tag" :class="diagnosis.chanlun.zhongshu_retracement_confirm_v75.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.zhongshu_retracement_confirm_v75.confirm_signal ? '✅ 回踩确认' : '❌ 未确认' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.zhongshu_retracement_confirm_v75.msg }}</div>
+                  </div>
+               </div>
+               <!-- V75: 量峰持续评分 -->
+               <div v-if="diagnosis.chanlun.volume_peak_duration_v75" class="metric-card v75-vpd2">
+                  <div class="card-title">📊 V75 量峰持续（条件234）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">放量天数</span><span class="kv-val">{{ diagnosis.chanlun.volume_peak_duration_v75.peak_days }} 天</span></div>
+                    <div class="kv-row"><span class="kv-key">连续峰值</span><span class="kv-val">{{ diagnosis.chanlun.volume_peak_duration_v75.peak_duration }} 天</span></div>
+                    <div class="kv-row"><span class="kv-key">均量比</span><span class="kv-val">{{ diagnosis.chanlun.volume_peak_duration_v75.avg_vol_ratio.toFixed(2) }}x</span></div>
+                    <div class="kv-row"><span class="kv-key">量能确认</span><span class="tag" :class="diagnosis.chanlun.volume_peak_duration_v75.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.volume_peak_duration_v75.confirm_signal ? '✅ 量能配合' : '⚠️ 量能不足' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.volume_peak_duration_v75.msg }}</div>
+                  </div>
+               </div>
+               <!-- V75: 多信号时间一致性 -->
+               <div v-if="diagnosis.chanlun.multi_signal_time_consistency_v75" class="metric-card v75-mstc">
+                  <div class="card-title">⏰ V75 时间一致（条件235）</div>
+                  <div class="card-body">
+                    <div class="kv-row"><span class="kv-key">信号数量</span><span class="kv-val">{{ diagnosis.chanlun.multi_signal_time_consistency_v75.signal_dates?.length ?? 0 }} 个</span></div>
+                    <div class="kv-row"><span class="kv-key">一致率</span><span class="kv-val">{{ (diagnosis.chanlun.multi_signal_time_consistency_v75.consistency_score * 100).toFixed(0) }}%</span></div>
+                    <div class="kv-row"><span class="kv-key">对齐比</span><span class="kv-val">{{ diagnosis.chanlun.multi_signal_time_consistency_v75.alignment_ratio.toFixed(3) }}</span></div>
+                    <div class="kv-row"><span class="kv-key">时间确认</span><span class="tag" :class="diagnosis.chanlun.multi_signal_time_consistency_v75.confirm_signal ? 'tag-green' : 'tag-gray'">{{ diagnosis.chanlun.multi_signal_time_consistency_v75.confirm_signal ? '✅ 信号同步' : '⚠️ 信号分散' }}</span></div>
+                    <div class="kv-note">{{ diagnosis.chanlun.multi_signal_time_consistency_v75.msg }}</div>
+                  </div>
+               </div>
                <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -5391,14 +5434,9 @@ onMounted(() => {
 .v74-tmc .kv-val { font-weight: 600; }
 .v74-zod .kv-val { font-weight: 600; }
 .v74-srd .kv-val { font-weight: 600; }
-/* V74: 量价背离+动能持续+中枢重叠+共振深度 */
-.v74-vpd .kv-val { font-weight: 600; }
-.v74-tmc .kv-val { font-weight: 600; }
-.v74-zod .kv-val { font-weight: 600; }
-.v74-srd .kv-val { font-weight: 600; }
-/* V74: 量价背离+动能持续+中枢重叠+共振深度 */
-.v74-vpd .kv-val { font-weight: 600; }
-.v74-tmc .kv-val { font-weight: 600; }
-.v74-zod .kv-val { font-weight: 600; }
-.v74-srd .kv-val { font-weight: 600; }
+/* V75: 回调深度+中枢回踩+量峰持续+时间一致性 */
+.v75-pdv .kv-val { font-weight: 600; }
+.v75-zrc .kv-val { font-weight: 600; }
+.v75-vpd .kv-val { font-weight: 600; }
+.v75-mstc .kv-val { font-weight: 600; }
 </style>

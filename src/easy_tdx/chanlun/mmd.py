@@ -3,6 +3,7 @@
 基于缠论理论持续优化（V55 2026-08-26）：
 - 置信度计算：基于多因子加权，非单一准确率声明
 - V74新增：量价背离二次确认(条件228)+趋势动能持续验证(条件229)+中枢重叠度评估(条件230)+信号共振深度评分(条件231)
+- V75新增：回调深度验证(条件232)+中枢回踩确认(条件233)+量峰持续评分(条件234)+多信号时间一致性(条件235)
 - V73新增：买卖点位置风险评估(条件224)+中枢突破有效性验证(条件225)+多指标确认一致性(条件226)+波动率环境适配(条件227)
 - V54新增：多K线确认后确认(条件156)+缺口风险评估(条件157)+波动率切换检测(条件158)+量价配合度评分(条件159)
 - V53新增：趋势顺势确认(条件152)+ATR自适应止损(条件153)+突破力度验证(条件154)+信号质量分层(条件155)
@@ -11,7 +12,7 @@
 - V49新增：突破力度二次验证(条件137)+回踩结构完整性(条件138)+中枢级别权重(条件139)
 - V48新增：量价背离二次确认(条件134)+趋势强度加权(条件135)+动态风险收益比(条件136)
 - V47新增：后确认价格跟随过滤(条件131)+信号有效性窗口(条件132)+置信度动态校准(条件133)
-- 总条件数：231个
+- 总条件数：235个
 - V9新增：MA20趋势对齐过滤、RSI确认过滤、MACD阈值从40%收紧至30%
 - V10新增：MA斜率确认、BOLL位置过滤、ADX趋势强度过滤、RSI动量确认、多因子共振加成
 - V11新增：MA斜率放宽+RSI动量补偿、ADX真实OHLC计算
@@ -12316,6 +12317,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V75 条件 232-235 ──
+
+        # 条件232：回调深度验证（Pullback Depth Validation）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                pb_depth = _calc_pullback_depth_validation_v75(mmd, closes, highs, lows)
+                mmd._pullback_depth_validation_v75 = pb_depth
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pb_depth.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件233：中枢区间回踩确认（Zhongshu Retracement Confirmation）
+        if mmd.bi is not None and zss is not None and closes is not None and len(closes) >= 15:
+            try:
+                zs_ret = _calc_zhongshu_retracement_confirm_v75(mmd, zss, closes)
+                mmd._zhongshu_retracement_confirm_v75 = zs_ret
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_ret.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件234：量峰持续时间评分（Volume Peak Duration Score）
+        if mmd.bi is not None and volumes is not None and closes is not None and len(volumes) >= 30 and len(closes) >= 30:
+            try:
+                vp_dur = _calc_volume_peak_duration_v75(mmd, volumes, closes)
+                mmd._volume_peak_duration_v75 = vp_dur
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_dur.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件235：多信号时间一致性（Multi-Signal Time Consistency）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 40:
+            try:
+                sig_time = _calc_multi_signal_time_consistency_v75(mmd, closes, highs, lows, macd_data, volumes)
+                mmd._multi_signal_time_consistency_v75 = sig_time
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sig_time.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -23856,6 +23895,497 @@ def _calc_signal_resonance_depth_v74(
         result["msg"] = (
             f"{confirming}/{total}维度共振 深度={resonance_level} "
             f"一致率={ratio:.0%} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# V75: 条件 232-235（回调深度验证+中枢回踩确认+量峰持续评分+多信号时间一致性）
+
+def _calc_pullback_depth_validation_v75(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+) -> dict[str, Any]:
+    """回调深度验证（V75 条件232）。
+
+    检测买入/卖出信号后的回调深度是否在合理范围内。
+    健康的趋势回调不应超过关键斐波那契回撤位（23.6%/38.2%）。
+
+    返回：pullback_depth, max_retracement, fibonacci_level, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "pullback_depth": 0.0,
+        "max_retracement": 0.0,
+        "fibonacci_level": "none",
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 30 or highs is None or lows is None:
+            result["msg"] = "数据不足（需≥30根且有highs/lows）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 找最近的高点/低点作为回调基准
+        lookback = min(20, n)
+        recent_high = max(highs[-lookback:])
+        recent_low = min(lows[-lookback:])
+        price_range = recent_high - recent_low
+
+        if price_range <= 0:
+            result["msg"] = "价格区间为零"
+            return result
+
+        current_price = closes[-1]
+
+        if is_buy:
+            # 买入信号后，价格从高点回落的深度
+            pullback = (recent_high - current_price) / recent_high
+            max_retracement = pullback
+            # 斐波那契回撤位判断
+            if pullback <= 0.15:
+                fib_level = "shallow_15"
+                confirm = True
+            elif pullback <= 0.236:
+                fib_level = "fib_236"
+                confirm = True
+            elif pullback <= 0.382:
+                fib_level = "fib_382"
+                confirm = True
+            elif pullback <= 0.5:
+                fib_level = "fib_50"
+                confirm = False  # 过度回调，趋势可能减弱
+            else:
+                fib_level = "deep_over_50"
+                confirm = False
+            strength = min(pullback * 2, 1.0) if confirm else 0.0
+        else:
+            # 卖出信号后，价格从低点反弹的深度
+            pullback = (current_price - recent_low) / recent_low
+            max_retracement = pullback
+            if pullback <= 0.15:
+                fib_level = "shallow_15"
+                confirm = True
+            elif pullback <= 0.236:
+                fib_level = "fib_236"
+                confirm = True
+            elif pullback <= 0.382:
+                fib_level = "fib_382"
+                confirm = True
+            elif pullback <= 0.5:
+                fib_level = "fib_50"
+                confirm = False
+            else:
+                fib_level = "deep_over_50"
+                confirm = False
+            strength = min(pullback * 2, 1.0) if confirm else 0.0
+
+        if confirm and pullback <= 0.236:
+            adjust = 0.05
+        elif confirm and pullback <= 0.382:
+            adjust = 0.02
+        elif not confirm and pullback <= 0.5:
+            adjust = -0.03
+        elif pullback > 0.5:
+            adjust = -0.06
+        else:
+            adjust = 0.0
+
+        result["pullback_depth"] = round(pullback, 4)
+        result["max_retracement"] = round(max_retracement, 4)
+        result["fibonacci_level"] = fib_level
+        result["confirm_signal"] = confirm
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"回调深度={pullback:.1%} 斐波={fib_level} "
+            f"高点={recent_high:.2f} 现价={current_price:.2f} 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_zhongshu_retracement_confirm_v75(
+    mmd: "MMD",
+    zss: list["ZS"],
+    closes: list[float],
+) -> dict[str, Any]:
+    """中枢区间回踩确认（V75 条件233）。
+
+    验证价格回踩到中枢边界后是否有反弹确认，判断中枢支撑/阻力有效性。
+
+    返回：retracement_type, nearest_zs_dist, bounce_strength, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "retracement_type": "none",
+        "nearest_zs_dist": 0.0,
+        "bounce_strength": 0.0,
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 15 or not zss:
+            result["msg"] = "数据不足（需≥15根且有中枢数据）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        current_price = closes[-1]
+
+        # 找最近的中枢
+        nearest_zs = None
+        min_dist = float("inf")
+        for zs in zss[-5:]:
+            if zs.zg is None or zs.zd is None:
+                continue
+            zs_center = (zs.zg + zs.zd) / 2
+            zs_range = zs.zg - zs.zd
+            dist = abs(current_price - zs_center) / max(zs_range, 1e-10)
+            if dist < min_dist:
+                min_dist = dist
+                nearest_zs = zs
+
+        if nearest_zs is None:
+            result["msg"] = "无可用中枢数据"
+            result["nearest_zs_dist"] = 0.0
+            return result
+
+        zs_top = nearest_zs.zg
+        zs_bottom = nearest_zs.zd
+        zs_range = zs_top - zs_bottom
+        price_range = max(max(closes[-10:]) - min(closes[-10:]), 1e-10)
+
+        # 计算价格相对中枢的位置
+        if current_price >= zs_top:
+            above_zs = (current_price - zs_top) / max(zs_range, 1e-10)
+            retracement_type = "above_zs"
+        elif current_price <= zs_bottom:
+            below_zs = (zs_bottom - current_price) / max(zs_range, 1e-10)
+            retracement_type = "below_zs"
+        else:
+            retracement_type = "inside_zs"
+            above_zs = 0.0
+            below_zs = 0.0
+
+        # 检查回踩后的反弹（最近10根K线的最低价是否收回）
+        # 简化：用closes的局部极值近似
+        last_10_closes = closes[-10:]
+
+        # 简单判断：最近几根K线是否从中枢区域反弹
+        if is_buy and retracement_type in ("inside_zs", "below_zs"):
+            # 买入信号在中枢下方或内部，检查是否有反弹
+            recent_high = max(last_10_closes[-5:]) if len(last_10_closes) >= 5 else max(last_10_closes)
+            bounce = (recent_high - current_price) / max(current_price, 1e-10)
+            if bounce > 0.01 and current_price < zs_top:
+                confirm = True
+                bounce_strength = min(bounce * 10, 1.0)
+                retracement_type = "zs_support_bounce"
+            elif current_price > zs_top:
+                confirm = True
+                bounce_strength = 0.5
+                retracement_type = "above_zs_confirmed"
+            else:
+                confirm = False
+                bounce_strength = 0.0
+        elif not is_buy and retracement_type in ("inside_zs", "above_zs"):
+            recent_low = min(last_10_closes[-5:]) if len(last_10_closes) >= 5 else min(last_10_closes)
+            bounce = (current_price - recent_low) / max(current_price, 1e-10)
+            if bounce > 0.01 and current_price > zs_bottom:
+                confirm = True
+                bounce_strength = min(bounce * 10, 1.0)
+                retracement_type = "zs_resistance_bounce"
+            elif current_price < zs_bottom:
+                confirm = True
+                bounce_strength = 0.5
+                retracement_type = "below_zs_confirmed"
+            else:
+                confirm = False
+                bounce_strength = 0.0
+        else:
+            confirm = False
+            bounce_strength = 0.0
+
+        if confirm and bounce_strength >= 0.5:
+            adjust = 0.05
+        elif confirm and bounce_strength >= 0.3:
+            adjust = 0.02
+        elif not confirm:
+            adjust = -0.03
+        else:
+            adjust = 0.0
+
+        result["retracement_type"] = retracement_type
+        result["nearest_zs_dist"] = round(min_dist, 3)
+        result["bounce_strength"] = round(bounce_strength, 3)
+        result["confirm_signal"] = confirm
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"类型={retracement_type} 反弹强度={bounce_strength:.2f} "
+            f"距中枢={min_dist:.2f}x 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_peak_duration_v75(
+    mmd: "MMD",
+    volumes: list[float],
+    closes: list[float],
+) -> dict[str, Any]:
+    """量峰持续时间评分（V75 条件234）。
+
+    评估成交量放大的持续天数，判断资金流入的持续性和信号可信度。
+
+    返回：peak_duration, avg_vol_ratio, peak_days, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "peak_duration": 0,
+        "avg_vol_ratio": 0.0,
+        "peak_days": 0,
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(volumes)
+        if n < 30:
+            result["msg"] = "数据不足（需≥30根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 计算平均成交量（用20日EMA）
+        avg_vol = sum(volumes[-20:]) / 20
+        if avg_vol <= 0:
+            result["msg"] = "平均成交量为零"
+            return result
+
+        # 统计连续放量天数（volume > 1.5x avg）
+        peak_threshold = avg_vol * 1.5
+        consecutive_peak = 0
+        total_peak_days = 0
+        vol_ratios = []
+
+        for i in range(n - 20, n):
+            vol_ratio = volumes[i] / avg_vol
+            vol_ratios.append(vol_ratio)
+            if volumes[i] >= peak_threshold:
+                total_peak_days += 1
+                consecutive_peak += 1
+            else:
+                if consecutive_peak > result["peak_duration"]:
+                    result["peak_duration"] = consecutive_peak
+                consecutive_peak = 0
+
+        if consecutive_peak > result["peak_duration"]:
+            result["peak_duration"] = consecutive_peak
+
+        peak_days = result["peak_duration"]
+        avg_vol_ratio = sum(vol_ratios) / len(vol_ratios) if vol_ratios else 0.0
+
+        # 判断信号确认
+        if is_buy:
+            if peak_days >= 5 and avg_vol_ratio >= 1.8:
+                confirm = True
+                strength = min(peak_days / 10, 1.0)
+            elif peak_days >= 3 and avg_vol_ratio >= 1.5:
+                confirm = True
+                strength = min(peak_days / 8, 0.7)
+            elif peak_days >= 2:
+                confirm = False
+                strength = 0.3
+            else:
+                confirm = False
+                strength = 0.0
+        else:
+            # 卖出信号：持续放量下跌是确认信号
+            if peak_days >= 5 and avg_vol_ratio >= 1.8:
+                confirm = True
+                strength = min(peak_days / 10, 1.0)
+            elif peak_days >= 3 and avg_vol_ratio >= 1.5:
+                confirm = True
+                strength = min(peak_days / 8, 0.7)
+            elif peak_days >= 2:
+                confirm = False
+                strength = 0.3
+            else:
+                confirm = False
+                strength = 0.0
+
+        if confirm and strength >= 0.7:
+            adjust = 0.06
+        elif confirm and strength >= 0.4:
+            adjust = 0.03
+        elif not confirm and peak_days >= 2:
+            adjust = -0.02
+        else:
+            adjust = 0.0
+
+        result["peak_duration"] = peak_days
+        result["avg_vol_ratio"] = round(avg_vol_ratio, 3)
+        result["peak_days"] = peak_days
+        result["confirm_signal"] = confirm
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"放量天数={peak_days} 均量比={avg_vol_ratio:.2f}x "
+            f"持续{peak_days}日 置信度{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_signal_time_consistency_v75(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float] | None,
+    lows: list[float] | None,
+    macd_data: list[dict[str, Any]] | None,
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """多信号时间一致性（V75 条件235）。
+
+    检测多个技术指标信号是否在相近时间段内出现，
+    时间越集中→一致性越高→信号越可靠。
+
+    返回：consistency_score, signal_dates, alignment_ratio, confirm_signal, confidence_adjust, msg
+    """
+    result = {
+        "consistency_score": 0.0,
+        "signal_dates": [],
+        "alignment_ratio": 0.0,
+        "confirm_signal": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        n = len(closes)
+        if n < 40 or highs is None or lows is None:
+            result["msg"] = "数据不足（需≥40根）"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 找各信号出现的最近位置（距离当前天数）
+        signals: list[tuple[str, int]] = []  # (signal_name, days_ago)
+
+        # 1. MACD金叉/死叉
+        if macd_data and len(macd_data) >= 10:
+            for i in range(len(macd_data) - 1, max(len(macd_data) - 20, 0), -1):
+                if i >= 1:
+                    prev_hist = macd_data[i - 1].get("hist", 0)
+                    curr_hist = macd_data[i].get("hist", 0)
+                    if is_buy and prev_hist <= 0 and curr_hist > 0:
+                        signals.append(("macd_golden_cross", n - 1 - i))
+                        break
+                    elif not is_buy and prev_hist >= 0 and curr_hist < 0:
+                        signals.append(("macd_dead_cross", n - 1 - i))
+                        break
+
+        # 2. KDJ超买/超卖
+        if n >= 14:
+            low_14 = min(lows[-14:])
+            high_14 = max(highs[-14:])
+            rsv = (closes[-1] - low_14) / max(high_14 - low_14, 1e-10) * 100
+            if is_buy and rsv < 30:
+                signals.append(("kdj_oversold", 0))
+            elif not is_buy and rsv > 70:
+                signals.append(("kdj_overbought", 0))
+
+        # 3. MA20突破
+        if n >= 20:
+            ma20 = sum(closes[-20:]) / 20
+            if is_buy and closes[-1] > ma20 and closes[-2] <= ma20:
+                signals.append(("ma20_breakup", 0))
+            elif not is_buy and closes[-1] < ma20 and closes[-2] >= ma20:
+                signals.append(("ma20_breakdown", 0))
+
+        # 4. 成交量放大
+        if volumes and len(volumes) >= 20:
+            avg_vol = sum(volumes[-20:]) / 20
+            if volumes[-1] > avg_vol * 1.5:
+                signals.append(("volume_spike", 0))
+
+        # 5. RSI信号
+        if n >= 14:
+            gains = []
+            losses = []
+            for i in range(-14, 0):
+                change = closes[i] - closes[i - 1]
+                if change > 0:
+                    gains.append(change)
+                    losses.append(0.0)
+                else:
+                    gains.append(0.0)
+                    losses.append(abs(change))
+            avg_gain = sum(gains) / 14
+            avg_loss = sum(losses) / 14
+            rs = avg_gain / max(avg_loss, 1e-10)
+            rsi = 100 - (100 / (1 + rs))
+            if is_buy and rsi < 40:
+                signals.append(("rsi_low", 0))
+            elif not is_buy and rsi > 60:
+                signals.append(("rsi_high", 0))
+
+        if not signals:
+            result["msg"] = "未检测到辅助信号"
+            result["consistency_score"] = 0.0
+            result["alignment_ratio"] = 0.0
+            return result
+
+        # 计算时间一致性：信号集中在最近几天内则一致性好
+        days_ago = [s[1] for s in signals]
+        max_days_ago = max(days_ago) if days_ago else 0
+        min_days_ago = min(days_ago) if days_ago else 0
+
+        # 一致性得分：所有信号在7天内出现→高一致性
+        if max_days_ago <= 3:
+            consistency = 1.0
+        elif max_days_ago <= 7:
+            consistency = 0.7
+        elif max_days_ago <= 14:
+            consistency = 0.4
+        else:
+            consistency = 0.2
+
+        # 信号数量加成
+        sig_count = len(signals)
+        if sig_count >= 4:
+            consistency = min(consistency + 0.1, 1.0)
+        elif sig_count >= 3:
+            consistency = min(consistency + 0.05, 1.0)
+
+        alignment_ratio = consistency
+
+        # 判定确认
+        confirm = consistency >= 0.5 and sig_count >= 2
+
+        if confirm and consistency >= 0.8:
+            adjust = 0.06
+        elif confirm and consistency >= 0.5:
+            adjust = 0.03
+        elif not confirm and sig_count >= 2:
+            adjust = -0.02
+        else:
+            adjust = 0.0
+
+        result["consistency_score"] = round(consistency, 3)
+        result["signal_dates"] = [{"name": s[0], "days_ago": s[1]} for s in signals]
+        result["alignment_ratio"] = round(alignment_ratio, 3)
+        result["confirm_signal"] = confirm
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"{sig_count}个信号 一致率={consistency:.0%} "
+            f"时间窗口={min_days_ago}-{max_days_ago}天前 "
+            f"置信度{adjust:+.0%}"
         )
         return result
     except Exception:
