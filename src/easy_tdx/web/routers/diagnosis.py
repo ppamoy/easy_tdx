@@ -733,6 +733,34 @@ async def diagnose_stock(
         v79_quality_level = "mixed"
         v79_recommendation = "信号混合，等待确认"
 
+    # ── V80: 四维度量摘要（条件252-255）──────────────────────────────
+    v80_msd = getattr(latest_mmd, "_mmd_zhongshu_distance_v80", None) if latest_mmd else None
+    v80_vcf = getattr(latest_mmd, "_volume_confirmation_v80", None) if latest_mmd else None
+    v80_mas = getattr(latest_mmd, "_ma_alignment_strength_v80", None) if latest_mmd else None
+    v80_drr = getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None
+
+    v80_adjust_total = 0.0
+    v80_msd_score = (v80_msd.get("confidence_adjust", 0) if v80_msd else 0)
+    v80_vcf_score = (v80_vcf.get("confidence_adjust", 0) if v80_vcf else 0)
+    v80_mas_score = (v80_mas.get("confidence_adjust", 0) if v80_mas else 0)
+    v80_drr_score = (v80_drr.get("confidence_adjust", 0) if v80_drr else 0)
+    v80_adjust_total = v80_msd_score + v80_vcf_score + v80_mas_score + v80_drr_score
+
+    v80_positive_count = sum(1 for s in [v80_msd_score, v80_vcf_score, v80_mas_score, v80_drr_score] if s > 0)
+    v80_negative_count = sum(1 for s in [v80_msd_score, v80_vcf_score, v80_mas_score, v80_drr_score] if s < 0)
+    if v80_positive_count >= 3 and v80_negative_count == 0:
+        v80_quality_level = "strong"
+        v80_recommendation = "四维结构确认，高置信度"
+    elif v80_positive_count >= 2 and v80_negative_count <= 1:
+        v80_quality_level = "moderate"
+        v80_recommendation = "多数维度支持，中等置信度"
+    elif v80_negative_count >= 2:
+        v80_quality_level = "weak"
+        v80_recommendation = "多维度负面信号，需谨慎"
+    else:
+        v80_quality_level = "mixed"
+        v80_recommendation = "信号混合，等待确认"
+
     adjusted_score = max(0, min(100, score + validity_adjust))
 
     if adjusted_score >= 75 and latest_mmd and latest_mmd.confidence >= 0.75:
@@ -841,6 +869,18 @@ async def diagnose_stock(
             "safety_level": v79_mds.get("safety_level") if v79_mds else None,
             "consistency_level": v79_mls.get("msg", "").split("一致=")[1].split(" ")[0] if v79_mls and "一致=" in v79_mls.get("msg", "") else None,
             "momentum_level": v79_pmc.get("momentum_level") if v79_pmc else None,
+        },
+        # V80: 四维度量摘要（条件252-255）—— 顶层快速可见
+        "v80_summary": {
+            "quality_level": v80_quality_level,
+            "total_adjust": round(v80_adjust_total, 3),
+            "positive_count": v80_positive_count,
+            "negative_count": v80_negative_count,
+            "recommendation": v80_recommendation,
+            "zs_position": v80_msd.get("zs_position") if v80_msd else None,
+            "volume_confirmed": f"{'↑' if v80_vcf.get('price_trend')=='up' else '↓'}{'↑' if v80_vcf.get('volume_trend')=='up' else '↓'}" if v80_vcf else None,
+            "ma_alignment": v80_mas.get("ma_alignment") if v80_mas else None,
+            "risk_level": v80_drr.get("risk_level") if v80_drr else None,
         },
         "chanlun": {
             "bi_count": len(result.bis),
@@ -1317,6 +1357,14 @@ async def diagnose_stock(
             "multi_level_structure_consistency_v79": getattr(latest_mmd, "_multi_level_structure_consistency_v79", None) if latest_mmd else None,
             # V79: 价格动能持续性评分（条件251）
             "price_momentum_continuity_v79": getattr(latest_mmd, "_price_momentum_continuity_v79", None) if latest_mmd else None,
+            # V80: 买卖点与中枢距离验证（条件252）
+            "mmd_zhongshu_distance_v80": getattr(latest_mmd, "_mmd_zhongshu_distance_v80", None) if latest_mmd else None,
+            # V80: 量能配合度评分（条件253）
+            "volume_confirmation_v80": getattr(latest_mmd, "_volume_confirmation_v80", None) if latest_mmd else None,
+            # V80: 均线排列强度确认（条件254）
+            "ma_alignment_strength_v80": getattr(latest_mmd, "_ma_alignment_strength_v80", None) if latest_mmd else None,
+            # V80: 盈亏比动态评估（条件255）
+            "dynamic_risk_reward_v80": getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,
@@ -1726,6 +1774,14 @@ async def multi_stock_comparison(
                             condition_counts["v79_cond250"] = condition_counts.get("v79_cond250", 0) + 1
                         if c == 251 and hasattr(mmd, "_price_momentum_continuity_v79"):
                             condition_counts["v79_cond251"] = condition_counts.get("v79_cond251", 0) + 1
+                        if c == 252 and hasattr(mmd, "_mmd_zhongshu_distance_v80"):
+                            condition_counts["v80_cond252"] = condition_counts.get("v80_cond252", 0) + 1
+                        if c == 253 and hasattr(mmd, "_volume_confirmation_v80"):
+                            condition_counts["v80_cond253"] = condition_counts.get("v80_cond253", 0) + 1
+                        if c == 254 and hasattr(mmd, "_ma_alignment_strength_v80"):
+                            condition_counts["v80_cond254"] = condition_counts.get("v80_cond254", 0) + 1
+                        if c == 255 and hasattr(mmd, "_dynamic_risk_reward_v80"):
+                            condition_counts["v80_cond255"] = condition_counts.get("v80_cond255", 0) + 1
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
             avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0

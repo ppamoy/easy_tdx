@@ -12507,6 +12507,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V80 条件 252-255 ──
+
+        # 条件252：买卖点与中枢距离验证（MMD-Zhongshu Distance Validation）
+        if mmd.bi is not None and closes is not None and len(closes) >= 20:
+            try:
+                msd = _calc_mmd_zhongshu_distance_v80(mmd, closes, highs or closes, lows or closes)
+                mmd._mmd_zhongshu_distance_v80 = msd
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + msd.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件253：量能配合度评分（Volume Confirmation Score）
+        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 10 and len(volumes) >= 10:
+            try:
+                vcf = _calc_volume_confirmation_v80(mmd, closes, volumes)
+                mmd._volume_confirmation_v80 = vcf
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vcf.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件254：均线排列强度确认（MA Alignment Strength）
+        if mmd.bi is not None and closes is not None and len(closes) >= 30:
+            try:
+                mas = _calc_ma_alignment_strength_v80(mmd, closes)
+                mmd._ma_alignment_strength_v80 = mas
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mas.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件255：盈亏比动态评估（Dynamic Risk-Reward Assessment）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+            try:
+                drr = _calc_dynamic_risk_reward_v80(mmd, closes, highs, lows)
+                mmd._dynamic_risk_reward_v80 = drr
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + drr.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -23052,7 +23090,7 @@ def _calc_ma_convergence_divergence_v72(
         prev_spread = abs(ma20[-5] - ma60[-5]) / max(ma60[-5], 1e-10) if n >= 85 else current_spread
         spread_change = (current_spread - prev_spread) / max(prev_spread, 1e-10)
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         if abs(spread_change) < 0.005:
             state = "entangled"
@@ -23131,7 +23169,7 @@ def _calc_support_resistance_proximity_v72(
         result["support_dist_pct"] = round(support_dist * 100, 2)
         result["resistance_dist_pct"] = round(resistance_dist * 100, 2)
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         if is_buy:
             proximity_bonus = max(0, 1.0 - support_dist * 10)
@@ -23202,7 +23240,7 @@ def _calc_volume_structure_quality_v72(
         vol_cv = vol_std / max(avg_vol, 1e-10)
         stability = max(0.0, 1.0 - vol_cv)
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         adjust = 0.0
 
         if health > 0.3 and stability > 0.5:
@@ -23252,7 +23290,7 @@ def _calc_signal_decay_velocity_v72(
             result["msg"] = "数据不足（需≥50根且有历史信号）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         target_type_val = "BUY" if is_buy else "SELL"
 
         recent_conf = []
@@ -23362,7 +23400,7 @@ def _calc_mmd_position_risk_v73(
 
         position_pct = (current_price - range_low) / price_range
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         if position_pct > 0.8:
             risk_level = "high"
@@ -23420,7 +23458,7 @@ def _calc_zhongshu_breakout_validity_v73(
             result["msg"] = "数据不足（需≥30根且有highs/lows）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         if mmd.bi is None or mmd.bi.index is None:
             result["msg"] = "无笔索引信息"
@@ -23511,7 +23549,7 @@ def _calc_multi_indicator_consistency_v73(
             result["msg"] = "数据不足（需≥20根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         agree_count = 0
         total_indicators = 0
 
@@ -23723,7 +23761,7 @@ def _calc_volume_price_divergence_secondary_v74(
             result["msg"] = "数据不足（需≥30根且有volumes）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         recent_closes = closes[-10:]
         recent_vols = volumes[-10:]
@@ -23822,7 +23860,7 @@ def _calc_trend_momentum_continuity_v74(
             result["msg"] = "数据不足（需≥30根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         st = (closes[-1] - closes[-5]) / max(closes[-5], 1e-10) if n >= 5 else 0.0
         mt = (closes[-1] - closes[-10]) / max(closes[-10], 1e-10) if n >= 10 else 0.0
@@ -23890,7 +23928,7 @@ def _calc_zhongshu_overlap_density_v74(
             result["msg"] = "无中枢数据或价格为零"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         recent_zs = zss[-5:] if len(zss) >= 5 else zss
         nearby_count = 0
@@ -23968,7 +24006,7 @@ def _calc_signal_resonance_depth_v74(
             result["msg"] = "数据不足（需≥20根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         confirming = 0
         total = 0
 
@@ -24108,7 +24146,7 @@ def _calc_pullback_depth_validation_v75(
             result["msg"] = "数据不足（需≥30根且有highs/lows）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 找最近的高点/低点作为回调基准
         lookback = min(20, n)
@@ -24214,7 +24252,7 @@ def _calc_zhongshu_retracement_confirm_v75(
             result["msg"] = "数据不足（需≥15根且有中枢数据）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         current_price = closes[-1]
 
         # 找最近的中枢
@@ -24338,7 +24376,7 @@ def _calc_volume_peak_duration_v75(
             result["msg"] = "数据不足（需≥30根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 计算平均成交量（用20日EMA）
         avg_vol = sum(volumes[-20:]) / 20
@@ -24450,7 +24488,7 @@ def _calc_multi_signal_time_consistency_v75(
             result["msg"] = "数据不足（需≥40根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 找各信号出现的最近位置（距离当前天数）
         signals: list[tuple[str, int]] = []  # (signal_name, days_ago)
@@ -24600,7 +24638,7 @@ def _calc_price_structure_integrity_v76(
             result["msg"] = "数据不足（需≥30根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 计算近期高低点
         lookback = min(30, n)
@@ -24697,7 +24735,7 @@ def _calc_trend_alignment_validation_v76(
             result["msg"] = "数据不足（需≥60根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 计算多周期均线
         mas: dict[int, dict[str, str]] = {}
@@ -24779,7 +24817,7 @@ def _calc_volatility_adaptive_confidence_v76(
             result["msg"] = "数据不足（需≥30根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 计算简化 ATR（使用负索引兼容 Python）
         trs: list[float] = []
@@ -24863,7 +24901,7 @@ def _calc_signal_final_validity_v76(
         "msg": "",
     }
     try:
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         adjustments: list[float] = []
         adjust_fields = [
@@ -24951,7 +24989,7 @@ def _calc_volume_distribution_depth_v77(
             result["msg"] = "数据不足（需≥40根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         current_price = closes[-1]
 
         # 计算近期高低点及成交量分布
@@ -25048,7 +25086,7 @@ def _calc_zhongshu_structure_weight_v77(
             result["msg"] = "无中枢数据或数据不足"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         current_price = closes[-1]
 
         # 找最近的中枢
@@ -25210,7 +25248,7 @@ def _calc_price_momentum_acceleration_v77(
             result["msg"] = "数据不足（需≥20根）"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 计算价格加速度（二阶差分）
         # 短期速度
@@ -25323,7 +25361,7 @@ def _calc_mmd_cycle_position_v78(
         distance_to_high = 1.0 - position
 
         # 根据信号方向评分
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         if is_buy:
             if position < 0.2:
                 position_score = 0.9
@@ -25428,16 +25466,16 @@ def _calc_multi_signal_consensus_v78(
                 continue
             other_bar = other_mmd.bi.index if other_mmd.bi else len(closes)
             if abs(other_bar - current_bar) <= window:
-                if other_mmd.mmd_type.value.startswith("BUY"):
+                if "buy" in other_mmd.mmd_type.value:
                     nearby_buys += 1
-                elif other_mmd.mmd_type.value.startswith("SELL"):
+                elif "sell" in other_mmd.mmd_type.value:
                     nearby_sells += 1
 
         total_nearby = nearby_buys + nearby_sells
         result["nearby_buy_count"] = nearby_buys
         result["nearby_sell_count"] = nearby_sells
 
-        is_buy = current_mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in current_mmd.mmd_type.value
 
         if total_nearby == 0:
             consensus_score = 0.5
@@ -25710,7 +25748,7 @@ def _calc_fractal_stability_validation_v79(
         current_high = recent_highs[-1]
         current_low = recent_lows[-1]
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         if is_buy:
             # 买入信号：检查顶分型是否被后续高点突破（破坏）
@@ -25786,7 +25824,7 @@ def _calc_mmd_distance_safety_v79(
             return result
 
         # 找最近同向买卖点的距离（以K线根数计）
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
         same_type_prefix = "BUY" if is_buy else "SELL"
 
         nearest_dist = None
@@ -25862,7 +25900,7 @@ def _calc_multi_level_structure_consistency_v79(
             result["msg"] = "数据不足"
             return result
 
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 短周期（5日）趋势
         short_ma5 = sum(closes[-5:]) / 5
@@ -25943,7 +25981,7 @@ def _calc_price_momentum_continuity_v79(
 
         lookback = min(20, len(closes))
         recent = closes[-lookback:]
-        is_buy = mmd.mmd_type.value.startswith("BUY")
+        is_buy = "buy" in mmd.mmd_type.value
 
         # 计算价格加速度（二阶差分）
         if len(recent) >= 3:
@@ -26004,6 +26042,332 @@ def _calc_price_momentum_continuity_v79(
             f"动能级={momentum_level} 加速={avg_acceleration:.4f} "
             f"量能={'↑' if vol_trend == 'up' else '↓' if vol_trend == 'down' else '→'} "
             f"动量分={momentum_score:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ── V80: 条件 252-255（中枢距离+量能配合+均线排列+盈亏比）────────────────────
+
+def _calc_mmd_zhongshu_distance_v80(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """买卖点与中枢距离验证（V80 条件252）。
+
+    评估当前买卖点与最近完成中枢的距离关系：
+    - 买入信号：在中枢上方0-3%区间 → 中枢支撑有效，加分；过远（>10%）→ 缺乏结构支撑，减分
+    - 卖出信号：在中枢下方0-3%区间 → 中枢压制有效，加分；过远（>10%）→ 缺乏结构压制，减分
+
+    返回：distance_score, nearest_zs_dist_pct, zs_position, confidence_adjust, msg
+    """
+    result = {
+        "distance_score": 0.5,
+        "nearest_zs_dist_pct": 0.0,
+        "zs_position": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 20 or mmd.zs is None:
+            result["msg"] = "数据不足或无中枢"
+            return result
+
+        current_price = closes[-1]
+        zs = mmd.zs
+        zg = getattr(zs, "zg", 0.0)
+        zd = getattr(zs, "zd", 0.0)
+        if zg <= 0 or zd <= 0:
+            result["msg"] = "中枢数据无效"
+            return result
+
+        zs_center = (zg + zd) / 2
+        dist_pct = (current_price - zs_center) / max(zs_center, 1e-10) * 100
+        result["nearest_zs_dist_pct"] = round(dist_pct, 2)
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if is_buy:
+            if 0 < dist_pct <= 5:
+                distance_score, zs_pos, adjust = 0.9, "just_above", 0.04
+            elif 5 < dist_pct <= 10:
+                distance_score, zs_pos, adjust = 0.6, "above", 0.01
+            elif dist_pct > 10:
+                distance_score, zs_pos, adjust = 0.3, "far_above", -0.03
+            elif -3 < dist_pct <= 0:
+                distance_score, zs_pos, adjust = 0.7, "inside", 0.02
+            else:
+                distance_score, zs_pos, adjust = 0.2, "below", -0.04
+        else:
+            if -5 <= dist_pct < 0:
+                distance_score, zs_pos, adjust = 0.9, "just_below", 0.04
+            elif -10 <= dist_pct < -5:
+                distance_score, zs_pos, adjust = 0.6, "below", 0.01
+            elif dist_pct < -10:
+                distance_score, zs_pos, adjust = 0.3, "far_below", -0.03
+            elif 0 <= dist_pct < 3:
+                distance_score, zs_pos, adjust = 0.7, "inside", 0.02
+            else:
+                distance_score, zs_pos, adjust = 0.2, "above", -0.04
+
+        result["distance_score"] = distance_score
+        result["zs_position"] = zs_pos
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"中枢距离={dist_pct:+.1f}% 位置={zs_pos} "
+            f"距离分={distance_score:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_confirmation_v80(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float],
+) -> dict[str, Any]:
+    """量能配合度评分（V80 条件253）。
+
+    评估近期成交量与价格趋势的配合程度：
+    - 上涨+放量 → 量价齐升，配合良好，加分
+    - 下跌+缩量 → 抛压减轻，配合良好，加分
+    - 上涨+缩量 → 量价背离，配合不良，减分
+    - 下跌+放量 → 恐慌抛售，配合不良，减分
+
+    返回：confirmation_score, vol_ratio, volume_trend, price_trend, confidence_adjust, msg
+    """
+    result = {
+        "confirmation_score": 0.5,
+        "vol_ratio": 1.0,
+        "volume_trend": "neutral",
+        "price_trend": "neutral",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 10 or not volumes or len(volumes) < 10:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(20, len(closes))
+        recent_closes = closes[-lookback:]
+        recent_vols = volumes[-lookback:]
+
+        if len(recent_closes) >= 10:
+            price_recent = sum(recent_closes[-5:]) / 5
+            price_prev = sum(recent_closes[-10:-5]) / 5
+        else:
+            price_recent = sum(recent_closes) / len(recent_closes)
+            price_prev = price_recent
+        price_trend = "up" if price_recent > price_prev * 1.01 else ("down" if price_recent < price_prev * 0.99 else "flat")
+
+        if len(recent_vols) >= 10:
+            vol_recent = sum(recent_vols[-5:]) / 5
+            vol_prev = sum(recent_vols[-10:-5]) / 5
+        else:
+            vol_recent = sum(recent_vols) / len(recent_vols)
+            vol_prev = vol_recent
+        vol_ratio = vol_recent / max(vol_prev, 1e-10)
+        vol_trend = "up" if vol_ratio > 1.1 else ("down" if vol_ratio < 0.9 else "flat")
+
+        result["vol_ratio"] = round(vol_ratio, 2)
+        result["volume_trend"] = vol_trend
+        result["price_trend"] = price_trend
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if price_trend == "up" and vol_trend in ["up", "flat"]:
+            confirmation = 0.85 if vol_trend == "up" else 0.65
+            adjust = 0.03 if vol_trend == "up" else 0.01
+        elif price_trend == "down" and vol_trend in ["down", "flat"]:
+            confirmation = 0.85 if vol_trend == "down" else 0.65
+            adjust = 0.03 if vol_trend == "down" else 0.01
+        elif price_trend == "up" and vol_trend == "down":
+            confirmation, adjust = 0.3, -0.03
+        elif price_trend == "down" and vol_trend == "up":
+            confirmation, adjust = 0.25, -0.03
+        else:
+            confirmation, adjust = 0.5, 0.0
+
+        if is_buy and price_trend == "up" and confirmation >= 0.65:
+            adjust += 0.01
+        elif not is_buy and price_trend == "down" and confirmation >= 0.65:
+            adjust += 0.01
+
+        result["confirmation_score"] = confirmation
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"量比={vol_ratio:.2f} 价{'↑' if price_trend=='up' else '↓' if price_trend=='down' else '→'} "
+            f"量{'↑' if vol_trend=='up' else '↓' if vol_trend=='down' else '→'} "
+            f"配合分={confirmation:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_ma_alignment_strength_v80(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """均线排列强度确认（V80 条件254）。
+
+    评估MA5/MA10/MA20/MA60的多空排列状态及价格相对位置：
+    - 多头排列且价格在上方 → 强趋势，加分
+    - 空头排列且价格在下方 → 强趋势，加分
+    - 排列混乱 → 震荡市，中性
+
+    返回：alignment_score, ma_alignment, price_position, confidence_adjust, msg
+    """
+    result = {
+        "alignment_score": 0.5,
+        "ma_alignment": "unknown",
+        "price_position": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 60:
+            result["msg"] = "数据不足（需≥60根）"
+            return result
+
+        ma5 = MA(closes, 5)[-1]
+        ma10 = MA(closes, 10)[-1]
+        ma20 = MA(closes, 20)[-1]
+        ma60 = MA(closes, 60)[-1]
+        current = closes[-1]
+
+        eps = 1e-10
+        if ma5 > ma10 + eps and ma10 > ma20 + eps and ma20 > ma60 + eps:
+            alignment = "bullish"
+        elif ma5 < ma10 - eps and ma10 < ma20 - eps and ma20 < ma60 - eps:
+            alignment = "bearish"
+        else:
+            alignment = "mixed"
+        result["ma_alignment"] = alignment
+
+        if current > ma5 > ma10 > ma20:
+            price_pos = "above_all"
+        elif current < ma5 < ma10 < ma20:
+            price_pos = "below_all"
+        elif current > ma20:
+            price_pos = "above_mid"
+        elif current < ma20:
+            price_pos = "below_mid"
+        else:
+            price_pos = "near_ma20"
+        result["price_position"] = price_pos
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if alignment == "bullish" and price_pos in ["above_all", "above_mid"]:
+            alignment_score, adjust = 0.9, 0.05
+        elif alignment == "bearish" and price_pos in ["below_all", "below_mid"]:
+            alignment_score, adjust = 0.9, 0.05
+        elif alignment == "bullish":
+            alignment_score, adjust = 0.6, 0.02
+        elif alignment == "bearish":
+            alignment_score, adjust = 0.6, 0.02
+        elif alignment == "mixed":
+            alignment_score, adjust = 0.3, -0.02
+        else:
+            alignment_score, adjust = 0.5, 0.0
+
+        if is_buy and alignment == "bullish" and price_pos in ["above_all", "above_mid"]:
+            adjust += 0.01
+        elif not is_buy and alignment == "bearish" and price_pos in ["below_all", "below_mid"]:
+            adjust += 0.01
+
+        result["alignment_score"] = alignment_score
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"排列={alignment} 价格={price_pos} "
+            f"排列分={alignment_score:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_dynamic_risk_reward_v80(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """盈亏比动态评估（V80 条件255）。
+
+    基于近期波动区间动态评估止损止盈距离和盈亏比：
+    - 使用近期高低点计算动态止损位
+    - 评估风险（止损距离）与潜在收益（目标距离）的比值
+    - 盈亏比≥2:1 → 加分；1:1~2:1 → 中性；<1:1 → 减分
+
+    返回：rr_ratio, stop_loss_pct, take_profit_pct, risk_level, confidence_adjust, msg
+    """
+    result = {
+        "rr_ratio": 1.0,
+        "stop_loss_pct": 0.0,
+        "take_profit_pct": 0.0,
+        "risk_level": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 20 or not highs or not lows:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(20, len(closes))
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+        current_price = closes[-1]
+
+        period_high = max(recent_highs)
+        period_low = min(recent_lows)
+        period_range = period_high - period_low
+        if period_range <= 0:
+            period_range = current_price * 0.02
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if is_buy:
+            stop_loss = period_low * 0.99
+            take_profit = period_high * 1.03
+            risk = (current_price - stop_loss) / current_price * 100
+            reward = (take_profit - current_price) / current_price * 100
+        else:
+            stop_loss = period_high * 1.01
+            take_profit = period_low * 0.97
+            risk = (stop_loss - current_price) / current_price * 100
+            reward = (current_price - take_profit) / current_price * 100
+
+        risk = max(risk, 0.5)
+        rr_ratio = reward / risk if risk > 0 else 1.0
+
+        result["rr_ratio"] = round(rr_ratio, 2)
+        result["stop_loss_pct"] = round(risk, 2)
+        result["take_profit_pct"] = round(reward, 2)
+
+        if rr_ratio >= 3.0:
+            risk_level, adjust = "excellent", 0.04
+        elif rr_ratio >= 2.0:
+            risk_level, adjust = "good", 0.02
+        elif rr_ratio >= 1.5:
+            risk_level, adjust = "moderate", 0.0
+        elif rr_ratio >= 1.0:
+            risk_level, adjust = "poor", -0.02
+        else:
+            risk_level, adjust = "dangerous", -0.04
+
+        result["risk_level"] = risk_level
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"盈亏比={rr_ratio:.1f}:1 风险{risk:.1f}% 收益{reward:.1f}% "
+            f"风险级={risk_level} 调整{adjust:+.0%}"
         )
         return result
     except Exception:

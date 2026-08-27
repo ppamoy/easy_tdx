@@ -291,7 +291,15 @@ function buildOption(): echarts.EChartsCoreOption {
       },
     },
     legend: {
-      data: ['K线', '笔(虚线)', '线段(实线)', '中枢', '分型', '买卖点', '背驰'],
+      data: [
+        'K线',
+        ...(props.bis.length ? ['笔(虚线)'] : []),
+        ...(props.xds.length ? ['线段(实线)'] : []),
+        ...(props.zss.length ? ['中枢'] : []),
+        ...(props.fxs && props.fxs.length ? ['分型'] : []),
+        ...(props.mmds.length ? ['买卖点'] : []),
+        ...(props.bcs && props.bcs.some(bc => bc.bc) ? ['背驰'] : []),
+      ],
       top: 2,
       textStyle: { color: '#999', fontSize: 11 },
       itemWidth: 14,

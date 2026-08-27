@@ -249,6 +249,11 @@ async def chanlun_recommend(
             "date": chanlun_result._fmt_dt(m.bi.end.k.date) if m.bi else None,
             "confidence": round(m.confidence, 2),
             "quality": {"grade": q.grade, "score": q.score, "reasons": q.reasons} if q else None,
+            # V79 缠论增强条件
+            "fractal_stability": getattr(m, "_fractal_stability_validation_v79", None),
+            "distance_safety": getattr(m, "_mmd_distance_safety_v79", None),
+            "multi_level_consistency": getattr(m, "_multi_level_structure_consistency_v79", None),
+            "momentum_continuity": getattr(m, "_price_momentum_continuity_v79", None),
         })
 
     # ── 3. 技术指标诊断（轻量版）─────────────────────────────────────
@@ -393,5 +398,19 @@ async def chanlun_recommend(
         },
         "all_mmds": mmd_summary,
         "diagnosis": diag,
+        # V79 缠论四维度量摘要
+        "v79_summary": {
+            "fractal_status": getattr(getattr(best_mmd, "_fractal_stability_validation_v79", None), "fractal_status", None) if best_mmd else None,
+            "safety_level": getattr(getattr(best_mmd, "_mmd_distance_safety_v79", None), "safety_level", None) if best_mmd else None,
+            "consistency_level": getattr(getattr(getattr(best_mmd, "_multi_level_structure_consistency_v79", None), "msg", ""), "split", "consistent")(0) if best_mmd else None,
+            "momentum_level": getattr(getattr(best_mmd, "_price_momentum_continuity_v79", None), "momentum_level", None) if best_mmd else None,
+        } if best_mmd else None,
+        # V80 缠论四维度量摘要（条件252-255）
+        "v80_summary": {
+            "zs_position": getattr(getattr(best_mmd, "_mmd_zhongshu_distance_v80", None), "zs_position", None) if best_mmd else None,
+            "volume_confirmed": f"{'↑' if getattr(getattr(best_mmd, '_volume_confirmation_v80', None), 'price_trend', None)=='up' else '↓'}{'↑' if getattr(getattr(best_mmd, '_volume_confirmation_v80', None), 'volume_trend', None)=='up' else '↓'}" if best_mmd and getattr(best_mmd, "_volume_confirmation_v80", None) else None,
+            "ma_alignment": getattr(getattr(best_mmd, "_ma_alignment_strength_v80", None), "ma_alignment", None) if best_mmd else None,
+            "risk_level": getattr(getattr(best_mmd, "_dynamic_risk_reward_v80", None), "risk_level", None) if best_mmd else None,
+        } if best_mmd else None,
     }
 

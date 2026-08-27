@@ -532,6 +532,12 @@ class MMD:
     _multi_level_structure_consistency_v79: dict[str, Any] | None = None  # 多级别结构一致性评分（条件250）
     _price_momentum_continuity_v79: dict[str, Any] | None = None  # 价格动能持续性评分（条件251）
 
+    # V80 enhancement fields (2026-08-28)
+    _mmd_zhongshu_distance_v80: dict[str, Any] | None = None  # 买卖点与中枢距离验证（条件252）
+    _volume_confirmation_v80: dict[str, Any] | None = None  # 量能配合度评分（条件253）
+    _ma_alignment_strength_v80: dict[str, Any] | None = None  # 均线排列强度确认（条件254）
+    _dynamic_risk_reward_v80: dict[str, Any] | None = None  # 盈亏比动态评估（条件255）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

@@ -49,6 +49,7 @@ const execution = ref<ExecutionMode>('next_open')
 
 // 缠论相关状态
 const chanlunLoading = ref(false)
+const chanlunError = ref('')
 const chanlunBis = ref<any[]>([])
 const chanlunXds = ref<any[]>([])
 const chanlunZss = ref<any[]>([])
@@ -184,13 +185,23 @@ async function runChanlunAnalysis() {
         market,
         code: code.value,
         category: categoryMap[category.value] ?? 'DAY',
-        count: store.ohlcv.length,
+        count: Math.min(store.ohlcv.length, 800),
         start: 0,
       }),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}))
-      throw new Error((err as { detail?: string }).detail ?? `HTTP ${resp.status}`)
+      const detail = err?.detail
+      let msg: string
+      if (Array.isArray(detail)) {
+        // Pydantic validation error: detail is [{type, msg, loc}, ...]
+        msg = detail.map((e: any) => e.msg ?? JSON.stringify(e)).join('; ')
+      } else if (typeof detail === 'string') {
+        msg = detail
+      } else {
+        msg = `HTTP ${resp.status}`
+      }
+      throw new Error(msg)
     }
     const data = await resp.json()
     chanlunBis.value = data.bis ?? []
@@ -200,6 +211,8 @@ async function runChanlunAnalysis() {
     chanlunFxs.value = data.fractals ?? []
     chanlunBcs.value = data.bcs ?? []
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e)
+    chanlunError.value = msg
     console.error('缠论分析失败:', e)
   } finally {
     chanlunLoading.value = false
@@ -470,6 +483,10 @@ async function onSave() {
           <!-- 缠论分析中 -->
           <div v-else-if="strategy === 'chanlun' && chanlunLoading" class="chanlun-loading">
             正在分析缠论结构…
+          </div>
+          <!-- 缠论分析失败 -->
+          <div v-else-if="chanlunError" class="chanlun-error">
+            ⚠ 缠论分析失败：{{ chanlunError }}
           </div>
           <!-- 普通策略：显示普通K线图 -->
           <KlineChart v-else :bars="bars" :trades="store.result.trades" />
@@ -753,6 +770,16 @@ async function onSave() {
   height: 400px;
   color: var(--text-dim);
   font-size: 13px;
+}
+.chanlun-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: var(--up);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
 }
 
 /* 最近浏览股票 */

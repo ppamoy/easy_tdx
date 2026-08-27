@@ -2254,6 +2254,40 @@ export interface DiagnosisChanlun {
       confidence_adjust: number
       msg: string
     } | null
+    // V80: 买卖点与中枢距离验证（条件252）
+    mmd_zhongshu_distance_v80?: {
+      distance_score: number
+      nearest_zs_dist_pct: number
+      zs_position: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V80: 量能配合度评分（条件253）
+    volume_confirmation_v80?: {
+      confirmation_score: number
+      vol_ratio: number
+      volume_trend: string
+      price_trend: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V80: 均线排列强度确认（条件254）
+    ma_alignment_strength_v80?: {
+      alignment_score: number
+      ma_alignment: string
+      price_position: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V80: 盈亏比动态评估（条件255）
+    dynamic_risk_reward_v80?: {
+      rr_ratio: number
+      stop_loss_pct: number
+      take_profit_pct: number
+      risk_level: string
+      confidence_adjust: number
+      msg: string
+    } | null
   }
 
 export interface DiagnosisMACD {
@@ -2421,6 +2455,18 @@ export interface DiagnosisResult {
       safety_level: string | null
       consistency_level: string | null
       momentum_level: string | null
+    }
+    // V80: 四维度量摘要（条件252-255）
+    v80_summary?: {
+      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+      total_adjust: number | null
+      positive_count: number | null
+      negative_count: number | null
+      recommendation: string
+      zs_position: string | null
+      volume_confirmed: string | null
+      ma_alignment: string | null
+      risk_level: string | null
     }
   chanlun: DiagnosisChanlun
   macd: DiagnosisMACD

@@ -57,6 +57,10 @@ const v79QualityLabel = (level: string | null | undefined): string => {
   const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
   return map[level ?? ''] ?? '—'
 }
+const v80QualityLabel = (level: string | null | undefined): string => {
+  const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
+  return map[level ?? ''] ?? '—'
+}
 const multiResultsHaveConditionData = computed(() =>
   multiResults.value.some((r: MultiStockResult) => Object.keys(r.condition_breakdown || {}).length > 0)
 )
@@ -282,6 +286,18 @@ onMounted(() => {
               🎯 V79四维度量{{ v79QualityLabel(diagnosis.v79_summary.quality_level) }}
               · 正{{ diagnosis.v79_summary.positive_count ?? '—' }}/负{{ diagnosis.v79_summary.negative_count ?? '—' }}
               · 调整{{ diagnosis.v79_summary.total_adjust != null ? (diagnosis.v79_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v79_summary.total_adjust.toFixed(0) + '%' : '—' }}
+            </span>
+          </div>
+          <div v-if="diagnosis.v80_summary" class="v80-summary-row">
+            <span class="v80-tag" :class="{
+              'v80-strong': diagnosis.v80_summary.quality_level === 'strong',
+              'v80-moderate': diagnosis.v80_summary.quality_level === 'moderate',
+              'v80-weak': diagnosis.v80_summary.quality_level === 'weak',
+              'v80-mixed': diagnosis.v80_summary.quality_level === 'mixed',
+            }">
+              🔬 V80四维度量{{ v80QualityLabel(diagnosis.v80_summary.quality_level) }}
+              · 正{{ diagnosis.v80_summary.positive_count ?? '—' }}/负{{ diagnosis.v80_summary.negative_count ?? '—' }}
+              · 调整{{ diagnosis.v80_summary.total_adjust != null ? (diagnosis.v80_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v80_summary.total_adjust.toFixed(0) + '%' : '—' }}
             </span>
           </div>
           <div class="meta-info">
@@ -4830,6 +4846,94 @@ onMounted(() => {
                       <div class="kv-note">{{ diagnosis.chanlun.price_momentum_continuity_v79.msg }}</div>
                     </div>
                  </div>
+                  <!-- V80: 买卖点与中枢距离验证（条件252） -->
+                  <div v-if="diagnosis.chanlun.mmd_zhongshu_distance_v80" class="metric-card v80-msd">
+                     <div class="card-title">🏛️ V80 中枢距离（条件252）</div>
+                     <div class="card-body">
+                       <div class="kv-row">
+                         <span class="kv-key">中枢位置</span>
+                         <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.mmd_zhongshu_distance_v80.zs_position === 'just_above', 'tag-blue': diagnosis.chanlun.mmd_zhongshu_distance_v80.zs_position === 'above', 'tag-orange': diagnosis.chanlun.mmd_zhongshu_distance_v80.zs_position === 'far_above', 'tag-yellow': diagnosis.chanlun.mmd_zhongshu_distance_v80.zs_position === 'inside', 'tag-red': diagnosis.chanlun.mmd_zhongshu_distance_v80.zs_position === 'below', 'tag-gray': diagnosis.chanlun.mmd_zhongshu_distance_v80.zs_position === 'unknown' }">
+                           {{ {just_above:'🟢 刚突破',above:'🔵 上方',far_above:'🟠 过远',inside:'🟡 中枢内',below:'🔴 下方',unknown:'⚪ 未知'}[diagnosis.chanlun.mmd_zhongshu_distance_v80.zs_position] ?? '—' }}
+                         </span>
+                       </div>
+                       <div class="kv-row">
+                         <span class="kv-key">距离评分</span>
+                         <span class="kv-val" :style="{ color: diagnosis.chanlun.mmd_zhongshu_distance_v80.distance_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.mmd_zhongshu_distance_v80.distance_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                           {{ (diagnosis.chanlun.mmd_zhongshu_distance_v80.distance_score * 100).toFixed(0) }}%
+                         </span>
+                         <span class="kv-key">距中枢</span><span class="kv-val">{{ diagnosis.chanlun.mmd_zhongshu_distance_v80.nearest_zs_dist_pct > 0 ? '+' : '' }}{{ diagnosis.chanlun.mmd_zhongshu_distance_v80.nearest_zs_dist_pct }}%</span>
+                       </div>
+                       <div class="kv-note">{{ diagnosis.chanlun.mmd_zhongshu_distance_v80.msg }}</div>
+                     </div>
+                  </div>
+                  <!-- V80: 量能配合度评分（条件253） -->
+                  <div v-if="diagnosis.chanlun.volume_confirmation_v80" class="metric-card v80-vcf">
+                     <div class="card-title">📊 V80 量能配合（条件253）</div>
+                     <div class="card-body">
+                       <div class="kv-row">
+                         <span class="kv-key">价格趋势</span>
+                         <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volume_confirmation_v80.price_trend === 'up', 'tag-red': diagnosis.chanlun.volume_confirmation_v80.price_trend === 'down', 'tag-gray': diagnosis.chanlun.volume_confirmation_v80.price_trend === 'flat' }">
+                           {{ {up:'📈 上涨',down:'📉 下跌',flat:'➡️ 横盘'}[diagnosis.chanlun.volume_confirmation_v80.price_trend] ?? '—' }}
+                         </span>
+                         <span class="kv-key">量能趋势</span>
+                         <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.volume_confirmation_v80.volume_trend === 'up', 'tag-red': diagnosis.chanlun.volume_confirmation_v80.volume_trend === 'down', 'tag-gray': diagnosis.chanlun.volume_confirmation_v80.volume_trend === 'flat' }">
+                           {{ {up:'📈 放量',down:'📉 缩量',flat:'➡️ 平稳'}[diagnosis.chanlun.volume_confirmation_v80.volume_trend] ?? '—' }}
+                         </span>
+                       </div>
+                       <div class="kv-row">
+                         <span class="kv-key">量比</span>
+                         <span class="kv-val">{{ diagnosis.chanlun.volume_confirmation_v80.vol_ratio.toFixed(2) }}</span>
+                         <span class="kv-key">配合评分</span>
+                         <span class="kv-val" :style="{ color: diagnosis.chanlun.volume_confirmation_v80.confirmation_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.volume_confirmation_v80.confirmation_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                           {{ (diagnosis.chanlun.volume_confirmation_v80.confirmation_score * 100).toFixed(0) }}%
+                         </span>
+                       </div>
+                       <div class="kv-note">{{ diagnosis.chanlun.volume_confirmation_v80.msg }}</div>
+                     </div>
+                  </div>
+                  <!-- V80: 均线排列强度确认（条件254） -->
+                  <div v-if="diagnosis.chanlun.ma_alignment_strength_v80" class="metric-card v80-mas">
+                     <div class="card-title">📐 V80 均线排列（条件254）</div>
+                     <div class="card-body">
+                       <div class="kv-row">
+                         <span class="kv-key">均线排列</span>
+                         <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.ma_alignment_strength_v80.ma_alignment === 'bullish', 'tag-red': diagnosis.chanlun.ma_alignment_strength_v80.ma_alignment === 'bearish', 'tag-orange': diagnosis.chanlun.ma_alignment_strength_v80.ma_alignment === 'mixed', 'tag-gray': diagnosis.chanlun.ma_alignment_strength_v80.ma_alignment === 'unknown' }">
+                           {{ {bullish:'🟢 多头排列',bearish:'🔴 空头排列',mixed:'🟠 混乱',unknown:'⚪ 未知'}[diagnosis.chanlun.ma_alignment_strength_v80.ma_alignment] ?? '—' }}
+                         </span>
+                       </div>
+                       <div class="kv-row">
+                         <span class="kv-key">价格位置</span>
+                         <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.ma_alignment_strength_v80.price_position === 'above_all', 'tag-blue': diagnosis.chanlun.ma_alignment_strength_v80.price_position === 'above_mid', 'tag-yellow': diagnosis.chanlun.ma_alignment_strength_v80.price_position === 'near_ma20', 'tag-orange': diagnosis.chanlun.ma_alignment_strength_v80.price_position === 'below_mid', 'tag-red': diagnosis.chanlun.ma_alignment_strength_v80.price_position === 'below_all', 'tag-gray': diagnosis.chanlun.ma_alignment_strength_v80.price_position === 'unknown' }">
+                           {{ {above_all:'🟢 全上方',above_mid:'🔵 中上方',near_ma20:'🟡 贴近MA20',below_mid:'🟠 中下方',below_all:'🔴 全下方',unknown:'⚪ 未知'}[diagnosis.chanlun.ma_alignment_strength_v80.price_position] ?? '—' }}
+                         </span>
+                         <span class="kv-key">排列评分</span>
+                         <span class="kv-val" :style="{ color: diagnosis.chanlun.ma_alignment_strength_v80.alignment_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.ma_alignment_strength_v80.alignment_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                           {{ (diagnosis.chanlun.ma_alignment_strength_v80.alignment_score * 100).toFixed(0) }}%
+                         </span>
+                       </div>
+                       <div class="kv-note">{{ diagnosis.chanlun.ma_alignment_strength_v80.msg }}</div>
+                     </div>
+                  </div>
+                  <!-- V80: 盈亏比动态评估（条件255） -->
+                  <div v-if="diagnosis.chanlun.dynamic_risk_reward_v80" class="metric-card v80-drr">
+                     <div class="card-title">⚖️ V80 盈亏比（条件255）</div>
+                     <div class="card-body">
+                       <div class="kv-row">
+                         <span class="kv-key">风险级别</span>
+                         <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.dynamic_risk_reward_v80.risk_level === 'excellent', 'tag-blue': diagnosis.chanlun.dynamic_risk_reward_v80.risk_level === 'good', 'tag-yellow': diagnosis.chanlun.dynamic_risk_reward_v80.risk_level === 'moderate', 'tag-orange': diagnosis.chanlun.dynamic_risk_reward_v80.risk_level === 'poor', 'tag-red': diagnosis.chanlun.dynamic_risk_reward_v80.risk_level === 'dangerous', 'tag-gray': diagnosis.chanlun.dynamic_risk_reward_v80.risk_level === 'unknown' }">
+                           {{ {excellent:'🟢 极佳',good:'🔵 良好',moderate:'🟡 中等',poor:'🟠 较差',dangerous:'🔴 危险',unknown:'⚪ 未知'}[diagnosis.chanlun.dynamic_risk_reward_v80.risk_level] ?? '—' }}
+                         </span>
+                       </div>
+                       <div class="kv-row">
+                         <span class="kv-key">盈亏比</span>
+                         <span class="kv-val" :style="{ color: diagnosis.chanlun.dynamic_risk_reward_v80.rr_ratio >= 2 ? '#22c55e' : diagnosis.chanlun.dynamic_risk_reward_v80.rr_ratio >= 1.5 ? '#f59e0b' : '#ef4444' }">
+                           {{ diagnosis.chanlun.dynamic_risk_reward_v80.rr_ratio.toFixed(1) }}:1
+                         </span>
+                         <span class="kv-key">止损/止盈</span><span class="kv-val" style="color:#ef4444">-{{ diagnosis.chanlun.dynamic_risk_reward_v80.stop_loss_pct }}%</span><span class="kv-val" style="color:#22c55e">+{{ diagnosis.chanlun.dynamic_risk_reward_v80.take_profit_pct }}%</span>
+                       </div>
+                       <div class="kv-note">{{ diagnosis.chanlun.dynamic_risk_reward_v80.msg }}</div>
+                     </div>
+                  </div>
                 <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -5167,6 +5271,62 @@ onMounted(() => {
                 <th>V65-193命中</th>
                 <th>V65-194命中</th>
                 <th>V65-195命中</th>
+                <th>V66-196命中</th>
+                <th>V66-197命中</th>
+                <th>V66-198命中</th>
+                <th>V66-199命中</th>
+                <th>V67-200命中</th>
+                <th>V67-201命中</th>
+                <th>V67-202命中</th>
+                <th>V67-203命中</th>
+                <th>V68-204命中</th>
+                <th>V68-205命中</th>
+                <th>V68-206命中</th>
+                <th>V68-207命中</th>
+                <th>V69-208命中</th>
+                <th>V69-209命中</th>
+                <th>V69-210命中</th>
+                <th>V69-211命中</th>
+                <th>V70-212命中</th>
+                <th>V70-213命中</th>
+                <th>V70-214命中</th>
+                <th>V70-215命中</th>
+                <th>V71-216命中</th>
+                <th>V71-217命中</th>
+                <th>V71-218命中</th>
+                <th>V71-219命中</th>
+                <th>V72-220命中</th>
+                <th>V72-221命中</th>
+                <th>V72-222命中</th>
+                <th>V72-223命中</th>
+                <th>V73-224命中</th>
+                <th>V73-225命中</th>
+                <th>V73-226命中</th>
+                <th>V73-227命中</th>
+                <th>V74-228命中</th>
+                <th>V74-229命中</th>
+                <th>V74-230命中</th>
+                <th>V74-231命中</th>
+                <th>V75-232命中</th>
+                <th>V75-233命中</th>
+                <th>V75-234命中</th>
+                <th>V75-235命中</th>
+                <th>V76-236命中</th>
+                <th>V76-237命中</th>
+                <th>V76-238命中</th>
+                <th>V76-239命中</th>
+                <th>V77-240命中</th>
+                <th>V77-241命中</th>
+                <th>V77-242命中</th>
+                <th>V77-243命中</th>
+                <th>V78-244命中</th>
+                <th>V78-245命中</th>
+                <th>V78-246命中</th>
+                <th>V78-247命中</th>
+                <th>V79-248命中</th>
+                <th>V79-249命中</th>
+                <th>V79-250命中</th>
+                <th>V79-251命中</th>
                 <th>状态</th>
               </tr>
             </thead>
@@ -5196,6 +5356,54 @@ onMounted(() => {
                 <td>{{ r.condition_breakdown?.v67_cond201 ?? 0 }}</td>
                 <td>{{ r.condition_breakdown?.v67_cond202 ?? 0 }}</td>
                 <td>{{ r.condition_breakdown?.v67_cond203 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v68_cond204 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v68_cond205 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v68_cond206 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v68_cond207 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v69_cond208 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v69_cond209 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v69_cond210 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v69_cond211 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v70_cond212 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v70_cond213 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v70_cond214 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v70_cond215 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v71_cond216 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v71_cond217 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v71_cond218 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v71_cond219 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v72_cond220 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v72_cond221 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v72_cond222 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v72_cond223 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v73_cond224 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v73_cond225 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v73_cond226 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v73_cond227 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v74_cond228 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v74_cond229 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v74_cond230 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v74_cond231 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v75_cond232 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v75_cond233 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v75_cond234 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v75_cond235 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v76_cond236 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v76_cond237 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v76_cond238 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v76_cond239 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v77_cond240 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v77_cond241 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v77_cond242 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v77_cond243 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v78_cond244 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v78_cond245 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v78_cond246 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v78_cond247 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v79_cond248 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v79_cond249 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v79_cond250 ?? 0 }}</td>
+                <td>{{ r.condition_breakdown?.v79_cond251 ?? 0 }}</td>
                 <td>
                   <span v-if="r.error" class="status-err">❌ {{ r.error }}</span>
                   <span v-else class="status-ok">✅ 正常</span>
@@ -5206,7 +5414,7 @@ onMounted(() => {
         </div>
         <!-- 条件命中详情 -->
         <div v-if="multiResultsHaveConditionData" class="condition-detail">
-          <div class="section-title">条件命中详情（V58-V67）</div>
+          <div class="section-title">条件命中详情（V58-V79）</div>
           <div class="cond-grid">
             <template v-for="r in multiResults" :key="r.stock_code">
               <div v-if="getConditionBreakdown(r).length > 0" class="cond-card">
@@ -5894,4 +6102,21 @@ onMounted(() => {
 .v79-tag.v79-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
 .v79-tag.v79-weak     { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .v79-tag.v79-mixed    { background: rgba(107,114,128,0.15); color: #9ca3af; }
+.v80-msd .kv-val { font-weight: 600; }
+.v80-vcf .kv-val { font-weight: 600; }
+.v80-mas .kv-val { font-weight: 600; }
+.v80-drr .kv-val { font-weight: 600; }
+.v80-summary-row { margin-bottom: 6px; }
+.v80-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 6px;
+}
+.v80-tag.v80-strong   { background: rgba(34,197,94,0.15); color: #22c55e; }
+.v80-tag.v80-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.v80-tag.v80-weak     { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.v80-tag.v80-mixed    { background: rgba(107,114,128,0.15); color: #9ca3af; }
 </style>
