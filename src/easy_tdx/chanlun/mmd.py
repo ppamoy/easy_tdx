@@ -12469,6 +12469,44 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V79 条件 248-251 ──
+
+        # 条件248：分型稳定性验证（Fractal Stability Validation）
+        if mmd.bi is not None and highs is not None and lows is not None and len(highs) >= 10:
+            try:
+                fsf = _calc_fractal_stability_validation_v79(mmd, highs, lows)
+                mmd._fractal_stability_validation_v79 = fsf
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + fsf.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件249：买卖点距离安全阈值（MMD Distance Safety）
+        if mmds is not None and mmd.bi is not None and closes is not None and len(closes) >= 10:
+            try:
+                mds = _calc_mmd_distance_safety_v79(mmds, mmd, closes)
+                mmd._mmd_distance_safety_v79 = mds
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mds.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件250：多级别结构一致性评分（Multi-Level Structure Consistency）
+        if mmd.bi is not None and closes is not None and len(closes) >= 10:
+            try:
+                mls = _calc_multi_level_structure_consistency_v79(mmd, closes, highs or closes, lows or closes)
+                mmd._multi_level_structure_consistency_v79 = mls
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mls.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件251：价格动能持续性评分（Price Momentum Continuity）
+        if mmd.bi is not None and closes is not None and len(closes) >= 15:
+            try:
+                pmc = _calc_price_momentum_continuity_v79(mmd, closes, volumes)
+                mmd._price_momentum_continuity_v79 = pmc
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pmc.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 
@@ -25633,6 +25671,339 @@ def _calc_fund_flow_divergence_v78(
         result["msg"] = (
             f"背离类型={divergence_type} 资金分={money_flow_score:.0%} "
             f"量价相关={correlation:.2f} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ── V79: 条件 248-251（分型稳定性+距离安全+多级别一致性+动能持续性）────────────
+
+def _calc_fractal_stability_validation_v79(
+    mmd: "MMD",
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """分型稳定性验证（V79 条件248）。
+
+    检验顶底分型是否被后续K线破坏，确认信号的可靠性：
+    - 买入信号：检查最近顶分型是否被后续高点突破（破坏）
+    - 卖出信号：检查最近底分型是否被后续低点跌破（破坏）
+    - 分型稳定 → 加分，分型被破坏 → 减分
+
+    返回：stability_score, fractal_status, confidence_adjust, msg
+    """
+    result = {
+        "stability_score": 0.5,
+        "fractal_status": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(highs) < 10 or len(lows) < 10:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(20, len(highs))
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+        current_high = recent_highs[-1]
+        current_low = recent_lows[-1]
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        if is_buy:
+            # 买入信号：检查顶分型是否被后续高点突破（破坏）
+            # 如果当前价格附近有更高的新高点，说明顶分型不稳定
+            max_recent_high = max(recent_highs[:-1]) if len(recent_highs) > 1 else current_high
+            price_new_high = current_high > max_recent_high * 1.02  # 新高超过2%
+
+            if not price_new_high:
+                stability = 0.9
+                status = "stable"
+                adjust = 0.03
+            elif current_high > max_recent_high * 1.05:
+                stability = 0.3
+                status = "broken"
+                adjust = -0.04
+            else:
+                stability = 0.6
+                status = "weak"
+                adjust = -0.01
+        else:
+            # 卖出信号：检查底分型是否被后续低点跌破（破坏）
+            min_recent_low = min(recent_lows[:-1]) if len(recent_lows) > 1 else current_low
+            price_new_low = current_low < min_recent_low * 0.98  # 新低超过2%
+
+            if not price_new_low:
+                stability = 0.9
+                status = "stable"
+                adjust = 0.03
+            elif current_low < min_recent_low * 0.95:
+                stability = 0.3
+                status = "broken"
+                adjust = -0.04
+            else:
+                stability = 0.6
+                status = "weak"
+                adjust = -0.01
+
+        result["stability_score"] = stability
+        result["fractal_status"] = status
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"分型状态={status} 稳定分={stability:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_mmd_distance_safety_v79(
+    mmds: list["MMD"],
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """买卖点距离安全阈值（V79 条件249）。
+
+    评估当前买卖点与最近同向买卖点的距离，避免追高/杀跌：
+    - 距离过近（<5根K线）→ 高风险，减分
+    - 距离适中（5-20根K线）→ 正常
+    - 距离充足（>20根K线）→ 安全，加分
+
+    返回：distance_score, bars_to_nearest, safety_level, confidence_adjust, msg
+    """
+    result = {
+        "distance_score": 0.5,
+        "bars_to_nearest": 0,
+        "safety_level": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if mmds is None or len(mmds) < 2 or not closes:
+            result["msg"] = "数据不足"
+            return result
+
+        # 找最近同向买卖点的距离（以K线根数计）
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+        same_type_prefix = "BUY" if is_buy else "SELL"
+
+        nearest_dist = None
+        for prev_mmd in reversed(mmds[:-1]):
+            prev_is_same = prev_mmd.mmd_type.value.startswith(same_type_prefix)
+            if prev_is_same and prev_mmd.bi is not None and mmd.bi is not None:
+                # 用bi.index估算距离
+                dist = abs(mmd.bi.index - prev_mmd.bi.index)
+                if nearest_dist is None or dist < nearest_dist:
+                    nearest_dist = dist
+
+        if nearest_dist is None:
+            nearest_dist = 99  # 没有最近的同向信号，视为安全
+            safety = "isolated"
+            score = 0.7
+            adjust = 0.02
+        elif nearest_dist < 5:
+            safety = "too_close"
+            score = 0.2
+            adjust = -0.04
+        elif nearest_dist < 10:
+            safety = "close"
+            score = 0.4
+            adjust = -0.02
+        elif nearest_dist < 20:
+            safety = "moderate"
+            score = 0.6
+            adjust = 0.0
+        else:
+            safety = "safe"
+            score = 0.85
+            adjust = 0.03
+
+        result["distance_score"] = score
+        result["bars_to_nearest"] = nearest_dist
+        result["safety_level"] = safety
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"最近同向={nearest_dist}根K线 安全={safety} "
+            f"距离分={score:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_multi_level_structure_consistency_v79(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """多级别结构一致性评分（V79 条件250）。
+
+    评估当前买卖点在短周期和长周期趋势中的一致性强弱：
+    - 短期（5日）趋势与信号方向一致 → +2%
+    - 中期（20日）趋势与信号方向一致 → +2%
+    - 长期（60日）趋势与信号方向一致 → +2%
+    - 全一致 → +6%，部分一致 → 加分，矛盾 → 减分
+
+    返回：consistency_score, short_align, mid_align, long_align, confidence_adjust, msg
+    """
+    result = {
+        "consistency_score": 0.5,
+        "short_align": False,
+        "mid_align": False,
+        "long_align": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 10:
+            result["msg"] = "数据不足"
+            return result
+
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 短周期（5日）趋势
+        short_ma5 = sum(closes[-5:]) / 5
+        short_trend_up = closes[-1] > short_ma5
+
+        # 中期（20日）趋势
+        mid_ma20 = sum(closes[-20:]) / 20 if len(closes) >= 20 else short_ma5
+        mid_trend_up = closes[-1] > mid_ma20
+
+        # 长期（60日）趋势
+        long_ma60 = sum(closes[-60:]) / 60 if len(closes) >= 60 else mid_ma20
+        long_trend_up = closes[-1] > long_ma60
+
+        short_align = (is_buy and short_trend_up) or (not is_buy and not short_trend_up)
+        mid_align = (is_buy and mid_trend_up) or (not is_buy and not mid_trend_up)
+        long_align = (is_buy and long_trend_up) or (not is_buy and not long_trend_up)
+
+        align_count = sum([short_align, mid_align, long_align])
+
+        if align_count == 3:
+            consistency = 0.95
+            adjust = 0.06
+            level = "full_consensus"
+        elif align_count == 2:
+            consistency = 0.7
+            adjust = 0.03
+            level = "partial_consensus"
+        elif align_count == 1:
+            consistency = 0.4
+            adjust = -0.02
+            level = "conflicted"
+        else:
+            consistency = 0.2
+            adjust = -0.04
+            level = "fully_conflicted"
+
+        result["consistency_score"] = consistency
+        result["short_align"] = short_align
+        result["mid_align"] = mid_align
+        result["long_align"] = long_align
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"多级别一致={level} 短={'✓' if short_align else '✗'} "
+            f"中={'✓' if mid_align else '✗'} 长={'✓' if long_align else '✗'} "
+            f"一致分={consistency:.0%} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_price_momentum_continuity_v79(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """价格动能持续性评分（V79 条件251）。
+
+    评估当前买卖点对应的价格动能是否在持续：
+    - 计算近N日价格加速度（二阶导）
+    - 结合成交量变化判断动能衰减/增强
+    - 动能持续 → 加分，动能衰竭 → 减分
+
+    返回：momentum_score, acceleration, vol_trend, momentum_level, confidence_adjust, msg
+    """
+    result = {
+        "momentum_score": 0.5,
+        "acceleration": 0.0,
+        "vol_trend": "neutral",
+        "momentum_level": "neutral",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 15:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(20, len(closes))
+        recent = closes[-lookback:]
+        is_buy = mmd.mmd_type.value.startswith("BUY")
+
+        # 计算价格加速度（二阶差分）
+        if len(recent) >= 3:
+            first_deriv = [recent[i] - recent[i - 1] for i in range(1, len(recent))]
+            second_deriv = [first_deriv[i] - first_deriv[i - 1] for i in range(1, len(first_deriv))]
+            avg_acceleration = sum(second_deriv) / len(second_deriv) if second_deriv else 0.0
+        else:
+            avg_acceleration = 0.0
+
+        # 价格动量（一阶导的平均）
+        price_momentum = sum(first_deriv[-5:]) / min(5, len(first_deriv)) if first_deriv else 0.0
+
+        # 成交量趋势
+        if volumes and len(volumes) >= lookback:
+            vol_recent = volumes[-5:]
+            vol_prev = volumes[-10:-5] if len(volumes) >= 10 else vol_recent
+            avg_vol_recent = sum(vol_recent) / len(vol_recent)
+            avg_vol_prev = sum(vol_prev) / len(vol_prev) if vol_prev else avg_vol_recent
+            vol_trend = "up" if avg_vol_recent > avg_vol_prev * 1.1 else ("down" if avg_vol_recent < avg_vol_prev * 0.9 else "neutral")
+        else:
+            vol_trend = "neutral"
+
+        # 综合评估动能持续性
+        if is_buy:
+            momentum_positive = price_momentum > 0
+            accel_positive = avg_acceleration > 0
+            vol_support = vol_trend in ["up", "neutral"]
+        else:
+            momentum_positive = price_momentum < 0
+            accel_positive = avg_acceleration < 0
+            vol_support = vol_trend in ["down", "neutral"]
+
+        positive_factors = sum([momentum_positive, accel_positive, vol_support])
+
+        if positive_factors == 3:
+            momentum_level = "strong"
+            momentum_score = 0.9
+            adjust = 0.04
+        elif positive_factors == 2:
+            momentum_level = "moderate"
+            momentum_score = 0.65
+            adjust = 0.02
+        elif positive_factors == 1:
+            momentum_level = "weak"
+            momentum_score = 0.4
+            adjust = -0.02
+        else:
+            momentum_level = "declining"
+            momentum_score = 0.2
+            adjust = -0.04
+
+        result["momentum_score"] = momentum_score
+        result["acceleration"] = round(avg_acceleration, 4)
+        result["vol_trend"] = vol_trend
+        result["momentum_level"] = momentum_level
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"动能级={momentum_level} 加速={avg_acceleration:.4f} "
+            f"量能={'↑' if vol_trend == 'up' else '↓' if vol_trend == 'down' else '→'} "
+            f"动量分={momentum_score:.0%} 调整{adjust:+.0%}"
         )
         return result
     except Exception:

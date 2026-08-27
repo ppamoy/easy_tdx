@@ -2221,7 +2221,40 @@ export interface DiagnosisChanlun {
      confidence_adjust: number
      msg: string
    } | null
-}
+    // V79: 分型稳定性验证（条件248）
+    fractal_stability_validation_v79?: {
+      stability_score: number
+      fractal_status: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V79: 买卖点距离安全阈值（条件249）
+    mmd_distance_safety_v79?: {
+      distance_score: number
+      bars_to_nearest: number
+      safety_level: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V79: 多级别结构一致性评分（条件250）
+    multi_level_structure_consistency_v79?: {
+      consistency_score: number
+      short_align: boolean
+      mid_align: boolean
+      long_align: boolean
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V79: 价格动能持续性评分（条件251）
+    price_momentum_continuity_v79?: {
+      momentum_score: number
+      acceleration: number
+      vol_trend: string
+      momentum_level: string
+      confidence_adjust: number
+      msg: string
+    } | null
+  }
 
 export interface DiagnosisMACD {
   dif: number
@@ -2365,6 +2398,30 @@ export interface DiagnosisResult {
      signal_freshness: string | null
      momentum_direction: string | null
    }
+   // V78: 四维度量摘要（条件244-247）
+   v78_summary?: {
+     quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+     total_adjust: number | null
+     positive_count: number | null
+     negative_count: number | null
+     recommendation: string
+     cycle_position: string | null
+     consensus_level: string | null
+     breakout_direction: string | null
+     divergence_type: string | null
+    }
+    // V79: 四维度量摘要（条件248-251）
+    v79_summary?: {
+      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+      total_adjust: number | null
+      positive_count: number | null
+      negative_count: number | null
+      recommendation: string
+      fractal_status: string | null
+      safety_level: string | null
+      consistency_level: string | null
+      momentum_level: string | null
+    }
   chanlun: DiagnosisChanlun
   macd: DiagnosisMACD
   boll: DiagnosisBOLL

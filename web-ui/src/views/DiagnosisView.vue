@@ -49,6 +49,14 @@ const v77QualityLabel = (level: string | null | undefined): string => {
   const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
   return map[level ?? ''] ?? '—'
 }
+const v78QualityLabel = (level: string | null | undefined): string => {
+  const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
+  return map[level ?? ''] ?? '—'
+}
+const v79QualityLabel = (level: string | null | undefined): string => {
+  const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
+  return map[level ?? ''] ?? '—'
+}
 const multiResultsHaveConditionData = computed(() =>
   multiResults.value.some((r: MultiStockResult) => Object.keys(r.condition_breakdown || {}).length > 0)
 )
@@ -250,6 +258,30 @@ onMounted(() => {
               📊 V77四维度量{{ v77QualityLabel(diagnosis.v77_summary.quality_level) }}
               · 正{{ diagnosis.v77_summary.positive_count ?? '—' }}/负{{ diagnosis.v77_summary.negative_count ?? '—' }}
               · 调整{{ diagnosis.v77_summary.total_adjust != null ? (diagnosis.v77_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v77_summary.total_adjust.toFixed(0) + '%' : '—' }}
+            </span>
+          </div>
+          <div v-if="diagnosis.v78_summary" class="v78-summary-row">
+            <span class="v78-tag" :class="{
+              'v78-strong': diagnosis.v78_summary.quality_level === 'strong',
+              'v78-moderate': diagnosis.v78_summary.quality_level === 'moderate',
+              'v78-weak': diagnosis.v78_summary.quality_level === 'weak',
+              'v78-mixed': diagnosis.v78_summary.quality_level === 'mixed',
+            }">
+              🔭 V78四维度量{{ v78QualityLabel(diagnosis.v78_summary.quality_level) }}
+              · 正{{ diagnosis.v78_summary.positive_count ?? '—' }}/负{{ diagnosis.v78_summary.negative_count ?? '—' }}
+              · 调整{{ diagnosis.v78_summary.total_adjust != null ? (diagnosis.v78_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v78_summary.total_adjust.toFixed(0) + '%' : '—' }}
+            </span>
+          </div>
+          <div v-if="diagnosis.v79_summary" class="v79-summary-row">
+            <span class="v79-tag" :class="{
+              'v79-strong': diagnosis.v79_summary.quality_level === 'strong',
+              'v79-moderate': diagnosis.v79_summary.quality_level === 'moderate',
+              'v79-weak': diagnosis.v79_summary.quality_level === 'weak',
+              'v79-mixed': diagnosis.v79_summary.quality_level === 'mixed',
+            }">
+              🎯 V79四维度量{{ v79QualityLabel(diagnosis.v79_summary.quality_level) }}
+              · 正{{ diagnosis.v79_summary.positive_count ?? '—' }}/负{{ diagnosis.v79_summary.negative_count ?? '—' }}
+              · 调整{{ diagnosis.v79_summary.total_adjust != null ? (diagnosis.v79_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v79_summary.total_adjust.toFixed(0) + '%' : '—' }}
             </span>
           </div>
           <div class="meta-info">
@@ -4704,6 +4736,100 @@ onMounted(() => {
                       <div class="kv-note">{{ diagnosis.chanlun.fund_flow_divergence_v78.msg }}</div>
                     </div>
                  </div>
+                 <!-- V79: 分型稳定性验证（条件248） -->
+                 <div v-if="diagnosis.chanlun.fractal_stability_validation_v79" class="metric-card v79-fsv">
+                    <div class="card-title">🔍 V79 分型稳定性（条件248）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">分型状态</span>
+                        <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.fractal_stability_validation_v79.fractal_status === 'stable', 'tag-orange': diagnosis.chanlun.fractal_stability_validation_v79.fractal_status === 'weak', 'tag-red': diagnosis.chanlun.fractal_stability_validation_v79.fractal_status === 'broken', 'tag-gray': diagnosis.chanlun.fractal_stability_validation_v79.fractal_status === 'unknown' }">
+                          {{ {stable:'🟢 稳定',weak:'🟠 弱稳定',broken:'🔴 已破坏',unknown:'⚪ 未知'}[diagnosis.chanlun.fractal_stability_validation_v79.fractal_status] ?? '—' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">稳定评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.fractal_stability_validation_v79.stability_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.fractal_stability_validation_v79.stability_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                          {{ (diagnosis.chanlun.fractal_stability_validation_v79.stability_score * 100).toFixed(0) }}%
+                        </span>
+                        <span class="kv-key">置信度调整</span><span class="kv-val" :style="{ color: diagnosis.chanlun.fractal_stability_validation_v79.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.fractal_stability_validation_v79.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.fractal_stability_validation_v79.confidence_adjust * 100).toFixed(0) }}%</span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.fractal_stability_validation_v79.msg }}</div>
+                    </div>
+                 </div>
+                 <!-- V79: 买卖点距离安全阈值（条件249） -->
+                 <div v-if="diagnosis.chanlun.mmd_distance_safety_v79" class="metric-card v79-mds">
+                    <div class="card-title">📏 V79 距离安全（条件249）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">安全等级</span>
+                        <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.mmd_distance_safety_v79.safety_level === 'safe', 'tag-blue': diagnosis.chanlun.mmd_distance_safety_v79.safety_level === 'moderate', 'tag-orange': diagnosis.chanlun.mmd_distance_safety_v79.safety_level === 'close', 'tag-red': diagnosis.chanlun.mmd_distance_safety_v79.safety_level === 'too_close', 'tag-gray': diagnosis.chanlun.mmd_distance_safety_v79.safety_level === 'isolated' }">
+                          {{ {safe:'🟢 安全',moderate:'🔵 适中',close:'🟠 过近',too_close:'🔴 太近',isolated:'⚪ 孤立'}[diagnosis.chanlun.mmd_distance_safety_v79.safety_level] ?? '—' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">安全评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.mmd_distance_safety_v79.distance_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.mmd_distance_safety_v79.distance_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                          {{ (diagnosis.chanlun.mmd_distance_safety_v79.distance_score * 100).toFixed(0) }}%
+                        </span>
+                        <span class="kv-key">距最近同向</span><span class="kv-val">{{ diagnosis.chanlun.mmd_distance_safety_v79.bars_to_nearest }}根K线</span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.mmd_distance_safety_v79.msg }}</div>
+                    </div>
+                 </div>
+                 <!-- V79: 多级别结构一致性评分（条件250） -->
+                 <div v-if="diagnosis.chanlun.multi_level_structure_consistency_v79" class="metric-card v79-mls">
+                    <div class="card-title">🔄 V79 多级别一致（条件250）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">短周期(5日)</span>
+                        <span class="tag" :class="diagnosis.chanlun.multi_level_structure_consistency_v79.short_align ? 'tag-green' : 'tag-red'">
+                          {{ diagnosis.chanlun.multi_level_structure_consistency_v79.short_align ? '✓ 同向' : '✗ 反向' }}
+                        </span>
+                        <span class="kv-key">中周期(20日)</span>
+                        <span class="tag" :class="diagnosis.chanlun.multi_level_structure_consistency_v79.mid_align ? 'tag-green' : 'tag-red'">
+                          {{ diagnosis.chanlun.multi_level_structure_consistency_v79.mid_align ? '✓ 同向' : '✗ 反向' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">长周期(60日)</span>
+                        <span class="tag" :class="diagnosis.chanlun.multi_level_structure_consistency_v79.long_align ? 'tag-green' : 'tag-red'">
+                          {{ diagnosis.chanlun.multi_level_structure_consistency_v79.long_align ? '✓ 同向' : '✗ 反向' }}
+                        </span>
+                        <span class="kv-key">一致评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.multi_level_structure_consistency_v79.consistency_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.multi_level_structure_consistency_v79.consistency_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                          {{ (diagnosis.chanlun.multi_level_structure_consistency_v79.consistency_score * 100).toFixed(0) }}%
+                        </span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.multi_level_structure_consistency_v79.msg }}</div>
+                    </div>
+                 </div>
+                 <!-- V79: 价格动能持续性评分（条件251） -->
+                 <div v-if="diagnosis.chanlun.price_momentum_continuity_v79" class="metric-card v79-pmc">
+                    <div class="card-title">⚡ V79 动能持续（条件251）</div>
+                    <div class="card-body">
+                      <div class="kv-row">
+                        <span class="kv-key">动能级别</span>
+                        <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.price_momentum_continuity_v79.momentum_level === 'strong', 'tag-blue': diagnosis.chanlun.price_momentum_continuity_v79.momentum_level === 'moderate', 'tag-orange': diagnosis.chanlun.price_momentum_continuity_v79.momentum_level === 'weak', 'tag-red': diagnosis.chanlun.price_momentum_continuity_v79.momentum_level === 'declining', 'tag-gray': diagnosis.chanlun.price_momentum_continuity_v79.momentum_level === 'neutral' }">
+                          {{ {strong:'🟢 强劲',moderate:'🔵 中等',weak:'🟠 偏弱',declining:'🔴 衰竭',neutral:'⚪ 中性'}[diagnosis.chanlun.price_momentum_continuity_v79.momentum_level] ?? '—' }}
+                        </span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">动能评分</span>
+                        <span class="kv-val" :style="{ color: diagnosis.chanlun.price_momentum_continuity_v79.momentum_score >= 0.7 ? '#22c55e' : diagnosis.chanlun.price_momentum_continuity_v79.momentum_score >= 0.4 ? '#f59e0b' : '#ef4444' }">
+                          {{ (diagnosis.chanlun.price_momentum_continuity_v79.momentum_score * 100).toFixed(0) }}%
+                        </span>
+                        <span class="kv-key">加速度</span><span class="kv-val">{{ diagnosis.chanlun.price_momentum_continuity_v79.acceleration.toFixed(4) }}</span>
+                      </div>
+                      <div class="kv-row">
+                        <span class="kv-key">量能趋势</span>
+                        <span class="tag" :class="{ 'tag-green': diagnosis.chanlun.price_momentum_continuity_v79.vol_trend === 'up', 'tag-red': diagnosis.chanlun.price_momentum_continuity_v79.vol_trend === 'down', 'tag-gray': diagnosis.chanlun.price_momentum_continuity_v79.vol_trend === 'neutral' }">
+                          {{ {up:'📈 放大',down:'📉 萎缩',neutral:'➡️ 平稳'}[diagnosis.chanlun.price_momentum_continuity_v79.vol_trend] ?? '—' }}
+                        </span>
+                        <span class="kv-key">调整</span><span class="kv-val" :style="{ color: diagnosis.chanlun.price_momentum_continuity_v79.confidence_adjust > 0 ? '#22c55e' : '#ef4444' }">{{ diagnosis.chanlun.price_momentum_continuity_v79.confidence_adjust > 0 ? '+' : '' }}{{ (diagnosis.chanlun.price_momentum_continuity_v79.confidence_adjust * 100).toFixed(0) }}%</span>
+                      </div>
+                      <div class="kv-note">{{ diagnosis.chanlun.price_momentum_continuity_v79.msg }}</div>
+                    </div>
+                 </div>
                 <!-- MACD -->
         <div class="metric-card">
           <div class="card-title">📈 MACD</div>
@@ -5242,6 +5368,15 @@ onMounted(() => {
 .v77-tag.v77-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
 .v77-tag.v77-weak    { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .v77-tag.v77-mixed  { background: rgba(107,114,128,0.15); color: #9ca3af; }
+.v78-summary-row { margin-bottom: 6px; }
+.v78-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 12px;
+  font-size: 12px; font-weight: 600; line-height: 1.4;
+}
+.v78-tag.v78-strong  { background: rgba(168,85,247,0.15); color: #a855f7; }
+.v78-tag.v78-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.v78-tag.v78-weak    { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.v78-tag.v78-mixed  { background: rgba(107,114,128,0.15); color: #9ca3af; }
 .meta-info {
   font-size: 12px;
   color: var(--text-dim);
@@ -5742,4 +5877,21 @@ onMounted(() => {
 .v78-msc .kv-val { font-weight: 600; }
 .v78-vcb .kv-val { font-weight: 600; }
 .v78-ffd .kv-val { font-weight: 600; }
+.v79-fsv .kv-val { font-weight: 600; }
+.v79-mds .kv-val { font-weight: 600; }
+.v79-mls .kv-val { font-weight: 600; }
+.v79-pmc .kv-val { font-weight: 600; }
+.v79-summary-row { margin-bottom: 6px; }
+.v79-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-right: 6px;
+}
+.v79-tag.v79-strong   { background: rgba(34,197,94,0.15); color: #22c55e; }
+.v79-tag.v79-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.v79-tag.v79-weak     { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.v79-tag.v79-mixed    { background: rgba(107,114,128,0.15); color: #9ca3af; }
 </style>

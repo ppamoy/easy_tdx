@@ -526,6 +526,12 @@ class MMD:
     _volatility_compression_breakout_v78: dict[str, Any] | None = None  # 波动率压缩突破预测（条件246）
     _fund_flow_divergence_v78: dict[str, Any] | None = None  # 资金流向与价格背离检测（条件247）
 
+    # V79 enhancement fields (2026-08-28)
+    _fractal_stability_validation_v79: dict[str, Any] | None = None  # 分型稳定性验证（条件248）
+    _mmd_distance_safety_v79: dict[str, Any] | None = None  # 买卖点距离安全阈值（条件249）
+    _multi_level_structure_consistency_v79: dict[str, Any] | None = None  # 多级别结构一致性评分（条件250）
+    _price_momentum_continuity_v79: dict[str, Any] | None = None  # 价格动能持续性评分（条件251）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 
