@@ -383,12 +383,32 @@ export interface DiagnosisChanlunMmd {
   kline_pattern?: string | null
   // V16: 仓位建议
   position_sizing?: { position_pct: number; suggestion: string; risk_level: string; notes: string[] } | null
+  // V79 缠论增强条件
+  v79_fractal_stability?: { stability_score: number; fractal_status: string; confidence_adjust: number; msg: string } | null
+  v79_distance_safety?: { distance_score: number; bars_to_nearest: number; safety_level: string; confidence_adjust: number; msg: string } | null
+  v79_multi_level_consistency?: { consistency_score: number; short_align: boolean; mid_align: boolean; long_align: boolean; confidence_adjust: number; msg: string } | null
+  v79_momentum_continuity?: { momentum_score: number; acceleration: number; momentum_level: string; confidence_adjust: number; msg: string } | null
+  // V80 缠论增强条件
+  v80_zhongshu_distance?: { distance_score: number; nearest_zs_dist_pct: number; zs_position: string; confidence_adjust: number; msg: string } | null
+  v80_volume_confirmation?: { confirmation_score: number; vol_ratio: number; volume_trend: string; price_trend: string; confidence_adjust: number; msg: string } | null
+  v80_ma_alignment?: { alignment_score: number; ma_alignment: string; price_position: string; confidence_adjust: number; msg: string } | null
+  v80_risk_reward?: { rr_ratio: number; stop_loss_pct: number; take_profit_pct: number; risk_level: string; confidence_adjust: number; msg: string } | null
 }
 
 export interface DiagnosisChanlunRecentSignal {
   type: string
   confidence: number
   quality: { grade: 'S'|'A'|'B'|'C'|'D'|null; score: number|null } | null
+  // V79 缠论增强条件
+  v79_fractal_stability?: { stability_score: number; fractal_status: string; confidence_adjust: number; msg: string } | null
+  v79_distance_safety?: { distance_score: number; bars_to_nearest: number; safety_level: string; confidence_adjust: number; msg: string } | null
+  v79_multi_level_consistency?: { consistency_score: number; short_align: boolean; mid_align: boolean; long_align: boolean; confidence_adjust: number; msg: string } | null
+  v79_momentum_continuity?: { momentum_score: number; acceleration: number; momentum_level: string; confidence_adjust: number; msg: string } | null
+  // V80 缠论增强条件
+  v80_zhongshu_distance?: { distance_score: number; nearest_zs_dist_pct: number; zs_position: string; confidence_adjust: number; msg: string } | null
+  v80_volume_confirmation?: { confirmation_score: number; vol_ratio: number; volume_trend: string; price_trend: string; confidence_adjust: number; msg: string } | null
+  v80_ma_alignment?: { alignment_score: number; ma_alignment: string; price_position: string; confidence_adjust: number; msg: string } | null
+  v80_risk_reward?: { rr_ratio: number; stop_loss_pct: number; take_profit_pct: number; risk_level: string; confidence_adjust: number; msg: string } | null
 }
 
 export interface DiagnosisSignalReport {

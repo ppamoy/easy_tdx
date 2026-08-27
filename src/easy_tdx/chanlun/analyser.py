@@ -141,6 +141,16 @@ class ChanlunResult:
                         "score": mmd.quality.score if mmd.quality else None,
                         "reasons": mmd.quality.reasons if mmd.quality else None,
                     } if mmd.quality else None,
+                    # V79 缠论增强条件（条件248-251）
+                    "v79_fractal_stability": getattr(mmd, "_fractal_stability_validation_v79", None),
+                    "v79_distance_safety": getattr(mmd, "_mmd_distance_safety_v79", None),
+                    "v79_multi_level_consistency": getattr(mmd, "_multi_level_structure_consistency_v79", None),
+                    "v79_momentum_continuity": getattr(mmd, "_price_momentum_continuity_v79", None),
+                    # V80 缠论增强条件（条件252-255）
+                    "v80_zhongshu_distance": getattr(mmd, "_mmd_zhongshu_distance_v80", None),
+                    "v80_volume_confirmation": getattr(mmd, "_volume_confirmation_v80", None),
+                    "v80_ma_alignment": getattr(mmd, "_ma_alignment_strength_v80", None),
+                    "v80_risk_reward": getattr(mmd, "_dynamic_risk_reward_v80", None),
                 }
                 for mmd in self.mmds
             ],

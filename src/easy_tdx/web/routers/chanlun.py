@@ -14,6 +14,24 @@ from easy_tdx.web.schemas import ChanlunRequest
 router = APIRouter(tags=["chanlun"])
 
 
+def _to_json_safe(obj: Any) -> Any:
+    """递归将 numpy 类型转换为 JSON 可序列化的 Python 原生类型。"""
+    import numpy as np
+    if isinstance(obj, dict):
+        return {k: _to_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_json_safe(item) for item in obj]
+    if isinstance(obj, np.bool_):
+        return bool(obj)
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    return obj
+
+
 @router.post("/chanlun/analyze")
 async def chanlun_analyze(
     req: ChanlunRequest,
@@ -167,7 +185,7 @@ async def chanlun_multi_level(
         ]
         return d
 
-    return {
+    return _to_json_safe({
         "high_level": {
             "category": req.category,
             "result": fmt_result(high_result),
@@ -178,7 +196,7 @@ async def chanlun_multi_level(
         },
         "confluence": confluence,
         "low_level_qs": low_qs,
-    }
+    })
 
 
 class ChanlunRecommendRequest(ChanlunRequest):
@@ -239,6 +257,8 @@ async def chanlun_recommend(
 
     sorted_mmds = sorted(mmds, key=_mmd_sort_key, reverse=True)
     best_mmd = sorted_mmds[0] if sorted_mmds else None
+    # 最新买卖点（按笔索引，用于 V79/V80 摘要）
+    latest_mmd = max(mmds, key=lambda m: m.bi.index if m.bi else 0) if mmds else None
 
     # 买卖点摘要
     mmd_summary = []
@@ -254,6 +274,11 @@ async def chanlun_recommend(
             "distance_safety": getattr(m, "_mmd_distance_safety_v79", None),
             "multi_level_consistency": getattr(m, "_multi_level_structure_consistency_v79", None),
             "momentum_continuity": getattr(m, "_price_momentum_continuity_v79", None),
+            # V80 缠论增强条件
+            "zhongshu_distance": getattr(m, "_mmd_zhongshu_distance_v80", None),
+            "volume_confirmation": getattr(m, "_volume_confirmation_v80", None),
+            "ma_alignment": getattr(m, "_ma_alignment_strength_v80", None),
+            "risk_reward": getattr(m, "_dynamic_risk_reward_v80", None),
         })
 
     # ── 3. 技术指标诊断（轻量版）─────────────────────────────────────
@@ -267,10 +292,10 @@ async def chanlun_recommend(
         k, d, j = MYTT_KDJ(closes, highs, lows, 9, 3, 3)
         rsi14 = MYTT_RSI(closes, 14)
 
-        latest_dif = dif[-1] if dif else 0
-        latest_dea = dea[-1] if dea else 0
-        golden_cross = dif[-2] <= dea[-2] and latest_dif > latest_dea if len(dif) > 1 else False
-        dead_cross = dif[-2] >= dea[-2] and latest_dif < latest_dea if len(dif) > 1 else False
+        latest_dif = dif[-1] if len(dif) > 0 else 0
+        latest_dea = dea[-1] if len(dea) > 0 else 0
+        golden_cross = (dif[-2] <= dea[-2] and latest_dif > latest_dea) if len(dif) > 1 else False
+        dead_cross = (dif[-2] >= dea[-2] and latest_dif < latest_dea) if len(dif) > 1 else False
 
         # 均线排列
         ma_bull = all(v > 0 for v in (ma5[-1]-ma10[-1], ma10[-1]-ma20[-1], ma20[-1]-ma60[-1])) if all(x > 0 for x in [ma5[-1],ma10[-1],ma20[-1],ma60[-1]]) else False
@@ -278,19 +303,19 @@ async def chanlun_recommend(
         diag = {
             "macd": {
                 "dif": round(latest_dif, 4), "dea": round(latest_dea, 4),
-                "hist": round(macd_hist[-1], 4) if macd_hist else 0,
+                "hist": round(macd_hist[-1], 4) if len(macd_hist) > 0 else 0,
                 "golden_cross": golden_cross, "dead_cross": dead_cross,
                 "above_zero": latest_dif > 0,
             },
             "kdj": {
-                "k": round(k[-1], 2) if k else 0, "d": round(d[-1], 2) if d else 0,
-                "j": round(j[-1], 2) if j else 0,
-                "overbought": (j[-1] if j else 0) > 80, "oversold": (j[-1] if j else 0) < 20,
+                "k": round(k[-1], 2) if len(k) > 0 else 0, "d": round(d[-1], 2) if len(d) > 0 else 0,
+                "j": round(j[-1], 2) if len(j) > 0 else 0,
+                "overbought": (j[-1] if len(j) > 0 else 0) > 80, "oversold": (j[-1] if len(j) > 0 else 0) < 20,
             },
             "rsi": {
-                "value": round(rsi14[-1], 2) if rsi14 else 50,
-                "overbought": (rsi14[-1] if rsi14 else 50) > 70,
-                "oversold": (rsi14[-1] if rsi14 else 50) < 30,
+                "value": round(rsi14[-1], 2) if len(rsi14) > 0 else 50,
+                "overbought": (rsi14[-1] if len(rsi14) > 0 else 50) > 70,
+                "oversold": (rsi14[-1] if len(rsi14) > 0 else 50) < 30,
             },
             "ma_bullish_arrangement": ma_bull,
             "latest_close": round(latest_close, 2),
@@ -376,7 +401,7 @@ async def chanlun_recommend(
     all_reasons = reasons_buy + reasons_sell
     reason_text = "；".join(all_reasons) if all_reasons else "无明显信号"
 
-    return {
+    return _to_json_safe({
         "symbol": symbol,
         "date": latest_date,
         "close": round(latest_close, 2),
@@ -398,19 +423,19 @@ async def chanlun_recommend(
         },
         "all_mmds": mmd_summary,
         "diagnosis": diag,
-        # V79 缠论四维度量摘要
+        # V79 缠论四维度量摘要（基于最新买卖点）
         "v79_summary": {
-            "fractal_status": getattr(getattr(best_mmd, "_fractal_stability_validation_v79", None), "fractal_status", None) if best_mmd else None,
-            "safety_level": getattr(getattr(best_mmd, "_mmd_distance_safety_v79", None), "safety_level", None) if best_mmd else None,
-            "consistency_level": getattr(getattr(getattr(best_mmd, "_multi_level_structure_consistency_v79", None), "msg", ""), "split", "consistent")(0) if best_mmd else None,
-            "momentum_level": getattr(getattr(best_mmd, "_price_momentum_continuity_v79", None), "momentum_level", None) if best_mmd else None,
-        } if best_mmd else None,
-        # V80 缠论四维度量摘要（条件252-255）
+            "fractal_status": getattr(getattr(latest_mmd, "_fractal_stability_validation_v79", None), "fractal_status", None) if latest_mmd else None,
+            "safety_level": getattr(getattr(latest_mmd, "_mmd_distance_safety_v79", None), "safety_level", None) if latest_mmd else None,
+            "consistency_level": (getattr(getattr(latest_mmd, "_multi_level_structure_consistency_v79", None), "msg", "").split("consistent")[0] if latest_mmd and getattr(getattr(latest_mmd, "_multi_level_structure_consistency_v79", None), "msg", "") else None),
+            "momentum_level": getattr(getattr(latest_mmd, "_price_momentum_continuity_v79", None), "momentum_level", None) if latest_mmd else None,
+        } if latest_mmd else None,
+        # V80 缠论四维度量摘要（条件252-255，基于最新买卖点）
         "v80_summary": {
-            "zs_position": getattr(getattr(best_mmd, "_mmd_zhongshu_distance_v80", None), "zs_position", None) if best_mmd else None,
-            "volume_confirmed": f"{'↑' if getattr(getattr(best_mmd, '_volume_confirmation_v80', None), 'price_trend', None)=='up' else '↓'}{'↑' if getattr(getattr(best_mmd, '_volume_confirmation_v80', None), 'volume_trend', None)=='up' else '↓'}" if best_mmd and getattr(best_mmd, "_volume_confirmation_v80", None) else None,
-            "ma_alignment": getattr(getattr(best_mmd, "_ma_alignment_strength_v80", None), "ma_alignment", None) if best_mmd else None,
-            "risk_level": getattr(getattr(best_mmd, "_dynamic_risk_reward_v80", None), "risk_level", None) if best_mmd else None,
-        } if best_mmd else None,
-    }
+            "zs_position": getattr(getattr(latest_mmd, "_mmd_zhongshu_distance_v80", None), "zs_position", None) if latest_mmd else None,
+            "volume_confirmed": f"{'↑' if getattr(getattr(latest_mmd, '_volume_confirmation_v80', None), 'price_trend', None)=='up' else '↓'}{'↑' if getattr(getattr(latest_mmd, '_volume_confirmation_v80', None), 'volume_trend', None)=='up' else '↓'}" if latest_mmd and getattr(latest_mmd, "_volume_confirmation_v80", None) else None,
+            "ma_alignment": getattr(getattr(latest_mmd, "_ma_alignment_strength_v80", None), "ma_alignment", None) if latest_mmd else None,
+            "risk_level": getattr(getattr(latest_mmd, "_dynamic_risk_reward_v80", None), "risk_level", None) if latest_mmd else None,
+        } if latest_mmd else None,
+    })
 

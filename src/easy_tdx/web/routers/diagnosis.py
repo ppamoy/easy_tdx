@@ -899,6 +899,16 @@ async def diagnose_stock(
                     "score": getattr(getattr(getattr(latest_mmd, "quality", None), "score", None), "score", None),
                     "reasons": getattr(getattr(getattr(latest_mmd, "quality", None), "reasons", None), "reasons", None),
                 } if latest_mmd and getattr(latest_mmd, "quality", None) else None,
+                # V79 缠论增强条件（条件248-251）
+                "v79_fractal_stability": getattr(latest_mmd, "_fractal_stability_validation_v79", None) if latest_mmd else None,
+                "v79_distance_safety": getattr(latest_mmd, "_mmd_distance_safety_v79", None) if latest_mmd else None,
+                "v79_multi_level_consistency": getattr(latest_mmd, "_multi_level_structure_consistency_v79", None) if latest_mmd else None,
+                "v79_momentum_continuity": getattr(latest_mmd, "_price_momentum_continuity_v79", None) if latest_mmd else None,
+                # V80 缠论增强条件（条件252-255）
+                "v80_zhongshu_distance": getattr(latest_mmd, "_mmd_zhongshu_distance_v80", None) if latest_mmd else None,
+                "v80_volume_confirmation": getattr(latest_mmd, "_volume_confirmation_v80", None) if latest_mmd else None,
+                "v80_ma_alignment": getattr(latest_mmd, "_ma_alignment_strength_v80", None) if latest_mmd else None,
+                "v80_risk_reward": getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None,
             } if latest_mmd else None,
             # V6: 最近3个高质量买卖点
             "recent_signals": [
@@ -909,6 +919,16 @@ async def diagnose_stock(
                         "grade": getattr(getattr(m, "quality", None), "grade", None),
                         "score": getattr(getattr(getattr(m, "quality", None), "score", None), "score", None),
                     } if getattr(m, "quality", None) else None,
+                    # V79 缠论增强条件（条件248-251）
+                    "v79_fractal_stability": getattr(m, "_fractal_stability_validation_v79", None),
+                    "v79_distance_safety": getattr(m, "_mmd_distance_safety_v79", None),
+                    "v79_multi_level_consistency": getattr(m, "_multi_level_structure_consistency_v79", None),
+                    "v79_momentum_continuity": getattr(m, "_price_momentum_continuity_v79", None),
+                    # V80 缠论增强条件（条件252-255）
+                    "v80_zhongshu_distance": getattr(m, "_mmd_zhongshu_distance_v80", None),
+                    "v80_volume_confirmation": getattr(m, "_volume_confirmation_v80", None),
+                    "v80_ma_alignment": getattr(m, "_ma_alignment_strength_v80", None),
+                    "v80_risk_reward": getattr(m, "_dynamic_risk_reward_v80", None),
                 }
                 for m in sorted(result.mmds, key=lambda x: getattr(getattr(x, "quality", None), "score", 0) if getattr(x, "quality", None) else 0, reverse=True)[:3]
             ],

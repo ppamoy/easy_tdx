@@ -335,6 +335,13 @@ onMounted(() => {
                   {{ sig.type }}
                   <span class="sig-conf">{{ (sig.confidence * 100).toFixed(0) }}%</span>
                   <span v-if="sig.quality" class="sig-grade grade-{{ sig.quality.grade }}">{{ sig.quality.grade }}</span>
+                  <!-- V79/V80 质量徽章 -->
+                  <span v-if="sig.v79_fractal_stability" class="sig-badge" :class="sig.v79_fractal_stability.confidence_adjust > 0 ? 'badge-green' : 'badge-red'">
+                    {{ sig.v79_fractal_stability.confidence_adjust > 0 ? '+' : '' }}{{ (sig.v79_fractal_stability.confidence_adjust * 100).toFixed(0) }}%
+                  </span>
+                  <span v-if="sig.v80_risk_reward" class="sig-badge" :class="sig.v80_risk_reward.confidence_adjust > 0 ? 'badge-green' : 'badge-red'">
+                    RR {{ sig.v80_risk_reward.rr_ratio.toFixed(1) }}:1
+                  </span>
                 </span>
               </div>
             </div>
@@ -5227,9 +5234,29 @@ onMounted(() => {
 
         <!-- 操作建议汇总 -->
         <div class="metric-card tip-card">
-          <div class="card-title">💡 决策建议</div>
+          <div class="card-title">💡 综合决策建议</div>
           <div class="card-body">
             <div class="tip-summary">{{ diagnosis.reason }}</div>
+            <!-- V79/V80 关键维度速览 -->
+            <div v-if="diagnosis.v79_summary || diagnosis.v80_summary" class="v79v80-summary">
+              <div class="section-label" style="margin-top:8px">📊 缠论增强维度速览</div>
+              <div class="v79v80-rows">
+                <div v-if="diagnosis.v79_summary" class="v79v80-row">
+                  <span class="v79v80-label">V79</span>
+                  <span :class="['v79v80-level', 'v79-' + (diagnosis.v79_summary.quality_level ?? 'moderate')]">
+                    {{ v79QualityLabel(diagnosis.v79_summary.quality_level) }}
+                  </span>
+                  <span class="v79v80-detail">分型{{ diagnosis.v79_summary.fractal_status === 'stable' ? '✅稳定' : diagnosis.v79_summary.fractal_status || '—' }} · 距离{{ diagnosis.v79_summary.safety_level === 'isolated' ? '✅安全' : diagnosis.v79_summary.safety_level || '—' }}</span>
+                </div>
+                <div v-if="diagnosis.v80_summary" class="v79v80-row">
+                  <span class="v79v80-label">V80</span>
+                  <span :class="['v79v80-level', 'v80-' + (diagnosis.v80_summary.quality_level ?? 'moderate')]">
+                    {{ v80QualityLabel(diagnosis.v80_summary.quality_level) }}
+                  </span>
+                  <span class="v79v80-detail">中枢{{ diagnosis.v80_summary.zs_position || '—' }} · 量能{{ diagnosis.v80_summary.volume_confirmed || '—' }} · 均线{{ diagnosis.v80_summary.ma_alignment || '—' }} · 盈亏比{{ diagnosis.v80_summary.risk_level || '—' }}</span>
+                </div>
+              </div>
+            </div>
             <div class="tip-actions">
               <button class="primary small" @click="router.push({ path: '/chanlun', query: { symbol: code, market } })">
                 🧧 深入缠论分析
@@ -5683,6 +5710,9 @@ onMounted(() => {
 .sig-grade.grade-B { background: rgba(59,130,246,0.2); color: #3b82f6; }
 .sig-grade.grade-C { background: rgba(249,115,22,0.2); color: #f97316; }
 .sig-grade.grade-D { background: rgba(239,68,68,0.2); color: #ef4444; }
+.sig-badge { font-size: 9px; font-weight: 600; padding: 1px 4px; border-radius: 3px; }
+.sig-badge.badge-green { background: rgba(34,197,94,0.15); color: #22c55e; }
+.sig-badge.badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
 
 /* V12: 共振评分 */
 .confluence-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); }
@@ -6119,4 +6149,19 @@ onMounted(() => {
 .v80-tag.v80-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
 .v80-tag.v80-weak     { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .v80-tag.v80-mixed    { background: rgba(107,114,128,0.15); color: #9ca3af; }
+/* V79/V80 综合决策速览 */
+.v79v80-summary { margin-top: 10px; padding: 10px; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border); }
+.v79v80-rows { display: flex; flex-direction: column; gap: 6px; }
+.v79v80-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.v79v80-label { font-weight: 700; color: var(--text-dim); min-width: 28px; }
+.v79v80-level { padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+.v79-strong { background: rgba(34,197,94,0.15); color: #22c55e; }
+.v79-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.v79-weak { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.v79-mixed { background: rgba(107,114,128,0.15); color: #9ca3af; }
+.v80-strong { background: rgba(34,197,94,0.15); color: #22c55e; }
+.v80-moderate { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.v80-weak { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.v80-mixed { background: rgba(107,114,128,0.15); color: #9ca3af; }
+.v79v80-detail { color: var(--text-secondary); font-size: 11px; }
 </style>
