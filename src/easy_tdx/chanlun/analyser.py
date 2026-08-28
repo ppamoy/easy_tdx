@@ -168,6 +168,15 @@ class ChanlunResult:
                 {
                     "type": bc.bc_type.value,
                     "bc": bc.bc,
+                    # 背驰发生点日期（前端统一消费 date 字段）：
+                    # 优先当前笔结束日，回退到前一笔结束日，避免缺失字段导致前端崩溃。
+                    "date": (
+                        self._fmt_dt(bc.curr.end.k.date)
+                        if bc.curr
+                        else self._fmt_dt(bc.prev.end.k.date)
+                        if bc.prev
+                        else None
+                    ),
                     "curr_date": self._fmt_dt(bc.curr.end.k.date) if bc.curr else None,
                     "prev_date": self._fmt_dt(bc.prev.end.k.date) if bc.prev else None,
                     "msg": bc.msg,

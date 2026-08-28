@@ -80,6 +80,8 @@ function buildIndexMap(): Map<string, number> {
 }
 
 function findBarIndex(keyIndex: Map<string, number>, dateStr: string): number {
+  // 防御：date 可能缺失（undefined/null/空串），直接返回 -1，由调用方过滤掉
+  if (!dateStr) return -1
   // 精确匹配
   const exact = keyIndex.get(dateStr.slice(0, 19).replace(' ', 'T'))
   if (exact !== undefined) return exact
@@ -144,19 +146,18 @@ function buildOption(): echarts.EChartsCoreOption {
       const si = findBarIndex(keyIndex, bi.start_date)
       const ei = findBarIndex(keyIndex, bi.end_date)
       const isUp = bi.direction === 'up'
-      return {
-        coord: [si, bi.high],
-        endCoord: [ei, bi.low],
-        lineStyle: {
-          color: isUp ? UP_COLOR : DOWN_COLOR,
-          width: 1,
-          type: 'dashed',
-          opacity: 0.7,
-        },
-        label: { show: false },
-        symbol: ['circle', 'circle'],
-        symbolSize: 6,
+      // ECharts 6 的 markLine 两点标记必须是 [起点, 终点] 二元组数组，
+      // 不再支持旧的 {coord, endCoord} 单对象形式（会导致 ECharts 内部崩溃）。
+      const lineStyle = {
+        color: isUp ? UP_COLOR : DOWN_COLOR,
+        width: 1,
+        type: 'dashed' as const,
+        opacity: 0.7,
       }
+      return [
+        { coord: [si, bi.high], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 6 },
+        { coord: [ei, bi.low], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 6 },
+      ]
     })
 
   // ── 线段的 MarkLine（细实线） ──
@@ -169,18 +170,16 @@ function buildOption(): echarts.EChartsCoreOption {
     .map((xd) => {
       const si = findBarIndex(keyIndex, xd.start_date)
       const ei = findBarIndex(keyIndex, xd.end_date)
-      return {
-        coord: [si, xd.high],
-        endCoord: [ei, xd.low],
-        lineStyle: {
-          color: 'rgba(200,120,255,0.9)',
-          width: 1.5,
-          type: 'solid',
-        },
-        label: { show: false },
-        symbol: ['circle', 'circle'],
-        symbolSize: 8,
+      // ECharts 6 的 markLine 两点标记必须是 [起点, 终点] 二元组数组。
+      const lineStyle = {
+        color: 'rgba(200,120,255,0.9)',
+        width: 1.5,
+        type: 'solid' as const,
       }
+      return [
+        { coord: [si, xd.high], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 8 },
+        { coord: [ei, xd.low], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 8 },
+      ]
     })
 
   // ── 中枢的 MarkArea ──
@@ -201,7 +200,7 @@ function buildOption(): echarts.EChartsCoreOption {
 
   // ── 买卖点的 MarkPoint ──
   const mmdMarkPoints = props.mmds
-    .filter((m) => m.date !== null)
+    .filter((m) => m.date != null)
     .map((m) => {
       const idx = findBarIndex(keyIndex, m.date!)
       if (idx === -1) return null
@@ -237,7 +236,7 @@ function buildOption(): echarts.EChartsCoreOption {
 
   // ── 背驰标记 ──
   const bcPoints = (props.bcs ?? [])
-    .filter((bc) => bc.bc && bc.date !== null)
+    .filter((bc) => bc.bc && bc.date != null)
     .map((bc) => {
       const idx = findBarIndex(keyIndex, bc.date!)
       if (idx === -1) return null
