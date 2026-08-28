@@ -538,6 +538,18 @@ class MMD:
     _ma_alignment_strength_v80: dict[str, Any] | None = None  # 均线排列强度确认（条件254）
     _dynamic_risk_reward_v80: dict[str, Any] | None = None  # 盈亏比动态评估（条件255）
 
+    # V81 enhancement fields (2026-08-28)
+    _volatility_regime_transition_v81: dict[str, Any] | None = None  # 波动率状态转换检测（条件256）
+    _support_resistance_strength_v81: dict[str, Any] | None = None  # 关键支撑阻力强度验证（条件257）
+    _volume_price_energy_distribution_v81: dict[str, Any] | None = None  # 量价能量分布验证（条件258）
+    _signal_execution_window_v81: dict[str, Any] | None = None  # 信号执行窗口评估（条件259）
+
+    # V82 enhancement fields (2026-08-28)
+    _mmd_age_decay_v82: dict[str, Any] | None = None  # 买卖点时间衰减验证（条件260）
+    _breakout_retest_confirm_v82: dict[str, Any] | None = None  # 中枢突破回踩确认（条件261）
+    _macd_multi_tf_resonance_v82: dict[str, Any] | None = None  # 多级别MACD共振（条件262）
+    _volatility_compression_breakout_v82: dict[str, Any] | None = None  # 波动率压缩突破确认（条件263）
+
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
 

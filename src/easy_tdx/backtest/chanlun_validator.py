@@ -80,6 +80,10 @@ class ConditionGroup(str, Enum):
     V79 = "v79"
     # V80: 条件252-255（中枢距离+量能配合+均线排列+盈亏比）
     V80 = "v80"
+    # V81: 条件256-259（波动率状态转换+支撑阻力强度+量价能量分布+执行窗口评估）
+    V81 = "v81"
+    # V82: 条件260-263（时间衰减+回踩确认+MACD共振+波动率压缩）
+    V82 = "v82"
 
     @property
     def condition_range(self) -> tuple[int, int]:
@@ -108,6 +112,8 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V78: (244, 247),
             ConditionGroup.V79: (248, 251),
             ConditionGroup.V80: (252, 255),
+            ConditionGroup.V81: (256, 259),
+            ConditionGroup.V82: (260, 263),
         }
         return mapping[self]
 
@@ -138,6 +144,8 @@ class ConditionGroup(str, Enum):
             ConditionGroup.V78: "买卖点周期位置评分+多信号时间窗口一致性+波动率压缩突破预测+资金流向背离检测",
             ConditionGroup.V79: "分型稳定性验证+买卖点距离安全阈值+多级别结构一致性评分+价格动能持续性评分",
             ConditionGroup.V80: "买卖点与中枢距离验证+量能配合度评分+均线排列强度确认+盈亏比动态评估",
+            ConditionGroup.V81: "波动率状态转换检测+关键支撑阻力强度验证+量价能量分布验证+信号执行窗口评估",
+            ConditionGroup.V82: "买卖点时间衰减验证+中枢突破回踩确认+多级别MACD共振+波动率压缩突破确认",
         }
         return mapping[self]
 

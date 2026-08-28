@@ -12545,6 +12545,82 @@ def find_mmds_v39(
             except Exception:
                 pass
 
+        # ── V81 条件 256-259 ──
+
+        # 条件256：波动率状态转换检测（Volatility Regime Transition）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                vrt = _calc_volatility_regime_transition_v81(mmd, closes, highs, lows)
+                mmd._volatility_regime_transition_v81 = vrt
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vrt.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件257：关键支撑阻力强度验证（Support/Resistance Strength）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+            try:
+                srs = _calc_support_resistance_strength_v81(mmd, closes, highs, lows)
+                mmd._support_resistance_strength_v81 = srs
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + srs.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件258：量价能量分布验证（Volume-Price Energy Distribution）
+        if mmd.bi is not None and closes is not None and volumes is not None and highs is not None and lows is not None and len(closes) >= 30 and len(volumes) >= 30:
+            try:
+                vped = _calc_volume_price_energy_distribution_v81(mmd, closes, volumes, highs, lows)
+                mmd._volume_price_energy_distribution_v81 = vped
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vped.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件259：信号执行窗口评估（Signal Execution Window）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+            try:
+                sew = _calc_signal_execution_window_v81(mmd, closes, highs, lows, volumes)
+                mmd._signal_execution_window_v81 = sew
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sew.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # ── V82 条件 260-263 ──
+
+        # 条件260：买卖点时间衰减验证（MMD Age Decay）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 10:
+            try:
+                mad = _calc_mmd_age_decay_v82(mmd, closes, highs, lows)
+                mmd._mmd_age_decay_v82 = mad
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mad.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件261：中枢突破回踩确认（Breakout Retest Confirmation）
+        if mmd.bi is not None and closes is not None and len(closes) >= 20:
+            try:
+                brc = _calc_breakout_retest_confirm_v82(mmd, closes, highs or closes, lows or closes)
+                mmd._breakout_retest_confirm_v82 = brc
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + brc.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件262：多级别MACD共振（Multi-Timeframe MACD Resonance）
+        if mmd.bi is not None and closes is not None and len(closes) >= 30:
+            try:
+                mtr = _calc_macd_multi_tf_resonance_v82(mmd, closes)
+                mmd._macd_multi_tf_resonance_v82 = mtr
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mtr.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
+        # 条件263：波动率压缩突破确认（Volatility Compression Breakout）
+        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+            try:
+                vcb = _calc_volatility_compression_breakout_v82(mmd, closes, highs, lows)
+                mmd._volatility_compression_breakout_v82 = vcb
+                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vcb.get("confidence_adjust", 0.0)))
+            except Exception:
+                pass
+
     return mmds
 
 

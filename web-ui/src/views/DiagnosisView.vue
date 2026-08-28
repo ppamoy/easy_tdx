@@ -61,6 +61,14 @@ const v80QualityLabel = (level: string | null | undefined): string => {
   const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
   return map[level ?? ''] ?? '—'
 }
+const v81QualityLabel = (level: string | null | undefined): string => {
+  const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
+  return map[level ?? ''] ?? '—'
+}
+const v82QualityLabel = (level: string | null | undefined): string => {
+  const map: Record<string, string> = { strong: '高置信度', moderate: '中等', weak: '低置信', mixed: '混合' }
+  return map[level ?? ''] ?? '—'
+}
 const multiResultsHaveConditionData = computed(() =>
   multiResults.value.some((r: MultiStockResult) => Object.keys(r.condition_breakdown || {}).length > 0)
 )
@@ -298,6 +306,30 @@ onMounted(() => {
               🔬 V80四维度量{{ v80QualityLabel(diagnosis.v80_summary.quality_level) }}
               · 正{{ diagnosis.v80_summary.positive_count ?? '—' }}/负{{ diagnosis.v80_summary.negative_count ?? '—' }}
               · 调整{{ diagnosis.v80_summary.total_adjust != null ? (diagnosis.v80_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v80_summary.total_adjust.toFixed(0) + '%' : '—' }}
+            </span>
+          </div>
+          <div v-if="diagnosis.v81_summary" class="v81-summary-row">
+            <span class="v81-tag" :class="{
+              'v81-strong': diagnosis.v81_summary.quality_level === 'strong',
+              'v81-moderate': diagnosis.v81_summary.quality_level === 'moderate',
+              'v81-weak': diagnosis.v81_summary.quality_level === 'weak',
+              'v81-mixed': diagnosis.v81_summary.quality_level === 'mixed',
+            }">
+              🔬 V81四维度量{{ v81QualityLabel(diagnosis.v81_summary.quality_level) }}
+              · 正{{ diagnosis.v81_summary.positive_count ?? '—' }}/负{{ diagnosis.v81_summary.negative_count ?? '—' }}
+              · 调整{{ diagnosis.v81_summary.total_adjust != null ? (diagnosis.v81_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v81_summary.total_adjust.toFixed(0) + '%' : '—' }}
+            </span>
+          </div>
+          <div v-if="diagnosis.v82_summary" class="v82-summary-row">
+            <span class="v82-tag" :class="{
+              'v82-strong': diagnosis.v82_summary.quality_level === 'strong',
+              'v82-moderate': diagnosis.v82_summary.quality_level === 'moderate',
+              'v82-weak': diagnosis.v82_summary.quality_level === 'weak',
+              'v82-mixed': diagnosis.v82_summary.quality_level === 'mixed',
+            }">
+              🔬 V82四维度量{{ v82QualityLabel(diagnosis.v82_summary.quality_level) }}
+              · 正{{ diagnosis.v82_summary.positive_count ?? '—' }}/负{{ diagnosis.v82_summary.negative_count ?? '—' }}
+              · 调整{{ diagnosis.v82_summary.total_adjust != null ? (diagnosis.v82_summary.total_adjust * 100 > 0 ? '+' : '') + diagnosis.v82_summary.total_adjust.toFixed(0) + '%' : '—' }}
             </span>
           </div>
           <div class="meta-info">

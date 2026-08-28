@@ -151,6 +151,16 @@ class ChanlunResult:
                     "v80_volume_confirmation": getattr(mmd, "_volume_confirmation_v80", None),
                     "v80_ma_alignment": getattr(mmd, "_ma_alignment_strength_v80", None),
                     "v80_risk_reward": getattr(mmd, "_dynamic_risk_reward_v80", None),
+                    # V81 缠论增强条件（条件256-259）
+                    "v81_volatility_regime": getattr(mmd, "_volatility_regime_transition_v81", None),
+                    "v81_support_resistance": getattr(mmd, "_support_resistance_strength_v81", None),
+                    "v81_energy_distribution": getattr(mmd, "_volume_price_energy_distribution_v81", None),
+                    "v81_execution_window": getattr(mmd, "_signal_execution_window_v81", None),
+                    # V82 缠论增强条件（条件260-263）
+                    "v82_age_decay": getattr(mmd, "_mmd_age_decay_v82", None),
+                    "v82_breakout_retest": getattr(mmd, "_breakout_retest_confirm_v82", None),
+                    "v82_macd_resonance": getattr(mmd, "_macd_multi_tf_resonance_v82", None),
+                    "v82_volatility_compression": getattr(mmd, "_volatility_compression_breakout_v82", None),
                 }
                 for mmd in self.mmds
             ],

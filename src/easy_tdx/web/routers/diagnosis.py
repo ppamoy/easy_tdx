@@ -761,6 +761,61 @@ async def diagnose_stock(
         v80_quality_level = "mixed"
         v80_recommendation = "信号混合，等待确认"
 
+    # ── V81: 四维度量摘要（条件256-259）──────────────────────────────
+    v81_vrt = getattr(latest_mmd, "_volatility_regime_transition_v81", None) if latest_mmd else None
+    v81_srs = getattr(latest_mmd, "_support_resistance_strength_v81", None) if latest_mmd else None
+    v81_vped = getattr(latest_mmd, "_volume_price_energy_distribution_v81", None) if latest_mmd else None
+    v81_sew = getattr(latest_mmd, "_signal_execution_window_v81", None) if latest_mmd else None
+
+    v81_adjust_total = 0.0
+    v81_vrt_score = (v81_vrt.get("confidence_adjust", 0) if v81_vrt else 0)
+    v81_srs_score = (v81_srs.get("confidence_adjust", 0) if v81_srs else 0)
+    v81_vped_score = (v81_vped.get("confidence_adjust", 0) if v81_vped else 0)
+    v81_sew_score = (v81_sew.get("confidence_adjust", 0) if v81_sew else 0)
+    v81_adjust_total = v81_vrt_score + v81_srs_score + v81_vped_score + v81_sew_score
+
+    v81_positive_count = sum(1 for s in [v81_vrt_score, v81_srs_score, v81_vped_score, v81_sew_score] if s > 0)
+    v81_negative_count = sum(1 for s in [v81_vrt_score, v81_srs_score, v81_vped_score, v81_sew_score] if s < 0)
+    if v81_positive_count >= 3 and v81_negative_count == 0:
+        v81_quality_level = "strong"
+        v81_recommendation = "四维环境确认，高置信度"
+    elif v81_positive_count >= 2 and v81_negative_count <= 1:
+        v81_quality_level = "moderate"
+        v81_recommendation = "多数维度支持，中等置信度"
+    elif v81_negative_count >= 2:
+        v81_quality_level = "weak"
+        v81_recommendation = "多维度负面信号，需谨慎"
+    else:
+        v81_quality_level = "mixed"
+        v81_recommendation = "信号混合，等待确认"
+
+    # ── V82: 四维度量摘要（条件260-263）──────────────────────────────
+    v82_mad = getattr(latest_mmd, "_mmd_age_decay_v82", None) if latest_mmd else None
+    v82_brc = getattr(latest_mmd, "_breakout_retest_confirm_v82", None) if latest_mmd else None
+    v82_mtr = getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None) if latest_mmd else None
+    v82_vcb = getattr(latest_mmd, "_volatility_compression_breakout_v82", None) if latest_mmd else None
+
+    v82_mad_score = (v82_mad.get("confidence_adjust", 0) if v82_mad else 0)
+    v82_brc_score = (v82_brc.get("confidence_adjust", 0) if v82_brc else 0)
+    v82_mtr_score = (v82_mtr.get("confidence_adjust", 0) if v82_mtr else 0)
+    v82_vcb_score = (v82_vcb.get("confidence_adjust", 0) if v82_vcb else 0)
+    v82_adjust_total = v82_mad_score + v82_brc_score + v82_mtr_score + v82_vcb_score
+
+    v82_positive_count = sum(1 for s in [v82_mad_score, v82_brc_score, v82_mtr_score, v82_vcb_score] if s > 0)
+    v82_negative_count = sum(1 for s in [v82_mad_score, v82_brc_score, v82_mtr_score, v82_vcb_score] if s < 0)
+    if v82_positive_count >= 3 and v82_negative_count == 0:
+        v82_quality_level = "strong"
+        v82_recommendation = "四维验证通过，高置信度"
+    elif v82_positive_count >= 2 and v82_negative_count <= 1:
+        v82_quality_level = "moderate"
+        v82_recommendation = "多数维度支持，中等置信度"
+    elif v82_negative_count >= 2:
+        v82_quality_level = "weak"
+        v82_recommendation = "多维度负面信号，需谨慎"
+    else:
+        v82_quality_level = "mixed"
+        v82_recommendation = "信号混合，等待确认"
+
     adjusted_score = max(0, min(100, score + validity_adjust))
 
     if adjusted_score >= 75 and latest_mmd and latest_mmd.confidence >= 0.75:
@@ -882,6 +937,30 @@ async def diagnose_stock(
             "ma_alignment": v80_mas.get("ma_alignment") if v80_mas else None,
             "risk_level": v80_drr.get("risk_level") if v80_drr else None,
         },
+        # V81: 四维度量摘要（条件256-259）—— 顶层快速可见
+        "v81_summary": {
+            "quality_level": v81_quality_level,
+            "total_adjust": round(v81_adjust_total, 3),
+            "positive_count": v81_positive_count,
+            "negative_count": v81_negative_count,
+            "recommendation": v81_recommendation,
+            "regime": v81_vrt.get("regime") if v81_vrt else None,
+            "strength_level": v81_srs.get("strength_level") if v81_srs else None,
+            "energy_zone": v81_vped.get("energy_zone") if v81_vped else None,
+            "window_quality": v81_sew.get("window_quality") if v81_sew else None,
+        },
+        # V82: 四维度量摘要（条件260-263）—— 顶层快速可见
+        "v82_summary": {
+            "quality_level": v82_quality_level,
+            "total_adjust": round(v82_adjust_total, 3),
+            "positive_count": v82_positive_count,
+            "negative_count": v82_negative_count,
+            "recommendation": v82_recommendation,
+            "age_label": v82_mad.get("age_label") if v82_mad else None,
+            "retest_quality": v82_brc.get("retest_quality") if v82_brc else None,
+            "resonance": v82_mtr.get("resonance") if v82_mtr else None,
+            "compression_level": v82_vcb.get("compression_level") if v82_vcb else None,
+        },
         "chanlun": {
             "bi_count": len(result.bis),
             "zs_count": len(result.zss),
@@ -909,6 +988,14 @@ async def diagnose_stock(
                 "v80_volume_confirmation": getattr(latest_mmd, "_volume_confirmation_v80", None) if latest_mmd else None,
                 "v80_ma_alignment": getattr(latest_mmd, "_ma_alignment_strength_v80", None) if latest_mmd else None,
                 "v80_risk_reward": getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None,
+                "v81_volatility_regime": getattr(latest_mmd, "_volatility_regime_transition_v81", None) if latest_mmd else None,
+                "v81_support_resistance": getattr(latest_mmd, "_support_resistance_strength_v81", None) if latest_mmd else None,
+                "v81_energy_distribution": getattr(latest_mmd, "_volume_price_energy_distribution_v81", None) if latest_mmd else None,
+                "v81_execution_window": getattr(latest_mmd, "_signal_execution_window_v81", None) if latest_mmd else None,
+                "v82_age_decay": getattr(latest_mmd, "_mmd_age_decay_v82", None) if latest_mmd else None,
+                "v82_breakout_retest": getattr(latest_mmd, "_breakout_retest_confirm_v82", None) if latest_mmd else None,
+                "v82_macd_resonance": getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None) if latest_mmd else None,
+                "v82_volatility_compression": getattr(latest_mmd, "_volatility_compression_breakout_v82", None) if latest_mmd else None,
             } if latest_mmd else None,
             # V6: 最近3个高质量买卖点
             "recent_signals": [
@@ -929,6 +1016,16 @@ async def diagnose_stock(
                     "v80_volume_confirmation": getattr(m, "_volume_confirmation_v80", None),
                     "v80_ma_alignment": getattr(m, "_ma_alignment_strength_v80", None),
                     "v80_risk_reward": getattr(m, "_dynamic_risk_reward_v80", None),
+                    # V81 缠论增强条件（条件256-259）
+                    "v81_volatility_regime": getattr(m, "_volatility_regime_transition_v81", None),
+                    "v81_support_resistance": getattr(m, "_support_resistance_strength_v81", None),
+                    "v81_energy_distribution": getattr(m, "_volume_price_energy_distribution_v81", None),
+                    "v81_execution_window": getattr(m, "_signal_execution_window_v81", None),
+                    # V82 缠论增强条件（条件260-263）
+                    "v82_age_decay": getattr(m, "_mmd_age_decay_v82", None),
+                    "v82_breakout_retest": getattr(m, "_breakout_retest_confirm_v82", None),
+                    "v82_macd_resonance": getattr(m, "_macd_multi_tf_resonance_v82", None),
+                    "v82_volatility_compression": getattr(m, "_volatility_compression_breakout_v82", None),
                 }
                 for m in sorted(result.mmds, key=lambda x: getattr(getattr(x, "quality", None), "score", 0) if getattr(x, "quality", None) else 0, reverse=True)[:3]
             ],
@@ -1385,6 +1482,22 @@ async def diagnose_stock(
             "ma_alignment_strength_v80": getattr(latest_mmd, "_ma_alignment_strength_v80", None) if latest_mmd else None,
             # V80: 盈亏比动态评估（条件255）
             "dynamic_risk_reward_v80": getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None,
+            # V81: 波动率状态转换检测（条件256）
+            "volatility_regime_transition_v81": getattr(latest_mmd, "_volatility_regime_transition_v81", None) if latest_mmd else None,
+            # V81: 关键支撑阻力强度验证（条件257）
+            "support_resistance_strength_v81": getattr(latest_mmd, "_support_resistance_strength_v81", None) if latest_mmd else None,
+            # V81: 量价能量分布验证（条件258）
+            "volume_price_energy_distribution_v81": getattr(latest_mmd, "_volume_price_energy_distribution_v81", None) if latest_mmd else None,
+            # V81: 信号执行窗口评估（条件259）
+            "signal_execution_window_v81": getattr(latest_mmd, "_signal_execution_window_v81", None) if latest_mmd else None,
+            # V82: 买卖点时间衰减验证（条件260）
+            "mmd_age_decay_v82": getattr(latest_mmd, "_mmd_age_decay_v82", None) if latest_mmd else None,
+            # V82: 中枢突破回踩确认（条件261）
+            "breakout_retest_confirm_v82": getattr(latest_mmd, "_breakout_retest_confirm_v82", None) if latest_mmd else None,
+            # V82: 多级别MACD共振（条件262）
+            "macd_multi_tf_resonance_v82": getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None) if latest_mmd else None,
+            # V82: 波动率压缩突破确认（条件263）
+            "volatility_compression_breakout_v82": getattr(latest_mmd, "_volatility_compression_breakout_v82", None) if latest_mmd else None,
         },
         # V12: 多级别联立分析结果（需前端传入低级别数据）
         "multi_level_confluence": None,

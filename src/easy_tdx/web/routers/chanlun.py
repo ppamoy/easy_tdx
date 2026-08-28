@@ -437,5 +437,19 @@ async def chanlun_recommend(
             "ma_alignment": getattr(getattr(latest_mmd, "_ma_alignment_strength_v80", None), "ma_alignment", None) if latest_mmd else None,
             "risk_level": getattr(getattr(latest_mmd, "_dynamic_risk_reward_v80", None), "risk_level", None) if latest_mmd else None,
         } if latest_mmd else None,
+        # V81 缠论四维度量摘要（条件256-259，基于最新买卖点）
+        "v81_summary": {
+            "regime": getattr(getattr(latest_mmd, "_volatility_regime_transition_v81", None), "regime", None) if latest_mmd else None,
+            "strength_level": getattr(getattr(latest_mmd, "_support_resistance_strength_v81", None), "strength_level", None) if latest_mmd else None,
+            "energy_zone": getattr(getattr(latest_mmd, "_volume_price_energy_distribution_v81", None), "energy_zone", None) if latest_mmd else None,
+            "window_quality": getattr(getattr(latest_mmd, "_signal_execution_window_v81", None), "window_quality", None) if latest_mmd else None,
+        } if latest_mmd else None,
+        # V82 缠论四维度量摘要（条件260-263，基于最新买卖点）
+        "v82_summary": {
+            "age_label": getattr(getattr(latest_mmd, "_mmd_age_decay_v82", None), "age_label", None) if latest_mmd else None,
+            "retest_quality": getattr(getattr(latest_mmd, "_breakout_retest_confirm_v82", None), "retest_quality", None) if latest_mmd else None,
+            "resonance": getattr(getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None), "resonance", None) if latest_mmd else None,
+            "compression_level": getattr(getattr(latest_mmd, "_volatility_compression_breakout_v82", None), "compression_level", None) if latest_mmd else None,
+        } if latest_mmd else None,
     })
 

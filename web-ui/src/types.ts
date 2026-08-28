@@ -393,6 +393,16 @@ export interface DiagnosisChanlunMmd {
   v80_volume_confirmation?: { confirmation_score: number; vol_ratio: number; volume_trend: string; price_trend: string; confidence_adjust: number; msg: string } | null
   v80_ma_alignment?: { alignment_score: number; ma_alignment: string; price_position: string; confidence_adjust: number; msg: string } | null
   v80_risk_reward?: { rr_ratio: number; stop_loss_pct: number; take_profit_pct: number; risk_level: string; confidence_adjust: number; msg: string } | null
+  // V81 缠论增强条件（条件256-259）
+  v81_volatility_regime?: { regime: string; transition_type: string; atr_ratio: number; atr_change_pct: number; confidence_adjust: number; msg: string } | null
+  v81_support_resistance?: { strength_level: string; nearest_sr_dist_pct: number; sr_count: number; confidence_adjust: number; msg: string } | null
+  v81_energy_distribution?: { energy_zone: string; energy_score: number; volume_concentration: number; confidence_adjust: number; msg: string } | null
+  v81_execution_window?: { window_quality: string; volatility_score: number; liquidity_score: number; confidence_adjust: number; msg: string } | null
+  // V82 缠论增强条件（条件260-263）
+  v82_age_decay?: { age_bars: number; age_label: string; confidence_adjust: number; msg: string } | null
+  v82_breakout_retest?: { retest_detected: boolean; retest_quality: string; confidence_adjust: number; msg: string } | null
+  v82_macd_resonance?: { short_acceleration: number; mid_trend: string; resonance: string; confidence_adjust: number; msg: string } | null
+  v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
 }
 
 export interface DiagnosisChanlunRecentSignal {
@@ -409,6 +419,16 @@ export interface DiagnosisChanlunRecentSignal {
   v80_volume_confirmation?: { confirmation_score: number; vol_ratio: number; volume_trend: string; price_trend: string; confidence_adjust: number; msg: string } | null
   v80_ma_alignment?: { alignment_score: number; ma_alignment: string; price_position: string; confidence_adjust: number; msg: string } | null
   v80_risk_reward?: { rr_ratio: number; stop_loss_pct: number; take_profit_pct: number; risk_level: string; confidence_adjust: number; msg: string } | null
+  // V81 缠论增强条件（条件256-259）
+  v81_volatility_regime?: { regime: string; transition_type: string; atr_ratio: number; atr_change_pct: number; confidence_adjust: number; msg: string } | null
+  v81_support_resistance?: { strength_level: string; nearest_sr_dist_pct: number; sr_count: number; confidence_adjust: number; msg: string } | null
+  v81_energy_distribution?: { energy_zone: string; energy_score: number; volume_concentration: number; confidence_adjust: number; msg: string } | null
+  v81_execution_window?: { window_quality: string; volatility_score: number; liquidity_score: number; confidence_adjust: number; msg: string } | null
+  // V82 缠论增强条件（条件260-263）
+  v82_age_decay?: { age_bars: number; age_label: string; confidence_adjust: number; msg: string } | null
+  v82_breakout_retest?: { retest_detected: boolean; retest_quality: string; confidence_adjust: number; msg: string } | null
+  v82_macd_resonance?: { short_acceleration: number; mid_trend: string; resonance: string; confidence_adjust: number; msg: string } | null
+  v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
 }
 
 export interface DiagnosisSignalReport {
@@ -2308,6 +2328,69 @@ export interface DiagnosisChanlun {
       confidence_adjust: number
       msg: string
     } | null
+    // V81: 波动率状态转换检测（条件256）
+    volatility_regime_transition_v81?: {
+      regime: string
+      transition_type: string
+      atr_ratio: number
+      atr_change_pct: number
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V81: 关键支撑阻力强度验证（条件257）
+    support_resistance_strength_v81?: {
+      strength_level: string
+      nearest_sr_dist_pct: number
+      sr_count: number
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V81: 量价能量分布验证（条件258）
+    volume_price_energy_distribution_v81?: {
+      energy_zone: string
+      energy_score: number
+      volume_concentration: number
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V81: 信号执行窗口评估（条件259）
+    signal_execution_window_v81?: {
+      window_quality: string
+      volatility_score: number
+      liquidity_score: number
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V82: 买卖点时间衰减验证（条件260）
+    mmd_age_decay_v82?: {
+      age_bars: number
+      age_label: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V82: 中枢突破回踩确认（条件261）
+    breakout_retest_confirm_v82?: {
+      retest_detected: boolean
+      retest_quality: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V82: 多级别MACD共振（条件262）
+    macd_multi_tf_resonance_v82?: {
+      short_acceleration: number
+      mid_trend: string
+      resonance: string
+      confidence_adjust: number
+      msg: string
+    } | null
+    // V82: 波动率压缩突破确认（条件263）
+    volatility_compression_breakout_v82?: {
+      compression_level: number
+      breakout_strength: number
+      volume_confirm: boolean
+      confidence_adjust: number
+      msg: string
+    } | null
   }
 
 export interface DiagnosisMACD {
@@ -2487,6 +2570,30 @@ export interface DiagnosisResult {
       volume_confirmed: string | null
       ma_alignment: string | null
       risk_level: string | null
+    }
+    // V81: 四维度量摘要（条件256-259）
+    v81_summary?: {
+      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+      total_adjust: number | null
+      positive_count: number | null
+      negative_count: number | null
+      recommendation: string
+      regime: string | null
+      strength_level: string | null
+      energy_zone: string | null
+      window_quality: string | null
+    }
+    // V82: 四维度量摘要（条件260-263）
+    v82_summary?: {
+      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+      total_adjust: number | null
+      positive_count: number | null
+      negative_count: number | null
+      recommendation: string
+      age_label: string | null
+      retest_quality: string | null
+      resonance: string | null
+      compression_level: string | null
     }
   chanlun: DiagnosisChanlun
   macd: DiagnosisMACD
