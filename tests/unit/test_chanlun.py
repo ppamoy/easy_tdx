@@ -582,24 +582,47 @@ class TestChanlunAnalyser:
         用一段振荡+趋势的数据，确保能确定性产出中枢/买卖点/背驰，
         从而真正覆盖 to_dict() 的日期输出分支。
         """
-        import math
         import re
 
         import pandas as pd
 
         from easy_tdx.chanlun.analyser import ChanlunAnalyser
 
-        dates = pd.date_range("2025-01-02", periods=40, freq="B")
-        highs = [15 + 5 * math.sin(i / 2) + i * 0.2 for i in range(40)]
-        lows = [highs[i] - 4 for i in range(40)]
+        # 确定性"多中枢下跌→反转"数据：下跌→中枢A→下跌→中枢B(更低)→弱跌破背驰→反弹。
+        # 产生 ≥1 个 1买 与背驰，覆盖 to_dict() 的买卖点/背驰日期输出分支。
+        opens: list[float] = []
+        closes: list[float] = []
+        highs: list[float] = []
+        lows: list[float] = []
+
+        def _seg(o: float, c: float, n: int) -> None:
+            for i in range(n):
+                opens.append(o + (c - o) * i / n)
+                closes.append(o + (c - o) * (i + 1) / n)
+                highs.append(max(opens[-1], closes[-1]) + 0.4)
+                lows.append(min(opens[-1], closes[-1]) - 0.4)
+
+        _seg(24, 19.5, 10)
+        _seg(19.5, 20.5, 5)
+        _seg(20.5, 18.5, 5)
+        _seg(18.5, 19.5, 5)
+        _seg(19.5, 16.5, 8)
+        _seg(16.5, 17.5, 4)
+        _seg(17.5, 15.5, 4)
+        _seg(15.5, 16.5, 4)
+        _seg(16.5, 13.8, 4)
+        _seg(13.8, 17.0, 5)
+
+        n = len(closes)
+        dates = pd.date_range("2025-01-02", periods=n, freq="B")
         df = pd.DataFrame(
             {
                 "datetime": dates,
-                "open": [h - 2 for h in highs],
-                "close": [h - 1 for h in highs],
+                "open": opens,
+                "close": closes,
                 "high": highs,
                 "low": lows,
-                "vol": [1000] * 40,
+                "vol": [1000] * n,
             }
         )
         analyser = ChanlunAnalyser(code="SZ000001")
@@ -690,24 +713,46 @@ class TestChanlunAnalyser:
         """
         import contextlib
         import io
-        import math
 
         import pandas as pd
 
         from easy_tdx.chanlun.analyser import ChanlunAnalyser
         from easy_tdx.cli.cmd_chanlun import _print_table
 
-        dates = pd.date_range("2025-01-02", periods=40, freq="B")
-        highs = [15 + 5 * math.sin(i / 2) + i * 0.2 for i in range(40)]
-        lows = [highs[i] - 4 for i in range(40)]
+        # 确定性"多中枢下跌→反转"数据（同 test_result_to_dict_with_visual_dates）
+        opens: list[float] = []
+        closes: list[float] = []
+        highs: list[float] = []
+        lows: list[float] = []
+
+        def _seg(o: float, c: float, n: int) -> None:
+            for i in range(n):
+                opens.append(o + (c - o) * i / n)
+                closes.append(o + (c - o) * (i + 1) / n)
+                highs.append(max(opens[-1], closes[-1]) + 0.4)
+                lows.append(min(opens[-1], closes[-1]) - 0.4)
+
+        _seg(24, 19.5, 10)
+        _seg(19.5, 20.5, 5)
+        _seg(20.5, 18.5, 5)
+        _seg(18.5, 19.5, 5)
+        _seg(19.5, 16.5, 8)
+        _seg(16.5, 17.5, 4)
+        _seg(17.5, 15.5, 4)
+        _seg(15.5, 16.5, 4)
+        _seg(16.5, 13.8, 4)
+        _seg(13.8, 17.0, 5)
+
+        n = len(closes)
+        dates = pd.date_range("2025-01-02", periods=n, freq="B")
         df = pd.DataFrame(
             {
                 "datetime": dates,
-                "open": [h - 2 for h in highs],
-                "close": [h - 1 for h in highs],
+                "open": opens,
+                "close": closes,
                 "high": highs,
                 "low": lows,
-                "vol": [1000] * 40,
+                "vol": [1000] * n,
             }
         )
         d = ChanlunAnalyser(code="SZ000001", frequency="DAILY").process_klines(df).to_dict()

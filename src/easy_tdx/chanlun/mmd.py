@@ -1372,6 +1372,36 @@ def find_mmds_sorted(
     return sort_mmds_by_priority(mmds)
 
 
+def _reference_zs_for_bi(zss: list[ZS], bi: BI) -> ZS | None:
+    """返回笔所对应的"同期参考中枢"：在笔开始前最后一个已完成的（或最近的）中枢。
+
+    一买/一卖 是"跌破/突破某个中枢后的背驰点"——应参考该笔发生时存在的那个中枢，
+    而非数据末端最后的中枢。用单一末端中枢做全局参考会导致历史每个底部都被标注。
+    """
+    if not zss:
+        return None
+    if bi.start is None or bi.start.k is None:
+        return None
+    bi_start_k = bi.start.k.k_index
+    ref: ZS | None = None
+    for zs in zss:
+        if zs.end is None or zs.end.k is None:
+            continue
+        if zs.end.k.k_index < bi_start_k:
+            ref = zs  # 记录最后一个在该笔之前结束的中枢
+        else:
+            break  # zss 按时间排序，之后的都更晚
+    # 若无已完成先导中枢，退而取最早的完成中枢，再退而取最后的中枢（可能未完成）。
+    # 最终跌破/突破笔正是"关闭"最后中枢的那一笔，此时参考该中枢是合法的。
+    if ref is None:
+        for zs in zss:
+            if zs.done:
+                return zs
+        if zss:
+            return zss[-1]
+    return ref
+
+
 def _find_first_type_mmds(
     bis: list[BI],
     zss: list[ZS],
@@ -1384,8 +1414,8 @@ def _find_first_type_mmds(
 ) -> list[MMD]:
     """识别一类买卖点（背驰点）。
 
-    1买：下跌趋势中，最后一个中枢下方的底背驰
-    1卖：上涨趋势中，最后一个中枢上方的顶背驰
+    1买：下跌趋势中，跌破某中枢后的底背驰（参考笔当时的同期中枢）
+    1卖：上涨趋势中，突破某中枢后的顶背驰
 
     V14增强：增加成交量异常检测 + 缺口分析
     """
@@ -1394,21 +1424,14 @@ def _find_first_type_mmds(
     if len(zss) == 0:
         return mmds
 
-    # 获取最后一个完成的中枢
-    last_done_zs = None
-    for zs in reversed(zss):
-        if zs.done:
-            last_done_zs = zs
-            break
-
-    if last_done_zs is None:
-        last_done_zs = zss[-1]
-
-    if last_done_zs is None:
-        return mmds
-
-    # 检查趋势强度（至少两个同向中枢）
+    # 趋势强度（至少两个同向中枢），用于参考判断
     trend_strength = _calc_trend_strength(zss)
+
+    # 一买/一卖 是"趋势反转"信号：必须建立在真实趋势之上（≥2 个同向中枢）。
+    # 震荡市（单中枢、趋势强度为0）中反复的顶底不构成反转，不应产生 1买/1卖，
+    # 盘整背驰交给 2买/类二买 处理。
+    if trend_strength <= 0:
+        return mmds
 
     # V5: 动态阈值 - 根据波动率调整
     base_threshold = 0.8
@@ -1421,18 +1444,41 @@ def _find_first_type_mmds(
     recent_highs = highs[-50:] if highs else None
     recent_lows = lows[-50:] if lows else None
 
-    # 在一类买点区域查找底背驰
-    found_buy_1 = False
+    # 在一类买点区域查找底背驰（识别各趋势段的末端背驰点）
+    # 双重去重避免同一底部反复创新低造成信号风暴：
+    #   1. last_1buy_bi_idx：相邻 1买 至少相隔 5 笔
+    #   2. rebound_high：前一次 1买 之后价格必须显著反弹（≥3%），
+    #      否则视为同一底部的反复下探（震荡市/阴跌中的假底），不重复标记。
+    # 一买是趋势反转末端信号，应稀缺而精准。
+    last_1buy_bi_idx = -100
+    last_1buy_low: float | None = None
+    rebound_high = 0.0  # 自上次1买以来的反弹最高价
     for bi in bis:
+        # 更新自上次1买以来的反弹最高点（含当前笔）
+        rebound_high = max(rebound_high, bi.high)
+
         if bi.direction.value != "down":
             continue
-        # 条件：笔低点在中枢下方
-        if bi.low >= last_done_zs.zd:
+        # 条件：笔低点在其"同期参考中枢"下沿下方
+        ref_zs = _reference_zs_for_bi(zss, bi)
+        if ref_zs is None:
             continue
-        # 检查背驰
-        if not found_buy_1 and _is_strong_beichi(bi, bis, zss, closes, threshold):
+        if bi.low >= ref_zs.zd:
+            continue
+        # 最小笔间距：相邻 1买 至少隔 5 笔，过滤同段反复的假底
+        if bi.index - last_1buy_bi_idx < 5:
+            continue
+        # 结构去重：前一次 1买 后必须出现 ≥3% 的有意义反弹，
+        # 才认定开启新的下跌腿；否则是同一底部的反复下探
+        if last_1buy_low is not None and last_1buy_bi_idx >= 0:
+            if rebound_high <= last_1buy_low:
+                continue
+            if (rebound_high - last_1buy_low) / last_1buy_low < 0.03:
+                continue
+        # 检查背驰（识别所有有效背驰点）
+        if _is_strong_beichi(bi, bis, zss, closes, threshold):
             strength = _get_beichi_strength(bi, bis, zss, closes)
-            msg_parts = [f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={last_done_zs.zd:.2f}"]
+            msg_parts = [f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={ref_zs.zd:.2f}"]
 
             # V14: 成交量异常检测（底背驰时放量=机构接盘信号）
             bi_end_idx = bi.end.k.k_index
@@ -1448,11 +1494,13 @@ def _find_first_type_mmds(
 
             mmds.append(MMD(
                 mmd_type=MMDType.BUY_1,
-                zs=last_done_zs,
+                zs=ref_zs,
                 bi=bi,
                 msg=", ".join(msg_parts),
             ))
-            found_buy_1 = True
+            last_1buy_bi_idx = bi.index
+            last_1buy_low = bi.low
+            rebound_high = bi.high  # 重置反弹追踪，开启下一个下跌腿
             # 记录成交量放大和缺口状态到mmd属性
             if volumes is not None and bi_end_idx > 0:
                 if _check_volume_spike(volumes, bi_end_idx, lookback=20, min_ratio=1.3):
@@ -1463,18 +1511,40 @@ def _find_first_type_mmds(
                     mmds[-1]._gap_down = True
                     mmds[-1]._gap_size = gap_info.get("gap_size_pct", 0.0)
     
-    # 在一类卖点区域查找顶背驰
-    found_sell_1 = False
+    # 在一类卖点区域查找顶背驰（识别各上升段的末端背驰点）
+    # 与 1买 同理的双重去重：
+    #   1. 相邻 1卖 至少相隔 5 笔
+    #   2. pullback_low：前一次 1卖 之后价格必须显著回落（≥3%），
+    #      否则视为同一顶部的反复创新高（震荡市中的假顶），不重复标记。
+    last_1sell_bi_idx = -100
+    last_1sell_high: float | None = None
+    pullback_low = float("inf")  # 自上次1卖以来的回落最低价
     for bi in reversed(bis):
+        # 更新自上次1卖以来的回落最低点（含当前笔）
+        pullback_low = min(pullback_low, bi.low)
+
         if bi.direction.value != "up":
             continue
-        # 条件：笔高点在中枢上方
-        if bi.high <= last_done_zs.zg:
+        # 条件：笔高点在其"同期参考中枢"上沿上方
+        ref_zs = _reference_zs_for_bi(zss, bi)
+        if ref_zs is None:
             continue
-        # 检查背驰
-        if not found_sell_1 and _is_strong_beichi(bi, bis, zss, closes, threshold, direction="up"):
+        if bi.high <= ref_zs.zg:
+            continue
+        # 最小笔间距
+        if abs(bi.index - last_1sell_bi_idx) < 5:
+            continue
+        # 结构去重：前一次 1卖 后必须出现 ≥3% 的有意义回落，
+        # 才认定开启新的上升腿；否则是同一顶部的反复创新高
+        if last_1sell_high is not None and last_1sell_bi_idx >= 0:
+            if pullback_low >= last_1sell_high:
+                continue
+            if (last_1sell_high - pullback_low) / last_1sell_high < 0.03:
+                continue
+        # 检查背驰（识别所有有效背驰点）
+        if _is_strong_beichi(bi, bis, zss, closes, threshold, direction="up"):
             strength = _get_beichi_strength(bi, bis, zss, closes, direction="up")
-            msg_parts = [f"1卖: 顶背驰(强度={strength}), 高点={bi.high:.2f} > 中枢上沿={last_done_zs.zg:.2f}"]
+            msg_parts = [f"1卖: 顶背驰(强度={strength}), 高点={bi.high:.2f} > 中枢上沿={ref_zs.zg:.2f}"]
 
             # V14: 成交量异常检测（顶背驰时放量=机构出货信号）
             bi_end_idx = bi.end.k.k_index
@@ -1490,11 +1560,13 @@ def _find_first_type_mmds(
 
             mmds.append(MMD(
                 mmd_type=MMDType.SELL_1,
-                zs=last_done_zs,
+                zs=ref_zs,
                 bi=bi,
                 msg=", ".join(msg_parts),
             ))
-            found_sell_1 = True
+            last_1sell_bi_idx = bi.index
+            last_1sell_high = bi.high
+            pullback_low = bi.low  # 重置回落追踪，开启下一个上升腿
             # V14: 记录成交量和缺口状态
             if volumes is not None and bi_end_idx > 0:
                 if _check_volume_spike(volumes, bi_end_idx, lookback=20, min_ratio=1.3):
@@ -1554,12 +1626,14 @@ def _find_second_type_mmds(
         buy_1_bi = buy_1_mmd.bi
         buy_1_low = buy_1_bi.low
         buy_1_idx = buy_1_bi.index
+        # 1买结束对应的原始K线索引（用于时间窗口的同一尺度比较）
+        buy_1_end_k = buy_1_bi.end.k.k_index
 
         # V8: 在1买之后找向上笔（离开笔），限制在30根K线内
         leave_bi_up = None
         for bi in bis[buy_1_idx + 1:]:
             if bi.direction.value == "up":
-                time_to_leave = bi.start.k.k_index - buy_1_idx
+                time_to_leave = bi.start.k.k_index - buy_1_end_k
                 if time_to_leave > 30:  # V8: 时间窗口限制
                     break
                 leave_bi_up = bi
@@ -1580,7 +1654,7 @@ def _find_second_type_mmds(
         found_2buy = False
         found_2s_buy = False
         for bi in bis[bis.index(leave_bi_up) + 1:]:
-            total_time = bi.start.k.k_index - buy_1_idx
+            total_time = bi.start.k.k_index - buy_1_end_k
             if total_time > 40:  # V8: 最大时间窗口
                 break
 
@@ -1602,11 +1676,11 @@ def _find_second_type_mmds(
                     if too_close:
                         continue
 
-                    # V8: 成交量确认（回调缩量）
+                    # V8: 成交量确认（回调缩量，基准用1买附近的局部均量）
                     if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
                             volumes, bi.start.k.k_index, bi.end.k.k_index,
-                            _calc_avg_volume(volumes, 20), max_ratio=0.7
+                            _calc_local_avg_volume(volumes, buy_1_end_k, 20), max_ratio=0.85
                         )
                         if not vol_ok:
                             continue
@@ -1678,12 +1752,14 @@ def _find_second_type_mmds(
         sell_1_bi = sell_1_mmd.bi
         sell_1_high = sell_1_bi.high
         sell_1_idx = sell_1_bi.index
+        # 1卖结束对应的原始K线索引（用于时间窗口的同一尺度比较）
+        sell_1_end_k = sell_1_bi.end.k.k_index
 
         # V8: 在1卖之后找向下笔（离开笔），限制在30根K线内
         leave_bi_down = None
         for bi in bis[sell_1_idx + 1:]:
             if bi.direction.value == "down":
-                time_to_leave = bi.start.k.k_index - sell_1_idx
+                time_to_leave = bi.start.k.k_index - sell_1_end_k
                 if time_to_leave > 30:
                     break
                 leave_bi_down = bi
@@ -1704,7 +1780,7 @@ def _find_second_type_mmds(
         found_2sell = False
         found_2s_sell = False
         for bi in bis[bis.index(leave_bi_down) + 1:]:
-            total_time = bi.start.k.k_index - sell_1_idx
+            total_time = bi.start.k.k_index - sell_1_end_k
             if total_time > 40:
                 break
 
@@ -1724,11 +1800,11 @@ def _find_second_type_mmds(
                     if too_close:
                         continue
 
-                    # V8: 成交量确认（反弹缩量）
+                    # V8: 成交量确认（反弹缩量，基准用1卖附近的局部均量）
                     if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
                             volumes, bi.start.k.k_index, bi.end.k.k_index,
-                            _calc_avg_volume(volumes, 20), max_ratio=0.7, is_pullback=False
+                            _calc_local_avg_volume(volumes, sell_1_end_k, 20), max_ratio=0.85, is_pullback=False
                         )
                         if not vol_ok:
                             continue
@@ -1802,6 +1878,51 @@ def _calc_avg_volume(volumes: list[float] | None, lookback: int) -> float:
     if not volumes or len(volumes) < lookback:
         return 0.0
     return sum(volumes[-lookback:]) / lookback
+
+
+def _calc_local_avg_volume(
+    volumes: list[float] | None,
+    anchor_idx: int,
+    lookback: int = 20,
+) -> float:
+    """计算信号点附近（以 anchor_idx 为锚）的局部平均成交量。
+
+    用于 2买/3买 等历史信号的"回调缩量"判断：
+    应以信号发生时刻附近的量能为基准，而非整个数据末端的均量
+    （后者会被后期放量段抬高，导致历史回调误判为未缩量）。
+    """
+    if not volumes or anchor_idx < 0:
+        return 0.0
+    start = max(0, anchor_idx - lookback + 1)
+    window = volumes[start : anchor_idx + 1]
+    if not window:
+        return 0.0
+    return sum(window) / len(window)
+
+
+def _calc_zs_avg_volume(volumes: list[float] | None, zs: ZS) -> float:
+    """计算中枢自身盘整期的平均成交量。
+
+    以中枢所有构成笔覆盖的原始K线区间为窗口，作为突破/跌破的量能比较基准：
+    突破相对盘整放量才是健康突破；被数据末端均量抬高会导致历史突破误判。
+    """
+    if not volumes:
+        return 0.0
+    start_k = min((ln.start.k.k_index for ln in zs.lines if ln.start and ln.start.k), default=None)
+    end_k = max((ln.end.k.k_index for ln in zs.lines if ln.end and ln.end.k), default=None)
+    if start_k is None or end_k is None:
+        return 0.0
+    last = len(volumes) - 1
+    if last < 0:
+        return 0.0
+    start_k = min(max(0, start_k), last)
+    end_k = min(max(0, end_k), last)
+    if end_k < start_k:
+        return 0.0
+    window = volumes[start_k : end_k + 1]
+    if not window:
+        return 0.0
+    return sum(window) / len(window)
 
 
 def _check_breakout_volume(
@@ -2917,19 +3038,22 @@ def _find_third_type_mmds(
     vol_adjusted_force_ratio = 1.3  # 基础突破力度比
     vol_adjusted_break_ratio = 0.35  # 基础回调幅度比
     vol_adjusted_time_window = 5  # 基础时间窗口（根K线）
-    vol_adjusted_vol_ratio = 1.8  # 基础放量倍数
+    # 放量倍数按"突破笔均量 vs 中枢盘整均量"度量。
+    # 笔均量会被笔内多根K线稀释，1.8x 的硬阈值几乎无法达到导致 3买/3卖 系统性失效；
+    # 实测真实结构比值约 1.2-1.5，故下调为 1.3。
+    vol_adjusted_vol_ratio = 1.3  # 基础放量倍数
 
     if volatility is not None:
         if volatility > 0.03:  # 高波动市场：放宽阈值
             vol_adjusted_force_ratio = 1.1
             vol_adjusted_break_ratio = 0.45
             vol_adjusted_time_window = 7
-            vol_adjusted_vol_ratio = 1.5
+            vol_adjusted_vol_ratio = 1.15
         elif volatility < 0.01:  # 低波动市场：收紧阈值
             vol_adjusted_force_ratio = 1.5
             vol_adjusted_break_ratio = 0.25
             vol_adjusted_time_window = 4
-            vol_adjusted_vol_ratio = 2.0
+            vol_adjusted_vol_ratio = 1.5
 
     # 预计算MACD数据用于动量确认
     latest_dif = macd_data["dif"][-1] if macd_data and macd_data.get("dif") else None
@@ -2950,16 +3074,19 @@ def _find_third_type_mmds(
             first_bi_force = 0.0
             force_ratio_in_zs = 1.0
 
-        # 计算平均成交量（用于成交量确认）
-        avg_vol_20 = _calc_avg_volume(volumes, 20)
+        # 计算平均成交量（用于成交量确认，基准用"中枢自身盘整期均量"）。
+        # 突破/跌破相对盘整放量才是合理的量能确认；用数据末端或突破附近的
+        # 均量会被后期放量段抬高，导致历史突破误判为未放量。
+        zs_end_idx = zs.end.k.k_index if zs.end else 0
+        avg_vol_20 = _calc_zs_avg_volume(volumes, zs)
 
         # 找3买：突破中枢后的回踩
-        zs_end_idx = zs.end.k.k_index if zs.end else 0
+        # （zs_end_idx 已在计算均量时定义，bi.start.k.k_index 同为原始K线索引）
 
         # 找向上突破笔
         break_bi_up = None
         for bi in bis:
-            if bi.start.k.index > zs_end_idx and bi.direction.value == "up":
+            if bi.start.k.k_index > zs_end_idx and bi.direction.value == "up":
                 if bi.high > zs.zg:  # 突破中枢上沿
                     break_bi_up = bi
                     break
@@ -3018,11 +3145,13 @@ def _find_third_type_mmds(
                     if not macd_ok:
                         continue
 
-                    # 条件6：回调时显著缩量（< 60%均量，V4更严格）
+                    # 条件6：回调时缩量（< 85%中枢均量）。
+                    # 原 <60% 过严：笔均量被笔内少量上涨日抬高，导致几乎无法满足，
+                    # 3买/3卖 因此系统性失效；0.85 仍要求明显缩量。
                     vol_ok = True
                     if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
-                            volumes, bi.start.k.k_index, bi.end.k.k_index, avg_vol_20, max_ratio=0.6
+                            volumes, bi.start.k.k_index, bi.end.k.k_index, avg_vol_20, max_ratio=0.85
                         )
                     if not vol_ok:
                         continue
@@ -3254,7 +3383,7 @@ def _find_third_type_mmds(
         # 找3卖：跌破中枢后的反抽
         break_bi_down = None
         for bi in bis:
-            if bi.start.k.index > zs_end_idx and bi.direction.value == "down":
+            if bi.start.k.k_index > zs_end_idx and bi.direction.value == "down":
                 if bi.low < zs.zd:  # 跌破中枢下沿
                     break_bi_down = bi
                     break
@@ -3590,7 +3719,7 @@ def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
         MMDType.SELL_3: 1,
     }
     
-    # 按位置分组
+    # 按位置分组（允许同位置出现 buy+sell 组合信号；同类型只保留高置信度）
     by_position: dict[int, list[MMD]] = {}
     for mmd in mmds:
         if mmd.bi:
@@ -3599,11 +3728,21 @@ def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
                 by_position[pos] = []
             by_position[pos].append(mmd)
     
-    # 每组只保留优先级最高的
+    # 每组按 (类型优先级, 置信度) 排序，同位置同方向只保留最高优先级的信号；
+    # 但买卖方向不同的信号（如底部同时出现 1buy+2buy 候选）保留更高置信度者。
+    def _sort_key(m: MMD) -> tuple:
+        return (priority.get(m.mmd_type, 0), m.confidence)
+    
     result = []
     for pos, group in by_position.items():
-        group.sort(key=lambda m: priority.get(m.mmd_type, 0), reverse=True)
-        result.append(group[0])
+        # 按方向分组：买入组 / 卖出组
+        buy_group = [m for m in group if "buy" in m.mmd_type.value]
+        sell_group = [m for m in group if "sell" in m.mmd_type.value]
+        for sub in (buy_group, sell_group):
+            if not sub:
+                continue
+            sub.sort(key=_sort_key, reverse=True)
+            result.append(sub[0])
     
     return result
 
@@ -3618,13 +3757,25 @@ def _is_strong_beichi(
     threshold: float = 0.8,
     direction: str = "down",
 ) -> bool:
-    """检查是否是强背驰（满足动态阈值）。"""
+    """检查是否是强背驰（满足动态阈值 + 新极值确认）。
+
+    背驰判定的核心要求：价格创新低（1买）/ 创新高（1卖）的同时，
+    MACD 力度（面积）衰竭。若价格未创新极值，则不属于趋势背驰，
+    只可能是盘整中的普通回调，不能判定为 1 买/1 卖。
+    """
     bi_idx = bi.index
     
-    # 1. 笔背驰检查
+    # 1. 笔背驰检查（要求新极值：向下背驰须创新低，向上背驰须创新高）
     for j in range(bi_idx - 1, -1, -1):
         prev_bi = bis[j]
         if prev_bi.direction.value == direction:
+            # 新极值确认：向下笔须跌破前低，向上笔须突破前高
+            if direction == "down":
+                if bi.low >= prev_bi.low:
+                    break
+            else:
+                if bi.high <= prev_bi.high:
+                    break
             curr_force = _calc_bi_force(bi, closes, bi_idx)
             prev_force = _calc_bi_force(prev_bi, closes, j)
             
@@ -3632,20 +3783,11 @@ def _is_strong_beichi(
                 return True
             break
     
-    # 2. 盘整背驰检查
-    for zs in zss:
-        if len(zs.lines) >= 3:
-            first_bi = zs.lines[0]
-            last_bi = zs.lines[-1]
-            
-            if first_bi.direction.value == direction:
-                first_force = _calc_bi_force(first_bi, closes, first_bi.index)
-                last_force = _calc_bi_force(last_bi, closes, last_bi.index)
-                
-                if last_force < first_force * threshold and last_force > 0:
-                    return True
+    # 注意：一买/一卖 只认"趋势背驰"（笔背驰或两中枢趋势背驰），
+    # 不把"盘整背驰"（中枢内力度衰竭）算作一买——盘整背驰更适合标记二买/类二买。
+    # 这样震荡市中的反复下探不会被误标为 1买。
     
-    # 3. 趋势背驰检查
+    # 3. 趋势背驰检查（两个同向中枢之间离开笔力度衰减 + 新极值）
     if len(zss) >= 2:
         for i in range(1, len(zss)):
             prev_zs = zss[i - 1]
@@ -3661,10 +3803,16 @@ def _is_strong_beichi(
                 curr_exit = curr_zs.lines[-1]
                 
                 if prev_exit.direction.value == direction and curr_exit.direction.value == direction:
+                    # 新极值确认：后一中枢离开笔须创出更极端价位
+                    if direction == "down":
+                        new_extreme = curr_exit.low < prev_exit.low
+                    else:
+                        new_extreme = curr_exit.high > prev_exit.high
+                    
                     prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
                     curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index)
                     
-                    if curr_force < prev_force * threshold and curr_force > 0:
+                    if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
                         return True
     
     return False
@@ -4029,10 +4177,19 @@ def _calc_confidence(
             pass
 
     # V19: 信号新鲜度衰减（条件30）- 过时信号降低置信度
+    # 类型感知：1买/1卖/2买/2卖是趋势反转信号，入场窗口宽（数周-数月），
+    # 按 3买/3卖（突破确认，时效性强）的15根K线短窗口重罚会过度压制。
     if mmd.bi and len(closes) > 0:
         try:
             signal_idx = mmd.bi.end.k.k_index
-            freshness_factor, _ = _calc_signal_freshness(closes, signal_idx)
+            if mmd.mmd_type in (
+                MMDType.BUY_1, MMDType.SELL_1,
+                MMDType.BUY_2, MMDType.SELL_2,
+                MMDType.BUY_2S, MMDType.SELL_2S,
+            ):
+                freshness_factor, _ = _calc_signal_freshness(closes, signal_idx, max_age_bars=120)
+            else:
+                freshness_factor, _ = _calc_signal_freshness(closes, signal_idx, max_age_bars=15)
             if freshness_factor < 1.0:
                 confidence *= freshness_factor
         except Exception:
@@ -10961,6 +11118,12 @@ def find_mmds_v39(
     if not mmds or not closes:
         return mmds
 
+    # V83: 记录校准基线置信度（find_mmds 内 V47 校验后的值）。
+    # 后续 V39-V82 共 160+ 个条件各自做 ±0.01~±0.05 的小幅调整，
+    # 累计漂移会把强信号压向 0/1 边界（实测强 1买 被压到 0.00~0.15）。
+    # 最终将置信度收敛回基线 ±CONFIDENCE_BAND，保留条件细化能力，避免过度压制。
+    _conf_base: dict[int, float] = {id(m): m.confidence for m in mmds}
+
     # 条件103：多时间框架背离确认（一次性计算）
     multi_tf_div = None
     try:
@@ -12620,6 +12783,16 @@ def find_mmds_v39(
                 mmd.confidence = max(0.0, min(1.0, mmd.confidence + vcb.get("confidence_adjust", 0.0)))
             except Exception:
                 pass
+
+    # V83: 置信度有界收敛 —— 限制 160+ 条件累计漂移对校准基线的影响
+    _BAND = 0.25
+    for m in mmds:
+        base = _conf_base.get(id(m))
+        if base is not None:
+            m.confidence = round(
+                max(0.0, min(1.0, max(base - _BAND, min(base + _BAND, m.confidence)))),
+                3,
+            )
 
     return mmds
 
@@ -26448,3 +26621,663 @@ def _calc_dynamic_risk_reward_v80(
         return result
     except Exception:
         return result
+
+
+# ── V81 条件 256-259 实现 ──────────────────────────────────────────────
+
+def _calc_volatility_regime_transition_v81(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """波动率状态转换检测（V81 条件256）。
+
+    基于近期 ATR/价格比率划分波动率环境：
+    - compressed: 低波动（<1.2%）→ 蓄势，突破信号加分
+    - normal: 正常波动（1.2%-3%）
+    - elevated: 波动偏高（3%-5%）
+    - expanding: 波动放大（>5%）→ 风险加大，信号减分
+
+    买入/卖出在 compressed 与 expanding 两个极端环境下的调整方向不同。
+    """
+    result = {
+        "regime": "unknown",
+        "volatility_pct": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30 or len(highs) < 30 or len(lows) < 30:
+            result["msg"] = "数据不足"
+            return result
+
+        vol = _calc_atr_volatility(closes[-60:])
+        vol_pct = vol * 100.0
+        result["volatility_pct"] = round(vol_pct, 2)
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if vol_pct < 1.2:
+            regime = "compressed"
+            adjust = 0.03 if is_buy else 0.02  # 压缩蓄势，买点加分更多
+        elif vol_pct < 3.0:
+            regime = "normal"
+            adjust = 0.0
+        elif vol_pct < 5.0:
+            regime = "elevated"
+            adjust = -0.01
+        else:
+            regime = "expanding"
+            adjust = -0.03 if is_buy else -0.02  # 高波动风险，卖点略宽容
+
+        result["regime"] = regime
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = f"波动率环境={regime} 波动率{vol_pct:.2f}% 调整{adjust:+.0%}"
+        return result
+    except Exception:
+        return result
+
+
+def _calc_support_resistance_strength_v81(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """关键支撑阻力强度验证（V81 条件257）。
+
+    在近端价格区间内寻找反复验证的支撑/阻力位（触达次数越多越强），
+    买入信号关注下方支撑强度，卖出信号关注上方阻力强度：
+    - strong: 近端强支撑/阻力 → 加分
+    - weak: 近端弱支撑/阻力 → 减分
+    - moderate: 中等
+    - distant: 支撑/阻力较远 → 中性
+    """
+    result = {
+        "strength_level": "unknown",
+        "nearest_sr_dist_pct": 0.0,
+        "sr_count": 0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 20 or not highs or not lows:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(60, len(closes))
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+        current_price = closes[-1]
+        is_buy = "buy" in mmd.mmd_type.value
+
+        # 找到近期局部极值点作为候选支撑/阻力
+        touch_counts: dict[float, int] = {}
+        for i in range(1, len(recent_lows) - 1):
+            # 局部低点（支撑候选）
+            if recent_lows[i] < recent_lows[i - 1] and recent_lows[i] < recent_lows[i + 1]:
+                level = round(recent_lows[i], 2)
+                touch_counts[level] = touch_counts.get(level, 0) + 1
+            # 局部高点（阻力候选）
+            if recent_highs[i] > recent_highs[i - 1] and recent_highs[i] > recent_highs[i + 1]:
+                level = round(recent_highs[i], 2)
+                touch_counts[level] = touch_counts.get(level, 0) + 1
+
+        if not touch_counts:
+            result["strength_level"] = "distant"
+            result["confidence_adjust"] = 0.0
+            result["msg"] = "近端无显著支撑/阻力位"
+            return result
+
+        # 依据买卖方向选择关注的极值区（下方支撑 / 上方阻力）
+        if is_buy:
+            candidates = [
+                (level, cnt) for level, cnt in touch_counts.items() if level <= current_price
+            ]
+            # 距离最近的支撑
+            nearest = min(candidates, key=lambda x: current_price - x[0]) if candidates else None
+        else:
+            candidates = [
+                (level, cnt) for level, cnt in touch_counts.items() if level >= current_price
+            ]
+            nearest = min(candidates, key=lambda x: x[0] - current_price) if candidates else None
+
+        if nearest is None:
+            result["strength_level"] = "distant"
+            result["confidence_adjust"] = 0.0
+            result["msg"] = "买卖方向对应无近端支撑/阻力位"
+            return result
+
+        level, touch = nearest
+        dist_pct = abs(current_price - level) / current_price * 100.0 if current_price > 0 else 0.0
+        result["nearest_sr_dist_pct"] = round(dist_pct, 2)
+        result["sr_count"] = touch
+
+        # 距离太远视为 distant
+        if dist_pct > 12:
+            result["strength_level"] = "distant"
+            result["confidence_adjust"] = 0.0
+            result["msg"] = f"最近支撑/阻力距{dist_pct:.1f}% 较远"
+            return result
+
+        if touch >= 3 and dist_pct < 5:
+            strength, adjust = "strong", 0.03
+        elif touch >= 2 and dist_pct < 8:
+            strength, adjust = "moderate", 0.01
+        elif touch == 1 and dist_pct < 5:
+            strength, adjust = "weak", -0.01
+        else:
+            strength, adjust = "distant", 0.0
+
+        result["strength_level"] = strength
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"支撑/阻力={level:.2f} 触达{touch}次 距离{dist_pct:.1f}% "
+            f"强度={strength} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+def _calc_volume_price_energy_distribution_v81(
+    mmd: "MMD",
+    closes: list[float],
+    volumes: list[float] | None,
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """量价能量分布验证（V81 条件258）。
+
+    分析近期量能集中区与价格位置的关系：
+    - 买入信号：价格处于低量能区（抛压衰竭）→ 加分
+    - 卖出信号：价格处于高量能区（接盘充分）→ 加分
+    - 量价背离（价格新高但量萎缩）→ 减分
+    """
+    result = {
+        "energy_zone": "unknown",
+        "energy_score": 0.5,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 30 or volumes is None or len(volumes) < 30 or not highs or not lows:
+            result["msg"] = "数据不足"
+            return result
+
+        lookback = min(60, len(closes))
+        recent_closes = closes[-lookback:]
+        recent_vols = volumes[-lookback:]
+
+        price_min = min(recent_closes)
+        price_max = max(recent_closes)
+        price_range = price_max - price_min
+        if price_range <= 0:
+            result["energy_zone"] = "mid"
+            result["msg"] = "价格区间过窄"
+            return result
+
+        current_price = recent_closes[-1]
+        pos = (current_price - price_min) / price_range  # 0~1 价格位置
+
+        # 量能分区：0=低区, 1=高区（按价格位置切两半统计均量）
+        low_zone = [
+            v for p, v in zip(recent_closes, recent_vols) if p <= price_min + price_range * 0.4
+        ]
+        high_zone = [
+            v for p, v in zip(recent_closes, recent_vols) if p >= price_min + price_range * 0.6
+        ]
+        avg_vol = sum(recent_vols) / max(1, len(recent_vols))
+        low_avg = sum(low_zone) / max(1, len(low_zone))
+        high_avg = sum(high_zone) / max(1, len(high_zone))
+
+        is_buy = "buy" in mmd.mmd_type.value
+
+        if is_buy:
+            if pos < 0.35:
+                # 低位：若低区量能正常而当前无放量，抛压衰竭
+                energy_zone = "low"
+                score = 0.8
+                adjust = 0.03 if low_avg <= avg_vol else 0.01
+            elif pos < 0.65:
+                energy_zone = "mid"
+                score = 0.6
+                adjust = 0.0
+            else:
+                # 高位买入：量价背离风险（放量追高）
+                energy_zone = "high"
+                score = 0.35
+                adjust = -0.03 if recent_vols[-1] > avg_vol * 1.3 else -0.01
+        else:
+            if pos > 0.65:
+                energy_zone = "high"
+                score = 0.8
+                adjust = 0.03 if high_avg >= avg_vol else 0.01
+            elif pos > 0.35:
+                energy_zone = "mid"
+                score = 0.6
+                adjust = 0.0
+            else:
+                energy_zone = "low"
+                score = 0.35
+                adjust = -0.03 if recent_vols[-1] > avg_vol * 1.3 else -0.01
+
+        result["energy_zone"] = energy_zone
+        result["energy_score"] = round(score, 2)
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = f"能量区={energy_zone} 分数={score:.2f} 位置={pos:.0%} 调整{adjust:+.0%}"
+        return result
+    except Exception:
+        return result
+
+
+def _calc_signal_execution_window_v81(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    volumes: list[float] | None,
+) -> dict[str, Any]:
+    """信号执行窗口评估（V81 条件259）。
+
+    综合波动率与流动性评估当前是否适合入场执行：
+    - 波动率分：低波动作它的窗口（避免追高杀跌）
+    - 流动性分：近期量能充足 → 执行滑移小
+    - 综合 window_quality：favorable / acceptable / caution / unfavorable
+    """
+    result = {
+        "window_quality": "unknown",
+        "volatility_score": 0.5,
+        "liquidity_score": 0.5,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 20 or not highs or not lows:
+            result["msg"] = "数据不足"
+            return result
+
+        vol = _calc_atr_volatility(closes[-40:])
+        vol_pct = vol * 100.0
+
+        # 波动率分：中枢波动 (1.5%~4%) 最优
+        if vol_pct < 1.0:
+            vol_score = 0.4  # 过于死寂
+        elif vol_pct < 1.5:
+            vol_score = 0.7
+        elif vol_pct < 4.0:
+            vol_score = 0.9
+        elif vol_pct < 6.0:
+            vol_score = 0.6
+        else:
+            vol_score = 0.3
+
+        # 流动性分：近期量能相对平稳充足
+        liq_score = 0.5
+        if volumes is not None and len(volumes) >= 20:
+            recent_vols = volumes[-20:]
+            avg = sum(recent_vols) / len(recent_vols)
+            if avg > 0:
+                last15 = recent_vols[-15:]
+                liq_ratio = sum(last15) / len(last15) / avg
+                if liq_ratio > 0.8:
+                    liq_score = 0.9
+                elif liq_ratio > 0.5:
+                    liq_score = 0.7
+                else:
+                    liq_score = 0.4
+
+        result["volatility_score"] = round(vol_score, 2)
+        result["liquidity_score"] = round(liq_score, 2)
+
+        combined = vol_score * 0.6 + liq_score * 0.4
+        if combined >= 0.8:
+            quality, adjust = "favorable", 0.03
+        elif combined >= 0.6:
+            quality, adjust = "acceptable", 0.01
+        elif combined >= 0.4:
+            quality, adjust = "caution", -0.01
+        else:
+            quality, adjust = "unfavorable", -0.04
+
+        result["window_quality"] = quality
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"执行窗口={quality} 波动分={vol_score:.2f} 流动性分={liq_score:.2f} "
+            f"波动率{vol_pct:.2f}% 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        return result
+
+
+# ── V82 条件 260-263 实现 ──────────────────────────────────────────────
+
+def _calc_mmd_age_decay_v82(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """买卖点时间衰减验证（V82 条件260）。
+
+    计算从信号触发点至今的 K 线数量，评估信号新鲜度：
+    - fresh: <60 根 → 新鲜，加分
+    - moderate: 60-120 根 → 中性
+    - aging: 120-200 根 → 减分
+    - old: 200-300 根 → 明显减分
+    - stale: >300 根 → 信号失效，大幅减分
+    """
+    result = {
+        "age_bars": 0,
+        "age_label": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if not closes or len(closes) < 5 or mmd.bi is None:
+            result["msg"] = "数据不足"
+            return result
+
+        bi_end_idx = mmd.bi.end.k.k_index
+        age_bars = max(0, len(closes) - 1 - bi_end_idx)
+        result["age_bars"] = age_bars
+
+        is_buy = "buy" in mmd.mmd_type.value
+        # 买入信号随时间推移价值衰减更快（市场结构可能已变化）
+        if is_buy:
+            if age_bars < 30:
+                label, adjust = "fresh", 0.03
+            elif age_bars < 60:
+                label, adjust = "fresh", 0.01
+            elif age_bars < 120:
+                label, adjust = "moderate", 0.0
+            elif age_bars < 200:
+                label, adjust = "aging", -0.02
+            elif age_bars < 300:
+                label, adjust = "old", -0.05
+            else:
+                label, adjust = "stale", -0.08
+        else:
+            if age_bars < 60:
+                label, adjust = "fresh", 0.02
+            elif age_bars < 120:
+                label, adjust = "moderate", 0.0
+            elif age_bars < 200:
+                label, adjust = "aging", -0.02
+            elif age_bars < 300:
+                label, adjust = "old", -0.04
+            else:
+                label, adjust = "stale", -0.07
+
+        result["age_label"] = label
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = f"信号距今{age_bars}根K线 新鲜度={label} 调整{adjust:+.0%}"
+        return result
+    except Exception:
+        result["msg"] = "数据不足"
+        return result
+
+
+def _calc_breakout_retest_confirm_v82(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """中枢突破回踩确认（V82 条件261）。
+
+    检测信号触发后是否出现"突破 → 回踩 → 确认"的完整结构：
+    - 突破后价格回踩至突破位附近（38.2%-61.8%回撤）再回升 → strong
+    - 突破后横盘消化 → moderate
+    - 突破后直接单边（无回踩）→ weak
+    - 突破后跌破突破位（失败）→ broken
+    """
+    result = {
+        "retest_detected": False,
+        "retest_quality": "unknown",
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 20 or not highs or not lows or mmd.bi is None:
+            result["msg"] = "数据不足"
+            result["retest_quality"] = "unknown"
+            return result
+
+        bi_end_idx = mmd.bi.end.k.k_index
+        # 信号触发后观察窗（最多20根）
+        window_start = bi_end_idx + 1
+        window_end = min(len(closes), window_start + 20)
+        if window_start >= window_end:
+            result["retest_quality"] = "unknown"
+            result["msg"] = "触发点位于末端，无后续确认"
+            return result
+
+        # 突破极值（1买取低点，1卖取高点）
+        is_buy = "buy" in mmd.mmd_type.value
+        extreme = lows[bi_end_idx] if is_buy else highs[bi_end_idx]
+
+        window_highs = highs[window_start:window_end]
+        window_lows = lows[window_start:window_end]
+        max_after = max(window_highs)
+        min_after = min(window_lows)
+
+        if is_buy:
+            # 突破后最高点相对于极值的抬升幅度
+            breakout_span = (max_after - extreme) / extreme if extreme > 0 else 0.0
+            # 找到回踩低点（极值之后的最低点）
+            retest_low = min_after
+            pullback_pct = (max_after - retest_low) / (max_after - extreme) if (max_after - extreme) > 0 else 0.0
+        else:
+            breakout_span = (extreme - min_after) / extreme if extreme > 0 else 0.0
+            retest_high = max_after
+            pullback_pct = (retest_high - min_after) / (extreme - min_after) if (extreme - min_after) > 0 else 0.0
+
+        # 突破幅度过小视为未突破
+        if breakout_span < 0.01:
+            result["retest_quality"] = "weak"
+            result["msg"] = "突破幅度过小，无有效确认"
+            return result
+
+        # 回撤幅度 0.382-0.618 为理想回踩
+        if 0.38 <= pullback_pct <= 0.65:
+            quality, adjust = "strong", 0.04
+            retest = True
+        elif 0.2 <= pullback_pct < 0.38:
+            quality, adjust = "moderate", 0.02
+            retest = True
+        elif pullback_pct < 0.2:
+            quality, adjust = "weak", 0.0
+            retest = True
+        elif pullback_pct > 0.9:
+            quality, adjust = "broken", -0.05
+            retest = False
+        else:
+            quality, adjust = "moderate", 0.01
+            retest = True
+
+        result["retest_detected"] = retest
+        result["retest_quality"] = quality
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"突破幅度{breakout_span:.1%} 回撤{pullback_pct:.1%} "
+            f"回踩={quality} 调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        result["msg"] = "数据不足"
+        result["retest_quality"] = "unknown"
+        return result
+
+
+def _calc_macd_multi_tf_resonance_v82(
+    mmd: "MMD",
+    closes: list[float],
+) -> dict[str, Any]:
+    """多级别MACD共振验证（V82 条件262）。
+
+    用同一收盘价序列的短/中/长周期 MACD 模拟多级别视角：
+    - short MACD(6,13,5)：短期加速度
+    - mid MACD(12,26,9)：中期趋势
+    - long MACD(24,52,18)：长期方向
+    三周期同向 → 强共振；冲突 → 中性/减分。
+    """
+    result = {
+        "resonance": "none",
+        "short_acceleration": 0.0,
+        "mid_trend": 0.0,
+        "long_trend": 0.0,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 60:
+            result["resonance"] = "none"
+            result["msg"] = "数据不足"
+            return result
+
+        from easy_tdx.chanlun.macd import calc_macd
+
+        macd_short = calc_macd(closes, 6, 13, 5)
+        macd_mid = calc_macd(closes, 12, 26, 9)
+
+        dif_s = macd_short["dif"]
+        dif_m = macd_mid["dif"]
+
+        # 用带类型的局部变量承载指标，避免 dict[str, object] 的 mypy strict 报错
+        short_acc: float = 0.0
+        mid_trend: float = 0.0
+        long_trend: float = 0.0
+
+        # 短期加速度：DIF 斜率（近5根）
+        if len(dif_s) >= 6:
+            short_acc = float(
+                sum(1 for i in range(-4, 0) if dif_s[i] > dif_s[i - 1])
+                - sum(1 for i in range(-4, 0) if dif_s[i] < dif_s[i - 1])
+            )
+        # 中期趋势：DIF 符号与斜率
+        if len(dif_m) >= 6:
+            mid_trend = float(
+                (1 if dif_m[-1] > 0 else 0)
+                + (1 if dif_m[-1] > dif_m[-2] else 0)
+            )
+        # 长期趋势：用更慢的 EMA 差
+        long_slow = sum(closes[-50:]) / 50 if len(closes) >= 50 else sum(closes) / len(closes)
+        long_fast = sum(closes[-10:]) / 10 if len(closes) >= 10 else sum(closes) / len(closes)
+        long_trend = float(1 if long_fast > long_slow else 0)
+
+        result["short_acceleration"] = short_acc
+        result["mid_trend"] = mid_trend
+        result["long_trend"] = long_trend
+
+        is_buy = "buy" in mmd.mmd_type.value
+        score = short_acc + mid_trend + long_trend
+
+        if is_buy:
+            if score >= 3:
+                resonance, adjust = "bullish", 0.04
+            elif score >= 1.5:
+                resonance, adjust = "mostly_bullish", 0.02
+            elif score <= -1.5:
+                resonance, adjust = "bearish", -0.04
+            else:
+                resonance, adjust = "mixed", 0.0
+        else:
+            if score <= -1.5:
+                resonance, adjust = "bearish", 0.04
+            elif score <= 0:
+                resonance, adjust = "mostly_bearish", 0.02
+            elif score >= 2.5:
+                resonance, adjust = "bullish", -0.04
+            else:
+                resonance, adjust = "mixed", 0.0
+
+        result["resonance"] = resonance
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = f"多周期共振={resonance} 短加={result['short_acceleration']} 中={result['mid_trend']} 长={result['long_trend']} 调整{adjust:+.0%}"
+        return result
+    except Exception:
+        result["msg"] = "数据不足"
+        result["resonance"] = "none"
+        return result
+
+
+def _calc_volatility_compression_breakout_v82(
+    mmd: "MMD",
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> dict[str, Any]:
+    """波动率压缩突破确认（V82 条件263）。
+
+    基于近期价格区间宽度检测波动率压缩状态，并评估突破力度：
+    - extreme: 区间收窄至 3% 以内 → 蓄势充分，突破信号加分
+    - high: 区间 3%-6% → 较充分
+    - moderate: 6%-10% → 中性
+    - low: >10% → 无压缩，信号减分
+    """
+    result = {
+        "compression_level": "none",
+        "compression_pct": 0.0,
+        "breakout_strength": 0.0,
+        "volume_confirm": False,
+        "confidence_adjust": 0.0,
+        "msg": "",
+    }
+    try:
+        if len(closes) < 20 or not highs or not lows:
+            result["msg"] = "数据不足"
+            result["compression_level"] = "unknown"
+            return result
+
+        lookback = min(30, len(closes))
+        recent_highs = highs[-lookback:]
+        recent_lows = lows[-lookback:]
+        current_price = closes[-1]
+        if current_price <= 0:
+            result["compression_level"] = "unknown"
+            return result
+
+        range_pct = (max(recent_highs) - min(recent_lows)) / current_price * 100.0
+        result["compression_pct"] = round(range_pct, 2)
+
+        # 近5根突破力度
+        last5_high = max(highs[-5:]) if len(highs) >= 5 else current_price
+        last5_low = min(lows[-5:]) if len(lows) >= 5 else current_price
+        move_pct = (last5_high - last5_low) / current_price * 100.0
+        result["breakout_strength"] = round(move_pct, 2)
+
+        if range_pct < 3.0:
+            compression = "extreme"
+        elif range_pct < 6.0:
+            compression = "high"
+        elif range_pct < 10.0:
+            compression = "moderate"
+        else:
+            compression = "low"
+
+        result["compression_level"] = compression
+
+        # 突破力度配合压缩程度评估
+        if compression == "extreme":
+            adjust = 0.04 if move_pct > 1.5 else 0.02
+        elif compression == "high":
+            adjust = 0.02 if move_pct > 2.0 else 0.0
+        elif compression == "moderate":
+            adjust = 0.0
+        else:
+            adjust = -0.02
+
+        result["confidence_adjust"] = round(adjust, 3)
+        result["msg"] = (
+            f"压缩度={compression} 区间宽{range_pct:.1f}% 近端波动{move_pct:.1f}% "
+            f"调整{adjust:+.0%}"
+        )
+        return result
+    except Exception:
+        result["msg"] = "数据不足"
+        result["compression_level"] = "unknown"
+        return result
+

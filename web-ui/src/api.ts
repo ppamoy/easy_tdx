@@ -69,6 +69,7 @@ export async function fetchBars(
   category: Category,
   startDate?: string,
   endDate?: string,
+  maxCount?: number,
 ): Promise<Bar[]> {
   let allBars: Bar[] = []
   for (let page = 0; page < MAX_PAGES; page++) {
@@ -104,6 +105,11 @@ export async function fetchBars(
     // （page1=最新段，page2=更旧段），concat 后需排序保证整体正序，
     // 否则引擎/图表只正确处理第一页的数据。
     bars.sort((a, b) => a.datetime.localeCompare(b.datetime))
+    // 可选 maxCount：只保留最新 maxCount 根（与缠论分析窗口对齐，
+    // 避免图表显示 8000 根历史但叠加层只覆盖最近 800 根）。
+    if (maxCount && bars.length > maxCount) {
+      bars = bars.slice(bars.length - maxCount)
+    }
     return bars
 }
 

@@ -97,6 +97,10 @@ function render() {
   if (!container.value || props.bars.length === 0) return
   if (!chart) chart = echarts.init(container.value, 'dark')
   chart.setOption(buildOption(), true)
+  // 开发/调试专用：暴露图表实例供 playwright 等浏览器测试检查内部状态
+  if (import.meta.env.DEV) {
+    ;(window as unknown as Record<string, unknown>).__CHANLUN_CHART__ = chart
+  }
 }
 
 function buildOption(): echarts.EChartsCoreOption {
@@ -154,9 +158,12 @@ function buildOption(): echarts.EChartsCoreOption {
         type: 'dashed' as const,
         opacity: 0.7,
       }
+      // 精确锚点：向上笔从底分型低点指向顶分型高点，向下笔从顶分型高点指向底分型低点
+      const startY = isUp ? bi.low : bi.high
+      const endY = isUp ? bi.high : bi.low
       return [
-        { coord: [si, bi.high], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 6 },
-        { coord: [ei, bi.low], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 6 },
+        { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 6 },
+        { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 6 },
       ]
     })
 
@@ -170,15 +177,19 @@ function buildOption(): echarts.EChartsCoreOption {
     .map((xd) => {
       const si = findBarIndex(keyIndex, xd.start_date)
       const ei = findBarIndex(keyIndex, xd.end_date)
+      const isUp = xd.direction === 'up'
       // ECharts 6 的 markLine 两点标记必须是 [起点, 终点] 二元组数组。
       const lineStyle = {
-        color: 'rgba(200,120,255,0.9)',
+        color: isUp ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)',
         width: 1.5,
         type: 'solid' as const,
       }
+      // 精确锚点：向上线段从低点指向高点，向下线段从高点指向低点
+      const startY = isUp ? xd.low : xd.high
+      const endY = isUp ? xd.high : xd.low
       return [
-        { coord: [si, xd.high], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 8 },
-        { coord: [ei, xd.low], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 8 },
+        { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 8 },
+        { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'circle', symbolSize: 8 },
       ]
     })
 

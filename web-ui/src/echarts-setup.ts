@@ -1,12 +1,14 @@
 // ECharts 按需引入。只注册用到的图表类型，避免全量引入（~1MB → ~400KB）。
-// 用到的：candlestick（K线）、line（净值/回撤曲线）、markPoint（买卖点标注）、heatmap（寻优热力图）。
+// 用到的：candlestick（K线）、line（净值/回撤曲线）、scatter（分型/买卖点/背驰标注）、
+// heatmap（寻优热力图）+ markLine（笔/线段）、markArea（中枢）、markPoint。
 
 import * as echarts from 'echarts/core'
-import { BarChart, CandlestickChart, HeatmapChart, LineChart } from 'echarts/charts'
+import { BarChart, CandlestickChart, HeatmapChart, LineChart, ScatterChart } from 'echarts/charts'
 import {
   DataZoomComponent,
   GridComponent,
   LegendComponent,
+  MarkAreaComponent,
   MarkLineComponent,
   MarkPointComponent,
   TitleComponent,
@@ -21,6 +23,7 @@ echarts.use([
   LineChart,
   BarChart,
   HeatmapChart,
+  ScatterChart,
   GridComponent,
   TooltipComponent,
   LegendComponent,
@@ -28,6 +31,7 @@ echarts.use([
   DataZoomComponent,
   MarkPointComponent,
   MarkLineComponent,
+  MarkAreaComponent,
   VisualMapComponent,
 ])
 

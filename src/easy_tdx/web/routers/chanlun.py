@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pandas as pd
+
 from fastapi import APIRouter, Depends
 from pydantic import Field
 
@@ -143,13 +145,31 @@ async def chanlun_multi_level(
         req.start,
         req.count,
     )
-    # 获取低级别数据（需要更多K线覆盖时间范围）
+    # 获取低级别数据（需要覆盖高级别的时间范围，否则最新高级别笔的低级别走势为空）
+    # 每自然日对应的低级别 K 线数（A股一天约4小时交易时段）
+    _bars_per_day = {
+        "MIN_1": 240, "MIN_5": 48, "MIN_15": 16, "MIN_30": 8, "MIN_60": 4,
+    }
+    low_bars_per_day = _bars_per_day.get(req.low_level.upper(), 8)
+    try:
+        if df_high is not None and len(df_high) > 0:
+            # 用高级别实际时间跨度估算低级别K线数量
+            _date_col = "date" if "date" in df_high.columns else "datetime"
+            _first = pd.to_datetime(df_high[_date_col].iloc[0])
+            _last = pd.to_datetime(df_high[_date_col].iloc[-1])
+            span_days = max((_last - _first).days, 1)
+            trading_days = int(span_days / 7 * 5) + 1
+            low_count = int(min(trading_days * low_bars_per_day + 200, 10000))
+        else:
+            low_count = int(min(req.count * low_bars_per_day + 200, 10000))
+    except Exception:
+        low_count = int(min(req.count * low_bars_per_day + 200, 10000))
     df_low = await client.get_security_bars(
         market_from_str(req.market),
         req.code,
         category_from_str(req.low_level),
         req.start,
-        min(req.count * 6, 3000),
+        low_count,
     )
 
     # 分别分析

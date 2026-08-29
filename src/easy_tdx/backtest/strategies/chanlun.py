@@ -52,14 +52,23 @@ class ChanlunStrategy(ParametrizedStrategy):
         from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
         # 构建 DataFrame（保留原始 datetime 用于日期匹配）
+        # vol/amount 列可能缺失（如纯 OHLC 数据），缺省回退 0，避免初始化崩溃
         n = len(self.data.open.raw)
+        try:
+            _vol_arr = [float(v) if v else 0.0 for v in self.data.vol.raw]
+        except (KeyError, AttributeError):
+            _vol_arr = [0.0] * n
+        try:
+            _amount_arr = [float(a) if a else 0.0 for a in self.data.amount.raw]
+        except (KeyError, AttributeError):
+            _amount_arr = [0.0] * n
         df = pd.DataFrame({
             "open": self.data.open.raw.tolist(),
             "close": self.data.close.raw.tolist(),
             "high": self.data.high.raw.tolist(),
             "low": self.data.low.raw.tolist(),
-            "vol": [float(v) if v else 0.0 for v in self.data.vol.raw],
-            "amount": [float(a) if a else 0.0 for a in self.data.amount.raw],
+            "vol": _vol_arr,
+            "amount": _amount_arr,
         })
         if self._datetime_array is not None:
             df["datetime"] = pd.to_datetime([int(d) for d in self._datetime_array], format="%Y%m%d")

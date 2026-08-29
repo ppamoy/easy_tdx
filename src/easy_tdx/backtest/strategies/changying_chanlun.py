@@ -161,7 +161,8 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         
         # 当前周期状态
         self._current_season: Season = Season.UNKNOWN
-        self._season_history: list[tuple[datetime, Season]] = []
+        # (切换时的K线日期或墙钟回退, 季节, 当时bar_index)
+        self._season_history: list[tuple[Any, Season, int]] = []
         
         # 买卖点缓存
         self._last_buy_1_idx = -1
@@ -233,6 +234,36 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         self._analyser = ChanlunAnalyser(code="TEST", frequency="DAILY", config=config)
         self._chanlun_result = self._analyser.process_klines(df)
     
+    @staticmethod
+    def _latest_bar_datetime(df: pd.DataFrame) -> Any:
+        """取 df 最后一根K线的日期（兼容 int YYYYMMDD / str / Timestamp / DatetimeIndex）。
+
+        返回 pd.Timestamp；无法解析时返回 None（调用方退化为按K线计数）。
+        """
+        if df is None or len(df) == 0:
+            return None
+        if "datetime" not in df.columns:
+            if isinstance(getattr(df, "index", None), pd.DatetimeIndex):
+                return df.index[-1]
+            return None
+        v = df["datetime"].iloc[-1]
+        try:
+            # 先处理 datetime/Timestamp（pd.Timestamp 的 int() 是纳秒，不能按 YYYYMMDD 解析）
+            if isinstance(v, (pd.Timestamp, datetime)):
+                return pd.to_datetime(v)
+            if isinstance(v, str):
+                s2 = v.strip().replace("-", "").replace(" ", "")[:8]
+                if s2.isdigit() and len(s2) >= 8:
+                    return pd.to_datetime(s2[:8], format="%Y%m%d", errors="coerce")
+                return pd.to_datetime(v, errors="coerce")
+            # int / numpy int64 / float 统一转字符串再按 YYYYMMDD 解析
+            s = str(int(v)).strip()
+            if s.isdigit() and len(s) >= 8:
+                return pd.to_datetime(s[:8], format="%Y%m%d", errors="coerce")
+            return pd.to_datetime(v)
+        except Exception:
+            return None
+
     def _update_season(self, df: pd.DataFrame) -> None:
         """更新当前周期状态（多维度信号融合）。
         
@@ -343,17 +374,28 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
             else:
                 new_season = self._current_season  # 保持当前状态
         
-        # 更新周期（防止频繁切换，至少保持30天）
+        # 更新周期（防止频繁切换，至少保持30个交易日）
+        # 注意：必须用K线自身的日期计时，而非 datetime.now()——
+        # 回测中所有K线在几秒内跑完，用墙钟时间会让"30天间隔"恒为0，
+        # 导致季节永远无法切换。
         if new_season != self._current_season:
-            # 检查上次切换距今是否超过30根K线
+            current_bar_date = self._latest_bar_datetime(df)
             if len(self._season_history) >= 1:
                 last_switch = self._season_history[-1][0]
-                days_since = (datetime.now() - last_switch).days
-                if days_since < 30:
-                    # 太早切换，保持原状态
-                    return
-            
-            self._season_history.append((datetime.now(), new_season))
+                if current_bar_date is not None:
+                    days_since = (current_bar_date - last_switch).days
+                    if days_since < 30:
+                        # 距上次切换不足30个交易日，保持原状态
+                        return
+                else:
+                    # 无法取得日期时退化为按K线计数（至少隔30根）
+                    if self._bar_index - self._season_history[-1][2] < 30:
+                        return
+
+            if current_bar_date is not None:
+                self._season_history.append((current_bar_date, new_season, self._bar_index))
+            else:
+                self._season_history.append((datetime.now(), new_season, self._bar_index))
             self._current_season = new_season
     
     def _check_risk_control(self) -> None:

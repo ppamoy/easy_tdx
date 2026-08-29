@@ -417,9 +417,10 @@ async function analyze() {
   error.value = ''
   multiLevelResult.value = null
   try {
-    // 1. 取行情
+    // 1. 取行情 —— 只取最新 count 根，与研究分析的窗口保持一致，
+    //    否则图表会显示 8000 根历史而笔/线段/中枢/买卖点只覆盖最近 800 根。
     const market = detectMarket(code.value)
-    const allBars = await fetchBars(market, code.value, category.value)
+    const allBars = await fetchBars(market, code.value, category.value, undefined, undefined, count.value)
     if (allBars.length === 0) {
       error.value = `未取到 ${market}:${code.value} 的 ${category.value} 数据`
       return
@@ -493,13 +494,13 @@ async function analyze() {
       }
       fxs.value = (hr.fractals ?? []).map((f: any) => ({
         type: f.fx_type,
-        date: hr._fmt_dt?.(f.k?.date) || f.date,
+        date: f.date,
         val: f.val,
       }))
       bcs.value = (hr.bcs ?? []).map((bc: any) => ({
         type: bc.type,
         bc: bc.bc,
-        date: bc.curr_date,
+        date: bc.date ?? bc.curr_date,
         msg: bc.msg,
       }))
       // 保存多级别结果
@@ -526,7 +527,7 @@ async function analyze() {
       }
       data = await resp.json()
 
-      // 3. 转换数据格式
+      // 3. 转换数据格式（单级别也完整映射中枢/买卖点/分型/背驰，避免图表只显示笔和线段）
       // BOLL数据
       if (data.boll) {
         boll.value = data.boll
@@ -547,6 +548,39 @@ async function analyze() {
         end_date: x.end_date,
         high: x.high,
         low: x.low,
+      }))
+      zss.value = (data.zss ?? []).map((z: any) => ({
+        index: z.index,
+        zg: z.zg,
+        zd: z.zd,
+        gg: z.gg,
+        dd: z.dd,
+        line_count: z.line_count,
+        start_date: z.start_date,
+        end_date: z.end_date,
+        done: z.done,
+      }))
+      mmds.value = (data.mmds ?? []).map((m: any) => ({
+        type: m.type,
+        date: m.date,
+        msg: m.msg,
+        confidence: m.confidence ?? 0,
+        quality: m.quality ? {
+          grade: m.quality.grade ?? null,
+          score: m.quality.score ?? null,
+          reasons: m.quality.reasons ?? null,
+        } : null,
+      }))
+      fxs.value = (data.fractals ?? []).map((f: any) => ({
+        type: f.fx_type,
+        date: f.date,
+        val: f.val,
+      }))
+      bcs.value = (data.bcs ?? []).map((bc: any) => ({
+        type: bc.type,
+        bc: bc.bc,
+        date: bc.date ?? bc.curr_date,
+        msg: bc.msg,
       }))
     }
   } catch (e) {

@@ -1,10 +1,16 @@
-"""线段计算。
+"""线段计算（标准缠论特征序列版）。
 
 线段定义：
 - 由至少3笔构成
-- 特征序列：将笔的高低点转化为特征序列
-- 特征序列分型：判断线段的转折
-- 简化实现：使用笔的方向和重叠关系判断线段
+- 特征序列：相对当前线段方向的"反向笔"，构成特征K线序列
+- 特征序列分型：线段结束的判定（向上线段出现顶分型结束，向下线段出现底分型结束）
+- 相邻线段共享转折点（前一段的结束笔即后一段的起始笔），因此方向自然交替
+
+标准算法（缠论新笔/老笔通用）：
+1. 线段方向 = 起始笔方向
+2. 特征序列 = 与线段方向相反的笔
+3. 当特征序列出现分型（顶分型结束向上线段 / 底分型结束向下线段）时，线段结束
+4. 下一线段从结束笔开始（共享转折点），方向与上一段相反
 """
 
 from __future__ import annotations
@@ -17,15 +23,15 @@ def find_xds(
     bis: list[BI],
     config: ChanlunConfig | None = None,
 ) -> list[XD]:
-    """从笔列表中计算线段。
+    """从笔列表中计算线段（特征序列法，方向交替）。
 
-    简化算法（基于中枢）：
-    1. 将笔序列划分为线段，每个线段对应一个中枢的形成和离开
-    2. 从第一笔开始，累积笔直到形成中枢（至少3笔有重叠）
-    3. 当后续笔离开中枢时，关闭当前线段，开始新线段
+    线段划分规则：
+    - 向上线段：特征序列为向下笔，出现顶分型时结束
+    - 向下线段：特征序列为向上笔，出现底分型时结束
+    - 相邻线段共享转折点（结束笔即下一段起始笔）
 
     Args:
-        bis: 笔列表
+        bis: 笔列表（方向交替排列）
         config: 缠论配置
 
     Returns:
@@ -39,84 +45,77 @@ def find_xds(
 
     xds: list[XD] = []
 
-    # 简化线段划分：使用笔的重叠区域判断
-    # 每个线段至少包含3笔（形成一个中枢）
-    i = 0
-    while i < len(bis):
-        # 尝试从第 i 笔开始寻找线段
-        xd_found = False
+    # 从第一笔开始划分，线段方向由起始笔方向决定
+    start = 0
+    while start < len(bis):
+        seg_dir = bis[start].direction
 
-        # 从3笔开始尝试，逐步扩展
-        for end_offset in range(3, len(bis) - i + 1):
-            segment_bis = bis[i : i + end_offset]
+        # 特征序列：与线段方向相反的笔
+        # features 记录 (bi_index, bi)，用于分型判定
+        features: list[tuple[int, BI]] = []
+        end: int | None = None
 
-            # 检查这段笔是否构成有意义的线段
-            # 条件：中间的笔有价格重叠（类似中枢），且最后一笔离开重叠区
-            if _forms_xd(segment_bis, config):
-                xd = _create_xd(segment_bis, len(xds))
-                xds.append(xd)
-                i += end_offset - 1  # 下一笔从倒数第2笔开始（共享转折点）
-                xd_found = True
-                break
+        j = start + 1
+        while j < len(bis):
+            if bis[j].direction != seg_dir:
+                # 反向笔加入特征序列
+                features.append((j, bis[j]))
+                # 最近3个特征笔形成分型 → 线段结束
+                if len(features) >= 3 and _feature_fx_end_segment(features, seg_dir):
+                    end = features[-1][0]
+                    break
+            j += 1
 
-        if not xd_found:
-            i += 1
+        if end is not None:
+            # 线段 [start, end]，下一段从 end 开始（共享转折点 → 方向交替）
+            xds.append(_create_xd_from_bis(bis, start, end, len(xds), seg_dir))
+            start = end
+        else:
+            # 未形成分型：若剩余笔数足以成段则收尾，否则结束
+            if len(bis) - start >= 2:
+                xds.append(_create_xd_from_bis(bis, start, len(bis) - 1, len(xds), seg_dir))
+            start = len(bis)
 
     return xds
 
 
-def _forms_xd(bis: list[BI], config: ChanlunConfig) -> bool:
-    """判断一组笔是否构成线段。
+def _feature_fx_end_segment(
+    features: list[tuple[int, BI]],
+    seg_dir: Direction,
+) -> bool:
+    """判断最近3个特征K线是否形成线段结束分型。
 
-    简化条件：
-    1. 至少3笔
-    2. 中间的笔有价格重叠区域（类似中枢）
-    3. 最后一笔与重叠区有明确的方向性突破
+    向上线段结束：特征序列（向下笔）形成顶分型 —— 中间特征笔的高点最高
+    向下线段结束：特征序列（向上笔）形成底分型 —— 中间特征笔的低点最低
     """
-    if len(bis) < 3:
+    if len(features) < 3:
         return False
 
-    # 计算中间笔的重叠区域（排除第一笔和最后一笔）
-    inner_bis = bis[1:-1]
-    if not inner_bis:
-        return False
+    (_, left) = features[-3]
+    (_, mid) = features[-2]
+    (_, right) = features[-1]
 
-    # 重叠区域
-    overlap_high = min(bi.high for bi in inner_bis)
-    overlap_low = max(bi.low for bi in inner_bis)
-
-    if overlap_high <= overlap_low:
-        return False
-
-    # 第一笔的方向决定线段的主方向
-    main_direction = bis[0].direction
-
-    # 最后一笔应该离开重叠区域
-    last_bi = bis[-1]
-    if main_direction == Direction.UP:
-        # 向上线段：最后一笔应向上突破
-        return last_bi.high > overlap_high
+    if seg_dir == Direction.UP:
+        # 向上线段：向下笔特征序列，顶分型结束
+        return mid.high > left.high and mid.high > right.high
     else:
-        # 向下线段：最后一笔应向下跌破
-        return last_bi.low < overlap_low
+        # 向下线段：向上笔特征序列，底分型结束
+        return mid.low < left.low and mid.low < right.low
 
 
-def _create_xd(bis: list[BI], index: int) -> XD:
-    """从一组笔创建线段。"""
-    start_bi = bis[0]
-    end_bi = bis[-1]
+def _create_xd_from_bis(
+    bis: list[BI],
+    start_bi_idx: int,
+    end_bi_idx: int,
+    index: int,
+    direction: Direction,
+) -> XD:
+    """从笔列表创建线段对象。"""
+    start_bi = bis[start_bi_idx]
+    end_bi = bis[end_bi_idx]
 
-    # 线段方向由第一笔的方向决定
-    direction = start_bi.direction
-
-    # 但如果第一笔向下，最后一笔向上，需要根据整体走势判断
-    if end_bi.direction == Direction.UP and end_bi.high > start_bi.high:
-        direction = Direction.UP
-    elif end_bi.direction == Direction.DOWN and end_bi.low < start_bi.low:
-        direction = Direction.DOWN
-
-    high = max(bi.high for bi in bis)
-    low = min(bi.low for bi in bis)
+    high = max(bi.high for bi in bis[start_bi_idx:end_bi_idx + 1])
+    low = min(bi.low for bi in bis[start_bi_idx:end_bi_idx + 1])
 
     return XD(
         start=start_bi.start,
