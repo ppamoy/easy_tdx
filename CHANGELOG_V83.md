@@ -123,7 +123,7 @@
 
 使用 Playwright 打开 /chanlun 实测（000001/600519 × 日线/60分钟/多级别联立），发现并修复两个导致「缠论叠加层显示不正确」的根因：
 
-- **ECharts 按需注册缺失：分型/买卖点/背驰完全不可见，中枢无边框**（web-ui/src/echarts-setup.ts）—— 图表用 scatter 系列渲染分型（268 个）、买卖点（17 个）、背驰（35 个），用 markArea 渲染中枢（16 个），但按需引入清单只有 candlestick/line/bar/heatmap，未注册 ScatterChart 与 MarkAreaComponent。浏览器 console 实测报错 [ECharts] Series scatter is used but not imported + 图例告警「分型/买卖点/背驰 series not exists」。补注册后 console 零错误，图例与系列一一对应。
+- **ECharts 按需注册缺失：分型/买卖点/背驰完全不可见，中枢 markArea 区域静默不渲染**（web-ui/src/echarts-setup.ts）—— 图表用 scatter 系列渲染分型（268 个）、买卖点（17 个）、背驰（35 个），用 markArea 渲染中枢（16 个），但按需引入清单只有 candlestick/line/bar/heatmap，未注册 ScatterChart 与 MarkAreaComponent。浏览器 console 实测报错 [ECharts] Series scatter is used but not imported + 图例告警「分型/买卖点/背驰 series not exists」；markArea 不注册时不报错，但对照实验截图实测中枢黄色区域完全不渲染。补注册 ScatterChart + MarkAreaComponent 后 console 零错误、中枢/分型/买卖点/背驰全部正常渲染。
 
 - **K 线窗口与分析窗口不一致：叠加层被压缩到最右侧 10%**（web-ui/src/api.ts + web-ui/src/views/ChanlunView.vue）—— fetchBars 默认翻页取满 8000 根（10 页 × 800），而缠论分析 /chanlun/analyze 只分析最新 count（默认 800）根，导致图表显示 8000 根历史但笔/线段/中枢/买卖点只覆盖最近 800 根，叠加层全部挤在右端。新增 fetchBars(..., maxCount?) 可选参数，缠论页只取最新 count 根，与分析窗口严格对齐（实测统计栏 K线 8000 → 800）。
 
