@@ -23,6 +23,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
       <nav class="app-nav">
         <RouterLink to="/" active-class="active">单标的回测</RouterLink>
         <RouterLink to="/chanlun" active-class="active">缠论分析</RouterLink>
+        <RouterLink to="/train" active-class="active">缠论学习</RouterLink>
         <RouterLink to="/changying" active-class="active">长赢投资</RouterLink>
         <RouterLink to="/screening" active-class="active">动态选股</RouterLink>
         <RouterLink to="/portfolio" active-class="active">组合回测</RouterLink>

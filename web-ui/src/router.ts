@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import BacktestView from './views/BacktestView.vue'
 import ChanlunView from './views/ChanlunView.vue'
+import TrainView from './views/TrainView.vue'
 import ChangyingView from './views/ChangyingView.vue'
 import CompareView from './views/CompareView.vue'
 import DiagnosisView from './views/DiagnosisView.vue'
@@ -16,6 +17,7 @@ import StrategiesView from './views/StrategiesView.vue'
 const routes = [
   { path: '/', name: 'backtest', component: BacktestView },
   { path: '/chanlun', name: 'chanlun', component: ChanlunView },
+  { path: '/train', name: 'train', component: TrainView },
   { path: '/changying', name: 'changying', component: ChangyingView },
   { path: '/screening', name: 'screening', component: ScreeningView },
   { path: '/portfolio', name: 'portfolio', component: PortfolioView },

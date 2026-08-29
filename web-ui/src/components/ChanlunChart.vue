@@ -16,6 +16,8 @@ const props = defineProps<{
   fxs?: ChanlunFx[]
   bcs?: ChanlunBc[]
   frequency: string
+  /** 揭示游标（训练模式）：只显示前 revealIndex+1 根 K 线及其范围内的叠加层 */
+  revealIndex?: number
 }>()
 
 interface ChanlunBi {
@@ -105,7 +107,12 @@ function render() {
 
 function buildOption(): echarts.EChartsCoreOption {
   const keyIndex = buildIndexMap()
-  const keys = props.bars.map((b) => b.datetime)
+  // 训练模式的揭示游标：只渲染前 revealIndex+1 根 K 线，其后的数据不显示
+  const revealActive = props.revealIndex !== undefined && props.revealIndex !== null
+  const revealLimit = revealActive
+    ? Math.min(Math.max(props.revealIndex as number, 0) + 1, props.bars.length)
+    : props.bars.length
+  const keys = props.bars.slice(0, revealLimit).map((b) => b.datetime)
 
   // x 轴显示格式
   const isIntraday = keys.some((k) => {
@@ -116,12 +123,27 @@ function buildOption(): echarts.EChartsCoreOption {
     isIntraday ? k.replace('T', ' ').slice(5, 16) : k.slice(0, 10),
   )
 
-  const ohlc = props.bars.map((b) => [b.open, b.close, b.low, b.high])
+  const ohlc = props.bars.slice(0, revealLimit).map((b) => [b.open, b.close, b.low, b.high])
+
+  // 揭示游标竖线（标记训练当前揭示到的位置）
+  const cursorMarkLines = revealActive
+    ? [{
+        xAxis: Math.max(revealLimit - 1, 0),
+        lineStyle: { color: '#60a5fa', width: 1, type: 'dashed' as const },
+        label: { show: true, formatter: '揭示位', color: '#60a5fa', fontSize: 10, position: 'insideEndTop' as const },
+      }]
+    : []
+
+  // 揭示感知的日期→索引查找：超出揭示范围的点返回 -1（自动被各 filter 丢弃）
+  const findIdx = (dateStr: string): number => {
+    const idx = findBarIndex(keyIndex, dateStr)
+    return idx >= revealLimit ? -1 : idx
+  }
 
   // ── 分型的 MarkPoint ──
   const fxPoints = (props.fxs ?? []).map((fx) => {
-    const idx = findBarIndex(keyIndex, fx.date)
-    if (idx === -1) return null
+    const idx = findIdx( fx.date)
+    if (idx === -1 || idx >= revealLimit) return null
     const bar = props.bars[idx]
     const price = fx.type === 'ding' ? bar.high * 1.002 : bar.low * 0.998
     return {
@@ -142,13 +164,13 @@ function buildOption(): echarts.EChartsCoreOption {
   // ── 笔的 MarkLine（细虚线） ──
   const biMarkLines = props.bis
     .filter((bi) => {
-      const si = findBarIndex(keyIndex, bi.start_date)
-      const ei = findBarIndex(keyIndex, bi.end_date)
+      const si = findIdx( bi.start_date)
+      const ei = findIdx( bi.end_date)
       return si !== -1 && ei !== -1
     })
     .map((bi) => {
-      const si = findBarIndex(keyIndex, bi.start_date)
-      const ei = findBarIndex(keyIndex, bi.end_date)
+      const si = findIdx( bi.start_date)
+      const ei = findIdx( bi.end_date)
       const isUp = bi.direction === 'up'
       // ECharts 6 的 markLine 两点标记必须是 [起点, 终点] 二元组数组，
       // 不再支持旧的 {coord, endCoord} 单对象形式（会导致 ECharts 内部崩溃）。
@@ -170,13 +192,13 @@ function buildOption(): echarts.EChartsCoreOption {
   // ── 线段的 MarkLine（细实线） ──
   const xdMarkLines = props.xds
     .filter((xd) => {
-      const si = findBarIndex(keyIndex, xd.start_date)
-      const ei = findBarIndex(keyIndex, xd.end_date)
+      const si = findIdx( xd.start_date)
+      const ei = findIdx( xd.end_date)
       return si !== -1 && ei !== -1
     })
     .map((xd) => {
-      const si = findBarIndex(keyIndex, xd.start_date)
-      const ei = findBarIndex(keyIndex, xd.end_date)
+      const si = findIdx( xd.start_date)
+      const ei = findIdx( xd.end_date)
       const isUp = xd.direction === 'up'
       // ECharts 6 的 markLine 两点标记必须是 [起点, 终点] 二元组数组。
       const lineStyle = {
@@ -196,13 +218,13 @@ function buildOption(): echarts.EChartsCoreOption {
   // ── 中枢的 MarkArea ──
   const zsMarkAreas = props.zss
     .filter((zs) => {
-      const si = findBarIndex(keyIndex, zs.start_date)
-      const ei = findBarIndex(keyIndex, zs.end_date)
+      const si = findIdx( zs.start_date)
+      const ei = findIdx( zs.end_date)
       return si !== -1 && ei !== -1
     })
     .map((zs) => {
-      const si = findBarIndex(keyIndex, zs.start_date)
-      const ei = findBarIndex(keyIndex, zs.end_date)
+      const si = findIdx( zs.start_date)
+      const ei = findIdx( zs.end_date)
       return [
         { coord: [si, zs.zg], itemStyle: { color: 'rgba(255,200,50,0.08)' } },
         { coord: [ei, zs.zd] },
@@ -213,7 +235,7 @@ function buildOption(): echarts.EChartsCoreOption {
   const mmdMarkPoints = props.mmds
     .filter((m) => m.date != null)
     .map((m) => {
-      const idx = findBarIndex(keyIndex, m.date!)
+      const idx = findIdx( m.date!)
       if (idx === -1) return null
       const isBuy = m.type.includes('buy')
       const priceOffset = isBuy ? -0.005 : 0.005
@@ -249,7 +271,7 @@ function buildOption(): echarts.EChartsCoreOption {
   const bcPoints = (props.bcs ?? [])
     .filter((bc) => bc.bc && bc.date != null)
     .map((bc) => {
-      const idx = findBarIndex(keyIndex, bc.date!)
+      const idx = findIdx( bc.date!)
       if (idx === -1) return null
       const bar = props.bars[idx]
       const isDown = bc.type === 'bi' || bc.type === 'pz'
@@ -345,6 +367,12 @@ function buildOption(): echarts.EChartsCoreOption {
           borderColor: UP_COLOR,
           borderColor0: DOWN_COLOR,
         },
+        markLine: cursorMarkLines.length ? {
+          silent: true,
+          symbol: 'none',
+          label: { show: false },
+          data: cursorMarkLines,
+        } : undefined,
       },
       // 笔（虚线）
       {
@@ -464,7 +492,7 @@ onBeforeUnmount(() => {
   chart?.dispose()
   chart = null
 })
-watch(() => [props.bars, props.bis, props.xds, props.zss, props.mmds, props.fxs, props.bcs], render)
+watch(() => [props.bars, props.bis, props.xds, props.zss, props.mmds, props.fxs, props.bcs, props.revealIndex], render)
 </script>
 
 <template>

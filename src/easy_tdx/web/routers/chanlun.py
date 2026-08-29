@@ -34,6 +34,150 @@ def _to_json_safe(obj: Any) -> Any:
     return obj
 
 
+
+def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) -> dict[str, Any]:
+    """把缠论分析结果组装成训练会话负载（纯函数，可单测）。
+
+    - bars：K 线（与 /bars 同列）
+    - bis/xds/zss/mmds/fractals/bcs/boll：完整结构
+    - candidates：候选点（买卖点信号 + 采样分型干扰项），供逐步揭示提问
+    - mmd_outcomes：每个买卖点的信号后 5/10/20 日收益（复盘验证）
+    """
+    # K 线（与 /bars 一致的列）
+    _date_col = "date" if "date" in df.columns else "datetime"
+    bars: list[dict[str, Any]] = []
+    for _i, row in df.iterrows():
+        dt = row[_date_col]
+        bars.append({
+            "datetime": str(dt)[:19].replace(" ", "T"),
+            "open": round(float(row["open"]), 3),
+            "close": round(float(row["close"]), 3),
+            "high": round(float(row["high"]), 3),
+            "low": round(float(row["low"]), 3),
+            "vol": float(row.get("vol", 0) or 0),
+            "amount": float(row.get("amount", 0) or 0),
+        })
+
+    # 结构数据（复用 analyze 的序列化）
+    d = result.to_dict()
+    d["fractals"] = [
+        {
+            "fx_type": fx.fx_type.value,
+            "date": result._fmt_dt(fx.k.date),
+            "val": round(fx.val, 2),
+            "index": fx.index,
+        }
+        for fx in result.fractals
+    ]
+    if result.boll:
+        d["boll"] = {
+            "upper": [round(x, 2) for x in result.boll.upper[-100:]],
+            "mid": [round(x, 2) for x in result.boll.mid[-100:]],
+            "lower": [round(x, 2) for x in result.boll.lower[-100:]],
+            "width": [round(x, 2) for x in result.boll.width[-100:]],
+            "percent_b": [round(x, 2) for x in result.boll.percent_b[-100:]],
+            "latest_upper": round(result.boll.latest_upper, 2),
+            "latest_mid": round(result.boll.latest_mid, 2),
+            "latest_lower": round(result.boll.latest_lower, 2),
+            "latest_percent_b": round(result.boll.latest_percent_b, 2),
+            "latest_width": round(result.boll.latest_width, 4),
+        }
+    else:
+        d["boll"] = None
+
+    # 候选点：每个买卖点一个（kind=mmd），外加采样分型干扰项（kind=fractal）
+    mmd_cands: list[dict[str, Any]] = []
+    for mmd in result.mmds:
+        if not mmd.bi:
+            continue
+        k_idx = mmd.bi.end.k.k_index
+        mmd_cands.append({
+            "index": k_idx,
+            "date": result._fmt_dt(mmd.bi.end.k.date),
+            "kind": "mmd",
+            "fx_type": None,
+            "signal": {
+                "type": mmd.mmd_type.value,
+                "confidence": round(mmd.confidence, 2),
+                "grade": getattr(getattr(mmd, "quality", None), "grade", None),
+            },
+        })
+    mmd_idx_set = {c["index"] for c in mmd_cands}
+    fx_cands: list[dict[str, Any]] = []
+    for fx in result.fractals:
+        k_idx = fx.k.k_index
+        if any(abs(k_idx - m) <= 3 for m in mmd_idx_set):
+            continue
+        fx_cands.append({
+            "index": k_idx,
+            "date": result._fmt_dt(fx.k.date),
+            "kind": "fractal",
+            "fx_type": fx.fx_type.value,
+            "signal": None,
+        })
+    # 均匀采样干扰项：总数（信号+干扰）控制在 ~40
+    target_total = 40
+    distract_max = max(target_total - len(mmd_cands), 0)
+    if len(fx_cands) > distract_max:
+        step = len(fx_cands) / distract_max
+        fx_cands = [fx_cands[int(i * step)] for i in range(distract_max)]
+    candidates = sorted(mmd_cands + fx_cands, key=lambda c: c["index"])
+
+    # 买卖点信号后 N 日收益
+    closes = [k.close for k in result.klines]
+
+    def _ret_from(idx: int, n: int) -> float | None:
+        if idx is None or idx < 0 or idx >= len(closes):
+            return None
+        end = idx + n
+        if end >= len(closes):
+            return None
+        base = closes[idx]
+        if not base:
+            return None
+        return round((closes[end] / base - 1) * 100, 2)
+
+    mmd_outcomes: list[dict[str, Any]] = []
+    for mmd in result.mmds:
+        if not mmd.bi:
+            continue
+        k_idx = mmd.bi.end.k.k_index
+        outcomes: dict[str, Any] = {
+            "type": mmd.mmd_type.value,
+            "date": result._fmt_dt(mmd.bi.end.k.date),
+            "price": round(result.klines[k_idx].close, 2) if 0 <= k_idx < len(result.klines) else None,
+            "ret_5d": _ret_from(k_idx, 5),
+            "ret_10d": _ret_from(k_idx, 10),
+            "ret_20d": _ret_from(k_idx, 20),
+            "max_5d": None,
+            "min_5d": None,
+        }
+        if 0 <= k_idx < len(closes):
+            base = closes[k_idx]
+            if base:
+                win = closes[k_idx : k_idx + 6]
+                if win:
+                    outcomes["max_5d"] = round((max(win) / base - 1) * 100, 2)
+                    outcomes["min_5d"] = round((min(win) / base - 1) * 100, 2)
+        mmd_outcomes.append(outcomes)
+
+    return _to_json_safe({
+        "code": result.code,
+        "frequency": result.frequency,
+        "category": category,
+        "bars": bars,
+        "bis": d.get("bis", []),
+        "xds": d.get("xds", []),
+        "zss": d.get("zss", []),
+        "mmds": d.get("mmds", []),
+        "fractals": d.get("fractals", []),
+        "bcs": d.get("bcs", []),
+        "boll": d.get("boll"),
+        "candidates": candidates,
+        "mmd_outcomes": mmd_outcomes,
+    })
+
+
 @router.post("/chanlun/analyze")
 async def chanlun_analyze(
     req: ChanlunRequest,
@@ -473,3 +617,46 @@ async def chanlun_recommend(
         } if latest_mmd else None,
     })
 
+
+@router.post("/chanlun/train/session")
+async def chanlun_train_session(
+    req: ChanlunRequest,
+    client: Any = Depends(get_client),
+) -> dict[str, Any]:
+    """创建缠论学习训练会话（P0：逐步揭示训练 + 逐笔复盘讲解）。
+
+    返回：
+    - bars：K 线数据（与 /bars 相同格式）
+    - bis/xds/zss/mmds/fractals/bcs/boll：完整缠论结构
+    - candidates：训练候选点（关键分型 + 买卖点信号），供前端逐步揭示时暂停提问
+      [{index, date, kind: fractal|mmd, fx_type, signal: null | {type, confidence, grade}}]
+    - mmd_outcomes：每个买卖点的信号后 5/10/20 日收益（复盘验证准确率用）
+    """
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    # 1. 取行情
+    df = await client.get_security_bars(
+        market_from_str(req.market),
+        req.code,
+        category_from_str(req.category),
+        req.start,
+        req.count,
+    )
+    if df is None or len(df) == 0:
+        return {"error": "未取到行情数据", "bars": [], "candidates": [], "mmd_outcomes": []}
+
+    symbol = f"{req.market}{req.code}"
+    frequency_map: dict[str, str] = {
+        "MIN_1": "1min", "MIN_5": "5min", "MIN_15": "15min",
+        "MIN_30": "30min", "MIN_60": "60min", "DAY": "daily",
+        "WEEK": "weekly", "MONTH": "monthly", "YEAR": "yearly",
+    }
+    freq = frequency_map.get(req.category.upper(), req.category)
+    analyser = ChanlunAnalyser(code=symbol, frequency=freq)
+    result = analyser.process_klines(df)
+
+    # 2. 组装训练会话负载（纯函数，可单测）
+    payload = build_train_session_payload(result, df, req.category)
+    payload["code"] = symbol
+    payload["frequency"] = freq
+    return payload
