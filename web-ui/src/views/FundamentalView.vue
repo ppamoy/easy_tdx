@@ -1,14 +1,24 @@
-<!-- P1 长赢基本面选股：历史时点 + 树粮菜量化打分 + 后续表现 + 四季判断 -->
+<!-- P1 长赢基本面选股：单日选股 + 批量时点验证 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { formatError } from '../api'
 
+// ── 模式：单日选股 / 批量验证 ──────────────────────────────────────────
+const mode = ref<'screen' | 'verify'>('screen')
+
+// 单日选股
 const selectDate = ref('')
 const poolText = ref('')
 const stockType = ref<'all' | 'tree' | 'grain' | 'vegetable'>('all')
 const loading = ref(false)
 const error = ref('')
 const result = ref<any>(null)
+
+// 批量验证
+const verifyDatesText = ref('')
+const verifyLoading = ref(false)
+const verifyError = ref('')
+const verifyResult = ref<any>(null)
 
 const CATEGORY_COLORS: Record<string, string> = {
   tree: '#22c55e',
@@ -32,6 +42,8 @@ const DEFAULT_POOL = [
   { market: 'SZ', code: '002594' },
   { market: 'SH', code: '601012' },
 ]
+
+const DEFAULT_VERIFY_DATES = ['2024-04-15', '2025-04-15', '2025-10-15']
 
 function parsePoolText(text: string) {
   const lines = text
@@ -57,6 +69,19 @@ const pool = computed(() => {
   if (txt) return parsePoolText(txt)
   return DEFAULT_POOL
 })
+
+function parseDates(text: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const ln of text.split(/[\s,，;；]+/)) {
+    const s = ln.trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s) && !seen.has(s)) {
+      seen.add(s)
+      out.push(s)
+    }
+  }
+  return out
+}
 
 async function runScreen() {
   if (!selectDate.value) {
@@ -89,6 +114,34 @@ async function runScreen() {
   }
 }
 
+async function runVerify() {
+  const dates = parseDates(verifyDatesText.value)
+  if (dates.length < 1) {
+    verifyError.value = '请输入至少一个历史日期（YYYY-MM-DD）'
+    return
+  }
+  if (pool.value.length === 0) {
+    verifyError.value = '自选池为空，请输入至少一个股票代码'
+    return
+  }
+  verifyLoading.value = true
+  verifyError.value = ''
+  verifyResult.value = null
+  try {
+    const resp = await fetch('/api/v1/fundamental/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dates, pool: pool.value }),
+    })
+    if (!resp.ok) throw new Error(await resp.text())
+    verifyResult.value = await resp.json()
+  } catch (e) {
+    verifyError.value = formatError(e)
+  } finally {
+    verifyLoading.value = false
+  }
+}
+
 const stats = computed(() => {
   const rs = result.value?.results ?? []
   return {
@@ -105,42 +158,78 @@ function fmt(v: any, suffix = '') {
   return String(v) + suffix
 }
 
+function pct(v: any) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '-'
+  return (v * 100).toFixed(0) + '%'
+}
+
+function colorBy(v: any) {
+  if (v === null || v === undefined || Number.isNaN(v)) return ''
+  return v > 0 ? '#22c55e' : v < 0 ? '#ef4444' : ''
+}
+
+const verifySummary = computed(() => verifyResult.value?.summary ?? null)
+const verifyPeriods = computed(() => verifyResult.value?.periods ?? [])
+
 onMounted(() => {
   const now = new Date()
   const d = new Date(now.getFullYear(), now.getMonth() - 2, 15)
   selectDate.value = d.toISOString().slice(0, 10)
   poolText.value = DEFAULT_POOL.map((p) => p.code).join('\n')
+  verifyDatesText.value = DEFAULT_VERIFY_DATES.join('\n')
 })
 </script>
 
 <template>
   <div class="fundamental-view">
+    <!-- 模式切换 + 配置栏 -->
     <div class="config-bar">
-      <div class="field-group">
-        <label>历史日期（只使用该日之前已披露的财报）</label>
-        <input v-model="selectDate" type="date" class="date-input" />
+      <div class="mode-tabs">
+        <button class="mode-tab" :class="{ active: mode === 'screen' }" @click="mode = 'screen'">📌 单日选股</button>
+        <button class="mode-tab" :class="{ active: mode === 'verify' }" @click="mode = 'verify'">📈 批量时点验证</button>
       </div>
-      <div class="field-group">
-        <label>股票类型</label>
-        <select v-model="stockType" class="market-select">
-          <option value="all">全部</option>
-          <option value="tree">🌳 树型</option>
-          <option value="grain">🌾 粮型</option>
-          <option value="vegetable">🥬 菜型</option>
-        </select>
-      </div>
+
+      <template v-if="mode === 'screen'">
+        <div class="field-group">
+          <label>历史日期（只使用该日之前已披露的财报）</label>
+          <input v-model="selectDate" type="date" class="date-input" />
+        </div>
+        <div class="field-group">
+          <label>股票类型</label>
+          <select v-model="stockType" class="market-select">
+            <option value="all">全部</option>
+            <option value="tree">🌳 树型</option>
+            <option value="grain">🌾 粮型</option>
+            <option value="vegetable">🥬 菜型</option>
+          </select>
+        </div>
+        <button class="primary scan-btn" :disabled="loading" @click="runScreen">
+          {{ loading ? '选股中（加载 gpcw 财报 + 计算指标）…' : '🚀 开始历史时点选股' }}
+        </button>
+      </template>
+
+      <template v-else>
+        <div class="field-group dates-group">
+          <label>历史日期（每行一个 YYYY-MM-DD，多个时点汇总验证）</label>
+          <textarea v-model="verifyDatesText" class="pool-input" rows="3" placeholder="2024-04-15&#10;2025-04-15&#10;..." />
+        </div>
+        <button class="primary scan-btn" :disabled="verifyLoading" @click="runVerify">
+          {{ verifyLoading ? '批量验证中（逐时点选股 + 回看后续）…' : '📈 运行批量时点验证' }}
+        </button>
+      </template>
+
       <div class="field-group pool-group">
         <label>自选池（每行一个 6 位代码，留空用默认池）</label>
         <textarea v-model="poolText" class="pool-input" rows="3" placeholder="600519&#10;000858&#10;..." />
       </div>
-      <button class="primary scan-btn" :disabled="loading" @click="runScreen">
-        {{ loading ? '选股中（加载 gpcw 财报 + 计算指标）…' : '🚀 开始历史时点选股' }}
-      </button>
     </div>
 
+    <!-- 错误提示 -->
     <div v-if="error" class="error-banner">⚠ {{ error }}</div>
+    <div v-if="verifyError" class="error-banner">⚠ {{ verifyError }}</div>
 
-    <template v-if="result">
+    <!-- ── 单日选股结果 ─────────────────────────────────────────────── -->
+    <template v-if="mode === 'screen' && result">
       <div v-if="result.season" class="season-card" :style="{ borderColor: result.season.color }">
         <div class="season-left">
           <div class="season-title" :style="{ color: result.season.color }">📅 当时四季：{{ result.season.label }}</div>
@@ -196,11 +285,11 @@ onMounted(() => {
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
               <td>{{ fmt(r.indicators.net_margin) }}</td>
               <td>{{ fmt(r.indicators.debt_ratio) }}</td>
-              <td :style="{ color: (r.indicators.rev_yoy ?? 0) >= 0 ? '#22c55e' : '#ef4444' }">{{ fmt(r.indicators.rev_yoy) }}</td>
-              <td :style="{ color: (r.indicators.np_yoy ?? 0) >= 0 ? '#22c55e' : '#ef4444' }">{{ fmt(r.indicators.np_yoy) }}</td>
-              <td :style="{ color: (r.performance.ret_20d ?? 0) >= 0 ? '#22c55e' : '#ef4444' }">{{ fmt(r.performance.ret_20d) }}</td>
-              <td :style="{ color: (r.performance.ret_60d ?? 0) >= 0 ? '#22c55e' : '#ef4444' }">{{ fmt(r.performance.ret_60d) }}</td>
-              <td :style="{ color: (r.performance.ret_250d ?? 0) >= 0 ? '#22c55e' : '#ef4444' }">{{ fmt(r.performance.ret_250d) }}</td>
+              <td :style="{ color: colorBy(r.indicators.rev_yoy) }">{{ fmt(r.indicators.rev_yoy) }}</td>
+              <td :style="{ color: colorBy(r.indicators.np_yoy) }">{{ fmt(r.indicators.np_yoy) }}</td>
+              <td :style="{ color: colorBy(r.performance.ret_20d) }">{{ fmt(r.performance.ret_20d) }}</td>
+              <td :style="{ color: colorBy(r.performance.ret_60d) }">{{ fmt(r.performance.ret_60d) }}</td>
+              <td :style="{ color: colorBy(r.performance.ret_250d) }">{{ fmt(r.performance.ret_250d) }}</td>
               <td>
                 <details class="score-details">
                   <summary>🌳{{ Math.round(r.scores.tree) }} / 🌾{{ Math.round(r.scores.grain) }} / 🥬{{ Math.round(r.scores.vegetable) }}</summary>
@@ -222,10 +311,130 @@ onMounted(() => {
       </div>
     </template>
 
-    <div v-else-if="!loading" class="intro">
+    <!-- ── 批量时点验证结果 ─────────────────────────────────────────── -->
+    <template v-if="mode === 'verify' && verifyResult">
+      <div class="verify-head">
+        <h3>📈 长赢理论批量时点验证（{{ verifyPeriods.length }} 个历史时点 × 自选池 {{ pool.length }} 只）</h3>
+        <p class="hint">口径：每个时点用「披露日 ≤ 该日」的财报选股，回看标的自该日起 20/60/250 个交易日的实际涨跌，并与同期上证指数对比。</p>
+      </div>
+
+      <!-- 是否跑赢基准 -->
+      <div class="beats-card" v-if="verifySummary?.beats_index">
+        <div class="beats-title">🎯 长赢选股 vs 上证指数（同期）</div>
+        <div class="beats-grid">
+          <div class="beats-item" v-for="h in ['ret_20d', 'ret_60d', 'ret_250d']" :key="h">
+            <span class="beats-label">{{ h.replace('ret_', '+').replace('d', '日') }}</span>
+            <span class="beats-alpha" :style="{ color: (verifySummary.beats_index[h].alpha ?? 0) >= 0 ? '#22c55e' : '#ef4444' }">
+              α {{ fmt(verifySummary.beats_index[h].alpha) }}%
+            </span>
+            <span class="beats-badge" :class="verifySummary.beats_index[h].beats ? 'win' : 'lose'">
+              {{ verifySummary.beats_index[h].beats ? '跑赢' : '跑输' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 汇总表：按分类 -->
+      <div class="result-table-wrap">
+        <table class="result-table verify-table">
+          <thead>
+            <tr>
+              <th>口径</th>
+              <th>样本数</th>
+              <th>+20日 平均%</th>
+              <th>+20日 命中率</th>
+              <th>+60日 平均%</th>
+              <th>+60日 命中率</th>
+              <th>+250日 平均%</th>
+              <th>+250日 命中率</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="cat in ['tree', 'grain', 'vegetable']" :key="cat">
+              <td>
+                <span class="cat-badge" :style="{ color: CATEGORY_COLORS[cat], background: CATEGORY_COLORS[cat] + '22' }">
+                  {{ CATEGORY_LABELS[cat] }}
+                </span>
+              </td>
+              <td>{{ verifySummary.by_category[cat].count }}</td>
+              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_20d.avg) }">{{ fmt(verifySummary.by_category[cat].ret_20d.avg) }}</td>
+              <td>{{ pct(verifySummary.by_category[cat].ret_20d.hit_rate) }}</td>
+              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_60d.avg) }">{{ fmt(verifySummary.by_category[cat].ret_60d.avg) }}</td>
+              <td>{{ pct(verifySummary.by_category[cat].ret_60d.hit_rate) }}</td>
+              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_250d.avg) }">{{ fmt(verifySummary.by_category[cat].ret_250d.avg) }}</td>
+              <td>{{ pct(verifySummary.by_category[cat].ret_250d.hit_rate) }}</td>
+            </tr>
+            <tr class="overall-row">
+              <td>📊 总体（长赢选股）</td>
+              <td>{{ verifySummary.overall.count }}</td>
+              <td :style="{ color: colorBy(verifySummary.overall.ret_20d.avg) }">{{ fmt(verifySummary.overall.ret_20d.avg) }}</td>
+              <td>{{ pct(verifySummary.overall.ret_20d.hit_rate) }}</td>
+              <td :style="{ color: colorBy(verifySummary.overall.ret_60d.avg) }">{{ fmt(verifySummary.overall.ret_60d.avg) }}</td>
+              <td>{{ pct(verifySummary.overall.ret_60d.hit_rate) }}</td>
+              <td :style="{ color: colorBy(verifySummary.overall.ret_250d.avg) }">{{ fmt(verifySummary.overall.ret_250d.avg) }}</td>
+              <td>{{ pct(verifySummary.overall.ret_250d.hit_rate) }}</td>
+            </tr>
+            <tr class="index-row">
+              <td>📉 上证指数（同期基准）</td>
+              <td>{{ verifySummary.index.ret_20d.count }}</td>
+              <td>{{ fmt(verifySummary.index.ret_20d.avg) }}</td>
+              <td>-</td>
+              <td>{{ fmt(verifySummary.index.ret_60d.avg) }}</td>
+              <td>-</td>
+              <td>{{ fmt(verifySummary.index.ret_250d.avg) }}</td>
+              <td>-</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 各时点明细 -->
+      <div class="verify-periods">
+        <div v-for="p in verifyPeriods" :key="p.date" class="period-card">
+          <div class="period-head">
+            <span class="period-date">📅 {{ p.date }}</span>
+            <span v-if="p.season" class="period-season" :style="{ color: p.season.color }">{{ p.season.label }}</span>
+            <span class="period-idx" v-if="p.index">
+              上证指数 +20日 {{ fmt(p.index.ret_20d) }}% / +60日 {{ fmt(p.index.ret_60d) }}% / +250日 {{ fmt(p.index.ret_250d) }}%
+            </span>
+          </div>
+          <table class="result-table period-table">
+            <thead>
+              <tr>
+                <th>代码</th>
+                <th>分类</th>
+                <th>报告期</th>
+                <th>+20日%</th>
+                <th>+60日%</th>
+                <th>+250日%</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in p.results" :key="p.date + r.market + r.code">
+                <td class="code-cell">{{ r.market }}.{{ r.code }}</td>
+                <td>
+                  <span class="cat-badge" :style="{ color: CATEGORY_COLORS[r.category], background: CATEGORY_COLORS[r.category] + '22' }">
+                    {{ r.label }}
+                  </span>
+                </td>
+                <td>{{ r.report_date }}</td>
+                <td :style="{ color: colorBy(r.performance.ret_20d) }">{{ fmt(r.performance.ret_20d) }}</td>
+                <td :style="{ color: colorBy(r.performance.ret_60d) }">{{ fmt(r.performance.ret_60d) }}</td>
+                <td :style="{ color: colorBy(r.performance.ret_250d) }">{{ fmt(r.performance.ret_250d) }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div v-if="p.results.length === 0" class="empty-state">
+            <p>该时点无入选标的（财报披露覆盖不足）</p>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <div v-else-if="!loading && !verifyLoading" class="intro">
       <h3>📊 长赢基本面选股（P1）</h3>
       <p>选一个历史日期，用<b>截至当天已披露</b>的 gpcw 财报，对自选池做树粮菜量化打分，并回看标的自该日起的实际走势。</p>
-      <p class="hint">数据口径：只使用披露日 ≤ 目标日期的财报（point-in-time，杜绝未来函数）。</p>
+      <p class="hint">「批量时点验证」可跨多个历史日期汇总树粮菜命中率，并与上证指数对比，验证长赢理论是否跑赢。</p>
     </div>
   </div>
 </template>
@@ -249,6 +458,17 @@ onMounted(() => {
   border-radius: var(--radius);
   padding: 12px 16px;
 }
+.mode-tabs { display: flex; gap: 6px; }
+.mode-tab {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.mode-tab.active { background: var(--primary, #2563eb); color: #fff; border-color: transparent; }
 .field-group { display: flex; flex-direction: column; gap: 4px; }
 .field-group label { font-size: 11px; color: var(--text-muted); }
 .date-input, .market-select {
@@ -262,6 +482,7 @@ onMounted(() => {
 .date-input { width: 140px; }
 .market-select { width: 130px; }
 .pool-group { flex: 1; min-width: 200px; }
+.dates-group { min-width: 220px; }
 .pool-input {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -309,6 +530,31 @@ onMounted(() => {
 .stat-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .stat-label { font-size: 11px; color: var(--text-dim); }
 .stat-value { font-size: 18px; font-weight: 600; color: var(--text); }
+.verify-head { display: flex; flex-direction: column; gap: 4px; }
+.verify-head h3 { margin: 0; font-size: 16px; color: var(--text); }
+.beats-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  border-left-color: #f59e0b;
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+.beats-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+.beats-grid { display: flex; gap: 24px; flex-wrap: wrap; }
+.beats-item { display: flex; flex-direction: column; gap: 2px; }
+.beats-label { font-size: 11px; color: var(--text-dim); }
+.beats-alpha { font-size: 16px; font-weight: 700; }
+.beats-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  width: fit-content;
+}
+.beats-badge.win { background: rgba(34,197,94,0.15); color: #22c55e; }
+.beats-badge.lose { background: rgba(239,68,68,0.15); color: #ef4444; }
 .result-table-wrap {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -330,6 +576,8 @@ onMounted(() => {
 .result-table th { color: var(--text-dim); font-weight: 500; text-align: right; }
 .result-table th:first-child, .result-table td:first-child { text-align: left; }
 .result-table tbody tr:hover { background: rgba(255,255,255,0.03); }
+.overall-row td { font-weight: 700; background: rgba(37,99,235,0.06); }
+.index-row td { color: var(--text-muted); }
 .code-cell { font-family: monospace; font-weight: 600; }
 .cat-badge {
   padding: 2px 8px;
@@ -341,8 +589,29 @@ onMounted(() => {
 .score-block { margin: 6px 0 2px 4px; text-align: left; }
 .score-cat { font-weight: 600; font-size: 12px; margin-bottom: 2px; }
 .score-block ul { margin: 0; padding-left: 16px; color: var(--text-muted); font-size: 11px; }
+.verify-periods { display: flex; flex-direction: column; gap: 12px; }
+.period-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.period-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.period-date { font-weight: 700; color: var(--text); }
+.period-season { font-weight: 600; }
+.period-idx { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+.period-table { min-width: 0; }
+.period-table th:first-child, .period-table td:first-child { text-align: left; }
 .empty-state { text-align: center; color: var(--text-muted); padding: 30px; }
 .intro { text-align: center; color: var(--text-muted); padding: 40px 20px; line-height: 1.8; }
 .intro h3 { color: var(--text); }
 .hint { font-size: 12px; color: var(--text-dim); }
 </style>
+

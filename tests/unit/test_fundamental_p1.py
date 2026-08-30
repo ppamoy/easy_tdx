@@ -169,3 +169,65 @@ class TestSeason:
         closes = [100.0, 101.0, 102.0]
         res = detect_season(dates, closes, date(2025, 1, 5))
         assert res.season == "unknown"
+
+
+
+class TestBatchVerify:
+    """批量时点验证汇总逻辑（合成数据，不依赖网络）。"""
+
+    def _period(self, results, idx=None):
+        return {
+            "date": "2025-01-01",
+            "season": None,
+            "results": results,
+            "index": idx or {"ret_20d": 1.0, "ret_60d": 2.0, "ret_250d": 5.0},
+        }
+
+    def _res(self, category, r20, r60=None, r250=None):
+        return {
+            "category": category,
+            "performance": {"ret_20d": r20, "ret_60d": r60, "ret_250d": r250},
+        }
+
+    def test_summarize_basic(self):
+        from easy_tdx.fundamental.pipeline import _summarize_periods
+
+        periods = [
+            self._period(
+                [self._res("tree", 5.0, 10.0), self._res("grain", -2.0, 1.0)],
+                idx={"ret_20d": 1.0, "ret_60d": 2.0, "ret_250d": 5.0},
+            )
+        ]
+        s = _summarize_periods(periods, (20, 60, 250))
+        # tree: 1 sample
+        assert s["by_category"]["tree"]["count"] == 1
+        assert s["by_category"]["tree"]["ret_20d"]["avg"] == 5.0
+        assert s["by_category"]["tree"]["ret_20d"]["hit_rate"] == 1.0
+        # grain: 1 sample
+        assert s["by_category"]["grain"]["ret_20d"]["avg"] == -2.0
+        assert s["by_category"]["grain"]["ret_20d"]["hit_rate"] == 0.0
+        # overall: 2 samples, avg (5 + -2)/2 = 1.5
+        assert s["overall"]["count"] == 2
+        assert abs(s["overall"]["ret_20d"]["avg"] - 1.5) < 1e-6
+        # index
+        assert s["index"]["ret_20d"]["avg"] == 1.0
+        # beats: overall 1.5 > index 1.0
+        assert s["beats_index"]["ret_20d"]["beats"] is True
+        assert abs(s["beats_index"]["ret_20d"]["alpha"] - 0.5) < 1e-6
+
+    def test_summarize_vegetable_and_empty(self):
+        from easy_tdx.fundamental.pipeline import _summarize_periods
+
+        periods = [
+            self._period(
+                [self._res("vegetable", 3.0, 6.0), self._res("vegetable", -1.0, 4.0)],
+                idx={"ret_20d": 2.0, "ret_60d": 3.0, "ret_250d": 4.0},
+            )
+        ]
+        s = _summarize_periods(periods, (20, 60, 250))
+        assert s["by_category"]["vegetable"]["count"] == 2
+        assert abs(s["by_category"]["vegetable"]["ret_20d"]["avg"] - 1.0) < 1e-6
+        assert s["by_category"]["tree"]["count"] == 0
+        assert s["by_category"]["tree"]["ret_20d"]["avg"] is None
+        # index beats overall here (2.0 > 1.0)
+        assert s["beats_index"]["ret_20d"]["beats"] is False

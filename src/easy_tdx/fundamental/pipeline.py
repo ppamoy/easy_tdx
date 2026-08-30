@@ -108,29 +108,8 @@ def load_pool(
     return pd.DataFrame(rows)
 
 
-def subsequent_performance(
-    market: str,
-    code: str,
-    target: date,
-    *,
-    client: TdxClient | None = None,
-    horizons: tuple[int, ...] = (20, 60, 250),
-) -> dict[str, Any]:
-    """自 target 后 N 个交易日（约 N 个交易日）的实际涨幅。
-
-    取 target 之后最近的 K 线作为基准价，计算第 N 根 K 线的相对涨幅（%）。
-    无足够数据时返回 None。
-    """
-    from easy_tdx.models.enums import KlineCategory, Market
-
-    if client is None:
-        client = TdxClient()
-    mk = Market[market.upper()] if isinstance(market, str) else market
-    try:
-        df = client.get_security_bars(mk, code, KlineCategory.DAY, 0, 400)
-    except Exception as e:
-        logger.warning("获取 %s%s 后续行情失败: %s", market, code, e)
-        return {}
+def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, Any]:
+    """给定 OHLC DataFrame（含 date/close 列），算 target 之后 N 个交易日的相对涨幅。"""
     if df is None or df.empty:
         return {}
     dates = pd.to_datetime(df["date"]).dt.date
@@ -151,6 +130,140 @@ def subsequent_performance(
         else:
             out[f"ret_{h}d"] = None
     return out
+
+
+def subsequent_performance(
+    market: str,
+    code: str,
+    target: date,
+    *,
+    client: TdxClient | None = None,
+    horizons: tuple[int, ...] = (20, 60, 250),
+) -> dict[str, Any]:
+    """自 target 后 N 个交易日（约 N 个交易日）的实际涨幅。"""
+    from easy_tdx.models.enums import KlineCategory, Market
+
+    if client is None:
+        client = TdxClient()
+    mk = Market[market.upper()] if isinstance(market, str) else market
+    try:
+        df = client.get_security_bars(mk, code, KlineCategory.DAY, 0, 400)
+    except Exception as e:
+        logger.warning("获取 %s%s 后续行情失败: %s", market, code, e)
+        return {}
+    return _returns_at(df, target, horizons)
+
+
+def index_performance(
+    target: date,
+    *,
+    client: TdxClient | None = None,
+    horizons: tuple[int, ...] = (20, 60, 250),
+) -> dict[str, Any]:
+    """上证指数（SH 000001）在 target 之后的 N 交易日涨幅，用作基准对比。"""
+    from easy_tdx.models.enums import KlineCategory, Market
+
+    if client is None:
+        client = TdxClient()
+    try:
+        df = client.get_index_bars(Market.SH, "000001", KlineCategory.DAY, 0, 400)
+    except Exception as e:
+        logger.warning("获取上证指数后续行情失败: %s", e)
+        return {}
+    return _returns_at(df, target, horizons)
+
+
+def _summarize_periods(
+    periods: list[dict[str, Any]],
+    horizons: tuple[int, ...],
+) -> dict[str, Any]:
+    """汇总多个历史时点的验证结果：按分类 + 总体 + 指数基准 + 是否跑赢。"""
+    cats = ["tree", "grain", "vegetable"]
+
+    def _stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        st: dict[str, Any] = {"count": len(rows)}
+        for h in horizons:
+            vals = [
+                r["performance"].get(f"ret_{h}d")
+                for r in rows
+                if r.get("performance") and r["performance"].get(f"ret_{h}d") is not None
+            ]
+            st[f"ret_{h}d"] = {
+                "count": len(vals),
+                "avg": round(sum(vals) / len(vals), 2) if vals else None,
+                "hit_rate": round(sum(1 for v in vals if v > 0) / len(vals), 2)
+                if vals
+                else None,
+            }
+        return st
+
+    by_category: dict[str, Any] = {}
+    for cat in cats:
+        rows = [r for p in periods for r in p.get("results", []) if r["category"] == cat]
+        by_category[cat] = _stats(rows)
+
+    all_rows = [r for p in periods for r in p.get("results", [])]
+    overall = _stats(all_rows)
+
+    idx_vals: dict[str, list[float]] = {}
+    for p in periods:
+        idx = p.get("index") or {}
+        for h in horizons:
+            v = idx.get(f"ret_{h}d")
+            if v is not None:
+                idx_vals.setdefault(f"ret_{h}d", []).append(v)
+    index_stats: dict[str, Any] = {}
+    for h in horizons:
+        vals = idx_vals.get(f"ret_{h}d", [])
+        index_stats[f"ret_{h}d"] = {
+            "count": len(vals),
+            "avg": round(sum(vals) / len(vals), 2) if vals else None,
+        }
+
+    beats: dict[str, Any] = {}
+    for h in horizons:
+        ov = overall[f"ret_{h}d"].get("avg")
+        bm = index_stats[f"ret_{h}d"].get("avg")
+        beats[f"ret_{h}d"] = {
+            "alpha": round(ov - bm, 2) if ov is not None and bm is not None else None,
+            "beats": (ov is not None and bm is not None and ov > bm),
+        }
+
+    return {
+        "by_category": by_category,
+        "overall": overall,
+        "index": index_stats,
+        "beats_index": beats,
+    }
+
+
+def run_verify(
+    targets: list[date],
+    pool: list[dict[str, str]],
+    *,
+    client: TdxClient | None = None,
+    horizons: tuple[int, ...] = (20, 60, 250),
+) -> dict[str, Any]:
+    """批量时点验证：对多个历史日期分别选股，汇总树粮菜命中率并对比上证指数。
+
+    Returns:
+        {"periods": [{date, season, results, index}], "summary": {...}}
+    """
+    periods: list[dict[str, Any]] = []
+    for t in targets:
+        screen = run_screen(t, pool, client=client)
+        idx = index_performance(t, horizons=horizons, client=client)
+        periods.append(
+            {
+                "date": str(t),
+                "season": screen.get("season"),
+                "pool_size": screen.get("pool_size"),
+                "results": screen.get("results", []),
+                "index": idx,
+            }
+        )
+    summary = _summarize_periods(periods, horizons)
+    return {"periods": periods, "summary": summary}
 
 
 def run_screen(

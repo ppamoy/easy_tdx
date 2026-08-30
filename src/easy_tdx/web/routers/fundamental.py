@@ -7,6 +7,8 @@
       历史时点选股：date + pool + stock_type → 树粮菜清单 + 后续表现 + 四季。
 - POST /api/v1/fundamental/season
       历史日期四季判断（上证指数）。
+- POST /api/v1/fundamental/verify
+      批量时点验证：多个历史日期选股 → 树粮菜命中率汇总 + 上证指数基准对比。
 """
 
 from __future__ import annotations
@@ -160,3 +162,50 @@ async def fundamental_season(req: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.exception("fundamental season 失败")
         raise HTTPException(status_code=500, detail=f"fundamental season 失败: {e}") from e
+
+
+@router.post("/fundamental/verify")
+async def fundamental_verify(req: dict[str, Any]) -> dict[str, Any]:
+    """批量时点验证（F9）：多个历史日期分别选股，汇总树粮菜命中率并对比上证指数。
+
+    请求体：
+    {
+      "dates": ["2024-04-01", "2025-04-01", ...],
+      "pool": [{"market": "SH", "code": "600519"}, ...],
+    }
+    """
+    from easy_tdx.fundamental.pipeline import run_verify
+
+    date_strs = req.get("dates") or []
+    pool = req.get("pool") or []
+
+    if not date_strs:
+        raise HTTPException(status_code=400, detail="缺少 dates（至少一个 YYYY-MM-DD）")
+    if not pool:
+        raise HTTPException(status_code=400, detail="pool 不能为空，至少一只股票")
+
+    targets: list[date] = []
+    for ds in date_strs:
+        try:
+            targets.append(date.fromisoformat(str(ds)))
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail=f"日期格式错误: {ds!r}（应为 YYYY-MM-DD）"
+            ) from None
+
+    norm_pool = [
+        {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
+        for p in pool
+        if p.get("code")
+    ]
+
+    def _run() -> dict[str, Any]:
+        return run_verify(targets, norm_pool)
+
+    try:
+        return await asyncio.to_thread(_run)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.exception("fundamental verify 失败")
+        raise HTTPException(status_code=500, detail=f"fundamental verify 失败: {e}") from e
