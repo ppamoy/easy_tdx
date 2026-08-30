@@ -32,6 +32,7 @@
 | scan_config_result.png | V88 全市场扫描：5550 只全市场扫描，树 280/粮 4249/菜 942，Top 50 结果表 + 季节卡 + 统计栏 |
 | scan_detail.png | V88 全市场扫描行展开树粮菜打分明细 |
 | v89_scan_cache.png | V89 全市场扫描（缓存命中）：统计栏 💾 财报缓存徽章（3 期 / 3.9MB），50 行结果表 + 季节卡 + 明细展开，console 零错误 |
+| v90_train_leaderboard.png | V90 训练排行榜：学员/得分/命中率/标的/周期 排名表，前三名高亮，console 零错误 |
 
 V88 全市场扫描验证要点（/fundamental → 🔭 全市场扫描，2026-09-01，沪+深）：
 

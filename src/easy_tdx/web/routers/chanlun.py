@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from typing import Any
 
 import pandas as pd
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 
 from easy_tdx.web.convert import category_from_str, market_from_str
 from easy_tdx.web.deps import get_client
 from easy_tdx.web.schemas import ChanlunRequest
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chanlun"])
 
@@ -660,3 +664,67 @@ async def chanlun_train_session(
     payload["code"] = symbol
     payload["frequency"] = freq
     return payload
+
+
+@router.post("/chanlun/train/score")
+async def chanlun_train_score(req: dict[str, Any]) -> dict[str, Any]:
+    """提交一轮「逐步揭示训练」的成绩（V90：持久化 + 排行榜）。
+
+    请求体：
+    {
+      "player_name": "学员甲",
+      "score": 18,
+      "total_asked": 8, "hit_count": 6, "hit_rate": 75.0,
+      "code": "600519", "market": "SH", "category": "DAY", "count": 400,
+      "extra": {"best_streak": 3}   // 可选
+    }
+    """
+    from easy_tdx.web.train_store import TrainScore, get_score_store
+
+    def _run() -> dict[str, Any]:
+        store = get_score_store()
+        rec = TrainScore(
+            score=float(req.get("score", 0) or 0),
+            player_name=str(req.get("player_name") or "学员").strip() or "学员",
+            code=str(req.get("code") or "").strip(),
+            market=str(req.get("market") or "SZ").upper()[:2],
+            category=str(req.get("category") or "DAY").upper(),
+            count=int(req.get("count", 400) or 400),
+            total_asked=int(req.get("total_asked", 0) or 0),
+            hit_count=int(req.get("hit_count", 0) or 0),
+            hit_rate=float(req.get("hit_rate", 0) or 0),
+            extra=dict(req.get("extra") or {}),
+        )
+        store.add(rec)
+        return {"ok": True, "id": rec.id, "score": rec.to_dict()}
+
+    try:
+        return await asyncio.to_thread(_run)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("chanlun train score 失败")
+        raise HTTPException(status_code=500, detail=f"提交成绩失败: {e}") from e
+
+
+@router.get("/chanlun/train/leaderboard")
+async def chanlun_train_leaderboard(
+    limit: int = 20,
+    category: str | None = None,
+) -> dict[str, Any]:
+    """V90 训练排行榜：得分降序、命中率降序，可限定周期。
+
+    Query:
+      limit=20   返回条数（默认 20）
+      category=DAY  只返回该周期（缺省全部）
+    """
+    from easy_tdx.web.train_store import get_score_store
+
+    def _run() -> dict[str, Any]:
+        store = get_score_store()
+        rows = store.leaderboard(limit=limit, category=category)
+        return {"items": [r.to_dict() for r in rows], "count": len(rows)}
+
+    try:
+        return await asyncio.to_thread(_run)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("chanlun train leaderboard 失败")
+        raise HTTPException(status_code=500, detail=f"排行榜失败: {e}") from e

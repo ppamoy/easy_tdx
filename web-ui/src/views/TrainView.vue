@@ -3,7 +3,7 @@
 //  1. 逐步揭示训练：K线逐根推进，到达关键位置暂停，让用户判断买/卖/观望，
 //     再揭示缠论引擎的真实信号 + 结构讲解 + 事后 N 日验证，培养盘感并验证模型准确性。
 //  2. 回测复盘讲解：逐笔买卖点讲解卡（为什么成立 + 事后表现）。
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import { formatError } from '../api'
 import type { Bar } from '../types'
@@ -38,7 +38,13 @@ const category = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>(
 const count = ref(400)
 const loading = ref(false)
 const error = ref('')
-const mode = ref<'train' | 'review'>('train')  // 训练 / 复盘
+const mode = ref<'train' | 'review' | 'leaderboard'>('train')  // 训练 / 复盘 / 排行榜
+
+// V90：训练成绩持久化 + 排行榜
+const playerName = ref('学员')
+const scoreSubmitted = ref(false)
+const leaderboard = ref<any[]>([])
+const lbLoading = ref(false)
 
 const bars = ref<Bar[]>([])
 const bis = ref<ChanlunBi[]>([])
@@ -111,6 +117,7 @@ async function startTraining() {
     totalAsked.value = 0
     hitCount.value = 0
     score.value = 0
+    scoreSubmitted.value = false
     // 快进到第一个候选点之前几根，让用户看到背景
     jumpToNextCandidate()
   } catch (e) {
@@ -227,6 +234,54 @@ function stopAuto() {
 // 命中率
 const hitRate = computed(() => totalAsked.value ? Math.round(hitCount.value / totalAsked.value * 100) : 0)
 
+// ── V90：提交成绩 + 加载排行榜 ─────────────────────────────────────
+async function submitScore() {
+  if (scoreSubmitted.value || totalAsked.value === 0) return
+  try {
+    const resp = await fetch('/api/v1/chanlun/train/score', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        player_name: playerName.value.trim() || '学员',
+        score: score.value,
+        total_asked: totalAsked.value,
+        hit_count: hitCount.value,
+        hit_rate: hitRate.value,
+        code: code.value,
+        market: detectMarket(code.value),
+        category: category.value,
+        count: count.value,
+      }),
+    })
+    if (resp.ok) {
+      scoreSubmitted.value = true
+      loadLeaderboard()
+    }
+  } catch (e) {
+    // 提交失败不打断训练流程，静默忽略
+  }
+}
+
+async function loadLeaderboard() {
+  lbLoading.value = true
+  try {
+    const resp = await fetch('/api/v1/chanlun/train/leaderboard?limit=10')
+    if (resp.ok) {
+      const d = await resp.json()
+      leaderboard.value = d.items ?? []
+    }
+  } catch (e) {
+    // 排行榜加载失败不阻塞页面
+  } finally {
+    lbLoading.value = false
+  }
+}
+
+// 训练完成后自动提交一次成绩
+watch(finished, (v) => {
+  if (v) submitScore()
+})
+
 // 图表数据：训练模式用 revealIndex 截断
 const chartReveal = computed(() => mode.value === 'train' ? revealIndex.value : undefined)
 
@@ -266,7 +321,10 @@ function isOutcomeMiss(o: MmdOutcome): boolean {
   return o.type.includes('buy') ? o.ret_20d < 0 : o.type.includes('sell') ? o.ret_20d > 0 : false
 }
 
-onMounted(() => startTraining())
+onMounted(() => {
+  startTraining()
+  loadLeaderboard()
+})
 </script>
 
 <template>
@@ -298,6 +356,7 @@ onMounted(() => startTraining())
       <div class="mode-tabs">
         <button :class="['tab', { active: mode === 'train' }]" @click="mode = 'train'">🎯 逐步揭示训练</button>
         <button :class="['tab', { active: mode === 'review' }]" @click="mode = 'review'">📖 复盘讲解</button>
+        <button :class="['tab', { active: mode === 'leaderboard' }]" @click="mode = 'leaderboard'; loadLeaderboard()">🏆 排行榜</button>
       </div>
     </div>
 
@@ -396,7 +455,12 @@ onMounted(() => startTraining())
                 <p class="done-title">🎉 训练完成！</p>
                 <p class="done-sub">共 {{ totalAsked }} 题，方向命中 {{ hitCount }} 题（{{ hitRate }}%）</p>
                 <p class="done-score">得分：{{ score }}</p>
-                <p class="done-hint">切换到「📖 复盘讲解」逐笔回看每个买卖点的结构依据与事后表现。</p>
+                <div class="done-save" v-if="totalAsked > 0">
+                  <span class="save-label">昵称</span>
+                  <input v-model="playerName" class="name-input" maxlength="12" placeholder="学员" :disabled="scoreSubmitted" />
+                  <button class="ghost save-btn" :disabled="scoreSubmitted" @click="submitScore()">{{ scoreSubmitted ? '✅ 已存入排行榜' : '💾 保存成绩' }}</button>
+                </div>
+                <p class="done-hint">切换到「📖 复盘讲解」逐笔回看买卖点的结构依据，或「🏆 排行榜」看成绩排名。</p>
               </template>
               <template v-else>
                 <p>加载完成，等待揭示…</p>
@@ -438,6 +502,40 @@ onMounted(() => startTraining())
                 <span :class="['verdict', isOutcomeMiss(o) ? 'miss' : 'ok']">{{ isOutcomeMiss(o) ? '✗' : '✓' }}</span>
               </td>
               <td class="msg-cell">{{ mmds[i]?.msg ?? '' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <!-- 排行榜模式（V90） -->
+    <template v-if="mode === 'leaderboard'">
+      <div class="leaderboard-panel">
+        <div class="lb-head">
+          <h3>🏆 训练排行榜（逐步揭示命中率）</h3>
+          <button class="ghost" @click="loadLeaderboard()" :disabled="lbLoading">{{ lbLoading ? '加载中…' : '🔄 刷新' }}</button>
+        </div>
+        <p class="review-hint">按得分降序；每轮训练完成后成绩自动/手动保存。得分 = 方向命中 +2/题 + 精确命中 +1。</p>
+        <table class="lb-table">
+          <thead>
+            <tr>
+              <th>#</th><th>学员</th><th>得分</th><th>命中率</th><th>题数</th>
+              <th>标的</th><th>周期</th><th>时间</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(r, i) in leaderboard" :key="r.id">
+              <td class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</td>
+              <td class="lb-player">{{ r.player_name }}</td>
+              <td class="lb-score">{{ r.score }}</td>
+              <td>{{ r.hit_rate.toFixed ? r.hit_rate.toFixed(0) + '%' : r.hit_rate + '%' }}</td>
+              <td>{{ r.total_asked }}</td>
+              <td class="code-cell">{{ r.market }}.{{ r.code }}</td>
+              <td>{{ r.category }}</td>
+              <td class="lb-time">{{ (r.created_at || '').slice(0, 16).replace('T', ' ') }}</td>
+            </tr>
+            <tr v-if="!lbLoading && leaderboard.length === 0">
+              <td colspan="8" class="lb-empty">暂无成绩——完成一轮训练后自动保存 🚀</td>
             </tr>
           </tbody>
         </table>
@@ -517,5 +615,26 @@ onMounted(() => startTraining())
 .verdict.ok { color: #22c55e; }
 .verdict.miss { color: #ef4444; }
 .msg-cell { color: var(--text-dim); font-size: 11px; max-width: 420px; }
+.done-save { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 10px 0; }
+.save-label { font-size: 12px; color: var(--text-dim); }
+.name-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 5px 10px; font-size: 12px; color: var(--text); width: 90px;
+}
+.save-btn { font-size: 12px; padding: 5px 12px; }
+.leaderboard-panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+.lb-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.lb-head h3 { font-size: 15px; font-weight: 700; color: var(--text); margin: 0; }
+.lb-head .ghost { font-size: 12px; padding: 5px 12px; }
+.lb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lb-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-weight: 500; }
+.lb-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text); }
+.rank { font-weight: 700; color: var(--text-dim); }
+.rank.top { color: #f59e0b; }
+.lb-player { font-weight: 600; }
+.lb-score { font-weight: 700; color: var(--accent); }
+.code-cell { font-family: monospace; font-weight: 600; }
+.lb-time { color: var(--text-dim); font-size: 11px; }
+.lb-empty { text-align: center; color: var(--text-muted); padding: 24px; }
 .placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--text-dim); gap: 8px; }
 </style>
