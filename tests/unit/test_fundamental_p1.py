@@ -425,10 +425,9 @@ class TestScanMarket:
         from easy_tdx.fundamental import pipeline
 
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: ["gpcwX.zip"])
-        monkeypatch.setattr(pipeline, "load_all_periods", lambda *a, **k: ["REC"])
         monkeypatch.setattr(
-            pipeline, "build_indicator_frame",
-            lambda recs: pd.DataFrame(self._frame_rows()),
+            pipeline, "load_all_periods_frame",
+            lambda *a, **k: pd.DataFrame(self._frame_rows()),
         )
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
         monkeypatch.setattr(pipeline, "subsequent_performance", lambda *a, **k: {"ret_20d": 5.0})
@@ -450,10 +449,9 @@ class TestScanMarket:
         from easy_tdx.fundamental import pipeline
 
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: ["gpcwX.zip"])
-        monkeypatch.setattr(pipeline, "load_all_periods", lambda *a, **k: ["REC"])
         monkeypatch.setattr(
-            pipeline, "build_indicator_frame",
-            lambda recs: pd.DataFrame(self._frame_rows()),
+            pipeline, "load_all_periods_frame",
+            lambda *a, **k: pd.DataFrame(self._frame_rows()),
         )
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
 
@@ -467,7 +465,10 @@ class TestScanMarket:
         from easy_tdx.fundamental import pipeline
 
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: [])
-        monkeypatch.setattr(pipeline, "load_all_periods", lambda *a, **k: [])
+        monkeypatch.setattr(
+            pipeline, "load_all_periods_frame",
+            lambda *a, **k: pd.DataFrame(),
+        )
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
 
         out = pipeline.scan_market(date(2026, 5, 1), with_performance=False)

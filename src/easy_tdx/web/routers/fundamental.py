@@ -38,8 +38,7 @@ async def fundamental_indicator(
         raise HTTPException(status_code=400, detail="as_of 格式应为 YYYY-MM-DD") from None
 
     from easy_tdx.fundamental.indicators import (
-        build_indicator_frame,
-        load_all_periods,
+        load_all_periods_frame,
         pick_report,
     )
     from easy_tdx.fundamental.pipeline import pick_report_zips
@@ -48,10 +47,11 @@ async def fundamental_indicator(
         zips = pick_report_zips(target)
         if not zips:
             raise HTTPException(status_code=503, detail="无可用的 gpcw 财报文件")
-        recs = load_all_periods(zips, codes={code}, markets={market.upper()[:2]})
-        if not recs:
+        frame = load_all_periods_frame(
+            zips, codes={code}, markets={market.upper()[:2]}
+        )
+        if frame.empty:
             return {"code": code, "market": market.upper(), "rows": [], "error": "无财报数据"}
-        frame = build_indicator_frame(recs, include_raw=False)
         if period:
             sel = frame[frame["report_date"].astype(str).str.replace("-", "").str[:8] == period]
             row = sel.iloc[-1] if not sel.empty else None
@@ -249,7 +249,9 @@ async def fundamental_scan(req: dict[str, Any]) -> dict[str, Any]:
     with_performance = bool(req.get("with_performance", True))
 
     def _run() -> dict[str, Any]:
-        return scan_market(
+        from easy_tdx.fundamental import cache_stats
+
+        out = scan_market(
             target,
             markets=norm_markets,
             stock_type=stock_type,
@@ -257,6 +259,15 @@ async def fundamental_scan(req: dict[str, Any]) -> dict[str, Any]:
             min_score=min_score,
             with_performance=with_performance,
         )
+        # V89：附缓存信息（命中的报告期/行数），前端展示缓存命中状态
+        cache = cache_stats()
+        out["cache"] = {
+            "zips_count": cache["zips_count"],
+            "total_rows": cache["total_rows"],
+            "db_bytes": cache["db_bytes"],
+            "zips": [z["filename"] for z in cache["zips"]],
+        }
+        return out
 
     try:
         return await asyncio.to_thread(_run)
@@ -265,3 +276,21 @@ async def fundamental_scan(req: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.exception("fundamental scan 失败")
         raise HTTPException(status_code=500, detail=f"fundamental scan 失败: {e}") from e
+
+
+@router.get("/fundamental/cache")
+async def fundamental_cache() -> dict[str, Any]:
+    """V89 财务指标缓存状态（SQLite gpcw_frames.db）。
+
+    返回已缓存报告期清单、总行数、库大小与格式版本。
+    """
+    from easy_tdx.fundamental import cache_stats
+
+    def _run() -> dict[str, Any]:
+        return cache_stats()
+
+    try:
+        return await asyncio.to_thread(_run)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("fundamental cache 失败")
+        raise HTTPException(status_code=500, detail=f"fundamental cache 失败: {e}") from e

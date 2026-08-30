@@ -553,6 +553,7 @@ onMounted(() => {
         <div class="stat-item"><span class="stat-label">返回 Top</span><span class="stat-value">{{ scanStats.returned }}</span></div>
         <div class="stat-item" v-if="scanStats.truncated"><span class="stat-label">截断</span><span class="stat-value" style="color:#f59e0b">+{{ scanStats.truncated }}</span></div>
         <div class="stat-item"><span class="stat-label">数据口径</span><span class="stat-value" style="font-size:13px">披露日 ≤ {{ scanResult.date }}</span></div>
+        <div class="stat-item" v-if="scanResult.cache"><span class="stat-label">财报缓存</span><span class="stat-value" style="font-size:13px;color:#22c55e">💾 {{ scanResult.cache.zips_count }} 期 / {{ (scanResult.cache.db_bytes/1048576).toFixed(1) }}MB</span></div>
       </div>
 
       <div class="result-table-wrap">

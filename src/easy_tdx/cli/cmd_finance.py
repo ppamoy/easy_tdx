@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 import click
 
 
@@ -61,3 +64,81 @@ def fund_flow(market: str, code: str, start: int, count: int) -> None:
       easy-tdx fund-flow SZ 000001
     """
     raise click.UsageError("fund-flow 命令暂未实现，请使用 TdxClient.get_history_fund_flow() API")
+
+
+@click.command("gpcw-cache")
+@click.option("--action", type=click.Choice(["stats", "warm", "clear"]), default="stats")
+@click.option(
+    "--date", "target_date", default=None,
+    help="warm 用目标日期 YYYY-MM-DD（自动选该日期的报告期）",
+)
+@click.option("--table", "use_table", is_flag=True, help="表格输出")
+def gpcw_cache(action: str, target_date: str | None, use_table: bool) -> None:
+    """gpcw 指标帧缓存管理（V89，SQLite）。
+
+    \b
+    动作：
+      stats  查看缓存统计（已缓存报告期/行数/库大小/格式版本）
+      warm   预生成缓存（解析缺失报告期的指标帧并落盘）
+      clear  清空全部缓存
+
+    \b
+    示例：
+      easy-tdx gpcw-cache stats --table
+      easy-tdx gpcw-cache warm --date 2026-09-01
+      easy-tdx gpcw-cache clear
+    """
+    from easy_tdx.fundamental import cache
+
+    from .output import print_output
+
+    if action == "stats":
+        stats = cache.cache_stats()
+        if use_table:
+            rows = [[z["filename"], z["rows"], z["built_at"]] for z in stats["zips"]]
+            print_output(
+                _df_from_rows(rows, ["报告期", "行数", "生成时间"]),
+                "table",
+            )
+        click.echo(
+            json.dumps(
+                {
+                    "format_version": stats["format_version"],
+                    "db_path": stats["db_path"],
+                    "db_bytes": stats["db_bytes"],
+                    "zips_count": stats["zips_count"],
+                    "total_rows": stats["total_rows"],
+                },
+                ensure_ascii=False,
+            )
+        )
+        return
+
+    if action == "clear":
+        n = cache.clear_cache()
+        click.echo(json.dumps({"cleared_zips": n}, ensure_ascii=False))
+        return
+
+    # warm
+    if not target_date:
+        raise click.UsageError("warm 需要 --date YYYY-MM-DD 指定目标日期")
+    from datetime import date as _date
+
+    from easy_tdx.fundamental.pipeline import pick_report_zips
+
+    try:
+        target = _date.fromisoformat(target_date)
+    except ValueError:
+        raise click.UsageError("--date 格式应为 YYYY-MM-DD") from None
+    zips = pick_report_zips(target)
+    if not zips:
+        raise click.UsageError("目标日期无可用的 gpcw 财报文件")
+    result = cache.warm(zips)
+    click.echo(json.dumps(result, ensure_ascii=False))
+
+
+def _df_from_rows(rows: list[list[str | int]], cols: list[str]) -> Any:
+    """把行列表转成打印用 DataFrame（避免引入额外依赖）。"""
+    import pandas as pd
+
+    return pd.DataFrame(rows, columns=cols)

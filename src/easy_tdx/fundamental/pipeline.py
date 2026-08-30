@@ -10,8 +10,7 @@ import pandas as pd
 
 from easy_tdx.client import TdxClient
 from easy_tdx.fundamental.indicators import (
-    build_indicator_frame,
-    load_all_periods,
+    load_all_periods_frame,
     pick_report,
     pick_reports_bulk,
 )
@@ -93,8 +92,10 @@ def load_pool(
         logger.warning("无可用 gpcw 财报文件，回退新浪财报")
         frame = pd.DataFrame()
     else:
-        recs = load_all_periods(zips, client, codes=codes, markets=markets)
-        frame = build_indicator_frame(recs) if recs else pd.DataFrame()
+        # V89：每份报告期走 SQLite 指标帧缓存，重复选股/扫描只解析一次
+        frame = load_all_periods_frame(
+            zips, client, codes=codes, markets=markets
+        )
     rows: list[pd.Series] = []
     missing: list[dict[str, str]] = []
     for p in pool:
@@ -401,7 +402,10 @@ def scan_market(
     """
     if zips is None:
         zips = pick_report_zips(target, client=client)
-    recs = load_all_periods(zips, client, codes=None, markets=set(markets))
+    # V89：全市场记录经 SQLite 指标帧缓存加载，重复扫描不再重复解析 zip
+    frame = load_all_periods_frame(
+        zips, client, codes=None, markets=set(markets)
+    )
     season = detect_season_for_date(target, client=client)
     base_out: dict[str, Any] = {
         "date": str(target),
@@ -411,11 +415,10 @@ def scan_market(
         "total_scanned": 0,
         "results": [],
     }
-    if not recs:
+    if frame.empty:
         base_out["warning"] = "无可用 gpcw 财报数据（目标日期无覆盖）"
         return base_out
 
-    frame = build_indicator_frame(recs)
     picked = pick_reports_bulk(frame, target, markets=set(markets))
     if picked.empty:
         base_out["warning"] = "截至目标日期无已披露财报记录"

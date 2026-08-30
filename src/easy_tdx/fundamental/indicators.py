@@ -223,6 +223,60 @@ def load_all_periods(
     return result
 
 
+def frame_for_zip(
+    filename: str,
+    client: TdxClient | None = None,
+    *,
+    use_cache: bool = True,
+) -> pd.DataFrame:
+    """解析一份 gpcw zip 为指标帧，优先读 SQLite 缓存（V89）。
+
+    - 命中缓存（格式版本一致）直接读库返回；
+    - 未命中则 ``records_from_zip`` + ``build_indicator_frame`` 后写库。
+    """
+    if use_cache:
+        from easy_tdx.fundamental.cache import load_frame, store_frame
+
+        cached = load_frame(filename)
+        if cached is not None:
+            return cached
+        recs = records_from_zip(filename, client)
+        frame = build_indicator_frame(recs) if recs else pd.DataFrame()
+        if not frame.empty:
+            try:
+                store_frame(filename, frame)
+            except Exception as e:  # noqa: BLE001
+                logger.warning("gpcw 指标帧写缓存失败 %s: %s", filename, e)
+        return frame
+    recs = records_from_zip(filename, client)
+    return build_indicator_frame(recs) if recs else pd.DataFrame()
+
+
+def load_all_periods_frame(
+    filenames: list[str],
+    client: TdxClient | None = None,
+    *,
+    codes: set[str] | None = None,
+    markets: set[str] | None = None,
+    use_cache: bool = True,
+) -> pd.DataFrame:
+    """按报告期逐份加载指标帧并纵向拼接（每份走 SQLite 缓存），再过滤股票。
+
+    等价于 ``load_all_periods`` + ``build_indicator_frame`` 的组合，但每份 zip
+    只解析一次（之后走缓存），是全市场扫描/选股的高效加载路径。
+    """
+    frames = [frame_for_zip(fn, client, use_cache=use_cache) for fn in filenames]
+    frames = [f for f in frames if f is not None and not f.empty]
+    if not frames:
+        return pd.DataFrame()
+    frame = pd.concat(frames, ignore_index=True)
+    if codes is not None:
+        frame = frame[frame["code"].isin(codes)]
+    if markets is not None:
+        frame = frame[frame["market"].isin(markets)]
+    return frame
+
+
 def build_indicator_frame(
     records: list[ReportRecord],
     *,

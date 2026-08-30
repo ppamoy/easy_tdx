@@ -22,7 +22,7 @@ from .cmd_chanlun import chanlun
 from .cmd_company import company_info, company_info_content, finance_info
 from .cmd_ex import ex
 from .cmd_factor import factor
-from .cmd_finance import f10, fund_flow
+from .cmd_finance import f10, fund_flow, gpcw_cache
 from .cmd_indicator import indicator, indicator_list
 from .cmd_info import server_info, symbol_info
 from .cmd_kline import kline
@@ -81,6 +81,7 @@ cli.add_command(server_info)
 cli.add_command(symbol_info)
 cli.add_command(f10)
 cli.add_command(fund_flow)
+cli.add_command(gpcw_cache)
 cli.add_command(finance_info)
 cli.add_command(company_info)
 cli.add_command(company_info_content)

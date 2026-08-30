@@ -18,7 +18,7 @@
 
 ---
 
-# 长赢基本面选股截图（V85–V88）
+# 长赢基本面选股截图（V85–V89）
 
 用 Playwright（web-ui/scripts/fundamental-scan-screenshot.mjs）打开 /fundamental，运行选股/批量验证/全市场扫描后截图。
 
@@ -29,8 +29,9 @@
 | fundamental_detail.png | 单行展开树粮菜三张打分明细 |
 | verify_config.png | 批量时点验证配置（多日期 + 自选池） |
 | verify_result.png | 批量验证汇总（α/跑赢徽章 + 按分类统计表） |
-| scan_config_result.png | P2 全市场扫描：5550 只全市场扫描，树 280/粮 4249/菜 942，Top 50 结果表 + 季节卡 + 统计栏 |
-| scan_detail.png | 全市场扫描行展开树粮菜打分明细 |
+| scan_config_result.png | V88 全市场扫描：5550 只全市场扫描，树 280/粮 4249/菜 942，Top 50 结果表 + 季节卡 + 统计栏 |
+| scan_detail.png | V88 全市场扫描行展开树粮菜打分明细 |
+| v89_scan_cache.png | V89 全市场扫描（缓存命中）：统计栏 💾 财报缓存徽章（3 期 / 3.9MB），50 行结果表 + 季节卡 + 明细展开，console 零错误 |
 
 V88 全市场扫描验证要点（/fundamental → 🔭 全市场扫描，2026-09-01，沪+深）：
 
