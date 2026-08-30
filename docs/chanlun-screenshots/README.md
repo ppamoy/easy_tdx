@@ -33,6 +33,7 @@
 | scan_detail.png | V88 全市场扫描行展开树粮菜打分明细 |
 | v89_scan_cache.png | V89 全市场扫描（缓存命中）：统计栏 💾 财报缓存徽章（3 期 / 3.9MB），50 行结果表 + 季节卡 + 明细展开，console 零错误 |
 | v90_train_leaderboard.png | V90 训练排行榜：学员/得分/命中率/标的/周期 排名表，前三名高亮，console 零错误 |
+| v91_sina_fallback.png | V91 全市场扫描新浪补充：2019-11-15 gpcw 无覆盖时 3 只自选池全部由新浪产出（数据源列橙色「新浪」徽章），console 零错误 |
 
 V88 全市场扫描验证要点（/fundamental → 🔭 全市场扫描，2026-09-01，沪+深）：
 

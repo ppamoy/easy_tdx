@@ -27,6 +27,7 @@ const scanStockType = ref<'all' | 'tree' | 'grain' | 'vegetable'>('all')
 const scanTopN = ref(50)
 const scanMinScore = ref(15)
 const scanWithPerf = ref(true)
+const scanSinaPool = ref('')
 const scanLoading = ref(false)
 const scanError = ref('')
 const scanResult = ref<any>(null)
@@ -165,6 +166,8 @@ async function runScan() {
     scanError.value = '至少选择一个市场（SH/SZ）'
     return
   }
+  // V91：新浪补充自选池（gpcw 未覆盖历史时点时用新浪财报）
+  const sinaPool = parsePoolText(scanSinaPool.value)
   scanLoading.value = true
   scanError.value = ''
   scanResult.value = null
@@ -179,6 +182,7 @@ async function runScan() {
         top_n: Number(scanTopN.value) || 50,
         min_score: Number(scanMinScore.value) || 0,
         with_performance: scanWithPerf.value,
+        ...(sinaPool.length ? { sina_pool: sinaPool } : {}),
       }),
     })
     if (!resp.ok) throw new Error(await resp.text())
@@ -308,6 +312,10 @@ onMounted(() => {
         <div class="field-group num-group">
           <label>最低分类分</label>
           <input v-model.number="scanMinScore" type="number" min="0" max="100" class="num-input" />
+        </div>
+        <div class="field-group sina-pool-group">
+          <label>新浪补充自选池（可选，gpcw 未覆盖的更早历史时点用）</label>
+          <textarea v-model="scanSinaPool" class="pool-input" rows="2" placeholder="600519&#10;000858&#10;..." />
         </div>
         <label class="check-item perf-check"><input type="checkbox" v-model="scanWithPerf" /> 附带后续表现</label>
         <button class="primary scan-btn" :disabled="scanLoading" @click="runScan">
@@ -563,6 +571,7 @@ onMounted(() => {
               <th>代码</th>
               <th>分类</th>
               <th>得分</th>
+              <th>数据源</th>
               <th>报告期</th>
               <th>EPS</th>
               <th>ROE%</th>
@@ -586,6 +595,9 @@ onMounted(() => {
                 </span>
               </td>
               <td class="score-cell">{{ fmt(r.score) }}</td>
+              <td>
+                <span class="ds-badge" :class="r.data_source === 'sina' ? 'sina' : 'gpcw'">{{ r.data_source === 'sina' ? '新浪' : 'gpcw' }}</span>
+              </td>
               <td>{{ r.report_date }}</td>
               <td>{{ fmt(r.indicators.eps) }}</td>
               <td>{{ fmt(r.indicators.roe) }}</td>
@@ -823,5 +835,12 @@ onMounted(() => {
 }
 .score-cell { font-weight: 700; color: var(--text); }
 .scan-table { min-width: 1100px; }
+.sina-pool-group { min-width: 180px; }
+.ds-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 12px;
+  font-size: 11px; font-weight: 600;
+}
+.ds-badge.gpcw { background: rgba(37,99,235,0.15); color: #60a5fa; }
+.ds-badge.sina { background: rgba(245,158,11,0.15); color: #f59e0b; }
 </style>
 

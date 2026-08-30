@@ -71,14 +71,40 @@ def _yoy_pct(v: Any) -> float | None:
         return None
 
 
-def load_sina_rows(code: str, market: str = "SZ", num: int = 40) -> list[SinaFinancialRow]:
+def load_sina_rows(
+    code: str,
+    market: str = "SZ",
+    num: int = 40,
+    *,
+    use_cache: bool = True,
+) -> list[SinaFinancialRow]:
     """拉取一只股票最近 N 期财报并合并为指标行（最新在前）。
+
+    优先读 SQLite 缓存（V91）：同代码已缓存则直接返回，网络只发生一次；
+    未命中才请求新浪三张报表并写缓存。
 
     Args:
         code: 6 位股票代码。
         market: SH / SZ（用于点选市场标签）。
         num: 报告期数。
+        use_cache: 是否启用缓存（测试或强制刷新时传 False）。
     """
+    if use_cache:
+        from easy_tdx.fundamental import sina_cache
+
+        cached = sina_cache.load_rows(code)
+        if cached is not None:
+            return [
+                SinaFinancialRow(
+                    code=code,
+                    market=c.get("market") or market,
+                    report_date=c.get("report_date"),
+                    disclosure_date=c.get("disclosure_date"),
+                    indicators=c.get("indicators") or {},
+                )
+                for c in cached[:num]
+            ]
+
     from easy_tdx.sina.client import SinaClient
 
     client = SinaClient(timeout=40)
@@ -167,4 +193,12 @@ def load_sina_rows(code: str, market: str = "SZ", num: int = 40) -> list[SinaFin
                 indicators=ind,
             )
         )
+    # V91：写缓存（只写成功拉到的；空结果不缓存，下次重试）
+    if rows and use_cache:
+        try:
+            from easy_tdx.fundamental import sina_cache
+
+            sina_cache.store_rows(code, market, rows)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("新浪指标写缓存失败 %s: %s", code, e)
     return rows

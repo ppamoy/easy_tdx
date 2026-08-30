@@ -377,6 +377,7 @@ def scan_market(
     zips: list[str] | None = None,
     client: TdxClient | None = None,
     horizons: tuple[int, ...] = (20, 60, 250),
+    sina_pool: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """P2 全市场扫描：对目标日期 tdx 财报覆盖的全部股票做树粮菜打分并排序。
 
@@ -385,6 +386,10 @@ def scan_market(
     取披露日 ≤ target 的最新一期，逐只跑树粮菜三维打分，按分类得分降序返回
     top_n 只（默认 50）。可选附加后续 N 日表现（只对返回的 top_n 计算，
     避免全市场几千次行情请求）。
+
+    V91：当 gpcw 财报未覆盖目标日期（更早历史/下载受限）时，可用
+    ``sina_pool``（自选代码列表）走新浪财报补充——每行标注 ``data_source``
+    （gpcw/sina），前端可区分数据来源。
 
     Args:
         target: 历史时点（只用披露日 ≤ target 的财报）。
@@ -395,6 +400,8 @@ def scan_market(
         with_performance: top_n 结果是否附带后续 20/60/250 日表现。
         zips: 指定的 gpcw 财报文件列表（缺省按 target 自动选择）。
         client: 注入 TdxClient（测试或省连接用）。
+        sina_pool: 可选，[{"market": "SH"/"SZ", "code": "600519"}, ...]。
+            gpcw 覆盖不足时用新浪补充这些代码（结果行 data_source="sina"）。
 
     Returns:
         {"date", "total_scanned", "results": [...], "by_category": {...},
@@ -415,13 +422,39 @@ def scan_market(
         "total_scanned": 0,
         "results": [],
     }
-    if frame.empty:
-        base_out["warning"] = "无可用 gpcw 财报数据（目标日期无覆盖）"
-        return base_out
 
-    picked = pick_reports_bulk(frame, target, markets=set(markets))
-    if picked.empty:
-        base_out["warning"] = "截至目标日期无已披露财报记录"
+    picked = (
+        pick_reports_bulk(frame, target, markets=set(markets))
+        if not frame.empty else pd.DataFrame()
+    )
+
+    # V91：新浪补充——gpcw 未覆盖的股票（frame 空或单只缺失）走新浪财报
+    if sina_pool and frame.empty:
+        from easy_tdx.fundamental.sina_adapter import load_sina_rows
+
+        extra: list[dict[str, Any]] = []
+        for p in sina_pool:
+            code = str(p.get("code", "")).zfill(6)
+            if not code:
+                continue
+            try:
+                srows = load_sina_rows(code, p.get("market", "SZ"))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("新浪补充 %s 失败: %s", code, e)
+                continue
+            if not srows:
+                continue
+            sframe = _sina_frame(srows)
+            srow = pick_report(sframe, code, target, market=p.get("market"))
+            if srow is not None:
+                r2 = srow.to_dict() if hasattr(srow, "to_dict") else dict(srow)
+                r2["data_source"] = "sina"
+                extra.append(r2)
+        if extra:
+            picked = pd.DataFrame(extra)
+
+    if picked is None or picked.empty:
+        base_out["warning"] = "截至目标日期无可用财报数据（gpcw/新浪均无覆盖）"
         return base_out
 
     scored: list[dict[str, Any]] = []
@@ -439,6 +472,7 @@ def scan_market(
             continue
         d = sr.as_dict()
         d["score"] = round(sc, 1)
+        d["data_source"] = str(row.get("data_source", "gpcw"))
         scored.append(d)
 
     scored.sort(key=lambda r: r["score"], reverse=True)

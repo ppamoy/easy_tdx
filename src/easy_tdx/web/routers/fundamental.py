@@ -78,6 +78,8 @@ async def fundamental_indicator(
             return v
 
         d = {c: _clean(c) for c in cols}
+        # V91：数据来源标注（gpcw / sina，screen/scan 补齐）
+        d["data_source"] = str(row.get("data_source", "gpcw")) if "data_source" in row else "gpcw"
         return {"code": code, "market": market.upper(), "rows": [d]}
 
     try:
@@ -248,8 +250,19 @@ async def fundamental_scan(req: dict[str, Any]) -> dict[str, Any]:
     min_score = float(req.get("min_score", 15.0))
     with_performance = bool(req.get("with_performance", True))
 
+    # V91：新浪补充——gpcw 覆盖不足时的自选代码池
+    sina_pool_raw = req.get("sina_pool") or []
+    sina_pool = [
+        {
+            "market": str(p.get("market", "SZ")).upper()[:2],
+            "code": str(p["code"]).zfill(6),
+        }
+        for p in sina_pool_raw
+        if p.get("code")
+    ]
+
     def _run() -> dict[str, Any]:
-        from easy_tdx.fundamental import cache_stats
+        from easy_tdx.fundamental import cache_stats, sina_cache_stats
 
         out = scan_market(
             target,
@@ -258,6 +271,7 @@ async def fundamental_scan(req: dict[str, Any]) -> dict[str, Any]:
             top_n=top_n,
             min_score=min_score,
             with_performance=with_performance,
+            sina_pool=sina_pool or None,
         )
         # V89：附缓存信息（命中的报告期/行数），前端展示缓存命中状态
         cache = cache_stats()
@@ -266,6 +280,7 @@ async def fundamental_scan(req: dict[str, Any]) -> dict[str, Any]:
             "total_rows": cache["total_rows"],
             "db_bytes": cache["db_bytes"],
             "zips": [z["filename"] for z in cache["zips"]],
+            "sina_codes": sina_cache_stats()["codes_count"],
         }
         return out
 
@@ -284,10 +299,12 @@ async def fundamental_cache() -> dict[str, Any]:
 
     返回已缓存报告期清单、总行数、库大小与格式版本。
     """
-    from easy_tdx.fundamental import cache_stats
+    from easy_tdx.fundamental import cache_stats, sina_cache_stats
 
     def _run() -> dict[str, Any]:
-        return cache_stats()
+        out = cache_stats()
+        out["sina"] = sina_cache_stats()
+        return out
 
     try:
         return await asyncio.to_thread(_run)
