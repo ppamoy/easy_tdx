@@ -7,15 +7,18 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Any
 
 import pandas as pd
 
 # 与 changying/前端一致的季节定义
 SEASONS = {"spring", "summer", "autumn", "winter", "unknown"}
 
-SEASON_INFO = {
+SEASON_INFO: dict[str, dict[str, Any]] = {
     "spring": {
         "label": "春季·播种期",
         "color": "#4ade80",
@@ -62,15 +65,16 @@ SEASON_INFO = {
 @dataclass
 class SeasonResult:
     season: str
-    signals: dict = field(default_factory=dict)
+    signals: dict[str, Any] = field(default_factory=dict)
 
     def label(self) -> str:
-        return SEASON_INFO.get(self.season, SEASON_INFO["unknown"])["label"]
+        label: str = SEASON_INFO.get(self.season, SEASON_INFO["unknown"])["label"]
+        return label
 
-    def info(self) -> dict:
+    def info(self) -> dict[str, Any]:
         return SEASON_INFO.get(self.season, SEASON_INFO["unknown"])
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> dict[str, Any]:
         info = self.info()
         return {
             "season": self.season,
@@ -84,9 +88,13 @@ class SeasonResult:
         }
 
 
-def _closes(dates, closes, target):
+def _closes(
+    dates: Sequence[Any],
+    closes: Sequence[Any],
+    target: date,
+) -> tuple[list[date], list[float]]:
     """只保留 <= target 的 (date, close)，并按时间升序。"""
-    pairs = []
+    pairs: list[tuple[date, float]] = []
     for d, c in zip(dates, closes):
         dd = pd.to_datetime(d).date() if not isinstance(d, date) else d
         if dd <= target and c == c:
@@ -96,11 +104,11 @@ def _closes(dates, closes, target):
 
 
 def detect_season(
-    dates,
-    closes,
+    dates: Sequence[Any],
+    closes: Sequence[Any],
     target: date,
     *,
-    volumes=None,
+    volumes: Sequence[Any] | None = None,
 ) -> SeasonResult:
     """从截至 target 的指数日线判断四季。
 
@@ -140,11 +148,12 @@ def detect_season(
     ma_ratio = ma20 / ma60 if ma60 else 1
     ma_score = 1 if ma_ratio > 1.05 else -1 if ma_ratio < 0.95 else 0
 
-    def _stdev(xs):
+    def _stdev(xs: list[float]) -> float:
         if len(xs) < 2:
             return 0.0
         m = sum(xs) / len(xs)
-        return (sum((x - m) ** 2 for x in xs) / (len(xs) - 1)) ** 0.5
+        variance = sum((x - m) ** 2 for x in xs) / (len(xs) - 1)
+        return math.sqrt(variance)
 
     rets = [cs[i] / cs[i - 1] - 1 for i in range(1, n) if cs[i - 1]]
     vol_20 = _stdev(rets[-20:]) if len(rets) >= 20 else _stdev(rets)

@@ -315,3 +315,164 @@ class TestSinaAdapterFallback:
         assert _disclosure_estimate(date(2020, 6, 30)) == date(2020, 8, 31)
         assert _disclosure_estimate(date(2020, 9, 30)) == date(2020, 10, 31)
 
+
+class TestPickReportsBulk:
+    """批量 point-in-time（全市场扫描核心）：与逐股 pick_report 语义一致。"""
+
+    def _frame(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            [
+                {
+                    "code": "600519", "market": "SH",
+                    "report_date": date(2025, 12, 31), "disclosure_date": date(2026, 4, 10),
+                    "eps": 5.0,
+                },
+                {
+                    "code": "600519", "market": "SH",
+                    "report_date": date(2026, 3, 31), "disclosure_date": date(2026, 4, 25),
+                    "eps": 1.5,
+                },
+                {
+                    "code": "600519", "market": "SH",
+                    "report_date": date(2026, 6, 30), "disclosure_date": date(2026, 8, 20),
+                    "eps": 3.0,
+                },
+                {
+                    "code": "000858", "market": "SZ",
+                    "report_date": date(2026, 3, 31), "disclosure_date": date(2026, 4, 20),
+                    "eps": 2.0,
+                },
+                {
+                    "code": "000858", "market": "SZ",
+                    "report_date": date(2026, 6, 30), "disclosure_date": date(2026, 8, 25),
+                    "eps": 4.0,
+                },
+            ]
+        )
+
+    def test_picks_latest_disclosed_per_stock(self):
+        from easy_tdx.fundamental.indicators import pick_reports_bulk
+
+        out = pick_reports_bulk(self._frame(), date(2026, 5, 1))
+        by_code = {row["code"]: row for _, row in out.iterrows()}
+        # 5/1：600519 一季报(4/25) 已披露；000858 一季报(4/20) 已披露
+        assert by_code["600519"]["eps"] == 1.5
+        assert by_code["000858"]["eps"] == 2.0
+        # 每只股票一行
+        assert len(out) == 2
+
+    def test_market_filter(self):
+        from easy_tdx.fundamental.indicators import pick_reports_bulk
+
+        out = pick_reports_bulk(self._frame(), date(2026, 9, 1), markets={"SH"})
+        assert set(out["market"]) == {"SH"}
+        assert len(out) == 1
+
+    def test_agrees_with_pick_report(self):
+        from easy_tdx.fundamental.indicators import pick_report, pick_reports_bulk
+
+        fr = self._frame()
+        out = pick_reports_bulk(fr, date(2026, 5, 1))
+        for _, row in out.iterrows():
+            single = pick_report(fr, row["code"], date(2026, 5, 1), market=row["market"])
+            assert single is not None
+            assert single["eps"] == row["eps"]
+
+    def test_empty_frame_returns_empty(self):
+        from easy_tdx.fundamental.indicators import pick_reports_bulk
+
+        out = pick_reports_bulk(pd.DataFrame(), date(2026, 5, 1))
+        assert out.empty
+
+
+class TestScanMarket:
+    """P2 全市场扫描编排（合成数据，不依赖网络）。"""
+
+    def _frame_rows(self):
+        from easy_tdx.fundamental.indicators import indicator_values
+
+        def _row(code, market, eps, roe, rev_yoy, np_yoy, ocf, dd):
+            ind = indicator_values(
+                {
+                    "基本每股收益": eps,
+                    "净资产收益率": roe,
+                    "其中：营业收入": 100.0,
+                    "其中：营业成本": 60.0,
+                    "归属于母公司所有者的净利润": 20.0,
+                    "资产总计": 200.0,
+                    "负债合计": 80.0,
+                    "经营活动产生的现金流量净额": ocf,
+                    "营业收入增长率(%)": rev_yoy,
+                    "净利润增长率(%)": np_yoy,
+                }
+            )
+            return {
+                "code": code, "market": market,
+                "report_date": date(2026, 3, 31),
+                "disclosure_date": dd,
+                **ind,
+            }
+
+        return [
+            _row("600519", "SH", 0.5, 30.0, 25.0, 30.0, 0.0, date(2026, 4, 25)),
+            _row("000858", "SZ", 2.0, 8.0, 4.0, 3.0, 25.0, date(2026, 4, 20)),
+            _row("300750", "SZ", -0.5, 6.0, 45.0, 60.0, -1.0, date(2026, 4, 22)),
+        ]
+
+    def test_scan_returns_sorted_top_n(self, monkeypatch):
+        import pandas as pd
+
+        from easy_tdx.fundamental import pipeline
+
+        monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: ["gpcwX.zip"])
+        monkeypatch.setattr(pipeline, "load_all_periods", lambda *a, **k: ["REC"])
+        monkeypatch.setattr(
+            pipeline, "build_indicator_frame",
+            lambda recs: pd.DataFrame(self._frame_rows()),
+        )
+        monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
+        monkeypatch.setattr(pipeline, "subsequent_performance", lambda *a, **k: {"ret_20d": 5.0})
+
+        out = pipeline.scan_market(date(2026, 5, 1), top_n=3, with_performance=False)
+        assert out["total_scanned"] == 3
+        assert len(out["results"]) == 3
+        # 按分类得分降序返回
+        scores = [r["score"] for r in out["results"]]
+        assert scores == sorted(scores, reverse=True)
+        codes = {r["code"] for r in out["results"]}
+        assert codes == {"600519", "000858", "300750"}
+        cats = {r["category"] for r in out["results"]}
+        assert cats == {"tree", "grain", "vegetable"}
+
+    def test_scan_filters_by_stock_type(self, monkeypatch):
+        import pandas as pd
+
+        from easy_tdx.fundamental import pipeline
+
+        monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: ["gpcwX.zip"])
+        monkeypatch.setattr(pipeline, "load_all_periods", lambda *a, **k: ["REC"])
+        monkeypatch.setattr(
+            pipeline, "build_indicator_frame",
+            lambda recs: pd.DataFrame(self._frame_rows()),
+        )
+        monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
+
+        out = pipeline.scan_market(
+            date(2026, 5, 1), stock_type="vegetable", top_n=10, with_performance=False
+        )
+        assert out["results"]
+        assert all(r["category"] == "vegetable" for r in out["results"])
+
+    def test_scan_empty_records_warns(self, monkeypatch):
+        from easy_tdx.fundamental import pipeline
+
+        monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: [])
+        monkeypatch.setattr(pipeline, "load_all_periods", lambda *a, **k: [])
+        monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
+
+        out = pipeline.scan_market(date(2026, 5, 1), with_performance=False)
+        assert out["total_scanned"] == 0
+        assert out["results"] == []
+        assert "warning" in out
+
+

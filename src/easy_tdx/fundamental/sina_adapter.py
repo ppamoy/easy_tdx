@@ -56,7 +56,7 @@ def _pct_ratio(v: Any, base: Any) -> float | None:
     if v is None or not base:
         return None
     try:
-        return v / base * 100.0
+        return float(v) / float(base) * 100.0
     except (TypeError, ValueError):
         return None
 
@@ -99,7 +99,7 @@ def load_sina_rows(code: str, market: str = "SZ", num: int = 40) -> list[SinaFin
         except Exception:
             rdate = None
 
-        def _fzb(col: str):
+        def _fzb(col: str) -> float | None:
             if fzb is None or fzb.empty:
                 return None
             sub = fzb[fzb["报告期"].astype(str) == str(period)]
@@ -108,7 +108,7 @@ def load_sina_rows(code: str, market: str = "SZ", num: int = 40) -> list[SinaFin
             v = sub.iloc[0][col]
             return None if pd.isna(v) else float(v)
 
-        def _llb(col: str):
+        def _llb(col: str) -> float | None:
             if llb is None or llb.empty:
                 return None
             sub = llb[llb["报告期"].astype(str) == str(period)]

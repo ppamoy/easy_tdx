@@ -1,10 +1,10 @@
-<!-- P1 长赢基本面选股：单日选股 + 批量时点验证 -->
+<!-- P1/P2 长赢基本面选股：单日选股 + 批量时点验证 + 全市场扫描 -->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { formatError } from '../api'
 
-// ── 模式：单日选股 / 批量验证 ──────────────────────────────────────────
-const mode = ref<'screen' | 'verify'>('screen')
+// ── 模式：单日选股 / 批量验证 / 全市场扫描 ────────────────────────────
+const mode = ref<'screen' | 'verify' | 'scan'>('screen')
 
 // 单日选股
 const selectDate = ref('')
@@ -19,6 +19,17 @@ const verifyDatesText = ref('')
 const verifyLoading = ref(false)
 const verifyError = ref('')
 const verifyResult = ref<any>(null)
+
+// 全市场扫描
+const scanDate = ref('')
+const scanMarkets = ref<Record<string, boolean>>({ SH: true, SZ: true })
+const scanStockType = ref<'all' | 'tree' | 'grain' | 'vegetable'>('all')
+const scanTopN = ref(50)
+const scanMinScore = ref(15)
+const scanWithPerf = ref(true)
+const scanLoading = ref(false)
+const scanError = ref('')
+const scanResult = ref<any>(null)
 
 const CATEGORY_COLORS: Record<string, string> = {
   tree: '#22c55e',
@@ -142,6 +153,55 @@ async function runVerify() {
   }
 }
 
+async function runScan() {
+  if (!scanDate.value) {
+    scanError.value = '请选择历史日期'
+    return
+  }
+  const markets = Object.entries(scanMarkets.value)
+    .filter(([, on]) => on)
+    .map(([m]) => m)
+  if (markets.length === 0) {
+    scanError.value = '至少选择一个市场（SH/SZ）'
+    return
+  }
+  scanLoading.value = true
+  scanError.value = ''
+  scanResult.value = null
+  try {
+    const resp = await fetch('/api/v1/fundamental/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: scanDate.value,
+        markets,
+        stock_type: scanStockType.value,
+        top_n: Number(scanTopN.value) || 50,
+        min_score: Number(scanMinScore.value) || 0,
+        with_performance: scanWithPerf.value,
+      }),
+    })
+    if (!resp.ok) throw new Error(await resp.text())
+    scanResult.value = await resp.json()
+  } catch (e) {
+    scanError.value = formatError(e)
+  } finally {
+    scanLoading.value = false
+  }
+}
+
+const scanStats = computed(() => {
+  const rs = scanResult.value?.results ?? []
+  return {
+    total: scanResult.value?.total_scanned ?? 0,
+    returned: rs.length,
+    tree: scanResult.value?.by_category?.tree ?? 0,
+    grain: scanResult.value?.by_category?.grain ?? 0,
+    vegetable: scanResult.value?.by_category?.vegetable ?? 0,
+    truncated: scanResult.value?.truncated ?? 0,
+  }
+})
+
 const stats = computed(() => {
   const rs = result.value?.results ?? []
   return {
@@ -175,6 +235,7 @@ onMounted(() => {
   const now = new Date()
   const d = new Date(now.getFullYear(), now.getMonth() - 2, 15)
   selectDate.value = d.toISOString().slice(0, 10)
+  scanDate.value = d.toISOString().slice(0, 10)
   poolText.value = DEFAULT_POOL.map((p) => p.code).join('\n')
   verifyDatesText.value = DEFAULT_VERIFY_DATES.join('\n')
 })
@@ -187,6 +248,7 @@ onMounted(() => {
       <div class="mode-tabs">
         <button class="mode-tab" :class="{ active: mode === 'screen' }" @click="mode = 'screen'">📌 单日选股</button>
         <button class="mode-tab" :class="{ active: mode === 'verify' }" @click="mode = 'verify'">📈 批量时点验证</button>
+        <button class="mode-tab" :class="{ active: mode === 'scan' }" @click="mode = 'scan'">🔭 全市场扫描</button>
       </div>
 
       <template v-if="mode === 'screen'">
@@ -208,7 +270,7 @@ onMounted(() => {
         </button>
       </template>
 
-      <template v-else>
+      <template v-else-if="mode === 'verify'">
         <div class="field-group dates-group">
           <label>历史日期（每行一个 YYYY-MM-DD，多个时点汇总验证）</label>
           <textarea v-model="verifyDatesText" class="pool-input" rows="3" placeholder="2024-04-15&#10;2025-04-15&#10;..." />
@@ -218,7 +280,42 @@ onMounted(() => {
         </button>
       </template>
 
-      <div class="field-group pool-group">
+      <template v-else-if="mode === 'scan'">
+        <div class="field-group">
+          <label>历史日期（全市场 point-in-time）</label>
+          <input v-model="scanDate" type="date" class="date-input" />
+        </div>
+        <div class="field-group">
+          <label>市场</label>
+          <div class="market-checks">
+            <label class="check-item"><input type="checkbox" v-model="scanMarkets.SH" /> 沪 SH</label>
+            <label class="check-item"><input type="checkbox" v-model="scanMarkets.SZ" /> 深 SZ</label>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>股票类型</label>
+          <select v-model="scanStockType" class="market-select">
+            <option value="all">全部</option>
+            <option value="tree">🌳 树型</option>
+            <option value="grain">🌾 粮型</option>
+            <option value="vegetable">🥬 菜型</option>
+          </select>
+        </div>
+        <div class="field-group num-group">
+          <label>返回 Top N</label>
+          <input v-model.number="scanTopN" type="number" min="1" max="200" class="num-input" />
+        </div>
+        <div class="field-group num-group">
+          <label>最低分类分</label>
+          <input v-model.number="scanMinScore" type="number" min="0" max="100" class="num-input" />
+        </div>
+        <label class="check-item perf-check"><input type="checkbox" v-model="scanWithPerf" /> 附带后续表现</label>
+        <button class="primary scan-btn" :disabled="scanLoading" @click="runScan">
+          {{ scanLoading ? '扫描中（全市场财报 + 树粮菜打分）…' : '🔭 运行全市场扫描' }}
+        </button>
+      </template>
+
+      <div class="field-group pool-group" v-if="mode !== 'scan'">
         <label>自选池（每行一个 6 位代码，留空用默认池）</label>
         <textarea v-model="poolText" class="pool-input" rows="3" placeholder="600519&#10;000858&#10;..." />
       </div>
@@ -227,6 +324,7 @@ onMounted(() => {
     <!-- 错误提示 -->
     <div v-if="error" class="error-banner">⚠ {{ error }}</div>
     <div v-if="verifyError" class="error-banner">⚠ {{ verifyError }}</div>
+    <div v-if="scanError" class="error-banner">⚠ {{ scanError }}</div>
 
     <!-- ── 单日选股结果 ─────────────────────────────────────────────── -->
     <template v-if="mode === 'screen' && result">
@@ -431,10 +529,98 @@ onMounted(() => {
       </div>
     </template>
 
-    <div v-else-if="!loading && !verifyLoading" class="intro">
-      <h3>📊 长赢基本面选股（P1）</h3>
-      <p>选一个历史日期，用<b>截至当天已披露</b>的 gpcw 财报，对自选池做树粮菜量化打分，并回看标的自该日起的实际走势。</p>
-      <p class="hint">「批量时点验证」可跨多个历史日期汇总树粮菜命中率，并与上证指数对比，验证长赢理论是否跑赢。</p>
+    <!-- ── 全市场扫描结果 ─────────────────────────────────────────── -->
+    <template v-if="mode === 'scan' && scanResult">
+      <div v-if="scanResult.warning" class="warning-banner">⚠ {{ scanResult.warning }}</div>
+      <div v-if="scanResult.season" class="season-card" :style="{ borderColor: scanResult.season.color }">
+        <div class="season-left">
+          <div class="season-title" :style="{ color: scanResult.season.color }">📅 当时四季：{{ scanResult.season.label }}</div>
+          <div class="season-desc">{{ scanResult.season.description }}</div>
+        </div>
+        <div class="season-right">
+          <div class="season-row"><span>策略</span>{{ scanResult.season.strategy }}</div>
+          <div class="season-row"><span>操作</span>{{ scanResult.season.action }}</div>
+          <div class="season-row"><span>仓位</span>{{ scanResult.season.position_range[0] }}% ~ {{ scanResult.season.position_range[1] }}%</div>
+          <div class="season-row" v-if="scanResult.season.signals"><span>信号分</span>{{ scanResult.season.signals.total_score }}（{{ scanResult.season.signals.trend_60d_pct ?? 0 }}% / 60日）</div>
+        </div>
+      </div>
+
+      <div class="stats-bar">
+        <div class="stat-item"><span class="stat-label">全市场扫描</span><span class="stat-value">{{ scanStats.total }}</span></div>
+        <div class="stat-item"><span class="stat-label">🌳 树</span><span class="stat-value" style="color:#22c55e">{{ scanStats.tree }}</span></div>
+        <div class="stat-item"><span class="stat-label">🌾 粮</span><span class="stat-value" style="color:#f59e0b">{{ scanStats.grain }}</span></div>
+        <div class="stat-item"><span class="stat-label">🥬 菜</span><span class="stat-value" style="color:#ef4444">{{ scanStats.vegetable }}</span></div>
+        <div class="stat-item"><span class="stat-label">返回 Top</span><span class="stat-value">{{ scanStats.returned }}</span></div>
+        <div class="stat-item" v-if="scanStats.truncated"><span class="stat-label">截断</span><span class="stat-value" style="color:#f59e0b">+{{ scanStats.truncated }}</span></div>
+        <div class="stat-item"><span class="stat-label">数据口径</span><span class="stat-value" style="font-size:13px">披露日 ≤ {{ scanResult.date }}</span></div>
+      </div>
+
+      <div class="result-table-wrap">
+        <table class="result-table scan-table">
+          <thead>
+            <tr>
+              <th>代码</th>
+              <th>分类</th>
+              <th>得分</th>
+              <th>报告期</th>
+              <th>EPS</th>
+              <th>ROE%</th>
+              <th>毛利率%</th>
+              <th>净利率%</th>
+              <th>负债率%</th>
+              <th>营收同比%</th>
+              <th>净利同比%</th>
+              <th v-if="scanWithPerf">+20日%</th>
+              <th v-if="scanWithPerf">+60日%</th>
+              <th v-if="scanWithPerf">+250日%</th>
+              <th>明细</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in scanResult.results" :key="r.market + r.code">
+              <td class="code-cell">{{ r.market }}.{{ r.code }}</td>
+              <td>
+                <span class="cat-badge" :style="{ color: CATEGORY_COLORS[r.category], background: CATEGORY_COLORS[r.category] + '22' }">
+                  {{ r.label }}
+                </span>
+              </td>
+              <td class="score-cell">{{ fmt(r.score) }}</td>
+              <td>{{ r.report_date }}</td>
+              <td>{{ fmt(r.indicators.eps) }}</td>
+              <td>{{ fmt(r.indicators.roe) }}</td>
+              <td>{{ fmt(r.indicators.gross_margin) }}</td>
+              <td>{{ fmt(r.indicators.net_margin) }}</td>
+              <td>{{ fmt(r.indicators.debt_ratio) }}</td>
+              <td :style="{ color: colorBy(r.indicators.rev_yoy) }">{{ fmt(r.indicators.rev_yoy) }}</td>
+              <td :style="{ color: colorBy(r.indicators.np_yoy) }">{{ fmt(r.indicators.np_yoy) }}</td>
+              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_20d) }">{{ fmt(r.performance?.ret_20d) }}</td>
+              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_60d) }">{{ fmt(r.performance?.ret_60d) }}</td>
+              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_250d) }">{{ fmt(r.performance?.ret_250d) }}</td>
+              <td>
+                <details class="score-details">
+                  <summary>🌳{{ Math.round(r.scores.tree) }} / 🌾{{ Math.round(r.scores.grain) }} / 🥬{{ Math.round(r.scores.vegetable) }}</summary>
+                  <div v-for="(ds, cat) in r.details" :key="cat" class="score-block">
+                    <div class="score-cat" :style="{ color: CATEGORY_COLORS[cat] }">{{ CATEGORY_LABELS[cat] }} {{ Math.round(r.scores[cat]) }}分</div>
+                    <ul>
+                      <li v-for="d in ds" :key="d.name">{{ d.reason }}</li>
+                    </ul>
+                  </div>
+                </details>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div v-if="scanResult.results.length === 0" class="empty-state">
+        <p>该日期/条件下无入选标的</p>
+        <p class="hint">尝试切换日期、降低最低分类分或扩大市场范围</p>
+      </div>
+    </template>
+
+    <div v-else-if="!loading && !verifyLoading && !scanLoading" class="intro">
+      <h3>📊 长赢基本面选股（P1/P2）</h3>
+      <p>选一个历史日期，用<b>截至当天已披露</b>的 gpcw 财报，对自选池（或全市场）做树粮菜量化打分，并回看标的自该日起的实际走势。</p>
+      <p class="hint">「批量时点验证」跨多个历史日期汇总命中率并与上证指数对比；「全市场扫描」对全市场逐只打分返回 Top N。</p>
     </div>
   </div>
 </template>
@@ -613,5 +799,28 @@ onMounted(() => {
 .intro { text-align: center; color: var(--text-muted); padding: 40px 20px; line-height: 1.8; }
 .intro h3 { color: var(--text); }
 .hint { font-size: 12px; color: var(--text-dim); }
+.market-checks { display: flex; gap: 10px; }
+.check-item { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); cursor: pointer; }
+.perf-check { align-self: center; margin-bottom: 8px; white-space: nowrap; }
+.num-group { width: 110px; }
+.num-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  width: 100%;
+}
+.warning-banner {
+  background: rgba(245,158,11,0.12);
+  border: 1px solid #f59e0b;
+  color: #f59e0b;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.score-cell { font-weight: 700; color: var(--text); }
+.scan-table { min-width: 1100px; }
 </style>
 

@@ -15,3 +15,25 @@
 - 000001 日线 800 根：笔 133/133 markLine、线段 15/15、中枢 16/16、分型 268、买卖点 17、背驰 35 —— 与后端 /api/v1/chanlun/analyze 计数完全一致；买卖点坐标 0 个越界；console / page 零错误。
 - 数据一致性：笔/线段起止日期全部命中分型日期；中枢 dd≤zd≤zg≤gg 且起止落在 K 线窗口内；买卖点/背驰日期均落在 800 根 K 线窗口内。
 - 修复要点：ECharts 按需注册补 ScatterChart + MarkAreaComponent（此前分型/买卖点/背驰不可见、中枢无边框）；fetchBars 新增 maxCount，缠论页 K 线窗口与分析窗口对齐（8000 → 800），叠加层不再压缩到右端 10%。
+
+---
+
+# 长赢基本面选股截图（V85–V88）
+
+用 Playwright（web-ui/scripts/fundamental-scan-screenshot.mjs）打开 /fundamental，运行选股/批量验证/全市场扫描后截图。
+
+| 文件 | 说明 |
+| --- | --- |
+| fundamental_config.png | 单日选股配置（历史日期 + 自选池 + 类型） |
+| fundamental_result.png | 单日选股结果表（EPS/ROE/毛利率/负债率/同比/后续收益） |
+| fundamental_detail.png | 单行展开树粮菜三张打分明细 |
+| verify_config.png | 批量时点验证配置（多日期 + 自选池） |
+| verify_result.png | 批量验证汇总（α/跑赢徽章 + 按分类统计表） |
+| scan_config_result.png | P2 全市场扫描：5550 只全市场扫描，树 280/粮 4249/菜 942，Top 50 结果表 + 季节卡 + 统计栏 |
+| scan_detail.png | 全市场扫描行展开树粮菜打分明细 |
+
+V88 全市场扫描验证要点（/fundamental → 🔭 全市场扫描，2026-09-01，沪+深）：
+
+- 全市场扫描 5550 只（gpcw 2026Q2 全量），by_category 树 280 / 粮 4249 / 菜 942
+- 结果表 Top 50 正常渲染（截断 +5421 提示），季节「春季·播种期」卡片正确
+- 首行明细展开：🌳49 / 🌾100 / 🥬30 三张明细卡，字段与 API 一致；console / page 零错误

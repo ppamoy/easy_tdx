@@ -329,3 +329,57 @@ def pick_report(
         return None
     usable.sort(key=lambda r: (r["disclosure_date"] or r["report_date"] or date.min), reverse=True)
     return usable[0]
+
+
+def pick_reports_bulk(
+    frame: pd.DataFrame,
+    target: date,
+    *,
+    markets: set[str] | None = None,
+) -> pd.DataFrame:
+    """批量 Point-in-time：对整张指标帧一次精出每只股票「截至 target 已披露的最新一期」。
+
+    规则与 :func:`pick_report` 完全一致（披露日 ≤ target；缺失披露日的用报告期
+    近似且相差 ≤100 天），但向量化实现：全市场几千只股票一次完成截断与去重，
+    替代逐股调用 pick_report 的 O(N²) 遍历。返回每只股票一行（code+market 唯一）。
+
+    Args:
+        frame: ``build_indicator_frame`` 输出（含 code/market/report_date/disclosure_date）。
+        target: 目标历史日期。
+        markets: 限定市场集合（None=全部）。
+
+    Returns:
+        与 frame 同构的 DataFrame，每只股票仅保留披露日最新的一期。
+    """
+    if frame is None or frame.empty:
+        return pd.DataFrame()
+    sub = frame
+    if markets:
+        sub = sub[sub["market"].isin(markets)]
+    if sub.empty:
+        return sub
+
+    dd = pd.to_datetime(sub["disclosure_date"], errors="coerce")
+    rd = pd.to_datetime(sub["report_date"], errors="coerce")
+    target_ts = pd.Timestamp(target)
+
+    # 披露日已知：披露日 ≤ target 即可用
+    usable_dd = dd.notna() & (dd <= target_ts)
+    # 披露日缺失：报告期 ≤ target 且相差 ≤100 天（近似，避免用未披露数据）
+    usable_rd = (
+        rd.notna()
+        & dd.isna()
+        & (rd <= target_ts)
+        & ((target_ts - rd) <= pd.Timedelta(days=100))
+    )
+    usable = usable_dd | usable_rd
+    sub = sub[usable]
+    if sub.empty:
+        return sub
+
+    # 排序键：披露日（缺失用报告期），取每只股票最新一期
+    sort_key = dd.fillna(rd)
+    sub = sub.assign(_pit_sort=sort_key).sort_values("_pit_sort", ascending=False)
+    out = sub.groupby(["code", "market"], as_index=False).first()
+    out = out.drop(columns="_pit_sort")
+    return out

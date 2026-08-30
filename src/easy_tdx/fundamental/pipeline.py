@@ -13,6 +13,7 @@ from easy_tdx.fundamental.indicators import (
     build_indicator_frame,
     load_all_periods,
     pick_report,
+    pick_reports_bulk,
 )
 from easy_tdx.fundamental.screener import screen_stock
 from easy_tdx.fundamental.season import SeasonResult, detect_season
@@ -362,3 +363,95 @@ def detect_season_for_date(
     closes = [float(x) for x in df["close"].tolist()]
     vols = [float(x) for x in df["vol"].tolist()] if "vol" in df.columns else None
     return detect_season(dates, closes, target, volumes=vols)
+
+
+def scan_market(
+    target: date,
+    *,
+    markets: tuple[str, ...] = ("SH", "SZ"),
+    stock_type: str = "all",
+    top_n: int = 50,
+    min_score: float = 15.0,
+    with_performance: bool = True,
+    zips: list[str] | None = None,
+    client: TdxClient | None = None,
+    horizons: tuple[int, ...] = (20, 60, 250),
+) -> dict[str, Any]:
+    """P2 全市场扫描：对目标日期 tdx 财报覆盖的全部股票做树粮菜打分并排序。
+
+    与 :func:`run_screen`（自选池）的区别：不传代码池，直接对选中报告期的
+    **全市场记录**做批量 point-in-time（:func:`pick_reports_bulk`），每只股票
+    取披露日 ≤ target 的最新一期，逐只跑树粮菜三维打分，按分类得分降序返回
+    top_n 只（默认 50）。可选附加后续 N 日表现（只对返回的 top_n 计算，
+    避免全市场几千次行情请求）。
+
+    Args:
+        target: 历史时点（只用披露日 ≤ target 的财报）。
+        markets: 扫描的市场子集，默认沪深两市。
+        stock_type: "all"/"tree"/"grain"/"vegetable"。
+        top_n: 每类/总数最多返回的股票数。
+        min_score: 分类得分下限（过滤明显不及格标的）。
+        with_performance: top_n 结果是否附带后续 20/60/250 日表现。
+        zips: 指定的 gpcw 财报文件列表（缺省按 target 自动选择）。
+        client: 注入 TdxClient（测试或省连接用）。
+
+    Returns:
+        {"date", "total_scanned", "results": [...], "by_category": {...},
+         "season": {...}|None, "warning": 可选}
+    """
+    if zips is None:
+        zips = pick_report_zips(target, client=client)
+    recs = load_all_periods(zips, client, codes=None, markets=set(markets))
+    season = detect_season_for_date(target, client=client)
+    base_out: dict[str, Any] = {
+        "date": str(target),
+        "markets": list(markets),
+        "season": season.as_dict() if season else None,
+        "by_category": {cat: 0 for cat in ("tree", "grain", "vegetable")},
+        "total_scanned": 0,
+        "results": [],
+    }
+    if not recs:
+        base_out["warning"] = "无可用 gpcw 财报数据（目标日期无覆盖）"
+        return base_out
+
+    frame = build_indicator_frame(recs)
+    picked = pick_reports_bulk(frame, target, markets=set(markets))
+    if picked.empty:
+        base_out["warning"] = "截至目标日期无已披露财报记录"
+        return base_out
+
+    scored: list[dict[str, Any]] = []
+    by_category: dict[str, int] = {"tree": 0, "grain": 0, "vegetable": 0}
+    pool_size = len(picked)
+    for _, row in picked.iterrows():
+        sr = screen_stock(row, pool_size=pool_size)
+        if sr is None:
+            continue
+        sc = sr.scores.get(sr.category, 0)
+        if sc < min_score:
+            continue
+        by_category[sr.category] = by_category.get(sr.category, 0) + 1
+        if stock_type != "all" and sr.category != stock_type:
+            continue
+        d = sr.as_dict()
+        d["score"] = round(sc, 1)
+        scored.append(d)
+
+    scored.sort(key=lambda r: r["score"], reverse=True)
+    kept = scored[:top_n]
+    if with_performance:
+        for d in kept:
+            perf = subsequent_performance(
+                d["market"], d["code"], target, client=client, horizons=horizons
+            )
+            d["performance"] = perf
+
+    base_out.update({
+        "by_category": by_category,
+        "total_scanned": pool_size,
+        "results": kept,
+    })
+    if scored and len(scored) > len(kept):
+        base_out["truncated"] = len(scored) - len(kept)
+    return base_out

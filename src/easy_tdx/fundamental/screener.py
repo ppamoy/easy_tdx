@@ -284,7 +284,7 @@ def screen_stock(
     s_grain, d_grain = score_grain(row, pool_size)
     s_veg, d_veg = score_vegetable(row, pool_size)
     scores = {TREE: s_tree, GRAIN: s_grain, VEGETABLE: s_veg}
-    category = max(scores, key=scores.get)
+    category = max(scores, key=lambda k: scores[k])
 
     ind = {
         "eps": row.get("eps"),

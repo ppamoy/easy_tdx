@@ -209,3 +209,59 @@ async def fundamental_verify(req: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.exception("fundamental verify 失败")
         raise HTTPException(status_code=500, detail=f"fundamental verify 失败: {e}") from e
+
+
+@router.post("/fundamental/scan")
+async def fundamental_scan(req: dict[str, Any]) -> dict[str, Any]:
+    """P2 全市场扫描：对目标日期全市场股票做树粮菜打分并返回 top_n。
+
+    请求体：
+    {
+      "date": "2026-08-25",
+      "markets": ["SH", "SZ"],
+      "stock_type": "all" | "tree" | "grain" | "vegetable",
+      "top_n": 50,
+      "min_score": 15.0,
+      "with_performance": true,
+    }
+    """
+    from easy_tdx.fundamental.pipeline import scan_market
+
+    date_str = req.get("date", "")
+    if not date_str:
+        raise HTTPException(status_code=400, detail="缺少 date")
+    try:
+        target = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD") from None
+
+    markets = req.get("markets") or ["SH", "SZ"]
+    norm_markets = tuple(str(m).upper()[:2] for m in markets if str(m).upper()[:2] in ("SH", "SZ"))
+    if not norm_markets:
+        raise HTTPException(status_code=400, detail="markets 至少包含 SH 或 SZ")
+
+    stock_type = str(req.get("stock_type", "all"))
+    if stock_type not in ("all", "tree", "grain", "vegetable"):
+        raise HTTPException(status_code=400, detail="stock_type 应为 all/tree/grain/vegetable")
+
+    top_n = max(1, min(int(req.get("top_n", 50)), 200))
+    min_score = float(req.get("min_score", 15.0))
+    with_performance = bool(req.get("with_performance", True))
+
+    def _run() -> dict[str, Any]:
+        return scan_market(
+            target,
+            markets=norm_markets,
+            stock_type=stock_type,
+            top_n=top_n,
+            min_score=min_score,
+            with_performance=with_performance,
+        )
+
+    try:
+        return await asyncio.to_thread(_run)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.exception("fundamental scan 失败")
+        raise HTTPException(status_code=500, detail=f"fundamental scan 失败: {e}") from e
