@@ -114,8 +114,8 @@ def _create_xd_from_bis(
     start_bi = bis[start_bi_idx]
     end_bi = bis[end_bi_idx]
 
-    high = max(bi.high for bi in bis[start_bi_idx:end_bi_idx + 1])
-    low = min(bi.low for bi in bis[start_bi_idx:end_bi_idx + 1])
+    high = max(bi.high for bi in bis[start_bi_idx : end_bi_idx + 1])
+    low = min(bi.low for bi in bis[start_bi_idx : end_bi_idx + 1])
 
     return XD(
         start=start_bi.start,

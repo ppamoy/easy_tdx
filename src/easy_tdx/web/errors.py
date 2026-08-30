@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import traceback as _tb
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import traceback as _tb
 
 from easy_tdx.exceptions import TdxConnectionError
 
@@ -34,6 +35,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
         del request  # unused but required by FastAPI signature
         import logging
+
         logger = logging.getLogger(__name__)
         logger.error("ValueError: %s\n%s", exc, _tb.format_exc())
         return JSONResponse(
@@ -45,6 +47,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def generic_error_handler(request: Request, exc: Exception) -> JSONResponse:
         del request  # unused but required by FastAPI signature
         import logging
+
         logger = logging.getLogger(__name__)
         logger.error("Unhandled exception: %s\n%s", exc, _tb.format_exc())
         return JSONResponse(

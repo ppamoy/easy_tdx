@@ -10,16 +10,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
 from easy_tdx.chanlun.mmd import (
     _calc_breakout_bi_strength_enhanced_v51,
     _calc_pullback_depth_time_v51,
-    _calc_trend_strength_composite_v51,
     _calc_trading_decision_v51,
+    _calc_trend_strength_composite_v51,
 )
-from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, ZS, Direction
-from datetime import datetime
+from easy_tdx.chanlun.types import BI, FX, MMD, ZS, CLKline, Direction, FXType, MMDType
 
 
 def _make_mock_mmd(mmd_type: MMDType, confidence: float = 0.5) -> MMD:
@@ -87,7 +88,9 @@ class TestBreakoutBiStrengthEnhancedV51:
         bis = [entry_bi, breakout_bi]
         volumes = [1000000.0] * 20
         # MACD数据：突破笔面积大于入场笔
-        macd_data = {"hist": [0.0] * 5 + [-0.5] * 5 + [0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.9, 0.8, 0.7]}
+        macd_data = {
+            "hist": [0.0] * 5 + [-0.5] * 5 + [0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.9, 0.8, 0.7]
+        }
         result = _calc_breakout_bi_strength_enhanced_v51(mmd, bis, None, volumes, macd_data)
         assert result["score"] >= 1  # 至少有一个维度通过
         assert result["confidence_adjust"] >= 0
@@ -234,7 +237,9 @@ class TestTrendStrengthCompositeV51:
     def test_insufficient_data_returns_default(self):
         """数据不足时返回默认值。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
-        result = _calc_trend_strength_composite_v51(mmd, [100.0] * 10, [101.0] * 10, [99.0] * 10, None)
+        result = _calc_trend_strength_composite_v51(
+            mmd, [100.0] * 10, [101.0] * 10, [99.0] * 10, None
+        )
         assert result["total_score"] == 0
         assert result["confidence_adjust"] == 0.0
 
@@ -335,7 +340,6 @@ class TestFindMMDsV51Integration:
 
     def test_v51_fields_present_in_mmd(self):
         """V51字段应存在于MMD对象中。"""
-        from easy_tdx.chanlun.types import MMD
         mmd = _make_mock_mmd(MMDType.BUY_3)
         assert hasattr(mmd, "_breakout_bi_strength_enhanced_v51")
         assert hasattr(mmd, "_pullback_depth_time_v51")
@@ -365,7 +369,14 @@ class TestFindMMDsV51Integration:
         assert -0.05 <= result2["confidence_adjust"] <= 0.05
 
         result3 = _calc_trading_decision_v51(mmd, closes, highs, lows, None)
-        assert result3["decision"] in ("buy_aggressive", "buy_cautious", "wait", "sell_aggressive", "sell_cautious", "hold")
+        assert result3["decision"] in (
+            "buy_aggressive",
+            "buy_cautious",
+            "wait",
+            "sell_aggressive",
+            "sell_cautious",
+            "hold",
+        )
 
 
 if __name__ == "__main__":

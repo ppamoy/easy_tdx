@@ -13,16 +13,16 @@ from __future__ import annotations
 from datetime import datetime
 
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.mmd import _find_second_type_mmds, _find_third_type_mmds
+from easy_tdx.chanlun.mmd import _find_second_type_mmds
 from easy_tdx.chanlun.types import (
     BI,
+    FX,
+    MMD,
+    ZS,
     CLKline,
     Direction,
-    FX,
     FXType,
-    MMD,
     MMDType,
-    ZS,
 )
 
 
@@ -64,8 +64,16 @@ def _bi(index: int, direction: Direction, start_k: int, end_k: int, high: float,
     """
     start_mid = _ck(start_k, high, low)
     end_mid = _ck(end_k, high, low)
-    start_fx = _fx(FXType.DI if direction == Direction.UP else FXType.DING, start_mid, low if direction == Direction.UP else high)
-    end_fx = _fx(FXType.DING if direction == Direction.UP else FXType.DI, end_mid, high if direction == Direction.UP else low)
+    start_fx = _fx(
+        FXType.DI if direction == Direction.UP else FXType.DING,
+        start_mid,
+        low if direction == Direction.UP else high,
+    )
+    end_fx = _fx(
+        FXType.DING if direction == Direction.UP else FXType.DI,
+        end_mid,
+        high if direction == Direction.UP else low,
+    )
     return BI(
         start=start_fx,
         end=end_fx,
@@ -92,8 +100,14 @@ class TestSecondTypeTimeWindowIndexConsistency:
         ]
         config = ChanlunConfig()
         mmds = _find_second_type_mmds(
-            bis, [], first_type_mmds, config,
-            volatility=0.01, volumes=None, macd_data=None, closes=None,
+            bis,
+            [],
+            first_type_mmds,
+            config,
+            volatility=0.01,
+            volumes=None,
+            macd_data=None,
+            closes=None,
         )
         types = [m.mmd_type for m in mmds]
         assert MMDType.BUY_2 in types, f"应识别 2买，实际: {types}"
@@ -111,8 +125,14 @@ class TestSecondTypeTimeWindowIndexConsistency:
         ]
         config = ChanlunConfig()
         mmds = _find_second_type_mmds(
-            bis, [], first_type_mmds, config,
-            volatility=0.01, volumes=None, macd_data=None, closes=None,
+            bis,
+            [],
+            first_type_mmds,
+            config,
+            volatility=0.01,
+            volumes=None,
+            macd_data=None,
+            closes=None,
         )
         types = [m.mmd_type for m in mmds]
         assert MMDType.BUY_2 not in types, f"超过K线窗口不应识别 2买，实际: {types}"
@@ -130,8 +150,14 @@ class TestSecondTypeTimeWindowIndexConsistency:
         ]
         config = ChanlunConfig()
         mmds = _find_second_type_mmds(
-            bis, [], first_type_mmds, config,
-            volatility=0.01, volumes=None, macd_data=None, closes=None,
+            bis,
+            [],
+            first_type_mmds,
+            config,
+            volatility=0.01,
+            volumes=None,
+            macd_data=None,
+            closes=None,
         )
         types = [m.mmd_type for m in mmds]
         assert MMDType.SELL_2 in types, f"应识别 2卖，实际: {types}"
@@ -222,4 +248,3 @@ class TestThirdTypeIndexConsistency:
         ]
         assert len(break_candidates) >= 1, "跌破笔应按 k_index 被正确找到"
         assert break_candidates[0].index == 4
-

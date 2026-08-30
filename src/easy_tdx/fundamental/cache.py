@@ -36,9 +36,22 @@ FORMAT_VERSION = 1
 
 _REPORT_COLS = ("report_date", "disclosure_date")
 _FLOAT_COLS = (
-    "eps", "bps", "roe", "revenue", "net_profit", "gross_margin", "net_margin",
-    "debt_ratio", "ocf", "ocf_ps", "rev_yoy", "np_yoy", "asset_yoy", "op_yoy",
-    "total_shares", "circ_a",
+    "eps",
+    "bps",
+    "roe",
+    "revenue",
+    "net_profit",
+    "gross_margin",
+    "net_margin",
+    "debt_ratio",
+    "ocf",
+    "ocf_ps",
+    "rev_yoy",
+    "np_yoy",
+    "asset_yoy",
+    "op_yoy",
+    "total_shares",
+    "circ_a",
 )
 
 # SELECT 用列（表里另有 zip/idx 作主键，不在业务列中）
@@ -91,8 +104,11 @@ def _text_to_date(s: str | None) -> date | None:
 
 _INSERT_COLS = ("zip", "idx") + _ALL_COLS
 _INSERT_SQL = (
-    "INSERT INTO frames (" + ",".join(_INSERT_COLS) + ") VALUES ("
-    + ",".join("?" for _ in _INSERT_COLS) + ")"
+    "INSERT INTO frames ("
+    + ",".join(_INSERT_COLS)
+    + ") VALUES ("
+    + ",".join("?" for _ in _INSERT_COLS)
+    + ")"
 )
 
 
@@ -133,9 +149,7 @@ def load_frame(filename: str) -> pd.DataFrame | None:
     """读回一份报告期的指标帧；未缓存或格式版本不匹配返回 None。"""
     conn = _connect()
     try:
-        meta = conn.execute(
-            "SELECT format_version FROM meta WHERE zip = ?", (filename,)
-        ).fetchone()
+        meta = conn.execute("SELECT format_version FROM meta WHERE zip = ?", (filename,)).fetchone()
         if meta is None or meta[0] != FORMAT_VERSION:
             return None
         cur = conn.execute(
@@ -160,9 +174,7 @@ def has_frame(filename: str) -> bool:
     """某份报告期是否已按当前格式版本缓存。"""
     conn = _connect()
     try:
-        m = conn.execute(
-            "SELECT format_version FROM meta WHERE zip = ?", (filename,)
-        ).fetchone()
+        m = conn.execute("SELECT format_version FROM meta WHERE zip = ?", (filename,)).fetchone()
     finally:
         conn.close()
     return m is not None and m[0] == FORMAT_VERSION
@@ -179,10 +191,7 @@ def cache_stats() -> dict[str, Any]:
         "db_path": str(DB_PATH),
         "format_version": FORMAT_VERSION,
         "db_bytes": DB_PATH.stat().st_size if DB_PATH.is_file() else 0,
-        "zips": [
-            {"filename": z, "rows": r, "built_at": b}
-            for z, r, b in metas
-        ],
+        "zips": [{"filename": z, "rows": r, "built_at": b} for z, r, b in metas],
         "zips_count": len(metas),
         "total_rows": sum(r for _, r, _ in metas),
     }
@@ -241,6 +250,13 @@ def warm(
 
 
 __all__ = [
-    "CACHE_DIR", "DB_PATH", "FORMAT_VERSION",
-    "store_frame", "load_frame", "has_frame", "cache_stats", "clear_cache", "warm",
+    "CACHE_DIR",
+    "DB_PATH",
+    "FORMAT_VERSION",
+    "store_frame",
+    "load_frame",
+    "has_frame",
+    "cache_stats",
+    "clear_cache",
+    "warm",
 ]

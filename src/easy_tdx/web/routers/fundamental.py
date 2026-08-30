@@ -47,9 +47,7 @@ async def fundamental_indicator(
         zips = pick_report_zips(target)
         if not zips:
             raise HTTPException(status_code=503, detail="无可用的 gpcw 财报文件")
-        frame = load_all_periods_frame(
-            zips, codes={code}, markets={market.upper()[:2]}
-        )
+        frame = load_all_periods_frame(zips, codes={code}, markets={market.upper()[:2]})
         if frame.empty:
             return {"code": code, "market": market.upper(), "rows": [], "error": "无财报数据"}
         if period:
@@ -64,9 +62,25 @@ async def fundamental_indicator(
                 "rows": [],
                 "warning": "截至目标日期无已披露财报",
             }
-        cols = ["report_date", "disclosure_date", "eps", "roe", "revenue", "net_profit",
-                "gross_margin", "net_margin", "debt_ratio", "ocf", "rev_yoy", "np_yoy",
-                "asset_yoy", "op_yoy", "total_shares", "circ_a"]
+        cols = [
+            "report_date",
+            "disclosure_date",
+            "eps",
+            "roe",
+            "revenue",
+            "net_profit",
+            "gross_margin",
+            "net_margin",
+            "debt_ratio",
+            "ocf",
+            "rev_yoy",
+            "np_yoy",
+            "asset_yoy",
+            "op_yoy",
+            "total_shares",
+            "circ_a",
+        ]
+
         def _clean(c: str) -> Any:
             v = row.get(c)
             if v is None:

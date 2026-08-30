@@ -158,8 +158,7 @@ class TrainScoreStore:
                 """INSERT INTO train_scores
                    (id, player_name, score, hit_rate, total_asked, hit_count,
                     code, market, category, count, created_at, extra)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
-                ,
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     record.id,
                     record.player_name,
@@ -198,9 +197,7 @@ class TrainScoreStore:
     def list_all(self) -> list[TrainScore]:
         """全部成绩，创建时间倒序（最近的在最前）。"""
         with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM train_scores ORDER BY created_at DESC"
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM train_scores ORDER BY created_at DESC").fetchall()
         return [TrainScore.from_row(r) for r in rows]
 
     def clear(self) -> int:

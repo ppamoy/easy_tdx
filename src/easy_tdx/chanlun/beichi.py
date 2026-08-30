@@ -11,8 +11,8 @@
 from __future__ import annotations
 
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.types import BC, BI, XD, ZS, BCType
 from easy_tdx.chanlun.mmd import _calc_bi_force
+from easy_tdx.chanlun.types import BC, BI, ZS, BCType
 
 
 def check_bi_beichi(
@@ -22,18 +22,18 @@ def check_bi_beichi(
     config: ChanlunConfig | None = None,
 ) -> list[BC]:
     """检查笔级别的背驰。
-    
+
     使用更严格的背驰判断标准：
     1. 笔背驰：比较相邻同向笔的MACD面积
     2. 盘整背驰：中枢内末笔 vs 首笔
     3. 趋势背驰：连续同向中枢离开力度比较
-    
+
     Args:
         bis: 笔列表
         zss: 中枢列表
         closes: 收盘价序列（用于MACD计算）
         config: 缠论配置
-        
+
     Returns:
         背驰列表
     """
@@ -61,7 +61,7 @@ def check_bi_beichi(
 
 def _check_bi_level_beichi(bis: list[BI], closes: list[float] | None) -> list[BC]:
     """检查笔级别的力度背驰。
-    
+
     比较相邻同向笔，后笔力度 < 前笔80% = 背驰
     """
     bcs: list[BC] = []
@@ -74,7 +74,7 @@ def _check_bi_level_beichi(bis: list[BI], closes: list[float] | None) -> list[BC
             if prev.direction == curr.direction:
                 curr_force = _calc_bi_force(curr, closes, i)
                 prev_force = _calc_bi_force(prev, closes, j)
-                
+
                 # 严格标准：后笔力度 < 前笔80% 才算背驰
                 if prev_force > 0 and curr_force < prev_force * 0.8 and curr_force > 0:
                     bcs.append(
@@ -87,7 +87,7 @@ def _check_bi_level_beichi(bis: list[BI], closes: list[float] | None) -> list[BC
                             msg=(
                                 f"笔背驰: 笔[{curr.index}] 力度={curr_force:.2f} "
                                 f"< 笔[{prev.index}] 力度={prev_force:.2f} "
-                                f"(比率={curr_force/prev_force:.2f})"
+                                f"(比率={curr_force / prev_force:.2f})"
                             ),
                         )
                     )
@@ -98,7 +98,7 @@ def _check_bi_level_beichi(bis: list[BI], closes: list[float] | None) -> list[BC
 
 def _check_pz_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -> list[BC]:
     """检查盘整背驰。
-    
+
     中枢内最后一笔 vs 进入中枢的第一笔
     """
     bcs: list[BC] = []
@@ -127,7 +127,7 @@ def _check_pz_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
                         msg=(
                             f"盘整背驰: 中枢[{zs.index}] 内末笔力度={last_force:.2f} "
                             f"< 首笔力度={first_force:.2f} "
-                            f"(比率={last_force/first_force:.2f})"
+                            f"(比率={last_force / first_force:.2f})"
                         ),
                     )
                 )
@@ -137,7 +137,7 @@ def _check_pz_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
 
 def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -> list[BC]:
     """检查趋势背驰。
-    
+
     连续两个同向中枢，离开力度衰减
     """
     bcs: list[BC] = []
@@ -147,16 +147,16 @@ def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
         curr_zs = zss[i]
 
         # 判断两个中枢是否形成趋势（同向排列）
-        is_down_trend = (prev_zs.zg > curr_zs.zg and prev_zs.zd > curr_zs.zd)
-        is_up_trend = (prev_zs.zg < curr_zs.zg and prev_zs.zd < curr_zs.zd)
-        
+        is_down_trend = prev_zs.zg > curr_zs.zg and prev_zs.zd > curr_zs.zd
+        is_up_trend = prev_zs.zg < curr_zs.zg and prev_zs.zd < curr_zs.zd
+
         if not (is_down_trend or is_up_trend):
             continue
 
         # 比较离开两中枢的笔
         prev_exit = prev_zs.lines[-1]
         curr_exit = curr_zs.lines[-1]
-        
+
         # 确保离开笔方向与趋势一致
         if is_down_trend and prev_exit.direction.value != "down":
             continue
@@ -179,7 +179,7 @@ def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
                     msg=(
                         f"趋势背驰({trend_dir}): 中枢[{curr_zs.index}] 离开力度={curr_force:.2f} "
                         f"< 中枢[{prev_zs.index}] 离开力度={prev_force:.2f} "
-                        f"(比率={curr_force/prev_force:.2f})"
+                        f"(比率={curr_force / prev_force:.2f})"
                     ),
                 )
             )

@@ -37,6 +37,7 @@ class MultiLevelAnalyser:
     def process(self, level: str, df: object) -> ChanlunResult:
         """处理指定级别的 K 线数据。"""
         import pandas as pd
+
         if level not in self._analysers:
             raise KeyError(f"未注册的级别: {level}，可用: {list(self._analysers.keys())}")
         assert isinstance(df, pd.DataFrame)
@@ -93,12 +94,12 @@ class MultiLevelAnalyser:
         # 1. 买卖点类型一致性评分
         buy_types = {"1buy", "2buy", "3buy", "2buy_s"}
         sell_types = {"1sell", "2sell", "3sell", "2sell_s"}
-        
+
         high_is_buy = latest_high.mmd_type.value in buy_types
         high_is_sell = latest_high.mmd_type.value in sell_types
         low_is_buy = latest_low.mmd_type.value in buy_types
         low_is_sell = latest_low.mmd_type.value in sell_types
-        
+
         # 同向信号加分（都买或都卖）
         signal_alignment = 0.0
         if high_is_buy and low_is_buy:

@@ -14,22 +14,48 @@ def _frame() -> pd.DataFrame:
     return pd.DataFrame(
         [
             {
-                "code": "600519", "market": "SH",
-                "report_date": date(2026, 6, 30), "disclosure_date": date(2026, 8, 15),
-                "eps": 21.76, "bps": 185.0, "roe": 11.7, "revenue": 1.4e10,
-                "net_profit": 6.9e9, "gross_margin": 89.8, "net_margin": 50.5,
-                "debt_ratio": 12.1, "ocf": 5.1e9, "ocf_ps": 4.0,
-                "rev_yoy": 6.3, "np_yoy": 1.5, "asset_yoy": 8.0, "op_yoy": 2.0,
-                "total_shares": 1.26e9, "circ_a": 1.26e9,
+                "code": "600519",
+                "market": "SH",
+                "report_date": date(2026, 6, 30),
+                "disclosure_date": date(2026, 8, 15),
+                "eps": 21.76,
+                "bps": 185.0,
+                "roe": 11.7,
+                "revenue": 1.4e10,
+                "net_profit": 6.9e9,
+                "gross_margin": 89.8,
+                "net_margin": 50.5,
+                "debt_ratio": 12.1,
+                "ocf": 5.1e9,
+                "ocf_ps": 4.0,
+                "rev_yoy": 6.3,
+                "np_yoy": 1.5,
+                "asset_yoy": 8.0,
+                "op_yoy": 2.0,
+                "total_shares": 1.26e9,
+                "circ_a": 1.26e9,
             },
             {
-                "code": "000858", "market": "SZ",
-                "report_date": date(2026, 6, 30), "disclosure_date": date(2026, 8, 18),
-                "eps": 3.2, "bps": 40.0, "roe": 8.0, "revenue": 4.0e10,
-                "net_profit": 1.7e10, "gross_margin": 78.0, "net_margin": 42.0,
-                "debt_ratio": 30.0, "ocf": 6.0e9, "ocf_ps": 1.5,
-                "rev_yoy": 12.0, "np_yoy": 10.0, "asset_yoy": 5.0, "op_yoy": 9.0,
-                "total_shares": 1.9e9, "circ_a": 1.9e9,
+                "code": "000858",
+                "market": "SZ",
+                "report_date": date(2026, 6, 30),
+                "disclosure_date": date(2026, 8, 18),
+                "eps": 3.2,
+                "bps": 40.0,
+                "roe": 8.0,
+                "revenue": 4.0e10,
+                "net_profit": 1.7e10,
+                "gross_margin": 78.0,
+                "net_margin": 42.0,
+                "debt_ratio": 30.0,
+                "ocf": 6.0e9,
+                "ocf_ps": 1.5,
+                "rev_yoy": 12.0,
+                "np_yoy": 10.0,
+                "asset_yoy": 5.0,
+                "op_yoy": 9.0,
+                "total_shares": 1.9e9,
+                "circ_a": 1.9e9,
             },
         ]
     )
@@ -105,15 +131,15 @@ class TestCacheWarm:
 
             return [
                 ReportRecord(
-                    code="600519", market="SH",
-                    report_date=date(2026, 6, 30), disclosure_date=date(2026, 8, 15),
+                    code="600519",
+                    market="SH",
+                    report_date=date(2026, 6, 30),
+                    disclosure_date=date(2026, 8, 15),
                     values={"基本每股收益": 21.76, "净资产收益率": 11.7},
                 ),
             ]
 
-        monkeypatch.setattr(
-            "easy_tdx.fundamental.indicators.records_from_zip", _fake_records
-        )
+        monkeypatch.setattr("easy_tdx.fundamental.indicators.records_from_zip", _fake_records)
         monkeypatch.setattr(
             "easy_tdx.fundamental.indicators.build_indicator_frame",
             lambda recs: _frame().iloc[:1] if recs else pd.DataFrame(),

@@ -190,7 +190,7 @@ def _merge_bar_datetime(df: pd.DataFrame, daily_plus: bool) -> pd.DataFrame:
         + df["day"].astype(str).str.zfill(2)
     )
     if daily_plus:
-        df.insert(0, "date", pd.to_datetime(date_str, errors='coerce'))
+        df.insert(0, "date", pd.to_datetime(date_str, errors="coerce"))
     else:
         full_str = (
             date_str
@@ -199,12 +199,12 @@ def _merge_bar_datetime(df: pd.DataFrame, daily_plus: bool) -> pd.DataFrame:
             + ":"
             + df["minute"].astype(str).str.zfill(2)
         )
-        df.insert(0, "datetime", pd.to_datetime(full_str, errors='coerce'))
+        df.insert(0, "datetime", pd.to_datetime(full_str, errors="coerce"))
     # 丢弃日期解析失败的脏数据行（TDX 服务器偶尔返回非法年/月/日）
     if daily_plus:
-        df = df.dropna(subset=['date'])
+        df = df.dropna(subset=["date"])
     else:
-        df = df.dropna(subset=['datetime'])
+        df = df.dropna(subset=["datetime"])
     df.drop(columns=["year", "month", "day", "hour", "minute"], inplace=True)
     return df
 

@@ -69,6 +69,18 @@ extend-exclude = ["*.pyi", "src/easy_tdx/exchange_margin.py"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 
+# V92+ 历史遗留：这些文件含大量既有超长行（多为缠论 docstring/注释/诊断输出），
+# 在 V93 拆行改造完成前豁免 E501（其余规则仍严格检查）。新代码遵循 line-length=100。
+
+[tool.ruff.lint.per-file-ignores]
+"src/easy_tdx/chanlun/mmd.py" = ["E501"]
+"src/easy_tdx/web/routers/diagnosis.py" = ["E501"]
+"src/easy_tdx/backtest/chanlun_validator.py" = ["E501"]
+"src/easy_tdx/backtest/strategies/builtin.py" = ["E501"]
+"src/easy_tdx/web/routers/chanlun.py" = ["E501"]
+"src/easy_tdx/web/routers/monitor.py" = ["E501"]
+"tests/unit/test_chanlun_v52.py" = ["E501"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--tb=short"

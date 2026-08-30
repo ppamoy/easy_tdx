@@ -11,7 +11,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 
 import pandas as pd
-import pytest
 
 from easy_tdx.chanlun import ChanlunAnalyser
 from easy_tdx.web.routers.chanlun import build_train_session_payload
@@ -32,15 +31,17 @@ def _synthetic_df(n: int = 300, seed: int = 7) -> pd.DataFrame:
         close = open_ + drift + rng.uniform(-0.15, 0.15)
         high = max(open_, close) + rng.uniform(0.02, 0.25)
         low = min(open_, close) - rng.uniform(0.02, 0.25)
-        rows.append({
-            "date": dt,  # datetime 对象（与 TDX 返回一致）
-            "open": round(open_, 3),
-            "close": round(close, 3),
-            "high": round(high, 3),
-            "low": round(low, 3),
-            "vol": float(rng.randint(50_000, 200_000)),
-            "amount": float(rng.randint(500_000, 2_000_000)),
-        })
+        rows.append(
+            {
+                "date": dt,  # datetime 对象（与 TDX 返回一致）
+                "open": round(open_, 3),
+                "close": round(close, 3),
+                "high": round(high, 3),
+                "low": round(low, 3),
+                "vol": float(rng.randint(50_000, 200_000)),
+                "amount": float(rng.randint(500_000, 2_000_000)),
+            }
+        )
         dt += timedelta(days=1)
     return pd.DataFrame(rows)
 
@@ -75,7 +76,16 @@ def test_session_candidates_cover_signals_and_distractors() -> None:
     signal_cands = [c for c in cands if c["kind"] == "mmd" and c["signal"]]
     assert len(signal_cands) >= 1, "合成数据应产出买卖点信号候选"
     for c in signal_cands:
-        assert c["signal"]["type"] in {"1buy", "2buy", "3buy", "1sell", "2sell", "3sell", "2buy_s", "2sell_s"}
+        assert c["signal"]["type"] in {
+            "1buy",
+            "2buy",
+            "3buy",
+            "1sell",
+            "2sell",
+            "3sell",
+            "2buy_s",
+            "2sell_s",
+        }
         assert 0 <= c["signal"]["confidence"] <= 1.0
     fx_cands = [c for c in cands if c["kind"] == "fractal"]
     assert len(fx_cands) >= 1

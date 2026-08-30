@@ -79,18 +79,24 @@ class TestPointInTime:
         return pd.DataFrame(
             [
                 {
-                    "code": "600519", "market": "SH",
-                    "report_date": date(2025, 12, 31), "disclosure_date": date(2026, 4, 10),
+                    "code": "600519",
+                    "market": "SH",
+                    "report_date": date(2025, 12, 31),
+                    "disclosure_date": date(2026, 4, 10),
                     "eps": 5.0,
                 },
                 {
-                    "code": "600519", "market": "SH",
-                    "report_date": date(2026, 3, 31), "disclosure_date": date(2026, 4, 25),
+                    "code": "600519",
+                    "market": "SH",
+                    "report_date": date(2026, 3, 31),
+                    "disclosure_date": date(2026, 4, 25),
                     "eps": 1.5,
                 },
                 {
-                    "code": "600519", "market": "SH",
-                    "report_date": date(2026, 6, 30), "disclosure_date": date(2026, 8, 20),
+                    "code": "600519",
+                    "market": "SH",
+                    "report_date": date(2026, 6, 30),
+                    "disclosure_date": date(2026, 8, 20),
                     "eps": 3.0,
                 },
             ]
@@ -150,7 +156,7 @@ class TestSeason:
         closes = []
         px = 100.0
         for i in range(n):
-            px *= (1.005 if up else 0.995)
+            px *= 1.005 if up else 0.995
             closes.append(px)
         return dates, closes
 
@@ -169,7 +175,6 @@ class TestSeason:
         closes = [100.0, 101.0, 102.0]
         res = detect_season(dates, closes, date(2025, 1, 5))
         assert res.season == "unknown"
-
 
 
 class TestBatchVerify:
@@ -233,7 +238,6 @@ class TestBatchVerify:
         assert s["beats_index"]["ret_20d"]["beats"] is False
 
 
-
 class TestSinaAdapterFallback:
     """新浪数据源适配与 load_pool 回退（合成数据，不依赖网络）。"""
 
@@ -285,6 +289,7 @@ class TestSinaAdapterFallback:
         # 阻断 gpcw（返回空）
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: [])
         import easy_tdx.fundamental.sina_adapter as _sa
+
         monkeypatch.setattr(_sa, "load_sina_rows", lambda *a, **k: self._fake_sina_rows())
 
         fr = pipeline.load_pool(date(2020, 4, 15), [{"market": "SH", "code": "600519"}])
@@ -299,6 +304,7 @@ class TestSinaAdapterFallback:
 
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: [])
         import easy_tdx.fundamental.sina_adapter as _sa
+
         monkeypatch.setattr(_sa, "load_sina_rows", lambda *a, **k: self._fake_sina_rows())
 
         # 5 月 15 日：年报（4/30）已披露 → 应选 2019 年报
@@ -323,28 +329,38 @@ class TestPickReportsBulk:
         return pd.DataFrame(
             [
                 {
-                    "code": "600519", "market": "SH",
-                    "report_date": date(2025, 12, 31), "disclosure_date": date(2026, 4, 10),
+                    "code": "600519",
+                    "market": "SH",
+                    "report_date": date(2025, 12, 31),
+                    "disclosure_date": date(2026, 4, 10),
                     "eps": 5.0,
                 },
                 {
-                    "code": "600519", "market": "SH",
-                    "report_date": date(2026, 3, 31), "disclosure_date": date(2026, 4, 25),
+                    "code": "600519",
+                    "market": "SH",
+                    "report_date": date(2026, 3, 31),
+                    "disclosure_date": date(2026, 4, 25),
                     "eps": 1.5,
                 },
                 {
-                    "code": "600519", "market": "SH",
-                    "report_date": date(2026, 6, 30), "disclosure_date": date(2026, 8, 20),
+                    "code": "600519",
+                    "market": "SH",
+                    "report_date": date(2026, 6, 30),
+                    "disclosure_date": date(2026, 8, 20),
                     "eps": 3.0,
                 },
                 {
-                    "code": "000858", "market": "SZ",
-                    "report_date": date(2026, 3, 31), "disclosure_date": date(2026, 4, 20),
+                    "code": "000858",
+                    "market": "SZ",
+                    "report_date": date(2026, 3, 31),
+                    "disclosure_date": date(2026, 4, 20),
                     "eps": 2.0,
                 },
                 {
-                    "code": "000858", "market": "SZ",
-                    "report_date": date(2026, 6, 30), "disclosure_date": date(2026, 8, 25),
+                    "code": "000858",
+                    "market": "SZ",
+                    "report_date": date(2026, 6, 30),
+                    "disclosure_date": date(2026, 8, 25),
                     "eps": 4.0,
                 },
             ]
@@ -407,7 +423,8 @@ class TestScanMarket:
                 }
             )
             return {
-                "code": code, "market": market,
+                "code": code,
+                "market": market,
                 "report_date": date(2026, 3, 31),
                 "disclosure_date": dd,
                 **ind,
@@ -426,7 +443,8 @@ class TestScanMarket:
 
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: ["gpcwX.zip"])
         monkeypatch.setattr(
-            pipeline, "load_all_periods_frame",
+            pipeline,
+            "load_all_periods_frame",
             lambda *a, **k: pd.DataFrame(self._frame_rows()),
         )
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
@@ -450,7 +468,8 @@ class TestScanMarket:
 
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: ["gpcwX.zip"])
         monkeypatch.setattr(
-            pipeline, "load_all_periods_frame",
+            pipeline,
+            "load_all_periods_frame",
             lambda *a, **k: pd.DataFrame(self._frame_rows()),
         )
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
@@ -466,7 +485,8 @@ class TestScanMarket:
 
         monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: [])
         monkeypatch.setattr(
-            pipeline, "load_all_periods_frame",
+            pipeline,
+            "load_all_periods_frame",
             lambda *a, **k: pd.DataFrame(),
         )
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
@@ -475,5 +495,3 @@ class TestScanMarket:
         assert out["total_scanned"] == 0
         assert out["results"] == []
         assert "warning" in out
-
-

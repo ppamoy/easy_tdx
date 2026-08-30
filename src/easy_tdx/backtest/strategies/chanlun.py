@@ -43,14 +43,24 @@ class ChanlunStrategy(ParametrizedStrategy):
         Param("use_3buy", bool, default=True, label="启用三类买点"),
         Param("use_3sell", bool, default=True, label="启用三类卖点"),
         Param("use_2s_signals", bool, default=False, label="启用类二买/类二卖"),
-        Param("min_confidence", float, default=0.0, min_value=0.0, max_value=1.0, label="最低置信度(0=不过滤)"),
+        Param(
+            "min_confidence",
+            float,
+            default=0.0,
+            min_value=0.0,
+            max_value=1.0,
+            label="最低置信度(0=不过滤)",
+        ),
         Param("stop_loss_pct", float, default=0.08, min_value=0.0, max_value=0.3, label="止损比例"),
-        Param("take_profit_pct", float, default=0.25, min_value=0.0, max_value=0.5, label="止盈比例"),
+        Param(
+            "take_profit_pct", float, default=0.25, min_value=0.0, max_value=0.5, label="止盈比例"
+        ),
     ]
 
     def init(self) -> None:
         """初始化：预计算缠论并构建精确信号队列。"""
         import pandas as pd
+
         from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
         # 构建 DataFrame（保留原始 datetime 用于日期匹配）
@@ -64,14 +74,16 @@ class ChanlunStrategy(ParametrizedStrategy):
             _amount_arr = [float(a) if a else 0.0 for a in self.data.amount.raw]
         except (KeyError, AttributeError):
             _amount_arr = [0.0] * n
-        df = pd.DataFrame({
-            "open": self.data.open.raw.tolist(),
-            "close": self.data.close.raw.tolist(),
-            "high": self.data.high.raw.tolist(),
-            "low": self.data.low.raw.tolist(),
-            "vol": _vol_arr,
-            "amount": _amount_arr,
-        })
+        df = pd.DataFrame(
+            {
+                "open": self.data.open.raw.tolist(),
+                "close": self.data.close.raw.tolist(),
+                "high": self.data.high.raw.tolist(),
+                "low": self.data.low.raw.tolist(),
+                "vol": _vol_arr,
+                "amount": _amount_arr,
+            }
+        )
         if self._datetime_array is not None:
             df["datetime"] = pd.to_datetime([int(d) for d in self._datetime_array], format="%Y%m%d")
         else:
@@ -148,11 +160,17 @@ class ChanlunStrategy(ParametrizedStrategy):
         current_price = float(self.data.close[0])
 
         # 止损/止盈
-        if self._position_count > 0 and (self.p["stop_loss_pct"] > 0 or self.p["take_profit_pct"] > 0):
-            if self.p["stop_loss_pct"] > 0 and current_price <= self._entry_price * (1 - self.p["stop_loss_pct"]):
+        if self._position_count > 0 and (
+            self.p["stop_loss_pct"] > 0 or self.p["take_profit_pct"] > 0
+        ):
+            if self.p["stop_loss_pct"] > 0 and current_price <= self._entry_price * (
+                1 - self.p["stop_loss_pct"]
+            ):
                 self._close_position()
                 return
-            if self.p["take_profit_pct"] > 0 and current_price >= self._entry_price * (1 + self.p["take_profit_pct"]):
+            if self.p["take_profit_pct"] > 0 and current_price >= self._entry_price * (
+                1 + self.p["take_profit_pct"]
+            ):
                 self._close_position()
                 return
 

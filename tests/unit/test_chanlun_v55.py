@@ -14,9 +14,9 @@ import pytest
 
 from easy_tdx.chanlun.mmd import (
     _calc_multi_tf_resonance_filter_v55,
-    _calc_zhongshu_level_weight_v55,
-    _calc_weak_stock_risk_v55,
     _calc_signal_trend_alignment_v55,
+    _calc_weak_stock_risk_v55,
+    _calc_zhongshu_level_weight_v55,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -46,19 +46,24 @@ class TestMultiTFResonanceFilterV55:
         """bi为None时仍可正常调用。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
         mmd.bi = None
-        result = _calc_multi_tf_resonance_filter_v55(mmd, [100.0 + i * 0.1 for i in range(30)], [1000.0] * 30)
+        result = _calc_multi_tf_resonance_filter_v55(
+            mmd, [100.0 + i * 0.1 for i in range(30)], [1000.0] * 30
+        )
         assert isinstance(result["timeframes"], list)
         assert isinstance(result["confidence_adjust"], float)
 
     def test_non_buy3_sell3_signal(self):
         """非3买/3卖信号时跳过。"""
         mmd = _make_mock_mmd(MMDType.BUY_1)
-        result = _calc_multi_tf_resonance_filter_v55(mmd, [100.0 + i * 0.1 for i in range(30)], [1000.0] * 30)
+        result = _calc_multi_tf_resonance_filter_v55(
+            mmd, [100.0 + i * 0.1 for i in range(30)], [1000.0] * 30
+        )
         assert "非3买" in result["msg"] or result["confidence_adjust"] == 0.0
 
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_multi_tf_resonance_filter_v55
+
         assert callable(_calc_multi_tf_resonance_filter_v55)
 
 
@@ -82,6 +87,7 @@ class TestZhongshuLevelWeightV55:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_zhongshu_level_weight_v55
+
         assert callable(_calc_zhongshu_level_weight_v55)
 
 
@@ -123,6 +129,7 @@ class TestWeakStockRiskV55:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_weak_stock_risk_v55
+
         assert callable(_calc_weak_stock_risk_v55)
 
 
@@ -154,6 +161,7 @@ class TestSignalTrendAlignmentV55:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_signal_trend_alignment_v55
+
         assert callable(_calc_signal_trend_alignment_v55)
 
 
@@ -164,10 +172,11 @@ class TestFindMMDsV55Integration:
         """所有V55函数可正常导入。"""
         from easy_tdx.chanlun.mmd import (
             _calc_multi_tf_resonance_filter_v55,
-            _calc_zhongshu_level_weight_v55,
-            _calc_weak_stock_risk_v55,
             _calc_signal_trend_alignment_v55,
+            _calc_weak_stock_risk_v55,
+            _calc_zhongshu_level_weight_v55,
         )
+
         assert callable(_calc_multi_tf_resonance_filter_v55)
         assert callable(_calc_zhongshu_level_weight_v55)
         assert callable(_calc_weak_stock_risk_v55)
@@ -176,6 +185,7 @@ class TestFindMMDsV55Integration:
     def test_v55_fields_in_mmd_type(self):
         """MMD类型包含V55字段定义。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, msg="test")
         assert hasattr(mmd, "_multi_tf_resonance_filter_v55")
         assert hasattr(mmd, "_zhongshu_level_weight_v55")

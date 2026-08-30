@@ -18,7 +18,6 @@ from fastapi import APIRouter, Depends
 
 from easy_tdx.web.convert import category_from_str, market_from_str
 from easy_tdx.web.deps import get_client
-from easy_tdx.web.schemas import StockIdentifier
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +27,7 @@ router = APIRouter(tags=["monitor"])
 @dataclass
 class MonitorTask:
     """单个监控任务。"""
+
     task_id: str
     stocks: list[dict[str, str]]  # [{market, code}]
     category: str  # K线周期
@@ -100,9 +100,13 @@ class SignalMonitor:
 
         new_signals: list[dict[str, Any]] = []
         freq_map: dict[str, str] = {
-            "MIN_1": "1min", "MIN_5": "5min", "MIN_15": "15min",
-            "MIN_30": "30min", "MIN_60": "60min",
-            "DAY": "daily", "WEEK": "weekly",
+            "MIN_1": "1min",
+            "MIN_5": "5min",
+            "MIN_15": "15min",
+            "MIN_30": "30min",
+            "MIN_60": "60min",
+            "DAY": "daily",
+            "WEEK": "weekly",
         }
         freq = freq_map.get(task.category.upper(), "daily")
 
@@ -128,24 +132,27 @@ class SignalMonitor:
                     if mmd.confidence >= task.confidence_threshold:
                         # 检查是否是新信号（不在上次结果中）
                         signal_key = f"{mmd.mmd_type.value}_{mmd.bi.end.k.date.strftime('%Y-%m-%d') if mmd.bi and mmd.bi.end else ''}"
-                        is_new = not any(
-                            s.get("key") == signal_key
-                            for s in task.last_signals
-                        )
+                        is_new = not any(s.get("key") == signal_key for s in task.last_signals)
                         if is_new:
-                            new_signals.append({
-                                "stock": f"{market}{code}",
-                                "type": mmd.mmd_type.value,
-                                "date": result._fmt_dt(mmd.bi.end.k.date) if mmd.bi and mmd.bi.end else None,
-                                "confidence": round(mmd.confidence, 2),
-                                "msg": mmd.msg,
-                                "key": signal_key,
-                            })
+                            new_signals.append(
+                                {
+                                    "stock": f"{market}{code}",
+                                    "type": mmd.mmd_type.value,
+                                    "date": result._fmt_dt(mmd.bi.end.k.date)
+                                    if mmd.bi and mmd.bi.end
+                                    else None,
+                                    "confidence": round(mmd.confidence, 2),
+                                    "msg": mmd.msg,
+                                    "key": signal_key,
+                                }
+                            )
                             # 标记为已记录
-                            task.last_signals.append({
-                                "key": signal_key,
-                                "checked_at": time.time(),
-                            })
+                            task.last_signals.append(
+                                {
+                                    "key": signal_key,
+                                    "checked_at": time.time(),
+                                }
+                            )
                             # 只保留最近100条记录
                             task.last_signals = task.last_signals[-100:]
             except Exception as e:
@@ -161,10 +168,7 @@ class SignalMonitor:
             return 0
         cutoff = time.time() - max_age_hours * 3600
         before = len(task.last_signals)
-        task.last_signals = [
-            s for s in task.last_signals
-            if s.get("checked_at", 0) > cutoff
-        ]
+        task.last_signals = [s for s in task.last_signals if s.get("checked_at", 0) > cutoff]
         return before - len(task.last_signals)
 
     async def start_periodic_check(self, task_id: str, client: Any) -> None:
@@ -296,14 +300,16 @@ async def monitor_list() -> dict[str, Any]:
     """列出所有监控任务。"""
     tasks = []
     for tid, task in _monitor._tasks.items():
-        tasks.append({
-            "task_id": task.task_id,
-            "stock_count": len(task.stocks),
-            "category": task.category,
-            "threshold": task.confidence_threshold,
-            "interval": task.interval_seconds,
-            "last_check": task.last_check,
-            "running": task.running,
-            "scheduled": task.scheduled,
-        })
+        tasks.append(
+            {
+                "task_id": task.task_id,
+                "stock_count": len(task.stocks),
+                "category": task.category,
+                "threshold": task.confidence_threshold,
+                "interval": task.interval_seconds,
+                "last_check": task.last_check,
+                "running": task.running,
+                "scheduled": task.scheduled,
+            }
+        )
     return {"tasks": tasks, "count": len(tasks)}

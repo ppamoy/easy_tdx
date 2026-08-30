@@ -13,10 +13,10 @@ from __future__ import annotations
 import pytest
 
 from easy_tdx.chanlun.mmd import (
-    _calc_trend_stage_follow_confirmation_v53,
     _calc_atr_adaptive_stop_v53,
-    _calc_zs_breakout_strength_v53,
     _calc_signal_quality_tier_v53,
+    _calc_trend_stage_follow_confirmation_v53,
+    _calc_zs_breakout_strength_v53,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -83,14 +83,18 @@ class TestTrendStageFollowConfirmationV53:
     def test_insufficient_data(self):
         """数据不足时返回默认值。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
-        result = _calc_trend_stage_follow_confirmation_v53(mmd, [100.0] * 30, [100.0] * 30, [90.0] * 30)
+        result = _calc_trend_stage_follow_confirmation_v53(
+            mmd, [100.0] * 30, [100.0] * 30, [90.0] * 30
+        )
         assert result["trend_direction"] == "unknown"
         assert result["confidence_adjust"] == 0.0
 
     def test_insufficient_data_short(self):
         """数据不足30根时返回默认值。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
-        result = _calc_trend_stage_follow_confirmation_v53(mmd, [100.0] * 20, [100.0] * 20, [90.0] * 20)
+        result = _calc_trend_stage_follow_confirmation_v53(
+            mmd, [100.0] * 20, [100.0] * 20, [90.0] * 20
+        )
         assert result["trend_direction"] == "unknown"
 
 
@@ -110,6 +114,7 @@ class TestAtrAdaptiveStopV53:
     def test_high_volatility_penalty(self):
         """高波动 → -2%或-3%置信度。"""
         import random
+
         random.seed(42)
         closes = [100.0]
         highs = [100.0]
@@ -192,11 +197,12 @@ class TestFindMMDsV53Integration:
     def test_v53_functions_importable(self):
         """所有V53函数可正常导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_trend_stage_follow_confirmation_v53,
             _calc_atr_adaptive_stop_v53,
-            _calc_zs_breakout_strength_v53,
             _calc_signal_quality_tier_v53,
+            _calc_trend_stage_follow_confirmation_v53,
+            _calc_zs_breakout_strength_v53,
         )
+
         assert callable(_calc_trend_stage_follow_confirmation_v53)
         assert callable(_calc_atr_adaptive_stop_v53)
         assert callable(_calc_zs_breakout_strength_v53)
@@ -205,6 +211,7 @@ class TestFindMMDsV53Integration:
     def test_v53_fields_in_mmd_type(self):
         """MMD类型包含V53字段定义。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, msg="test")
         assert hasattr(mmd, "_trend_stage_follow_confirmation_v53")
         assert hasattr(mmd, "_atr_adaptive_stop_v53")

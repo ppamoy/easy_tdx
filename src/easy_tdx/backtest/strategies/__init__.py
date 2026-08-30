@@ -31,9 +31,11 @@ __all__ = [
 
 def _load_builtin() -> None:
     """导入内置策略模块以触发注册（惰性，避免循环导入）。"""
-    from easy_tdx.backtest.strategies import builtin  # noqa: F401
-    from easy_tdx.backtest.strategies import chanlun  # noqa: F401
-    from easy_tdx.backtest.strategies import changying_chanlun  # noqa: F401
+    from easy_tdx.backtest.strategies import (
+        builtin,  # noqa: F401
+        changying_chanlun,  # noqa: F401
+        chanlun,  # noqa: F401
+    )
 
     # 触发 REF 符号的导入校验（builtin 顶部已导入，这里仅保留语义占位）
     del builtin

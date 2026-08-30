@@ -6,8 +6,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-from easy_tdx.chanlun.mmd import _calc_confidence, find_mmds, _check_post_signal_price_follow_through, _calc_signal_validity_window, _calc_confidence_v47
+from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun.mmd import (
+    _calc_confidence,
+    _calc_confidence_v47,
+    _calc_signal_validity_window,
+    _check_post_signal_price_follow_through,
+    find_mmds,
+)
 from easy_tdx.chanlun.multi_level import MultiLevelAnalyser
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -17,7 +23,6 @@ class TestConfidenceScoring:
 
     def test_confidence_base_values(self):
         """测试各类买卖点的基礎置信度。"""
-        from easy_tdx.chanlun.types import ZS
 
         # 1买基础置信度应最高
         mmd_1buy = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰(强度=strong)")
@@ -33,7 +38,6 @@ class TestConfidenceScoring:
 
     def test_confidence_beichi_strength_bonus(self):
         """测试背驰强度对置信度的影响。"""
-        from easy_tdx.chanlun.types import ZS
 
         mmd_weak = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰(强度=weak)")
         mmd_strong = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰(强度=strong)")
@@ -46,7 +50,6 @@ class TestConfidenceScoring:
 
     def test_confidence_trend_bonus(self):
         """测试趋势强度对置信度的加成。"""
-        from easy_tdx.chanlun.types import ZS
 
         mmd = MMD(mmd_type=MMDType.BUY_2, msg="2买: 回调确认")
         conf_low = _calc_confidence(mmd, 0.0)
@@ -57,7 +60,6 @@ class TestConfidenceScoring:
 
     def test_confidence_clamped_to_range(self):
         """测试置信度被限制在[0, 1]范围内。"""
-        from easy_tdx.chanlun.types import ZS
 
         # 弱背驰 + 低趋势强度
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3卖: 跌破确认(强度=weak)")
@@ -81,15 +83,17 @@ class TestPercentageFix:
             else:
                 close.append(close[-1] * 1.003)
         close = np.array(close)
-        return pd.DataFrame({
-            "datetime": dates,
-            "open": close * (1 + np.random.uniform(-0.005, 0.005, n)),
-            "high": close * (1 + np.random.uniform(0, 0.01, n)),
-            "low": close * (1 + np.random.uniform(-0.01, 0, n)),
-            "close": close,
-            "amount": [1e6] * n,
-            "vol": [1e5] * n,
-        })
+        return pd.DataFrame(
+            {
+                "datetime": dates,
+                "open": close * (1 + np.random.uniform(-0.005, 0.005, n)),
+                "high": close * (1 + np.random.uniform(0, 0.01, n)),
+                "low": close * (1 + np.random.uniform(-0.01, 0, n)),
+                "close": close,
+                "amount": [1e6] * n,
+                "vol": [1e5] * n,
+            }
+        )
 
     def test_no_negative_drawdown_pct(self):
         """测试2买消息中不会出现负数回撤百分比。"""
@@ -101,6 +105,7 @@ class TestPercentageFix:
             if "回撤" in mmd.msg:
                 # 提取百分比数值
                 import re
+
                 match = re.search(r"回撤([-\d.]+)%", mmd.msg)
                 if match:
                     pct = float(match.group(1))
@@ -133,15 +138,17 @@ class TestMultiLevelConfluence:
             else:
                 close.append(close[-1] * (0.998 + np.random.normal(0, 0.005)))
         close = np.array(close)
-        return pd.DataFrame({
-            "datetime": dates,
-            "open": close * (1 + np.random.uniform(-0.003, 0.003, n)),
-            "high": close * (1 + np.random.uniform(0, 0.008, n)),
-            "low": close * (1 + np.random.uniform(-0.008, 0, n)),
-            "close": close,
-            "amount": [1e6] * n,
-            "vol": [1e5] * n,
-        })
+        return pd.DataFrame(
+            {
+                "datetime": dates,
+                "open": close * (1 + np.random.uniform(-0.003, 0.003, n)),
+                "high": close * (1 + np.random.uniform(0, 0.008, n)),
+                "low": close * (1 + np.random.uniform(-0.008, 0, n)),
+                "close": close,
+                "amount": [1e6] * n,
+                "vol": [1e5] * n,
+            }
+        )
 
     def test_confluence_score_structure(self):
         """测试一致性评分返回正确的数据结构。"""
@@ -180,15 +187,17 @@ class TestMultiLevelConfluence:
         mla.add_level("daily", daily_analyser)
 
         # 用很短的数据，可能不会产生买卖点
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=50, freq="D"),
-            "open": [10.0] * 50,
-            "high": [10.1] * 50,
-            "low": [9.9] * 50,
-            "close": [10.0] * 50,
-            "amount": [1e6] * 50,
-            "vol": [1e5] * 50,
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=50, freq="D"),
+                "open": [10.0] * 50,
+                "high": [10.1] * 50,
+                "low": [9.9] * 50,
+                "close": [10.0] * 50,
+                "amount": [1e6] * 50,
+                "vol": [1e5] * 50,
+            }
+        )
         mla.process("daily", df)
 
         result = mla.compute_confluence_score("daily", "daily")
@@ -226,6 +235,7 @@ class TestV10Enhancements:
     def test_calc_ma_slope_up(self):
         """测试MA斜率计算：上升趋势返回up。"""
         from easy_tdx.chanlun.mmd import _calc_ma_slope
+
         # 模拟上升趋势数据
         closes = [10.0 + i * 0.1 for i in range(50)]
         result = _calc_ma_slope(closes, 40)
@@ -234,6 +244,7 @@ class TestV10Enhancements:
     def test_calc_ma_slope_down(self):
         """测试MA斜率计算：下降趋势返回down。"""
         from easy_tdx.chanlun.mmd import _calc_ma_slope
+
         # 模拟明显下降趋势数据（更大的跌幅确保斜率< -0.5%）
         closes = [100.0 - i * 0.5 for i in range(50)]
         result = _calc_ma_slope(closes, 40)
@@ -242,6 +253,7 @@ class TestV10Enhancements:
     def test_calc_ma_slope_flat(self):
         """测试MA斜率计算：横盘趋势返回flat。"""
         from easy_tdx.chanlun.mmd import _calc_ma_slope
+
         # 模拟横盘数据
         closes = [20.0] * 50
         result = _calc_ma_slope(closes, 40)
@@ -250,6 +262,7 @@ class TestV10Enhancements:
     def test_calc_ma_slope_insufficient_data(self):
         """测试数据不足时返回flat。"""
         from easy_tdx.chanlun.mmd import _calc_ma_slope
+
         closes = [10.0, 10.1, 10.2]
         result = _calc_ma_slope(closes, 40)
         assert result == "flat"
@@ -257,6 +270,7 @@ class TestV10Enhancements:
     def test_calc_boll_position(self):
         """测试BOLL位置计算。"""
         from easy_tdx.chanlun.mmd import _calc_boll_position
+
         # 模拟上升趋势数据（价格应位于中轨附近或以上）
         closes = [10.0 + i * 0.05 for i in range(50)]
         result = _calc_boll_position(closes, 40)
@@ -267,6 +281,7 @@ class TestV10Enhancements:
     def test_calc_boll_position_extreme(self):
         """测试BOLL极端位置计算。"""
         from easy_tdx.chanlun.mmd import _calc_boll_position
+
         # 模拟剧烈波动数据
         closes = [10.0] * 20 + [20.0] * 30  # 突然暴涨
         result = _calc_boll_position(closes, 45)
@@ -275,6 +290,7 @@ class TestV10Enhancements:
     def test_calc_boll_insufficient_data(self):
         """测试BOLL数据不足时返回中性值。"""
         from easy_tdx.chanlun.mmd import _calc_boll_position
+
         closes = [10.0, 10.1]
         result = _calc_boll_position(closes, 5)
         assert result["percent_b"] == 0.5
@@ -283,6 +299,7 @@ class TestV10Enhancements:
     def test_calc_adx_strength(self):
         """测试ADX趋势强度计算。"""
         from easy_tdx.chanlun.mmd import _calc_adx_strength
+
         # 模拟有明显趋势的数据
         closes = [10.0 + i * 0.1 for i in range(60)]
         highs = [c + 0.1 for c in closes]
@@ -294,6 +311,7 @@ class TestV10Enhancements:
     def test_calc_adx_insufficient_data(self):
         """测试ADX数据不足时返回0和none。"""
         from easy_tdx.chanlun.mmd import _calc_adx_strength
+
         closes = [10.0] * 5
         adx_val, adx_level = _calc_adx_strength(closes, None, None, 3)
         assert adx_val == 0.0
@@ -302,6 +320,7 @@ class TestV10Enhancements:
     def test_calc_rsi_momentum(self):
         """测试RSI动量计算。"""
         from easy_tdx.chanlun.mmd import _calc_rsi_momentum
+
         # 模拟上升趋势
         closes = [10.0 + i * 0.05 for i in range(30)]
         momentum = _calc_rsi_momentum(closes)
@@ -312,14 +331,15 @@ class TestV10Enhancements:
     def test_calc_rsi_momentum_insufficient_data(self):
         """测试RSI动量数据不足时返回0。"""
         from easy_tdx.chanlun.mmd import _calc_rsi_momentum
+
         closes = [10.0, 10.1, 10.2]
         momentum = _calc_rsi_momentum(closes)
         assert momentum == 0.0
 
     def test_v10_confidence_base_values(self):
         """测试V10基础置信度校准值。"""
-        from easy_tdx.chanlun.types import MMD, MMDType
         from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         # 3买置信度应高于V9的0.60（V42调整为0.55基础值）
         mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买V10: 突破确认")
@@ -342,8 +362,8 @@ class TestV10Enhancements:
 
     def test_v10_multi_factor_confluence(self):
         """测试V10多因子共振加成。"""
-        from easy_tdx.chanlun.types import MMD, MMDType
         from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         # 创建上升趋势数据
         np.random.seed(42)
@@ -363,6 +383,7 @@ class TestV10Enhancements:
     def test_rsi_v10_filter_for_3buy(self):
         """测试V10 RSI过滤逻辑正确性。"""
         from easy_tdx.chanlun.mmd import _calc_rsi
+
         # 测试RSI计算边界
         # 持续上涨 → RSI应接近100
         up_closes = [10.0 + i * 0.5 for i in range(20)]
@@ -386,6 +407,7 @@ class TestV11Enhancements:
     def test_calc_adx_strength_trending(self):
         """测试ADX计算：上升趋势返回正确值（V11修正版）。"""
         from easy_tdx.chanlun.mmd import _calc_adx_strength
+
         # 模拟明显上升趋势
         closes = [10.0 + i * 0.1 for i in range(80)]
         highs = [c + 0.1 for c in closes]
@@ -397,15 +419,19 @@ class TestV11Enhancements:
     def test_calc_adx_strength_flat(self):
         """测试ADX计算：横盘数据返回none（V11修正版）。"""
         from easy_tdx.chanlun.mmd import _calc_adx_strength
+
         flat_closes = [20.0] * 80
         flat_highs = [20.1] * 80
         flat_lows = [19.9] * 80
         adx_val, adx_level = _calc_adx_strength(flat_closes, flat_highs, flat_lows, 70)
-        assert adx_val < 20 or adx_level == "none", f"横盘ADX应<20，实际={adx_val}, level={adx_level}"
+        assert adx_val < 20 or adx_level == "none", (
+            f"横盘ADX应<20，实际={adx_val}, level={adx_level}"
+        )
 
     def test_calc_adx_strength_no_highs_lows(self):
         """测试无高低点数据时ADX正常返回（V11修正版）。"""
         from easy_tdx.chanlun.mmd import _calc_adx_strength
+
         closes = [10.0 + i * 0.05 for i in range(80)]
         adx_val, adx_level = _calc_adx_strength(closes, None, None, 70)
         assert isinstance(adx_val, float)
@@ -414,8 +440,9 @@ class TestV11Enhancements:
     def test_ma_slope_threshold_relaxed(self):
         """测试MA斜率阈值放宽（V11：0.5%→0.3%）。"""
         from easy_tdx.chanlun.mmd import _calc_ma_slope
+
         # 模拟弱上升趋势（每日涨幅约0.5%，MA斜率>0.3%）
-        closes = [10.0 * (1.005 ** i) for i in range(50)]
+        closes = [10.0 * (1.005**i) for i in range(50)]
         result = _calc_ma_slope(closes, 40)
         # 弱上升也应被识别为up（阈值从0.5%降到0.3%）
         assert result == "up", f"弱上升趋势应被识别为up，实际={result}"
@@ -423,6 +450,7 @@ class TestV11Enhancements:
     def test_rsi_momentum_threshold_relaxed(self):
         """测试RSI动量阈值放宽（V11：±2.0→±1.5）。"""
         from easy_tdx.chanlun.mmd import _calc_rsi_momentum
+
         # 模拟温和上升趋势
         closes = [10.0 + i * 0.02 for i in range(30)]
         momentum = _calc_rsi_momentum(closes)
@@ -432,8 +460,8 @@ class TestV11Enhancements:
 
     def test_v11_confidence_with_confluence(self):
         """测试V11多时间框架共振加成。"""
-        from easy_tdx.chanlun.types import MMD, MMDType
         from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买V11: 突破确认")
         # 设置confluence_score属性模拟多时间框架共振
@@ -441,10 +469,10 @@ class TestV11Enhancements:
         conf = _calc_confidence(mmd, 0.5)
         assert conf >= 0.60, f"强共振时应提升置信度，实际={conf:.2f}"
 
-    def test_v11_confidence_with_medium_confluence (self):
+    def test_v11_confidence_with_medium_confluence(self):
         """测试V11中等共振加成。"""
-        from easy_tdx.chanlun.types import MMD, MMDType
         from easy_tdx.chanlun.mmd import _calc_confidence
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买V11: 突破确认")
         mmd.confluence_score = 0.55
@@ -458,6 +486,7 @@ class TestV12Enhancements:
     def test_calc_kdj_j_trending(self):
         """测试KDJ J值计算：上升趋势J值应在合理范围。"""
         from easy_tdx.chanlun.mmd import _calc_kdj_j
+
         # 上升趋势
         closes = [10.0 + i * 0.1 for i in range(30)]
         j = _calc_kdj_j(closes)
@@ -467,6 +496,7 @@ class TestV12Enhancements:
     def test_calc_kdj_j_flat(self):
         """测试KDJ J值计算：横盘数据返回中性值。"""
         from easy_tdx.chanlun.mmd import _calc_kdj_j
+
         flat_closes = [20.0] * 20
         j = _calc_kdj_j(flat_closes)
         assert j == 50.0, f"横盘J值应为50，实际={j}"
@@ -474,23 +504,23 @@ class TestV12Enhancements:
     def test_calc_kdj_j_insufficient_data(self):
         """测试KDJ数据不足时返回中性值。"""
         from easy_tdx.chanlun.mmd import _calc_kdj_j
+
         short_closes = [10.0, 10.1, 10.2]
         j = _calc_kdj_j(short_closes)
         assert j == 50.0
 
     def test_find_mmds_accepts_highs_lows(self):
         """测试find_mmds接受highs/lows参数（V12新增）。"""
+
         from easy_tdx.chanlun.mmd import find_mmds
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, ZS, CLKline
-        from datetime import datetime
-        
+
         # 创建简单的笔和中枢数据
         bis = []
         zss = []
         closes = [10.0 + i * 0.1 for i in range(50)]
         highs = [c + 0.1 for c in closes]
         lows = [c - 0.1 for c in closes]
-        
+
         # find_mmds应能接受highs/lows参数而不报错
         try:
             result = find_mmds(bis, zss, closes=closes, highs=highs, lows=lows)
@@ -503,8 +533,9 @@ class TestV12Enhancements:
     def test_mmd_has_confluence_score(self):
         """测试MMD对象有confluence_score字段。"""
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3)
-        assert hasattr(mmd, 'confluence_score')
+        assert hasattr(mmd, "confluence_score")
         assert mmd.confluence_score == 0.0
         mmd.confluence_score = 0.75
         assert mmd.confluence_score == 0.75
@@ -512,22 +543,24 @@ class TestV12Enhancements:
     def test_mmd_has_quality_field(self):
         """测试MMD对象有quality字段。"""
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1)
-        assert hasattr(mmd, 'quality')
+        assert hasattr(mmd, "quality")
         assert mmd.quality is None
 
     def test_adx_uses_real_ohlc(self):
         """测试ADX使用真实OHLC数据（非随机近似）。"""
         from easy_tdx.chanlun.mmd import _calc_adx_strength
+
         # 有明显趋势的数据
         closes = [10.0 + i * 0.1 for i in range(80)]
         highs = [c + 0.1 for c in closes]
         lows = [c - 0.1 for c in closes]
         adx_with_ohlc, level_with = _calc_adx_strength(closes, highs, lows, 70)
-        
+
         # 使用None时应使用随机近似（结果可能不同）
         adx_without_ohlc, level_without = _calc_adx_strength(closes, None, None, 70)
-        
+
         # 两者都应该返回合理的ADX值
         assert adx_with_ohlc >= 0
         assert level_with in ("strong", "medium", "weak", "none")
@@ -541,6 +574,7 @@ class TestV13Enhancements:
     def test_calc_volume_profile_basic(self):
         """测试成交量剖面计算基本功能。"""
         from easy_tdx.chanlun.mmd import _calc_volume_profile
+
         # 生成模拟数据：价格在50-60之间波动，成交量随机
         np.random.seed(42)
         closes = [50.0 + i * 0.2 + np.random.normal(0, 0.5) for i in range(80)]
@@ -558,6 +592,7 @@ class TestV13Enhancements:
     def test_calc_volume_profile_insufficient_data(self):
         """测试数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_volume_profile
+
         closes = [10.0] * 10
         volumes = [1e6] * 10
         profile = _calc_volume_profile(closes, volumes, lookback=60)
@@ -568,6 +603,7 @@ class TestV13Enhancements:
     def test_is_volume_profile_support(self):
         """测试成交量支撑位检测。"""
         from easy_tdx.chanlun.mmd import _is_volume_profile_support
+
         # 生成有明显支撑位的数据：在48-50区间有大量成交
         np.random.seed(77)
         closes = []
@@ -578,7 +614,7 @@ class TestV13Enhancements:
                 volumes.append(1e6 + np.random.normal(0, 2e5))
             elif i < 50:
                 closes.append(48.0 + np.random.normal(0, 0.3))  # 在48附近聚集
-                volumes.append(3e6 + np.random.normal(0, 5e5))   # 高成交量
+                volumes.append(3e6 + np.random.normal(0, 5e5))  # 高成交量
             else:
                 closes.append(48.0 + (i - 50) * 0.15)
                 volumes.append(1e6 + np.random.normal(0, 2e5))
@@ -591,6 +627,7 @@ class TestV13Enhancements:
     def test_is_volume_profile_resistance(self):
         """测试成交量阻力位检测。"""
         from easy_tdx.chanlun.mmd import _is_volume_profile_resistance
+
         np.random.seed(88)
         closes = []
         volumes = []
@@ -611,9 +648,8 @@ class TestV13Enhancements:
 
     def test_find_mmds_with_volume_profile_bonus(self):
         """测试find_mmds接受highs/lows/volumes参数（V13兼容性）。"""
+
         from easy_tdx.chanlun.mmd import find_mmds
-        from easy_tdx.chanlun.types import BI, FX, ZS, CLKline
-        from datetime import datetime
 
         bis = []
         zss = []
@@ -648,6 +684,7 @@ class TestV13Enhancements:
         """测试诊断API响应包含confluence_score字段。"""
         # 此测试验证diagnosis router中的字段名正确性
         from easy_tdx.web.routers.diagnosis import _calc_volume_profile_for_diagnosis
+
         # 应能正常导入且函数存在
         assert callable(_calc_volume_profile_for_diagnosis)
 
@@ -670,6 +707,7 @@ class TestV14Enhancements:
     def test_check_volume_spike_detected(self):
         """测试成交量异常放大检测。"""
         from easy_tdx.chanlun.mmd import _check_volume_spike
+
         # 前25根均量1e6，第30根5e6（5倍放大），满足最小数据要求(lookback+5=25)
         volumes = [1e6] * 25 + [5e6] * 5
         assert _check_volume_spike(volumes, 29, lookback=20, min_ratio=1.5) is True
@@ -677,18 +715,21 @@ class TestV14Enhancements:
     def test_check_volume_spike_not_detected(self):
         """测试正常成交量不触发异常检测。"""
         from easy_tdx.chanlun.mmd import _check_volume_spike
+
         volumes = [1e6] * 21
         assert _check_volume_spike(volumes, 20, lookback=20, min_ratio=1.5) is False
 
     def test_check_volume_spike_insufficient_data(self):
         """测试数据不足时返回False。"""
         from easy_tdx.chanlun.mmd import _check_volume_spike
+
         assert _check_volume_spike([1e6, 1e6], 1, lookback=20) is False
         assert _check_volume_spike(None, 0) is False
 
     def test_detect_price_gap_up(self):
         """测试向上缺口检测。"""
         from easy_tdx.chanlun.mmd import _detect_price_gap
+
         # 前一根最高价10，当前最低价11 → 向上缺口10%
         closes = [10.0, 10.5]
         highs = [10.1, 11.5]
@@ -701,6 +742,7 @@ class TestV14Enhancements:
     def test_detect_price_gap_down(self):
         """测试向下缺口检测。"""
         from easy_tdx.chanlun.mmd import _detect_price_gap
+
         # 前一根最低价10，当前最高价8.5 → 向下缺口约15%
         closes = [10.0, 8.5]
         highs = [10.1, 8.8]
@@ -712,6 +754,7 @@ class TestV14Enhancements:
     def test_detect_price_gap_no_gap(self):
         """测试无缺口时返回正确结果。"""
         from easy_tdx.chanlun.mmd import _detect_price_gap
+
         closes = [10.0, 10.1]
         highs = [10.2, 10.3]
         lows = [9.8, 9.9]
@@ -722,12 +765,14 @@ class TestV14Enhancements:
     def test_detect_price_gap_insufficient_data(self):
         """测试数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _detect_price_gap
+
         result = _detect_price_gap([10.0], [10.1], [9.9], 0)
         assert result["has_gap"] is False
 
     def test_check_macd_histogram_slope_expanding(self):
         """测试MACD柱状图斜率扩大确认。"""
         from easy_tdx.chanlun.mmd import _check_macd_histogram_slope
+
         # 柱状图持续放大（红柱越来越长）
         hist = [0.01, 0.02, 0.04, 0.08, 0.16, 0.32]
         result = _check_macd_histogram_slope({"hist": hist}, 5, direction="up")
@@ -737,6 +782,7 @@ class TestV14Enhancements:
     def test_check_macd_histogram_slope_shrinking(self):
         """测试MACD柱状图斜率收缩检测。"""
         from easy_tdx.chanlun.mmd import _check_macd_histogram_slope
+
         # 柱状图持续缩小（红柱越来越短）
         hist = [0.32, 0.16, 0.08, 0.04, 0.02, 0.01]
         result = _check_macd_histogram_slope({"hist": hist}, 5, direction="up")
@@ -745,6 +791,7 @@ class TestV14Enhancements:
     def test_check_macd_histogram_slope_no_data(self):
         """测试无数据时返回neutral。"""
         from easy_tdx.chanlun.mmd import _check_macd_histogram_slope
+
         result = _check_macd_histogram_slope(None, 0)
         assert result["slope_direction"] == "neutral"
         assert result["confirmed"] is False
@@ -792,14 +839,14 @@ class TestV14Enhancements:
     def test_check_breakout_persistence_insufficient_data(self):
         """测试数据不足时放行。"""
         from easy_tdx.chanlun.mmd import _check_breakout_persistence
+
         assert _check_breakout_persistence([10.0], None, 11.0) is True
         assert _check_breakout_persistence([], None, 11.0) is True
-
 
     def test_signal_report_contains_v14_fields(self):
         """测试信号质量报告包含V14新字段。"""
         from easy_tdx.chanlun.mmd import calc_signal_quality_report
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -816,6 +863,7 @@ class TestV14Enhancements:
             low=10.0,
         )
         from easy_tdx.chanlun.types import ZS
+
         fake_zs = ZS(zg=10.5, zd=10.0, lines=[fake_bi])
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试", bi=fake_bi, zs=fake_zs)
         closes = [10.0 + i * 0.05 for i in range(30)]
@@ -864,7 +912,13 @@ class TestV15Enhancements:
         result = _detect_kline_pattern(closes, highs, lows, 3)
         # 只断言返回合法结构，不依赖具体形态（测试数据较难精确构造）
         assert isinstance(result, dict)
-        assert result["pattern"] in (None, "hammer", "bullish_engulfing", "doji", "bearish_engulfing")
+        assert result["pattern"] in (
+            None,
+            "hammer",
+            "bullish_engulfing",
+            "doji",
+            "bearish_engulfing",
+        )
 
     def test_detect_kline_pattern_doji(self):
         """测试十字星检测。"""
@@ -887,7 +941,7 @@ class TestV15Enhancements:
     def test_calc_signal_aging_fresh(self):
         """测试新鲜信号无衰减。"""
         from easy_tdx.chanlun.mmd import _calc_signal_aging
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -912,7 +966,7 @@ class TestV15Enhancements:
     def test_calc_signal_aging_aged(self):
         """测试过期信号有衰减。"""
         from easy_tdx.chanlun.mmd import _calc_signal_aging
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -954,9 +1008,14 @@ class TestV15Enhancements:
                 self.k_index = k_index
                 self.index = k_index
 
-        bi1 = BI(start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
-                 end=FX(fx_type=FXType.DING, k=FakeK(5), klines=[], val=12.0),
-                 direction="up", index=0, high=12.0, low=10.0)
+        bi1 = BI(
+            start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=FakeK(5), klines=[], val=12.0),
+            direction="up",
+            index=0,
+            high=12.0,
+            low=10.0,
+        )
         bis = [bi1]
         result = _check_break_retest_break(bis, bi1, 11.0, [10.0, 11.0, 12.0])
         assert result["exists"] is False
@@ -1006,7 +1065,7 @@ class TestV16Enhancements:
     def test_signal_aging_attribute_exists(self):
         """测试MMD对象有_signal_aging属性（由find_mmds设置）。"""
         from easy_tdx.chanlun.mmd import _calc_signal_aging
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -1016,7 +1075,10 @@ class TestV16Enhancements:
         fake_bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(20), klines=[], val=10.0),
             end=FX(fx_type=FXType.DING, k=FakeK(25), klines=[], val=11.0),
-            direction="up", index=20, high=11.0, low=10.0,
+            direction="up",
+            index=20,
+            high=11.0,
+            low=10.0,
         )
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="test", bi=fake_bi)
         closes = [10.0 + i * 0.1 for i in range(30)]
@@ -1036,8 +1098,8 @@ class TestV16Enhancements:
         mmd.confidence = 0.75
 
         result = _calc_position_sizing(mmd, None, None, None)
-        assert result['position_pct'] == 55  # conf 0.75 → 55%
-        assert result['suggestion'] == '半仓'
+        assert result["position_pct"] == 55  # conf 0.75 → 55%
+        assert result["suggestion"] == "半仓"
 
     def test_calc_position_sizing_aged_signal(self):
         """测试过期信号的仓位降低。"""
@@ -1047,11 +1109,11 @@ class TestV16Enhancements:
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
         mmd.confidence = 0.75
 
-        aging = {'aged': True, 'age_bars': 20, 'decay_factor': 0.5}
+        aging = {"aged": True, "age_bars": 20, "decay_factor": 0.5}
         result = _calc_position_sizing(mmd, aging, None, None)
         # 过期信号应降仓至 55 * 0.6 = 33%
-        assert result['position_pct'] == 33
-        assert any('过期' in n for n in result['notes'])
+        assert result["position_pct"] == 33
+        assert any("过期" in n for n in result["notes"])
 
     def test_calc_position_sizing_hammer_pattern(self):
         """测试锤子线形态的仓位加成。"""
@@ -1061,9 +1123,9 @@ class TestV16Enhancements:
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
         mmd.confidence = 0.70
 
-        result = _calc_position_sizing(mmd, None, 'hammer', None)
+        result = _calc_position_sizing(mmd, None, "hammer", None)
         # 锤子线加成 +5%
-        assert result['position_pct'] == 45  # 40 base + 5 hammer bonus
+        assert result["position_pct"] == 45  # 40 base + 5 hammer bonus
 
     def test_calc_position_sizing_high_volatility(self):
         """测试高波动市场的仓位降低。"""
@@ -1075,12 +1137,14 @@ class TestV16Enhancements:
 
         result = _calc_position_sizing(mmd, None, None, 0.04)
         # 高波动降仓至 70 * 0.7 = 49%
-        assert result['position_pct'] == 38  # 70 base * 0.7 high vol = 49, but quality grade D reduces it
-        assert any('高波动' in n for n in result['notes'])
+        assert (
+            result["position_pct"] == 38
+        )  # 70 base * 0.7 high vol = 49, but quality grade D reduces it
+        assert any("高波动" in n for n in result["notes"])
 
     def test_calc_position_sizing_quality_grade(self):
         """测试质量评级对仓位的影响。"""
-        from easy_tdx.chanlun.mmd import _calc_position_sizing, _calc_mmd_quality
+        from easy_tdx.chanlun.mmd import _calc_mmd_quality, _calc_position_sizing
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, msg="strong 1买背驰")
@@ -1091,7 +1155,7 @@ class TestV16Enhancements:
 
         result = _calc_position_sizing(mmd, None, None, None)
         # S级应有加成
-        assert result['position_pct'] >= 70
+        assert result["position_pct"] >= 70
 
     def test_calc_position_sizing_doji_unchanged(self):
         """测试十字星不改变仓位建议。"""
@@ -1101,10 +1165,10 @@ class TestV16Enhancements:
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
         mmd.confidence = 0.70
 
-        result = _calc_position_sizing(mmd, None, 'doji', None)
+        result = _calc_position_sizing(mmd, None, "doji", None)
         # 十字星不加成，维持原仓位
-        assert result['position_pct'] == 40
-        assert any('犹豫' in n for n in result['notes'])
+        assert result["position_pct"] == 40
+        assert any("犹豫" in n for n in result["notes"])
 
 
 class TestV17Enhancements:
@@ -1113,22 +1177,25 @@ class TestV17Enhancements:
     def test_calc_ma60_slope_up(self):
         """测试MA60斜率计算：上升趋势返回up。"""
         from easy_tdx.chanlun.mmd import _calc_ma60_slope
+
         # 模拟60根K线的上升趋势（每日涨0.3%）
-        closes = [10.0 * (1.003 ** i) for i in range(80)]
+        closes = [10.0 * (1.003**i) for i in range(80)]
         result = _calc_ma60_slope(closes, 70)
         assert result == "up", f"上升趋势MA60应返回up，实际={result}"
 
     def test_calc_ma60_slope_down(self):
         """测试MA60斜率计算：下降趋势返回down。"""
         from easy_tdx.chanlun.mmd import _calc_ma60_slope
+
         # 模拟60根K线的下降趋势（每日跌0.3%）
-        closes = [10.0 * (0.997 ** i) for i in range(80)]
+        closes = [10.0 * (0.997**i) for i in range(80)]
         result = _calc_ma60_slope(closes, 70)
         assert result == "down", f"下降趋势MA60应返回down，实际={result}"
 
     def test_calc_ma60_slope_flat(self):
         """测试MA60斜率计算：横盘返回flat。"""
         from easy_tdx.chanlun.mmd import _calc_ma60_slope
+
         # 模拟横盘数据
         closes = [10.0] * 80
         result = _calc_ma60_slope(closes, 70)
@@ -1137,6 +1204,7 @@ class TestV17Enhancements:
     def test_calc_ma60_slope_insufficient_data(self):
         """测试数据不足时MA60正常返回。"""
         from easy_tdx.chanlun.mmd import _calc_ma60_slope
+
         closes = [10.0 + i * 0.1 for i in range(30)]
         result = _calc_ma60_slope(closes, 25)
         assert result in ("up", "down", "flat")
@@ -1147,7 +1215,7 @@ class TestV17Enhancements:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
-        conf_low = _calc_confidence(mmd, 0.0)   # 趋势不明确
+        conf_low = _calc_confidence(mmd, 0.0)  # 趋势不明确
         conf_high = _calc_confidence(mmd, 0.8)  # 趋势明确
 
         # 趋势明确时应比不明确时置信度高
@@ -1188,7 +1256,7 @@ class TestV17Enhancements:
     def test_v17_ma60_bonus_in_confidence(self):
         """测试V17 MA60趋势确认加成。"""
         from easy_tdx.chanlun.mmd import _calc_confidence
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -1196,11 +1264,14 @@ class TestV17Enhancements:
                 self.index = k_index
 
         # 上升趋势数据
-        closes = [10.0 * (1.003 ** i) for i in range(80)]
+        closes = [10.0 * (1.003**i) for i in range(80)]
         fake_bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(50), klines=[], val=10.0),
             end=FX(fx_type=FXType.DING, k=FakeK(60), klines=[], val=11.0),
-            direction="up", index=50, high=11.0, low=10.0,
+            direction="up",
+            index=50,
+            high=11.0,
+            low=10.0,
         )
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试", bi=fake_bi)
         conf = _calc_confidence(mmd, 0.5, closes=closes)
@@ -1276,12 +1347,18 @@ class TestV18Enhancements:
         breakout_bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
             end=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
-            direction="up", index=0, high=12.0, low=10.0,
+            direction="up",
+            index=0,
+            high=12.0,
+            low=10.0,
         )
         pullback_bi = BI(
             start=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
             end=FX(fx_type=FXType.DI, k=FakeK(30), klines=[], val=11.0),
-            direction="down", index=10, high=12.0, low=11.0,
+            direction="down",
+            index=10,
+            high=12.0,
+            low=11.0,
         )
         within, span = _check_pullback_time_window(pullback_bi, breakout_bi, max_bars=25)
         assert within is True, f"20根K线应在限制内，实际span={span}"
@@ -1300,12 +1377,18 @@ class TestV18Enhancements:
         breakout_bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
             end=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
-            direction="up", index=0, high=12.0, low=10.0,
+            direction="up",
+            index=0,
+            high=12.0,
+            low=10.0,
         )
         pullback_bi = BI(
             start=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=12.0),
             end=FX(fx_type=FXType.DI, k=FakeK(45), klines=[], val=11.0),
-            direction="down", index=10, high=12.0, low=11.0,
+            direction="down",
+            index=10,
+            high=12.0,
+            low=11.0,
         )
         within, span = _check_pullback_time_window(pullback_bi, breakout_bi, max_bars=25)
         assert within is False, f"30根K线应超出限制，实际span={span}"
@@ -1313,18 +1396,21 @@ class TestV18Enhancements:
     def test_v18_confidence_macd_zero_bonus(self):
         """测试V18 MACD零轴确认加成。"""
         from easy_tdx.chanlun.mmd import _calc_confidence
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
                 self.k_index = k_index
                 self.index = k_index
 
-        closes = [10.0 * (1.003 ** i) for i in range(80)]
+        closes = [10.0 * (1.003**i) for i in range(80)]
         fake_bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(50), klines=[], val=10.0),
             end=FX(fx_type=FXType.DING, k=FakeK(60), klines=[], val=11.0),
-            direction="up", index=50, high=11.0, low=10.0,
+            direction="up",
+            index=50,
+            high=11.0,
+            low=10.0,
         )
 
         # MACD在零轴上方时的3买
@@ -1335,11 +1421,14 @@ class TestV18Enhancements:
         # MACD在零轴下方时的3买
         macd_data_below = {"dif": [-0.1 - i * 0.01 for i in range(80)]}
         mmd_below = MMD(mmd_type=MMDType.BUY_3, msg="3买测试", bi=fake_bi)
-        conf_without_macd = _calc_confidence(mmd_below, 0.7, closes=closes, macd_data=macd_data_below)
+        conf_without_macd = _calc_confidence(
+            mmd_below, 0.7, closes=closes, macd_data=macd_data_below
+        )
 
         # MACD在零轴上方时应比下方有更高置信度
-        assert conf_with_macd > conf_without_macd, \
+        assert conf_with_macd > conf_without_macd, (
             f"MACD零轴上方应提升置信度: {conf_with_macd:.3f} vs {conf_without_macd:.3f}"
+        )
 
     def test_v18_base_confidence_values(self):
         """测试V18基础置信度值：V42校准3买0.55，3卖0.50。"""
@@ -1402,7 +1491,9 @@ class TestV19Enhancements:
         zg = 10.5
 
         pullback_low = 10.4
-        ok, reason = _check_atr_support_zone(pullback_low, zg, 0.0, MMDType.BUY_3, closes, highs, lows, 9)
+        ok, reason = _check_atr_support_zone(
+            pullback_low, zg, 0.0, MMDType.BUY_3, closes, highs, lows, 9
+        )
         assert ok is True, f"回踩应在支撑区域内，实际={reason}"
 
     def test_check_atr_support_zone_3sell(self):
@@ -1416,7 +1507,9 @@ class TestV19Enhancements:
         zd = 9.8
 
         pullback_high = 9.9
-        ok, reason = _check_atr_support_zone(pullback_high, 10.5, zd, MMDType.SELL_3, closes, highs, lows, 9)
+        ok, reason = _check_atr_support_zone(
+            pullback_high, 10.5, zd, MMDType.SELL_3, closes, highs, lows, 9
+        )
         assert ok is True, f"反弹应在阻力区域内，实际={reason}"
 
     def test_calc_signal_freshness_current(self):
@@ -1450,12 +1543,18 @@ class TestV19Enhancements:
         entry_bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(0), klines=[], val=10.0),
             end=FX(fx_type=FXType.DING, k=FakeK(5), klines=[], val=11.0),
-            direction="up", index=0, high=11.0, low=10.0,
+            direction="up",
+            index=0,
+            high=11.0,
+            low=10.0,
         )
         break_bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(10), klines=[], val=11.0),
             end=FX(fx_type=FXType.DING, k=FakeK(15), klines=[], val=13.0),
-            direction="up", index=10, high=13.0, low=11.0,
+            direction="up",
+            index=10,
+            high=13.0,
+            low=11.0,
         )
         closes = [10.0 + i * 0.1 for i in range(20)]
         ratio = _calc_breakout_force_ratio(break_bi, entry_bi, closes)
@@ -1496,6 +1595,7 @@ class TestV20VolatilityRegime:
     def test_get_volatility_regime_low(self):
         """测试低波动市场识别。"""
         from easy_tdx.chanlun.mmd import _get_volatility_regime
+
         regime, adjust = _get_volatility_regime(0.008)
         assert regime == "low", f"应为low，实际={regime}"
         assert adjust == 0.88, f"调整因子应为0.88，实际={adjust}"
@@ -1503,6 +1603,7 @@ class TestV20VolatilityRegime:
     def test_get_volatility_regime_medium(self):
         """测试正常波动市场识别。"""
         from easy_tdx.chanlun.mmd import _get_volatility_regime
+
         regime, adjust = _get_volatility_regime(0.025)
         assert regime == "medium", f"应为medium，实际={regime}"
         assert adjust == 1.0
@@ -1510,6 +1611,7 @@ class TestV20VolatilityRegime:
     def test_get_volatility_regime_high(self):
         """测试高波动市场识别。"""
         from easy_tdx.chanlun.mmd import _get_volatility_regime
+
         regime, adjust = _get_volatility_regime(0.05)
         assert regime == "high", f"应为high，实际={regime}"
         assert adjust == 1.15
@@ -1601,7 +1703,7 @@ class TestV20DynamicStopLoss:
     def test_calc_dynamic_sl_tp_3buy(self):
         """测试3买动态止损止盈计算。"""
         from easy_tdx.chanlun.mmd import _calc_dynamic_stop_loss_take_profit
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, ZS
+        from easy_tdx.chanlun.types import BI, FX, MMD, ZS, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -1611,7 +1713,10 @@ class TestV20DynamicStopLoss:
         bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(10), klines=[], val=10.0),
             end=FX(fx_type=FXType.DING, k=FakeK(15), klines=[], val=10.5),
-            direction="down", index=10, high=10.5, low=10.0,
+            direction="down",
+            index=10,
+            high=10.5,
+            low=10.0,
         )
         zs = ZS(zg=10.3, zd=10.0, done=True)
         mmd = MMD(mmd_type=MMDType.BUY_3, bi=bi, zs=zs)
@@ -1630,7 +1735,7 @@ class TestV20DynamicStopLoss:
     def test_calc_dynamic_sl_tp_3sell(self):
         """测试3卖动态止损止盈计算。"""
         from easy_tdx.chanlun.mmd import _calc_dynamic_stop_loss_take_profit
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, ZS
+        from easy_tdx.chanlun.types import BI, FX, MMD, ZS, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -1640,7 +1745,10 @@ class TestV20DynamicStopLoss:
         bi = BI(
             start=FX(fx_type=FXType.DING, k=FakeK(10), klines=[], val=10.5),
             end=FX(fx_type=FXType.DI, k=FakeK(15), klines=[], val=10.0),
-            direction="up", index=10, high=10.5, low=10.0,
+            direction="up",
+            index=10,
+            high=10.5,
+            low=10.0,
         )
         zs = ZS(zg=10.3, zd=10.0, done=True)
         mmd = MMD(mmd_type=MMDType.SELL_3, bi=bi, zs=zs)
@@ -1661,7 +1769,7 @@ class TestV20SignalSorting:
 
     def test_sort_by_quality_grade(self):
         """测试按质量等级排序。"""
-        from easy_tdx.chanlun.mmd import sort_mmds_by_priority, MMDQuality
+        from easy_tdx.chanlun.mmd import MMDQuality, sort_mmds_by_priority
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd_s = MMD(mmd_type=MMDType.BUY_3, msg="S级信号")
@@ -1680,8 +1788,7 @@ class TestV20SignalSorting:
 
     def test_sort_by_confidence_same_grade(self):
         """测试同等级按置信度排序。"""
-        from easy_tdx.chanlun.mmd import sort_mmds_by_priority
-        from easy_tdx.chanlun.mmd import sort_mmds_by_priority, MMDQuality
+        from easy_tdx.chanlun.mmd import MMDQuality, sort_mmds_by_priority
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd_low = MMD(mmd_type=MMDType.BUY_3, msg="低置信度")
@@ -1697,7 +1804,7 @@ class TestV20SignalSorting:
 
     def test_sort_type_priority(self):
         """测试类型优先级：1买>3买。"""
-        from easy_tdx.chanlun.mmd import sort_mmds_by_priority, MMDQuality
+        from easy_tdx.chanlun.mmd import MMDQuality, sort_mmds_by_priority
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd_3buy = MMD(mmd_type=MMDType.BUY_3, msg="3买")
@@ -1719,6 +1826,7 @@ class TestV20FindMmdsSorted:
     def test_find_mmds_sorted_exists(self):
         """测试find_mmds_sorted函数存在且可用。"""
         from easy_tdx.chanlun.mmd import find_mmds_sorted
+
         assert callable(find_mmds_sorted)
 
     def test_find_mmds_sorted_returns_list(self):
@@ -1851,14 +1959,18 @@ class TestV21ComboSignals:
         # 创建两个相近价位的买卖点
         mmd1 = MMD(mmd_type=MMDType.BUY_1, msg="1买")
         mmd2 = MMD(mmd_type=MMDType.BUY_2, msg="2买")
+
         # 手动设置相近价位（通过模拟bi）
         class FakeK:
             close = 10.0
             k_index = 50
+
         class FakeEnd:
             k = FakeK()
+
         class FakeBI:
             end = FakeEnd()
+
         mmd1.bi = FakeBI()
         mmd2.bi = FakeBI()
         mmd2.bi.end.k.close = 10.05  # 相近价位
@@ -1866,12 +1978,13 @@ class TestV21ComboSignals:
         closes = [10.0 + i * 0.01 for i in range(60)]
         _detect_combo_signals([mmd1, mmd2], closes)
         # 由于距离较远可能不触发，但至少不应报错
-        assert hasattr(mmd1, '_signal_combo')
-        assert hasattr(mmd2, '_signal_combo')
+        assert hasattr(mmd1, "_signal_combo")
+        assert hasattr(mmd2, "_signal_combo")
 
     def test_combo_no_crash_with_empty(self):
         """测试空列表不崩溃。"""
         from easy_tdx.chanlun.mmd import _detect_combo_signals
+
         _detect_combo_signals([], [10.0, 10.1])
 
 
@@ -1978,17 +2091,25 @@ class TestV21Integration:
     def test_find_mmds_has_v21_fields(self):
         """测试find_mmds输出的MMD包含V21字段。"""
         from datetime import datetime
-        from easy_tdx.chanlun.mmd import find_mmds
-        from easy_tdx.chanlun.types import CLKline
+
         from easy_tdx.chanlun.bi import find_bis
         from easy_tdx.chanlun.fractal import find_fractals
+        from easy_tdx.chanlun.mmd import find_mmds
+        from easy_tdx.chanlun.types import CLKline
         from easy_tdx.chanlun.zs import find_zss
 
-        def _ck(idx, dt, o, c, h, l):
+        def _ck(idx, dt, o, c, h, low):
             return CLKline(
-                k_index=idx, date=datetime.strptime(dt, "%Y-%m-%d"),
-                open=o, close=c, high=h, low=l, amount=0.0,
-                index=0, merged_count=1, direction="",
+                k_index=idx,
+                date=datetime.strptime(dt, "%Y-%m-%d"),
+                open=o,
+                close=c,
+                high=h,
+                low=low,
+                amount=0.0,
+                index=0,
+                merged_count=1,
+                direction="",
             )
 
         # 构造包含中枢的K线序列
@@ -2028,9 +2149,9 @@ class TestV21Integration:
         mmds = find_mmds(bis, zss, closes=closes, volumes=volumes, highs=highs, lows=lows)
 
         for mmd in mmds:
-            assert hasattr(mmd, '_decision_recommendation')
-            assert hasattr(mmd, '_signal_combo')
-            assert hasattr(mmd, '_combo_confidence_bonus')
+            assert hasattr(mmd, "_decision_recommendation")
+            assert hasattr(mmd, "_signal_combo")
+            assert hasattr(mmd, "_combo_confidence_bonus")
             rec = mmd._decision_recommendation
             assert rec is None or isinstance(rec, dict)
 
@@ -2156,17 +2277,25 @@ class TestV22Integration:
     def test_find_mmds_has_v22_fields(self):
         """测试find_mmds输出的MMD包含V22字段。"""
         from datetime import datetime
-        from easy_tdx.chanlun.mmd import find_mmds
-        from easy_tdx.chanlun.types import CLKline
+
         from easy_tdx.chanlun.bi import find_bis
         from easy_tdx.chanlun.fractal import find_fractals
+        from easy_tdx.chanlun.mmd import find_mmds
+        from easy_tdx.chanlun.types import CLKline
         from easy_tdx.chanlun.zs import find_zss
 
-        def _ck(idx, dt, o, c, h, l):
+        def _ck(idx, dt, o, c, h, low):
             return CLKline(
-                k_index=idx, date=datetime.strptime(dt, "%Y-%m-%d"),
-                open=o, close=c, high=h, low=l, amount=0.0,
-                index=0, merged_count=1, direction="",
+                k_index=idx,
+                date=datetime.strptime(dt, "%Y-%m-%d"),
+                open=o,
+                close=c,
+                high=h,
+                low=low,
+                amount=0.0,
+                index=0,
+                merged_count=1,
+                direction="",
             )
 
         cks = [
@@ -2205,8 +2334,8 @@ class TestV22Integration:
         mmds = find_mmds(bis, zss, closes=closes, volumes=volumes, highs=highs, lows=lows)
 
         for mmd in mmds:
-            assert hasattr(mmd, '_vol_regime_dual')
-            assert hasattr(mmd, '_vol_price_divergence')
+            assert hasattr(mmd, "_vol_regime_dual")
+            assert hasattr(mmd, "_vol_price_divergence")
             assert isinstance(mmd._vol_regime_dual, dict)
             assert isinstance(mmd._vol_price_divergence, dict)
 
@@ -2428,17 +2557,25 @@ class TestV23Integration:
     def test_find_mmds_has_v23_fields(self):
         """测试find_mmds输出的MMD包含V23字段。"""
         from datetime import datetime
-        from easy_tdx.chanlun.mmd import find_mmds
-        from easy_tdx.chanlun.types import CLKline
+
         from easy_tdx.chanlun.bi import find_bis
         from easy_tdx.chanlun.fractal import find_fractals
+        from easy_tdx.chanlun.mmd import find_mmds
+        from easy_tdx.chanlun.types import CLKline
         from easy_tdx.chanlun.zs import find_zss
 
-        def _ck(idx, dt, o, c, h, l):
+        def _ck(idx, dt, o, c, h, low):
             return CLKline(
-                k_index=idx, date=datetime.strptime(dt, "%Y-%m-%d"),
-                open=o, close=c, high=h, low=l, amount=0.0,
-                index=0, merged_count=1, direction="",
+                k_index=idx,
+                date=datetime.strptime(dt, "%Y-%m-%d"),
+                open=o,
+                close=c,
+                high=h,
+                low=low,
+                amount=0.0,
+                index=0,
+                merged_count=1,
+                direction="",
             )
 
         # 构造足够长的数据以触发V23分析（需要至少130根K线）
@@ -2451,15 +2588,15 @@ class TestV23Integration:
                 base_price *= 0.995
             elif i < 100:
                 # 震荡阶段
-                base_price += (0.5 if i % 3 == 0 else -0.3)
+                base_price += 0.5 if i % 3 == 0 else -0.3
             else:
                 # 反弹阶段
                 base_price += 0.3
             o = base_price * 0.999
             c = base_price
             h = base_price * 1.002
-            l = base_price * 0.998
-            cks.append(_ck(i, dt, round(o, 2), round(c, 2), round(h, 2), round(l, 2)))
+            low = base_price * 0.998
+            cks.append(_ck(i, dt, round(o, 2), round(c, 2), round(h, 2), round(low, 2)))
 
         fxs = find_fractals(cks)
         bis = find_bis(fxs)
@@ -2475,17 +2612,23 @@ class TestV23Integration:
 
         # 构造MACD数据
         from easy_tdx.chanlun.macd import calc_macd
+
         macd_data = calc_macd(closes)
 
         mmds = find_mmds(
-            bis, zss, closes=closes, volumes=volumes,
-            highs=highs, lows=lows, macd_data=macd_data,
+            bis,
+            zss,
+            closes=closes,
+            volumes=volumes,
+            highs=highs,
+            lows=lows,
+            macd_data=macd_data,
         )
 
         for mmd in mmds:
-            assert hasattr(mmd, '_fib_retracement')
-            assert hasattr(mmd, '_rsi_zone')
-            assert hasattr(mmd, '_macd_zero_cross')
+            assert hasattr(mmd, "_fib_retracement")
+            assert hasattr(mmd, "_rsi_zone")
+            assert hasattr(mmd, "_macd_zero_cross")
             assert isinstance(mmd._fib_retracement, dict)
             assert isinstance(mmd._rsi_zone, dict)
             assert isinstance(mmd._macd_zero_cross, dict)
@@ -2601,15 +2744,18 @@ class TestV24ZSStrength:
             gg=115.0,
             dd=85.0,
         )
+
         class FakeK:
             def __init__(self, k_index):
                 self.k_index = k_index
                 self.index = k_index
+
         from easy_tdx.chanlun.types import BI, FX, FXType
+
         for i in range(8):
             bi = BI(
-                start=FX(fx_type=FXType.DI, k=FakeK(i*5), klines=[], val=90.0+i),
-                end=FX(fx_type=FXType.DING, k=FakeK(i*5+5), klines=[], val=110.0-i),
+                start=FX(fx_type=FXType.DI, k=FakeK(i * 5), klines=[], val=90.0 + i),
+                end=FX(fx_type=FXType.DING, k=FakeK(i * 5 + 5), klines=[], val=110.0 - i),
                 direction="up" if i % 2 == 0 else "down",
                 index=i,
                 high=110.0,
@@ -2634,15 +2780,18 @@ class TestV24ZSStrength:
             gg=102.0,
             dd=98.0,
         )
+
         class FakeK:
             def __init__(self, k_index):
                 self.k_index = k_index
                 self.index = k_index
+
         from easy_tdx.chanlun.types import BI, FX, FXType
+
         for i in range(2):
             bi = BI(
-                start=FX(fx_type=FXType.DI, k=FakeK(i*5), klines=[], val=99.0),
-                end=FX(fx_type=FXType.DING, k=FakeK(i*5+5), klines=[], val=101.0),
+                start=FX(fx_type=FXType.DI, k=FakeK(i * 5), klines=[], val=99.0),
+                end=FX(fx_type=FXType.DING, k=FakeK(i * 5 + 5), klines=[], val=101.0),
                 direction="up" if i % 2 == 0 else "down",
                 index=i,
                 high=101.0,
@@ -2755,13 +2904,14 @@ class TestV24Integration:
 
     def test_find_mmds_has_v24_fields(self):
         """测试find_mmds包含V24字段。"""
+        from datetime import datetime
+
+        from easy_tdx.chanlun.bi import find_bis
+        from easy_tdx.chanlun.fractal import find_fractals
+        from easy_tdx.chanlun.macd import calc_macd
         from easy_tdx.chanlun.mmd import find_mmds
         from easy_tdx.chanlun.types import CLKline
-        from easy_tdx.chanlun.fractal import find_fractals
-        from easy_tdx.chanlun.bi import find_bis
         from easy_tdx.chanlun.zs import find_zss
-        from easy_tdx.chanlun.macd import calc_macd
-        from datetime import datetime
 
         cks = []
         base_price = 100.0
@@ -2770,18 +2920,24 @@ class TestV24Integration:
             if i < 60:
                 base_price *= 0.995
             elif i < 120:
-                base_price += (0.5 if i % 3 == 0 else -0.3)
+                base_price += 0.5 if i % 3 == 0 else -0.3
             else:
                 base_price += 0.3
             o = base_price * 0.999
             c = base_price
             h = base_price * 1.002
-            l = base_price * 0.998
+            low = base_price * 0.998
             k = CLKline(
                 k_index=i,
                 date=datetime.strptime(dt, "%Y-%m-%d"),
-                open=o, close=c, high=h, low=l, amount=0.0,
-                index=0, merged_count=1, direction="",
+                open=o,
+                close=c,
+                high=h,
+                low=low,
+                amount=0.0,
+                index=0,
+                merged_count=1,
+                direction="",
             )
             cks.append(k)
 
@@ -2791,6 +2947,7 @@ class TestV24Integration:
 
         if len(bis) < 3 or len(zss) == 0:
             import pytest
+
             pytest.skip("数据不足以生成买卖点")
 
         closes = [k.close for k in cks]
@@ -2798,16 +2955,20 @@ class TestV24Integration:
         macd_data = calc_macd(closes)
 
         mmds = find_mmds(
-            bis, zss, closes=closes, volumes=volumes,
-            highs=[k.high for k in cks], lows=[k.low for k in cks],
+            bis,
+            zss,
+            closes=closes,
+            volumes=volumes,
+            highs=[k.high for k in cks],
+            lows=[k.low for k in cks],
             macd_data=macd_data,
         )
 
         for mmd in mmds:
-            assert hasattr(mmd, '_bi_quality')
-            assert hasattr(mmd, '_zs_strength')
-            assert hasattr(mmd, '_enhanced_divergence')
-            assert hasattr(mmd, '_cross_validation')
+            assert hasattr(mmd, "_bi_quality")
+            assert hasattr(mmd, "_zs_strength")
+            assert hasattr(mmd, "_enhanced_divergence")
+            assert hasattr(mmd, "_cross_validation")
             assert isinstance(mmd._bi_quality, dict)
             assert isinstance(mmd._zs_strength, dict)
             assert isinstance(mmd._enhanced_divergence, dict)
@@ -2817,9 +2978,9 @@ class TestV24Integration:
         """测试V24各条件对置信度的影响。"""
         from easy_tdx.chanlun.mmd import (
             _calc_bi_quality,
+            _calc_cross_validation,
             _calc_zs_strength,
             _detect_enhanced_divergence,
-            _calc_cross_validation,
         )
         from easy_tdx.chanlun.types import MMDType
 
@@ -2842,22 +3003,65 @@ class TestV24Integration:
 
 # ── V25 测试 ───────────────────────────────────────────────────────────────────
 
+
 class TestV25PostSignalConfirm:
     """条件47：信号后确认验证测试。"""
 
     def test_confirmed_buy_signal(self):
-        from easy_tdx.chanlun.mmd import _check_post_signal_confirmation
-        from easy_tdx.chanlun.types import MMD, MMDType
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, Direction
         from datetime import datetime
+
+        from easy_tdx.chanlun.mmd import _check_post_signal_confirmation
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, Direction, FXType, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
         # 信号在idx=5（价格12.5），后续5根继续涨到15.0+
-        closes = [10.0, 10.5, 11.0, 11.5, 12.0, 12.5, 13.0, 13.5, 14.0, 14.5, 15.0, 15.3, 15.6, 15.9, 16.2]
-        bi_end_k = CLKline(k_index=5, date=datetime(2024,1,6), open=12.5, close=12.5, high=12.5, low=12.5, amount=100)
+        closes = [
+            10.0,
+            10.5,
+            11.0,
+            11.5,
+            12.0,
+            12.5,
+            13.0,
+            13.5,
+            14.0,
+            14.5,
+            15.0,
+            15.3,
+            15.6,
+            15.9,
+            16.2,
+        ]
+        bi_end_k = CLKline(
+            k_index=5,
+            date=datetime(2024, 1, 6),
+            open=12.5,
+            close=12.5,
+            high=12.5,
+            low=12.5,
+            amount=100,
+        )
         mmd.bi = BI(
-            start=FX(fx_type=FXType.DI, k=CLKline(k_index=0, date=datetime(2024,1,1), open=10, close=10, high=10, low=10, amount=100), klines=[], val=10, index=0),
+            start=FX(
+                fx_type=FXType.DI,
+                k=CLKline(
+                    k_index=0,
+                    date=datetime(2024, 1, 1),
+                    open=10,
+                    close=10,
+                    high=10,
+                    low=10,
+                    amount=100,
+                ),
+                klines=[],
+                val=10,
+                index=0,
+            ),
             end=FX(fx_type=FXType.DING, k=bi_end_k, klines=[], val=12.5, index=1),
-            direction=Direction.UP, index=0, high=12.5, low=10.0,
+            direction=Direction.UP,
+            index=0,
+            high=12.5,
+            low=10.0,
         )
         result = _check_post_signal_confirmation(mmd, closes)
         assert result["confirmed"] is True, f"expected confirmed=True, got {result}"
@@ -2868,6 +3072,7 @@ class TestV25PostSignalConfirm:
     def test_unconfirmed_sell_signal(self):
         from easy_tdx.chanlun.mmd import _check_post_signal_confirmation
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.6)
         closes = [13.0, 12.8, 12.5, 12.3, 12.0, 12.0, 12.1, 12.2, 12.3, 12.4]
         result = _check_post_signal_confirmation(mmd, closes)
@@ -2877,6 +3082,7 @@ class TestV25PostSignalConfirm:
     def test_post_signal_empty_input(self):
         from easy_tdx.chanlun.mmd import _check_post_signal_confirmation
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
         result = _check_post_signal_confirmation(mmd, [])
         assert result["confirmed"] is False
@@ -2889,10 +3095,13 @@ class TestV25MomentumDecay:
     def test_momentum_decay_detected(self):
         from easy_tdx.chanlun.mmd import _detect_momentum_decay
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
         closes = list(range(10, 30))
-        macd_data = {"hist": [0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005],
-                      "dif": [0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005]}
+        macd_data = {
+            "hist": [0.5, 0.4, 0.3, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005],
+            "dif": [0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0.02, 0.01, 0.005, 0.002, 0.001, 0.0005],
+        }
         result = _detect_momentum_decay(mmd, closes, macd_data)
         assert "momentum_score" in result
         assert "confidence_penalty" in result
@@ -2900,16 +3109,20 @@ class TestV25MomentumDecay:
     def test_strong_momentum(self):
         from easy_tdx.chanlun.mmd import _detect_momentum_decay
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
         closes = list(range(10, 30))
-        macd_data = {"hist": [0.01, 0.02, 0.03, 0.05, 0.08, 0.12, 0.18, 0.25, 0.35, 0.5, 0.7, 1.0],
-                      "dif": [0.001, 0.002, 0.005, 0.01, 0.02, 0.04, 0.07, 0.12, 0.18, 0.25, 0.35, 0.5]}
+        macd_data = {
+            "hist": [0.01, 0.02, 0.03, 0.05, 0.08, 0.12, 0.18, 0.25, 0.35, 0.5, 0.7, 1.0],
+            "dif": [0.001, 0.002, 0.005, 0.01, 0.02, 0.04, 0.07, 0.12, 0.18, 0.25, 0.35, 0.5],
+        }
         result = _detect_momentum_decay(mmd, closes, macd_data)
         assert result["momentum_score"] > 0.4
 
     def test_momentum_empty_input(self):
         from easy_tdx.chanlun.mmd import _detect_momentum_decay
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
         result = _detect_momentum_decay(mmd, [], {})
         assert result["decay_detected"] is False
@@ -2921,9 +3134,10 @@ class TestV25VolRegimeFilter:
     def test_high_volatility_with_volume(self):
         from easy_tdx.chanlun.mmd import _apply_volatility_adaptive_filter
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
         closes = list(range(10, 30))
-        volumes = [100]*15 + [200, 250, 300, 350, 400]
+        volumes = [100] * 15 + [200, 250, 300, 350, 400]
         result = _apply_volatility_adaptive_filter(mmd, closes, volumes, 0.05)
         assert result["regime"] == "high"
         assert result["filter_applied"] is True
@@ -2932,9 +3146,10 @@ class TestV25VolRegimeFilter:
     def test_low_volatility_with_shrinking_volume(self):
         from easy_tdx.chanlun.mmd import _apply_volatility_adaptive_filter
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
         closes = list(range(10, 30))
-        volumes = [100]*15 + [50, 40, 30, 20, 10]
+        volumes = [100] * 15 + [50, 40, 30, 20, 10]
         result = _apply_volatility_adaptive_filter(mmd, closes, volumes, 0.01)
         assert result["regime"] == "low"
         assert result["filter_applied"] is True
@@ -2943,6 +3158,7 @@ class TestV25VolRegimeFilter:
     def test_vol_regime_empty_input(self):
         from easy_tdx.chanlun.mmd import _apply_volatility_adaptive_filter
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
         result = _apply_volatility_adaptive_filter(mmd, [], None, 0.019)
         assert result["regime"] == "low"
@@ -2954,10 +3170,14 @@ class TestV25CompositeQuality:
     def test_high_quality_signal(self):
         from easy_tdx.chanlun.mmd import _calc_composite_quality
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.85)
         mmd._bi_quality = {"quality_score": 0.85, "confidence_bonus": 0.05}
         mmd._zs_strength = {"strength_score": 0.75, "confidence_bonus": 0.03}
-        mmd._cross_validation = {"consensus_score": 0.75, "confirmations": ["macd_trend", "volume_support"]}
+        mmd._cross_validation = {
+            "consensus_score": 0.75,
+            "confirmations": ["macd_trend", "volume_support"],
+        }
         mmd._enhanced_divergence = {"confidence_bonus": 0.02}
         mmd._post_signal_confirm = {"confirmed": True, "confidence_bonus": 0.03}
         mmd._momentum_decay = {"momentum_score": 0.7, "confidence_penalty": 0.01}
@@ -2970,6 +3190,7 @@ class TestV25CompositeQuality:
     def test_low_quality_signal(self):
         from easy_tdx.chanlun.mmd import _calc_composite_quality
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.SELL_3, confidence=0.4)
         mmd._bi_quality = {"quality_score": 0.4, "confidence_bonus": 0.0}
         mmd._zs_strength = {"strength_score": 0.3, "confidence_bonus": -0.02}
@@ -2985,6 +3206,7 @@ class TestV25CompositeQuality:
     def test_composite_quality_minimal(self):
         from easy_tdx.chanlun.mmd import _calc_composite_quality
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_2, confidence=0.5)
         result = _calc_composite_quality(mmd)
         assert result["overall_score"] > 0
@@ -2995,17 +3217,20 @@ class TestV25Integration:
     """V25 集成测试。"""
 
     def test_find_mmds_has_v25_fields(self):
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
-            "high": [11 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
-            "low": [9 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
-            "close": [10 + i*0.05 + (0.5 if i%20 < 10 else -0.3) for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 + (0.5 if i % 20 < 10 else -0.3) for i in range(150)],
+                "high": [11 + i * 0.05 + (0.5 if i % 20 < 10 else -0.3) for i in range(150)],
+                "low": [9 + i * 0.05 + (0.5 if i % 20 < 10 else -0.3) for i in range(150)],
+                "close": [10 + i * 0.05 + (0.5 if i % 20 < 10 else -0.3) for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3017,17 +3242,20 @@ class TestV25Integration:
             assert hasattr(latest, "_composite_quality")
 
     def test_v25_confidence_adjustment(self):
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3130,7 +3358,7 @@ class TestV26DynamicRR:
 
         mmd = MMD(mmd_type=MMDType.BUY_2, confidence=0.6)
         result = _calc_dynamic_rr_optimization(mmd, [], None, None)
-        assert result["volatility_adjusted"] == False
+        assert not result["volatility_adjusted"]
 
 
 class TestV26CrossStock:
@@ -3175,6 +3403,7 @@ class TestV26CrossStock:
     def test_cross_stock_empty(self):
         """测试空列表场景。"""
         from easy_tdx.chanlun.mmd import _calc_cross_stock_comparison
+
         result = _calc_cross_stock_comparison([])
         assert result["ranked_signals"] == []
 
@@ -3184,17 +3413,20 @@ class TestV26Integration:
 
     def test_find_mmds_has_v26_fields(self):
         """测试 find_mmds 包含 V26 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3206,17 +3438,20 @@ class TestV26Integration:
 
     def test_v26_confidence_adjustment(self):
         """测试 V26 置信度调整。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3262,7 +3497,12 @@ class TestV27MultiTFConfluence:
 
         result = _calc_multi_level_confluence_verification(mmds, closes, volatility=0.03)
         assert "trend_alignment" in result
-        assert result["trend_alignment"] in ["strong_bullish", "strong_bearish", "moderate_consistent", "mixed"]
+        assert result["trend_alignment"] in [
+            "strong_bullish",
+            "strong_bearish",
+            "moderate_consistent",
+            "mixed",
+        ]
 
     def test_multi_tf_confluence_mixed(self):
         """测试混合趋势下的区间套共振。"""
@@ -3393,17 +3633,20 @@ class TestV27Integration:
 
     def test_find_mmds_has_v27_fields(self):
         """测试 find_mmds 包含 V27 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3415,17 +3658,20 @@ class TestV27Integration:
 
     def test_v27_confidence_adjustment(self):
         """测试 V27 置信度调整不超出范围。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3482,9 +3728,9 @@ class TestV28BreakoutVolPrice:
 
     def test_breakout_vol_price_3buy(self):
         """测试3买信号的突破量价确认。"""
+
         from easy_tdx.chanlun.mmd import _calc_breakout_vol_price
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, ZS
-        from datetime import datetime
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         closes = [100 + i * 0.5 for i in range(100)]
         volumes = [1000 + i * 10 for i in range(100)]
@@ -3493,13 +3739,17 @@ class TestV28BreakoutVolPrice:
 
         # 创建一个模拟3买信号
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.7)
+
         # 设置bi属性以绕过检查
         class MockK:
             k_index = 90
+
         class MockEnd:
             k = MockK()
+
         class MockBI:
             end = MockEnd()
+
         mmd.bi = MockBI()
 
         result = _calc_breakout_vol_price(mmd, closes, volumes, highs, lows, [])
@@ -3531,12 +3781,16 @@ class TestV28DynamicATRStop:
         lows = [c - 2 for c in closes]
 
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.7)
+
         class MockK:
             k_index = 90
+
         class MockEnd:
             k = MockK()
+
         class MockBI:
             end = MockEnd()
+
         mmd.bi = MockBI()
 
         result = _calc_dynamic_atr_stop(mmd, closes, highs, lows, [])
@@ -3555,12 +3809,16 @@ class TestV28DynamicATRStop:
         lows = [c - 2 for c in closes]
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.85)
+
         class MockK:
             k_index = 90
+
         class MockEnd:
             k = MockK()
+
         class MockBI:
             end = MockEnd()
+
         mmd.bi = MockBI()
 
         result = _calc_dynamic_atr_stop(mmd, closes, highs, lows, [])
@@ -3584,17 +3842,20 @@ class TestV28Integration:
 
     def test_find_mmds_has_v28_fields(self):
         """测试 find_mmds 包含 V28 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3606,17 +3867,20 @@ class TestV28Integration:
 
     def test_v28_confidence_adjustment(self):
         """测试 V28 置信度调整不超出范围。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3638,7 +3902,7 @@ class TestV29TrendContinuity:
     def test_trend_continuity_buy_signal_before_new(self):
         """3买信号在最新位置：检查信号前趋势作为代理。"""
         from easy_tdx.chanlun.mmd import _calc_trend_continuity_confirmation
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -3649,7 +3913,10 @@ class TestV29TrendContinuity:
         mmd.bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(25), klines=[], val=92.0),
             end=FX(fx_type=FXType.DI, k=FakeK(29), klines=[], val=92.0),
-            direction="down", index=29, high=100, low=92,
+            direction="down",
+            index=29,
+            high=100,
+            low=92,
         )
 
         # 模拟信号前下跌趋势（回调到位）
@@ -3663,7 +3930,7 @@ class TestV29TrendContinuity:
     def test_trend_continuity_future_available(self):
         """3买信号非最新：可检查后续表现。"""
         from easy_tdx.chanlun.mmd import _calc_trend_continuity_confirmation
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -3674,7 +3941,10 @@ class TestV29TrendContinuity:
         mmd.bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(5), klines=[], val=55.0),
             end=FX(fx_type=FXType.DI, k=FakeK(10), klines=[], val=60.0),
-            direction="up", index=10, high=60, low=50,
+            direction="up",
+            index=10,
+            high=60,
+            low=50,
         )
 
         # 信号后有上涨趋势（7/10根K线收涨）
@@ -3695,7 +3965,7 @@ class TestV29TrendContinuity:
     def test_trend_continuity_confidence_bounds(self):
         """置信度调整应在合理范围内。"""
         from easy_tdx.chanlun.mmd import _calc_trend_continuity_confirmation
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
         class FakeK:
             def __init__(self, k_index):
@@ -3706,7 +3976,10 @@ class TestV29TrendContinuity:
         mmd.bi = BI(
             start=FX(fx_type=FXType.DI, k=FakeK(5), klines=[], val=105.0),
             end=FX(fx_type=FXType.DI, k=FakeK(10), klines=[], val=110.0),
-            direction="up", index=10, high=110, low=105,
+            direction="up",
+            index=10,
+            high=110,
+            low=105,
         )
 
         closes = list(range(100, 150))
@@ -3722,7 +3995,7 @@ class TestV29ConsolidationDivergence:
         from easy_tdx.chanlun.mmd import _calc_consolidation_divergence_warning
 
         result = _calc_consolidation_divergence_warning([1.0, 2.0], None, None, None, [])
-        assert result["has_divergence"] == False
+        assert not result["has_divergence"]
         assert result["warning_level"] == "none"
 
     def test_divergence_normal_trend(self):
@@ -3754,17 +4027,20 @@ class TestV29Integration:
 
     def test_find_mmds_has_v29_fields(self):
         """测试 find_mmds 包含 V29 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3775,17 +4051,20 @@ class TestV29Integration:
 
     def test_v29_confidence_adjustment(self):
         """测试 V29 置信度调整不超出范围。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3803,9 +4082,9 @@ class TestV30KlinePattern:
 
     def test_kline_pattern_bullish_support(self):
         """买入信号 + 连续阳线 = 支持度高。"""
+
         from easy_tdx.chanlun.mmd import _calc_kline_pattern_confirmation
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline
-        from datetime import datetime
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买: 底背驰")
         closes = [10.0, 10.2, 10.5, 10.8, 11.0]
@@ -3858,7 +4137,11 @@ class TestV30ZSBreakout:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买: 突破回踩")
-        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        mmd.bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 0})()})()},
+        )()
         closes = [10.0] * 25 + [10.5, 11.0, 11.5]
         volumes = [1000.0] * 25 + [1500.0, 1600.0, 1700.0]
 
@@ -3886,7 +4169,11 @@ class TestV30ZSBreakout:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
-        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        mmd.bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 0})()})()},
+        )()
         closes = [10.0] * 25 + [10.1]
         volumes = [1000.0] * 26
 
@@ -3909,7 +4196,11 @@ class TestV30RangeStop:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买")
-        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        mmd.bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 0})()})()},
+        )()
         closes = [10.0 + i * 0.1 for i in range(40)]
         highs = [c + 0.1 for c in closes]
         lows = [c - 0.1 for c in closes]
@@ -3925,7 +4216,11 @@ class TestV30RangeStop:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.SELL_1, msg="1卖")
-        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 0})()})()})()
+        mmd.bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 0})()})()},
+        )()
         closes = [20.0 - i * 0.1 for i in range(40)]
         highs = [c + 0.1 for c in closes]
         lows = [c - 0.1 for c in closes]
@@ -3949,17 +4244,20 @@ class TestV30Integration:
 
     def test_find_mmds_has_v30_fields(self):
         """测试 find_mmds 包含 V30 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3971,17 +4269,20 @@ class TestV30Integration:
 
     def test_v30_confidence_adjustment(self):
         """测试 V30 置信度调整不超出范围。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -3999,15 +4300,20 @@ class TestV31MAAlignment:
 
     def _make_mmd(self, mmd_type):
         """辅助函数：创建带 mock bi 的 MMD。"""
-        from easy_tdx.chanlun.types import MMD, MMDType
+        from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type=mmd_type, msg="test")
+
         # 模拟 bi 对象（_calc_ma_alignment_confirmation 需要 hasattr(mmd, 'bi')）
         class FakeK:
             k_index = 0
+
         class FakeEnd:
             k = FakeK()
+
         class FakeBI:
             end = FakeEnd()
+
         mmd.bi = FakeBI()
         return mmd
 
@@ -4158,17 +4464,20 @@ class TestV31Integration:
 
     def test_find_mmds_has_v31_fields(self):
         """测试 find_mmds 包含 V31 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -4180,17 +4489,20 @@ class TestV31Integration:
 
     def test_v31_confidence_bounds(self):
         """测试 V31 置信度调整不超出范围。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=150, freq="D"),
-            "open": [10 + i*0.05 for i in range(150)],
-            "high": [11 + i*0.05 for i in range(150)],
-            "low": [9 + i*0.05 for i in range(150)],
-            "close": [10 + i*0.05 for i in range(150)],
-            "volume": [1000 + i*10 for i in range(150)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=150, freq="D"),
+                "open": [10 + i * 0.05 for i in range(150)],
+                "high": [11 + i * 0.05 for i in range(150)],
+                "low": [9 + i * 0.05 for i in range(150)],
+                "close": [10 + i * 0.05 for i in range(150)],
+                "volume": [1000 + i * 10 for i in range(150)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -4205,14 +4517,15 @@ class TestV31Integration:
 
 # ── V32 测试：条件68-70 ───────────────────────────────────────────────────────
 
+
 class TestV32VolumePriceDivergence:
     """V32 条件68: 量价背离检测增强测试。"""
 
     def test_vp_divergence_no_data(self):
         """数据不足时返回默认值。"""
+
         from easy_tdx.chanlun.mmd import _calc_volume_price_divergence_enhanced
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, Direction
-        from datetime import datetime
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1)
         result = _calc_volume_price_divergence_enhanced(mmd, [10.0], [100.0])
@@ -4221,9 +4534,9 @@ class TestV32VolumePriceDivergence:
 
     def test_vp_divergence_bearish_buy_signal(self):
         """买入信号但量价背离（价格新高成交量萎缩）应降权。"""
+
         from easy_tdx.chanlun.mmd import _calc_volume_price_divergence_enhanced
         from easy_tdx.chanlun.types import MMD, MMDType
-        import numpy as np
 
         # 构造价格逐步走高但成交量萎缩的场景
         n = 60
@@ -4274,12 +4587,12 @@ class TestV32SignalPriorityRanking:
         closes = [10.0 + i * 0.01 for i in range(100)]
         # 高质量信号
         mmd_a = MMD(mmd_type=MMDType.BUY_1, confidence=0.85)
-        mmd_a.quality = type('Q', (), {"grade": "S"})()
+        mmd_a.quality = type("Q", (), {"grade": "S"})()
         # 低质量信号
         mmd_b = MMD(mmd_type=MMDType.BUY_2, confidence=0.5)
-        mmd_b.quality = type('Q', (), {"grade": "D"})()
+        mmd_b.quality = type("Q", (), {"grade": "D"})()
         mmd_c = MMD(mmd_type=MMDType.SELL_1, confidence=0.6)
-        mmd_c.quality = type('Q', (), {"grade": "B"})()
+        mmd_c.quality = type("Q", (), {"grade": "B"})()
 
         result_a = _calc_signal_priority_ranking(mmd_a, [mmd_a, mmd_b, mmd_c], closes)
         result_b = _calc_signal_priority_ranking(mmd_b, [mmd_a, mmd_b, mmd_c], closes)
@@ -4306,7 +4619,7 @@ class TestV32SRExitBreakout:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         # 构造有 Swing Low 的价格序列
-        n = 60
+        _ = 60
         closes = [10.0] * 20 + [9.0] * 5 + [9.5] * 5 + [10.5] * 30  # 先跌后涨
         highs = [c * 1.003 for c in closes]
         lows = [c * 0.997 for c in closes]
@@ -4323,17 +4636,20 @@ class TestV32Integration:
 
     def test_find_mmds_has_v32_fields(self):
         """测试 find_mmds 包含 V32 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10 + i*0.05 for i in range(200)],
-            "high": [11 + i*0.05 for i in range(200)],
-            "low": [9 + i*0.05 for i in range(200)],
-            "close": [10 + i*0.05 for i in range(200)],
-            "volume": [1000 + i*10 for i in range(200)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10 + i * 0.05 for i in range(200)],
+                "high": [11 + i * 0.05 for i in range(200)],
+                "low": [9 + i * 0.05 for i in range(200)],
+                "close": [10 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -4345,17 +4661,20 @@ class TestV32Integration:
 
     def test_v32_confidence_bounds(self):
         """测试 V32 置信度调整不超出范围。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10 + i*0.05 for i in range(200)],
-            "high": [11 + i*0.05 for i in range(200)],
-            "low": [9 + i*0.05 for i in range(200)],
-            "close": [10 + i*0.05 for i in range(200)],
-            "volume": [1000 + i*10 for i in range(200)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10 + i * 0.05 for i in range(200)],
+                "high": [11 + i * 0.05 for i in range(200)],
+                "low": [9 + i * 0.05 for i in range(200)],
+                "close": [10 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -4365,6 +4684,7 @@ class TestV32Integration:
     def test_v32_all_tests_pass(self):
         """V32 集成测试全部通过。"""
         assert True
+
 
 class TestV33OBVTrendConfirmation:
     """V33 条件71: OBV能量潮趋势确认测试。"""
@@ -4392,9 +4712,19 @@ class TestV33OBVTrendConfirmation:
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
         # 需要设置bi来通过检查
-        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
         from datetime import datetime
-        clk = CLKline(k_index=n-1, date=datetime(2024, 1, 1), open=19.0, close=20.0, high=20.5, low=18.5, amount=5000.0)
+
+        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
+
+        clk = CLKline(
+            k_index=n - 1,
+            date=datetime(2024, 1, 1),
+            open=19.0,
+            close=20.0,
+            high=20.5,
+            low=18.5,
+            amount=5000.0,
+        )
         fx_end = FX(fx_type=FXType.DI, k=clk, klines=[clk, clk, clk], val=18.5)
         fx_start = FX(fx_type=FXType.DING, k=clk, klines=[clk, clk, clk], val=20.5)
         bi = BI(start=fx_start, end=fx_end, direction="up")
@@ -4415,9 +4745,19 @@ class TestV33OBVTrendConfirmation:
         volumes = [1000 - i * 15 for i in range(n)]  # 成交量递减
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
         from datetime import datetime
-        clk = CLKline(k_index=n-1, date=datetime(2024, 1, 1), open=14.5, close=15.0, high=15.2, low=14.3, amount=500.0)
+
+        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
+
+        clk = CLKline(
+            k_index=n - 1,
+            date=datetime(2024, 1, 1),
+            open=14.5,
+            close=15.0,
+            high=15.2,
+            low=14.3,
+            amount=500.0,
+        )
         fx_end = FX(fx_type=FXType.DI, k=clk, klines=[clk, clk, clk], val=14.3)
         fx_start = FX(fx_type=FXType.DING, k=clk, klines=[clk, clk, clk], val=15.2)
         bi = BI(start=fx_start, end=fx_end, direction="up")
@@ -4471,7 +4811,7 @@ class TestV33RSIMomentumConfirmation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         # 构造先跌后涨的序列，RSI从超卖区回升
-        n = 40
+        _ = 40
         closes = [20.0 - i * 0.1 for i in range(20)] + [18.0 + i * 0.15 for i in range(20)]
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
@@ -4486,17 +4826,20 @@ class TestV33Integration:
 
     def test_find_mmds_has_v33_fields(self):
         """测试 find_mmds 包含 V33 字段。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10 + i*0.05 for i in range(200)],
-            "high": [11 + i*0.05 for i in range(200)],
-            "low": [9 + i*0.05 for i in range(200)],
-            "close": [10 + i*0.05 for i in range(200)],
-            "volume": [1000 + i*10 for i in range(200)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10 + i * 0.05 for i in range(200)],
+                "high": [11 + i * 0.05 for i in range(200)],
+                "low": [9 + i * 0.05 for i in range(200)],
+                "close": [10 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         mmds = result.mmds
@@ -4508,17 +4851,20 @@ class TestV33Integration:
 
     def test_v33_confidence_bounds(self):
         """测试 V33 置信度调整不超出范围。"""
-        from easy_tdx.chanlun.analyser import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "date": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10 + i*0.05 for i in range(200)],
-            "high": [11 + i*0.05 for i in range(200)],
-            "low": [9 + i*0.05 for i in range(200)],
-            "close": [10 + i*0.05 for i in range(200)],
-            "volume": [1000 + i*10 for i in range(200)],
-        })
+        from easy_tdx.chanlun.analyser import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10 + i * 0.05 for i in range(200)],
+                "high": [11 + i * 0.05 for i in range(200)],
+                "low": [9 + i * 0.05 for i in range(200)],
+                "close": [10 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -4545,16 +4891,25 @@ class TestV34TrendMomentumContinuation:
 
     def test_trend_momentum_accelerating_bullish(self):
         """买入信号且趋势加速应加分。"""
-        from easy_tdx.chanlun.mmd import _calc_trend_momentum_continuation
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, CLKline, FXType
         from datetime import datetime
+
+        from easy_tdx.chanlun.mmd import _calc_trend_momentum_continuation
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, FXType, MMDType
 
         # 加速上涨：近期涨幅 > 前期涨幅
         n = 60
         closes = [10.0 + i * 0.15 + i * 0.005 * i for i in range(n)]  # 加速上涨
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        clk = CLKline(k_index=n-1, date=datetime(2024, 1, 1), open=18.0, close=19.0, high=19.5, low=17.5, amount=5000.0)
+        clk = CLKline(
+            k_index=n - 1,
+            date=datetime(2024, 1, 1),
+            open=18.0,
+            close=19.0,
+            high=19.5,
+            low=17.5,
+            amount=5000.0,
+        )
         fx_end = FX(fx_type=FXType.DI, k=clk, klines=[clk, clk, clk], val=17.5)
         fx_start = FX(fx_type=FXType.DING, k=clk, klines=[clk, clk, clk], val=19.5)
         bi = BI(start=fx_start, end=fx_end, direction="up")
@@ -4567,16 +4922,25 @@ class TestV34TrendMomentumContinuation:
 
     def test_trend_momentum_decelerating_bearish(self):
         """卖出信号且趋势衰减应降权。"""
-        from easy_tdx.chanlun.mmd import _calc_trend_momentum_continuation
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, CLKline, FXType
         from datetime import datetime
+
+        from easy_tdx.chanlun.mmd import _calc_trend_momentum_continuation
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, FXType, MMDType
 
         # 减速下跌：价格下跌但幅度越来越小
         n = 60
         closes = [30.0 - i * 0.1 - 0.001 * i * i for i in range(n)]  # 减速下跌
 
         mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.7)
-        clk = CLKline(k_index=n-1, date=datetime(2024, 1, 1), open=24.0, close=23.5, high=24.5, low=23.0, amount=5000.0)
+        clk = CLKline(
+            k_index=n - 1,
+            date=datetime(2024, 1, 1),
+            open=24.0,
+            close=23.5,
+            high=24.5,
+            low=23.0,
+            amount=5000.0,
+        )
         fx_end = FX(fx_type=FXType.DING, k=clk, klines=[clk, clk, clk], val=24.5)
         fx_start = FX(fx_type=FXType.DI, k=clk, klines=[clk, clk, clk], val=23.0)
         bi = BI(start=fx_start, end=fx_end, direction="down")
@@ -4612,8 +4976,12 @@ class TestV34MultiIndicatorResonance:
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
         result = _calc_multi_indicator_resonance(
-            mmd, obv_result=obv_result, macd_hist_result=macd_result,
-            rsi_result=rsi_result, vp_div_result=vp_result, ma_align_result=ma_result,
+            mmd,
+            obv_result=obv_result,
+            macd_hist_result=macd_result,
+            rsi_result=rsi_result,
+            vp_div_result=vp_result,
+            ma_align_result=ma_result,
         )
         assert result["bullish_votes"] >= 3
         assert result["resonance_score"] >= 60.0
@@ -4632,8 +5000,12 @@ class TestV34MultiIndicatorResonance:
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
         result = _calc_multi_indicator_resonance(
-            mmd, obv_result=obv_result, macd_hist_result=macd_result,
-            rsi_result=rsi_result, vp_div_result=vp_result, ma_align_result=ma_result,
+            mmd,
+            obv_result=obv_result,
+            macd_hist_result=macd_result,
+            rsi_result=rsi_result,
+            vp_div_result=vp_result,
+            ma_align_result=ma_result,
         )
         assert result["resonance_score"] < 50.0
 
@@ -4657,16 +5029,17 @@ class TestV34VolatilityAdaptive:
 
     def test_volatility_adaptive_high_vol(self):
         """高波动环境应提高置信度门槛。"""
-        from easy_tdx.chanlun.mmd import _calc_volatility_adaptive_threshold
-
         # 高波动序列
         import random
+
+        from easy_tdx.chanlun.mmd import _calc_volatility_adaptive_threshold
+
         random.seed(42)
         closes = [10.0]
         for _ in range(99):
             closes.append(closes[-1] + random.uniform(-1.0, 1.0))
-        highs = [max(closes[i], closes[i-1]) + 0.5 for i in range(len(closes))]
-        lows = [min(closes[i], closes[i-1]) - 0.5 for i in range(len(closes))]
+        highs = [max(closes[i], closes[i - 1]) + 0.5 for i in range(len(closes))]
+        lows = [min(closes[i], closes[i - 1]) - 0.5 for i in range(len(closes))]
 
         result = _calc_volatility_adaptive_threshold(closes, highs, lows)
         assert "volatility_regime" in result
@@ -4686,17 +5059,20 @@ class TestV34Integration:
 
     def test_find_mmds_has_v34_fields(self):
         """find_mmds 应包含 V34 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -4706,17 +5082,20 @@ class TestV34Integration:
 
     def test_v34_confidence_bounds(self):
         """V34 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -4914,17 +5293,20 @@ class TestV35Integration:
 
     def test_find_mmds_has_v35_fields(self):
         """find_mmds 应包含 V35 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -4936,17 +5318,20 @@ class TestV35Integration:
 
     def test_v35_confidence_bounds(self):
         """V35 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -4966,7 +5351,7 @@ class TestV36ExecutionWindow:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mmd.bi = type('obj', (object,), {'index': 198})()  # 信号在倒数第2根K线形成
+        mmd.bi = type("obj", (object,), {"index": 198})()  # 信号在倒数第2根K线形成
         closes = [10.0 + i * 0.05 for i in range(200)]
 
         result = _calc_execution_window(mmd, closes)
@@ -4981,7 +5366,7 @@ class TestV36ExecutionWindow:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mmd.bi = type('obj', (object,), {'index': 189})()  # 信号在10根K线前形成
+        mmd.bi = type("obj", (object,), {"index": 189})()  # 信号在10根K线前形成
         closes = [10.0 + i * 0.05 for i in range(200)]
 
         result = _calc_execution_window(mmd, closes)
@@ -5010,7 +5395,7 @@ class TestV36TfConsistency:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mmd.bi = type('obj', (object,), {'index': None})()
+        mmd.bi = type("obj", (object,), {"index": None})()
         # 创建明显的上升趋势数据
         closes = [10.0 + i * 0.2 for i in range(100)]
         result = _calc_tf_consistency(mmd, closes)
@@ -5025,7 +5410,7 @@ class TestV36TfConsistency:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mmd.bi = type('obj', (object,), {'index': None})()
+        mmd.bi = type("obj", (object,), {"index": None})()
         # 创建近期反弹但中期仍处下降通道的数据（短上中下）
         closes = [50.0 - i * 0.5 for i in range(80)] + [10.0 + i * 0.25 for i in range(20)]
         result = _calc_tf_consistency(mmd, closes)
@@ -5052,7 +5437,7 @@ class TestV36RiskAdjustedReturn:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.75)
-        mmd.bi = type('obj', (object,), {'index': 20})()
+        mmd.bi = type("obj", (object,), {"index": 20})()
         closes = [10.0 + i * 0.1 for i in range(50)]
         result = _calc_risk_adjusted_return(mmd, closes, None, None)
         assert result["expected_return_pct"] != 0.0
@@ -5065,7 +5450,7 @@ class TestV36RiskAdjustedReturn:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.75)
-        mmd.bi = type('obj', (object,), {'index': 20})()
+        mmd.bi = type("obj", (object,), {"index": 20})()
         closes = [10.0 + i * 0.1 for i in range(50)]
         result = _calc_risk_adjusted_return(mmd, closes, None, None)
         assert result["expected_return_pct"] != 0.0
@@ -5091,7 +5476,7 @@ class TestV36UrgencyScore:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mmd.bi = type('obj', (object,), {'index': 198})()
+        mmd.bi = type("obj", (object,), {"index": 198})()
         closes = [10.0 + i * 0.05 for i in range(200)]
         result = _calc_urgency_score(mmd, closes)
         assert result["urgency_level"] == "critical"
@@ -5104,7 +5489,7 @@ class TestV36UrgencyScore:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mmd.bi = type('obj', (object,), {'index': 185})()  # 14根K线前，属于low范围
+        mmd.bi = type("obj", (object,), {"index": 185})()  # 14根K线前，属于low范围
         closes = [10.0 + i * 0.05 for i in range(200)]
         result = _calc_urgency_score(mmd, closes)
         assert result["urgency_level"] == "low"
@@ -5153,6 +5538,7 @@ class TestV36MarketComposite:
     def test_market_composite_no_data(self):
         """数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_market_composite
+
         result = _calc_market_composite([10.0], None, None)
         assert result["market_score"] == 0.5
         assert result["market_regime"] == "neutral"
@@ -5167,7 +5553,7 @@ class TestV36StrategyRecommendation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.9)
-        mmd.bi = type('obj', (object,), {'index': 10})()
+        mmd.bi = type("obj", (object,), {"index": 10})()
         closes = [10.0 + i * 0.05 for i in range(50)]
         result = _calc_strategy_recommendation(mmd, closes)
         assert result["strategy"] == "aggressive_buy"
@@ -5180,7 +5566,7 @@ class TestV36StrategyRecommendation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.5)
-        mmd.bi = type('obj', (object,), {'index': 10})()
+        mmd.bi = type("obj", (object,), {"index": 10})()
         closes = [10.0 + i * 0.05 for i in range(50)]
         result = _calc_strategy_recommendation(mmd, closes)
         assert result["strategy"] == "watch"
@@ -5192,7 +5578,7 @@ class TestV36StrategyRecommendation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.8)
-        mmd.bi = type('obj', (object,), {'index': 10})()
+        mmd.bi = type("obj", (object,), {"index": 10})()
         closes = [10.0 + i * 0.05 for i in range(50)]
         result = _calc_strategy_recommendation(mmd, closes)
         assert result["strategy"] == "standard_sell"
@@ -5214,17 +5600,20 @@ class TestV36Integration:
 
     def test_find_mmds_has_v36_fields(self):
         """find_mmds 应包含 V36 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -5237,17 +5626,20 @@ class TestV36Integration:
 
     def test_v36_confidence_bounds(self):
         """V36 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -5267,7 +5659,11 @@ class TestV37ConsecutiveConfirmation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()},
+        )()
         mmd.bi = mock_bi
 
         # 信号后5根K线持续上涨
@@ -5283,7 +5679,11 @@ class TestV37ConsecutiveConfirmation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()},
+        )()
         mmd.bi = mock_bi
 
         # 信号后5根K线持续下跌
@@ -5313,7 +5713,11 @@ class TestV37MomentumAcceleration:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()},
+        )()
         mmd.bi = mock_bi
 
         # 加速上涨趋势
@@ -5328,11 +5732,15 @@ class TestV37MomentumAcceleration:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()},
+        )()
         mmd.bi = mock_bi
 
         # 减速上涨趋势
-        closes = [10.0 + 5.0 * (1 - 0.95 ** i) for i in range(30)]
+        closes = [10.0 + 5.0 * (1 - 0.95**i) for i in range(30)]
         result = _calc_momentum_acceleration(mmd, closes)
         assert result["confidence_adjust"] <= 0.05
 
@@ -5375,11 +5783,19 @@ class TestV37TemporalCorrelation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 30})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 30})()})()},
+        )()
         mmd.bi = mock_bi
 
         prev_mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
-        prev_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        prev_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()},
+        )()
         prev_mmd.bi = prev_bi
 
         result = _calc_temporal_correlation(mmd, [prev_mmd, mmd])
@@ -5393,11 +5809,19 @@ class TestV37TemporalCorrelation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 12})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 12})()})()},
+        )()
         mmd.bi = mock_bi
 
         prev_mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.6)
-        prev_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        prev_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()},
+        )()
         prev_mmd.bi = prev_bi
 
         result = _calc_temporal_correlation(mmd, [prev_mmd, mmd])
@@ -5411,7 +5835,11 @@ class TestV37TemporalCorrelation:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()},
+        )()
         mmd.bi = mock_bi
 
         result = _calc_temporal_correlation(mmd, [mmd])
@@ -5428,7 +5856,11 @@ class TestV37MultiTfMomentum:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 50})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 50})()})()},
+        )()
         mmd.bi = mock_bi
 
         # 全上涨趋势
@@ -5443,7 +5875,11 @@ class TestV37MultiTfMomentum:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.SELL_1, confidence=0.7)
-        mock_bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 50})()})()})()
+        mock_bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 50})()})()},
+        )()
         mmd.bi = mock_bi
 
         # 全下跌趋势
@@ -5473,8 +5909,8 @@ class TestV37QualityRanking:
 
         mmd_high = MMD(mmd_type=MMDType.BUY_1, confidence=0.9)
         mmd_low = MMD(mmd_type=MMDType.BUY_2, confidence=0.5)
-        mmd_high.quality = type('obj', (object,), {'grade': 'A'})()
-        mmd_low.quality = type('obj', (object,), {'grade': 'C'})()
+        mmd_high.quality = type("obj", (object,), {"grade": "A"})()
+        mmd_low.quality = type("obj", (object,), {"grade": "C"})()
         mmd_high.confluence_score = 0.8
         mmd_low.confluence_score = 0.3
 
@@ -5492,7 +5928,7 @@ class TestV37QualityRanking:
             MMD(mmd_type=MMDType.BUY_3, confidence=0.5),
         ]
         for m in signals:
-            m.quality = type('obj', (object,), {'grade': 'B'})()
+            m.quality = type("obj", (object,), {"grade": "B"})()
             m.confluence_score = 0.5
 
         result = _calc_quality_ranking(signals[0], signals)
@@ -5515,17 +5951,20 @@ class TestV37Integration:
 
     def test_find_mmds_has_v37_fields(self):
         """find_mmds 应包含 V37 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -5537,17 +5976,20 @@ class TestV37Integration:
 
     def test_v37_confidence_bounds(self):
         """V37 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -5563,20 +6005,32 @@ class TestV38ZSStructureIntegrity:
 
     def test_zs_structure_integrity_complete(self):
         """完整中枢（3+笔）应得高分。"""
-        from easy_tdx.chanlun.mmd import _calc_zs_structure_integrity
-        from easy_tdx.chanlun.types import MMD, MMDType, ZS, BI, FX, FXType, CLKline
         from datetime import datetime
 
+        from easy_tdx.chanlun.mmd import _calc_zs_structure_integrity
+        from easy_tdx.chanlun.types import BI, FX, MMD, ZS, FXType, MMDType
+
         # 创建一个有3笔的完整中枢
-        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now(), 'open': 10.0, 'close': 10.0, 'high': 10.0, 'low': 10.0})()
+        kline = type(
+            "obj",
+            (object,),
+            {
+                "k_index": 0,
+                "date": datetime.now(),
+                "open": 10.0,
+                "close": 10.0,
+                "high": 10.0,
+                "low": 10.0,
+            },
+        )()
         fx1 = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
         fx2 = FX(fx_type=FXType.DING, k=kline, klines=[], val=12.0)
         fx3 = FX(fx_type=FXType.DI, k=kline, klines=[], val=9.0)
         fx4 = FX(fx_type=FXType.DING, k=kline, klines=[], val=13.0)
 
-        bi1 = BI(start=fx1, end=fx2, direction=type('obj', (object,), {'value': 'up'})())
-        bi2 = BI(start=fx2, end=fx3, direction=type('obj', (object,), {'value': 'down'})())
-        bi3 = BI(start=fx3, end=fx4, direction=type('obj', (object,), {'value': 'up'})())
+        bi1 = BI(start=fx1, end=fx2, direction=type("obj", (object,), {"value": "up"})())
+        bi2 = BI(start=fx2, end=fx3, direction=type("obj", (object,), {"value": "down"})())
+        bi3 = BI(start=fx3, end=fx4, direction=type("obj", (object,), {"value": "up"})())
 
         zs = ZS(lines=[bi1, bi2, bi3], zg=12.0, zd=9.0, gg=13.0, dd=9.0, done=True)
 
@@ -5584,20 +6038,32 @@ class TestV38ZSStructureIntegrity:
         result = _calc_zs_structure_integrity(mmd, [zs])
 
         assert result["bi_count"] == 3
-        assert result["is_complete"] == True
+        assert result["is_complete"]
         assert result["integrity_score"] >= 0.6
 
     def test_zs_structure_integrity_weak(self):
         """弱中枢（1-2笔）应得低分。"""
-        from easy_tdx.chanlun.mmd import _calc_zs_structure_integrity
-        from easy_tdx.chanlun.types import MMD, MMDType, ZS, BI, FX, FXType
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now(), 'open': 10.0, 'close': 10.0, 'high': 10.0, 'low': 10.0})()
+        from easy_tdx.chanlun.mmd import _calc_zs_structure_integrity
+        from easy_tdx.chanlun.types import BI, FX, MMD, ZS, FXType, MMDType
+
+        kline = type(
+            "obj",
+            (object,),
+            {
+                "k_index": 0,
+                "date": datetime.now(),
+                "open": 10.0,
+                "close": 10.0,
+                "high": 10.0,
+                "low": 10.0,
+            },
+        )()
         fx1 = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
         fx2 = FX(fx_type=FXType.DING, k=kline, klines=[], val=12.0)
 
-        bi1 = BI(start=fx1, end=fx2, direction=type('obj', (object,), {'value': 'up'})())
+        bi1 = BI(start=fx1, end=fx2, direction=type("obj", (object,), {"value": "up"})())
         zs = ZS(lines=[bi1], zg=12.0, zd=10.0, gg=12.0, dd=10.0, done=False)
 
         mmd = MMD(mmd_type=MMDType.BUY_2, zs=zs)
@@ -5623,13 +6089,14 @@ class TestV38PositionScore:
 
     def test_mmd_position_score_near_bottom(self):
         """买入信号在区间底部应加分。"""
-        from easy_tdx.chanlun.mmd import _calc_mmd_position_score
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        from easy_tdx.chanlun.mmd import _calc_mmd_position_score
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
+
+        kline = type("obj", (object,), {"k_index": 0, "date": datetime.now()})()
         fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
-        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+        bi = BI(start=fx, end=fx, direction=type("obj", (object,), {"value": "up"})())
 
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
         # 价格在20日区间的底部（接近最低价）
@@ -5641,13 +6108,14 @@ class TestV38PositionScore:
 
     def test_mmd_position_score_near_top(self):
         """买入信号在区间顶部应减分。"""
-        from easy_tdx.chanlun.mmd import _calc_mmd_position_score
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        from easy_tdx.chanlun.mmd import _calc_mmd_position_score
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
+
+        kline = type("obj", (object,), {"k_index": 0, "date": datetime.now()})()
         fx = FX(fx_type=FXType.DING, k=kline, klines=[], val=10.0)
-        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'down'})())
+        bi = BI(start=fx, end=fx, direction=type("obj", (object,), {"value": "down"})())
 
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
         # 价格在20日区间的顶部
@@ -5659,13 +6127,14 @@ class TestV38PositionScore:
 
     def test_post_signal_return_good(self):
         """历史信号收益好时应加分。"""
-        from easy_tdx.chanlun.mmd import _calc_post_signal_return
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        from easy_tdx.chanlun.mmd import _calc_post_signal_return
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
+
+        kline = type("obj", (object,), {"k_index": 0, "date": datetime.now()})()
         fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
-        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+        bi = BI(start=fx, end=fx, direction=type("obj", (object,), {"value": "up"})())
 
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
         # 上升趋势中的价格，历史低点后会有正收益
@@ -5682,13 +6151,14 @@ class TestV38BreakoutStrength:
 
     def test_breakout_strength_strong(self):
         """强突破（价格远离均价+量放大）应得高分。"""
-        from easy_tdx.chanlun.mmd import _calc_breakout_strength
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        from easy_tdx.chanlun.mmd import _calc_breakout_strength
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
+
+        kline = type("obj", (object,), {"k_index": 0, "date": datetime.now()})()
         fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
-        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+        bi = BI(start=fx, end=fx, direction=type("obj", (object,), {"value": "up"})())
 
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
         # 创造明显的上升趋势 + 最后大幅突破
@@ -5696,18 +6166,19 @@ class TestV38BreakoutStrength:
         volumes = [1000] * 25 + [1500, 2000, 2500, 3000, 5000]  # 放量突破
         result = _calc_breakout_strength(mmd, closes, volumes)
 
-        assert result["volume_confirmation"] == True
+        assert result["volume_confirmation"]
         assert result["breakout_strength"] > 0.3
 
     def test_breakout_strength_weak(self):
         """弱突破（无量）应得低分。"""
-        from easy_tdx.chanlun.mmd import _calc_breakout_strength
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 0, 'date': datetime.now()})()
+        from easy_tdx.chanlun.mmd import _calc_breakout_strength
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
+
+        kline = type("obj", (object,), {"k_index": 0, "date": datetime.now()})()
         fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
-        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+        bi = BI(start=fx, end=fx, direction=type("obj", (object,), {"value": "up"})())
 
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
         # 价格小幅上涨但无量
@@ -5715,7 +6186,7 @@ class TestV38BreakoutStrength:
         volumes = [1000] * 31  # 成交量不变
         result = _calc_breakout_strength(mmd, closes, volumes)
 
-        assert result["volume_confirmation"] == False
+        assert not result["volume_confirmation"]
         assert result["breakout_strength"] < 0.5
 
 
@@ -5752,13 +6223,14 @@ class TestV38SignalDecay:
 
     def test_signal_decay_fresh(self):
         """新鲜信号（近期形成）应标记为 fresh。"""
-        from easy_tdx.chanlun.mmd import _calc_signal_decay_warning
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 97, 'date': datetime.now()})()
+        from easy_tdx.chanlun.mmd import _calc_signal_decay_warning
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
+
+        kline = type("obj", (object,), {"k_index": 97, "date": datetime.now()})()
         fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
-        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+        bi = BI(start=fx, end=fx, direction=type("obj", (object,), {"value": "up"})())
 
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
         closes = [10.0 + i * 0.01 for i in range(100)]
@@ -5770,13 +6242,14 @@ class TestV38SignalDecay:
 
     def test_signal_decay_expired(self):
         """过期信号（很久以前形成）应标记为 expired。"""
-        from easy_tdx.chanlun.mmd import _calc_signal_decay_warning
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType
         from datetime import datetime
 
-        kline = type('obj', (object,), {'k_index': 10, 'date': datetime.now()})()
+        from easy_tdx.chanlun.mmd import _calc_signal_decay_warning
+        from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
+
+        kline = type("obj", (object,), {"k_index": 10, "date": datetime.now()})()
         fx = FX(fx_type=FXType.DI, k=kline, klines=[], val=10.0)
-        bi = BI(start=fx, end=fx, direction=type('obj', (object,), {'value': 'up'})())
+        bi = BI(start=fx, end=fx, direction=type("obj", (object,), {"value": "up"})())
 
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi)
         closes = [10.0 + i * 0.01 for i in range(100)]
@@ -5793,17 +6266,20 @@ class TestV38Integration:
 
     def test_find_mmds_has_v38_fields(self):
         """find_mmds 应包含 V38 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -5816,17 +6292,20 @@ class TestV38Integration:
 
     def test_v38_confidence_bounds(self):
         """V38 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -5838,6 +6317,7 @@ class TestV38Integration:
 
 
 # ── V39: 条件101-105 测试 ───────────────────────────────────────────────────────
+
 
 class TestV39SignalConsistency:
     """测试信号一致性验证（条件101）。"""
@@ -5856,9 +6336,9 @@ class TestV39SignalConsistency:
 
     def test_signal_consistency_with_data(self):
         """测试有数据时的信号一致性计算。"""
+
         from easy_tdx.chanlun.mmd import _calc_signal_consistency_check
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, Direction
-        from datetime import datetime
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         closes = [10.0 + i * 0.1 for i in range(100)]
         mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
@@ -5896,7 +6376,7 @@ class TestV39ZSLevelMatch:
     def test_zs_level_match_with_zs(self):
         """有中枢时返回匹配信息。"""
         from easy_tdx.chanlun.mmd import _calc_zs_level_match
-        from easy_tdx.chanlun.types import MMD, MMDType, ZS
+        from easy_tdx.chanlun.types import MMD, ZS, MMDType
 
         zs = ZS(lines=[], zg=100, zd=90, gg=100, dd=90)
         mmd = MMD(mmd_type=MMDType.BUY_1, zs=zs, msg="1买测试")
@@ -5937,8 +6417,9 @@ class TestV39MultiTfDivergence:
 
     def test_multi_tf_divergence_with_data(self):
         """有足够数据时应正常计算。"""
-        from easy_tdx.chanlun.mmd import _calc_multi_tf_divergence_confirmation
         import numpy as np
+
+        from easy_tdx.chanlun.mmd import _calc_multi_tf_divergence_confirmation
 
         np.random.seed(42)
         closes = [100.0 + i * 0.1 + np.random.normal(0, 0.5) for i in range(100)]
@@ -5978,9 +6459,9 @@ class TestV39CrossValidation:
 
     def test_cross_validation_with_data(self):
         """有足够数据时应正常计算。"""
+
         from easy_tdx.chanlun.mmd import _calc_independent_cross_validation
-        from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, Direction
-        from datetime import datetime
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         # 构造上升趋势数据
         closes = [10.0 + i * 0.1 for i in range(50)]
@@ -6029,7 +6510,15 @@ class TestV39DecisionQualityScore:
         result = _calc_decision_quality_score(mmd, closes, None, None, None)
         assert result["decision_score"] > 0
         assert result["risk_level"] in ("low", "medium", "high")
-        assert result["action"] in ("strong_buy", "buy", "cautious_buy", "hold", "cautious_sell", "sell", "strong_sell")
+        assert result["action"] in (
+            "strong_buy",
+            "buy",
+            "cautious_buy",
+            "hold",
+            "cautious_sell",
+            "sell",
+            "strong_sell",
+        )
 
 
 class TestV39Integration:
@@ -6038,27 +6527,32 @@ class TestV39Integration:
     def test_find_mmds_v39_exists(self):
         """find_mmds_v39 函数应存在且可调用。"""
         from easy_tdx.chanlun.mmd import find_mmds_v39
+
         assert callable(find_mmds_v39)
 
     def test_find_mmds_v39_returns_list(self):
         """find_mmds_v39 应返回列表。"""
         from easy_tdx.chanlun.mmd import find_mmds_v39
+
         result = find_mmds_v39([], [], None)
         assert isinstance(result, list)
 
     def test_find_mmds_v39_has_v39_fields(self):
         """find_mmds_v39 输出的 MMD 应包含 V39 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6070,17 +6564,20 @@ class TestV39Integration:
 
     def test_v39_confidence_bounds(self):
         """V39 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6088,17 +6585,20 @@ class TestV39Integration:
 
     def test_v39_decision_quality_score_structure(self):
         """决策质量评分应包含所有必要字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6117,6 +6617,7 @@ class TestV39Integration:
 # ═══════════════════════════════════════════════════════════════════
 # V40: 条件106-110 缠论模型决策增强
 # ═══════════════════════════════════════════════════════════════════
+
 
 class TestV40TimeDecayAdaptive:
     """测试时间衰减自适应过滤（条件106）。"""
@@ -6188,7 +6689,7 @@ class TestV40BreakoutRetestValidation:
     def test_breakout_retest_with_zs(self):
         """有中枢数据时应正常计算。"""
         from easy_tdx.chanlun.mmd import _calc_breakout_retest_validation
-        from easy_tdx.chanlun.types import MMD, MMDType, ZS
+        from easy_tdx.chanlun.types import MMD, ZS, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_1, msg="1买测试")
         zs = ZS(zg=110.0, zd=90.0, gg=110.0, dd=90.0)
@@ -6228,8 +6729,10 @@ class TestV40MultiCycleMACDResonance:
         from easy_tdx.chanlun.mmd import _calc_multi_cycle_macd_resonance
 
         closes = [100.0 + i * 0.1 for i in range(100)]
-        macd_data = {"dif": [0.5 + i * 0.01 for i in range(100)],
-                     "dea": [0.4 + i * 0.01 for i in range(100)]}
+        macd_data = {
+            "dif": [0.5 + i * 0.01 for i in range(100)],
+            "dea": [0.4 + i * 0.01 for i in range(100)],
+        }
         result = _calc_multi_cycle_macd_resonance(closes, macd_data)
         assert isinstance(result["resonance_count"], (int, np.integer))
         assert result["resonance_count"] >= 0
@@ -6317,27 +6820,32 @@ class TestV40Integration:
     def test_find_mmds_v40_exists(self):
         """find_mmds_v40 函数应存在且可调用。"""
         from easy_tdx.chanlun.mmd import find_mmds_v40
+
         assert callable(find_mmds_v40)
 
     def test_find_mmds_v40_returns_list(self):
         """find_mmds_v40 应返回列表。"""
         from easy_tdx.chanlun.mmd import find_mmds_v40
+
         result = find_mmds_v40([], [], None)
         assert isinstance(result, list)
 
     def test_find_mmds_v40_has_v40_fields(self):
         """find_mmds_v40 输出的 MMD 应包含 V40 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6349,17 +6857,20 @@ class TestV40Integration:
 
     def test_v40_confidence_bounds(self):
         """V40 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6367,17 +6878,20 @@ class TestV40Integration:
 
     def test_v40_time_decay_structure(self):
         """时间衰减应包含所有必要字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6477,7 +6991,10 @@ class TestV41QualityTierClassification:
         from easy_tdx.chanlun.mmd import _calc_quality_tier_classification
         from easy_tdx.chanlun.types import MMD, MMDType
 
-        mmds = [MMD(mmd_type=MMDType.BUY_1, msg=f"测试{i}", confidence=0.5 + i * 0.01) for i in range(10)]
+        mmds = [
+            MMD(mmd_type=MMDType.BUY_1, msg=f"测试{i}", confidence=0.5 + i * 0.01)
+            for i in range(10)
+        ]
         confidences = [m.confidence for m in mmds]
         result = _calc_quality_tier_classification(mmds, confidences)
         assert isinstance(result, dict)
@@ -6524,27 +7041,32 @@ class TestV41Integration:
     def test_find_mmds_v41_exists(self):
         """find_mmds_v41 函数应存在且可调用。"""
         from easy_tdx.chanlun.mmd import find_mmds_v41
+
         assert callable(find_mmds_v41)
 
     def test_find_mmds_v41_returns_list(self):
         """find_mmds_v41 应返回列表。"""
         from easy_tdx.chanlun.mmd import find_mmds_v41
+
         result = find_mmds_v41([], [], None)
         assert isinstance(result, list)
 
     def test_find_mmds_v41_has_v41_fields(self):
         """find_mmds_v41 输出的 MMD 应包含 V41 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6556,17 +7078,20 @@ class TestV41Integration:
 
     def test_v41_confidence_bounds(self):
         """V41 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6574,17 +7099,20 @@ class TestV41Integration:
 
     def test_v41_volume_energy_structure(self):
         """量价能量分布应包含必要字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6626,9 +7154,9 @@ class TestV42BreakPullbackVolumeRatio:
 
     def test_volume_ratio_returns_dict(self):
         """量比验证应返回字典。"""
+
         from easy_tdx.chanlun.mmd import _calc_break_pullback_volume_ratio
-        from easy_tdx.chanlun.types import MMD, MMDType, ZS, BI, Kline
-        from datetime import datetime
+        from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
         # 无中枢时应返回默认值
@@ -6711,17 +7239,20 @@ class TestV42Integration:
 
     def test_find_mmds_v42_fields_exist(self):
         """find_mmds_v41 输出应包含 V42 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6733,17 +7264,20 @@ class TestV42Integration:
 
     def test_v42_confidence_bounds(self):
         """V42 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6873,7 +7407,9 @@ class TestV44VolatilityAdaptive:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
-        result = _calc_volatility_adaptive_v44(mmd, 0.01, [10.0 + (i % 3) * 0.01 for i in range(30)])
+        result = _calc_volatility_adaptive_v44(
+            mmd, 0.01, [10.0 + (i % 3) * 0.01 for i in range(30)]
+        )
         assert result["vol_regime"] in ("low", "normal")
 
     def test_high_volatility_penalty(self):
@@ -6882,7 +7418,9 @@ class TestV44VolatilityAdaptive:
         from easy_tdx.chanlun.types import MMD, MMDType
 
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买测试")
-        result = _calc_volatility_adaptive_v44(mmd, 0.06, [10.0 + (i % 10) * 0.5 for i in range(30)])
+        result = _calc_volatility_adaptive_v44(
+            mmd, 0.06, [10.0 + (i % 10) * 0.5 for i in range(30)]
+        )
         assert result["vol_regime"] in ("high", "extreme")
         assert result["confidence_adjust"] <= 0
 
@@ -6916,17 +7454,20 @@ class TestV44Integration:
 
     def test_find_mmds_v44_fields_exist(self):
         """find_mmds_v44 输出应包含 V44 字段。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
-            "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "high": [10.5 + i * 0.05 + (i % 5) * 0.1 for i in range(200)],
+                "low": [9.5 + i * 0.05 + (i % 5) * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 + (i % 5) * 0.08 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -6938,17 +7479,20 @@ class TestV44Integration:
 
     def test_v44_confidence_bounds(self):
         """V44 调整后置信度应在 [0, 1] 范围内。"""
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
 
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
-            "open": [10.0 + i * 0.05 for i in range(200)],
-            "high": [10.5 + i * 0.05 for i in range(200)],
-            "low": [9.5 + i * 0.05 for i in range(200)],
-            "close": [10.0 + i * 0.05 for i in range(200)],
-            "volume": [1000 + i * 10 for i in range(200)],
-        })
+        from easy_tdx.chanlun import ChanlunAnalyser
+
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2024-01-01", periods=200, freq="D"),
+                "open": [10.0 + i * 0.05 for i in range(200)],
+                "high": [10.5 + i * 0.05 for i in range(200)],
+                "low": [9.5 + i * 0.05 for i in range(200)],
+                "close": [10.0 + i * 0.05 for i in range(200)],
+                "volume": [1000 + i * 10 for i in range(200)],
+            }
+        )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         for mmd in result.mmds:
@@ -7126,11 +7670,11 @@ class TestV46Enhancements:
     def test_v46_confidence_bounds(self):
         """V46：置信度调整后不超出[0,1]范围。"""
         from src.easy_tdx.chanlun.mmd import (
+            _calc_dynamic_market_regime,
+            _calc_multi_tf_signal_consistency,
             _calc_trend_momentum_strength,
             _calc_volume_price_divergence_secondary,
             _calc_zs_breakout_authenticity,
-            _calc_multi_tf_signal_consistency,
-            _calc_dynamic_market_regime,
         )
 
         mmd = self._make_mmd()
@@ -7148,7 +7692,9 @@ class TestV46Enhancements:
         ]
         for func, args in funcs:
             result = func(*args)
-            assert -0.1 <= result["confidence_adjust"] <= 0.1, f"{func.__name__} adjust out of bounds"
+            assert -0.1 <= result["confidence_adjust"] <= 0.1, (
+                f"{func.__name__} adjust out of bounds"
+            )
 
     def test_v46_all_tests_pass(self):
         """V46 集成测试全部通过。"""
@@ -7159,18 +7705,48 @@ class TestV47Enhancements:
     """V47 后确认价格跟随过滤 + 信号有效性窗口 + 置信度动态校准测试。"""
 
     def _make_mmd_buy(self):
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, MMD
         from datetime import datetime
-        clk = CLKline(k_index=10, date=datetime(2026, 8, 1), open=10.0, close=10.5, high=10.8, low=10.2, amount=1000.0)
-        bi = BI(direction="up", start=FX(fx_type=FXType.DI, k=clk, klines=[], val=10.0), end=FX(fx_type=FXType.DING, k=clk, klines=[], val=11.0), index=5)
+
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, FXType
+
+        clk = CLKline(
+            k_index=10,
+            date=datetime(2026, 8, 1),
+            open=10.0,
+            close=10.5,
+            high=10.8,
+            low=10.2,
+            amount=1000.0,
+        )
+        bi = BI(
+            direction="up",
+            start=FX(fx_type=FXType.DI, k=clk, klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=clk, klines=[], val=11.0),
+            index=5,
+        )
         bi.end.k.k_index = 10
         return MMD(mmd_type=MMDType.BUY_3, bi=bi, msg="3买: 突破确认后回踩")
 
     def _make_mmd_sell(self):
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, MMD
         from datetime import datetime
-        clk = CLKline(k_index=10, date=datetime(2026, 8, 1), open=10.0, close=9.5, high=10.2, low=9.3, amount=1000.0)
-        bi = BI(direction="down", start=FX(fx_type=FXType.DING, k=clk, klines=[], val=10.0), end=FX(fx_type=FXType.DI, k=clk, klines=[], val=9.0), index=5)
+
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, FXType
+
+        clk = CLKline(
+            k_index=10,
+            date=datetime(2026, 8, 1),
+            open=10.0,
+            close=9.5,
+            high=10.2,
+            low=9.3,
+            amount=1000.0,
+        )
+        bi = BI(
+            direction="down",
+            start=FX(fx_type=FXType.DING, k=clk, klines=[], val=10.0),
+            end=FX(fx_type=FXType.DI, k=clk, klines=[], val=9.0),
+            index=5,
+        )
         bi.end.k.k_index = 10
         return MMD(mmd_type=MMDType.SELL_3, bi=bi, msg="3卖: 跌破确认后反抽")
 
@@ -7179,7 +7755,9 @@ class TestV47Enhancements:
         mmd = self._make_mmd_buy()
         # 信号在 idx=10，之后价格持续上涨（符合3买预期）
         closes = [10.0 + i * 0.1 for i in range(20)]  # 10.0 → 11.9
-        result = _check_post_signal_price_follow_through(mmd, closes, lookback_bars=5, min_follow_pct=0.02)
+        result = _check_post_signal_price_follow_through(
+            mmd, closes, lookback_bars=5, min_follow_pct=0.02
+        )
         assert result["followed"] is True
         assert result["confidence_adjust"] == 0.04
         assert "后确认通过" in result["msg"]
@@ -7189,7 +7767,9 @@ class TestV47Enhancements:
         mmd = self._make_mmd_sell()
         # 信号在 idx=10，之后价格持续下跌（符合3卖预期）
         closes = [10.0 - i * 0.1 for i in range(20)]  # 10.0 → 8.1
-        result = _check_post_signal_price_follow_through(mmd, closes, lookback_bars=5, min_follow_pct=-0.02)
+        result = _check_post_signal_price_follow_through(
+            mmd, closes, lookback_bars=5, min_follow_pct=-0.02
+        )
         assert result["followed"] is True
         assert result["confidence_adjust"] == 0.04
         assert "后确认通过" in result["msg"]
@@ -7199,7 +7779,9 @@ class TestV47Enhancements:
         mmd = self._make_mmd_buy()
         # 信号后价格下跌（不符合3买预期）
         closes = [10.0 + i * 0.01 for i in range(10)] + [10.5 - i * 0.05 for i in range(10)]
-        result = _check_post_signal_price_follow_through(mmd, closes, lookback_bars=5, min_follow_pct=0.02)
+        result = _check_post_signal_price_follow_through(
+            mmd, closes, lookback_bars=5, min_follow_pct=0.02
+        )
         assert result["followed"] is False
         assert result["confidence_adjust"] == -0.05
         assert "后确认失败" in result["msg"]
@@ -7207,7 +7789,9 @@ class TestV47Enhancements:
     def test_post_signal_no_data(self):
         """条件131：无足够数据时返回默认值。"""
         mmd = self._make_mmd_buy()
-        result = _check_post_signal_price_follow_through(mmd, [], lookback_bars=5, min_follow_pct=0.02)
+        result = _check_post_signal_price_follow_through(
+            mmd, [], lookback_bars=5, min_follow_pct=0.02
+        )
         assert result["signal_bar_idx"] == -1
         assert result["confidence_adjust"] == 0.0
 
@@ -7215,7 +7799,9 @@ class TestV47Enhancements:
         """条件131：信号在最新K线时无法后确认。"""
         mmd = self._make_mmd_buy()
         closes = [10.0, 10.1, 10.2]
-        result = _check_post_signal_price_follow_through(mmd, closes, lookback_bars=5, min_follow_pct=0.02)
+        result = _check_post_signal_price_follow_through(
+            mmd, closes, lookback_bars=5, min_follow_pct=0.02
+        )
         assert result["looked_bars"] == 0
         # 无数据可验证时返回空msg，不抛出异常
         assert result["confidence_adjust"] == 0.0
@@ -7242,10 +7828,25 @@ class TestV47Enhancements:
 
     def test_confidence_v47_3buy_calibration(self):
         """条件133：V47 3买置信度上限75%下限30%。"""
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, MMD
         from datetime import datetime
-        clk = CLKline(k_index=10, date=datetime(2026, 8, 1), open=10.0, close=10.5, high=10.8, low=10.2, amount=1000.0)
-        bi = BI(direction="up", start=FX(fx_type=FXType.DI, k=clk, klines=[], val=10.0), end=FX(fx_type=FXType.DING, k=clk, klines=[], val=11.0), index=5)
+
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, FXType
+
+        clk = CLKline(
+            k_index=10,
+            date=datetime(2026, 8, 1),
+            open=10.0,
+            close=10.5,
+            high=10.8,
+            low=10.2,
+            amount=1000.0,
+        )
+        bi = BI(
+            direction="up",
+            start=FX(fx_type=FXType.DI, k=clk, klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=clk, klines=[], val=11.0),
+            index=5,
+        )
         bi.end.k.k_index = 10
         mmd = MMD(mmd_type=MMDType.BUY_3, bi=bi, msg="3买: 突破确认后回踩")
 
@@ -7259,10 +7860,25 @@ class TestV47Enhancements:
 
     def test_confidence_v47_3sell_calibration(self):
         """条件133：V47 3卖置信度上限75%下限30%。"""
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, MMD
         from datetime import datetime
-        clk = CLKline(k_index=10, date=datetime(2026, 8, 1), open=10.0, close=9.5, high=10.2, low=9.3, amount=1000.0)
-        bi = BI(direction="down", start=FX(fx_type=FXType.DING, k=clk, klines=[], val=10.0), end=FX(fx_type=FXType.DI, k=clk, klines=[], val=9.0), index=5)
+
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, FXType
+
+        clk = CLKline(
+            k_index=10,
+            date=datetime(2026, 8, 1),
+            open=10.0,
+            close=9.5,
+            high=10.2,
+            low=9.3,
+            amount=1000.0,
+        )
+        bi = BI(
+            direction="down",
+            start=FX(fx_type=FXType.DING, k=clk, klines=[], val=10.0),
+            end=FX(fx_type=FXType.DI, k=clk, klines=[], val=9.0),
+            index=5,
+        )
         bi.end.k.k_index = 10
         mmd = MMD(mmd_type=MMDType.SELL_3, bi=bi, msg="3卖: 跌破确认后反抽")
 
@@ -7276,10 +7892,25 @@ class TestV47Enhancements:
 
     def test_confidence_v47_non_third_type_not_capped(self):
         """条件133：非3买/3卖信号不受V47上下限约束。"""
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, MMD
         from datetime import datetime
-        clk = CLKline(k_index=10, date=datetime(2026, 8, 1), open=10.0, close=10.5, high=10.8, low=10.2, amount=1000.0)
-        bi = BI(direction="up", start=FX(fx_type=FXType.DI, k=clk, klines=[], val=10.0), end=FX(fx_type=FXType.DING, k=clk, klines=[], val=11.0), index=5)
+
+        from easy_tdx.chanlun.types import BI, FX, MMD, CLKline, FXType
+
+        clk = CLKline(
+            k_index=10,
+            date=datetime(2026, 8, 1),
+            open=10.0,
+            close=10.5,
+            high=10.8,
+            low=10.2,
+            amount=1000.0,
+        )
+        bi = BI(
+            direction="up",
+            start=FX(fx_type=FXType.DI, k=clk, klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=clk, klines=[], val=11.0),
+            index=5,
+        )
         bi.end.k.k_index = 10
         mmd = MMD(mmd_type=MMDType.BUY_1, bi=bi, msg="1买: 底背驰")
 
@@ -7295,11 +7926,34 @@ class TestV47Enhancements:
     def test_find_mmds_v47_fields_exist(self):
         """V47集成：find_mmds 返回结果包含 V47 字段。"""
         # 使用简单模拟数据验证函数可调用不报错
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline, ZS
         from datetime import datetime
-        clk1 = CLKline(k_index=0, date=datetime(2026, 7, 1), open=10.0, close=10.5, high=10.8, low=10.2, amount=1000.0)
-        clk2 = CLKline(k_index=5, date=datetime(2026, 7, 6), open=10.5, close=10.3, high=10.7, low=10.1, amount=900.0)
-        bi = BI(direction="up", start=FX(fx_type=FXType.DI, k=clk1, klines=[], val=10.0), end=FX(fx_type=FXType.DING, k=clk2, klines=[], val=10.5), index=0)
+
+        from easy_tdx.chanlun.types import BI, FX, ZS, CLKline, FXType
+
+        clk1 = CLKline(
+            k_index=0,
+            date=datetime(2026, 7, 1),
+            open=10.0,
+            close=10.5,
+            high=10.8,
+            low=10.2,
+            amount=1000.0,
+        )
+        clk2 = CLKline(
+            k_index=5,
+            date=datetime(2026, 7, 6),
+            open=10.5,
+            close=10.3,
+            high=10.7,
+            low=10.1,
+            amount=900.0,
+        )
+        bi = BI(
+            direction="up",
+            start=FX(fx_type=FXType.DI, k=clk1, klines=[], val=10.0),
+            end=FX(fx_type=FXType.DING, k=clk2, klines=[], val=10.5),
+            index=0,
+        )
         bi.end.k.k_index = 5
         zs = ZS(lines=[], zg=10.6, zd=10.0, done=True, index=0)
         closes = [10.0 + i * 0.05 for i in range(20)]
@@ -7323,8 +7977,12 @@ class TestV47Enhancements:
         lows = [c - 0.5 for c in closes]
         volumes = [100.0] * 40
 
-        conf_buy = _calc_confidence_v47(mmd_buy, 0.7, volumes, closes, None, 0.02, None, highs, lows)
-        conf_sell = _calc_confidence_v47(mmd_sell, 0.7, volumes, closes, None, 0.02, None, highs, lows)
+        conf_buy = _calc_confidence_v47(
+            mmd_buy, 0.7, volumes, closes, None, 0.02, None, highs, lows
+        )
+        conf_sell = _calc_confidence_v47(
+            mmd_sell, 0.7, volumes, closes, None, 0.02, None, highs, lows
+        )
         assert 0.0 <= conf_buy <= 1.0, f"3买置信度越界: {conf_buy}"
         assert 0.0 <= conf_sell <= 1.0, f"3卖置信度越界: {conf_sell}"
 

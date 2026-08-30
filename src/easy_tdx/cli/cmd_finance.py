@@ -69,7 +69,9 @@ def fund_flow(market: str, code: str, start: int, count: int) -> None:
 @click.command("gpcw-cache")
 @click.option("--action", type=click.Choice(["stats", "warm", "clear"]), default="stats")
 @click.option(
-    "--date", "target_date", default=None,
+    "--date",
+    "target_date",
+    default=None,
     help="warm 用目标日期 YYYY-MM-DD（自动选该日期的报告期）",
 )
 @click.option("--table", "use_table", is_flag=True, help="表格输出")

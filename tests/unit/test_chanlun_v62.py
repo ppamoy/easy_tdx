@@ -9,14 +9,12 @@
 
 from __future__ import annotations
 
-import pytest
-
 from easy_tdx.chanlun.mmd import (
     MMDType,
     _calc_boll_bandwidth_breakout_confirm_v62,
     _calc_boll_bandwidth_reversal_confirm_v62,
-    _calc_dynamic_threshold_volatility_regime_v62,
     _calc_dynamic_threshold_atr_multiplier_v62,
+    _calc_dynamic_threshold_volatility_regime_v62,
 )
 from easy_tdx.chanlun.types import MMD
 
@@ -35,6 +33,7 @@ def _make_mmd(mmd_type: MMDType, confidence: float = 0.5) -> MMD:
 def _make_closes(n: int = 80, base: float = 100.0, trend: str = "up") -> list[float]:
     """创建测试用的收盘价序列。"""
     import math
+
     closes = []
     for i in range(n):
         if trend == "up":
@@ -48,6 +47,7 @@ def _make_closes(n: int = 80, base: float = 100.0, trend: str = "up") -> list[fl
 # =============================================================================
 # 条件186: BOLL带宽突破确认
 # =============================================================================
+
 
 class TestBollBandwidthBreakoutV62:
     """测试条件186：BOLL带宽突破确认。"""
@@ -125,6 +125,7 @@ class TestBollBandwidthBreakoutV62:
 # 条件187: BOLL带宽压缩反弹确认
 # =============================================================================
 
+
 class TestBollBandwidthReversalV62:
     """测试条件187：BOLL带宽压缩反弹确认。"""
 
@@ -184,7 +185,12 @@ class TestBollBandwidthReversalV62:
         mmd = _make_mmd(MMDType.BUY_3, confidence=0.5)
         closes = _make_closes(80, trend="up")
         result = _calc_boll_bandwidth_reversal_confirm_v62(mmd, closes)
-        assert result["reversal_type"] in ("bullish_reversal", "bearish_reversal", "no_reversal", "none")
+        assert result["reversal_type"] in (
+            "bullish_reversal",
+            "bearish_reversal",
+            "no_reversal",
+            "none",
+        )
 
     def test_msg_format(self):
         """消息格式验证。"""
@@ -198,6 +204,7 @@ class TestBollBandwidthReversalV62:
 # =============================================================================
 # 条件188: 动态阈值-波动率状态切换
 # =============================================================================
+
 
 class TestDynamicThresholdVolatilityRegimeV62:
     """测试条件188：动态阈值-波动率状态切换。"""
@@ -272,6 +279,7 @@ class TestDynamicThresholdVolatilityRegimeV62:
 # =============================================================================
 # 条件189: 动态阈值-ATR倍数自适应
 # =============================================================================
+
 
 class TestDynamicThresholdATRMultiplierV62:
     """测试条件189：动态阈值-ATR倍数自适应。"""
@@ -354,6 +362,7 @@ class TestDynamicThresholdATRMultiplierV62:
 # 集成测试
 # =============================================================================
 
+
 class TestFindMMDsV62Integration:
     """集成测试：验证V62函数可被find_mmds_v39调用。"""
 
@@ -362,9 +371,10 @@ class TestFindMMDsV62Integration:
         from easy_tdx.chanlun.mmd import (
             _calc_boll_bandwidth_breakout_confirm_v62,
             _calc_boll_bandwidth_reversal_confirm_v62,
-            _calc_dynamic_threshold_volatility_regime_v62,
             _calc_dynamic_threshold_atr_multiplier_v62,
+            _calc_dynamic_threshold_volatility_regime_v62,
         )
+
         assert callable(_calc_boll_bandwidth_breakout_confirm_v62)
         assert callable(_calc_boll_bandwidth_reversal_confirm_v62)
         assert callable(_calc_dynamic_threshold_volatility_regime_v62)
@@ -443,8 +453,10 @@ class TestFindMMDsV62Integration:
 
     def test_v62_integration_pass(self):
         """V62集成通过测试。"""
-        from easy_tdx.chanlun.mmd import find_mmds_v39
         import inspect
+
+        from easy_tdx.chanlun.mmd import find_mmds_v39
+
         source = inspect.getsource(find_mmds_v39)
         assert "_calc_boll_bandwidth_breakout_confirm_v62" in source
         assert "_calc_boll_bandwidth_reversal_confirm_v62" in source

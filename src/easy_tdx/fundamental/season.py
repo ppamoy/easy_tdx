@@ -174,16 +174,18 @@ def detect_season(
 
     total = price_score + ma_score + vol_score + vol_score2
     trend_20 = (cs[-1] - cs[-20]) / cs[-20] if n >= 20 and cs[-20] else 0
-    sig.update({
-        "trend_60d_pct": round(trend_60 * 100, 2),
-        "trend_20d_pct": round(trend_20 * 100, 2),
-        "price_score": price_score,
-        "ma_ratio": round(ma_ratio, 3),
-        "ma_score": ma_score,
-        "vol_score": vol_score,
-        "vol_score2": vol_score2,
-        "total_score": total,
-    })
+    sig.update(
+        {
+            "trend_60d_pct": round(trend_60 * 100, 2),
+            "trend_20d_pct": round(trend_20 * 100, 2),
+            "price_score": price_score,
+            "ma_ratio": round(ma_ratio, 3),
+            "ma_score": ma_score,
+            "vol_score": vol_score,
+            "vol_score2": vol_score2,
+            "total_score": total,
+        }
+    )
 
     # 与 changying_chanlun 一致的季节映射：强分直接定季，
     # 中性分按近 20 日趋势方向翻转（历史时点无“当前季”，用趋势做方向）。

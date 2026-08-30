@@ -13,13 +13,11 @@ import logging
 from datetime import datetime
 from typing import Any
 
+import pandas as pd
 from fastapi import APIRouter, Depends
 
 from easy_tdx.web.convert import category_from_str, market_from_str
 from easy_tdx.web.deps import get_client
-from easy_tdx.web.schemas import StockIdentifier
-
-import pandas as pd
 
 router = APIRouter(tags=["screening"])
 logger = logging.getLogger(__name__)
@@ -39,8 +37,6 @@ async def scan_stocks(
     - season_filter: 是否过滤季节
     - stock_type: 股票类型 (tree/grain/vegetable/all)
     """
-    from easy_tdx.chanlun import ChanlunAnalyser
-    from easy_tdx.chanlun.types import MMDType
 
     date_str = req.get("date", "")
     market = req.get("market", "SZ")
@@ -72,15 +68,14 @@ async def scan_stocks(
     max_stocks = min(len(stocks), 30)  # 最多扫描30只
     results["total_scanned"] = max_stocks
     logger.info(f"开始扫描 {max_stocks} 只股票...")
-    
+
     import time
+
     start_time = time.time()
-    
+
     for i, stock in enumerate(stocks[:max_stocks]):
         try:
-            stock_result = await _analyze_stock(
-                client, market, stock, target_date, min_klines
-            )
+            stock_result = await _analyze_stock(client, market, stock, target_date, min_klines)
             if stock_result.get("valid"):
                 # 根据长赢模型筛选
                 if _pass_screening(stock_result, stock_type, season_filter):
@@ -95,19 +90,17 @@ async def scan_stocks(
         except Exception as e:
             logger.warning(f"扫描 {stock} 失败: {e}")
             continue
-        
+
         # 每5只打印进度
         if (i + 1) % 5 == 0:
             elapsed = time.time() - start_time
-            logger.info(f"已扫描 {i+1}/{max_stocks} 只，耗时 {elapsed:.1f}s")
-    
+            logger.info(f"已扫描 {i + 1}/{max_stocks} 只，耗时 {elapsed:.1f}s")
+
     elapsed_total = time.time() - start_time
     logger.info(f"扫描完成，总耗时 {elapsed_total:.1f}s")
 
     # 按质量排序
-    results["qualified"].sort(
-        key=lambda x: x.get("quality_score", 0), reverse=True
-    )
+    results["qualified"].sort(key=lambda x: x.get("quality_score", 0), reverse=True)
 
     return results
 
@@ -174,24 +167,46 @@ async def evaluate_stock(
     }
 
 
-async def _get_stock_list(
-    client: Any, market: str
-) -> list[str]:
+async def _get_stock_list(client: Any, market: str) -> list[str]:
     """获取股票列表（使用预定义热门股票池，避免全市场扫描超时）。"""
     # 预定义的热门股票池（可根据需要扩展）
     HOT_STOCKS = {
         "SZ": [
-            "000001", "000002", "000063", "000100", "000333",
-            "000568", "000651", "000725", "000858", "002594",
-            "300059", "300015", "300014", "300012", "300750",
+            "000001",
+            "000002",
+            "000063",
+            "000100",
+            "000333",
+            "000568",
+            "000651",
+            "000725",
+            "000858",
+            "002594",
+            "300059",
+            "300015",
+            "300014",
+            "300012",
+            "300750",
         ],
         "SH": [
-            "600000", "600004", "600009", "600010", "600011",
-            "600016", "600028", "600030", "600036", "600048",
-            "600519", "601318", "601398", "601398", "600900",
+            "600000",
+            "600004",
+            "600009",
+            "600010",
+            "600011",
+            "600016",
+            "600028",
+            "600030",
+            "600036",
+            "600048",
+            "600519",
+            "601318",
+            "601398",
+            "601398",
+            "600900",
         ],
     }
-    
+
     return HOT_STOCKS.get(market, [])
 
 
@@ -306,7 +321,11 @@ def _get_latest_mmd(result: Any) -> dict[str, Any] | None:
     return {
         "type": latest.mmd_type.value,
         "date": latest.bi.end.k.date.strftime("%Y-%m-%d") if latest.bi else None,
-        "price": latest.bi.low if latest.bi and latest.mmd_type.value.endswith("buy") else latest.bi.high if latest.bi else None,
+        "price": latest.bi.low
+        if latest.bi and latest.mmd_type.value.endswith("buy")
+        else latest.bi.high
+        if latest.bi
+        else None,
     }
 
 
@@ -356,4 +375,3 @@ def _calc_quality_score(result: Any, target_date: datetime) -> float:
     score += min(len(result.zss) * 5, 20)
 
     return min(score, 100)
-

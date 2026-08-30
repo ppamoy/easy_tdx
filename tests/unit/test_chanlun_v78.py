@@ -6,20 +6,19 @@
 条件247：资金流向与价格背离检测（Fund Flow Divergence）
 """
 
-import pytest
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from easy_tdx.backtest.chanlun_validator import ConditionGroup
 from easy_tdx.chanlun.mmd import (
+    _calc_fund_flow_divergence_v78,
     _calc_mmd_cycle_position_v78,
     _calc_multi_signal_consensus_v78,
     _calc_volatility_compression_breakout_v78,
-    _calc_fund_flow_divergence_v78,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
-from easy_tdx.backtest.chanlun_validator import ConditionGroup
 
 
 def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
@@ -30,6 +29,7 @@ def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
 def _make_closes(n: int = 80, base: float = 100.0, trend: str = "flat") -> list[float]:
     """Generate test closing prices."""
     import random
+
     random.seed(42)
     if trend == "up":
         return [base + i * 0.05 + random.uniform(-1, 1) for i in range(n)]
@@ -49,11 +49,13 @@ def _make_lows(closes: list[float], spread: float = 1.0) -> list[float]:
 
 def _make_volumes(n: int = 80, base: float = 1000.0) -> list[float]:
     import random
+
     random.seed(43)
     return [base + random.uniform(-200, 200) for _ in range(n)]
 
 
 # ── TestV78ConditionGroup：ConditionGroup 枚举测试 ───────────────────────────
+
 
 class TestV78ConditionGroup:
     """V78 ConditionGroup 存在性和正确性测试。"""
@@ -72,6 +74,7 @@ class TestV78ConditionGroup:
 
 # ── TestV78MMDFields：MMD 对象字段测试 ───────────────────────────────────────
 
+
 class TestV78MMDFields:
     """MMD 对象包含 V78 字段。"""
 
@@ -85,12 +88,14 @@ class TestV78MMDFields:
 
 # ── TestV78BacktestValidator：回测验证器测试 ─────────────────────────────────
 
+
 class TestV78BacktestValidator:
     """V78 条件回测验证器测试。"""
 
     def test_v78_validator_usage(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
-        validator = ChanlunConditionBacktestValidator()
+
+        _ = ChanlunConditionBacktestValidator()
         assert ConditionGroup.V78 in list(ConditionGroup)
 
     def test_v78_multi_group_validation(self):
@@ -102,12 +107,14 @@ class TestV78BacktestValidator:
 
     def test_v78_summary_output(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
+
         validator = ChanlunConditionBacktestValidator()
         summary = validator.validate_conditions({}, [ConditionGroup.V78])
         assert summary is not None
 
 
 # ── TestV78Functions：各计算函数单元测试 ─────────────────────────────────────
+
 
 class TestV78Functions:
     """V78 四个计算函数的单元测试。"""
@@ -128,9 +135,7 @@ class TestV78Functions:
         assert "confidence_adjust" in result
         assert isinstance(result["position_score"], float)
         assert 0 <= result["position_score"] <= 1.0
-        assert result["cycle_position"] in [
-            "bottom", "lower", "mid", "upper", "top"
-        ]
+        assert result["cycle_position"] in ["bottom", "lower", "mid", "upper", "top"]
 
     def test_mcp_sell_at_top(self):
         """卖出信号在波段顶部 → 高评分。"""
@@ -209,8 +214,11 @@ class TestV78Functions:
         closes = _make_closes(60)
         result = _calc_multi_signal_consensus_v78(mmds, current, closes)
         valid_levels = {
-            "strong_consensus", "moderate_consensus", "contradicted",
-            "isolated", "mixed"
+            "strong_consensus",
+            "moderate_consensus",
+            "contradicted",
+            "isolated",
+            "mixed",
         }
         assert result["consensus_level"] in valid_levels
 
@@ -237,7 +245,12 @@ class TestV78Functions:
         result = _calc_volatility_compression_breakout_v78(closes, highs, lows)
         assert "breakout_direction" in result
         assert result["breakout_direction"] in [
-            "up", "up_continuing", "down", "down_continuing", "neutral", "normal"
+            "up",
+            "up_continuing",
+            "down",
+            "down_continuing",
+            "neutral",
+            "normal",
         ]
 
     def test_vcb_insufficient_data(self):
@@ -275,8 +288,11 @@ class TestV78Functions:
         volumes = [500.0 + i * 20 for i in range(40)]  # 量能放大
         result = _calc_fund_flow_divergence_v78(closes, volumes)
         assert result["divergence_type"] in [
-            "bearish_divergence", "bullish_divergence",
-            "confirmed_up", "confirmed_down", "neutral"
+            "bearish_divergence",
+            "bullish_divergence",
+            "confirmed_up",
+            "confirmed_down",
+            "neutral",
         ]
 
     def test_ffd_neutral(self):
@@ -325,10 +341,12 @@ class TestV78Functions:
             _calc_volume_distribution_depth_v77,
             _calc_zhongshu_structure_weight_v77,
         )
+
         mmd = _make_mmd("3buy", 0.6)
         closes = _make_closes(80)
         volumes = _make_volumes(80)
         from easy_tdx.chanlun.types import ZS
+
         zss = [ZS(index=0, zg=100.5, zd=99.5)]
 
         # V77 函数仍能正常工作

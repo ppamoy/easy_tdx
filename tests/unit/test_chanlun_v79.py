@@ -6,12 +6,12 @@
 条件251：价格动能持续性评分（Price Momentum Continuity）
 """
 
-import pytest
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from easy_tdx.backtest.chanlun_validator import ConditionGroup
 from easy_tdx.chanlun.mmd import (
     _calc_fractal_stability_validation_v79,
     _calc_mmd_distance_safety_v79,
@@ -19,7 +19,6 @@ from easy_tdx.chanlun.mmd import (
     _calc_price_momentum_continuity_v79,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
-from easy_tdx.backtest.chanlun_validator import ConditionGroup
 
 
 def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
@@ -30,6 +29,7 @@ def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
 def _make_closes(n: int = 80, base: float = 100.0, trend: str = "flat") -> list[float]:
     """Generate test closing prices."""
     import random
+
     random.seed(42)
     if trend == "up":
         return [base + i * 0.05 + random.uniform(-1, 1) for i in range(n)]
@@ -49,11 +49,13 @@ def _make_lows(closes: list[float], spread: float = 1.0) -> list[float]:
 
 def _make_volumes(n: int = 80, base: float = 1000.0) -> list[float]:
     import random
+
     random.seed(43)
     return [base + random.uniform(-200, 200) for _ in range(n)]
 
 
 # ── TestV79ConditionGroup：ConditionGroup 枚举测试 ───────────────────────────
+
 
 class TestV79ConditionGroup:
     """V79 ConditionGroup 存在性和正确性测试。"""
@@ -72,6 +74,7 @@ class TestV79ConditionGroup:
 
 # ── TestV79MMDFields：MMD 对象字段测试 ───────────────────────────────────────
 
+
 class TestV79MMDFields:
     """MMD 对象包含 V79 字段。"""
 
@@ -85,12 +88,14 @@ class TestV79MMDFields:
 
 # ── TestV79BacktestValidator：回测验证器测试 ─────────────────────────────────
 
+
 class TestV79BacktestValidator:
     """V79 条件回测验证器测试。"""
 
     def test_v79_validator_usage(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
-        validator = ChanlunConditionBacktestValidator()
+
+        _ = ChanlunConditionBacktestValidator()
         assert ConditionGroup.V79 in list(ConditionGroup)
 
     def test_v79_multi_group_validation(self):
@@ -103,12 +108,14 @@ class TestV79BacktestValidator:
 
     def test_v79_summary_output(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
+
         validator = ChanlunConditionBacktestValidator()
         summary = validator.validate_conditions({}, [ConditionGroup.V79])
         assert summary is not None
 
 
 # ── TestV79Functions：各计算函数单元测试 ─────────────────────────────────────
+
 
 class TestV79Functions:
     """V79 四个计算函数的单元测试。"""
@@ -171,6 +178,7 @@ class TestV79Functions:
         current = mmds[-1]
         # 模拟较远距离
         import random
+
         random.seed(1)
         closes = _make_closes(60, base=100.0)
         result = _calc_mmd_distance_safety_v79(mmds, current, closes)
@@ -243,7 +251,9 @@ class TestV79Functions:
     def test_mls_insufficient_data(self):
         """数据不足时返回默认值。"""
         mmd = _make_mmd("3buy", 0.6)
-        result = _calc_multi_level_structure_consistency_v79(mmd, [1.0, 2.0], [2.0, 3.0], [1.0, 2.0])
+        result = _calc_multi_level_structure_consistency_v79(
+            mmd, [1.0, 2.0], [2.0, 3.0], [1.0, 2.0]
+        )
         assert result["msg"] != ""
         assert result["consistency_score"] == 0.5
         assert result["confidence_adjust"] == 0.0
@@ -254,8 +264,12 @@ class TestV79Functions:
         highs = _make_highs(closes, 1.0)
         lows = _make_lows(closes, 1.0)
 
-        buy_result = _calc_multi_level_structure_consistency_v79(_make_mmd("3buy"), closes, highs, lows)
-        sell_result = _calc_multi_level_structure_consistency_v79(_make_mmd("3sell"), closes, highs, lows)
+        buy_result = _calc_multi_level_structure_consistency_v79(
+            _make_mmd("3buy"), closes, highs, lows
+        )
+        sell_result = _calc_multi_level_structure_consistency_v79(
+            _make_mmd("3sell"), closes, highs, lows
+        )
 
         # 两者应该都是float
         assert isinstance(buy_result["consistency_score"], float)
@@ -342,9 +356,10 @@ class TestV79Functions:
     def test_v79_vs_v78_consistency(self):
         """V79 与 V78 函数互不干扰。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_mmd_cycle_position_v78,
             _calc_fund_flow_divergence_v78,
+            _calc_mmd_cycle_position_v78,
         )
+
         mmd = _make_mmd("3buy", 0.6)
         closes = _make_closes(80)
         volumes = _make_volumes(80)

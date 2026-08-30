@@ -64,15 +64,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.macd import calc_macd, calc_macd_force
-from easy_tdx.chanlun.types import BI, BCType, Line, MMD, MMDType, ZS
-from easy_tdx.MyTT import BIAS, KDJ, OBV, MA, RSI, BOLL, ATR, STD
+from easy_tdx.chanlun.macd import calc_macd_force
+from easy_tdx.chanlun.types import BI, MMD, ZS, BCType, Line, MMDType
+from easy_tdx.MyTT import ATR, BIAS, KDJ, MA, OBV, RSI
 
 
 @dataclass
@@ -120,8 +120,8 @@ def _calc_atr_volatility(closes: list[float] | None, lookback: int = 20) -> floa
         prev_closes.append(closes[idx - 1])
 
     tr = []
-    for h, l, pc in zip(highs, lows, prev_closes):
-        tr.append(max(h - l, abs(h - pc), abs(l - pc)))
+    for h, low, pc in zip(highs, lows, prev_closes):
+        tr.append(max(h - low, abs(h - pc), abs(low - pc)))
 
     atr = sum(tr) / len(tr) if tr else 0
     avg_price = sum(closes[-lookback:]) / lookback if len(closes) > 0 else 1
@@ -187,7 +187,7 @@ def _calc_confluence_bonus(
     if volumes is not None and mmd.bi:
         bi_end = mmd.bi.end.k.k_index
         if 0 <= bi_end < len(volumes):
-            recent_vols = volumes[max(0, bi_end - 10):bi_end + 1]
+            recent_vols = volumes[max(0, bi_end - 10) : bi_end + 1]
             if len(recent_vols) >= 5:
                 avg_vol = sum(recent_vols) / len(recent_vols)
                 avg_20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else avg_vol
@@ -255,8 +255,8 @@ def calc_signal_quality_report(
                     prev_closes.append(closes[idx])
         if len(highs) >= 14 and len(prev_closes) >= 14:
             trs = []
-            for h, l, pc in zip(highs, lows, prev_closes):
-                tr = max(h - l, abs(h - pc), abs(l - pc))
+            for h, low, pc in zip(highs, lows, prev_closes):
+                tr = max(h - low, abs(h - pc), abs(low - pc))
                 trs.append(tr)
             atr = sum(trs) / len(trs) if trs else latest_close * 0.02
     else:
@@ -283,7 +283,7 @@ def calc_signal_quality_report(
         take_profit_2 = round(entry_price + tp2_dist, 2)
         zs_zg_text = f"{mmd.zs.zg:.2f}" if mmd.zs else "0.00"
         entry_reason = f"3 买信号：回踩中枢上沿 ({zs_zg_text}) 后低点 {bi_low:.2f} 企稳"
-        risk_notes = f"止损 {stop_loss:.2f}（-{(entry_price-stop_loss)/entry_price*100:.1f}%），第一止盈 {take_profit_1:.2f}"
+        risk_notes = f"止损 {stop_loss:.2f}（-{(entry_price - stop_loss) / entry_price * 100:.1f}%），第一止盈 {take_profit_1:.2f}"
 
     elif mmd_type == "3sell":
         # 3 卖：反弹确认后入场（做空）
@@ -296,7 +296,7 @@ def calc_signal_quality_report(
         take_profit_2 = round(entry_price - tp2_dist, 2)
         zs_zd_text = f"{mmd.zs.zd:.2f}" if mmd.zs else "0.00"
         entry_reason = f"3 卖信号：反弹中枢下沿 ({zs_zd_text}) 后高点 {bi_high:.2f} 遇阻"
-        risk_notes = f"止损 {stop_loss:.2f}（+{(stop_loss-entry_price)/entry_price*100:.1f}%），第一止盈 {take_profit_1:.2f}"
+        risk_notes = f"止损 {stop_loss:.2f}（+{(stop_loss - entry_price) / entry_price * 100:.1f}%），第一止盈 {take_profit_1:.2f}"
 
     elif mmd_type in ("1buy", "2buy"):
         entry_price = round(latest_close, 2)
@@ -304,7 +304,9 @@ def calc_signal_quality_report(
         take_profit_1 = round(latest_close + atr * 3, 2)
         take_profit_2 = round(latest_close + atr * 5, 2)
         entry_reason = f"{mmd_type} 信号：背驰确认，当前价 {latest_close:.2f}"
-        risk_notes = f"止损 {stop_loss:.2f}（-{(entry_price-stop_loss)/entry_price*100:.1f}%）"
+        risk_notes = (
+            f"止损 {stop_loss:.2f}（-{(entry_price - stop_loss) / entry_price * 100:.1f}%）"
+        )
 
     elif mmd_type in ("1sell", "2sell"):
         entry_price = round(latest_close, 2)
@@ -312,7 +314,9 @@ def calc_signal_quality_report(
         take_profit_1 = round(latest_close - atr * 3, 2)
         take_profit_2 = round(latest_close - atr * 5, 2)
         entry_reason = f"{mmd_type} 信号：背驰确认，当前价 {latest_close:.2f}"
-        risk_notes = f"止损 {stop_loss:.2f}（+{(stop_loss-entry_price)/entry_price*100:.1f}%）"
+        risk_notes = (
+            f"止损 {stop_loss:.2f}（+{(stop_loss - entry_price) / entry_price * 100:.1f}%）"
+        )
 
     else:
         entry_price = round(latest_close, 2)
@@ -333,6 +337,7 @@ def calc_signal_quality_report(
     if volumes is not None and len(closes) > 0 and mmd.bi:
         try:
             from easy_tdx.chanlun.mmd import _calc_volume_profile
+
             profile = _calc_volume_profile(closes, volumes, lookback=60)
             vol_support = profile.get("high_volume_support")
             if vol_support and vol_support < entry_price:
@@ -363,17 +368,17 @@ def calc_signal_quality_report(
 
     # V14: 信号增强注释
     enhancement_notes: list[str] = []
-    if hasattr(mmd, '_vol_spike') and mmd._vol_spike:
+    if hasattr(mmd, "_vol_spike") and mmd._vol_spike:
         enhancement_notes.append("成交量异常放大（机构活动信号）")
-    if hasattr(mmd, '_gap_down') and mmd._gap_down:
+    if hasattr(mmd, "_gap_down") and mmd._gap_down:
         enhancement_notes.append(f"向下加速缺口({mmd._gap_size:.1f}%)")
-    if hasattr(mmd, '_gap_up') and mmd._gap_up:
+    if hasattr(mmd, "_gap_up") and mmd._gap_up:
         enhancement_notes.append(f"向上突破缺口({mmd._gap_size:.1f}%)")
-    if hasattr(mmd, '_macd_slope_confirmed') and mmd._macd_slope_confirmed:
+    if hasattr(mmd, "_macd_slope_confirmed") and mmd._macd_slope_confirmed:
         enhancement_notes.append("MACD柱状图斜率确认")
 
     # V15: K线形态注释
-    kline_pattern = getattr(mmd, '_kline_pattern', None)
+    kline_pattern = getattr(mmd, "_kline_pattern", None)
     if kline_pattern:
         pattern_labels = {
             "hammer": "锤子线（看涨反转）",
@@ -385,8 +390,8 @@ def calc_signal_quality_report(
             enhancement_notes.append(pattern_labels[kline_pattern])
 
     # V15: 二次回踩注释
-    if hasattr(mmd, '_retest_break') and mmd._retest_break:
-        retracement = getattr(mmd, '_retest_retracement', 0.0)
+    if hasattr(mmd, "_retest_break") and mmd._retest_break:
+        retracement = getattr(mmd, "_retest_retracement", 0.0)
         enhancement_notes.append(f"二次回踩确认(深度{retracement:.0f}%)")
 
     # 信号强度（综合置信度和质量评级）
@@ -461,7 +466,7 @@ def _calc_position_sizing(
 
     # 信号衰减调整
     if signal_aging is not None:
-        decay = signal_aging.get("decay_factor", 1.0)
+        _ = signal_aging.get("decay_factor", 1.0)
         age_bars = signal_aging.get("age_bars", 0)
         if signal_aging.get("aged", False):
             base_pct = int(base_pct * 0.6)
@@ -506,7 +511,9 @@ def _calc_position_sizing(
         grade = getattr(quality, "grade", "C")
         grade_bonus = {"S": 10, "A": 5, "B": 0, "C": -5, "D": -15}.get(grade, 0)
         base_pct = max(0, min(100, base_pct + grade_bonus))
-        notes.append(f"质量评级{grade}级，{'显著' if grade in ('S', 'A') else '适度' if grade == 'B' else '限制'}仓位")
+        notes.append(
+            f"质量评级{grade}级，{'显著' if grade in ('S', 'A') else '适度' if grade == 'B' else '限制'}仓位"
+        )
 
     # 最终仓位裁剪
     base_pct = max(0, min(100, base_pct))
@@ -579,7 +586,11 @@ def find_mmds(
     mmds.extend(_find_second_type_mmds(bis, zss, mmds, config, volatility, volumes, macd_data))
 
     # 3. 识别三类买卖点（增加严格过滤 + 动态阈值）
-    mmds.extend(_find_third_type_mmds(bis, zss, mmds, config, closes, volumes, macd_data, volatility, highs, lows))
+    mmds.extend(
+        _find_third_type_mmds(
+            bis, zss, mmds, config, closes, volumes, macd_data, volatility, highs, lows
+        )
+    )
 
     # 去重：同一位置只保留最高优先级买卖点
     mmds = _deduplicate_mmds(mmds)
@@ -605,10 +616,16 @@ def find_mmds(
     trend_strength = _calc_trend_strength(zss)
     trend_direction = _calc_overall_trend_direction(zss)
     for mmd in mmds:
-        mmd.confidence = _calc_confidence_v47(mmd, trend_strength, volumes, closes, macd_data, volatility, zss, highs, lows)
-        mmd.quality = _calc_mmd_quality(mmd, trend_strength, trend_direction, volumes, closes, macd_data, volatility)
+        mmd.confidence = _calc_confidence_v47(
+            mmd, trend_strength, volumes, closes, macd_data, volatility, zss, highs, lows
+        )
+        mmd.quality = _calc_mmd_quality(
+            mmd, trend_strength, trend_direction, volumes, closes, macd_data, volatility
+        )
         # V12: 设置多时间框架共振评分（基于区间套一致性）
-        mmd.confluence_score = round(_calc_confluence_bonus(mmd, zss or [], macd_data, volumes, closes, volatility), 2)
+        mmd.confluence_score = round(
+            _calc_confluence_bonus(mmd, zss or [], macd_data, volumes, closes, volatility), 2
+        )
         # V16: 计算信号衰减并存储到MMD对象（此前仅在报告函数中计算，未影响置信度）
         if closes is not None and mmd.bi:
             try:
@@ -625,7 +642,7 @@ def find_mmds(
         except Exception:
             pass
 
-    # V21: 条件37 - 决策辅助输出
+        # V21: 条件37 - 决策辅助输出
         if closes is not None:
             try:
                 mmd._decision_recommendation = _generate_decision_recommendation(
@@ -640,7 +657,9 @@ def find_mmds(
                 dual_result = _calc_volatility_regime_dual_confirmation(closes, volumes, volatility)
                 mmd._vol_regime_dual = dual_result
                 if dual_result.get("dual_confirmed"):
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + dual_result.get("confidence_adjust", 0.0)))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + dual_result.get("confidence_adjust", 0.0))
+                    )
             except Exception:
                 pass
 
@@ -684,7 +703,9 @@ def find_mmds(
                 bi_quality = _calc_bi_quality(mmd.bi, bis, closes)
                 mmd._bi_quality = bi_quality
                 if bi_quality.get("quality_score", 0) > 0.7:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + bi_quality.get("confidence_bonus", 0.0)))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + bi_quality.get("confidence_bonus", 0.0))
+                    )
             except Exception:
                 pass
 
@@ -718,7 +739,9 @@ def find_mmds(
         # V24: 条件46 - 信号交叉验证评分（Signal Cross-Validation）
         if closes is not None and macd_data is not None and volumes is not None:
             try:
-                cv_result = _calc_cross_validation(mmd, bis or [], zss or [], closes, macd_data, volumes)
+                cv_result = _calc_cross_validation(
+                    mmd, bis or [], zss or [], closes, macd_data, volumes
+                )
                 mmd._cross_validation = cv_result
                 consensus_bonus = cv_result.get("consensus_bonus", 0.0)
                 mmd.confidence = max(0.0, min(1.0, mmd.confidence + consensus_bonus))
@@ -731,7 +754,9 @@ def find_mmds(
                 post_confirm = _check_post_signal_confirmation(mmd, closes)
                 mmd._post_signal_confirm = post_confirm
                 if post_confirm.get("confirmed", False):
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + post_confirm.get("confidence_bonus", 0.0)))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + post_confirm.get("confidence_bonus", 0.0))
+                    )
                 else:
                     # 未确认信号：对3买/3卖额外降权
                     if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
@@ -776,7 +801,9 @@ def find_mmds(
                 history_result = _calc_signal_history_validation(mmd, closes)
                 mmd._signal_history = history_result
                 if history_result.get("validation_passed", False):
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + history_result.get("confidence_adjust", 0.0)))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + history_result.get("confidence_adjust", 0.0))
+                    )
             except Exception:
                 pass
 
@@ -824,7 +851,9 @@ def find_mmds(
                 mmd._boll_squeeze = squeeze_result
             if squeeze_result.get("squeeze_active", False):
                 for mmd in mmds:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + squeeze_result.get("confidence_adjust", 0.0)))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + squeeze_result.get("confidence_adjust", 0.0))
+                    )
         except Exception:
             pass
 
@@ -835,7 +864,9 @@ def find_mmds(
                 vol_price = _calc_breakout_vol_price(mmd, closes, volumes, highs, lows, zss)
                 mmd._breakout_vol_price = vol_price
                 if vol_price.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_price["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + vol_price["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -846,7 +877,9 @@ def find_mmds(
                 atr_stop = _calc_dynamic_atr_stop(mmd, closes, highs, lows, zss)
                 mmd._dynamic_atr_stop = atr_stop
                 if atr_stop.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + atr_stop["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + atr_stop["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -857,7 +890,9 @@ def find_mmds(
                 trend_cont = _calc_trend_continuity_confirmation(mmd, closes)
                 mmd._trend_continuity = trend_cont
                 if trend_cont.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_cont["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + trend_cont["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -871,7 +906,9 @@ def find_mmds(
                     if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
                         mmd._consolidation_divergence = div_warning
                         if div_warning.get("confidence_adjust", 0) != 0:
-                            mmd.confidence = max(0.0, min(1.0, mmd.confidence + div_warning["confidence_adjust"]))
+                            mmd.confidence = max(
+                                0.0, min(1.0, mmd.confidence + div_warning["confidence_adjust"])
+                            )
         except Exception:
             pass
 
@@ -882,7 +919,9 @@ def find_mmds(
                 pat_confirm = _calc_kline_pattern_confirmation(mmd, closes)
                 mmd._kline_pattern_confirm = pat_confirm
                 if pat_confirm.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + pat_confirm["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + pat_confirm["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -893,7 +932,9 @@ def find_mmds(
                 zs_breakout = _calc_zs_breakout_confirmation(mmd, closes, volumes, zss)
                 mmd._zs_breakout_confirm = zs_breakout
                 if zs_breakout.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_breakout["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + zs_breakout["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -904,7 +945,9 @@ def find_mmds(
                 range_stop = _calc_recent_range_stop_loss(mmd, closes, highs, lows)
                 mmd._recent_range_stop = range_stop
                 if range_stop.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + range_stop["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + range_stop["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -915,7 +958,9 @@ def find_mmds(
                 ma_align = _calc_ma_alignment_confirmation(mmd, closes)
                 mmd._ma_alignment = ma_align
                 if ma_align.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_align["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + ma_align["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -926,7 +971,9 @@ def find_mmds(
                 macd_accel = _calc_macd_histogram_acceleration(mmd, macd_data, closes)
                 mmd._macd_histogram_acceleration = macd_accel
                 if macd_accel.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + macd_accel["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + macd_accel["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -947,7 +994,9 @@ def find_mmds(
                 vp_div = _calc_volume_price_divergence_enhanced(mmd, closes, volumes)
                 mmd._vol_price_divergence_enhanced = vp_div
                 if vp_div.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_div["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + vp_div["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -980,7 +1029,9 @@ def find_mmds(
                 obv_result = _calc_obv_trend_confirmation(mmd, closes, volumes)
                 mmd._obv_trend_confirm = obv_result
                 if obv_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + obv_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + obv_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -991,7 +1042,9 @@ def find_mmds(
                 hist_area = _calc_macd_histogram_area(mmd, macd_data)
                 mmd._macd_hist_area = hist_area
                 if hist_area.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + hist_area["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + hist_area["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1002,7 +1055,9 @@ def find_mmds(
                 rsi_momentum = _calc_rsi_momentum_confirmation(mmd, closes)
                 mmd._rsi_momentum_confirm = rsi_momentum
                 if rsi_momentum.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + rsi_momentum["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + rsi_momentum["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1035,7 +1090,11 @@ def find_mmds(
             except Exception:
                 rsi_results.append({})
             try:
-                vp_r = _calc_volume_price_divergence_enhanced(mmd, closes, volumes) if mmd.bi is not None else {}
+                vp_r = (
+                    _calc_volume_price_divergence_enhanced(mmd, closes, volumes)
+                    if mmd.bi is not None
+                    else {}
+                )
                 vp_div_results.append(vp_r)
             except Exception:
                 vp_div_results.append({})
@@ -1052,7 +1111,9 @@ def find_mmds(
                 tm_result = _calc_trend_momentum_continuation(mmd, closes)
                 mmd._trend_momentum_continuation = tm_result
                 if tm_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + tm_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + tm_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1069,7 +1130,9 @@ def find_mmds(
             )
             mmd._multi_indicator_resonance = res_result
             if res_result.get("confidence_adjust", 0) != 0:
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + res_result["confidence_adjust"]))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + res_result["confidence_adjust"])
+                )
         except Exception:
             pass
 
@@ -1080,9 +1143,11 @@ def find_mmds(
             # 将所有MMD的置信度加上波动率调整
             for mmd in mmds:
                 if vol_result.get("threshold_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_result["threshold_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + vol_result["threshold_adjust"])
+                    )
             # 存储波动率结果供诊断API使用
-            if not hasattr(find_mmds, '_last_vol_result'):
+            if not hasattr(find_mmds, "_last_vol_result"):
                 find_mmds._last_vol_result = {}  # type: ignore[attr-defined]
             find_mmds._last_vol_result = vol_result  # type: ignore[attr-defined]
         except Exception:
@@ -1100,7 +1165,7 @@ def find_mmds(
                     mmd.confidence = max(0.0, min(1.0, mmd.confidence + adj))
         except Exception:
             pass
-    if not hasattr(find_mmds, '_last_market_context'):
+    if not hasattr(find_mmds, "_last_market_context"):
         find_mmds._last_market_context = {}  # type: ignore[attr-defined]
     find_mmds._last_market_context = market_context_result  # type: ignore[attr-defined]
 
@@ -1112,7 +1177,9 @@ def find_mmds(
                 decay_result = _calc_enhanced_signal_decay(mmd, closes, volatility)
                 mmd._enhanced_signal_decay = decay_result
                 if decay_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + decay_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1122,7 +1189,9 @@ def find_mmds(
                 fake_result = _calc_fake_signal_filter(mmd, closes, volumes, macd_data, volatility)
                 mmd._false_signal_filter = fake_result
                 if fake_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + fake_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + fake_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1140,7 +1209,9 @@ def find_mmds(
                 sector_result = _calc_sector_rotation_context(mmd, closes, trend_direction)
                 mmd._sector_rotation_context = sector_result
                 if sector_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + sector_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + sector_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1150,7 +1221,9 @@ def find_mmds(
                 div_result = _calc_multi_dim_divergence(mmd, macd_data, closes, volumes)
                 mmd._multi_dim_divergence = div_result
                 if div_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + div_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + div_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1160,7 +1233,9 @@ def find_mmds(
                 exec_result = _calc_execution_window(mmd, closes, volatility)
                 mmd._execution_window = exec_result
                 if exec_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + exec_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + exec_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1170,7 +1245,9 @@ def find_mmds(
                 tf_result = _calc_tf_consistency(mmd, closes)
                 mmd._tf_consistency = tf_result
                 if tf_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + tf_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1188,7 +1265,9 @@ def find_mmds(
                 urg_result = _calc_urgency_score(mmd, closes, volatility)
                 mmd._urgency_score = urg_result
                 if urg_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + urg_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + urg_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1198,8 +1277,10 @@ def find_mmds(
                 mkt_result = _calc_market_composite(closes, volumes, macd_data)
                 if mkt_result.get("confidence_adjust", 0) != 0:
                     for m in mmds:
-                        m.confidence = max(0.0, min(1.0, m.confidence + mkt_result["confidence_adjust"]))
-                if not hasattr(find_mmds, '_last_market_composite'):
+                        m.confidence = max(
+                            0.0, min(1.0, m.confidence + mkt_result["confidence_adjust"])
+                        )
+                if not hasattr(find_mmds, "_last_market_composite"):
                     find_mmds._last_market_composite = {}  # type: ignore[attr-defined]
                 find_mmds._last_market_composite = mkt_result  # type: ignore[attr-defined]
             except Exception:
@@ -1219,7 +1300,9 @@ def find_mmds(
                 cc_result = _calc_consecutive_confirmation(mmd, closes)
                 mmd._consecutive_confirmation = cc_result
                 if cc_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + cc_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + cc_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1229,7 +1312,9 @@ def find_mmds(
                 ma_result = _calc_momentum_acceleration(mmd, closes)
                 mmd._momentum_acceleration = ma_result
                 if ma_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + ma_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1244,7 +1329,7 @@ def find_mmds(
                     m.confidence = max(0.0, min(1.0, m.confidence + adj))
         except Exception:
             pass
-    if not hasattr(find_mmds, '_last_vol_regime_change'):
+    if not hasattr(find_mmds, "_last_vol_regime_change"):
         find_mmds._last_vol_regime_change = {}  # type: ignore[attr-defined]
     find_mmds._last_vol_regime_change = vol_regime_result  # type: ignore[attr-defined]
 
@@ -1256,7 +1341,9 @@ def find_mmds(
                 tc_result = _calc_temporal_correlation(mmd, mmds)
                 mmd._temporal_correlation = tc_result
                 if tc_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + tc_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + tc_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1266,7 +1353,9 @@ def find_mmds(
                 mfm_result = _calc_multi_tf_momentum_consistency(mmd, closes)
                 mmd._multi_tf_momentum = mfm_result
                 if mfm_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + mfm_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + mfm_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1295,7 +1384,9 @@ def find_mmds(
                 pos_result = _calc_mmd_position_score(mmd, closes)
                 mmd._mmd_position_score = pos_result
                 if pos_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + pos_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + pos_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1327,7 +1418,9 @@ def find_mmds(
                 decay_result = _calc_signal_decay_warning(mmd, closes)
                 mmd._signal_decay_warning = decay_result
                 if decay_result.get("confidence_adjust", 0) != 0:
-                    mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay_result["confidence_adjust"]))
+                    mmd.confidence = max(
+                        0.0, min(1.0, mmd.confidence + decay_result["confidence_adjust"])
+                    )
             except Exception:
                 pass
 
@@ -1342,7 +1435,7 @@ def find_mmds(
                     m.confidence = max(0.0, min(1.0, m.confidence + adj))
         except Exception:
             pass
-    if not hasattr(find_mmds, '_last_composite_deviation'):
+    if not hasattr(find_mmds, "_last_composite_deviation"):
         find_mmds._last_composite_deviation = {}  # type: ignore[attr-defined]
     find_mmds._last_composite_deviation = composite_dev_result  # type: ignore[attr-defined]
 
@@ -1477,7 +1570,9 @@ def _find_first_type_mmds(
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(bi, bis, zss, closes, threshold):
             strength = _get_beichi_strength(bi, bis, zss, closes)
-            msg_parts = [f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={ref_zs.zd:.2f}"]
+            msg_parts = [
+                f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={ref_zs.zd:.2f}"
+            ]
 
             # V14: 成交量异常检测（底背驰时放量=机构接盘信号）
             bi_end_idx = bi.end.k.k_index
@@ -1491,12 +1586,14 @@ def _find_first_type_mmds(
                 if gap_info.get("gap_type") == "down" and not gap_info.get("filled", False):
                     msg_parts.append(f"加速缺口({gap_info['gap_size_pct']:.1f}%)✅")
 
-            mmds.append(MMD(
-                mmd_type=MMDType.BUY_1,
-                zs=ref_zs,
-                bi=bi,
-                msg=", ".join(msg_parts),
-            ))
+            mmds.append(
+                MMD(
+                    mmd_type=MMDType.BUY_1,
+                    zs=ref_zs,
+                    bi=bi,
+                    msg=", ".join(msg_parts),
+                )
+            )
             last_1buy_bi_idx = bi.index
             last_1buy_low = bi.low
             rebound_high = bi.high  # 重置反弹追踪，开启下一个下跌腿
@@ -1509,7 +1606,7 @@ def _find_first_type_mmds(
                 if gap_info.get("gap_type") == "down" and not gap_info.get("filled", False):
                     mmds[-1]._gap_down = True
                     mmds[-1]._gap_size = gap_info.get("gap_size_pct", 0.0)
-    
+
     # 在一类卖点区域查找顶背驰（识别各上升段的末端背驰点）
     # 与 1买 同理的双重去重：
     #   1. 相邻 1卖 至少相隔 5 笔
@@ -1543,7 +1640,9 @@ def _find_first_type_mmds(
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(bi, bis, zss, closes, threshold, direction="up"):
             strength = _get_beichi_strength(bi, bis, zss, closes, direction="up")
-            msg_parts = [f"1卖: 顶背驰(强度={strength}), 高点={bi.high:.2f} > 中枢上沿={ref_zs.zg:.2f}"]
+            msg_parts = [
+                f"1卖: 顶背驰(强度={strength}), 高点={bi.high:.2f} > 中枢上沿={ref_zs.zg:.2f}"
+            ]
 
             # V14: 成交量异常检测（顶背驰时放量=机构出货信号）
             bi_end_idx = bi.end.k.k_index
@@ -1557,12 +1656,14 @@ def _find_first_type_mmds(
                 if gap_info.get("gap_type") == "up" and not gap_info.get("filled", False):
                     msg_parts.append(f"加速缺口({gap_info['gap_size_pct']:.1f}%)✅")
 
-            mmds.append(MMD(
-                mmd_type=MMDType.SELL_1,
-                zs=ref_zs,
-                bi=bi,
-                msg=", ".join(msg_parts),
-            ))
+            mmds.append(
+                MMD(
+                    mmd_type=MMDType.SELL_1,
+                    zs=ref_zs,
+                    bi=bi,
+                    msg=", ".join(msg_parts),
+                )
+            )
             last_1sell_bi_idx = bi.index
             last_1sell_high = bi.high
             pullback_low = bi.low  # 重置回落追踪，开启下一个上升腿
@@ -1630,7 +1731,7 @@ def _find_second_type_mmds(
 
         # V8: 在1买之后找向上笔（离开笔），限制在30根K线内
         leave_bi_up = None
-        for bi in bis[buy_1_idx + 1:]:
+        for bi in bis[buy_1_idx + 1 :]:
             if bi.direction.value == "up":
                 time_to_leave = bi.start.k.k_index - buy_1_end_k
                 if time_to_leave > 30:  # V8: 时间窗口限制
@@ -1646,13 +1747,13 @@ def _find_second_type_mmds(
         if leave_range <= 0:
             continue
 
-        max_drawdown_strict = leave_range * 0.5  # 严格条件（2买）
-        max_drawdown_loose = leave_range * 0.7   # 宽松条件（类二买）
+        _ = leave_range * 0.5  # 严格条件（2买）
+        _ = leave_range * 0.7  # 宽松条件（类二买）
 
         # V8: 在离开笔之后找回调笔，限制总时间窗口在10-40根K线内
         found_2buy = False
         found_2s_buy = False
-        for bi in bis[bis.index(leave_bi_up) + 1:]:
+        for bi in bis[bis.index(leave_bi_up) + 1 :]:
             total_time = bi.start.k.k_index - buy_1_end_k
             if total_time > 40:  # V8: 最大时间窗口
                 break
@@ -1678,8 +1779,11 @@ def _find_second_type_mmds(
                     # V8: 成交量确认（回调缩量，基准用1买附近的局部均量）
                     if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
-                            volumes, bi.start.k.k_index, bi.end.k.k_index,
-                            _calc_local_avg_volume(volumes, buy_1_end_k, 20), max_ratio=0.85
+                            volumes,
+                            bi.start.k.k_index,
+                            bi.end.k.k_index,
+                            _calc_local_avg_volume(volumes, buy_1_end_k, 20),
+                            max_ratio=0.85,
                         )
                         if not vol_ok:
                             continue
@@ -1709,7 +1813,7 @@ def _find_second_type_mmds(
                         zs=buy_1_mmd.zs,
                         bi=bi,
                         msg=f"2买V13: 回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%, RSI={rsi_val:.0f}"
-                            + (", 成交量支撑确认✅" if vol_profile_bonus else ""),
+                        + (", 成交量支撑确认✅" if vol_profile_bonus else ""),
                     )
                     if vol_profile_bonus:
                         _mmd_2buy._vol_profile_support = True
@@ -1732,12 +1836,14 @@ def _find_second_type_mmds(
                     if too_close:
                         continue
 
-                    mmds.append(MMD(
-                        mmd_type=MMDType.BUY_2S,
-                        zs=buy_1_mmd.zs,
-                        bi=bi,
-                        msg=f"类2买V8: 浅回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%",
-                    ))
+                    mmds.append(
+                        MMD(
+                            mmd_type=MMDType.BUY_2S,
+                            zs=buy_1_mmd.zs,
+                            bi=bi,
+                            msg=f"类2买V8: 浅回调确认, 低点={bi.low:.2f} > 1买={buy_1_low:.2f}, 回撤{pct:.0f}%",
+                        )
+                    )
                     found_2s_buy = True
                     existing_positions.add(bi.end.k.k_index)
 
@@ -1756,7 +1862,7 @@ def _find_second_type_mmds(
 
         # V8: 在1卖之后找向下笔（离开笔），限制在30根K线内
         leave_bi_down = None
-        for bi in bis[sell_1_idx + 1:]:
+        for bi in bis[sell_1_idx + 1 :]:
             if bi.direction.value == "down":
                 time_to_leave = bi.start.k.k_index - sell_1_end_k
                 if time_to_leave > 30:
@@ -1772,20 +1878,24 @@ def _find_second_type_mmds(
         if leave_range <= 0:
             continue
 
-        max_pullback_strict = leave_range * 0.5   # 严格条件（2卖）
-        max_pullback_loose = leave_range * 0.7    # 宽松条件（类二卖）
+        max_pullback_strict = leave_range * 0.5  # 严格条件（2卖）
+        max_pullback_loose = leave_range * 0.7  # 宽松条件（类二卖）
 
         # V8: 在离开笔之后找反弹笔，限制总时间窗口在10-40根K线内
         found_2sell = False
         found_2s_sell = False
-        for bi in bis[bis.index(leave_bi_down) + 1:]:
+        for bi in bis[bis.index(leave_bi_down) + 1 :]:
             total_time = bi.start.k.k_index - sell_1_end_k
             if total_time > 40:
                 break
 
             if bi.direction.value == "up":
                 # 检查是否是2卖（严格条件）
-                if not found_2sell and bi.high < sell_1_high and (bi.high - leave_low) < max_pullback_strict:
+                if (
+                    not found_2sell
+                    and bi.high < sell_1_high
+                    and (bi.high - leave_low) < max_pullback_strict
+                ):
                     pullback_from_low = bi.high - leave_low
                     pct = (pullback_from_low / leave_range * 100) if leave_range > 0 else 0.0
                     pct = max(0.0, pct)
@@ -1802,8 +1912,12 @@ def _find_second_type_mmds(
                     # V8: 成交量确认（反弹缩量，基准用1卖附近的局部均量）
                     if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
-                            volumes, bi.start.k.k_index, bi.end.k.k_index,
-                            _calc_local_avg_volume(volumes, sell_1_end_k, 20), max_ratio=0.85, is_pullback=False
+                            volumes,
+                            bi.start.k.k_index,
+                            bi.end.k.k_index,
+                            _calc_local_avg_volume(volumes, sell_1_end_k, 20),
+                            max_ratio=0.85,
+                            is_pullback=False,
                         )
                         if not vol_ok:
                             continue
@@ -1833,7 +1947,7 @@ def _find_second_type_mmds(
                         zs=sell_1_mmd.zs,
                         bi=bi,
                         msg=f"2卖V13: 反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%, RSI={rsi_val:.0f}"
-                            + (", 成交量阻力确认✅" if vol_profile_bonus_sell else ""),
+                        + (", 成交量阻力确认✅" if vol_profile_bonus_sell else ""),
                     )
                     if vol_profile_bonus_sell:
                         _mmd_2sell._vol_profile_resistance = True
@@ -1842,7 +1956,12 @@ def _find_second_type_mmds(
                     existing_positions.add(bi.end.k.k_index)
 
                 # 检查是否是类二卖（宽松条件）
-                elif not found_2s_sell and not found_2sell and bi.high < sell_1_high and (bi.high - leave_low) < max_pullback_loose:
+                elif (
+                    not found_2s_sell
+                    and not found_2sell
+                    and bi.high < sell_1_high
+                    and (bi.high - leave_low) < max_pullback_loose
+                ):
                     pullback_from_low = bi.high - leave_low
                     pct = (pullback_from_low / leave_range * 100) if leave_range > 0 else 0.0
                     pct = max(0.0, pct)
@@ -1856,12 +1975,14 @@ def _find_second_type_mmds(
                     if too_close:
                         continue
 
-                    mmds.append(MMD(
-                        mmd_type=MMDType.SELL_2S,
-                        zs=sell_1_mmd.zs,
-                        bi=bi,
-                        msg=f"类2卖V8: 浅反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%",
-                    ))
+                    mmds.append(
+                        MMD(
+                            mmd_type=MMDType.SELL_2S,
+                            zs=sell_1_mmd.zs,
+                            bi=bi,
+                            msg=f"类2卖V8: 浅反弹确认, 高点={bi.high:.2f} < 1卖={sell_1_high:.2f}, 反弹{pct:.0f}%",
+                        )
+                    )
                     found_2s_sell = True
                     existing_positions.add(bi.end.k.k_index)
 
@@ -1869,7 +1990,6 @@ def _find_second_type_mmds(
                     break
 
     return mmds
-
 
 
 def _calc_avg_volume(volumes: list[float] | None, lookback: int) -> float:
@@ -1935,7 +2055,7 @@ def _check_breakout_volume(
     if avg_vol <= 0 or break_start < 0 or break_end >= len(volumes):
         return True  # 无数据时放行
     try:
-        break_vols = volumes[break_start:break_end + 1]
+        break_vols = volumes[break_start : break_end + 1]
         if not break_vols:
             return True
         break_avg = sum(break_vols) / len(break_vols)
@@ -1960,7 +2080,7 @@ def _check_pullback_volume(
     if avg_vol <= 0 or pull_start < 0 or pull_end >= len(volumes):
         return True  # 无数据时放行
     try:
-        pull_vols = volumes[pull_start:pull_end + 1]
+        pull_vols = volumes[pull_start : pull_end + 1]
         if not pull_vols:
             return True
         pull_avg = sum(pull_vols) / len(pull_vols)
@@ -1986,7 +2106,7 @@ def _check_pullback_volume_v2(
     if avg_vol <= 0 or pull_start < 0 or pull_end >= len(volumes):
         return True  # 无数据时放行
     try:
-        pull_vols = volumes[pull_start:pull_end + 1]
+        pull_vols = volumes[pull_start : pull_end + 1]
         if not pull_vols:
             return True
         pull_avg = sum(pull_vols) / len(pull_vols)
@@ -1996,6 +2116,7 @@ def _check_pullback_volume_v2(
 
 
 # ── V13: 成交量剖面分析 ─────────────────────────────────────────────────────
+
 
 def _calc_volume_profile(
     closes: list[float],
@@ -2088,7 +2209,9 @@ def _calc_volume_profile(
         # 当前价格所在的价格带
         current_price = closes[-1]
         current_bin = min(int((current_price - price_min) / bin_width), num_bins - 1)
-        current_rank = sum(1 for pl, vp in price_levels if pl < current_price) / max(len(price_levels), 1)
+        current_rank = sum(1 for pl, vp in price_levels if pl < current_price) / max(
+            len(price_levels), 1
+        )
 
         # 判断上下方是否有成交密集区
         upper_bins = set(i for i, _, _ in high_vol_bins if i > current_bin)
@@ -2110,7 +2233,7 @@ def _calc_volume_profile(
             "price_levels": price_levels,
             "high_volume_support": high_vol_support,
             "high_volume_resistance": high_vol_resistance,
-            "current_volume_rank": round(current_volume_rank := current_rank, 2),
+            "current_volume_rank": round(current_rank, 2),
             "volume_cluster_up": volume_cluster_up,
             "volume_cluster_down": volume_cluster_down,
         }
@@ -2247,7 +2370,9 @@ def _calc_overall_trend_direction(zss: list[ZS]) -> str:
 
 
 def _calc_ma_trend_alignment(
-    closes: list[float] | None, bi_end_idx: int, ma_period: int = 20,
+    closes: list[float] | None,
+    bi_end_idx: int,
+    ma_period: int = 20,
 ) -> str:
     """计算价格相对均线的趋势对齐状态。
 
@@ -2262,7 +2387,7 @@ def _calc_ma_trend_alignment(
         return "near"
     try:
         price = closes[bi_end_idx] if bi_end_idx < len(closes) else closes[-1]
-        ma_vals = closes[max(0, bi_end_idx - ma_period + 1):bi_end_idx + 1]
+        ma_vals = closes[max(0, bi_end_idx - ma_period + 1) : bi_end_idx + 1]
         if not ma_vals or len(ma_vals) < 5:
             return "near"
         ma_val = sum(ma_vals) / len(ma_vals)
@@ -2298,8 +2423,10 @@ def _calc_ma_slope(closes: list[float] | None, bi_end_idx: int, ma_period: int =
         end_idx = bi_end_idx if bi_end_idx < len(closes) else len(closes) - 1
         if end_idx < ma_period:
             return "flat"
-        current_ma = sum(closes[max(0, end_idx - ma_period + 1):end_idx + 1]) / min(ma_period, end_idx + 1)
-        prev_ma = sum(closes[max(0, end_idx - ma_period):end_idx]) / min(ma_period, end_idx)
+        current_ma = sum(closes[max(0, end_idx - ma_period + 1) : end_idx + 1]) / min(
+            ma_period, end_idx + 1
+        )
+        prev_ma = sum(closes[max(0, end_idx - ma_period) : end_idx]) / min(ma_period, end_idx)
         if prev_ma <= 0:
             return "flat"
         slope = (current_ma - prev_ma) / prev_ma
@@ -2332,8 +2459,10 @@ def _calc_ma60_slope(closes: list[float] | None, bi_end_idx: int, ma_period: int
         end_idx = bi_end_idx if bi_end_idx < len(closes) else len(closes) - 1
         if end_idx < ma_period:
             return "flat"
-        current_ma = sum(closes[max(0, end_idx - ma_period + 1):end_idx + 1]) / min(ma_period, end_idx + 1)
-        prev_ma = sum(closes[max(0, end_idx - ma_period):end_idx]) / min(ma_period, end_idx)
+        current_ma = sum(closes[max(0, end_idx - ma_period + 1) : end_idx + 1]) / min(
+            ma_period, end_idx + 1
+        )
+        prev_ma = sum(closes[max(0, end_idx - ma_period) : end_idx]) / min(ma_period, end_idx)
         if prev_ma <= 0:
             return "flat"
         slope = (current_ma - prev_ma) / prev_ma
@@ -2388,8 +2517,8 @@ def _calc_macd_zero_axis_position(
 
 
 def _check_pullback_time_window(
-    pullback_bi: "BI",
-    breakout_bi: "BI",
+    pullback_bi: BI,
+    breakout_bi: BI,
     max_bars: int = 25,
 ) -> tuple[bool, int]:
     """检查回踩笔的时间窗口（V18新增）。
@@ -2428,7 +2557,7 @@ def _calc_boll_position(closes: list[float] | None, bi_end_idx: int) -> dict[str
         end_idx = bi_end_idx if bi_end_idx < len(closes) else len(closes) - 1
         if end_idx < 20:
             return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
-        window = closes[max(0, end_idx - 19):end_idx + 1]
+        window = closes[max(0, end_idx - 19) : end_idx + 1]
         mid = sum(window) / len(window)
         std = (sum((x - mid) ** 2 for x in window) / len(window)) ** 0.5
         upper = mid + 2 * std
@@ -2443,14 +2572,21 @@ def _calc_boll_position(closes: list[float] | None, bi_end_idx: int) -> dict[str
             position = "lower"
         else:
             position = "mid"
-        return {"upper": upper, "mid": mid, "lower": lower, "percent_b": round(percent_b, 3), "position": position}
+        return {
+            "upper": upper,
+            "mid": mid,
+            "lower": lower,
+            "percent_b": round(percent_b, 3),
+            "position": position,
+        }
     except Exception:
         return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
 
 
 def _calc_adx_strength(
     closes: list[float] | None,
-    highs: list[float] | None, lows: list[float] | None,
+    highs: list[float] | None,
+    lows: list[float] | None,
     bi_end_idx: int,
 ) -> tuple[float, str]:
     """计算ADX趋势强度（V11修正版，使用MyTT DMI算法）。
@@ -2471,14 +2607,20 @@ def _calc_adx_strength(
         start_idx = end_idx - lookback + 1
 
         # 准备数据
-        closes_slice = closes[start_idx:end_idx + 1]
+        closes_slice = closes[start_idx : end_idx + 1]
         if len(closes_slice) < 30:
             return (0.0, "none")
 
         if highs is None or lows is None:
             # 无真实高低点数据，用收盘价±1%近似
-            highs_arr = [c * (1 + abs(np.random.RandomState(i).uniform(0, 0.005))) for i, c in enumerate(closes_slice)]
-            lows_arr = [c * (1 - abs(np.random.RandomState(i + 100).uniform(0, 0.005))) for i, c in enumerate(closes_slice)]
+            highs_arr = [
+                c * (1 + abs(np.random.RandomState(i).uniform(0, 0.005)))
+                for i, c in enumerate(closes_slice)
+            ]
+            lows_arr = [
+                c * (1 - abs(np.random.RandomState(i + 100).uniform(0, 0.005)))
+                for i, c in enumerate(closes_slice)
+            ]
         else:
             h_start = max(0, end_idx - lookback + 1)
             h_end = end_idx + 1
@@ -2491,6 +2633,7 @@ def _calc_adx_strength(
         # 使用MyTT的DMI函数计算真实ADX（与通达信/同花顺一致）
         # 注意：MyTT函数需要numpy数组，需显式转换
         import warnings
+
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning)
             from easy_tdx.MyTT import DMI
@@ -2502,7 +2645,15 @@ def _calc_adx_strength(
         adx_val = float(adx[-1]) if len(adx) > 0 and not np.isnan(adx[-1]) else 0.0
         if np.isnan(adx_val):
             adx_val = 0.0
-        level = "strong" if adx_val >= 40 else "medium" if adx_val >= 25 else "weak" if adx_val >= 20 else "none"
+        level = (
+            "strong"
+            if adx_val >= 40
+            else "medium"
+            if adx_val >= 25
+            else "weak"
+            if adx_val >= 20
+            else "none"
+        )
         return (round(adx_val, 1), level)
     except Exception:
         return (0.0, "none")
@@ -2561,13 +2712,13 @@ def _calc_kdj_j(closes: list[float] | None, period: int = 9) -> float:
     try:
         # 简化版KDJ：只计算J值
         n = len(closes)
-        low_min = min(closes[n-period:])
-        high_max = max(closes[n-period:])
+        low_min = min(closes[n - period :])
+        high_max = max(closes[n - period :])
         close = closes[-1]
-        
+
         if high_max == low_min:
             return 50.0
-        
+
         rsv = (close - low_min) / (high_max - low_min) * 100
         # J = 3*K - 2*D，简化为R SV
         return rsv
@@ -2593,6 +2744,7 @@ def _get_kdj_thresholds(volatility: float | None) -> tuple[float, float]:
 
 
 # ── V14: 增强功能 ──────────────────────────────────────────────────────────────
+
 
 def _check_volume_spike(
     volumes: list[float] | None,
@@ -2726,16 +2878,18 @@ def _check_macd_histogram_slope(
         return result
 
     try:
-        recent_hist = hist[max(0, idx - lookback):idx + 1]
+        recent_hist = hist[max(0, idx - lookback) : idx + 1]
         if len(recent_hist) < 3:
             return result
 
         diffs = [recent_hist[i] - recent_hist[i - 1] for i in range(1, len(recent_hist))]
-        avg_diff = sum(diffs) / len(diffs) if diffs else 0
+        _ = sum(diffs) / len(diffs) if diffs else 0
 
         abs_hist = [abs(h) for h in recent_hist]
         recent_avg = sum(abs_hist[-3:]) / 3 if len(abs_hist) >= 3 else sum(abs_hist) / len(abs_hist)
-        prev_avg = sum(abs_hist[:-3]) / max(len(abs_hist) - 3, 1) if len(abs_hist) > 3 else recent_avg
+        prev_avg = (
+            sum(abs_hist[:-3]) / max(len(abs_hist) - 3, 1) if len(abs_hist) > 3 else recent_avg
+        )
 
         if prev_avg > 0:
             slope_strength = (recent_avg - prev_avg) / prev_avg
@@ -2833,17 +2987,17 @@ def _detect_kline_pattern(
 
     try:
         prev_close = closes[idx - 1]
-        prev_high = highs[idx - 1]
-        prev_low = lows[idx - 1]
-        prev_body = abs(prev_close - highs[idx - 1]) if idx - 1 >= 0 else 0
+        _ = highs[idx - 1]
+        _ = lows[idx - 1]
+        _ = abs(prev_close - highs[idx - 1]) if idx - 1 >= 0 else 0
 
         c = closes[idx]
         h = highs[idx]
-        l = lows[idx]
+        low = lows[idx]
         body = abs(c - (closes[idx - 1] if idx > 0 else c))
         upper_shadow = h - max(c, closes[idx - 1] if idx > 0 else c)
-        lower_shadow = min(c, closes[idx - 1] if idx > 0 else c) - l
-        total_range = h - l if h > l else 0.001
+        lower_shadow = min(c, closes[idx - 1] if idx > 0 else c) - low
+        total_range = h - low if h > low else 0.001
 
         # 锤子线：下影线 ≥ 2倍实体，上影线很短，实体小
         is_hammer = (
@@ -2859,19 +3013,13 @@ def _detect_kline_pattern(
         prev_is_down = closes[idx - 1] < (closes[idx - 2] if idx > 1 else closes[idx - 1])
         curr_is_up = c > (closes[idx - 1] if idx > 0 else c)
         is_bullish_engulfing = (
-            prev_is_down
-            and curr_is_up
-            and c > closes[idx - 1]
-            and l < closes[idx - 1]
+            prev_is_down and curr_is_up and c > closes[idx - 1] and low < closes[idx - 1]
         )
         # 阴吞没：前阳后阴，后实体完全包裹前实体
         prev_is_up = closes[idx - 1] > (closes[idx - 2] if idx > 1 else closes[idx - 1])
         curr_is_down = c < (closes[idx - 1] if idx > 0 else c)
         is_bearish_engulfing = (
-            prev_is_up
-            and curr_is_down
-            and c < closes[idx - 1]
-            and h > closes[idx - 1]
+            prev_is_up and curr_is_down and c < closes[idx - 1] and h > closes[idx - 1]
         )
 
         pattern = None
@@ -2936,7 +3084,12 @@ def _check_break_retest_break(
     lookback: int = 5,
 ) -> dict[str, Any]:
     if closes is None:
-        return {"exists": False, "retest_bi_idx": None, "second_break_bi_idx": None, "confidence_bonus": 0.0}
+        return {
+            "exists": False,
+            "retest_bi_idx": None,
+            "second_break_bi_idx": None,
+            "confidence_bonus": 0.0,
+        }
     """检查突破-回踩-再突破模式（V15新增）。
 
     3买：突破中枢 → 回踩不破zg → 再次突破确认。
@@ -2964,7 +3117,7 @@ def _check_break_retest_break(
 
         # 找突破后的第一根反向笔（回踩）
         retest_bi = None
-        for bi in bis[break_bi_idx + 1:]:
+        for bi in bis[break_bi_idx + 1 :]:
             if bi.direction.value == "down":
                 retest_bi = bi
                 break
@@ -2982,7 +3135,7 @@ def _check_break_retest_break(
             return result
 
         second_break_bi = None
-        for bi in bis[retest_idx + 1:]:
+        for bi in bis[retest_idx + 1 :]:
             if bi.direction.value == "up" and bi.high > zs_zg:
                 second_break_bi = bi
                 break
@@ -2991,14 +3144,20 @@ def _check_break_retest_break(
             return result
 
         # 计算回踩深度
-        retracement = (break_bi.high - retest_bi.low) / (break_bi.high - break_bi.low) if break_bi.high > break_bi.low else 1.0
+        retracement = (
+            (break_bi.high - retest_bi.low) / (break_bi.high - break_bi.low)
+            if break_bi.high > break_bi.low
+            else 1.0
+        )
 
         # 如果回踩较浅（<50%），说明多头强势，二次突破更可靠
         confidence_bonus = 0.03 if retracement < 0.5 else 0.02
 
         result["exists"] = True
         result["retest_bi_idx"] = retest_idx
-        result["second_break_bi_idx"] = bis.index(second_break_bi) if second_break_bi in bis else None
+        result["second_break_bi_idx"] = (
+            bis.index(second_break_bi) if second_break_bi in bis else None
+        )
         result["confidence_bonus"] = confidence_bonus
         result["retracement_pct"] = round(retracement * 100, 1)
     except Exception:
@@ -3090,7 +3249,7 @@ def _find_third_type_mmds(
 
     # 预计算MACD数据用于动量确认
     latest_dif = macd_data["dif"][-1] if macd_data and macd_data.get("dif") else None
-    prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else None
+    _ = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else None
     latest_hist = macd_data["hist"][-1] if macd_data and macd_data.get("hist") else None
     prev_hist = macd_data["hist"][-2] if macd_data and len(macd_data.get("hist", [])) > 1 else None
 
@@ -3102,10 +3261,10 @@ def _find_third_type_mmds(
         if len(zs.lines) >= 2:
             first_bi_force = _calc_bi_force(zs.lines[0], closes, zs.lines[0].index)
             last_bi_force = _calc_bi_force(zs.lines[-1], closes, zs.lines[-1].index)
-            force_ratio_in_zs = last_bi_force / first_bi_force if first_bi_force > 0 else 1.0
+            _ = last_bi_force / first_bi_force if first_bi_force > 0 else 1.0
         else:
             first_bi_force = 0.0
-            force_ratio_in_zs = 1.0
+            _ = 1.0
 
         # 计算平均成交量（用于成交量确认，基准用"中枢自身盘整期均量"）。
         # 突破/跌破相对盘整放量才是合理的量能确认；用数据末端或突破附近的
@@ -3140,12 +3299,16 @@ def _find_third_type_mmds(
             # V8: 条件C - 成交量确认（自适应倍数）
             if volumes is not None:
                 if not _check_breakout_volume(
-                    volumes, break_bi_up.start.k.k_index, break_bi_up.end.k.k_index, avg_vol_20, min_ratio=vol_adjusted_vol_ratio
+                    volumes,
+                    break_bi_up.start.k.k_index,
+                    break_bi_up.end.k.k_index,
+                    avg_vol_20,
+                    min_ratio=vol_adjusted_vol_ratio,
                 ):
                     continue
 
             # 在突破笔之后找回调笔
-            for bi in bis[bis.index(break_bi_up) + 1:]:
+            for bi in bis[bis.index(break_bi_up) + 1 :]:
                 if bi.direction.value == "down":
                     # V8: 条件1 - 回踩不破zg（严格：必须明显高于zg，留0.5%缓冲）
                     if bi.low <= zs.zg * 1.005:
@@ -3184,7 +3347,11 @@ def _find_third_type_mmds(
                     vol_ok = True
                     if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
-                            volumes, bi.start.k.k_index, bi.end.k.k_index, avg_vol_20, max_ratio=0.85
+                            volumes,
+                            bi.start.k.k_index,
+                            bi.end.k.k_index,
+                            avg_vol_20,
+                            max_ratio=0.85,
                         )
                     if not vol_ok:
                         continue
@@ -3264,7 +3431,9 @@ def _find_third_type_mmds(
                     # V14: 条件16 - 成交量异常检测（突破时放量=机构参与）
                     vol_spike = False
                     if volumes is not None:
-                        vol_spike = _check_volume_spike(volumes, break_bi_up.end.k.k_index, lookback=20, min_ratio=1.5)
+                        vol_spike = _check_volume_spike(
+                            volumes, break_bi_up.end.k.k_index, lookback=20, min_ratio=1.5
+                        )
 
                     # V14: 条件17 - 缺口分析（向上缺口突破=强势信号）
                     gap_info: dict[str, Any] = {"has_gap": False, "gap_type": None, "filled": True}
@@ -3272,7 +3441,9 @@ def _find_third_type_mmds(
                         gap_info = _detect_price_gap(closes, highs, lows, break_bi_up.end.k.k_index)
 
                     # V14: 条件18 - MACD柱状图斜率确认
-                    macd_slope = _check_macd_histogram_slope(macd_data, bi.end.k.k_index, direction="up")
+                    macd_slope = _check_macd_histogram_slope(
+                        macd_data, bi.end.k.k_index, direction="up"
+                    )
                     if macd_slope["slope_direction"] == "shrinking":
                         continue  # 柱状图收缩，动量减弱，跳过
 
@@ -3284,7 +3455,11 @@ def _find_third_type_mmds(
                     extra_parts = []
                     if vol_spike:
                         extra_parts.append("量能放大✅")
-                    if gap_info.get("has_gap") and gap_info.get("gap_type") == "up" and not gap_info.get("filled"):
+                    if (
+                        gap_info.get("has_gap")
+                        and gap_info.get("gap_type") == "up"
+                        and not gap_info.get("filled")
+                    ):
                         extra_parts.append(f"跳空突破({gap_info['gap_size_pct']:.1f}%)✅")
                     if macd_slope["confirmed"]:
                         extra_parts.append("MACD斜率确认✅")
@@ -3326,13 +3501,12 @@ def _find_third_type_mmds(
 
                     # V19: 条件29 - ATR支撑确认：回踩低点应在zg±ATR范围内
                     atr_support_ok, atr_support_reason = _check_atr_support_zone(
-                        bi.low, zs.zg, zs.zd, MMDType.BUY_3,
-                        closes, highs, lows, bi.end.k.k_index
+                        bi.low, zs.zg, zs.zd, MMDType.BUY_3, closes, highs, lows, bi.end.k.k_index
                     )
                     if not atr_support_ok:
                         continue  # 回踩位置不在ATR支撑区域内，可能是假突破
                     if atr_support_ok:
-                        extra_parts.append(f"ATR支撑✅")
+                        extra_parts.append("ATR支撑✅")
 
                     # V20: 条件31 - 波动率Regime过滤：根据当前波动率状态调整判断标准
                     regime_vol = _calc_atr_volatility(closes)
@@ -3359,8 +3533,13 @@ def _find_third_type_mmds(
 
                     # V20: 条件33 - 关键价位成交量分布：zg附近应有足够成交量确认
                     if volumes is not None:
-                        vol_dist = _analyze_volume_at_levels(closes, volumes, zs.zg, "resistance", lookback=30)
-                        if vol_dist["strength"] == "weak" and vol_dist["volume_concentration"] < 0.5:
+                        vol_dist = _analyze_volume_at_levels(
+                            closes, volumes, zs.zg, "resistance", lookback=30
+                        )
+                        if (
+                            vol_dist["strength"] == "weak"
+                            and vol_dist["volume_concentration"] < 0.5
+                        ):
                             # 中枢上沿成交量极度稀疏，支撑强度存疑
                             pass  # 不直接跳过，但在消息中标记
                         elif vol_dist["strength"] == "strong":
@@ -3369,14 +3548,18 @@ def _find_third_type_mmds(
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
                     retest_result = _check_break_retest_break(bis, break_bi_up, zs.zg, closes)
                     if retest_result["exists"]:
-                        extra_parts.append(f"二次确认(回踩{retest_result.get('retracement_pct', '?')}%)✅")
+                        extra_parts.append(
+                            f"二次确认(回踩{retest_result.get('retracement_pct', '?')}%)✅"
+                        )
 
                     # V47: 条件131 - 后确认价格跟随过滤（仅当数据足够时生效）
                     if closes is not None and len(closes) > 10:
                         try:
                             post_confirm = _check_post_signal_price_follow_through(
                                 MMD(mmd_type=MMDType.BUY_3, zs=zs, bi=bi, msg=""),
-                                closes, lookback_bars=5, min_follow_pct=0.02
+                                closes,
+                                lookback_bars=5,
+                                min_follow_pct=0.02,
                             )
                             if not post_confirm["followed"] and post_confirm["looked_bars"] > 0:
                                 # 后确认失败但有数据可查，跳过
@@ -3386,12 +3569,15 @@ def _find_third_type_mmds(
 
                     extra_msg = ", " + ", ".join(extra_parts) if extra_parts else ""
 
-                    mmds.append(MMD(
-                        mmd_type=MMDType.BUY_3,
-                        zs=zs,
-                        bi=bi,
-                        msg=f"3买V47: 突破确认后回踩(深度{(break_bi_up.low-bi.low)/breakout_range*100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, Regime={regime}(×{regime_adjust:.2f}), MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos}, 回踩{pullback_time_span}根K线, ATR支撑✅" + extra_msg,
-                    ))
+                    mmds.append(
+                        MMD(
+                            mmd_type=MMDType.BUY_3,
+                            zs=zs,
+                            bi=bi,
+                            msg=f"3买V47: 突破确认后回踩(深度{(break_bi_up.low - bi.low) / breakout_range * 100:.0f}%), 低点={bi.low:.2f} > zg={zs.zg:.2f}, Regime={regime}(×{regime_adjust:.2f}), MA20={ma_slope}, RSI={rsi_3buy:.0f}(+{rsi_momentum:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos}, 回踩{pullback_time_span}根K线, ATR支撑✅"
+                            + extra_msg,
+                        )
+                    )
                     # V14/V15/V20: 记录增强信息
                     if vol_spike:
                         mmds[-1]._vol_spike = True
@@ -3409,7 +3595,9 @@ def _find_third_type_mmds(
                     mmds[-1]._vol_regime = regime
                     mmds[-1]._trend_accel = trend_state if macd_data is not None else "neutral"
                     if volumes is not None:
-                        vol_dist_3buy = _analyze_volume_at_levels(closes, volumes, zs.zg, "resistance", lookback=30)
+                        vol_dist_3buy = _analyze_volume_at_levels(
+                            closes, volumes, zs.zg, "resistance", lookback=30
+                        )
                         mmds[-1]._vol_dist_at_zg = vol_dist_3buy
                     break
 
@@ -3424,23 +3612,33 @@ def _find_third_type_mmds(
         if break_bi_down:
             # V8: 条件A - 跌破笔必须有足够力度（波动率自适应）
             break_force_down = _calc_bi_force(break_bi_down, closes, break_bi_down.index)
-            if len(zs.lines) >= 2 and break_force_down < _calc_bi_force(zs.lines[0], closes, zs.lines[0].index) * vol_adjusted_force_ratio:
+            if (
+                len(zs.lines) >= 2
+                and break_force_down
+                < _calc_bi_force(zs.lines[0], closes, zs.lines[0].index) * vol_adjusted_force_ratio
+            ):
                 continue
 
             # V8: 条件B - 跌破后价格应该站稳中枢下方（自适应）
-            breakdown_price_ratio = (zs.zd - break_bi_down.low) / (zs.zg - zs.zd) if zs.zg > zs.zd else 0
+            breakdown_price_ratio = (
+                (zs.zd - break_bi_down.low) / (zs.zg - zs.zd) if zs.zg > zs.zd else 0
+            )
             if breakdown_price_ratio < 0.4:  # V8: 最低要求40%
                 continue
 
             # V8: 条件C - 成交量确认 - 跌破时应显著放量（自适应倍数）
             if volumes is not None:
                 if not _check_breakout_volume(
-                    volumes, break_bi_down.start.k.k_index, break_bi_down.end.k.k_index, avg_vol_20, min_ratio=vol_adjusted_vol_ratio
+                    volumes,
+                    break_bi_down.start.k.k_index,
+                    break_bi_down.end.k.k_index,
+                    avg_vol_20,
+                    min_ratio=vol_adjusted_vol_ratio,
                 ):
                     continue
 
             # 在跌破笔之后找反弹笔
-            for bi in bis[bis.index(break_bi_down) + 1:]:
+            for bi in bis[bis.index(break_bi_down) + 1 :]:
                 if bi.direction.value == "up":
                     # V8: 条件1 - 反抽不破zd（严格：必须明显低于zd，留0.5%缓冲）
                     if bi.high >= zs.zd * 0.995:
@@ -3477,8 +3675,12 @@ def _find_third_type_mmds(
                     vol_ok = True
                     if volumes is not None:
                         vol_ok = _check_pullback_volume_v2(
-                            volumes, bi.start.k.k_index, bi.end.k.k_index, avg_vol_20,
-                            max_ratio=0.6, is_pullback=False
+                            volumes,
+                            bi.start.k.k_index,
+                            bi.end.k.k_index,
+                            avg_vol_20,
+                            max_ratio=0.6,
+                            is_pullback=False,
                         )
                     if not vol_ok:
                         continue
@@ -3557,17 +3759,25 @@ def _find_third_type_mmds(
                     # V14: 条件16 - 成交量异常检测（跌破时放量=机构出货）
                     vol_spike_sell = False
                     if volumes is not None:
-                        vol_spike_sell = _check_volume_spike(volumes, break_bi_down.end.k.k_index, lookback=20, min_ratio=1.5)
+                        vol_spike_sell = _check_volume_spike(
+                            volumes, break_bi_down.end.k.k_index, lookback=20, min_ratio=1.5
+                        )
 
                     # V14: 条件17 - 缺口分析（向下缺口跌破=加速下跌信号）
                     gap_info_sell: dict[str, Any] = {
-                        "has_gap": False, "gap_type": None, "filled": True,
+                        "has_gap": False,
+                        "gap_type": None,
+                        "filled": True,
                     }
                     if highs is not None and lows is not None:
-                        gap_info_sell = _detect_price_gap(closes, highs, lows, break_bi_down.end.k.k_index)
+                        gap_info_sell = _detect_price_gap(
+                            closes, highs, lows, break_bi_down.end.k.k_index
+                        )
 
                     # V14: 条件18 - MACD柱状图斜率确认
-                    macd_slope_sell = _check_macd_histogram_slope(macd_data, bi.end.k.k_index, direction="down")
+                    macd_slope_sell = _check_macd_histogram_slope(
+                        macd_data, bi.end.k.k_index, direction="down"
+                    )
                     if macd_slope_sell["slope_direction"] == "shrinking":
                         continue  # 柱状图收缩，动量减弱，跳过
 
@@ -3579,7 +3789,11 @@ def _find_third_type_mmds(
                     extra_parts_sell = []
                     if vol_spike_sell:
                         extra_parts_sell.append("量能放大✅")
-                    if gap_info_sell.get("has_gap") and gap_info_sell.get("gap_type") == "down" and not gap_info_sell.get("filled"):
+                    if (
+                        gap_info_sell.get("has_gap")
+                        and gap_info_sell.get("gap_type") == "down"
+                        and not gap_info_sell.get("filled")
+                    ):
                         extra_parts_sell.append(f"跳空跌破({gap_info_sell['gap_size_pct']:.1f}%)✅")
                     if macd_slope_sell["confirmed"]:
                         extra_parts_sell.append("MACD斜率确认✅")
@@ -3587,7 +3801,9 @@ def _find_third_type_mmds(
                     # V15: 条件20 - K线形态确认（回抽笔出现锤子线或阴吞没=看跌增强）
                     kline_pattern_sell: dict[str, Any] = {"pattern": None, "strength": "none"}
                     if highs is not None and lows is not None:
-                        kline_pattern_sell = _detect_kline_pattern(closes, highs, lows, bi.end.k.k_index)
+                        kline_pattern_sell = _detect_kline_pattern(
+                            closes, highs, lows, bi.end.k.k_index
+                        )
                     if kline_pattern_sell["pattern"] in ("hammer", "bullish_engulfing"):
                         extra_parts_sell.append(f"K线形态:{kline_pattern_sell['pattern']}✅")
                     # V17: 条件24 - K线形态反向过滤：回抽笔出现阳吞没=看涨信号，跳过3卖
@@ -3596,7 +3812,9 @@ def _find_third_type_mmds(
 
                     # V18: 条件26 - 跌破力度确认：跌破笔力度需大于进入中枢的笔（避免弱势跌破）
                     if len(zs.lines) >= 1 and break_bi_down:
-                        break_force_down = _calc_bi_force(break_bi_down, closes, break_bi_down.index)
+                        break_force_down = _calc_bi_force(
+                            break_bi_down, closes, break_bi_down.index
+                        )
                         entry_force_down = _calc_bi_force(zs.lines[0], closes, zs.lines[0].index)
                         if entry_force_down > 0 and break_force_down < entry_force_down * 0.9:
                             continue  # 跌破力度弱于进入中枢的笔，可能是假跌破
@@ -3615,13 +3833,12 @@ def _find_third_type_mmds(
 
                     # V19: 条件29 - ATR阻力确认：反抽高点应在zd±ATR范围内
                     atr_resist_ok, atr_resist_reason = _check_atr_support_zone(
-                        bi.high, zs.zg, zs.zd, MMDType.SELL_3,
-                        closes, highs, lows, bi.end.k.k_index
+                        bi.high, zs.zg, zs.zd, MMDType.SELL_3, closes, highs, lows, bi.end.k.k_index
                     )
                     if not atr_resist_ok:
                         continue  # 反弹位置不在ATR阻力区域内
                     if atr_resist_ok:
-                        extra_parts_sell.append(f"ATR阻力✅")
+                        extra_parts_sell.append("ATR阻力✅")
 
                     # V20: 条件31 - 波动率Regime过滤：根据当前波动率状态调整判断标准
                     regime_vol_sell = _calc_atr_volatility(closes)
@@ -3639,7 +3856,9 @@ def _find_third_type_mmds(
 
                     # V20: 条件32 - 趋势加速度确认：3卖时趋势应加速或中性（不应减速）
                     if macd_data is not None:
-                        accel_sell, trend_state_sell = _calc_trend_acceleration(macd_data, bi.end.k.k_index)
+                        accel_sell, trend_state_sell = _calc_trend_acceleration(
+                            macd_data, bi.end.k.k_index
+                        )
                         if trend_state_sell == "accelerating":
                             # 趋势正在加速向上，可能是底背离前兆，跳过
                             continue
@@ -3648,37 +3867,54 @@ def _find_third_type_mmds(
 
                     # V20: 条件33 - 关键价位成交量分布：zd附近应有足够成交量确认
                     if volumes is not None:
-                        vol_dist_sell = _analyze_volume_at_levels(closes, volumes, zs.zd, "support", lookback=30)
-                        if vol_dist_sell["strength"] == "weak" and vol_dist_sell["volume_concentration"] < 0.5:
+                        vol_dist_sell = _analyze_volume_at_levels(
+                            closes, volumes, zs.zd, "support", lookback=30
+                        )
+                        if (
+                            vol_dist_sell["strength"] == "weak"
+                            and vol_dist_sell["volume_concentration"] < 0.5
+                        ):
                             pass  # 中枢下沿成交量极度稀疏，支撑强度存疑
                         elif vol_dist_sell["strength"] == "strong":
                             extra_parts_sell.append(f"支撑位量密({vol_dist_sell['signal']})✅")
 
                     # V15: 条件21 - 二次回踩确认（break-retest-break pattern）
-                    retest_result_sell = _check_break_retest_break(bis, break_bi_down, zs.zd, closes)
+                    retest_result_sell = _check_break_retest_break(
+                        bis, break_bi_down, zs.zd, closes
+                    )
                     if retest_result_sell["exists"]:
-                        extra_parts_sell.append(f"二次确认(反抽{retest_result_sell.get('retracement_pct', '?')}%)✅")
+                        extra_parts_sell.append(
+                            f"二次确认(反抽{retest_result_sell.get('retracement_pct', '?')}%)✅"
+                        )
 
                     # V47: 条件131 - 后确认价格跟随过滤（仅当数据足够时生效）
                     if closes is not None and len(closes) > 10:
                         try:
                             post_confirm_sell = _check_post_signal_price_follow_through(
                                 MMD(mmd_type=MMDType.SELL_3, zs=zs, bi=bi, msg=""),
-                                closes, lookback_bars=5, min_follow_pct=-0.02
+                                closes,
+                                lookback_bars=5,
+                                min_follow_pct=-0.02,
                             )
-                            if not post_confirm_sell["followed"] and post_confirm_sell["looked_bars"] > 0:
+                            if (
+                                not post_confirm_sell["followed"]
+                                and post_confirm_sell["looked_bars"] > 0
+                            ):
                                 pass  # 不直接跳过，记录到置信度中
                         except Exception:
                             pass
 
                     extra_msg_sell = ", " + ", ".join(extra_parts_sell) if extra_parts_sell else ""
 
-                    mmds.append(MMD(
-                        mmd_type=MMDType.SELL_3,
-                        zs=zs,
-                        bi=bi,
-                        msg=f"3卖V47: 跌破确认后反抽(幅度{(bi.high-break_bi_down.high)/breakdown_range*100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, Regime={regime_sell}(×{regime_adjust_sell:.2f}), MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos_sell}, 反抽{retracement_time_span}根K线, ATR阻力✅" + extra_msg_sell,
-                    ))
+                    mmds.append(
+                        MMD(
+                            mmd_type=MMDType.SELL_3,
+                            zs=zs,
+                            bi=bi,
+                            msg=f"3卖V47: 跌破确认后反抽(幅度{(bi.high - break_bi_down.high) / breakdown_range * 100:.0f}%), 高点={bi.high:.2f} < zd={zs.zd:.2f}, Regime={regime_sell}(×{regime_adjust_sell:.2f}), MA20={ma_slope}, RSI={rsi_3sell:.0f}(+{rsi_momentum_sell:+.1f}), ADX={adx_val:.0f}, KDJ.J={kjd_j_sell:.0f}, BOLL%b={boll_pos['percent_b']:.2f}, MACD零轴={macd_zero_pos_sell}, 反抽{retracement_time_span}根K线, ATR阻力✅"
+                            + extra_msg_sell,
+                        )
+                    )
                     # V14/V15/V20: 记录增强信息
                     if vol_spike_sell:
                         mmds[-1]._vol_spike = True
@@ -3691,18 +3927,20 @@ def _find_third_type_mmds(
                         mmds[-1]._kline_pattern = kline_pattern_sell["pattern"]
                     if retest_result_sell["exists"]:
                         mmds[-1]._retest_break = True
-                        mmds[-1]._retest_retracement = retest_result_sell.get("retracement_pct", 0.0)
+                        mmds[-1]._retest_retracement = retest_result_sell.get(
+                            "retracement_pct", 0.0
+                        )
                     # V20: 记录波动率Regime和趋势加速度
                     mmds[-1]._vol_regime = regime_sell
                     mmds[-1]._trend_accel = trend_state_sell if macd_data is not None else "neutral"
                     if volumes is not None:
-                        vol_dist_3sell = _analyze_volume_at_levels(closes, volumes, zs.zd, "support", lookback=30)
+                        vol_dist_3sell = _analyze_volume_at_levels(
+                            closes, volumes, zs.zd, "support", lookback=30
+                        )
                         mmds[-1]._vol_dist_at_zd = vol_dist_3sell
                     break
 
     return mmds
-
-
 
 
 def _check_macd_confirmation(
@@ -3742,7 +3980,7 @@ def _check_macd_confirmation(
 
 def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
     """去重：同一位置只保留最高优先级的买卖点。
-    
+
     优先级：1买 > 2买 > 3买 > 1卖 > 2卖 > 3卖
     """
     priority = {
@@ -3753,7 +3991,7 @@ def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
         MMDType.SELL_2: 2,
         MMDType.SELL_3: 1,
     }
-    
+
     # 按位置分组（允许同位置出现 buy+sell 组合信号；同类型只保留高置信度）
     by_position: dict[int, list[MMD]] = {}
     for mmd in mmds:
@@ -3762,12 +4000,12 @@ def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
             if pos not in by_position:
                 by_position[pos] = []
             by_position[pos].append(mmd)
-    
+
     # 每组按 (类型优先级, 置信度) 排序，同位置同方向只保留最高优先级的信号；
     # 但买卖方向不同的信号（如底部同时出现 1buy+2buy 候选）保留更高置信度者。
     def _sort_key(m: MMD) -> tuple[int, float]:
         return (priority.get(m.mmd_type, 0), m.confidence)
-    
+
     result = []
     for pos, group in by_position.items():
         # 按方向分组：买入组 / 卖出组
@@ -3778,11 +4016,12 @@ def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
                 continue
             sub.sort(key=_sort_key, reverse=True)
             result.append(sub[0])
-    
+
     return result
 
 
 # ── 辅助函数 ─────────────────────────────────────────────────────────────
+
 
 def _is_strong_beichi(
     bi: BI,
@@ -3799,7 +4038,7 @@ def _is_strong_beichi(
     只可能是盘整中的普通回调，不能判定为 1 买/1 卖。
     """
     bi_idx = bi.index
-    
+
     # 1. 笔背驰检查（要求新极值：向下背驰须创新低，向上背驰须创新高）
     for j in range(bi_idx - 1, -1, -1):
         prev_bi = bis[j]
@@ -3813,43 +4052,45 @@ def _is_strong_beichi(
                     break
             curr_force = _calc_bi_force(bi, closes, bi_idx)
             prev_force = _calc_bi_force(prev_bi, closes, j)
-            
+
             if prev_force > 0 and curr_force < prev_force * threshold:
                 return True
             break
-    
+
     # 注意：一买/一卖 只认"趋势背驰"（笔背驰或两中枢趋势背驰），
     # 不把"盘整背驰"（中枢内力度衰竭）算作一买——盘整背驰更适合标记二买/类二买。
     # 这样震荡市中的反复下探不会被误标为 1买。
-    
+
     # 3. 趋势背驰检查（两个同向中枢之间离开笔力度衰减 + 新极值）
     if len(zss) >= 2:
         for i in range(1, len(zss)):
             prev_zs = zss[i - 1]
             curr_zs = zss[i]
-            
+
             is_same_trend = (
-                (direction == "down" and curr_zs.zg < prev_zs.zg and curr_zs.zd < prev_zs.zd) or
-                (direction == "up" and curr_zs.zg > prev_zs.zg and curr_zs.zd > prev_zs.zd)
-            )
-            
+                direction == "down" and curr_zs.zg < prev_zs.zg and curr_zs.zd < prev_zs.zd
+            ) or (direction == "up" and curr_zs.zg > prev_zs.zg and curr_zs.zd > prev_zs.zd)
+
             if is_same_trend:
                 prev_exit = prev_zs.lines[-1]
                 curr_exit = curr_zs.lines[-1]
-                
-                if prev_exit.direction.value == direction and curr_exit.direction.value == direction:
+
+                if (
+                    prev_exit.direction.value == direction
+                    and curr_exit.direction.value == direction
+                ):
                     # 新极值确认：后一中枢离开笔须创出更极端价位
                     if direction == "down":
                         new_extreme = curr_exit.low < prev_exit.low
                     else:
                         new_extreme = curr_exit.high > prev_exit.high
-                    
+
                     prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
                     curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index)
-                    
+
                     if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
                         return True
-    
+
     return False
 
 
@@ -3862,14 +4103,14 @@ def _get_beichi_strength(
 ) -> str:
     """获取背驰强度标签。"""
     bi_idx = bi.index
-    
+
     # 找最近同向笔
     for j in range(bi_idx - 1, -1, -1):
         prev_bi = bis[j]
         if prev_bi.direction.value == direction:
             curr_force = _calc_bi_force(bi, closes, bi_idx)
             prev_force = _calc_bi_force(prev_bi, closes, j)
-            
+
             if prev_force > 0:
                 ratio = curr_force / prev_force
                 if ratio < 0.5:
@@ -3879,7 +4120,7 @@ def _get_beichi_strength(
                 else:
                     return "weak"
             break
-    
+
     return "unknown"
 
 
@@ -3887,18 +4128,17 @@ def _calc_trend_strength(zss: list[ZS]) -> float:
     """计算趋势强度（0-1）。"""
     if len(zss) < 2:
         return 0.0
-    
+
     # 计算中枢的重叠程度
     overlaps = 0
     for i in range(1, len(zss)):
         prev = zss[i - 1]
         curr = zss[i]
-        
+
         # 检查是否同向排列
-        if (curr.zg < prev.zg and curr.zd < prev.zd) or \
-           (curr.zg > prev.zg and curr.zd > prev.zd):
+        if (curr.zg < prev.zg and curr.zd < prev.zd) or (curr.zg > prev.zg and curr.zd > prev.zd):
             overlaps += 1
-    
+
     return overlaps / (len(zss) - 1) if len(zss) > 1 else 0.0
 
 
@@ -3913,17 +4153,17 @@ def _calc_bi_force(
 
     start_idx = bi.start.k.k_index
     end_idx = bi.end.k.k_index
-    
+
     if start_idx < 0 or end_idx >= len(closes):
         return abs(bi.high - bi.low)
-    
+
     try:
         macd_result = calc_macd_force(closes, start_idx, end_idx)
         if bi.direction.value == "down":
             return macd_result["hist_down_sum"]
         else:
             return macd_result["hist_up_sum"]
-    except:
+    except Exception:
         return abs(bi.high - bi.low)
 
 
@@ -3954,11 +4194,11 @@ def _calc_confidence(
     base_confidence: dict[MMDType, float] = {
         MMDType.BUY_1: 0.88,
         MMDType.SELL_1: 0.92,
-        MMDType.BUY_2: 0.78,   # V10: 从0.75提升至0.78（BOLL+MA斜率增强）
+        MMDType.BUY_2: 0.78,  # V10: 从0.75提升至0.78（BOLL+MA斜率增强）
         MMDType.SELL_2: 0.73,  # V10: 从0.70提升至0.73
         MMDType.BUY_2S: 0.55,
         MMDType.SELL_2S: 0.50,
-        MMDType.BUY_3: 0.55,   # V42: 从0.65下调至0.55（基于500日回测实际57%→保守估计）
+        MMDType.BUY_3: 0.55,  # V42: 从0.65下调至0.55（基于500日回测实际57%→保守估计）
         MMDType.SELL_3: 0.50,  # V42: 从0.60下调至0.50（基于500日回测实际50%→保守估计）
     }
 
@@ -3997,7 +4237,7 @@ def _calc_confidence(
         try:
             bi_end_idx = mmd.bi.end.k.k_index
             if 0 <= bi_end_idx < len(volumes):
-                recent_vols = volumes[max(0, bi_end_idx-20):bi_end_idx+1]
+                recent_vols = volumes[max(0, bi_end_idx - 20) : bi_end_idx + 1]
                 if recent_vols and len(volumes) >= 20:
                     avg_recent = sum(recent_vols) / len(recent_vols)
                     avg_20 = sum(volumes[-20:]) / 20
@@ -4025,34 +4265,34 @@ def _calc_confidence(
             pass
 
     # V13: 成交量剖面加成（2买/2卖专属：支撑/阻力确认加分）
-    if hasattr(mmd, '_vol_profile_support') and mmd._vol_profile_support:
+    if hasattr(mmd, "_vol_profile_support") and mmd._vol_profile_support:
         confidence += 0.05  # 成交量支撑确认加成
-    if hasattr(mmd, '_vol_profile_resistance') and mmd._vol_profile_resistance:
+    if hasattr(mmd, "_vol_profile_resistance") and mmd._vol_profile_resistance:
         confidence += 0.05  # 成交量阻力确认加成
 
     # V14: 成交量异常加成（机构活动信号）
-    if hasattr(mmd, '_vol_spike') and mmd._vol_spike:
+    if hasattr(mmd, "_vol_spike") and mmd._vol_spike:
         if "buy" in mmd.mmd_type.value:
             confidence += 0.04  # 买入信号成交量放大=机构接盘
         else:
             confidence += 0.03  # 卖出信号成交量放大=机构出货
 
     # V14: 缺口分析加成
-    if hasattr(mmd, '_gap_down') and mmd._gap_down:
-        gap_size = getattr(mmd, '_gap_size', 0.0)
+    if hasattr(mmd, "_gap_down") and mmd._gap_down:
+        gap_size = getattr(mmd, "_gap_size", 0.0)
         if gap_size > 1.0:
             confidence += 0.05  # 大缺口=强信号
         else:
             confidence += 0.03
-    if hasattr(mmd, '_gap_up') and mmd._gap_up:
-        gap_size = getattr(mmd, '_gap_size', 0.0)
+    if hasattr(mmd, "_gap_up") and mmd._gap_up:
+        gap_size = getattr(mmd, "_gap_size", 0.0)
         if gap_size > 1.0:
             confidence += 0.05
         else:
             confidence += 0.03
 
     # V14: MACD柱状图斜率确认加成
-    if hasattr(mmd, '_macd_slope_confirmed') and mmd._macd_slope_confirmed:
+    if hasattr(mmd, "_macd_slope_confirmed") and mmd._macd_slope_confirmed:
         confidence += 0.03  # 动量确认加成
 
     # V8: MACD位置确认（优先使用传入的macd_data）
@@ -4060,11 +4300,16 @@ def _calc_confidence(
         try:
             if macd_data is None:
                 from easy_tdx.chanlun.macd import calc_macd
+
                 macd_data = calc_macd(closes or [])
             latest_dif = macd_data["dif"][-1] if macd_data.get("dif") else 0
-            prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
+            prev_dif = (
+                macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
+            )
             latest_hist = macd_data["hist"][-1] if macd_data.get("hist") else 0
-            prev_hist = macd_data["hist"][-2] if macd_data and len(macd_data.get("hist", [])) > 1 else 0
+            prev_hist = (
+                macd_data["hist"][-2] if macd_data and len(macd_data.get("hist", [])) > 1 else 0
+            )
 
             if "buy" in mmd.mmd_type.value:
                 if latest_dif > 0:
@@ -4095,7 +4340,9 @@ def _calc_confidence(
 
     # V8: 区间套一致性加成（传入zss参数）
     if closes is not None and macd_data and mmd.zs:
-        confluence_bonus = _calc_confluence_bonus(mmd, zss or [], macd_data, volumes, closes, volatility)
+        confluence_bonus = _calc_confluence_bonus(
+            mmd, zss or [], macd_data, volumes, closes, volatility
+        )
         confidence += confluence_bonus
 
     # V10: 多因子共振加成（3买/3卖额外加分）
@@ -4218,9 +4465,12 @@ def _calc_confidence(
         try:
             signal_idx = mmd.bi.end.k.k_index
             if mmd.mmd_type in (
-                MMDType.BUY_1, MMDType.SELL_1,
-                MMDType.BUY_2, MMDType.SELL_2,
-                MMDType.BUY_2S, MMDType.SELL_2S,
+                MMDType.BUY_1,
+                MMDType.SELL_1,
+                MMDType.BUY_2,
+                MMDType.SELL_2,
+                MMDType.BUY_2S,
+                MMDType.SELL_2S,
             ):
                 freshness_factor, _ = _calc_signal_freshness(closes, signal_idx, max_age_bars=120)
             else:
@@ -4252,30 +4502,36 @@ def _calc_confidence(
         confidence *= 0.94  # 关键价位成交量稀疏折扣
 
     # V21: 组合信号加成（条件35）- 邻近不同类型的同向信号增强
-    combo_bonus = getattr(mmd, '_combo_confidence_bonus', 0.0)
+    combo_bonus = getattr(mmd, "_combo_confidence_bonus", 0.0)
     if combo_bonus > 0:
         confidence += combo_bonus  # 组合信号额外加成
 
     # V22: 波动率Regime双重确认加成（条件38）
-    vol_regime_dual = getattr(mmd, '_vol_regime_dual', None)
+    vol_regime_dual = getattr(mmd, "_vol_regime_dual", None)
     if vol_regime_dual and vol_regime_dual.get("dual_confirmed"):
         confidence += vol_regime_dual.get("confidence_adjust", 0.0)
 
     # V22: 量价背离惩罚（条件39）- 顶背离时降低置信度
-    vp_div = getattr(mmd, '_vol_price_divergence', None)
+    vp_div = getattr(mmd, "_vol_price_divergence", None)
     if vp_div and vp_div.get("type") == "bearish_divergence":
-        confidence *= (1.0 - vp_div.get("strength", 0.5) * 0.15)  # 最多-15%
+        confidence *= 1.0 - vp_div.get("strength", 0.5) * 0.15  # 最多-15%
 
     # V23: Fibonacci回撤位加成（条件40）
-    fib_result = getattr(mmd, '_fib_retracement', None)
+    fib_result = getattr(mmd, "_fib_retracement", None)
     if fib_result and fib_result.get("confirmation_bonus", 0) > 0:
         # 仅对2买/2卖/3买/3卖加分（回撤位对1买/1卖影响较小）
-        if mmd.mmd_type in (MMDType.BUY_2, MMDType.BUY_2S, MMDType.BUY_3,
-                            MMDType.SELL_2, MMDType.SELL_2S, MMDType.SELL_3):
+        if mmd.mmd_type in (
+            MMDType.BUY_2,
+            MMDType.BUY_2S,
+            MMDType.BUY_3,
+            MMDType.SELL_2,
+            MMDType.SELL_2S,
+            MMDType.SELL_3,
+        ):
             confidence += fib_result["confirmation_bonus"]
 
     # V23: RSI区域调整（条件41）- 仅对买/卖点类型应用方向性调整
-    rsi_zone_data = getattr(mmd, '_rsi_zone', None)
+    rsi_zone_data = getattr(mmd, "_rsi_zone", None)
     if rsi_zone_data:
         zone = rsi_zone_data.get("zone", "neutral")
         rsi_val = rsi_zone_data.get("rsi", 50.0)
@@ -4293,11 +4549,14 @@ def _calc_confidence(
                 confidence -= 0.02
 
     # V23: MACD零轴穿越加成（条件42）
-    macd_cross = getattr(mmd, '_macd_zero_cross', None)
+    macd_cross = getattr(mmd, "_macd_zero_cross", None)
     if macd_cross and macd_cross.get("confidence_bonus", 0) > 0:
         if "buy" in mmd.mmd_type.value and macd_cross.get("cross_type") in ("cross_above", "above"):
             confidence += macd_cross["confidence_bonus"]
-        elif "sell" in mmd.mmd_type.value and macd_cross.get("cross_type") in ("cross_below", "below"):
+        elif "sell" in mmd.mmd_type.value and macd_cross.get("cross_type") in (
+            "cross_below",
+            "below",
+        ):
             confidence += macd_cross["confidence_bonus"]
 
     # clip到[0, 1]
@@ -4306,8 +4565,10 @@ def _calc_confidence(
 
 def _calc_atr(
     closes: list[float] | None,
-    highs: list[float] | None, lows: list[float] | None,
-    idx: int, period: int = 14,
+    highs: list[float] | None,
+    lows: list[float] | None,
+    idx: int,
+    period: int = 14,
 ) -> float:
     """计算指定位置的ATR值（V19新增）。
 
@@ -4321,21 +4582,21 @@ def _calc_atr(
     try:
         end = idx if idx < len(closes) else len(closes) - 1
         start = max(0, end - period + 1)
-        slice_closes = closes[start:end + 1]
+        slice_closes = closes[start : end + 1]
         if highs is None or lows is None:
             highs_arr = [c * (1 + 0.005) for c in slice_closes]
             lows_arr = [c * (1 - 0.005) for c in slice_closes]
         else:
             h_end = end if end < len(highs) else len(highs) - 1
             l_end = end if end < len(lows) else len(lows) - 1
-            highs_arr = highs[start:h_end + 1]
-            lows_arr = lows[start:l_end + 1]
+            highs_arr = highs[start : h_end + 1]
+            lows_arr = lows[start : l_end + 1]
         if len(slice_closes) < 2 or len(highs_arr) < 2 or len(lows_arr) < 2:
             return 0.0
         trs = []
         for i in range(1, len(slice_closes)):
-            h, l, pc = highs_arr[i], lows_arr[i], slice_closes[i - 1]
-            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+            h, low, pc = highs_arr[i], lows_arr[i], slice_closes[i - 1]
+            trs.append(max(h - low, abs(h - pc), abs(low - pc)))
         return sum(trs) / len(trs) if trs else 0.0
     except Exception:
         return 0.0
@@ -4368,7 +4629,7 @@ def _check_atr_support_zone(
         support_high = zg + atr * 0.3
         if support_low <= pullback_low <= support_high:
             depth_pct = (zg - pullback_low) / zg * 100 if zg > 0 else 0
-            return True, f"ATR支撑确认(回踩{depth_pct:.1f}%@zg-{atr:.2f}~zg+{atr*0.3:.2f})"
+            return True, f"ATR支撑确认(回踩{depth_pct:.1f}%@zg-{atr:.2f}~zg+{atr * 0.3:.2f})"
         else:
             return False, f"ATR支撑不符(回踩{pullback_low:.2f}超出范围)"
     elif mmd_type == MMDType.SELL_3:
@@ -4376,7 +4637,7 @@ def _check_atr_support_zone(
         resistance_high = zd + atr * 1.0
         if resistance_low <= pullback_low <= resistance_high:
             depth_pct = (pullback_low - zd) / zd * 100 if zd > 0 else 0
-            return True, f"ATR阻力确认(反抽{depth_pct:.1f}%@zd-{atr*0.3:.2f}~zd+{atr:.2f})"
+            return True, f"ATR阻力确认(反抽{depth_pct:.1f}%@zd-{atr * 0.3:.2f}~zd+{atr:.2f})"
         else:
             return False, f"ATR阻力不符(反抽{pullback_low:.2f}超出范围)"
     return True, "未知类型"
@@ -4446,14 +4707,20 @@ def _calc_mmd_quality(
 
     # 1. 类型得分（30分）
     type_scores = {
-        MMDType.BUY_1: 30, MMDType.SELL_1: 30,
-        MMDType.BUY_2: 25, MMDType.SELL_2: 25,
-        MMDType.BUY_2S: 18, MMDType.SELL_2S: 18,
-        MMDType.BUY_3: 22, MMDType.SELL_3: 22,
+        MMDType.BUY_1: 30,
+        MMDType.SELL_1: 30,
+        MMDType.BUY_2: 25,
+        MMDType.SELL_2: 25,
+        MMDType.BUY_2S: 18,
+        MMDType.SELL_2S: 18,
+        MMDType.BUY_3: 22,
+        MMDType.SELL_3: 22,
     }
     type_score = type_scores.get(mmd.mmd_type, 15)
     factors["type"] = type_score / 30.0
-    reasons.append(f"类型: {mmd.mmd_type.value.replace('buy', '买').replace('sell', '卖')} ({type_score}/30)")
+    reasons.append(
+        f"类型: {mmd.mmd_type.value.replace('buy', '买').replace('sell', '卖')} ({type_score}/30)"
+    )
 
     # 2. 趋势得分（20分）
     trend_score = trend_strength * 20
@@ -4471,7 +4738,7 @@ def _calc_mmd_quality(
         try:
             bi_end_idx = mmd.bi.end.k.k_index
             if 0 <= bi_end_idx < len(volumes):
-                recent_vols = volumes[max(0, bi_end_idx-20):bi_end_idx+1]
+                recent_vols = volumes[max(0, bi_end_idx - 20) : bi_end_idx + 1]
                 avg_recent = sum(recent_vols) / len(recent_vols)
                 avg_20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else avg_recent
                 if avg_20 > 0:
@@ -4508,23 +4775,26 @@ def _calc_mmd_quality(
         try:
             if macd_data is None:
                 from easy_tdx.chanlun.macd import calc_macd
+
                 macd_data = calc_macd(closes or [])
             latest_dif = macd_data["dif"][-1] if macd_data.get("dif") else 0
-            prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
+            prev_dif = (
+                macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
+            )
 
             if "buy" in mmd.mmd_type.value:
                 if latest_dif > 0:
                     macd_score = 15
                     factors["macd"] = 1.0
-                    reasons.append(f"DIF>0多头 +15")
+                    reasons.append("DIF>0多头 +15")
                 elif latest_dif > -0.5:
                     macd_score = 10
                     factors["macd"] = 0.67
-                    reasons.append(f"DIF≈0中性 +10")
+                    reasons.append("DIF≈0中性 +10")
                 else:
                     macd_score = 5
                     factors["macd"] = 0.33
-                    reasons.append(f"DIF<0空头 +5")
+                    reasons.append("DIF<0空头 +5")
 
                 if prev_dif is not None and latest_dif > prev_dif:
                     macd_score = min(15, macd_score + 2)
@@ -4533,15 +4803,15 @@ def _calc_mmd_quality(
                 if latest_dif < 0:
                     macd_score = 15
                     factors["macd"] = 1.0
-                    reasons.append(f"DIF<0空头 +15")
+                    reasons.append("DIF<0空头 +15")
                 elif latest_dif < 0.5:
                     macd_score = 10
                     factors["macd"] = 0.67
-                    reasons.append(f"DIF≈0中性 +10")
+                    reasons.append("DIF≈0中性 +10")
                 else:
                     macd_score = 5
                     factors["macd"] = 0.33
-                    reasons.append(f"DIF>0多头 +5")
+                    reasons.append("DIF>0多头 +5")
 
                 if prev_dif is not None and latest_dif < prev_dif:
                     macd_score = min(15, macd_score + 2)
@@ -4593,7 +4863,9 @@ def _calc_mmd_quality(
     if (
         closes is not None
         and mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
-        and mmd.zs and mmd.bi and len(closes) > 0
+        and mmd.zs
+        and mmd.bi
+        and len(closes) > 0
     ):
         try:
             if len(mmd.zs.lines) >= 1:
@@ -4623,12 +4895,12 @@ def _calc_mmd_quality(
             freshness_factor, freshness_reason = _calc_signal_freshness(closes, signal_idx)
             if freshness_factor >= 0.9:
                 freshness_bonus = 5
-                reasons.append(f"信号新鲜✅ +5")
+                reasons.append("信号新鲜✅ +5")
             elif freshness_factor >= 0.7:
                 freshness_bonus = 3
-                reasons.append(f"信号较新 +3")
+                reasons.append("信号较新 +3")
             else:
-                reasons.append(f"信号老化 ⚠️")
+                reasons.append("信号老化 ⚠️")
         except Exception:
             pass
 
@@ -4730,11 +5002,11 @@ def _get_volatility_regime(volatility: float) -> tuple[str, float]:
         threshold_adjust为阈值调整因子（>1表示放宽，<1表示收紧）
     """
     if volatility > 0.04:
-        return "high", 1.15   # 高波动：放宽阈值15%，避免漏信号
+        return "high", 1.15  # 高波动：放宽阈值15%，避免漏信号
     elif volatility > 0.02:
         return "medium", 1.0  # 正常波动：不调整
     else:
-        return "low", 0.88    # 低波动：收紧阈值12%，过滤噪音
+        return "low", 0.88  # 低波动：收紧阈值12%，过滤噪音
 
 
 def _calc_trend_acceleration(
@@ -4758,13 +5030,17 @@ def _calc_trend_acceleration(
 
         # 计算一阶差（DIF变化率）
         dif_recent = macd_data["dif"][end] - macd_data["dif"][end - lookback // 2]
-        dif_earlier = macd_data["dif"][end - lookback // 2] - macd_data["dif"][max(0, end - lookback)]
+        dif_earlier = (
+            macd_data["dif"][end - lookback // 2] - macd_data["dif"][max(0, end - lookback)]
+        )
 
         # 加速度 = 一阶差的变化
         acceleration = dif_recent - dif_earlier
 
         # 归一化（除以平均DIF绝对值）
-        avg_dif_abs = sum(abs(macd_data["dif"][i]) for i in range(max(0, end - lookback), end + 1)) / max(1, lookback)
+        avg_dif_abs = sum(
+            abs(macd_data["dif"][i]) for i in range(max(0, end - lookback), end + 1)
+        ) / max(1, lookback)
         if avg_dif_abs > 0:
             acceleration_normalized = acceleration / avg_dif_abs
         else:
@@ -4812,7 +5088,7 @@ def _analyze_volume_at_levels(
         end = len(closes) - 1
         start = max(0, end - lookback)
 
-        tol = level * tolerance_pct
+        _ = level * tolerance_pct
         near_level_volumes: list[float] = []
         all_volumes_slice: list[float] = []
 
@@ -4820,10 +5096,14 @@ def _analyze_volume_at_levels(
             all_volumes_slice.append(volumes[i] if i < len(volumes) else 0)
             # 检查是否在关键价位附近
             if level_type == "support":
-                if closes[i] <= level * (1 + tolerance_pct) and closes[i] >= level * (1 - tolerance_pct * 2):
+                if closes[i] <= level * (1 + tolerance_pct) and closes[i] >= level * (
+                    1 - tolerance_pct * 2
+                ):
                     near_level_volumes.append(volumes[i] if i < len(volumes) else 0)
             else:  # resistance
-                if closes[i] >= level * (1 - tolerance_pct) and closes[i] <= level * (1 + tolerance_pct * 2):
+                if closes[i] >= level * (1 - tolerance_pct) and closes[i] <= level * (
+                    1 + tolerance_pct * 2
+                ):
                     near_level_volumes.append(volumes[i] if i < len(volumes) else 0)
 
         if not all_volumes_slice or not near_level_volumes:
@@ -4958,18 +5238,22 @@ def sort_mmds_by_priority(mmds: list[MMD]) -> list[MMD]:
         排序后的买卖点列表
     """
     type_priority = {
-        MMDType.BUY_1: 1, MMDType.SELL_1: 2,
-        MMDType.BUY_2: 3, MMDType.SELL_2: 4,
-        MMDType.BUY_2S: 5, MMDType.SELL_2S: 6,
-        MMDType.BUY_3: 7, MMDType.SELL_3: 8,
+        MMDType.BUY_1: 1,
+        MMDType.SELL_1: 2,
+        MMDType.BUY_2: 3,
+        MMDType.SELL_2: 4,
+        MMDType.BUY_2S: 5,
+        MMDType.SELL_2S: 6,
+        MMDType.BUY_3: 7,
+        MMDType.SELL_3: 8,
     }
 
     def sort_key(mmd: MMD) -> tuple[int, float, int]:
         grade = getattr(getattr(mmd, "quality", None), "grade", "D")
         grade_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
         return (
-            grade_order.get(grade, 4),      # 1. 质量等级
-            -mmd.confidence,                 # 2. 置信度（降序）
+            grade_order.get(grade, 4),  # 1. 质量等级
+            -mmd.confidence,  # 2. 置信度（降序）
             type_priority.get(mmd.mmd_type, 9),  # 3. 类型优先级
         )
 
@@ -5061,7 +5345,7 @@ def _identify_dynamic_support_resistance(
         # 3. 加入整数价位/心理关口
         latest = closes[end]
         for power in range(1, 4):
-            round_level = round(latest / (10 ** power)) * (10 ** power)
+            round_level = round(latest / (10**power)) * (10**power)
             if 0.9 * latest < round_level < 1.1 * latest and round_level not in support_candidates:
                 if round_level < latest:
                     support_candidates.append(round_level)
@@ -5133,7 +5417,7 @@ def _detect_combo_signals(mmds: list[MMD], closes: list[float]) -> None:
         for mmd in mmds:
             if not mmd.bi:
                 continue
-            price = mmd.bi.end.k.close if hasattr(mmd.bi.end.k, 'close') else latest
+            price = mmd.bi.end.k.close if hasattr(mmd.bi.end.k, "close") else latest
             zone_key = round(price / zone_width) * zone_width
             if zone_key not in by_zone:
                 by_zone[zone_key] = []
@@ -5205,11 +5489,11 @@ def _calc_multi_tf_resonance(
 
     try:
         bonus = 0.0
-        signal_price = mmd.bi.end.k.close if hasattr(mmd.bi.end.k, 'close') else closes[-1]
+        signal_price = mmd.bi.end.k.close if hasattr(mmd.bi.end.k, "close") else closes[-1]
         atr = _calc_atr(closes, None, None, len(closes) - 1, 14)
         if atr <= 0:
             atr = signal_price * 0.02
-        resonance_zone = atr * 2  # 2ATR共振区间
+        _ = atr * 2  # 2ATR共振区间
 
         # 1. 检查邻近不同类型的同向信号
         for other in all_mmds:
@@ -5217,14 +5501,13 @@ def _calc_multi_tf_resonance(
                 continue
             if not other.bi:
                 continue
-            other_price = other.bi.end.k.close if hasattr(other.bi.end.k, 'close') else closes[-1]
+            other_price = other.bi.end.k.close if hasattr(other.bi.end.k, "close") else closes[-1]
             if abs(other_price - signal_price) / signal_price > 0.03:
                 continue  # 超出3%不视为共振
 
             # 同向信号共振
-            is_same_direction = (
-                ("buy" in mmd.mmd_type.value and "buy" in other.mmd_type.value) or
-                ("sell" in mmd.mmd_type.value and "sell" in other.mmd_type.value)
+            is_same_direction = ("buy" in mmd.mmd_type.value and "buy" in other.mmd_type.value) or (
+                "sell" in mmd.mmd_type.value and "sell" in other.mmd_type.value
             )
             if is_same_direction and other.mmd_type != mmd.mmd_type:
                 # 不同类型同向 = 强共振
@@ -5238,11 +5521,17 @@ def _calc_multi_tf_resonance(
             difs = macd_data["dif"]
             idx = mmd.bi.end.k.k_index if mmd.bi else len(difs) - 1
             if 0 <= idx < len(difs) and len(difs) > 5:
-                recent_dif = difs[max(0, idx-3):idx+1]
+                recent_dif = difs[max(0, idx - 3) : idx + 1]
                 if len(recent_dif) >= 3:
-                    rising = all(recent_dif[i] <= recent_dif[i+1] for i in range(len(recent_dif)-1))
-                    falling = all(recent_dif[i] >= recent_dif[i+1] for i in range(len(recent_dif)-1))
-                    if ("buy" in mmd.mmd_type.value and rising) or ("sell" in mmd.mmd_type.value and falling):
+                    rising = all(
+                        recent_dif[i] <= recent_dif[i + 1] for i in range(len(recent_dif) - 1)
+                    )
+                    falling = all(
+                        recent_dif[i] >= recent_dif[i + 1] for i in range(len(recent_dif) - 1)
+                    )
+                    if ("buy" in mmd.mmd_type.value and rising) or (
+                        "sell" in mmd.mmd_type.value and falling
+                    ):
                         bonus += 0.02
 
         return min(0.08, bonus)
@@ -5290,7 +5579,13 @@ def _generate_decision_recommendation(
         vol = volatility if volatility is not None else _calc_atr_volatility(closes)
 
         # 基础建议
-        action = "buy" if "buy" in mmd.mmd_type.value else "sell" if "sell" in mmd.mmd_type.value else "hold"
+        action = (
+            "buy"
+            if "buy" in mmd.mmd_type.value
+            else "sell"
+            if "sell" in mmd.mmd_type.value
+            else "hold"
+        )
 
         # 入场价
         if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
@@ -5300,9 +5595,15 @@ def _generate_decision_recommendation(
 
         # 止损止盈（复用V20动态计算逻辑）
         sl_tp = _calc_dynamic_stop_loss_take_profit(mmd, closes, highs, lows)
-        stop_loss = sl_tp.get("stop_loss", entry - atr * 1.5 if "buy" in action else entry + atr * 1.5)
-        tp1 = sl_tp.get("take_profit_1", entry + atr * 2.0 if "buy" in action else entry - atr * 2.0)
-        tp2 = sl_tp.get("take_profit_2", entry + atr * 3.5 if "buy" in action else entry - atr * 3.5)
+        stop_loss = sl_tp.get(
+            "stop_loss", entry - atr * 1.5 if "buy" in action else entry + atr * 1.5
+        )
+        tp1 = sl_tp.get(
+            "take_profit_1", entry + atr * 2.0 if "buy" in action else entry - atr * 2.0
+        )
+        tp2 = sl_tp.get(
+            "take_profit_2", entry + atr * 3.5 if "buy" in action else entry - atr * 3.5
+        )
 
         # 风险收益比
         risk = abs(entry - stop_loss)
@@ -5316,7 +5617,7 @@ def _generate_decision_recommendation(
         # 仓位建议（基于置信度和风险收益比）
         base_position = 0.10  # 基础10%
         conf_bonus = mmd.confidence * 0.15  # 置信度加成
-        combo_bonus = getattr(mmd, '_combo_confidence_bonus', 0.0)
+        combo_bonus = getattr(mmd, "_combo_confidence_bonus", 0.0)
         rrr_bonus = min(0.10, rrr * 0.02) if rrr > 1.5 else 0
         position_pct = min(0.30, base_position + conf_bonus + combo_bonus + rrr_bonus)
 
@@ -5334,7 +5635,7 @@ def _generate_decision_recommendation(
             warnings.append("高波动市场，注意止损")
         if rrr < 1.5:
             warnings.append("风险收益比较低，谨慎入场")
-        if getattr(mmd, '_signal_aging', {}).get('aged', False):
+        if getattr(mmd, "_signal_aging", {}).get("aged", False):
             warnings.append("信号已衰减，时效性降低")
         if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3):
             warnings.append("三类买卖点需谨慎确认")
@@ -5419,7 +5720,9 @@ def _calc_volatility_regime_dual_confirmation(
         for i in range(-lookback, 0):
             idx = len(closes) + i
             if idx >= 1 and idx < len(closes):
-                amp = (closes[idx] - closes[idx - 1]) / closes[idx - 1] if closes[idx - 1] > 0 else 0
+                amp = (
+                    (closes[idx] - closes[idx - 1]) / closes[idx - 1] if closes[idx - 1] > 0 else 0
+                )
                 amplitudes.append(abs(amp))
 
         avg_amplitude = sum(amplitudes) / len(amplitudes) if amplitudes else 0
@@ -5488,7 +5791,9 @@ def _detect_volume_price_divergence(
             return result
 
         recent_closes = closes[-lookback:]
-        recent_volumes = volumes[-lookback:] if len(volumes) >= lookback else volumes[-len(recent_closes):]
+        recent_volumes = (
+            volumes[-lookback:] if len(volumes) >= lookback else volumes[-len(recent_closes) :]
+        )
 
         if not recent_volumes:
             return result
@@ -5497,11 +5802,19 @@ def _detect_volume_price_divergence(
         peaks_price = []
         troughs_price = []
         for i in range(2, len(recent_closes) - 2):
-            if (recent_closes[i] > recent_closes[i - 1] and recent_closes[i] > recent_closes[i - 2]
-                    and recent_closes[i] > recent_closes[i + 1] and recent_closes[i] > recent_closes[i + 2]):
+            if (
+                recent_closes[i] > recent_closes[i - 1]
+                and recent_closes[i] > recent_closes[i - 2]
+                and recent_closes[i] > recent_closes[i + 1]
+                and recent_closes[i] > recent_closes[i + 2]
+            ):
                 peaks_price.append(i)
-            if (recent_closes[i] < recent_closes[i - 1] and recent_closes[i] < recent_closes[i - 2]
-                    and recent_closes[i] < recent_closes[i + 1] and recent_closes[i] < recent_closes[i + 2]):
+            if (
+                recent_closes[i] < recent_closes[i - 1]
+                and recent_closes[i] < recent_closes[i - 2]
+                and recent_closes[i] < recent_closes[i + 1]
+                and recent_closes[i] < recent_closes[i + 2]
+            ):
                 troughs_price.append(i)
 
         # 顶背离：价格创新高但成交量萎缩
@@ -5512,16 +5825,21 @@ def _detect_volume_price_divergence(
             vol_lower = recent_volumes[last_peak] < recent_volumes[prev_peak] * 0.8
 
             if price_higher and vol_lower:
-                strength = min(1.0, (recent_closes[last_peak] - recent_closes[prev_peak]) /
-                               recent_closes[prev_peak] / 0.05 * 0.5 +
-                               (1 - recent_volumes[last_peak] / max(recent_volumes[prev_peak], 1)) * 0.5)
+                strength = min(
+                    1.0,
+                    (recent_closes[last_peak] - recent_closes[prev_peak])
+                    / recent_closes[prev_peak]
+                    / 0.05
+                    * 0.5
+                    + (1 - recent_volumes[last_peak] / max(recent_volumes[prev_peak], 1)) * 0.5,
+                )
                 result = {
                     "type": "bearish_divergence",
                     "strength": round(strength, 2),
                     "signal": "顶背离（价升量缩）",
-                    "description": f"价格较前高上涨{(recent_closes[last_peak]/max(recent_closes[prev_peak],1e-9)-1)*100:.1f}%，"
-                                   f"但成交量萎缩{(1-recent_volumes[last_peak]/max(recent_volumes[prev_peak],1))*100:.1f}%，"
-                                   f"警惕见顶信号",
+                    "description": f"价格较前高上涨{(recent_closes[last_peak] / max(recent_closes[prev_peak], 1e-9) - 1) * 100:.1f}%，"
+                    f"但成交量萎缩{(1 - recent_volumes[last_peak] / max(recent_volumes[prev_peak], 1)) * 100:.1f}%，"
+                    f"警惕见顶信号",
                 }
                 return result
 
@@ -5533,22 +5851,29 @@ def _detect_volume_price_divergence(
             vol_lower = recent_volumes[last_trough] < recent_volumes[prev_trough] * 0.8
 
             if price_lower and vol_lower:
-                strength = min(1.0, (recent_closes[prev_trough] - recent_closes[last_trough]) /
-                               recent_closes[prev_trough] / 0.05 * 0.5 +
-                               (1 - recent_volumes[last_trough] / max(recent_volumes[prev_trough], 1)) * 0.5)
+                strength = min(
+                    1.0,
+                    (recent_closes[prev_trough] - recent_closes[last_trough])
+                    / recent_closes[prev_trough]
+                    / 0.05
+                    * 0.5
+                    + (1 - recent_volumes[last_trough] / max(recent_volumes[prev_trough], 1)) * 0.5,
+                )
                 result = {
                     "type": "bullish_divergence",
                     "strength": round(strength, 2),
                     "signal": "底背离（价跌量缩）",
-                    "description": f"价格较前低下跌{(recent_closes[prev_trough]/max(recent_closes[last_trough],1e-9)-1)*100:.1f}%，"
-                                   f"但成交量萎缩{(1-recent_volumes[last_trough]/max(recent_volumes[prev_trough],1))*100:.1f}%，"
-                                   f"卖压衰竭，关注反弹信号",
+                    "description": f"价格较前低下跌{(recent_closes[prev_trough] / max(recent_closes[last_trough], 1e-9) - 1) * 100:.1f}%，"
+                    f"但成交量萎缩{(1 - recent_volumes[last_trough] / max(recent_volumes[prev_trough], 1)) * 100:.1f}%，"
+                    f"卖压衰竭，关注反弹信号",
                 }
                 return result
 
         # 量价齐升/齐降确认
         last_5_price_change = (recent_closes[-1] - recent_closes[-5]) / max(recent_closes[-5], 1e-9)
-        last_5_vol_change = (recent_volumes[-1] - recent_volumes[-5]) / max(recent_volumes[-5], 1e-9)
+        last_5_vol_change = (recent_volumes[-1] - recent_volumes[-5]) / max(
+            recent_volumes[-5], 1e-9
+        )
 
         if last_5_price_change > 0.02 and last_5_vol_change > 0.1:
             result = {
@@ -5626,20 +5951,20 @@ def _calc_fibonacci_retracement_level(
         if period_low < period_high:
             # 先跌后涨 → 计算反弹回撤位（买参考）
             range_start = period_low
-            current_position = (latest - range_start) / fib_range
+            _ = (latest - range_start) / fib_range
         else:
             # 先涨后跌 → 计算回调回撤位（卖参考）
             range_start = period_high
-            current_position = (range_start - latest) / fib_range
+            _ = (range_start - latest) / fib_range
 
         # 找最近的Fibonacci回撤位
         nearest_level = None
-        nearest_distance = float('inf')
+        nearest_distance = float("inf")
         nearest_ratio = 0.0
 
         for ratio in fib_ratios:
             level_price = range_start + fib_range * ratio
-            distance = abs(latest - level_price) / latest if latest > 0 else float('inf')
+            distance = abs(latest - level_price) / latest if latest > 0 else float("inf")
             if distance < nearest_distance:
                 nearest_distance = distance
                 nearest_level = f"fib_{ratio}"
@@ -5733,7 +6058,7 @@ def _detect_macd_zero_axis_cross(
         if end < lookback + 1:
             return result
 
-        recent_difs = difs[max(0, end - lookback):end + 1]
+        recent_difs = difs[max(0, end - lookback) : end + 1]
         if len(recent_difs) < 2:
             return result
 
@@ -5789,6 +6114,7 @@ def _detect_macd_zero_axis_cross(
 
 
 # ── V24 新增函数 ────────────────────────────────────────────────────────────────
+
 
 def _calc_bi_quality(
     bi: BI,
@@ -5863,7 +6189,12 @@ def _calc_bi_quality(
             factors["direction_consistency"] = 0.5
 
         # 综合评分（加权平均）
-        weights = {"bar_count": 0.25, "price_range": 0.35, "completion": 0.25, "direction_consistency": 0.15}
+        weights = {
+            "bar_count": 0.25,
+            "price_range": 0.35,
+            "completion": 0.25,
+            "direction_consistency": 0.15,
+        }
         quality_score = sum(factors.get(k, 0.5) * w for k, w in weights.items())
         quality_score = max(0.0, min(1.0, quality_score))
 
@@ -5949,9 +6280,13 @@ def _calc_zs_strength(
                 start_idx = max(0, start_idx)
                 end_idx = min(len(volumes) - 1, end_idx)
                 if end_idx > start_idx:
-                    zs_volume = sum(volumes[start_idx:end_idx + 1])
+                    zs_volume = sum(volumes[start_idx : end_idx + 1])
                     avg_volume = sum(volumes) / len(volumes) if volumes else 1
-                    volume_ratio = zs_volume / (avg_volume * (end_idx - start_idx + 1)) if avg_volume > 0 else 0.5
+                    volume_ratio = (
+                        zs_volume / (avg_volume * (end_idx - start_idx + 1))
+                        if avg_volume > 0
+                        else 0.5
+                    )
                     if volume_ratio >= 1.5:
                         factors.append(1.0)
                     elif volume_ratio >= 1.0:
@@ -6201,6 +6536,7 @@ def _calc_cross_validation(
 
 # ── V25 新增函数 ────────────────────────────────────────────────────────────────
 
+
 def _check_post_signal_confirmation(
     mmd: MMD,
     closes: list[float],
@@ -6313,7 +6649,7 @@ def _detect_momentum_decay(
         is_sell = "sell" in mmd.mmd_type.value
 
         recent_hist = hist[-lookback:]
-        old_hist = hist[-lookback*2:-lookback] if len(hist) >= lookback * 2 else hist[:lookback]
+        old_hist = hist[-lookback * 2 : -lookback] if len(hist) >= lookback * 2 else hist[:lookback]
         if not old_hist:
             old_hist = hist[-lookback:]
 
@@ -6611,7 +6947,7 @@ def _calc_signal_history_validation(
             return result
 
         is_buy = "buy" in mmd.mmd_type.value
-        signal_type = mmd.mmd_type.value
+        _ = mmd.mmd_type.value
 
         # 简化版历史验证：基于当前位置的技术特征匹配
         # 在实际生产中，这里可以连接历史数据库进行模式匹配
@@ -6620,20 +6956,28 @@ def _calc_signal_history_validation(
         # 计算近期波动率和趋势
         returns = []
         for i in range(1, len(recent_closes)):
-            ret = (recent_closes[i] - recent_closes[i-1]) / recent_closes[i-1]
+            ret = (recent_closes[i] - recent_closes[i - 1]) / recent_closes[i - 1]
             returns.append(ret)
 
         if not returns:
             return result
 
         # 统计近期涨跌分布
-        up_days = sum(1 for r in returns if r > 0)
-        down_days = sum(1 for r in returns if r < 0)
+        _ = sum(1 for r in returns if r > 0)
+        _ = sum(1 for r in returns if r < 0)
         total_days = len(returns)
 
         # 计算近期趋势方向
-        recent_trend = (recent_closes[-5] - recent_closes[-10]) / recent_closes[-10] if recent_closes[-10] > 0 else 0
-        earlier_trend = (recent_closes[-15] - recent_closes[-20]) / recent_closes[-20] if recent_closes[-20] > 0 else 0
+        recent_trend = (
+            (recent_closes[-5] - recent_closes[-10]) / recent_closes[-10]
+            if recent_closes[-10] > 0
+            else 0
+        )
+        _ = (
+            (recent_closes[-15] - recent_closes[-20]) / recent_closes[-20]
+            if recent_closes[-20] > 0
+            else 0
+        )
 
         # 基于历史数据的验证评分
         accuracy = 0.5  # 基准准确率
@@ -6751,7 +7095,7 @@ def _calc_dynamic_rr_optimization(
             # 止盈基于风险收益比
             risk = abs(latest - stop_loss)
             tp1_distance = risk * target_rrr * 0.7  # 第一止盈 70% 目标
-            tp2_distance = risk * target_rrr        # 第二止盈 100% 目标
+            tp2_distance = risk * target_rrr  # 第二止盈 100% 目标
 
             take_profit_1 = round(latest + tp1_distance, 2)
             take_profit_2 = round(latest + tp2_distance, 2)
@@ -6946,16 +7290,16 @@ def _calc_multi_level_confluence_verification(
             return "flat"
 
         n = len(closes)
-        short_trend = _calc_trend_segment(closes, n - 20, n)       # 短期 20日
-        mid_trend = _calc_trend_segment(closes, n - 40, n - 20)     # 中期 20-40日
-        long_trend = _calc_trend_segment(closes, n - 60, n - 40)    # 长期 40-60日
+        short_trend = _calc_trend_segment(closes, n - 20, n)  # 短期 20日
+        mid_trend = _calc_trend_segment(closes, n - 40, n - 20)  # 中期 20-40日
+        long_trend = _calc_trend_segment(closes, n - 60, n - 40)  # 长期 40-60日
 
         # 计算趋势一致性评分
         trend_scores = {"up": 1.0, "flat": 0.5, "down": 0.0}
         overall_score = (
-            trend_scores.get(short_trend, 0.5) * 0.3 +
-            trend_scores.get(mid_trend, 0.5) * 0.4 +
-            trend_scores.get(long_trend, 0.5) * 0.3
+            trend_scores.get(short_trend, 0.5) * 0.3
+            + trend_scores.get(mid_trend, 0.5) * 0.4
+            + trend_scores.get(long_trend, 0.5) * 0.3
         )
 
         # 判断趋势对齐状态
@@ -7116,10 +7460,10 @@ def _calc_structural_position(
         # 中枢位置加成（如果有中枢数据）
         if zss and len(zss) > 0:
             latest_zs = zss[-1]
-            if hasattr(latest_zs, 'high') and hasattr(latest_zs, 'low'):
+            if hasattr(latest_zs, "high") and hasattr(latest_zs, "low"):
                 zs_high = latest_zs.high
                 zs_low = latest_zs.low
-                zs_range = zs_high - zs_low if zs_high > zs_low else recent_range * 0.5
+                _ = zs_high - zs_low if zs_high > zs_low else recent_range * 0.5
 
                 # 判断信号相对于中枢的位置
                 if is_buy:
@@ -7206,13 +7550,13 @@ def _calc_stock_signal_profile(
             return result
 
         is_buy = "buy" in mmd.mmd_type.value
-        mmd_type = mmd.mmd_type.value
+        _ = mmd.mmd_type.value
 
         # 分析价格模式来推断信号成功率
         recent_closes = closes[-50:]
         returns = []
         for i in range(1, len(recent_closes)):
-            ret = (recent_closes[i] - recent_closes[i-1]) / recent_closes[i-1]
+            ret = (recent_closes[i] - recent_closes[i - 1]) / recent_closes[i - 1]
             returns.append(ret)
 
         if not returns:
@@ -7261,19 +7605,19 @@ def _calc_stock_signal_profile(
             # 计算最近信号的时间间隔
             signal_indices = []
             for m in all_mmds[-10:]:  # 最近10个信号
-                if m.bi and hasattr(m.bi, 'end') and hasattr(m.bi.end, 'k'):
+                if m.bi and hasattr(m.bi, "end") and hasattr(m.bi.end, "k"):
                     signal_indices.append(m.bi.end.k.k_index)
 
             if len(signal_indices) >= 2:
                 intervals = []
                 for i in range(1, len(signal_indices)):
-                    intervals.append(signal_indices[i] - signal_indices[i-1])
+                    intervals.append(signal_indices[i] - signal_indices[i - 1])
                 avg_interval = np.mean(intervals) if intervals else 0
 
                 if avg_interval < 5:
                     sig_frequency = "high"  # 信号频繁
                 elif avg_interval > 20:
-                    sig_frequency = "low"   # 信号稀少
+                    sig_frequency = "low"  # 信号稀少
                 else:
                     sig_frequency = "normal"
             else:
@@ -7364,7 +7708,7 @@ def _calc_boll_squeeze(
         end_idx = min(idx, len(closes) - 1)
         lookback = min(period * 3, end_idx + 1)
         start_idx = end_idx - lookback + 1
-        window = closes[start_idx:end_idx + 1]
+        window = closes[start_idx : end_idx + 1]
 
         if len(window) < period:
             return result
@@ -7372,7 +7716,7 @@ def _calc_boll_squeeze(
         # 计算各期BOLL带宽
         widths = []
         for i in range(period, len(window) + 1):
-            segment = window[i - period:i]
+            segment = window[i - period : i]
             mid = sum(segment) / period
             std = (sum((x - mid) ** 2 for x in segment) / period) ** 0.5
             upper = mid + 2 * std
@@ -7451,8 +7795,8 @@ def _calc_breakout_vol_price(
         # 找突破笔（break_bi）和进入中枢的第一笔
         break_range = 30
         start_idx = max(0, bi_idx - break_range)
-        pre_closes = closes[start_idx:bi_idx + 1]
-        pre_volumes = volumes[start_idx:bi_idx + 1] if volumes is not None else None
+        pre_closes = closes[start_idx : bi_idx + 1]
+        pre_volumes = volumes[start_idx : bi_idx + 1] if volumes is not None else None
 
         if len(pre_closes) < 10:
             return result
@@ -7460,17 +7804,21 @@ def _calc_breakout_vol_price(
         # 计算突破前后的价格变化
         if is_3buy:
             # 3买：找突破前中枢上沿附近的价格，对比突破后价格
-            price_change = (closes[bi_idx] - pre_closes[0]) / pre_closes[0] if pre_closes[0] > 0 else 0
+            price_change = (
+                (closes[bi_idx] - pre_closes[0]) / pre_closes[0] if pre_closes[0] > 0 else 0
+            )
         else:
-            price_change = (pre_closes[0] - closes[bi_idx]) / pre_closes[0] if pre_closes[0] > 0 else 0
+            price_change = (
+                (pre_closes[0] - closes[bi_idx]) / pre_closes[0] if pre_closes[0] > 0 else 0
+            )
 
         # 计算突破笔的力度（幅度）
         if highs is not None and lows is not None:
-            pre_highs = highs[start_idx:bi_idx + 1]
-            pre_lows = lows[start_idx:bi_idx + 1]
-            breakout_range_px = max(pre_highs) - min(pre_lows) if pre_highs and pre_lows else 0
+            pre_highs = highs[start_idx : bi_idx + 1]
+            pre_lows = lows[start_idx : bi_idx + 1]
+            _ = max(pre_highs) - min(pre_lows) if pre_highs and pre_lows else 0
         else:
-            breakout_range_px = abs(pre_closes[-1] - pre_closes[0]) if len(pre_closes) > 1 else 0
+            _ = abs(pre_closes[-1] - pre_closes[0]) if len(pre_closes) > 1 else 0
 
         # 成交量分析
         vol_ratio = 0.0
@@ -7488,10 +7836,18 @@ def _calc_breakout_vol_price(
 
         if is_3buy:
             confirmed = volume_ok and price_ok
-            strength = "strong" if (volume_ok and price_ok and vol_ratio > 1.5) else ("moderate" if (volume_ok or price_ok) else "weak")
+            strength = (
+                "strong"
+                if (volume_ok and price_ok and vol_ratio > 1.5)
+                else ("moderate" if (volume_ok or price_ok) else "weak")
+            )
         else:
             confirmed = volume_ok and price_ok
-            strength = "strong" if (volume_ok and price_ok and vol_ratio > 1.5) else ("moderate" if (volume_ok or price_ok) else "weak")
+            strength = (
+                "strong"
+                if (volume_ok and price_ok and vol_ratio > 1.5)
+                else ("moderate" if (volume_ok or price_ok) else "weak")
+            )
 
         result["confirmed"] = confirmed
         result["breakout_strength"] = strength
@@ -7684,7 +8040,7 @@ def _calc_trend_continuity_confirmation(
 
         if future_available:
             # 查看信号后N根K线的表现
-            future_closes = closes[bi_end_idx + 1: bi_end_idx + 1 + lookback_bars]
+            future_closes = closes[bi_end_idx + 1 : bi_end_idx + 1 + lookback_bars]
             if not future_closes:
                 return result
 
@@ -7707,8 +8063,15 @@ def _calc_trend_continuity_confirmation(
             if not prev_closes:
                 return result
 
-            short_change = (prev_closes[-1] - prev_closes[0]) / prev_closes[0] if prev_closes[0] > 0 else 0
-            mid_change = (prev_closes[-1] - prev_closes[len(prev_closes)//2]) / prev_closes[len(prev_closes)//2] if len(prev_closes) > 1 else 0
+            short_change = (
+                (prev_closes[-1] - prev_closes[0]) / prev_closes[0] if prev_closes[0] > 0 else 0
+            )
+            mid_change = (
+                (prev_closes[-1] - prev_closes[len(prev_closes) // 2])
+                / prev_closes[len(prev_closes) // 2]
+                if len(prev_closes) > 1
+                else 0
+            )
 
             if is_buy:
                 if short_change < -0.02 and mid_change < 0:
@@ -7751,7 +8114,7 @@ def _calc_consolidation_divergence_warning(
     volumes: list[float] | None,
     highs: list[float] | None,
     lows: list[float] | None,
-    zss: list["ZS"],
+    zss: list[ZS],
     lookback: int = 40,
 ) -> dict[str, Any]:
     """盘整区背离预警（V29 条件61）。
@@ -7780,7 +8143,8 @@ def _calc_consolidation_divergence_warning(
 
         try:
             from easy_tdx.chanlun.macd import calc_macd
-            macd_data = calc_macd(closes[-lookback * 2:])
+
+            macd_data = calc_macd(closes[-lookback * 2 :])
             dif_series = macd_data.get("dif", [])
 
             if len(dif_series) < 20:
@@ -7788,7 +8152,7 @@ def _calc_consolidation_divergence_warning(
 
             # 检测顶背离
             if high_idx > 10 and high_idx < n - 5:
-                earlier_subset = closes[-lookback:-lookback//2]
+                earlier_subset = closes[-lookback : -lookback // 2]
                 if len(earlier_subset) > 10:
                     prev_high = max(earlier_subset)
                     prev_local_idx = -earlier_subset[::-1].index(prev_high) - 1
@@ -7808,7 +8172,7 @@ def _calc_consolidation_divergence_warning(
 
             # 检测底背离
             if low_idx > 10 and low_idx < n - 5:
-                earlier_subset = closes[-lookback:-lookback//2]
+                earlier_subset = closes[-lookback : -lookback // 2]
                 if len(earlier_subset) > 10:
                     prev_low = min(earlier_subset)
                     prev_local_idx = -earlier_subset[::-1].index(prev_low) - 1
@@ -7862,9 +8226,19 @@ def _calc_kline_pattern_confirmation(
         is_buy = "buy" in mmd.mmd_type.value
         is_sell = "sell" in mmd.mmd_type.value
 
-        actual_opens = opens if opens is not None else [c * (1 + (0.003 if i % 2 else -0.003)) for i, c in enumerate(closes)]
-        actual_highs = highs if highs is not None else [max(c, o) * 1.002 for c, o in zip(closes, actual_opens)]
-        actual_lows = lows if lows is not None else [min(c, o) * 0.998 for c, o in zip(closes, actual_opens)]
+        actual_opens = (
+            opens
+            if opens is not None
+            else [c * (1 + (0.003 if i % 2 else -0.003)) for i, c in enumerate(closes)]
+        )
+        actual_highs = (
+            highs
+            if highs is not None
+            else [max(c, o) * 1.002 for c, o in zip(closes, actual_opens)]
+        )
+        actual_lows = (
+            lows if lows is not None else [min(c, o) * 0.998 for c, o in zip(closes, actual_opens)]
+        )
 
         bullish_bars = 0
         bearish_bars = 0
@@ -7877,10 +8251,10 @@ def _calc_kline_pattern_confirmation(
             c = closes[idx]
             o = actual_opens[idx]
             h = actual_highs[idx]
-            l = actual_lows[idx]
+            low = actual_lows[idx]
 
-            range_val = h - l
-            lower_shadow = min(c, o) - l
+            range_val = h - low
+            lower_shadow = min(c, o) - low
             upper_shadow = h - max(c, o)
 
             if c > o:
@@ -7938,7 +8312,7 @@ def _calc_zs_breakout_confirmation(
     mmd: MMD,
     closes: list[float],
     volumes: list[float] | None,
-    zss: list["ZS"],
+    zss: list[ZS],
 ) -> dict[str, Any]:
     """中枢突破方向确认（V30 条件63）。
 
@@ -7977,7 +8351,11 @@ def _calc_zs_breakout_confirmation(
         if is_buy and latest_close > last_zs.zg:
             result["breakout_direction"] = "up"
             if len(actual_volumes) >= 20:
-                avg_vol = sum(actual_volumes[-21:-1]) / 20 if len(actual_volumes) >= 21 else sum(actual_volumes[-20:]) / 20
+                avg_vol = (
+                    sum(actual_volumes[-21:-1]) / 20
+                    if len(actual_volumes) >= 21
+                    else sum(actual_volumes[-20:]) / 20
+                )
                 recent_vol = actual_volumes[-1] if actual_volumes else 0
                 if avg_vol > 0 and recent_vol > avg_vol * 1.2:
                     result["volume_confirmed"] = True
@@ -7986,7 +8364,11 @@ def _calc_zs_breakout_confirmation(
         elif is_sell and latest_close < last_zs.zd:
             result["breakout_direction"] = "down"
             if len(actual_volumes) >= 20:
-                avg_vol = sum(actual_volumes[-21:-1]) / 20 if len(actual_volumes) >= 21 else sum(actual_volumes[-20:]) / 20
+                avg_vol = (
+                    sum(actual_volumes[-21:-1]) / 20
+                    if len(actual_volumes) >= 21
+                    else sum(actual_volumes[-20:]) / 20
+                )
                 recent_vol = actual_volumes[-1] if actual_volumes else 0
                 if avg_vol > 0 and recent_vol > avg_vol * 1.2:
                     result["volume_confirmed"] = True
@@ -8088,6 +8470,7 @@ def _calc_recent_range_stop_loss(
 
 # ── V31 新增：条件65-67 ────────────────────────────────────────────────────────
 
+
 def _calc_ma_alignment_confirmation(
     mmd: MMD,
     closes: list[float],
@@ -8109,14 +8492,14 @@ def _calc_ma_alignment_confirmation(
         "confidence_adjust": 0.0,
     }
     try:
-        if len(closes) < 20 or not hasattr(mmd, 'bi') or mmd.bi is None:
+        if len(closes) < 20 or not hasattr(mmd, "bi") or mmd.bi is None:
             return result
 
         n = len(closes)
         # 计算MA5/MA10/MA20（使用信号位置附近的数据）
-        ma5 = sum(closes[n-5:]) / 5
-        ma10 = sum(closes[n-10:]) / 10
-        ma20 = sum(closes[n-20:]) / 20
+        ma5 = sum(closes[n - 5 :]) / 5
+        ma10 = sum(closes[n - 10 :]) / 10
+        ma20 = sum(closes[n - 20 :]) / 20
 
         if ma5 <= 0 or ma10 <= 0 or ma20 <= 0:
             return result
@@ -8305,7 +8688,7 @@ def _calc_signal_health_dashboard(
             max_score += 10
 
         # 维度5：信号新鲜度（基于信号后确认）
-        if hasattr(mmd, '_post_signal_confirm') and mmd._post_signal_confirm:
+        if hasattr(mmd, "_post_signal_confirm") and mmd._post_signal_confirm:
             confirmed = mmd._post_signal_confirm.get("confirmed", False)
             dimensions["signal_freshness"] = "confirmed" if confirmed else "pending"
             if confirmed:
@@ -8316,7 +8699,7 @@ def _calc_signal_health_dashboard(
             max_score += 20
 
         # 维度6：中枢强度（如果有关联中枢）
-        if hasattr(mmd, '_zs_strength') and mmd._zs_strength:
+        if hasattr(mmd, "_zs_strength") and mmd._zs_strength:
             zs_level = mmd._zs_strength.get("strength_level", "unknown")
             dimensions["zs_strength"] = zs_level
             if zs_level == "strong":
@@ -8327,7 +8710,7 @@ def _calc_signal_health_dashboard(
             max_score += 10
 
         # 维度7：背离状态
-        if hasattr(mmd, '_enhanced_divergence') and mmd._enhanced_divergence:
+        if hasattr(mmd, "_enhanced_divergence") and mmd._enhanced_divergence:
             div_type = mmd._enhanced_divergence.get("divergence_type", "none")
             dimensions["divergence"] = div_type
             if div_type == "bullish" and is_buy:
@@ -8386,6 +8769,7 @@ def _calc_signal_health_dashboard(
 
 # ── V32 新增：条件68-70 ────────────────────────────────────────────────────────
 
+
 def _calc_volume_price_divergence_enhanced(
     mmd: MMD,
     closes: list[float],
@@ -8413,13 +8797,15 @@ def _calc_volume_price_divergence_enhanced(
         if volumes is None or len(volumes) < lookback:
             return result
 
-        n = len(closes)
+        _ = len(closes)
         is_buy = "buy" in mmd.mmd_type.value
         is_sell = "sell" in mmd.mmd_type.value
 
         # 价格趋势：最近lookback根K线
         recent_closes = closes[-lookback:]
-        older_closes = closes[-lookback * 2:-lookback] if len(closes) >= lookback * 2 else closes[:lookback]
+        older_closes = (
+            closes[-lookback * 2 : -lookback] if len(closes) >= lookback * 2 else closes[:lookback]
+        )
 
         if not older_closes:
             return result
@@ -8435,14 +8821,22 @@ def _calc_volume_price_divergence_enhanced(
 
         # 成交量趋势
         vol_recent = sum(volumes[-lookback:]) / lookback
-        vol_older = sum(volumes[-lookback * 2:-lookback]) / lookback if len(volumes) >= lookback * 2 else vol_recent
+        vol_older = (
+            sum(volumes[-lookback * 2 : -lookback]) / lookback
+            if len(volumes) >= lookback * 2
+            else vol_recent
+        )
         if vol_older > 0:
             vol_ratio = vol_recent / vol_older
         else:
             vol_ratio = 1.0
 
-        result["volume_trend"] = "increasing" if vol_ratio > 1.2 else ("decreasing" if vol_ratio < 0.8 else "normal")
-        result["price_trend"] = "new_high" if price_new_high else ("new_low" if price_new_low else "normal")
+        result["volume_trend"] = (
+            "increasing" if vol_ratio > 1.2 else ("decreasing" if vol_ratio < 0.8 else "normal")
+        )
+        result["price_trend"] = (
+            "new_high" if price_new_high else ("new_low" if price_new_low else "normal")
+        )
 
         # 量价背离检测
         if is_buy and price_new_high and vol_ratio < 0.8:
@@ -8504,7 +8898,7 @@ def _calc_signal_priority_ranking(
             score += grade_score
             score += other_mmd.confidence * 25
             if other_mmd.bi:
-                if hasattr(other_mmd.bi.end, 'k'):
+                if hasattr(other_mmd.bi.end, "k"):
                     bi_idx = other_mmd.bi.end.k.k_index
                 else:
                     bi_idx = other_mmd.bi.index
@@ -8576,11 +8970,13 @@ def _calc_sr_breakout_confirmation(
         swing_highs: list[tuple[int, float]] = []
         swing_lows: list[tuple[int, float]] = []
         for i in range(5, n - 5):
-            if all(actual_highs[i] >= actual_highs[i - k] for k in range(1, 6)) and \
-               all(actual_highs[i] >= actual_highs[i + k] for k in range(1, 6)):
+            if all(actual_highs[i] >= actual_highs[i - k] for k in range(1, 6)) and all(
+                actual_highs[i] >= actual_highs[i + k] for k in range(1, 6)
+            ):
                 swing_highs.append((i, actual_highs[i]))
-            if all(actual_lows[i] <= actual_lows[i - k] for k in range(1, 6)) and \
-               all(actual_lows[i] <= actual_lows[i + k] for k in range(1, 6)):
+            if all(actual_lows[i] <= actual_lows[i - k] for k in range(1, 6)) and all(
+                actual_lows[i] <= actual_lows[i + k] for k in range(1, 6)
+            ):
                 swing_lows.append((i, actual_lows[i]))
 
         if not swing_highs and not swing_lows:
@@ -8599,7 +8995,9 @@ def _calc_sr_breakout_confirmation(
                     result["confidence_adjust"] = 0.02
                 else:
                     result["sr_type"] = "approaching_sl"
-                    result["distance_pct"] = round((sl_price - latest_close) / latest_close * 100, 2)
+                    result["distance_pct"] = round(
+                        (sl_price - latest_close) / latest_close * 100, 2
+                    )
                     result["confidence_adjust"] = -0.01
         elif is_sell and swing_highs:
             nearest_sh = min(swing_highs, key=lambda x: abs(x[0] - (n - 1)))
@@ -8613,7 +9011,9 @@ def _calc_sr_breakout_confirmation(
                     result["confidence_adjust"] = 0.02
                 else:
                     result["sr_type"] = "approaching_sh"
-                    result["distance_pct"] = round((sh_price - latest_close) / latest_close * 100, 2)
+                    result["distance_pct"] = round(
+                        (sh_price - latest_close) / latest_close * 100, 2
+                    )
                     result["confidence_adjust"] = -0.01
         return result
     except Exception:
@@ -8621,6 +9021,7 @@ def _calc_sr_breakout_confirmation(
 
 
 # ── V33 新增：条件71-73 ────────────────────────────────────────────────────────
+
 
 def _calc_obv_trend_confirmation(
     mmd: MMD,
@@ -8654,7 +9055,11 @@ def _calc_obv_trend_confirmation(
 
         # OBV趋势判断：比较近期OBV与前期OBV
         recent_obv = sum(obv_values[-lookback:]) / lookback
-        prev_obv = sum(obv_values[-lookback*2:-lookback]) / lookback if len(obv_values) >= lookback * 2 else recent_obv
+        prev_obv = (
+            sum(obv_values[-lookback * 2 : -lookback]) / lookback
+            if len(obv_values) >= lookback * 2
+            else recent_obv
+        )
         obv_ma = MA(obv_values, lookback)[-1] if len(obv_values) >= lookback else recent_obv
 
         # OBV趋势
@@ -8737,10 +9142,10 @@ def _calc_macd_histogram_area(
 
         # 计算前期面积（lookback~2*lookback根K线前，不足则用较早部分）
         if n >= lookback * 2:
-            prev_hist = hist[-lookback*2:-lookback]
+            prev_hist = hist[-lookback * 2 : -lookback]
         else:
             # 数据不足时，用前半部分作为前期参考
-            prev_hist = hist[:max(1, n // 2)]
+            prev_hist = hist[: max(1, n // 2)]
         prev_area = sum(abs(h) for h in prev_hist)
 
         if prev_area <= 0:
@@ -8892,13 +9297,17 @@ def _calc_rsi_momentum_confirmation(
         # RSI背离检测（简易版：价格新高但RSI未新高）
         if len(closes) >= lookback * 3:
             price_high = max(closes[-lookback:])
-            price_high_prev = max(closes[-lookback*2:-lookback]) if len(closes) >= lookback * 2 else price_high
+            price_high_prev = (
+                max(closes[-lookback * 2 : -lookback])
+                if len(closes) >= lookback * 2
+                else price_high
+            )
             rsi_high = rsi_current
             # 估算前期RSI高点
             prev_rsi_vals = []
-            for i in range(len(closes)-lookback*2, len(closes)-lookback):
+            for i in range(len(closes) - lookback * 2, len(closes) - lookback):
                 if i >= lookback:
-                    prev_rsi_vals.append(_calc_rsi(closes[:i+1], lookback))
+                    prev_rsi_vals.append(_calc_rsi(closes[: i + 1], lookback))
             rsi_high_prev = max(prev_rsi_vals) if prev_rsi_vals else rsi_current
 
             if price_high > price_high_prev * 1.01 and rsi_high < rsi_high_prev:
@@ -8918,6 +9327,7 @@ def _calc_rsi_momentum_confirmation(
 
 
 # ── V34 新增：条件74-76 ────────────────────────────────────────────────────────
+
 
 def _calc_trend_momentum_continuation(
     mmd: MMD,
@@ -8948,11 +9358,19 @@ def _calc_trend_momentum_continuation(
         if len(closes) < lookback * 2 or not mmd.bi:
             return result
 
-        n = len(closes)
+        _ = len(closes)
         # 计算不同时间窗口的价格变化率
         change_5d = (closes[-1] - closes[-6]) / closes[-6] if closes[-6] > 0 else 0.0
-        change_10d = (closes[-1] - closes[-11]) / closes[-11] if len(closes) >= 11 and closes[-11] > 0 else 0.0
-        change_20d = (closes[-1] - closes[-21]) / closes[-21] if len(closes) >= 21 and closes[-21] > 0 else 0.0
+        change_10d = (
+            (closes[-1] - closes[-11]) / closes[-11]
+            if len(closes) >= 11 and closes[-11] > 0
+            else 0.0
+        )
+        change_20d = (
+            (closes[-1] - closes[-21]) / closes[-21]
+            if len(closes) >= 21 and closes[-21] > 0
+            else 0.0
+        )
 
         result["price_change_5d"] = round(change_5d * 100, 2)
         result["price_change_10d"] = round(change_10d * 100, 2)
@@ -9080,7 +9498,15 @@ def _calc_multi_indicator_resonance(
         if vp_div_result and vp_div_result.get("divergence_detected"):
             is_buy = "buy" in mmd.mmd_type.value
             dt = vp_div_result.get("divergence_type", "none")
-            votes["vol_price"] = "bullish" if dt == "bullish" else "bearish" if is_buy else "bearish" if dt == "bearish" else "bullish"
+            votes["vol_price"] = (
+                "bullish"
+                if dt == "bullish"
+                else "bearish"
+                if is_buy
+                else "bearish"
+                if dt == "bearish"
+                else "bullish"
+            )
         elif vp_div_result:
             votes["vol_price"] = "neutral"
 
@@ -9121,7 +9547,11 @@ def _calc_multi_indicator_resonance(
         result["resonance_level"] = resonance_level
 
         is_buy = "buy" in mmd.mmd_type.value
-        dominant = "bullish" if bullish_count > bearish_count else ("bearish" if bearish_count > bullish_count else "neutral")
+        dominant = (
+            "bullish"
+            if bullish_count > bearish_count
+            else ("bearish" if bearish_count > bullish_count else "neutral")
+        )
 
         if resonance_level == "strong" and dominant != "neutral":
             result["confidence_adjust"] = 0.03
@@ -9158,10 +9588,12 @@ def _calc_volatility_adaptive_threshold(
             return result
 
         atr = _calc_atr(closes, highs, lows, len(closes) - 1, period=14)
-        latest_close = closes[-1]
+        _ = closes[-1]
         result["atr_value"] = round(atr, 4)
 
-        recent_highs = highs[-lookback:] if highs is not None else [max(closes[-lookback:])] * lookback
+        recent_highs = (
+            highs[-lookback:] if highs is not None else [max(closes[-lookback:])] * lookback
+        )
         recent_lows = lows[-lookback:] if lows is not None else [min(closes[-lookback:])] * lookback
         price_range = max(recent_highs) - min(recent_lows)
         avg_price = sum(closes[-lookback:]) / lookback
@@ -9192,6 +9624,7 @@ def _calc_volatility_adaptive_threshold(
 
 # ── V35 新增：條件77-82 ────────────────────────────────────────────────────────
 
+
 def _calc_market_context_filter(
     closes: list[float],
     lookback: int = 60,
@@ -9212,9 +9645,13 @@ def _calc_market_context_filter(
         if len(closes) < lookback:
             return result
 
-        n = len(closes)
+        _ = len(closes)
         change_30d = (closes[-1] - closes[-31]) / closes[-31] if closes[-31] > 0 else 0.0
-        change_60d = (closes[-1] - closes[-61]) / closes[-61] if len(closes) >= 61 and closes[-61] > 0 else change_30d
+        change_60d = (
+            (closes[-1] - closes[-61]) / closes[-61]
+            if len(closes) >= 61 and closes[-61] > 0
+            else change_30d
+        )
 
         result["price_change_30d"] = round(change_30d * 100, 2)
         result["price_change_60d"] = round(change_60d * 100, 2)
@@ -9543,9 +9980,17 @@ def _calc_multi_dim_divergence(
         pv_div = False
         if volumes is not None and len(volumes) >= lookback:
             price_recent = closes[-lookback:]
-            price_older = closes[-lookback * 2:-lookback] if len(closes) >= lookback * 2 else closes[:lookback]
+            price_older = (
+                closes[-lookback * 2 : -lookback]
+                if len(closes) >= lookback * 2
+                else closes[:lookback]
+            )
             vol_recent = volumes[-lookback:]
-            vol_older = volumes[-lookback * 2:-lookback] if len(volumes) >= lookback * 2 else volumes[:lookback]
+            vol_older = (
+                volumes[-lookback * 2 : -lookback]
+                if len(volumes) >= lookback * 2
+                else volumes[:lookback]
+            )
 
             if price_older and vol_older:
                 price_avg_recent = sum(price_recent) / len(price_recent)
@@ -9554,14 +9999,26 @@ def _calc_multi_dim_divergence(
                 vol_avg_older = sum(vol_older) / len(vol_older)
 
                 if is_buy:
-                    if price_avg_recent < price_avg_older * 0.98 and vol_avg_recent > vol_avg_older * 1.2:
+                    if (
+                        price_avg_recent < price_avg_older * 0.98
+                        and vol_avg_recent > vol_avg_older * 1.2
+                    ):
                         pv_div = True
-                    elif price_avg_recent > price_avg_older * 1.02 and vol_avg_recent < vol_avg_older * 0.8:
+                    elif (
+                        price_avg_recent > price_avg_older * 1.02
+                        and vol_avg_recent < vol_avg_older * 0.8
+                    ):
                         pv_div = False
                 else:
-                    if price_avg_recent > price_avg_older * 1.02 and vol_avg_recent > vol_avg_older * 1.2:
+                    if (
+                        price_avg_recent > price_avg_older * 1.02
+                        and vol_avg_recent > vol_avg_older * 1.2
+                    ):
                         pv_div = True
-                    elif price_avg_recent < price_avg_older * 0.98 and vol_avg_recent < vol_avg_older * 0.8:
+                    elif (
+                        price_avg_recent < price_avg_older * 0.98
+                        and vol_avg_recent < vol_avg_older * 0.8
+                    ):
                         pv_div = False
 
         result["price_volume_div"] = pv_div
@@ -9571,23 +10028,35 @@ def _calc_multi_dim_divergence(
         hist = macd_data.get("histogram", []) if macd_data else []
         if len(hist) >= lookback * 2:
             hist_recent = hist[-lookback:]
-            hist_older = hist[-lookback * 2:-lookback]
+            hist_older = hist[-lookback * 2 : -lookback]
 
             hist_avg_recent = sum(abs(h) for h in hist_recent) / len(hist_recent)
             hist_avg_older = sum(abs(h) for h in hist_older) / len(hist_older)
 
             price_avg_recent = sum(closes[-lookback:]) / lookback
-            price_avg_older = sum(closes[-lookback * 2:-lookback]) / lookback
+            price_avg_older = sum(closes[-lookback * 2 : -lookback]) / lookback
 
             if is_buy:
-                if price_avg_recent < price_avg_older * 0.98 and hist_avg_recent < hist_avg_older * 0.8:
+                if (
+                    price_avg_recent < price_avg_older * 0.98
+                    and hist_avg_recent < hist_avg_older * 0.8
+                ):
                     macd_div = True
-                elif price_avg_recent > price_avg_older * 1.02 and hist_avg_recent > hist_avg_older * 1.2:
+                elif (
+                    price_avg_recent > price_avg_older * 1.02
+                    and hist_avg_recent > hist_avg_older * 1.2
+                ):
                     macd_div = False
             else:
-                if price_avg_recent > price_avg_older * 1.02 and hist_avg_recent < hist_avg_older * 0.8:
+                if (
+                    price_avg_recent > price_avg_older * 1.02
+                    and hist_avg_recent < hist_avg_older * 0.8
+                ):
                     macd_div = True
-                elif price_avg_recent < price_avg_older * 0.98 and hist_avg_recent > hist_avg_older * 1.2:
+                elif (
+                    price_avg_recent < price_avg_older * 0.98
+                    and hist_avg_recent > hist_avg_older * 1.2
+                ):
                     macd_div = False
 
         result["price_macd_div"] = macd_div
@@ -9608,6 +10077,7 @@ def _calc_multi_dim_divergence(
 # ─────────────────────────────────────────────────────────────────────────────
 # V36 增强功能（条件83-88）
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _calc_execution_window(
     mmd: MMD,
@@ -9633,7 +10103,7 @@ def _calc_execution_window(
             return result
 
         is_buy = "buy" in mmd.mmd_type.value
-        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+        _ = volatility if volatility is not None else _calc_atr_volatility(closes)
 
         # 计算信号形成至今的K线根数
         bi_index = mmd.bi.index if mmd.bi.index is not None else len(closes)
@@ -9696,11 +10166,19 @@ def _calc_tf_consistency(
         # 短期趋势：MA5 vs MA20
         ma5_short = sum(closes[-5:]) / 5
         ma20_short = sum(closes[-20:]) / 20
-        short_trend = "up" if ma5_short > ma20_short * 1.02 else ("down" if ma5_short < ma20_short * 0.98 else "neutral")
+        short_trend = (
+            "up"
+            if ma5_short > ma20_short * 1.02
+            else ("down" if ma5_short < ma20_short * 0.98 else "neutral")
+        )
 
         # 中期趋势：MA20 vs MA60
         ma60 = sum(closes[-60:]) / 60
-        mid_trend = "up" if ma20_short > ma60 * 1.02 else ("down" if ma20_short < ma60 * 0.98 else "neutral")
+        mid_trend = (
+            "up"
+            if ma20_short > ma60 * 1.02
+            else ("down" if ma20_short < ma60 * 0.98 else "neutral")
+        )
 
         result["short_term_trend"] = short_trend
         result["mid_term_trend"] = mid_trend
@@ -9782,7 +10260,7 @@ def _calc_risk_adjusted_return(
             hist_returns.append(ret)
 
         max_dd = min(hist_returns) if hist_returns else -0.05
-        avg_return = sum(hist_returns) / len(hist_returns) if hist_returns else 0.001
+        _ = sum(hist_returns) / len(hist_returns) if hist_returns else 0.001
 
         # 风险调整后收益 = 预期收益 / 最大回撤
         if is_buy:
@@ -9792,7 +10270,9 @@ def _calc_risk_adjusted_return(
             expected_down = abs(max_dd) * 1.5
             sharpe_like = (expected_down / abs(max_dd)) if abs(max_dd) > 0.001 else 1.0
 
-        result["expected_return_pct"] = round(expected_up * 100, 2) if is_buy else round(-expected_down * 100, 2)
+        result["expected_return_pct"] = (
+            round(expected_up * 100, 2) if is_buy else round(-expected_down * 100, 2)
+        )
         result["risk_adjusted_return"] = round(sharpe_like, 4)
         result["max_drawdown_est"] = round(abs(max_dd) * 100, 2)
         result["volatility_adj"] = round(vol, 4)
@@ -9824,8 +10304,8 @@ def _calc_urgency_score(
         if not mmd.bi or len(closes) < 20:
             return result
 
-        is_buy = "buy" in mmd.mmd_type.value
-        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+        _ = "buy" in mmd.mmd_type.value
+        _ = volatility if volatility is not None else _calc_atr_volatility(closes)
 
         bi_index = mmd.bi.index if mmd.bi.index is not None else len(closes)
         bars_since = len(closes) - bi_index - 1
@@ -9895,7 +10375,7 @@ def _calc_market_composite(
 
         # 趋势评分：基于MA斜率
         ma10 = sum(closes[-10:]) / 10
-        ma30 = sum(closes[-30:]) / 30
+        _ = sum(closes[-30:]) / 30
         ma60 = sum(closes[-60:]) / 60
         trend_score = (ma10 - ma60) / ma60 if ma60 > 0 else 0
         trend_score = max(-1.0, min(1.0, trend_score * 20))  # 归一化到[-1,1]
@@ -9903,7 +10383,9 @@ def _calc_market_composite(
         result["trend_score"] = round(trend_score_norm, 4)
 
         # 波动率评分
-        returns = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(-30, 0) if closes[i - 1] > 0]
+        returns = [
+            (closes[i] - closes[i - 1]) / closes[i - 1] for i in range(-30, 0) if closes[i - 1] > 0
+        ]
         vol_std = float(np.std(returns)) if returns else 0.02
         vol_score_norm = max(0.0, min(1.0, 1.0 - vol_std * 50))  # 低波动=高评分
         result["vol_score"] = round(vol_score_norm, 4)
@@ -9924,11 +10406,18 @@ def _calc_market_composite(
             if len(hist) >= 10:
                 hist_recent = sum(hist[-5:]) / 5
                 hist_avg = sum(abs(h) for h in hist[-20:]) / 20 if hist[-20:] else 1
-                macd_score_norm = max(0.0, min(1.0, 0.5 + hist_recent / (hist_avg * 2 + 0.001) * 0.3))
+                macd_score_norm = max(
+                    0.0, min(1.0, 0.5 + hist_recent / (hist_avg * 2 + 0.001) * 0.3)
+                )
         result["macd_score"] = round(macd_score_norm, 4)
 
         # 综合评分
-        composite = (trend_score_norm * 0.3 + vol_score_norm * 0.2 + vol_score_norm * 0.2 + macd_score_norm * 0.3)
+        composite = (
+            trend_score_norm * 0.3
+            + vol_score_norm * 0.2
+            + vol_score_norm * 0.2
+            + macd_score_norm * 0.3
+        )
         result["market_score"] = round(composite, 4)
 
         # 市场状态判定
@@ -9963,7 +10452,13 @@ def _calc_strategy_recommendation(
     - 风险管理建议
     """
     if closes is None:
-        return {"strategy": "hold", "position_size_pct": 0.2, "hold_period": "medium", "risk_level": "medium", "action_priority": 0}
+        return {
+            "strategy": "hold",
+            "position_size_pct": 0.2,
+            "hold_period": "medium",
+            "risk_level": "medium",
+            "action_priority": 0,
+        }
     result: dict[str, Any] = {
         "strategy": "hold",
         "position_size_pct": 0.2,
@@ -9976,7 +10471,7 @@ def _calc_strategy_recommendation(
             return result
 
         is_buy = "buy" in mmd.mmd_type.value
-        vol = volatility if volatility is not None else _calc_atr_volatility(closes)
+        _ = volatility if volatility is not None else _calc_atr_volatility(closes)
 
         conf = mmd.confidence
 
@@ -10043,6 +10538,7 @@ def _calc_strategy_recommendation(
 
 
 # ── V37: 条件89-94 缠论模型增强 ───────────────────────────────────────────────────
+
 
 def _calc_consecutive_confirmation(
     mmd: MMD,
@@ -10112,7 +10608,9 @@ def _calc_momentum_acceleration(
     - 卖出信号：价格下跌加速 → 加分；减速 → 减分
     """
     result: dict[str, Any] = {
-        "acceleration": 0.0, "momentum_direction": "neutral", "confidence_adjust": 0.0,
+        "acceleration": 0.0,
+        "momentum_direction": "neutral",
+        "confidence_adjust": 0.0,
     }
     try:
         if not mmd.bi or len(closes) < 30:
@@ -10130,9 +10628,16 @@ def _calc_momentum_acceleration(
         # 计算加速度（二阶导数）
         if len(recent_momentum) >= 3:
             # 近3根K线的动量变化率
-            accel_3 = (recent_momentum[-1] - recent_momentum[0]) / max(abs(recent_momentum[0]), 1e-10)
+            accel_3 = (recent_momentum[-1] - recent_momentum[0]) / max(
+                abs(recent_momentum[0]), 1e-10
+            )
             # 近5根K线的动量变化率
-            accel_5 = (recent_momentum[-1] - recent_momentum[0]) / max(abs(sum(recent_momentum[:-1]) / len(recent_momentum[:-1])), 1e-10) if len(recent_momentum) > 1 else 0
+            accel_5 = (
+                (recent_momentum[-1] - recent_momentum[0])
+                / max(abs(sum(recent_momentum[:-1]) / len(recent_momentum[:-1])), 1e-10)
+                if len(recent_momentum) > 1
+                else 0
+            )
 
             avg_accel = (accel_3 + accel_5) / 2 if accel_5 != 0 else accel_3
             result["acceleration"] = round(avg_accel, 4)
@@ -10184,10 +10689,16 @@ def _calc_volatility_regime_change(
             return result
 
         # 计算近期和远期波动率（使用相同窗口大小 30 日收益率）
-        short_returns = [(closes[i] - closes[i - 1]) / max(closes[i - 1], 1e-10)
-                         for i in range(-30, 0) if closes[i - 1] > 0]
-        long_returns = [(closes[i] - closes[i - 1]) / max(closes[i - 1], 1e-10)
-                        for i in range(-60, -30) if closes[i - 1] > 0]
+        short_returns = [
+            (closes[i] - closes[i - 1]) / max(closes[i - 1], 1e-10)
+            for i in range(-30, 0)
+            if closes[i - 1] > 0
+        ]
+        long_returns = [
+            (closes[i] - closes[i - 1]) / max(closes[i - 1], 1e-10)
+            for i in range(-60, -30)
+            if closes[i - 1] > 0
+        ]
 
         if not short_returns or not long_returns:
             return result
@@ -10229,7 +10740,9 @@ def _calc_temporal_correlation(
         {"interval_bars": int, "interval_status": str, "confidence_adjust": float}
     """
     result: dict[str, Any] = {
-        "interval_bars": 0, "interval_status": "unknown", "confidence_adjust": 0.0,
+        "interval_bars": 0,
+        "interval_status": "unknown",
+        "confidence_adjust": 0.0,
     }
     try:
         if not mmd.bi:
@@ -10282,8 +10795,11 @@ def _calc_multi_tf_momentum_consistency(
          "consistency": str, "confidence_adjust": float}
     """
     result: dict[str, Any] = {
-        "short_trend": "neutral", "mid_trend": "neutral", "long_trend": "neutral",
-        "consistency": "unknown", "confidence_adjust": 0.0,
+        "short_trend": "neutral",
+        "mid_trend": "neutral",
+        "long_trend": "neutral",
+        "consistency": "unknown",
+        "confidence_adjust": 0.0,
     }
     try:
         if not mmd.bi or len(closes) < 60:
@@ -10394,6 +10910,7 @@ def _calc_quality_ranking(
 
 # ── V38: 条件95-100 缠论模型增强 ────────────────────────────────────────────────
 
+
 def _calc_zs_structure_integrity(
     mmd: MMD,
     zss: list[ZS],
@@ -10409,7 +10926,10 @@ def _calc_zs_structure_integrity(
         {"integrity_score": float, "bi_count": int, "zs_range": float, "is_complete": bool}
     """
     result: dict[str, Any] = {
-        "integrity_score": 0.5, "bi_count": 0, "zs_range": 0.0, "is_complete": False,
+        "integrity_score": 0.5,
+        "bi_count": 0,
+        "zs_range": 0.0,
+        "is_complete": False,
     }
     try:
         if not zss or len(zss) == 0:
@@ -10446,7 +10966,7 @@ def _calc_zs_structure_integrity(
         else:
             range_score = 0.5
 
-        integrity = (bi_score * 0.5 + complete_bonus + range_score * 0.4)
+        integrity = bi_score * 0.5 + complete_bonus + range_score * 0.4
         result["integrity_score"] = round(min(1.0, max(0.0, integrity)), 2)
 
         return result
@@ -10466,7 +10986,9 @@ def _calc_mmd_position_score(
     - 卖出信号：价格接近区间上沿 → 加分；接近下沿 → 减分
     """
     result: dict[str, Any] = {
-        "position_pct": 0.5, "position_label": "mid", "confidence_adjust": 0.0,
+        "position_pct": 0.5,
+        "position_label": "mid",
+        "confidence_adjust": 0.0,
     }
     try:
         if not closes or len(closes) < lookback:
@@ -10531,11 +11053,11 @@ def _calc_post_signal_return(
             return result
 
         is_buy = "buy" in mmd.mmd_type.value
-        mmd_type_str = mmd.mmd_type.value
+        _ = mmd.mmd_type.value
 
         # 回溯寻找类似信号并计算收益
         returns = []
-        min_window = 10
+        _ = 10
         max_window = min(30, len(closes) - 1)
 
         # 从lookback前开始扫描
@@ -10544,7 +11066,7 @@ def _calc_post_signal_return(
             # 简单启发式：找局部极值点作为历史信号近似
             if is_buy:
                 # 局部低点：当日low是近5日最低
-                window = closes[i - 5:i + 1]
+                window = closes[i - 5 : i + 1]
                 if len(window) >= 5 and closes[i] == min(window):
                     # 检查前一根是否也是低点
                     if i > 0 and closes[i] <= closes[i - 1]:
@@ -10555,7 +11077,7 @@ def _calc_post_signal_return(
                                 returns.append(ret)
             else:
                 # 局部高点
-                window = closes[i - 5:i + 1]
+                window = closes[i - 5 : i + 1]
                 if len(window) >= 5 and closes[i] == max(window):
                     if i > 0 and closes[i] >= closes[i - 1]:
                         for n in [10, 20]:
@@ -10706,9 +11228,9 @@ def _calc_composite_deviation(
 
         # BIAS偏离度（L1=20 的乖离率线，即 BIAS1）
         bias_values = BIAS(closes, L1=20)
-        bias1 = float(bias_values[0][-1]) if (
-            len(bias_values) > 0 and len(bias_values[0]) > 0
-        ) else 0.0
+        bias1 = (
+            float(bias_values[0][-1]) if (len(bias_values) > 0 and len(bias_values[0]) > 0) else 0.0
+        )
         bias_dev = min(1.0, abs(bias1) / 10.0)
         result["bias_dev"] = round(bias_dev, 3)
 
@@ -10739,7 +11261,13 @@ def _calc_signal_decay_warning(
     - 价格大幅偏离信号形成位置时，信号衰减加速
     """
     if closes is None:
-        return {"decay_stage": "fresh", "bars_since_signal": 0, "price_drift_pct": 0.0, "remaining_window_pct": 1.0, "confidence_adjust": 0.0}
+        return {
+            "decay_stage": "fresh",
+            "bars_since_signal": 0,
+            "price_drift_pct": 0.0,
+            "remaining_window_pct": 1.0,
+            "confidence_adjust": 0.0,
+        }
     result: dict[str, Any] = {
         "decay_stage": "fresh",
         "bars_since_signal": 0,
@@ -10753,7 +11281,9 @@ def _calc_signal_decay_warning(
 
         is_buy = "buy" in mmd.mmd_type.value
         bi_end_idx = mmd.bi.end.k.k_index
-        bars_since = latest_idx - bi_end_idx if latest_idx is not None else (len(closes) - 1 - bi_end_idx)
+        bars_since = (
+            latest_idx - bi_end_idx if latest_idx is not None else (len(closes) - 1 - bi_end_idx)
+        )
         result["bars_since_signal"] = max(0, bars_since)
 
         if bars_since < 0:
@@ -10768,7 +11298,9 @@ def _calc_signal_decay_warning(
         # 计算价格漂移（信号形成后价格变化幅度）
         signal_price = closes[bi_end_idx] if bi_end_idx < len(closes) else closes[-1]
         current_price = closes[-1]
-        price_drift = abs(current_price - signal_price) / signal_price * 100 if signal_price > 0 else 0
+        price_drift = (
+            abs(current_price - signal_price) / signal_price * 100 if signal_price > 0 else 0
+        )
         result["price_drift_pct"] = round(price_drift, 2)
 
         # 计算剩余窗口百分比
@@ -10793,6 +11325,7 @@ def _calc_signal_decay_warning(
 
 
 # ── V39: 条件101-105 缠论模型决策增强 ───────────────────────────────────────────
+
 
 def _calc_signal_consistency_check(
     mmd: MMD,
@@ -10893,10 +11426,14 @@ def _calc_zs_level_match(
 
         # 买卖点类型的期望中枢级别
         type_level_map = {
-            MMDType.BUY_1: 3, MMDType.SELL_1: 3,
-            MMDType.BUY_2: 2, MMDType.SELL_2: 2,
-            MMDType.BUY_3: 1, MMDType.SELL_3: 1,
-            MMDType.BUY_2S: 2, MMDType.SELL_2S: 2,
+            MMDType.BUY_1: 3,
+            MMDType.SELL_1: 3,
+            MMDType.BUY_2: 2,
+            MMDType.SELL_2: 2,
+            MMDType.BUY_3: 1,
+            MMDType.SELL_3: 1,
+            MMDType.BUY_2S: 2,
+            MMDType.SELL_2S: 2,
         }
         expected_level = type_level_map.get(mmd.mmd_type, 2)
         result["mmd_type_level"] = expected_level
@@ -11023,8 +11560,12 @@ def _calc_independent_cross_validation(
         # 方法2：量价关系验证
         if volumes and len(volumes) >= 20 and len(closes) >= 20:
             price_change = (closes[-1] - closes[-20]) / closes[-20] if closes[-20] > 0 else 0
-            vol_change = (sum(volumes[-5:]) / 5) / (sum(volumes[-20:]) / 20) if sum(volumes[-20:]) > 0 else 1
-            method2 = (price_change > 0 and vol_change > 1.0) or (price_change < 0 and vol_change < 1.0)
+            vol_change = (
+                (sum(volumes[-5:]) / 5) / (sum(volumes[-20:]) / 20) if sum(volumes[-20:]) > 0 else 1
+            )
+            method2 = (price_change > 0 and vol_change > 1.0) or (
+                price_change < 0 and vol_change < 1.0
+            )
         else:
             method2 = False
 
@@ -11079,8 +11620,8 @@ def _calc_decision_quality_score(
 
         # 位置评分
         pos_score = 10
-        if hasattr(mmd, '_mmd_position_score') and mmd._mmd_position_score:
-            pos_pct = mmd._mmd_position_score.get('position_pct', 0.5)
+        if hasattr(mmd, "_mmd_position_score") and mmd._mmd_position_score:
+            pos_pct = mmd._mmd_position_score.get("position_pct", 0.5)
             if is_buy and pos_pct < 0.3:
                 pos_score = 20
             elif is_buy and pos_pct > 0.7:
@@ -11093,11 +11634,11 @@ def _calc_decision_quality_score(
 
         # 衰减状态评分
         decay_score = 10
-        if hasattr(mmd, '_signal_decay_warning') and mmd._signal_decay_warning:
-            decay_stage = mmd._signal_decay_warning.get('decay_stage', 'fresh')
-            if decay_stage == 'fresh':
+        if hasattr(mmd, "_signal_decay_warning") and mmd._signal_decay_warning:
+            decay_stage = mmd._signal_decay_warning.get("decay_stage", "fresh")
+            if decay_stage == "fresh":
                 decay_score = 20
-            elif decay_stage == 'warning':
+            elif decay_stage == "warning":
                 decay_score = 10
             else:
                 decay_score = 0
@@ -11105,8 +11646,8 @@ def _calc_decision_quality_score(
 
         # 突破力度评分
         breakout_score = 10
-        if hasattr(mmd, '_breakout_strength') and mmd._breakout_strength:
-            strength = mmd._breakout_strength.get('breakout_strength', 0.5)
+        if hasattr(mmd, "_breakout_strength") and mmd._breakout_strength:
+            strength = mmd._breakout_strength.get("breakout_strength", 0.5)
             breakout_score = int(strength * 20)
         score += breakout_score
 
@@ -11179,9 +11720,15 @@ def find_mmds_v39(
     返回：与 find_mmds 相同的 MMD 列表，但每个 MMD 包含 V39/V40/V41 字段。
     """
     mmds = find_mmds(
-        bis=bis, zss=zss, closes=closes, config=config,
-        volumes=volumes, macd_data=macd_data, volatility=volatility,
-        highs=highs, lows=lows,
+        bis=bis,
+        zss=zss,
+        closes=closes,
+        config=config,
+        volumes=volumes,
+        macd_data=macd_data,
+        volatility=volatility,
+        highs=highs,
+        lows=lows,
     )
 
     if not mmds or not closes:
@@ -11232,7 +11779,9 @@ def find_mmds_v39(
         try:
             consistency = _calc_signal_consistency_check(mmd, closes, mmds)
             mmd._signal_consistency = consistency
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + consistency.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + consistency.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11240,7 +11789,9 @@ def find_mmds_v39(
         try:
             level_match = _calc_zs_level_match(mmd, zss)
             mmd._zs_level_match = level_match
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + level_match.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + level_match.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11266,7 +11817,9 @@ def find_mmds_v39(
         try:
             cross_val = _calc_independent_cross_validation(mmd, closes, volumes)
             mmd._independent_cross_validation = cross_val
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + cross_val.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + cross_val.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11283,7 +11836,9 @@ def find_mmds_v39(
         try:
             time_decay = _calc_time_decay_adaptive(mmd, closes, volatility)
             mmd._time_decay_adaptive = time_decay
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + time_decay.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + time_decay.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11291,7 +11846,9 @@ def find_mmds_v39(
         try:
             retest_val = _calc_breakout_retest_validation(mmd, bis, zss, closes, volumes)
             mmd._breakout_retest_validation = retest_val
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + retest_val.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + retest_val.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11312,11 +11869,11 @@ def find_mmds_v39(
         # 条件109：K线形态综合评分
         try:
             mmd_idx = mmd.bi.end.k.k_index if mmd.bi else len(closes) - 1
-            kline_score = _calc_kline_pattern_composite(
-                closes, highs, lows, None, mmd_idx
-            )
+            kline_score = _calc_kline_pattern_composite(closes, highs, lows, None, mmd_idx)
             mmd._kline_pattern_composite = kline_score
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + kline_score.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + kline_score.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11324,7 +11881,9 @@ def find_mmds_v39(
         try:
             calibration = _calc_confidence_calibration(mmd, mmd.confidence, all_confidences)
             mmd._confidence_calibration = calibration
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + calibration.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + calibration.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11334,7 +11893,9 @@ def find_mmds_v39(
         try:
             energy_dist = _calc_volume_price_energy_dist(mmd, closes, volumes, highs, lows)
             mmd._volume_price_energy_dist = energy_dist
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + energy_dist.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + energy_dist.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11387,7 +11948,10 @@ def find_mmds_v39(
         if quality_tiers:
             try:
                 tier = quality_tiers.get(mmd.mmd_type.value, "C")
-                mmd._quality_tier_classification = {"tier": tier, "rank": quality_tiers.get(f"{mmd.mmd_type.value}_rank", 0)}
+                mmd._quality_tier_classification = {
+                    "tier": tier,
+                    "rank": quality_tiers.get(f"{mmd.mmd_type.value}_rank", 0),
+                }
                 tier_multiplier = {"S": 0.03, "A": 0.01, "B": 0.0, "C": -0.01}.get(tier, 0.0)
                 mmd.confidence = max(0.0, min(1.0, mmd.confidence + tier_multiplier))
             except Exception:
@@ -11396,7 +11960,9 @@ def find_mmds_v39(
         # 条件115：反转风险评估（全局一次性计算）
         if reversal_risk is None:
             try:
-                reversal_risk = _calc_reversal_risk_assessment(closes, volumes, highs, lows, macd_data, volatility)
+                reversal_risk = _calc_reversal_risk_assessment(
+                    closes, volumes, highs, lows, macd_data, volatility
+                )
                 find_mmds_v39._last_reversal_risk = reversal_risk  # type: ignore[attr-defined]
             except Exception:
                 reversal_risk = {}
@@ -11416,36 +11982,62 @@ def find_mmds_v39(
 
         # 条件116：后确认验证（Post-Signal Confirmation）
         try:
-            post_confirm = _calc_post_signal_confirmation(mmd, closes, volumes, highs, lows, bi_end_idx)
+            post_confirm = _calc_post_signal_confirmation(
+                mmd, closes, volumes, highs, lows, bi_end_idx
+            )
             mmd._post_signal_confirmation = post_confirm
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + post_confirm.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + post_confirm.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
         # 条件117：突破-回调量比验证
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs and volumes is not None and bis is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and mmd.zs
+            and volumes is not None
+            and bis is not None
+        ):
             try:
                 vol_ratio_result = _calc_break_pullback_volume_ratio(mmd, bis, zss, closes, volumes)
                 mmd._break_pullback_volume_ratio = vol_ratio_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_ratio_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_ratio_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件118：中枢距离验证
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and mmd.zs
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 dist_result = _calc_zhongshu_distance_validation(mmd, closes)
                 mmd._zhongshu_distance_validation = dist_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + dist_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + dist_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件119：ADX趋势强度确认
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and mmd.bi is not None
+        ):
             try:
                 adx_result = _calc_adx_trend_strength_check(mmd, closes, highs, lows, bi_end_idx)
                 mmd._adx_trend_strength = adx_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + adx_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + adx_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11453,7 +12045,9 @@ def find_mmds_v39(
         try:
             freshness = _calc_enhanced_signal_freshness(mmd, closes, volatility)
             mmd._signal_freshness = freshness
-            mmd.confidence = max(0.0, min(1.0, mmd.confidence + freshness.get("confidence_adjust", 0.0)))
+            mmd.confidence = max(
+                0.0, min(1.0, mmd.confidence + freshness.get("confidence_adjust", 0.0))
+            )
         except Exception:
             pass
 
@@ -11461,51 +12055,85 @@ def find_mmds_v39(
 
         # 条件121：趋势方向对齐验证（Trend Direction Alignment）
         # 3买必须在上升趋势中，3卖必须在下降趋势中
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 trend_align = _calc_trend_direction_alignment(mmd, closes, volumes)
                 mmd._trend_direction_alignment = trend_align
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_align.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + trend_align.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件122：突破笔力度对比（Breakout Bi Strength vs Entry Bi）
         # 突破笔成交量/长度必须大于进入笔，否则可能是假突破
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs is not None and bis is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and mmd.zs is not None
+            and bis is not None
+            and volumes is not None
+        ):
             try:
                 breakout_strength = _calc_breakout_bi_strength_compare(mmd, bis, zss, volumes)
                 mmd._breakout_bi_strength_compare = breakout_strength
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout_strength.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + breakout_strength.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件123：回踩时间窗口过滤（Pullback Time Window Filter）
         # 信号形成后经过的K线数量不能过多，否则信号失效
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 pullback_window = _calc_pullback_time_window(mmd, closes)
                 mmd._pullback_time_window = pullback_window
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pullback_window.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pullback_window.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件124：波动率自适应阈值（Volatility-Adaptive Thresholds）
         # 根据当前波动率动态调整置信度加成幅度
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and volatility is not None and closes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and volatility is not None
+            and closes is not None
+        ):
             try:
                 vol_adapt = _calc_volatility_adaptive_v44(mmd, volatility, closes)
                 mmd._volatility_adaptive_threshold = vol_adapt
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_adapt.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_adapt.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件125：多指标背离共振增强（Multi-Indicator Divergence Resonance）
         # MACD+RSI+KDJ 同时出现背离时，额外确认趋势反转
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and macd_data is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and macd_data is not None
+        ):
             try:
-                div_resonance = _calc_multi_indicator_divergence_resonance(mmd, closes, volumes, macd_data)
+                div_resonance = _calc_multi_indicator_divergence_resonance(
+                    mmd, closes, volumes, macd_data
+                )
                 mmd._multi_indicator_divergence_resonance = div_resonance
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + div_resonance.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + div_resonance.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11513,71 +12141,121 @@ def find_mmds_v39(
 
         # 条件126：趋势动能强度过滤（Trend Momentum Strength Filter）
         # 使用ADX确认趋势强度，只有ADX>20时才给予完整加分
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and mmd.bi is not None
+        ):
             try:
                 mom_strength = _calc_trend_momentum_strength(mmd, closes, highs, lows)
                 mmd._trend_momentum_strength = mom_strength
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mom_strength.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mom_strength.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件127：量价背离二次确认（Volume-Price Divergence Secondary Confirmation）
         # 在突破笔和回踩笔中检测量价背离，加强确认
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and mmd.bi is not None
+        ):
             try:
                 vol_price_sec = _calc_volume_price_divergence_secondary(mmd, closes, volumes)
                 mmd._volume_price_divergence_secondary = vol_price_sec
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_price_sec.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_price_sec.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件128：中枢突破真实性验证（ZS Breakout Authenticity Verification）
         # 突破后价格需站稳中枢上方/下方至少3根K线
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs is not None and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and mmd.zs is not None
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 zs_authenticity = _calc_zs_breakout_authenticity(mmd, closes)
                 mmd._zs_breakout_authenticity = zs_authenticity
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_authenticity.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_authenticity.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件129：多时间框架信号一致性（Multi-Timeframe Signal Consistency）
         # 通过不同周期MA斜率判断多TF一致性
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 tf_consistency = _calc_multi_tf_signal_consistency(mmd, closes)
                 mmd._multi_tf_signal_consistency = tf_consistency
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_consistency.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + tf_consistency.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件130：动态市场环境适配（Dynamic Market Regime Adaptation）
         # 识别当前市场状态（趋势/盘整/高波动），动态调整阈值
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 regime = _calc_dynamic_market_regime(mmd, closes, volumes)
                 mmd._dynamic_market_regime = regime
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + regime.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + regime.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V47 条件 131-133 ──
 
         # 条件131：后确认价格跟随过滤（Post-Signal Price Follow-Through）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
-                follow_result = _check_post_signal_price_follow_through(mmd, closes, lookback_bars=5, min_follow_pct=0.02)
+                follow_result = _check_post_signal_price_follow_through(
+                    mmd, closes, lookback_bars=5, min_follow_pct=0.02
+                )
                 mmd._post_signal_price_follow_through = follow_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + follow_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + follow_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件132：信号有效性窗口（Signal Validity Window）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and mmd.bi is not None
+        ):
             try:
                 window_result = _calc_signal_validity_window(mmd, closes, highs, lows, volatility)
                 mmd._signal_validity_window = window_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + window_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + window_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11588,49 +12266,86 @@ def find_mmds_v39(
         # ── V48 条件 134-136 ──
 
         # 条件134：量价背离二次确认（Volume-Price Divergence Secondary Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and mmd.bi is not None
+        ):
             try:
                 vol_price_result = _calc_volume_price_divergence_secondary_v48(mmd, closes, volumes)
                 mmd._volume_price_divergence_secondary_v48 = vol_price_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_price_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_price_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件135：趋势强度加权（Trend Strength Weighting）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
-                trend_weight_result = _calc_trend_strength_weighting_v48(mmd, closes, highs, lows, trend_strength)
+                trend_weight_result = _calc_trend_strength_weighting_v48(
+                    mmd, closes, highs, lows, trend_strength
+                )
                 mmd._trend_strength_weighting = trend_weight_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_weight_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0,
+                    min(1.0, mmd.confidence + trend_weight_result.get("confidence_adjust", 0.0)),
+                )
             except Exception:
                 pass
 
         # 条件136：动态风险收益比（Dynamic Risk-Reward Ratio）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 rrr_result = _calc_dynamic_risk_reward_ratio_v48(mmd, closes, highs, lows)
                 mmd._dynamic_risk_reward_ratio = rrr_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + rrr_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + rrr_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V49 条件 137-139 ──
 
         # 条件137：突破力度二次验证（Breakout Strength Re-validation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
-                breakout_result = _calc_breakout_strength_revalidation_v49(mmd, closes, volumes, macd_data)
+                breakout_result = _calc_breakout_strength_revalidation_v49(
+                    mmd, closes, volumes, macd_data
+                )
                 mmd._breakout_strength_revalidation_v49 = breakout_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + breakout_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件138：回踩结构完整性（Pullback Structure Integrity）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None and bis is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+            and bis is not None
+        ):
             try:
                 pullback_result = _calc_pullback_structure_integrity_v49(mmd, bis, closes)
                 mmd._pullback_structure_integrity_v49 = pullback_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pullback_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pullback_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11639,7 +12354,9 @@ def find_mmds_v39(
             try:
                 zs_level_result = _calc_zhongshu_level_weight_v49(mmd, zss)
                 mmd._zhongshu_level_weight_v49 = zs_level_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_level_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_level_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11647,75 +12364,131 @@ def find_mmds_v39(
 
         # 条件140：板块联动分析（Sector Correlation Analysis）
         # 通过成交活跃度与波动率判断板块联动效应
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and mmd.bi is not None
+        ):
             try:
                 sector_result = _calc_sector_correlation_v50(mmd, closes, volumes)
                 mmd._sector_correlation_v50 = sector_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sector_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + sector_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件141：多时间框架共振验证（Multi-Timeframe Resonance）
         # 通过不同周期价格动量一致性验证信号质量
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 mtf_result = _calc_multi_tf_resonance_v50(mmd, closes)
                 mmd._multi_tf_resonance_v50 = mtf_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mtf_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mtf_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件142：缠论级别递归验证（Multi-Level Chanlun Recursive Validation）
         # 验证当前信号在更高级别结构中是否一致
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs is not None and zss is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and mmd.zs is not None
+            and zss is not None
+        ):
             try:
                 level_result = _calc_level_recursive_validation_v50(mmd, zss)
                 mmd._level_recursive_validation_v50 = level_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + level_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + level_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件143：市场情绪指标融合（Market Sentiment Fusion）
         # 通过涨跌幅分布和量能分布判断市场情绪
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 sentiment_result = _calc_market_sentiment_fusion_v50(mmd, closes, volumes)
                 mmd._market_sentiment_fusion_v50 = sentiment_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sentiment_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + sentiment_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V51 条件 144-147 ──
 
         # 条件144：突破笔力度二次确认增强（Breakout Bi Strength Enhanced）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and bis is not None and zss is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and bis is not None
+            and zss is not None
+            and volumes is not None
+        ):
             try:
-                breakout_enhanced = _calc_breakout_bi_strength_enhanced_v51(mmd, bis, zss, volumes, macd_data)
+                breakout_enhanced = _calc_breakout_bi_strength_enhanced_v51(
+                    mmd, bis, zss, volumes, macd_data
+                )
                 mmd._breakout_bi_strength_enhanced_v51 = breakout_enhanced
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout_enhanced.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + breakout_enhanced.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件145：回踩笔深度+时间综合验证（Pullback Depth+Time）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and volatility is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and volatility is not None
+        ):
             try:
                 pullback_dt = _calc_pullback_depth_time_v51(mmd, closes, highs, lows, volatility)
                 mmd._pullback_depth_time_v51 = pullback_dt
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pullback_dt.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pullback_dt.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件146：趋势强度综合评分（Trend Strength Composite）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+        ):
             try:
-                trend_composite = _calc_trend_strength_composite_v51(mmd, closes, highs, lows, volumes)
+                trend_composite = _calc_trend_strength_composite_v51(
+                    mmd, closes, highs, lows, volumes
+                )
                 mmd._trend_strength_composite_v51 = trend_composite
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_composite.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + trend_composite.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件147：交易决策建议（Trading Decision Recommendation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+        ):
             try:
                 decision = _calc_trading_decision_v51(mmd, closes, highs, lows, zss)
                 mmd._trading_decision_v51 = decision
@@ -11725,29 +12498,48 @@ def find_mmds_v39(
         # ── V52 条件 148-151 ──
 
         # 条件148：量价持续确认（Volume Sustain After Signal）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 vol_sustain = _calc_volume_sustain_after_signal_v52(mmd, closes, volumes)
                 mmd._volume_sustain_after_signal_v52 = vol_sustain
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_sustain.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_sustain.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件149：多指标背离共振（Multi-Indicator Divergence Fusion）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and macd_data is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and macd_data is not None
+        ):
             try:
                 div_fusion = _calc_multi_indicator_divergence_fusion_v52(mmd, closes, macd_data)
                 mmd._multi_indicator_divergence_fusion_v52 = div_fusion
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + div_fusion.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + div_fusion.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件150：近期极端价位检测（Recent Extreme Price Detection）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+        ):
             try:
                 extreme_price = _calc_recent_extreme_price_v52(mmd, closes, highs, lows)
                 mmd._recent_extreme_price_v52 = extreme_price
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + extreme_price.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + extreme_price.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11756,18 +12548,27 @@ def find_mmds_v39(
             try:
                 regime_score = _calc_market_regime_score_v52(closes, volumes, highs, lows)
                 mmd._market_regime_score_v52 = regime_score
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + regime_score.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + regime_score.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V53 条件 152-155 ──
 
         # 条件152：趋势阶段识别与顺势确认（Trend Stage Follow Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+        ):
             try:
                 trend_follow = _calc_trend_stage_follow_confirmation_v53(mmd, closes, highs, lows)
                 mmd._trend_stage_follow_confirmation_v53 = trend_follow
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_follow.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + trend_follow.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11776,16 +12577,25 @@ def find_mmds_v39(
             try:
                 atr_result = _calc_atr_adaptive_stop_v53(closes, highs, lows)
                 mmd._atr_adaptive_stop_v53 = atr_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + atr_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + atr_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件154：中枢突破力度验证（Zhongshu Breakout Strength）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and bis is not None and zss is not None and closes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and bis is not None
+            and zss is not None
+            and closes is not None
+        ):
             try:
                 breakout_strength = _calc_zs_breakout_strength_v53(mmd, bis, zss, closes)
                 mmd._zs_breakout_strength_v53 = breakout_strength
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout_strength.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + breakout_strength.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11794,7 +12604,9 @@ def find_mmds_v39(
             try:
                 quality_tier = _calc_signal_quality_tier_v53(mmd, closes[-1])
                 mmd._signal_quality_tier_v53 = quality_tier
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + quality_tier.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + quality_tier.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11805,16 +12617,25 @@ def find_mmds_v39(
             try:
                 multi_bar = _calc_multi_bar_confirmation_v54(mmd, closes)
                 mmd._multi_bar_confirmation_v54 = multi_bar
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + multi_bar.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + multi_bar.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件157：缺口风险评估（Gap Risk Assessment）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+        ):
             try:
                 gap_risk = _calc_gap_risk_assessment_v54(mmd, closes, highs, lows)
                 mmd._gap_risk_assessment_v54 = gap_risk
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + gap_risk.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + gap_risk.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11823,27 +12644,41 @@ def find_mmds_v39(
             try:
                 vol_regime = _calc_volatility_regime_change_v54(closes, highs, lows)
                 mmd._volatility_regime_change_v54 = vol_regime
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_regime.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_regime.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件159：量价配合度评分（Volume-Price Coordination Score）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 vol_price_coord = _calc_volume_price_coordination_v54(mmd, closes, volumes)
                 mmd._volume_price_coordination_v54 = vol_price_coord
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_price_coord.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_price_coord.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V55 条件 160-163 ──
 
         # 条件160：分钟级多时间框架共振过滤（Multi-Timeframe Resonance Filter）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 mtfr = _calc_multi_tf_resonance_filter_v55(mmd, closes, volumes)
                 mmd._multi_tf_resonance_filter_v55 = mtfr
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mtfr.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mtfr.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11852,7 +12687,9 @@ def find_mmds_v39(
             try:
                 zs_weight = _calc_zhongshu_level_weight_v55(mmd, zss)
                 mmd._zhongshu_level_weight_v55 = zs_weight
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_weight.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_weight.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11861,7 +12698,9 @@ def find_mmds_v39(
             try:
                 weak_risk = _calc_weak_stock_risk_v55(mmd, closes, volumes, highs, lows)
                 mmd._weak_stock_risk_v55 = weak_risk
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + weak_risk.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + weak_risk.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11870,27 +12709,41 @@ def find_mmds_v39(
             try:
                 trend_align = _calc_signal_trend_alignment_v55(mmd, closes)
                 mmd._signal_trend_alignment_v55 = trend_align
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + trend_align.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + trend_align.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V56 条件 164-167 ──
 
         # 条件164：假突破识别（False Breakout Detection）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 fake_result = _calc_false_breakout_detection_v56(mmd, closes, volumes, highs, lows)
                 mmd._false_breakout_detection_v56 = fake_result
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + fake_result.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + fake_result.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件165：中枢结构复杂度分析（Zhongshu Structure Complexity）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and mmd.zs is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and zss is not None
+            and mmd.zs is not None
+        ):
             try:
                 zs_complexity = _calc_zhongshu_structure_complexity_v56(mmd, zss)
                 mmd._zhongshu_structure_complexity_v56 = zs_complexity
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_complexity.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_complexity.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11899,45 +12752,72 @@ def find_mmds_v39(
             try:
                 pos_size = _calc_volatility_adaptive_position_v56(mmd, closes, highs, lows)
                 mmd._volatility_adaptive_position_v56 = pos_size
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pos_size.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pos_size.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件167：多信号共振评分（Multi-Signal Resonance Score）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 resonance = _calc_multi_signal_resonance_v56(mmd, closes, volumes)
                 mmd._multi_signal_resonance_v56 = resonance
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + resonance.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + resonance.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V57 条件 168-171 ──
 
         # 条件168：回踩幅度与时间双重过滤（Pullback Depth & Time Filter）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+        ):
             try:
                 pullback = _calc_pullback_filter_v57(mmd, closes, highs, lows)
                 mmd._pullback_filter_v57 = pullback
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pullback.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pullback.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件169：突破力度验证（Breakout Strength Validation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+        ):
             try:
                 breakout = _calc_breakout_strength_validation_v57(mmd, closes, volumes)
                 mmd._breakout_strength_validation_v57 = breakout
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + breakout.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + breakout.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件170：中枢背驰检测（Zhongshu Divergence Check）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and bis is not None and bc_list is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and bis is not None
+            and bc_list is not None
+        ):
             try:
                 divergence = _calc_zs_divergence_check_v57(mmd, bis, bc_list)
                 mmd._zs_divergence_check_v57 = divergence
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + divergence.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + divergence.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -11946,32 +12826,52 @@ def find_mmds_v39(
             try:
                 decay = _calc_signal_decay_detection_v57(mmd, closes)
                 mmd._signal_decay_detection_v57 = decay
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + decay.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V58 条件 172-175 ──
 
         # 条件172：多时间框架趋势一致性验证（Multi-Timeframe Trend Consistency）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 60:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 60
+        ):
             try:
                 tf_consistency = _calc_multi_tf_trend_consistency_v58(mmd, closes)
                 mmd._multi_tf_trend_consistency_v58 = tf_consistency
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_consistency.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + tf_consistency.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件173：成交量堆积验证（Volume Accumulation Validation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and len(closes) >= 30:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and len(closes) >= 30
+        ):
             try:
                 vol_accum = _calc_volume_accumulation_validation_v58(mmd, closes, volumes)
                 mmd._volume_accumulation_validation_v58 = vol_accum
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_accum.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_accum.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件174：ATR自适应止损距离（ATR Adaptive Stop Distance）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+        ):
             try:
                 atr_stop = _calc_atr_adaptive_stop_v58(mmd, highs, lows)
                 mmd._atr_adaptive_stop_v58 = atr_stop
@@ -11989,87 +12889,142 @@ def find_mmds_v39(
         # ── V59 条件 176-179 ──
 
         # 条件176：波动率自适应MA周期（Volatility-Adaptive MA Period）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 90:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 90
+        ):
             try:
                 vol_adapt = _calc_volatility_adaptive_ma_v59(mmd, closes)
                 mmd._volatility_adaptive_ma_v59 = vol_adapt
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_adapt.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_adapt.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件177：ATR倍数自适应（ATR Multiplier Adaptation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and highs is not None and lows is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and highs is not None
+            and lows is not None
+        ):
             try:
                 atr_mult = _calc_atr_multiplier_adapt_v59(mmd, highs, lows)
                 mmd._atr_multiplier_adapt_v59 = atr_mult
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + atr_mult.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + atr_mult.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件178：多时间框架共振信号（Multi-TF Resonance Signal）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 25:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 25
+        ):
             try:
                 tf_resonance = _calc_multi_tf_resonance_signal_v59(mmd, closes, volumes)
                 mmd._multi_tf_resonance_signal_v59 = tf_resonance
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_resonance.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + tf_resonance.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件179：信号衰减速度评估（Signal Decay Speed）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 15:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 15
+        ):
             try:
                 decay_speed = _calc_signal_decay_speed_v59(mmd, closes)
                 mmd._signal_decay_speed_v59 = decay_speed
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay_speed.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + decay_speed.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V60 条件 180-183 ──
 
         # 条件180：RSI深度背离过滤（RSI Deep Divergence Filter）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 40:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 40
+        ):
             try:
                 rsi_div = _calc_rsi_deep_divergence_v60(mmd, closes)
                 mmd._rsi_deep_divergence_v60 = rsi_div
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + rsi_div.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + rsi_div.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件181：MA排列间距强度评分（MA Alignment Spacing Score）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 60:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 60
+        ):
             try:
                 ma_spacing = _calc_ma_spacing_strength_v60(mmd, closes)
                 mmd._ma_spacing_strength_v60 = ma_spacing
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_spacing.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + ma_spacing.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件182：中枢支撑/阻力距离评分增强（ZhongShu Distance Score Enhanced）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs is not None and closes is not None and mmd.bi is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and mmd.zs is not None
+            and closes is not None
+            and mmd.bi is not None
+        ):
             try:
                 zs_dist = _calc_zs_distance_enhanced_v60(mmd, closes)
                 mmd._zs_distance_enhanced_v60 = zs_dist
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_dist.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_dist.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件183：KDJ超买超卖确认（KDJ Overbought/Oversold Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 15:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 15
+        ):
             try:
                 kdj_conf = _calc_kdj_ob_os_confirm_v60(mmd, closes)
                 mmd._kdj_ob_os_confirm_v60 = kdj_conf
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + kdj_conf.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + kdj_conf.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V61 条件 184-185 ──
 
         # 条件184：MACD柱状图背离融合（MACD Histogram Divergence Fusion）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and macd_data is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and macd_data is not None
+        ):
             try:
                 macd_div = _calc_macd_histogram_divergence_v61(mmd, closes, macd_data)
                 mmd._macd_hist_divergence_v61 = macd_div
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + macd_div.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + macd_div.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12084,87 +13039,143 @@ def find_mmds_v39(
         # ── V62 条件 186-189 ──
 
         # 条件186：BOLL带宽突破确认（BOLL Bandwidth Breakout Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 40:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 40
+        ):
             try:
                 boll_bw = _calc_boll_bandwidth_breakout_confirm_v62(mmd, closes)
                 mmd._boll_bandwidth_breakout_v62 = boll_bw
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + boll_bw.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + boll_bw.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件187：BOLL带宽压缩反弹确认（BOLL Bandwidth Reversal Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 60:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 60
+        ):
             try:
                 boll_rev = _calc_boll_bandwidth_reversal_confirm_v62(mmd, closes)
                 mmd._boll_bandwidth_reversal_v62 = boll_rev
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + boll_rev.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + boll_rev.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件188：动态阈值-波动率状态切换（Dynamic Threshold Volatility Regime）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 30:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 30
+        ):
             try:
                 vol_regime = _calc_dynamic_threshold_volatility_regime_v62(mmd, closes)
                 mmd._dynamic_threshold_volatility_regime_v62 = vol_regime
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_regime.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_regime.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件189：动态阈值-ATR倍数自适应（Dynamic Threshold ATR Multiplier Adaptive）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 30:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 30
+        ):
             try:
                 atr_mult = _calc_dynamic_threshold_atr_multiplier_v62(mmd, closes)
                 mmd._dynamic_threshold_atr_multiplier_v62 = atr_mult
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + atr_mult.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + atr_mult.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V63 条件 190-191 ──
 
         # 条件190：中枢级别权重优化增强（Zhongshu Level Weight Optimization Enhanced）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and zss is not None
+            and closes is not None
+        ):
             try:
                 zs_weight_enh = _calc_zhongshu_level_weight_enhanced_v63(mmd, zss, closes)
                 mmd._zhongshu_level_weight_enhanced_v63 = zs_weight_enh
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_weight_enh.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_weight_enh.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件191：多周期信号衰减追踪（Multi-Period Signal Decay Tracking）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 25:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 25
+        ):
             try:
                 multi_decay = _calc_multi_period_signal_decay_v63(mmd, closes)
                 mmd._multi_period_signal_decay_v63 = multi_decay
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + multi_decay.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + multi_decay.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V65 条件 192-195 ──
 
         # 条件192：量价背离二次确认增强（Volume-Price Divergence Secondary Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and len(closes) >= 60:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and len(closes) >= 60
+        ):
             try:
                 vp_div = _calc_volume_price_divergence_secondary_v65(mmd, closes, volumes)
                 mmd._volume_price_divergence_secondary_v65 = vp_div
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_div.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vp_div.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件193：中枢突破回踩确认（Breakout Retest Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None and len(closes) >= 40:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and zss is not None
+            and closes is not None
+            and len(closes) >= 40
+        ):
             try:
                 retest = _calc_breakout_retest_confirmation_v65(mmd, zss, closes)
                 mmd._breakout_retest_confirmation_v65 = retest
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + retest.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + retest.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件194：波动率压缩突破信号（Volatility Compression Breakout）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 80:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 80
+        ):
             try:
                 vol_comp = _calc_volatility_compression_breakout_v65(mmd, closes)
                 mmd._volatility_compression_breakout_v65 = vol_comp
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_comp.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_comp.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12173,36 +13184,57 @@ def find_mmds_v39(
             try:
                 freshness = _calc_signal_time_window_freshness_v65(mmd, closes)
                 mmd._signal_time_window_freshness_v65 = freshness
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + freshness.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + freshness.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V66 条件 196-199 ──
 
         # 条件196：MACD动能锥加速确认（MACD Momentum Acceleration Confirmation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and macd_data is not None and len(macd_data.get("hist", [])) >= 20:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and macd_data is not None
+            and len(macd_data.get("hist", [])) >= 20
+        ):
             try:
                 macd_acc = _calc_macd_momentum_acceleration_v66(mmd, macd_data)
                 mmd._macd_momentum_acceleration_v66 = macd_acc
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + macd_acc.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + macd_acc.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件197：量价配合深度评分（Volume-Price Coordination Deep Score）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and len(closes) >= 60:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and len(closes) >= 60
+        ):
             try:
                 vp_coord = _calc_volume_price_coordination_deep_v66(mmd, closes, volumes)
                 mmd._volume_price_coordination_deep_v66 = vp_coord
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_coord.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vp_coord.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件198：多时间框架共振强度评分（Multi-Timeframe Convergence Intensity）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 100:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 100
+        ):
             try:
                 tf_conv = _calc_multi_tf_convergence_intensity_v66(mmd, closes)
                 mmd._multi_tf_convergence_intensity_v66 = tf_conv
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tf_conv.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + tf_conv.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12217,11 +13249,18 @@ def find_mmds_v39(
         # ── V67 条件 200-203 ──
 
         # 条件200：中枢背驰力度量化（Zhongshu Divergence Strength Quantification）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None and len(closes) >= 30:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and zss is not None
+            and closes is not None
+            and len(closes) >= 30
+        ):
             try:
                 zs_div = _calc_zhongshu_divergence_strength_v67(mmd, zss, closes, macd_data)
                 mmd._zhongshu_divergence_strength_v67 = zs_div
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_div.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_div.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12230,7 +13269,9 @@ def find_mmds_v39(
             try:
                 ml_cons = _calc_multi_level_mmd_consistency_v67(mmd, closes)
                 mmd._multi_level_mmd_consistency_v67 = ml_cons
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ml_cons.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + ml_cons.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12239,36 +13280,56 @@ def find_mmds_v39(
             try:
                 traj_health = _calc_post_signal_trajectory_health_v67(mmd, closes)
                 mmd._post_signal_trajectory_health_v67 = traj_health
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + traj_health.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + traj_health.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件203：动态止损止盈推荐（Dynamic SL/TP Recommendation）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 20
+        ):
             try:
                 sl_tp = _calc_dynamic_sl_tp_recommendation_v67(mmd, closes, highs, lows)
                 mmd._dynamic_sl_tp_recommendation_v67 = sl_tp
             except Exception:
                 pass
 
-
         # ── V68 条件 204-207 ──
 
         # 条件204：缺口方向与趋势一致性验证（Gap-Trend Consistency）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and len(closes) >= 30:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and len(closes) >= 30
+        ):
             try:
                 gap_res = _calc_gap_trend_consistency_v68(mmd, closes)
                 mmd._gap_trend_consistency_v68 = gap_res
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + gap_res.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + gap_res.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件205：多级别区间套一致性验证（Range Set Multi-level Consistency）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and zss is not None and closes is not None and len(closes) >= 40:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and zss is not None
+            and closes is not None
+            and len(closes) >= 40
+        ):
             try:
                 rs_cons = _calc_range_set_multi_level_v68(mmd, zss, closes)
                 mmd._range_set_multi_level_v68 = rs_cons
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + rs_cons.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + rs_cons.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12277,16 +13338,27 @@ def find_mmds_v39(
             try:
                 fund_flow = _calc_post_signal_fund_flow_v68(mmd, closes, volumes)
                 mmd._post_signal_fund_flow_v68 = fund_flow
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + fund_flow.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + fund_flow.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件207：市场风格适配评分（Market Regime Adaptation）
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and volumes is not None and highs is not None and lows is not None and len(closes) >= 60:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and volumes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 60
+        ):
             try:
                 regime_adapt = _calc_market_regime_adaptation_v68(mmd, closes, volumes, highs, lows)
                 mmd._market_regime_adaptation_v68 = regime_adapt
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + regime_adapt.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + regime_adapt.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12298,7 +13370,9 @@ def find_mmds_v39(
             try:
                 pv_div = _calc_price_volume_divergence_v69(mmd, closes, volumes)
                 mmd._price_volume_divergence_v69 = pv_div
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pv_div.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pv_div.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12308,27 +13382,44 @@ def find_mmds_v39(
             try:
                 struct_int = _calc_structural_integrity_v69(mmd, bis, zss, closes)
                 mmd._structural_integrity_v69 = struct_int
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + struct_int.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + struct_int.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件210：多指标背离融合（Multi-Indicator Divergence Fusion）
         # 综合MACD/KDJ/RSI背离信号，提供综合背离强度评分
-        if macd_data is not None and closes is not None and mmd.bi is not None and len(closes) >= 30:
+        if (
+            macd_data is not None
+            and closes is not None
+            and mmd.bi is not None
+            and len(closes) >= 30
+        ):
             try:
                 multi_div = _calc_multi_indicator_divergence_v69(mmd, closes, volumes, macd_data)
                 mmd._multi_indicator_divergence_v69 = multi_div
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + multi_div.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + multi_div.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件211：回踩深度量化（Retracement Depth Quantification）
         # 量化回踩幅度与时间，判断回踩是否充分
-        if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+        if (
+            mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 20
+        ):
             try:
                 retrace = _calc_retracement_depth_v69(mmd, closes, highs, lows)
                 mmd._retracement_depth_v69 = retrace
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + retrace.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + retrace.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12340,7 +13431,9 @@ def find_mmds_v39(
             try:
                 vol_peak = _calc_volume_peak_detection_v70(mmd, closes, volumes)
                 mmd._volume_peak_detection_v70 = vol_peak
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_peak.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_peak.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12350,17 +13443,27 @@ def find_mmds_v39(
             try:
                 time_decay = _calc_signal_time_decay_v70(mmd, closes)
                 mmd._signal_time_decay_v70 = time_decay
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + time_decay.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + time_decay.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件214：假突破二次过滤（False Breakout Secondary Filter）
         # 突破后价格需持续N根K线维持在突破水平之上/之下
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 15:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 15
+        ):
             try:
                 false_break = _calc_false_breakout_filter_v70(mmd, closes, highs, lows)
                 mmd._false_breakout_filter_v70 = false_break
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + false_break.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + false_break.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12381,7 +13484,9 @@ def find_mmds_v39(
             try:
                 ma_align = _calc_ma_alignment_strength_v71(mmd, closes)
                 mmd._ma_alignment_strength_v71 = ma_align
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_align.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + ma_align.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12391,7 +13496,9 @@ def find_mmds_v39(
             try:
                 ma_res = _calc_multi_tf_ma_resonance_v71(mmd, closes)
                 mmd._multi_tf_ma_resonance_v71 = ma_res
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_res.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + ma_res.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12401,13 +13508,21 @@ def find_mmds_v39(
             try:
                 winrate = _calc_mmd_history_winrate_v71(mmd, closes, volumes)
                 mmd._mmd_history_winrate_v71 = winrate
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + winrate.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + winrate.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件219：动态风险收益比优化（Dynamic RR Optimization）
         # 根据当前波动率和市场环境动态调整止损止盈比例
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 rr_opt = _calc_dynamic_rr_optimization_v71(mmd, closes, highs, lows, volatility)
                 mmd._dynamic_rr_optimization_v71 = rr_opt
@@ -12422,17 +13537,27 @@ def find_mmds_v39(
             try:
                 ma_cd = _calc_ma_convergence_divergence_v72(mmd, closes)
                 mmd._ma_convergence_divergence_v72 = ma_cd
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ma_cd.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + ma_cd.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件221：支撑/阻力位距离评估（Support/Resistance Proximity）
         # 计算当前价格相对于最近支撑/阻力位的距离
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 sr_prox = _calc_support_resistance_proximity_v72(mmd, closes, highs, lows)
                 mmd._support_resistance_proximity_v72 = sr_prox
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sr_prox.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + sr_prox.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12442,7 +13567,9 @@ def find_mmds_v39(
             try:
                 vsq = _calc_volume_structure_quality_v72(mmd, closes, volumes)
                 mmd._volume_structure_quality_v72 = vsq
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vsq.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vsq.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12452,7 +13579,9 @@ def find_mmds_v39(
             try:
                 sdv = _calc_signal_decay_velocity_v72(mmd, closes, mmds)
                 mmd._signal_decay_velocity_v72 = sdv
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sdv.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + sdv.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12460,11 +13589,19 @@ def find_mmds_v39(
 
         # 条件224：买卖点位置风险评估（MMD Position Risk Assessment）
         # 评估信号在近期价格区间中的位置风险
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 pos_risk = _calc_mmd_position_risk_v73(mmd, closes, highs, lows)
                 mmd._mmd_position_risk_v73 = pos_risk
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pos_risk.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pos_risk.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12474,7 +13611,9 @@ def find_mmds_v39(
             try:
                 bo_valid = _calc_zhongshu_breakout_validity_v73(mmd, closes, volumes, highs, lows)
                 mmd._zhongshu_breakout_validity_v73 = bo_valid
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + bo_valid.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + bo_valid.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12487,7 +13626,10 @@ def find_mmds_v39(
                 _mi_kdj: dict[str, list[float]] | None = None
                 _mi_boll: dict[str, list[float]] | None = None
                 if len(closes) >= 14:
-                    from easy_tdx.MyTT import RSI as _mytt_rsi, KDJ as _mytt_kdj, BOLL as _mytt_boll
+                    from easy_tdx.MyTT import BOLL as _mytt_boll
+                    from easy_tdx.MyTT import KDJ as _mytt_kdj
+                    from easy_tdx.MyTT import RSI as _mytt_rsi
+
                     _mi_rsi = [float(x) for x in _mytt_rsi(closes, N=14)]
                 if len(closes) >= 30:
                     _k, _d, _j = _mytt_kdj(closes, highs or closes, lows or closes, N=9, M1=3, M2=3)
@@ -12504,17 +13646,27 @@ def find_mmds_v39(
                     mmd, closes, macd_data, _mi_kdj, _mi_rsi, _mi_boll, volumes
                 )
                 mmd._multi_indicator_consistency_v73 = mi_cons
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mi_cons.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mi_cons.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件227：波动率环境适配（Volatility Regime Adaptation）
         # 根据当前ATR分位动态调整置信度
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 60:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 60
+        ):
             try:
                 vol_reg = _calc_volatility_regime_adaptation_v73(mmd, closes, highs, lows)
                 mmd._volatility_regime_adaptation_v73 = vol_reg
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_reg.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vol_reg.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12525,16 +13677,26 @@ def find_mmds_v39(
             try:
                 vp_div = _calc_volume_price_divergence_secondary_v74(mmd, closes, volumes)
                 mmd._volume_price_divergence_secondary_v74 = vp_div
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_div.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vp_div.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件229：趋势动能持续验证（Trend Momentum Continuity）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 mom = _calc_trend_momentum_continuity_v74(mmd, closes, highs, lows)
                 mmd._trend_momentum_continuity_v74 = mom
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mom.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mom.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12543,7 +13705,9 @@ def find_mmds_v39(
             try:
                 overlap = _calc_zhongshu_overlap_density_v74(mmd, zss, closes[-1])
                 mmd._zhongshu_overlap_density_v74 = overlap
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + overlap.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + overlap.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12554,18 +13718,28 @@ def find_mmds_v39(
                     mmd, closes, highs, lows, macd_data, volumes
                 )
                 mmd._signal_resonance_depth_v74 = resonance
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + resonance.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + resonance.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V75 条件 232-235 ──
 
         # 条件232：回调深度验证（Pullback Depth Validation）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 pb_depth = _calc_pullback_depth_validation_v75(mmd, closes, highs, lows)
                 mmd._pullback_depth_validation_v75 = pb_depth
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pb_depth.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pb_depth.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12574,25 +13748,45 @@ def find_mmds_v39(
             try:
                 zs_ret = _calc_zhongshu_retracement_confirm_v75(mmd, zss, closes)
                 mmd._zhongshu_retracement_confirm_v75 = zs_ret
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_ret.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zs_ret.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件234：量峰持续时间评分（Volume Peak Duration Score）
-        if mmd.bi is not None and volumes is not None and closes is not None and len(volumes) >= 30 and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and volumes is not None
+            and closes is not None
+            and len(volumes) >= 30
+            and len(closes) >= 30
+        ):
             try:
                 vp_dur = _calc_volume_peak_duration_v75(mmd, volumes, closes)
                 mmd._volume_peak_duration_v75 = vp_dur
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vp_dur.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vp_dur.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件235：多信号时间一致性（Multi-Signal Time Consistency）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 40:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 40
+        ):
             try:
-                sig_time = _calc_multi_signal_time_consistency_v75(mmd, closes, highs, lows, macd_data, volumes)
+                sig_time = _calc_multi_signal_time_consistency_v75(
+                    mmd, closes, highs, lows, macd_data, volumes
+                )
                 mmd._multi_signal_time_consistency_v75 = sig_time
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sig_time.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + sig_time.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12603,7 +13797,9 @@ def find_mmds_v39(
             try:
                 psi = _calc_price_structure_integrity_v76(mmd, closes, volumes)
                 mmd._price_structure_integrity_v76 = psi
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + psi.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + psi.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12612,7 +13808,9 @@ def find_mmds_v39(
             try:
                 tav = _calc_trend_alignment_validation_v76(mmd, closes)
                 mmd._trend_alignment_validation_v76 = tav
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + tav.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + tav.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12621,7 +13819,9 @@ def find_mmds_v39(
             try:
                 vac = _calc_volatility_adaptive_confidence_v76(mmd, closes)
                 mmd._volatility_adaptive_confidence_v76 = vac
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vac.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vac.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12640,7 +13840,9 @@ def find_mmds_v39(
             try:
                 vdd = _calc_volume_distribution_depth_v77(mmd, closes, volumes)
                 mmd._volume_distribution_depth_v77 = vdd
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vdd.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vdd.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12649,7 +13851,9 @@ def find_mmds_v39(
             try:
                 zsw = _calc_zhongshu_structure_weight_v77(mmd, zss, closes)
                 mmd._zhongshu_structure_weight_v77 = zsw
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + zsw.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + zsw.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12658,7 +13862,9 @@ def find_mmds_v39(
             try:
                 sfv = _calc_signal_freshness_validation_v77(mmd, closes)
                 mmd._signal_freshness_validation_v77 = sfv
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sfv.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + sfv.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12667,18 +13873,28 @@ def find_mmds_v39(
             try:
                 pma = _calc_price_momentum_acceleration_v77(mmd, closes)
                 mmd._price_momentum_acceleration_v77 = pma
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pma.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pma.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V78 条件 244-247 ──
 
         # 条件244：买卖点周期位置评分（MMD Cycle Position）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 mcp = _calc_mmd_cycle_position_v78(mmd, closes, highs, lows)
                 mmd._mmd_cycle_position_v78 = mcp
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mcp.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mcp.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12687,7 +13903,9 @@ def find_mmds_v39(
             try:
                 msc = _calc_multi_signal_consensus_v78(mmds, mmd, closes)
                 mmd._multi_signal_consensus_v78 = msc
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + msc.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + msc.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12696,7 +13914,9 @@ def find_mmds_v39(
             try:
                 vcb = _calc_volatility_compression_breakout_v78(closes, highs, lows)
                 mmd._volatility_compression_breakout_v78 = vcb
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vcb.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vcb.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12705,7 +13925,9 @@ def find_mmds_v39(
             try:
                 ffd = _calc_fund_flow_divergence_v78(closes, volumes)
                 mmd._fund_flow_divergence_v78 = ffd
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + ffd.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + ffd.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12716,7 +13938,9 @@ def find_mmds_v39(
             try:
                 fsf = _calc_fractal_stability_validation_v79(mmd, highs, lows)
                 mmd._fractal_stability_validation_v79 = fsf
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + fsf.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + fsf.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12725,16 +13949,22 @@ def find_mmds_v39(
             try:
                 mds = _calc_mmd_distance_safety_v79(mmds, mmd, closes)
                 mmd._mmd_distance_safety_v79 = mds
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mds.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mds.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件250：多级别结构一致性评分（Multi-Level Structure Consistency）
         if mmd.bi is not None and closes is not None and len(closes) >= 10:
             try:
-                mls = _calc_multi_level_structure_consistency_v79(mmd, closes, highs or closes, lows or closes)
+                mls = _calc_multi_level_structure_consistency_v79(
+                    mmd, closes, highs or closes, lows or closes
+                )
                 mmd._multi_level_structure_consistency_v79 = mls
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mls.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mls.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12743,7 +13973,9 @@ def find_mmds_v39(
             try:
                 pmc = _calc_price_momentum_continuity_v79(mmd, closes, volumes)
                 mmd._price_momentum_continuity_v79 = pmc
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + pmc.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + pmc.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12754,16 +13986,26 @@ def find_mmds_v39(
             try:
                 msd = _calc_mmd_zhongshu_distance_v80(mmd, closes, highs or closes, lows or closes)
                 mmd._mmd_zhongshu_distance_v80 = msd
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + msd.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + msd.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件253：量能配合度评分（Volume Confirmation Score）
-        if mmd.bi is not None and closes is not None and volumes is not None and len(closes) >= 10 and len(volumes) >= 10:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and volumes is not None
+            and len(closes) >= 10
+            and len(volumes) >= 10
+        ):
             try:
                 vcf = _calc_volume_confirmation_v80(mmd, closes, volumes)
                 mmd._volume_confirmation_v80 = vcf
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vcf.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vcf.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12772,74 +14014,130 @@ def find_mmds_v39(
             try:
                 mas = _calc_ma_alignment_strength_v80(mmd, closes)
                 mmd._ma_alignment_strength_v80 = mas
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mas.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mas.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件255：盈亏比动态评估（Dynamic Risk-Reward Assessment）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 20
+        ):
             try:
                 drr = _calc_dynamic_risk_reward_v80(mmd, closes, highs, lows)
                 mmd._dynamic_risk_reward_v80 = drr
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + drr.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + drr.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V81 条件 256-259 ──
 
         # 条件256：波动率状态转换检测（Volatility Regime Transition）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 vrt = _calc_volatility_regime_transition_v81(mmd, closes, highs, lows)
                 mmd._volatility_regime_transition_v81 = vrt
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vrt.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vrt.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件257：关键支撑阻力强度验证（Support/Resistance Strength）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 20
+        ):
             try:
                 srs = _calc_support_resistance_strength_v81(mmd, closes, highs, lows)
                 mmd._support_resistance_strength_v81 = srs
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + srs.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + srs.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件258：量价能量分布验证（Volume-Price Energy Distribution）
-        if mmd.bi is not None and closes is not None and volumes is not None and highs is not None and lows is not None and len(closes) >= 30 and len(volumes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and volumes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+            and len(volumes) >= 30
+        ):
             try:
                 vped = _calc_volume_price_energy_distribution_v81(mmd, closes, volumes, highs, lows)
                 mmd._volume_price_energy_distribution_v81 = vped
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vped.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vped.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件259：信号执行窗口评估（Signal Execution Window）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 20:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 20
+        ):
             try:
                 sew = _calc_signal_execution_window_v81(mmd, closes, highs, lows, volumes)
                 mmd._signal_execution_window_v81 = sew
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + sew.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + sew.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # ── V82 条件 260-263 ──
 
         # 条件260：买卖点时间衰减验证（MMD Age Decay）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 10:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 10
+        ):
             try:
                 mad = _calc_mmd_age_decay_v82(mmd, closes, highs, lows)
                 mmd._mmd_age_decay_v82 = mad
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mad.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mad.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件261：中枢突破回踩确认（Breakout Retest Confirmation）
         if mmd.bi is not None and closes is not None and len(closes) >= 20:
             try:
-                brc = _calc_breakout_retest_confirm_v82(mmd, closes, highs or closes, lows or closes)
+                brc = _calc_breakout_retest_confirm_v82(
+                    mmd, closes, highs or closes, lows or closes
+                )
                 mmd._breakout_retest_confirm_v82 = brc
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + brc.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + brc.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12848,16 +14146,26 @@ def find_mmds_v39(
             try:
                 mtr = _calc_macd_multi_tf_resonance_v82(mmd, closes)
                 mmd._macd_multi_tf_resonance_v82 = mtr
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + mtr.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + mtr.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
         # 条件263：波动率压缩突破确认（Volatility Compression Breakout）
-        if mmd.bi is not None and closes is not None and highs is not None and lows is not None and len(closes) >= 30:
+        if (
+            mmd.bi is not None
+            and closes is not None
+            and highs is not None
+            and lows is not None
+            and len(closes) >= 30
+        ):
             try:
                 vcb = _calc_volatility_compression_breakout_v82(mmd, closes, highs, lows)
                 mmd._volatility_compression_breakout_v82 = vcb
-                mmd.confidence = max(0.0, min(1.0, mmd.confidence + vcb.get("confidence_adjust", 0.0)))
+                mmd.confidence = max(
+                    0.0, min(1.0, mmd.confidence + vcb.get("confidence_adjust", 0.0))
+                )
             except Exception:
                 pass
 
@@ -12890,9 +14198,15 @@ def find_mmds_v40(
     别名：与 find_mmds_v39 完全相同，提供统一入口。
     """
     return find_mmds_v39(
-        bis=bis, zss=zss, closes=closes, config=config,
-        volumes=volumes, macd_data=macd_data, volatility=volatility,
-        highs=highs, lows=lows,
+        bis=bis,
+        zss=zss,
+        closes=closes,
+        config=config,
+        volumes=volumes,
+        macd_data=macd_data,
+        volatility=volatility,
+        highs=highs,
+        lows=lows,
     )
 
 
@@ -12913,9 +14227,15 @@ def find_mmds_v41(
     V42 条件(116-120)已集成至 find_mmds_v39，故本函数同样生效。
     """
     return find_mmds_v39(
-        bis=bis, zss=zss, closes=closes, config=config,
-        volumes=volumes, macd_data=macd_data, volatility=volatility,
-        highs=highs, lows=lows,
+        bis=bis,
+        zss=zss,
+        closes=closes,
+        config=config,
+        volumes=volumes,
+        macd_data=macd_data,
+        volatility=volatility,
+        highs=highs,
+        lows=lows,
     )
 
 
@@ -12937,9 +14257,15 @@ def find_mmds_v42(
     基础置信度已重新校准：BUY_3 0.65→0.55，SELL_3 0.60→0.50。
     """
     return find_mmds_v39(
-        bis=bis, zss=zss, closes=closes, config=config,
-        volumes=volumes, macd_data=macd_data, volatility=volatility,
-        highs=highs, lows=lows,
+        bis=bis,
+        zss=zss,
+        closes=closes,
+        config=config,
+        volumes=volumes,
+        macd_data=macd_data,
+        volatility=volatility,
+        highs=highs,
+        lows=lows,
     )
 
 
@@ -12964,9 +14290,15 @@ def find_mmds_v44(
     - 条件125：多指标背离共振（多指标同时确认）
     """
     return find_mmds_v39(
-        bis=bis, zss=zss, closes=closes, config=config,
-        volumes=volumes, macd_data=macd_data, volatility=volatility,
-        highs=highs, lows=lows,
+        bis=bis,
+        zss=zss,
+        closes=closes,
+        config=config,
+        volumes=volumes,
+        macd_data=macd_data,
+        volatility=volatility,
+        highs=highs,
+        lows=lows,
     )
 
 
@@ -12990,9 +14322,15 @@ def find_mmds_v76(
     - 条件243：价格动能加速度（评估趋势动能变化）
     """
     return find_mmds_v39(
-        bis=bis, zss=zss, closes=closes, config=config,
-        volumes=volumes, macd_data=macd_data, volatility=volatility,
-        highs=highs, lows=lows,
+        bis=bis,
+        zss=zss,
+        closes=closes,
+        config=config,
+        volumes=volumes,
+        macd_data=macd_data,
+        volatility=volatility,
+        highs=highs,
+        lows=lows,
     )
 
 
@@ -13005,6 +14343,7 @@ setattr(find_mmds_v39, "_last_reversal_risk", {})
 
 
 # ── V40: 条件106-110 缠论模型决策增强 ───────────────────────────────────────────
+
 
 def _calc_time_decay_adaptive(
     mmd: MMD,
@@ -13115,7 +14454,7 @@ def _calc_breakout_retest_validation(
         if is_buy:
             is_breakout = breakout_bar > zs_high and prev_close <= zs_high * 1.01
             lookback = min(15, mmd_idx)
-            pullback_lows = closes[mmd_idx - lookback:mmd_idx]
+            pullback_lows = closes[mmd_idx - lookback : mmd_idx]
             if pullback_lows:
                 min_pullback = min(pullback_lows)
                 fib_62 = zs_high - zs_range * 0.618
@@ -13124,17 +14463,19 @@ def _calc_breakout_retest_validation(
                 retest_depth = (zs_high - min_pullback) / zs_range * 100 if zs_range > 0 else 0
                 result["retest_depth"] = round(retest_depth, 1)
                 result["retest_detected"] = (
-                    retest_depth > 5 and retest_depth < 65 and
-                    min_pullback >= retest_zone_low and min_pullback <= retest_zone_high
+                    retest_depth > 5
+                    and retest_depth < 65
+                    and min_pullback >= retest_zone_low
+                    and min_pullback <= retest_zone_high
                 )
                 if volumes and len(volumes) > mmd_idx:
-                    recent_vol = sum(volumes[max(0, mmd_idx - 5):mmd_idx]) / min(5, mmd_idx)
+                    recent_vol = sum(volumes[max(0, mmd_idx - 5) : mmd_idx]) / min(5, mmd_idx)
                     avg_vol = _calc_avg_volume(volumes, 20)
                     result["volume_confirm"] = recent_vol < avg_vol * 0.7 if avg_vol > 0 else False
         else:
             is_breakout = breakout_bar < zs_low and prev_close >= zs_low * 0.99
             lookback = min(15, mmd_idx)
-            pullback_highs = closes[mmd_idx - lookback:mmd_idx]
+            pullback_highs = closes[mmd_idx - lookback : mmd_idx]
             if pullback_highs:
                 max_pullback = max(pullback_highs)
                 fib_38 = zs_low + zs_range * 0.382
@@ -13143,11 +14484,13 @@ def _calc_breakout_retest_validation(
                 retest_depth = (max_pullback - zs_low) / zs_range * 100 if zs_range > 0 else 0
                 result["retest_depth"] = round(retest_depth, 1)
                 result["retest_detected"] = (
-                    retest_depth > 5 and retest_depth < 65 and
-                    max_pullback >= retest_zone_low and max_pullback <= retest_zone_high
+                    retest_depth > 5
+                    and retest_depth < 65
+                    and max_pullback >= retest_zone_low
+                    and max_pullback <= retest_zone_high
                 )
                 if volumes and len(volumes) > mmd_idx:
-                    recent_vol = sum(volumes[max(0, mmd_idx - 5):mmd_idx]) / min(5, mmd_idx)
+                    recent_vol = sum(volumes[max(0, mmd_idx - 5) : mmd_idx]) / min(5, mmd_idx)
                     avg_vol = _calc_avg_volume(volumes, 20)
                     result["volume_confirm"] = recent_vol < avg_vol * 0.7 if avg_vol > 0 else False
 
@@ -13198,6 +14541,7 @@ def _calc_multi_cycle_macd_resonance(
                 result["fast_macd_bearish"] = dif[-1] < dea[-1] and dif[-2] >= dea[-2]
 
         from easy_tdx.MyTT import EMA
+
         close_arr = np.array(closes, dtype=float)
 
         # 中速MACD
@@ -13215,19 +14559,27 @@ def _calc_multi_cycle_macd_resonance(
         dif_slow = ema_fast_slow - ema_slow_slow
         dea_slow = EMA(dif_slow, 5)
         if len(dif_slow) >= 3 and len(dea_slow) >= 3:
-            result["slow_macd_bullish"] = dif_slow[-1] > dea_slow[-1] and dif_slow[-2] <= dea_slow[-2]
-            result["slow_macd_bearish"] = dif_slow[-1] < dea_slow[-1] and dif_slow[-2] >= dea_slow[-2]
+            result["slow_macd_bullish"] = (
+                dif_slow[-1] > dea_slow[-1] and dif_slow[-2] <= dea_slow[-2]
+            )
+            result["slow_macd_bearish"] = (
+                dif_slow[-1] < dea_slow[-1] and dif_slow[-2] >= dea_slow[-2]
+            )
 
-        bullish_count = sum([
-            result["fast_macd_bullish"],
-            result["mid_macd_bullish"],
-            result["slow_macd_bullish"],
-        ])
-        bearish_count = sum([
-            result["fast_macd_bearish"],
-            result["mid_macd_bearish"],
-            result["slow_macd_bearish"],
-        ])
+        bullish_count = sum(
+            [
+                result["fast_macd_bullish"],
+                result["mid_macd_bullish"],
+                result["slow_macd_bullish"],
+            ]
+        )
+        bearish_count = sum(
+            [
+                result["fast_macd_bearish"],
+                result["mid_macd_bearish"],
+                result["slow_macd_bearish"],
+            ]
+        )
         result["resonance_count"] = max(bullish_count, bearish_count)
 
         if bullish_count >= 2:
@@ -13266,7 +14618,13 @@ def _calc_kline_pattern_composite(
             return result
 
         close = closes[-1]
-        open_ = opens[-1] if opens and len(opens) > mmd_idx else closes[-2] if len(closes) > 1 else close
+        open_ = (
+            opens[-1]
+            if opens and len(opens) > mmd_idx
+            else closes[-2]
+            if len(closes) > 1
+            else close
+        )
         prev_close = closes[-2] if len(closes) > 1 else close
         high = highs[-1] if highs and len(highs) > mmd_idx else close
         low = lows[-1] if lows and len(lows) > mmd_idx else close
@@ -13281,10 +14639,10 @@ def _calc_kline_pattern_composite(
 
         if total_range > 0:
             is_hammer = (
-                lower_shadow > body * 2 and
-                upper_shadow < body * 0.5 and
-                body / total_range < 0.3 and
-                close > (open_ + high) / 2
+                lower_shadow > body * 2
+                and upper_shadow < body * 0.5
+                and body / total_range < 0.3
+                and close > (open_ + high) / 2
             )
             if is_hammer:
                 patterns.append("hammer")
@@ -13297,20 +14655,20 @@ def _calc_kline_pattern_composite(
 
         if len(closes) > 1 and total_range > 0:
             is_bullish_engulf = (
-                prev_close < (highs[-2] if highs and len(highs) > 1 else closes[-2]) and
-                close > open_ and
-                close > prev_close and
-                open_ < prev_close
+                prev_close < (highs[-2] if highs and len(highs) > 1 else closes[-2])
+                and close > open_
+                and close > prev_close
+                and open_ < prev_close
             )
             if is_bullish_engulf:
                 patterns.append("bullish_engulfing")
                 score += 5
 
             is_bearish_engulf = (
-                prev_close > (highs[-2] if highs and len(highs) > 1 else closes[-2]) and
-                close < open_ and
-                open_ > prev_close and
-                low < (lows[-2] if lows and len(lows) > 1 else closes[-2])
+                prev_close > (highs[-2] if highs and len(highs) > 1 else closes[-2])
+                and close < open_
+                and open_ > prev_close
+                and low < (lows[-2] if lows and len(lows) > 1 else closes[-2])
             )
             if is_bearish_engulf:
                 patterns.append("bearish_engulfing")
@@ -13377,6 +14735,7 @@ def _calc_confidence_calibration(
         z_score = (base_confidence - mean_conf) / std_conf if std_conf > 0 else 0.0
 
         import math
+
         sigmoid = 1.0 / (1.0 + math.exp(-min(5.0, max(-5.0, z_score))))
         calibration_factor = 0.7 + 0.3 * sigmoid
         calibrated = base_confidence * calibration_factor
@@ -13395,6 +14754,7 @@ def _calc_confidence_calibration(
 
 
 # ── V41: 条件111-115 缠论模型决策增强 ─────────────────────────────────────────────
+
 
 def _calc_volume_price_energy_dist(
     mmd: MMD,
@@ -13511,8 +14871,10 @@ def _calc_volume_cycle_detection(
         vol_mid = sum(volumes[-20:]) / 20
         vol_long = sum(volumes[-50:]) / 50 if len(volumes) >= 50 else vol_mid
 
-        result["volume_trend"] = "expanding" if vol_short > vol_long * 1.2 else (
-            "contracting" if vol_short < vol_long * 0.8 else "stable"
+        result["volume_trend"] = (
+            "expanding"
+            if vol_short > vol_long * 1.2
+            else ("contracting" if vol_short < vol_long * 0.8 else "stable")
         )
 
         # 检测成交量周期状态
@@ -13585,7 +14947,11 @@ def _calc_post_signal_trajectory(
 
         # 价格动量分析
         price_momentum = (closes[-1] - closes[-5]) / closes[-5] * 100 if closes[-5] > 0 else 0.0
-        price_acceleration = (closes[-1] - 2 * closes[-3] + closes[-5]) / max(1, closes[-3]) * 100 if closes[-3] > 0 else 0.0
+        price_acceleration = (
+            (closes[-1] - 2 * closes[-3] + closes[-5]) / max(1, closes[-3]) * 100
+            if closes[-3] > 0
+            else 0.0
+        )
 
         # 综合预测
         bullish_score = 0.0
@@ -13634,7 +15000,7 @@ def _calc_post_signal_trajectory(
             result["momentum_score"] = 0.0
 
         # 预期收益区间
-        vol = _calc_atr_volatility(closes) if 'vol' in dir() else 0.02
+        vol = _calc_atr_volatility(closes) if "vol" in dir() else 0.02
         expected_range = vol * 20 * 100  # 20日波动范围
         result["expected_return_range"] = [
             round(-expected_range * result["prediction_confidence"], 2),
@@ -13673,9 +15039,9 @@ def _calc_quality_tier_classification(
         scored_mmds = []
         for mmd in mmds:
             quality_score = mmd.confidence
-            if hasattr(mmd, 'confluence_score'):
+            if hasattr(mmd, "confluence_score"):
                 quality_score += mmd.confluence_score * 0.1
-            if hasattr(mmd, 'quality') and mmd.quality is not None:
+            if hasattr(mmd, "quality") and mmd.quality is not None:
                 quality_score += float(getattr(mmd.quality, "score", 0) or 0) * 0.05
             scored_mmds.append((mmd, quality_score))
 
@@ -13754,9 +15120,9 @@ def _calc_reversal_risk_assessment(
             price_highs = []
             macd_highs = []
             for i in range(len(closes) - 10, len(closes)):
-                if i >= 5 and closes[i] == max(closes[i-5:i+1]):
+                if i >= 5 and closes[i] == max(closes[i - 5 : i + 1]):
                     price_highs.append((i, closes[i]))
-                if i >= 5 and macd_hist[i] == max(macd_hist[i-5:i+1]):
+                if i >= 5 and macd_hist[i] == max(macd_hist[i - 5 : i + 1]):
                     macd_highs.append((i, macd_hist[i]))
 
             if len(price_highs) >= 2 and len(macd_highs) >= 2:
@@ -13766,7 +15132,9 @@ def _calc_reversal_risk_assessment(
                 prev_macd_high = macd_highs[-2][1] if len(macd_highs) >= 2 else 0
 
                 if last_price_high > prev_price_high and last_macd_high < prev_macd_high:
-                    result["divergence_strength"] = round(abs(last_macd_high - prev_macd_high) / max(1, prev_macd_high) * 100, 1)
+                    result["divergence_strength"] = round(
+                        abs(last_macd_high - prev_macd_high) / max(1, prev_macd_high) * 100, 1
+                    )
                     risk_score += 0.35
 
         # 3. 量价背离检测
@@ -13784,7 +15152,11 @@ def _calc_reversal_risk_assessment(
         # 4. 趋势加速度衰减
         if len(closes) >= 10:
             accel = closes[-1] - 2 * closes[-5] + closes[-10] if closes[-10] > 0 else 0
-            prev_accel = closes[-5] - 2 * closes[-8] + closes[-11] if len(closes) >= 11 and closes[-11] > 0 else 0
+            prev_accel = (
+                closes[-5] - 2 * closes[-8] + closes[-11]
+                if len(closes) >= 11 and closes[-11] > 0
+                else 0
+            )
             if accel * prev_accel > 0 and abs(accel) < abs(prev_accel) * 0.5:
                 result["momentum_decay"] = True
                 risk_score += 0.15
@@ -13814,6 +15186,7 @@ def _calc_reversal_risk_assessment(
 
 
 # ── V42: 条件116-120 缠论模型精准度提升 ──────────────────────────────────────────
+
 
 def _calc_post_signal_confirmation(
     mmd: MMD,
@@ -13845,9 +15218,9 @@ def _calc_post_signal_confirmation(
         signal_price = closes[bi_end_idx]
 
         # 检查信号后5根K线的表现
-        future_closes = closes[bi_end_idx + 1:bi_end_idx + 6]
-        future_highs = highs[bi_end_idx + 1:bi_end_idx + 6] if highs else future_closes
-        future_lows = lows[bi_end_idx + 1:bi_end_idx + 6] if lows else future_closes
+        future_closes = closes[bi_end_idx + 1 : bi_end_idx + 6]
+        future_highs = highs[bi_end_idx + 1 : bi_end_idx + 6] if highs else future_closes
+        future_lows = lows[bi_end_idx + 1 : bi_end_idx + 6] if lows else future_closes
 
         if is_buy:
             # 3买确认：信号后价格未大幅下跌
@@ -13938,10 +15311,10 @@ def _calc_break_pullback_volume_ratio(
 
         # 找突破笔（在bi之前的同向笔）
         bi_start_idx = bi.start.k.k_index
-        bi_end_idx = bi.end.k.k_index
+        _ = bi.end.k.k_index
 
         break_bi = None
-        for b in reversed(bis[:bis.index(bi)]):
+        for b in reversed(bis[: bis.index(bi)]):
             if is_buy and b.direction.value == "up" and b.end.k.k_index < bi_start_idx:
                 if b.high > zs.zg * 1.01:  # 突破中枢上沿
                     break_bi = b
@@ -13960,7 +15333,7 @@ def _calc_break_pullback_volume_ratio(
         if break_end <= break_start or break_end >= len(volumes):
             return result
 
-        break_vol = sum(volumes[break_start:break_end + 1]) / max(1, break_end - break_start)
+        break_vol = sum(volumes[break_start : break_end + 1]) / max(1, break_end - break_start)
         avg_vol = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else sum(volumes) / len(volumes)
 
         if avg_vol <= 0:
@@ -13976,13 +15349,13 @@ def _calc_break_pullback_volume_ratio(
         if pull_end <= pull_start or pull_end >= len(volumes):
             return result
 
-        pull_vol = sum(volumes[pull_start:pull_end + 1]) / max(1, pull_end - pull_start)
+        pull_vol = sum(volumes[pull_start : pull_end + 1]) / max(1, pull_end - pull_start)
         pull_vol_ratio = pull_vol / avg_vol if avg_vol > 0 else 1.0
         result["pullback_vol_ratio"] = round(pull_vol_ratio, 2)
 
         # 量比验证：突破放量应大于回调缩量
         # 理想情况：break_vol_ratio > 1.5 且 pull_vol_ratio < 0.7
-        volume_ratio_ok = (break_vol_ratio >= 1.3 and pull_vol_ratio <= 0.85)
+        volume_ratio_ok = break_vol_ratio >= 1.3 and pull_vol_ratio <= 0.85
         result["volume_ratio_ok"] = volume_ratio_ok
 
         if volume_ratio_ok:
@@ -14160,6 +15533,7 @@ def _calc_enhanced_signal_freshness(
 
         # 指数衰减模型：decay = e^(-rate * bars)
         import math
+
         decay_factor = math.exp(-decay_rate * bars_since)
         decay_factor = max(0.0, min(1.0, decay_factor))
 
@@ -14185,6 +15559,7 @@ def _calc_enhanced_signal_freshness(
 
 
 # ── V44: 条件121-125 缠论模型精准度进一步提升 ──────────────────────────────────
+
 
 def _calc_trend_direction_alignment(
     mmd: MMD,
@@ -14215,6 +15590,7 @@ def _calc_trend_direction_alignment(
 
         is_buy = "buy" in mmd.mmd_type.value
         from easy_tdx.MyTT import MA
+
         ma5 = MA(closes, 5)[-1]
         ma10 = MA(closes, 10)[-1]
         ma20 = MA(closes, 20)[-1]
@@ -14294,7 +15670,7 @@ def _calc_breakout_bi_strength_compare(
         if mmd_bi_idx is None or mmd_bi_idx < 1:
             return result
 
-        zs = mmd.zs
+        _ = mmd.zs
         entry_bi_idx = mmd_bi_idx - 1
         entry_bi = bis[entry_bi_idx]
         breakout_bi = mmd_bi
@@ -14304,7 +15680,7 @@ def _calc_breakout_bi_strength_compare(
             end_idx = bi.end.k.k_index
             if start_idx >= len(volumes) or end_idx >= len(volumes) or start_idx < 0:
                 return 0.0
-            vol_slice = volumes[start_idx:end_idx + 1]
+            vol_slice = volumes[start_idx : end_idx + 1]
             return sum(vol_slice) / len(vol_slice) if vol_slice else 0.0
 
         entry_vol = bi_avg_volume(entry_bi)
@@ -14412,10 +15788,14 @@ def _calc_volatility_adaptive_v44(
     try:
         if len(closes) >= 20:
             recent_closes = closes[-20:]
-            returns = [(recent_closes[i] - recent_closes[i-1]) / recent_closes[i-1]
-                       for i in range(1, len(recent_closes)) if recent_closes[i-1] > 0]
+            returns = [
+                (recent_closes[i] - recent_closes[i - 1]) / recent_closes[i - 1]
+                for i in range(1, len(recent_closes))
+                if recent_closes[i - 1] > 0
+            ]
             if returns:
                 import numpy as np
+
                 calc_vol = float(np.std(returns)) * np.sqrt(252)
             else:
                 calc_vol = volatility
@@ -14441,7 +15821,7 @@ def _calc_volatility_adaptive_v44(
             result["threshold_multiplier"] = 0.5
             result["msg"] = "极端波动市场，信号可靠性大幅降低"
 
-        is_buy = "buy" in mmd.mmd_type.value
+        _ = "buy" in mmd.mmd_type.value
         base_adj = 0.02 if result["vol_regime"] in ("low", "normal") else 0.0
 
         if result["vol_regime"] == "high":
@@ -14489,38 +15869,50 @@ def _calc_multi_indicator_divergence_resonance(
         # MACD背离检测
         macd_hist = macd_data.get("hist", [])
         if len(macd_hist) >= lookback:
-            price_low_1 = min(closes[-lookback:-lookback//2])
-            price_low_2 = min(closes[-lookback//2:])
-            macd_low_1 = min(macd_hist[-lookback:-lookback//2]) if macd_hist[-lookback:-lookback//2] else 0
-            macd_low_2 = min(macd_hist[-lookback//2:]) if macd_hist[-lookback//2:] else 0
+            price_low_1 = min(closes[-lookback : -lookback // 2])
+            price_low_2 = min(closes[-lookback // 2 :])
+            macd_low_1 = (
+                min(macd_hist[-lookback : -lookback // 2])
+                if macd_hist[-lookback : -lookback // 2]
+                else 0
+            )
+            macd_low_2 = min(macd_hist[-lookback // 2 :]) if macd_hist[-lookback // 2 :] else 0
             if is_buy and price_low_2 < price_low_1 and macd_low_2 > macd_low_1:
                 result["macd_divergence"] = True
 
         # RSI背离检测
         rsi_values = macd_data.get("rsi", [])
         if len(rsi_values) >= lookback:
-            price_low_1 = min(closes[-lookback:-lookback//2])
-            price_low_2 = min(closes[-lookback//2:])
-            rsi_low_1 = min(rsi_values[-lookback:-lookback//2]) if rsi_values[-lookback:-lookback//2] else 0
-            rsi_low_2 = min(rsi_values[-lookback//2:]) if rsi_values[-lookback//2:] else 0
+            price_low_1 = min(closes[-lookback : -lookback // 2])
+            price_low_2 = min(closes[-lookback // 2 :])
+            rsi_low_1 = (
+                min(rsi_values[-lookback : -lookback // 2])
+                if rsi_values[-lookback : -lookback // 2]
+                else 0
+            )
+            rsi_low_2 = min(rsi_values[-lookback // 2 :]) if rsi_values[-lookback // 2 :] else 0
             if is_buy and price_low_2 < price_low_1 and rsi_low_2 > rsi_low_1:
                 result["rsi_divergence"] = True
 
         # KDJ背离检测
         kdj_k = macd_data.get("k", [])
         if len(kdj_k) >= lookback:
-            price_low_1 = min(closes[-lookback:-lookback//2])
-            price_low_2 = min(closes[-lookback//2:])
-            kdj_low_1 = min(kdj_k[-lookback:-lookback//2]) if kdj_k[-lookback:-lookback//2] else 0
-            kdj_low_2 = min(kdj_k[-lookback//2:]) if kdj_k[-lookback//2:] else 0
+            price_low_1 = min(closes[-lookback : -lookback // 2])
+            price_low_2 = min(closes[-lookback // 2 :])
+            kdj_low_1 = (
+                min(kdj_k[-lookback : -lookback // 2]) if kdj_k[-lookback : -lookback // 2] else 0
+            )
+            kdj_low_2 = min(kdj_k[-lookback // 2 :]) if kdj_k[-lookback // 2 :] else 0
             if is_buy and price_low_2 < price_low_1 and kdj_low_2 > kdj_low_1:
                 result["kdj_divergence"] = True
 
-        resonance_count = sum([
-            result["macd_divergence"],
-            result["rsi_divergence"],
-            result["kdj_divergence"],
-        ])
+        resonance_count = sum(
+            [
+                result["macd_divergence"],
+                result["rsi_divergence"],
+                result["kdj_divergence"],
+            ]
+        )
         result["resonance_count"] = resonance_count
 
         if resonance_count >= 3:
@@ -14648,22 +16040,25 @@ def _calc_volume_price_divergence_secondary(
         if len(closes) < 30 or len(volumes) < 30:
             return result
 
-        is_buy = "buy" in mmd.mmd_type.value
+        _ = "buy" in mmd.mmd_type.value
 
         recent_closes = closes[-20:]
         recent_vols = volumes[-20:]
 
-        first_half_price_change = (
-            (recent_closes[-1] - recent_closes[0]) / (recent_closes[0] + 1e-10)
+        first_half_price_change = (recent_closes[-1] - recent_closes[0]) / (
+            recent_closes[0] + 1e-10
         )
         second_half_price_change = (
-            (recent_closes[-1] - recent_closes[10])
-            / (recent_closes[10] + 1e-10)
+            (recent_closes[-1] - recent_closes[10]) / (recent_closes[10] + 1e-10)
             if len(recent_closes) > 10
             else 0
         )
-        first_half_vol_avg = sum(recent_vols[:10]) / max(len([v for v in recent_vols[:10] if v > 0]), 1)
-        second_half_vol_avg = sum(recent_vols[10:]) / max(len([v for v in recent_vols[10:] if v > 0]), 1)
+        first_half_vol_avg = sum(recent_vols[:10]) / max(
+            len([v for v in recent_vols[:10] if v > 0]), 1
+        )
+        second_half_vol_avg = sum(recent_vols[10:]) / max(
+            len([v for v in recent_vols[10:] if v > 0]), 1
+        )
 
         if first_half_price_change > 0.02 and first_half_vol_avg > 0:
             result["breakout_vol_price"] = True
@@ -14864,6 +16259,7 @@ def _calc_dynamic_market_regime(
             return result
 
         import statistics
+
         daily_vol = statistics.stdev(returns) if len(returns) > 1 else 0
         annual_vol = daily_vol * (252**0.5)
         result["volatility"] = round(annual_vol * 100, 2)
@@ -14922,6 +16318,7 @@ def _calc_dynamic_market_regime(
 # V47: 后确认价格跟随过滤 + 信号有效性窗口 + 置信度动态校准
 # =============================================================================
 
+
 def _check_post_signal_price_follow_through(
     mmd: MMD,
     closes: list[float],
@@ -14974,25 +16371,27 @@ def _check_post_signal_price_follow_through(
             if follow_pct >= min_follow_pct:
                 result["followed"] = True
                 result["confidence_adjust"] = 0.04
-                result["msg"] = f"后确认通过：信号后{actual_lookback}根K线涨{follow_pct*100:.1f}%"
+                result["msg"] = f"后确认通过：信号后{actual_lookback}根K线涨{follow_pct * 100:.1f}%"
             elif follow_pct >= min_follow_pct * 0.5:
                 # 部分确认，小幅加分
                 result["confidence_adjust"] = 0.01
-                result["msg"] = f"部分确认：信号后涨{follow_pct*100:.1f}%，勉强达标"
+                result["msg"] = f"部分确认：信号后涨{follow_pct * 100:.1f}%，勉强达标"
             else:
                 result["confidence_adjust"] = -0.05
-                result["msg"] = f"后确认失败：信号后仅涨{follow_pct*100:.1f}%，可能假突破"
+                result["msg"] = f"后确认失败：信号后仅涨{follow_pct * 100:.1f}%，可能假突破"
         else:  # sell
             if follow_pct <= -min_follow_pct:
                 result["followed"] = True
                 result["confidence_adjust"] = 0.04
-                result["msg"] = f"后确认通过：信号后{actual_lookback}根K线跌{abs(follow_pct)*100:.1f}%"
+                result["msg"] = (
+                    f"后确认通过：信号后{actual_lookback}根K线跌{abs(follow_pct) * 100:.1f}%"
+                )
             elif follow_pct <= -min_follow_pct * 0.5:
                 result["confidence_adjust"] = 0.01
-                result["msg"] = f"部分确认：信号后跌{abs(follow_pct)*100:.1f}%，勉强达标"
+                result["msg"] = f"部分确认：信号后跌{abs(follow_pct) * 100:.1f}%，勉强达标"
             else:
                 result["confidence_adjust"] = -0.05
-                result["msg"] = f"后确认失败：信号后仅跌{abs(follow_pct)*100:.1f}%，可能假跌破"
+                result["msg"] = f"后确认失败：信号后仅跌{abs(follow_pct) * 100:.1f}%，可能假跌破"
 
         return result
     except Exception:
@@ -15053,25 +16452,29 @@ def _calc_signal_validity_window(
             # 计算信号窗口内的价格范围
             if is_buy:
                 # 3买：信号后窗口内价格不应跌破信号价的95%
-                future_prices = closes[signal_idx:min(signal_idx + window_bars, len(closes))]
+                future_prices = closes[signal_idx : min(signal_idx + window_bars, len(closes))]
                 if future_prices:
                     min_price = min(future_prices)
                     if min_price < signal_price * 0.95:
                         result["valid"] = False
                         result["confidence_adjust"] = -0.03
-                        result["msg"] = f"信号失效：窗口内最低价{min_price:.2f}跌破信号价{signal_price:.2f}的5%"
+                        result["msg"] = (
+                            f"信号失效：窗口内最低价{min_price:.2f}跌破信号价{signal_price:.2f}的5%"
+                        )
                     else:
                         result["confidence_adjust"] = 0.02
                         result["msg"] = f"信号有效：窗口内最低{min_price:.2f}，未破5%止损"
             else:
                 # 3卖：信号后窗口内价格不应涨超信号价的105%
-                future_prices = closes[signal_idx:min(signal_idx + window_bars, len(closes))]
+                future_prices = closes[signal_idx : min(signal_idx + window_bars, len(closes))]
                 if future_prices:
                     max_price = max(future_prices)
                     if max_price > signal_price * 1.05:
                         result["valid"] = False
                         result["confidence_adjust"] = -0.03
-                        result["msg"] = f"信号失效：窗口内最高价{max_price:.2f}突破信号价{signal_price:.2f}的5%"
+                        result["msg"] = (
+                            f"信号失效：窗口内最高价{max_price:.2f}突破信号价{signal_price:.2f}的5%"
+                        )
                     else:
                         result["confidence_adjust"] = 0.02
                         result["msg"] = f"信号有效：窗口内最高{max_price:.2f}，未破5%止损"
@@ -15107,7 +16510,9 @@ def _calc_confidence_v47(
     # V47: 后确认修正
     if closes is not None and len(closes) > 5:
         try:
-            follow_result = _check_post_signal_price_follow_through(mmd, closes, lookback_bars=5, min_follow_pct=0.02)
+            follow_result = _check_post_signal_price_follow_through(
+                mmd, closes, lookback_bars=5, min_follow_pct=0.02
+            )
             base_confidence += follow_result.get("confidence_adjust", 0.0)
         except Exception:
             pass
@@ -15132,6 +16537,7 @@ def _calc_confidence_v47(
 
 
 # ── V48: 条件134-136 缠论模型决策增强 ────────────────────────────────────────────────
+
 
 def _calc_volume_price_divergence_secondary_v48(
     mmd: MMD,
@@ -15168,8 +16574,8 @@ def _calc_volume_price_divergence_secondary_v48(
         if lookback < 5:
             return result
 
-        recent_closes = closes[signal_idx - lookback:signal_idx + 1]
-        recent_volumes = volumes[signal_idx - lookback:signal_idx + 1]
+        recent_closes = closes[signal_idx - lookback : signal_idx + 1]
+        recent_volumes = volumes[signal_idx - lookback : signal_idx + 1]
 
         if len(recent_closes) < 5:
             return result
@@ -15192,25 +16598,31 @@ def _calc_volume_price_divergence_secondary_v48(
             if vwap_deviation > 0.01:
                 result["confirmed"] = True
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"量价背离二次确认通过：当前价VWAP偏离+{vwap_deviation*100:.1f}%（多头）"
+                result["msg"] = (
+                    f"量价背离二次确认通过：当前价VWAP偏离+{vwap_deviation * 100:.1f}%（多头）"
+                )
             elif vwap_deviation < -0.02:
                 result["confidence_adjust"] = -0.04
-                result["msg"] = f"量价背离二次确认失败：当前价低于VWAP {abs(vwap_deviation)*100:.1f}%"
+                result["msg"] = (
+                    f"量价背离二次确认失败：当前价低于VWAP {abs(vwap_deviation) * 100:.1f}%"
+                )
             else:
                 result["confidence_adjust"] = 0.0
-                result["msg"] = f"量价背离二次确认中性：VWAP偏离{vwap_deviation*100:.1f}%"
+                result["msg"] = f"量价背离二次确认中性：VWAP偏离{vwap_deviation * 100:.1f}%"
         else:
             # 3卖：价格应在VWAP之下（空头排列）
             if vwap_deviation < -0.01:
                 result["confirmed"] = True
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"量价背离二次确认通过：当前价VWAP偏离{vwap_deviation*100:.1f}%（空头）"
+                result["msg"] = (
+                    f"量价背离二次确认通过：当前价VWAP偏离{vwap_deviation * 100:.1f}%（空头）"
+                )
             elif vwap_deviation > 0.02:
                 result["confidence_adjust"] = -0.04
-                result["msg"] = f"量价背离二次确认失败：当前价高于VWAP {vwap_deviation*100:.1f}%"
+                result["msg"] = f"量价背离二次确认失败：当前价高于VWAP {vwap_deviation * 100:.1f}%"
             else:
                 result["confidence_adjust"] = 0.0
-                result["msg"] = f"量价背离二次确认中性：VWAP偏离{vwap_deviation*100:.1f}%"
+                result["msg"] = f"量价背离二次确认中性：VWAP偏离{vwap_deviation * 100:.1f}%"
 
         return result
     except Exception:
@@ -15351,15 +16763,21 @@ def _calc_dynamic_risk_reward_ratio_v48(
         if rrr >= 2.5:
             result["quality_tier"] = "S"
             result["confidence_adjust"] = 0.04
-            result["msg"] = f"优质信号：风险收益比{rrr:.1f}（S级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+            result["msg"] = (
+                f"优质信号：风险收益比{rrr:.1f}（S级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+            )
         elif rrr >= 2.0:
             result["quality_tier"] = "A"
             result["confidence_adjust"] = 0.03
-            result["msg"] = f"良好信号：风险收益比{rrr:.1f}（A级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+            result["msg"] = (
+                f"良好信号：风险收益比{rrr:.1f}（A级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+            )
         elif rrr >= 1.5:
             result["quality_tier"] = "B"
             result["confidence_adjust"] = 0.01
-            result["msg"] = f"合格信号：风险收益比{rrr:.1f}（B级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+            result["msg"] = (
+                f"合格信号：风险收益比{rrr:.1f}（B级），止损{result['stop_loss']:.2f}→止盈{result['take_profit_1']:.2f}"
+            )
         else:
             result["quality_tier"] = "C"
             result["confidence_adjust"] = -0.03
@@ -15371,6 +16789,7 @@ def _calc_dynamic_risk_reward_ratio_v48(
 
 
 # ── V49: 条件137-139 缠论模型精准度提升（聚焦3买/3卖准确率）───────────────────────
+
 
 def _calc_breakout_strength_revalidation_v49(
     mmd: MMD,
@@ -15424,20 +16843,24 @@ def _calc_breakout_strength_revalidation_v49(
 
         if macd_data and "hist" in macd_data:
             hist = macd_data["hist"]
-            hist_before = hist[start_before:end_before + 1] if end_before >= start_before else []
-            hist_after = hist[start_after:end_after + 1] if end_after >= start_after else []
+            hist_before = hist[start_before : end_before + 1] if end_before >= start_before else []
+            hist_after = hist[start_after : end_after + 1] if end_after >= start_after else []
         else:
             # 用收盘价变化率代替
-            price_before = closes[start_before:end_before + 1] if end_before >= start_before else []
-            price_after = closes[start_after:end_after + 1] if end_after >= start_after else []
-            hist_before = [
-                price_before[i] - price_before[i - 1]
-                for i in range(1, len(price_before))
-            ] if len(price_before) > 1 else []
-            hist_after = [
-                price_after[i] - price_after[i - 1]
-                for i in range(1, len(price_after))
-            ] if len(price_after) > 1 else []
+            price_before = (
+                closes[start_before : end_before + 1] if end_before >= start_before else []
+            )
+            price_after = closes[start_after : end_after + 1] if end_after >= start_after else []
+            hist_before = (
+                [price_before[i] - price_before[i - 1] for i in range(1, len(price_before))]
+                if len(price_before) > 1
+                else []
+            )
+            hist_after = (
+                [price_after[i] - price_after[i - 1] for i in range(1, len(price_after))]
+                if len(price_after) > 1
+                else []
+            )
 
         area_before = sum(abs(h) for h in hist_before) if hist_before else 1e-6
         area_after = sum(abs(h) for h in hist_after) if hist_after else 1e-6
@@ -15535,7 +16958,9 @@ def _calc_pullback_structure_integrity_v49(
         second_half_avg = sum(price_seq[mid:]) / (len(price_seq) - mid)
 
         if is_buy:
-            decline_ratio = (first_half_avg - second_half_avg) / first_half_avg if first_half_avg > 0 else 0
+            decline_ratio = (
+                (first_half_avg - second_half_avg) / first_half_avg if first_half_avg > 0 else 0
+            )
 
             if decline_ratio > 0.01:
                 result["confirmed"] = True
@@ -15554,7 +16979,9 @@ def _calc_pullback_structure_integrity_v49(
                 result["msg"] = "回踩结构无效：非递减走势，非有效回调"
 
         else:
-            rise_ratio = (second_half_avg - first_half_avg) / first_half_avg if first_half_avg > 0 else 0
+            rise_ratio = (
+                (second_half_avg - first_half_avg) / first_half_avg if first_half_avg > 0 else 0
+            )
 
             if rise_ratio > 0.01:
                 result["confirmed"] = True
@@ -15580,7 +17007,7 @@ def _calc_pullback_structure_integrity_v49(
 
 def _calc_zhongshu_level_weight_v49(
     mmd: MMD,
-    zss: list["ZS"] | None,
+    zss: list[ZS] | None,
 ) -> dict[str, Any]:
     """中枢级别权重（V49 条件139）。
 
@@ -15630,7 +17057,9 @@ def _calc_zhongshu_level_weight_v49(
 
     return result
 
+
 # ── V50: 条件140-143 缠论模型精准度进一步提升 ────────────────────────────────────────
+
 
 def _calc_sector_correlation_v50(
     mmd: MMD,
@@ -15665,7 +17094,9 @@ def _calc_sector_correlation_v50(
 
         # 计算价格动量和成交量动量
         price_change = (recent_closes[-1] - recent_closes[0]) / (recent_closes[0] + 1e-10)
-        vol_change = (recent_volumes[-1] - recent_volumes[0]) / (sum(recent_volumes) / lookback + 1e-10)
+        vol_change = (recent_volumes[-1] - recent_volumes[0]) / (
+            sum(recent_volumes) / lookback + 1e-10
+        )
 
         # 计算价格与成交量的相关性（简化版：同向性检查）
         is_buy = "buy" in mmd.mmd_type.value
@@ -15724,8 +17155,12 @@ def _calc_multi_tf_resonance_v50(
 
         # 计算不同周期的动量
         momentum_5d = (closes[-1] - closes[-5]) / (closes[-5] + 1e-10) if len(closes) >= 5 else 0.0
-        momentum_20d = (closes[-1] - closes[-20]) / (closes[-20] + 1e-10) if len(closes) >= 20 else 0.0
-        momentum_60d = (closes[-1] - closes[-60]) / (closes[-60] + 1e-10) if len(closes) >= 60 else 0.0
+        momentum_20d = (
+            (closes[-1] - closes[-20]) / (closes[-20] + 1e-10) if len(closes) >= 20 else 0.0
+        )
+        momentum_60d = (
+            (closes[-1] - closes[-60]) / (closes[-60] + 1e-10) if len(closes) >= 60 else 0.0
+        )
 
         # 判断各周期动量方向
         dirs = []
@@ -15787,10 +17222,10 @@ def _calc_level_recursive_validation_v50(
 
         # 分析中枢的相对位置和质量
         zs = mmd.zs
-        zg = zs.zg if hasattr(zs, 'zg') else 0.0
-        zd = zs.zd if hasattr(zs, 'zd') else 0.0
-        zgg = zs.zgg if hasattr(zs, 'zgg') else 0.0
-        zdd = zs.zdd if hasattr(zs, 'zdd') else 0.0
+        zg = zs.zg if hasattr(zs, "zg") else 0.0
+        zd = zs.zd if hasattr(zs, "zd") else 0.0
+        zgg = zs.zgg if hasattr(zs, "zgg") else 0.0
+        zdd = zs.zdd if hasattr(zs, "zdd") else 0.0
 
         if zg == 0 or zd == 0:
             result["msg"] = "中枢数据不完整"
@@ -15947,6 +17382,7 @@ def _calc_market_sentiment_fusion_v50(
 
 # ── V51: 条件144-147 缠论模型精准度与决策帮助进一步提升 ────────────────────────────────
 
+
 def _calc_breakout_bi_strength_enhanced_v51(
     mmd: MMD,
     bis: list[Any],
@@ -15995,7 +17431,7 @@ def _calc_breakout_bi_strength_enhanced_v51(
             end_idx = bi.end.k.k_index
             if start_idx >= len(volumes) or end_idx >= len(volumes) or start_idx < 0:
                 return 0.0
-            vol_slice = volumes[start_idx:end_idx + 1]
+            vol_slice = volumes[start_idx : end_idx + 1]
             return sum(vol_slice) / len(vol_slice) if vol_slice else 0.0
 
         entry_vol = bi_avg_volume(entry_bi)
@@ -16023,12 +17459,14 @@ def _calc_breakout_bi_strength_enhanced_v51(
             def macd_area(start: int, end: int) -> float:
                 if end <= start or start < 0 or end >= len(macd_data["hist"]):
                     return 0.0
-                hist = macd_data["hist"][start:end + 1]
+                hist = macd_data["hist"][start : end + 1]
                 return sum(abs(h) for h in hist)
 
             entry_area = macd_area(entry_start, entry_end)
             breakout_area = macd_area(breakout_start, breakout_end)
-            result["macd_area_ratio"] = round(breakout_area / entry_area, 2) if entry_area > 0 else 0.0
+            result["macd_area_ratio"] = (
+                round(breakout_area / entry_area, 2) if entry_area > 0 else 0.0
+            )
 
             is_buy = "buy" in mmd.mmd_type.value
             if is_buy:
@@ -16121,15 +17559,21 @@ def _calc_pullback_depth_time_v51(
         if depth_ok and time_ok:
             result["combined_status"] = "strong"
             result["confidence_adjust"] = 0.03
-            result["msg"] = f"回踩深度{depth_pct*100:.1f}%在安全范围，时间{pullback_bars}根K线符合预期"
+            result["msg"] = (
+                f"回踩深度{depth_pct * 100:.1f}%在安全范围，时间{pullback_bars}根K线符合预期"
+            )
         elif depth_ok or time_ok:
             result["combined_status"] = "normal"
             result["confidence_adjust"] = 0.0
-            result["msg"] = f"回踩深度{'符合' if depth_ok else '偏深'}，时间{'符合' if time_ok else '偏长'}"
+            result["msg"] = (
+                f"回踩深度{'符合' if depth_ok else '偏深'}，时间{'符合' if time_ok else '偏长'}"
+            )
         else:
             result["combined_status"] = "weak"
             result["confidence_adjust"] = -0.04
-            result["msg"] = f"回踩深度{depth_pct*100:.1f}%过大且时间{pullback_bars}根K线过长，信号质量差"
+            result["msg"] = (
+                f"回踩深度{depth_pct * 100:.1f}%过大且时间{pullback_bars}根K线过长，信号质量差"
+            )
 
         return result
     except Exception:
@@ -16178,14 +17622,18 @@ def _calc_trend_strength_composite_v51(
         if len(ma20) >= 2:
             ma_slope = "up" if ma20[-1] > ma20[-2] else "down"
             result["ma_slope"] = ma_slope
-            ma_score = 2 if (ma_slope == "up" and is_buy) or (ma_slope == "down" and not is_buy) else -2
+            ma_score = (
+                2 if (ma_slope == "up" and is_buy) or (ma_slope == "down" and not is_buy) else -2
+            )
         else:
             ma_score = 0
 
         if len(closes) >= 6:
             momentum_5d = (closes[-1] - closes[-6]) / closes[-6] if closes[-6] > 0 else 0.0
             result["momentum_5d"] = round(momentum_5d * 100, 2)
-            mom_score = 2 if (momentum_5d > 0 and is_buy) or (momentum_5d < 0 and not is_buy) else -2
+            mom_score = (
+                2 if (momentum_5d > 0 and is_buy) or (momentum_5d < 0 and not is_buy) else -2
+            )
         else:
             mom_score = 0
 
@@ -16199,7 +17647,7 @@ def _calc_trend_strength_composite_v51(
         elif total_score >= 3:
             trend_strength = "medium"
             confidence_adjust = 0.02
-            msg = f"趋势强度综合评分{total_score}分（ADX={adx_val:.1f}，MA{ma_slope}，动量{momentum_5d*100:.1f}%），中等确认"
+            msg = f"趋势强度综合评分{total_score}分（ADX={adx_val:.1f}，MA{ma_slope}，动量{momentum_5d * 100:.1f}%），中等确认"
         elif total_score >= 0:
             trend_strength = "weak"
             confidence_adjust = 0.0
@@ -16207,7 +17655,9 @@ def _calc_trend_strength_composite_v51(
         else:
             trend_strength = "contrarian"
             confidence_adjust = -0.05
-            msg = f"⚠️ 趋势强度综合评分{total_score}分（ADX={adx_val:.1f}弱趋势+方向相反），逆势需谨慎"
+            msg = (
+                f"⚠️ 趋势强度综合评分{total_score}分（ADX={adx_val:.1f}弱趋势+方向相反），逆势需谨慎"
+            )
 
         result["trend_strength"] = trend_strength
         result["confidence_adjust"] = confidence_adjust
@@ -16326,6 +17776,7 @@ def _calc_trading_decision_v51(
 
 # ── V52: 条件148-151 缠论模型精准度与决策帮助进一步提升 ────────────────────────────────
 
+
 def _calc_volume_sustain_after_signal_v52(
     mmd: MMD,
     closes: list[float],
@@ -16355,7 +17806,7 @@ def _calc_volume_sustain_after_signal_v52(
         if len(volumes) < lookback * 2:
             return result
 
-        pre_vol = sum(volumes[-lookback * 2:-lookback]) / lookback
+        pre_vol = sum(volumes[-lookback * 2 : -lookback]) / lookback
         post_vol = sum(volumes[-lookback:]) / lookback
 
         vol_ratio = post_vol / (pre_vol + 1e-10)
@@ -16375,7 +17826,9 @@ def _calc_volume_sustain_after_signal_v52(
             result["vol_trend"] = "shrinking"
             result["confirmed"] = False
             result["confidence_adjust"] = -0.04
-            result["msg"] = f"⚠️ 量价持续确认：信号后均量/信号前均量={vol_ratio:.2f}（量能萎缩，警惕假突破）"
+            result["msg"] = (
+                f"⚠️ 量价持续确认：信号后均量/信号前均量={vol_ratio:.2f}（量能萎缩，警惕假突破）"
+            )
 
         return result
     except Exception:
@@ -16419,15 +17872,20 @@ def _calc_multi_indicator_divergence_fusion_v52(
             hist_high = max(recent_hist) if recent_hist else 0
             hist_low = min(recent_hist) if recent_hist else 0
             if is_buy:
-                result["macd_div"] = (price_low > closes[-30] * 0.98) and (hist_low > macd_hist[-40] if len(macd_hist) >= 40 else False)
+                result["macd_div"] = (price_low > closes[-30] * 0.98) and (
+                    hist_low > macd_hist[-40] if len(macd_hist) >= 40 else False
+                )
             else:
-                result["macd_div"] = (price_high < closes[-30] * 1.02) and (hist_high < macd_hist[-40] if len(macd_hist) >= 40 else False)
+                result["macd_div"] = (price_high < closes[-30] * 1.02) and (
+                    hist_high < macd_hist[-40] if len(macd_hist) >= 40 else False
+                )
 
         # 2. RSI背离检测
         from easy_tdx.MyTT import RSI
+
         if len(closes) >= 30:
             rsi_val = RSI(closes, 14)[-1] if len(closes) >= 14 else 50.0
-            rsi_prev = RSI(closes[:len(closes)-1], 14)[-1] if len(closes) >= 15 else 50.0
+            rsi_prev = RSI(closes[: len(closes) - 1], 14)[-1] if len(closes) >= 15 else 50.0
             if is_buy:
                 result["rsi_div"] = rsi_val < 35 and rsi_prev < 30
             else:
@@ -16435,6 +17893,7 @@ def _calc_multi_indicator_divergence_fusion_v52(
 
         # 3. KDJ背离检测
         from easy_tdx.MyTT import KDJ
+
         if len(closes) >= 20:
             k, d, j = KDJ(closes, 9, 3, 3)
             if len(j) >= 5:
@@ -16457,10 +17916,14 @@ def _calc_multi_indicator_divergence_fusion_v52(
                 indicators.append("RSI")
             if result["kdj_div"]:
                 indicators.append("KDJ")
-            result["msg"] = f"多指标背离共振：{','.join(indicators)}同时发出同向信号（{div_count}/3）✅"
+            result["msg"] = (
+                f"多指标背离共振：{','.join(indicators)}同时发出同向信号（{div_count}/3）✅"
+            )
         elif div_count == 1:
             result["confidence_adjust"] = 0.01
-            result["msg"] = f"单一指标背离：仅{['MACD','RSI','KDJ'][[result['macd_div'],result['rsi_div'],result['kdj_div']].index(True)]}发出信号"
+            result["msg"] = (
+                f"单一指标背离：仅{['MACD', 'RSI', 'KDJ'][[result['macd_div'], result['rsi_div'], result['kdj_div']].index(True)]}发出信号"
+            )
         else:
             result["confidence_adjust"] = -0.02
             result["msg"] = "无指标背离确认，信号质量存疑"
@@ -16507,22 +17970,30 @@ def _calc_recent_extreme_price_v52(
             if high_pct > 0.9:
                 result["is_extreme"] = True
                 result["confidence_adjust"] = -0.03
-                result["msg"] = f"⚠️ 近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近高点），过度延伸风险"
+                result["msg"] = (
+                    f"⚠️ 近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近高点），过度延伸风险"
+                )
             elif high_pct < 0.2:
                 result["is_extreme"] = True
                 result["confidence_adjust"] = 0.02
-                result["msg"] = f"近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近低点），支撑有效 ✅"
+                result["msg"] = (
+                    f"近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近低点），支撑有效 ✅"
+                )
             else:
                 result["msg"] = f"近期价位正常（60日区间{high_pct:.0%}位置）"
         else:
             if high_pct < 0.1:
                 result["is_extreme"] = True
                 result["confidence_adjust"] = -0.03
-                result["msg"] = f"⚠️ 近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近低点），过度延伸风险"
+                result["msg"] = (
+                    f"⚠️ 近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近低点），过度延伸风险"
+                )
             elif high_pct > 0.85:
                 result["is_extreme"] = True
                 result["confidence_adjust"] = 0.02
-                result["msg"] = f"近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近高点），阻力有效 ✅"
+                result["msg"] = (
+                    f"近期极端价位：当前价处于60日区间{high_pct:.0%}位置（接近高点），阻力有效 ✅"
+                )
             else:
                 result["msg"] = f"近期价位正常（60日区间{high_pct:.0%}位置）"
 
@@ -16557,8 +18028,15 @@ def _calc_market_regime_score_v52(
             return result
 
         recent_closes = closes[-20:]
-        recent_returns = [(recent_closes[i] - recent_closes[i - 1]) / (recent_closes[i - 1] + 1e-10) for i in range(1, len(recent_closes))]
-        vol_std = (sum(r ** 2 for r in recent_returns) / len(recent_returns)) ** 0.5 if recent_returns else 0.0
+        recent_returns = [
+            (recent_closes[i] - recent_closes[i - 1]) / (recent_closes[i - 1] + 1e-10)
+            for i in range(1, len(recent_closes))
+        ]
+        vol_std = (
+            (sum(r**2 for r in recent_returns) / len(recent_returns)) ** 0.5
+            if recent_returns
+            else 0.0
+        )
 
         if vol_std > 0.03:
             vol_regime = "high"
@@ -16621,7 +18099,7 @@ def _calc_market_regime_score_v52(
 
 
 def _calc_trend_stage_follow_confirmation_v53(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -16663,7 +18141,7 @@ def _calc_trend_stage_follow_confirmation_v53(
 
         # 判断趋势阶段
         price_change_20d = (closes[-1] - closes[-21]) / (closes[-21] + 1e-10)
-        price_change_60d = (closes[-1] - closes[-61]) / (closes[-61] + 1e-10)
+        _ = (closes[-1] - closes[-61]) / (closes[-61] + 1e-10)
         if trend_direction == "strong_uptrend":
             if price_change_20d > 0.10:
                 trend_stage = "early"
@@ -16690,30 +18168,30 @@ def _calc_trend_stage_follow_confirmation_v53(
             result["is_following_trend"] = True
             if trend_direction == "strong_uptrend":
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"✅ 3买信号符合强上升趋势，顺势确认 +3%置信度"
+                result["msg"] = "✅ 3买信号符合强上升趋势，顺势确认 +3%置信度"
             else:
                 result["confidence_adjust"] = 0.01
-                result["msg"] = f"3买信号符合弱上升趋势，轻微确认 +1%置信度"
+                result["msg"] = "3买信号符合弱上升趋势，轻微确认 +1%置信度"
         elif is_sell and trend_direction in ("strong_downtrend", "weak_trend"):
             result["is_following_trend"] = True
             if trend_direction == "strong_downtrend":
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"✅ 3卖信号符合强下降趋势，顺势确认 +3%置信度"
+                result["msg"] = "✅ 3卖信号符合强下降趋势，顺势确认 +3%置信度"
             else:
                 result["confidence_adjust"] = 0.01
-                result["msg"] = f"3卖信号符合弱下降趋势，轻微确认 +1%置信度"
+                result["msg"] = "3卖信号符合弱下降趋势，轻微确认 +1%置信度"
         elif is_buy and trend_direction == "strong_downtrend":
             result["is_following_trend"] = False
             result["confidence_adjust"] = -0.05
-            result["msg"] = f"⚠️ 3买信号逆势（强下降趋势），可能接飞刀，-5%置信度"
+            result["msg"] = "⚠️ 3买信号逆势（强下降趋势），可能接飞刀，-5%置信度"
         elif is_sell and trend_direction == "strong_uptrend":
             result["is_following_trend"] = False
             result["confidence_adjust"] = -0.05
-            result["msg"] = f"⚠️ 3卖信号逆势（强上升趋势），可能逆势做空，-5%置信度"
+            result["msg"] = "⚠️ 3卖信号逆势（强上升趋势），可能逆势做空，-5%置信度"
         elif trend_direction == "sideways":
             result["is_following_trend"] = False
             result["confidence_adjust"] = -0.02
-            result["msg"] = f"⚠️ 当前处于震荡阶段，趋势不明确，-2%置信度"
+            result["msg"] = "⚠️ 当前处于震荡阶段，趋势不明确，-2%置信度"
         else:
             result["msg"] = f"趋势阶段正常（{trend_direction}+{trend_stage}）"
 
@@ -16790,7 +18268,9 @@ def _calc_atr_adaptive_stop_v53(
 
         if atr_pct < 0.015:
             result["confidence_adjust"] = 0.02
-            result["msg"] = f"✅ ATR={atr_pct:.2%}低波动，趋势交易环境良好，+2%置信度，建议仓位{position_pct}"
+            result["msg"] = (
+                f"✅ ATR={atr_pct:.2%}低波动，趋势交易环境良好，+2%置信度，建议仓位{position_pct}"
+            )
         elif atr_pct < 0.025:
             result["msg"] = f"ATR={atr_pct:.2%}中等波动，建议仓位{position_pct}"
         elif atr_pct < 0.04:
@@ -16806,9 +18286,9 @@ def _calc_atr_adaptive_stop_v53(
 
 
 def _calc_zs_breakout_strength_v53(
-    mmd: "MMD",
-    bis: list["BI"],
-    zss: list["ZS"],
+    mmd: MMD,
+    bis: list[BI],
+    zss: list[ZS],
     closes: list[float],
 ) -> dict[str, Any]:
     """中枢突破力度验证（V53 条件154）。
@@ -16846,7 +18326,7 @@ def _calc_zs_breakout_strength_v53(
             for i in range(bi_idx - 1, max(0, bi_idx - 5), -1):
                 candidate_bi = bis[i] if i < len(bis) else None
                 if candidate_bi is not None:
-                    same_direction = (breakout_bi.direction.value == candidate_bi.direction.value)
+                    same_direction = breakout_bi.direction.value == candidate_bi.direction.value
                     if same_direction:
                         entry_range = candidate_bi.high - candidate_bi.low
                         entry_bi_strength = entry_range / (candidate_bi.low + 1e-10)
@@ -16858,7 +18338,9 @@ def _calc_zs_breakout_strength_v53(
         if strength_ratio >= 1.2:
             result["confirmed"] = True
             result["confidence_adjust"] = 0.03
-            result["msg"] = f"✅ 突破力度充分（比值{strength_ratio:.2f}），突破笔比进入笔强{strength_ratio:.0%}，+3%置信度"
+            result["msg"] = (
+                f"✅ 突破力度充分（比值{strength_ratio:.2f}），突破笔比进入笔强{strength_ratio:.0%}，+3%置信度"
+            )
         elif strength_ratio >= 0.8:
             result["confirmed"] = True
             result["confidence_adjust"] = 0.01
@@ -16870,7 +18352,9 @@ def _calc_zs_breakout_strength_v53(
         else:
             result["confirmed"] = False
             result["confidence_adjust"] = -0.04
-            result["msg"] = f"🚨 突破力度严重不足（比值{strength_ratio:.2f}），极可能是假突破，-4%置信度"
+            result["msg"] = (
+                f"🚨 突破力度严重不足（比值{strength_ratio:.2f}），极可能是假突破，-4%置信度"
+            )
 
         return result
     except Exception:
@@ -16878,7 +18362,7 @@ def _calc_zs_breakout_strength_v53(
 
 
 def _calc_signal_quality_tier_v53(
-    mmd: "MMD",
+    mmd: MMD,
     close: float,
 ) -> dict[str, Any]:
     """信号质量综合分层（V53 条件155）。
@@ -16961,7 +18445,7 @@ def _calc_signal_quality_tier_v53(
         elif tier == "D":
             result["confidence_adjust"] = -0.03
 
-        mmd_type_str = mmd.mmd_type.value if mmd.mmd_type else "unknown"
+        _ = mmd.mmd_type.value if mmd.mmd_type else "unknown"
         result["msg"] = (
             f"📊 [{tier}] {tier_label} | "
             f"综合评分{tier_score:.0f}/100 | "
@@ -16974,12 +18458,11 @@ def _calc_signal_quality_tier_v53(
         return result
 
 
-
-
 # ── V54: 条件156-159 缠论模型精准度与决策帮助进一步提升 ────────────────────────
 
+
 def _calc_multi_bar_confirmation_v54(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多K线确认后确认（V54 条件156）。
@@ -17012,7 +18495,7 @@ def _calc_multi_bar_confirmation_v54(
         if lookback < 2:
             return result
 
-        post_closes = closes[signal_idx + 1: signal_idx + 1 + lookback]
+        post_closes = closes[signal_idx + 1 : signal_idx + 1 + lookback]
         is_buy = mmd.mmd_type == MMDType.BUY_3
         is_sell = mmd.mmd_type == MMDType.SELL_3
 
@@ -17045,7 +18528,7 @@ def _calc_multi_bar_confirmation_v54(
             else:
                 result["confirmed"] = False
                 result["confidence_adjust"] = -0.05
-                result["msg"] = f"⚠️ 多K线确认失败：信号后无K线持续上涨，-5%置信度（假突破风险）"
+                result["msg"] = "⚠️ 多K线确认失败：信号后无K线持续上涨，-5%置信度（假突破风险）"
         elif is_sell:
             if confirm_count >= 3:
                 result["confirmed"] = True
@@ -17062,7 +18545,7 @@ def _calc_multi_bar_confirmation_v54(
             else:
                 result["confirmed"] = False
                 result["confidence_adjust"] = -0.05
-                result["msg"] = f"⚠️ 多K线确认失败：信号后无K线持续下跌，-5%置信度（假突破风险）"
+                result["msg"] = "⚠️ 多K线确认失败：信号后无K线持续下跌，-5%置信度（假突破风险）"
         else:
             result["msg"] = "非3买/3卖信号，跳过此条件"
 
@@ -17072,7 +18555,7 @@ def _calc_multi_bar_confirmation_v54(
 
 
 def _calc_gap_risk_assessment_v54(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -17103,7 +18586,7 @@ def _calc_gap_risk_assessment_v54(
         if signal_idx < 0 or signal_idx >= len(closes) - 1:
             return result
 
-        signal_price = closes[signal_idx]
+        _ = closes[signal_idx]
         is_buy = mmd.mmd_type == MMDType.BUY_3
         is_sell = mmd.mmd_type == MMDType.SELL_3
 
@@ -17125,13 +18608,17 @@ def _calc_gap_risk_assessment_v54(
                     result["gap_direction"] = "up"
                     result["gap_size_pct"] = round(gap_size, 2)
                     result["confidence_adjust"] = 0.03
-                    result["msg"] = f"✅ 3买信号后出现向上缺口{gap_size:.1f}%，强化看涨信号 +3%置信度"
+                    result["msg"] = (
+                        f"✅ 3买信号后出现向上缺口{gap_size:.1f}%，强化看涨信号 +3%置信度"
+                    )
                 elif is_sell:
                     result["has_gap"] = True
                     result["gap_direction"] = "up"
                     result["gap_size_pct"] = round(gap_size, 2)
                     result["confidence_adjust"] = -0.05
-                    result["msg"] = f"⚠️ 3卖信号后出现向上缺口{gap_size:.1f}%，强势反弹风险 -5%置信度"
+                    result["msg"] = (
+                        f"⚠️ 3卖信号后出现向上缺口{gap_size:.1f}%，强势反弹风险 -5%置信度"
+                    )
                 break
             # 向下缺口：今日最高 < 昨日最低
             elif curr_high < prev_close * 0.995:
@@ -17141,13 +18628,17 @@ def _calc_gap_risk_assessment_v54(
                     result["gap_direction"] = "down"
                     result["gap_size_pct"] = round(gap_size, 2)
                     result["confidence_adjust"] = -0.06
-                    result["msg"] = f"🚨 3买信号后出现向下缺口{gap_size:.1f}%，强烈看跌信号 -6%置信度"
+                    result["msg"] = (
+                        f"🚨 3买信号后出现向下缺口{gap_size:.1f}%，强烈看跌信号 -6%置信度"
+                    )
                 elif is_sell:
                     result["has_gap"] = True
                     result["gap_direction"] = "down"
                     result["gap_size_pct"] = round(gap_size, 2)
                     result["confidence_adjust"] = 0.03
-                    result["msg"] = f"✅ 3卖信号后出现向下缺口{gap_size:.1f}%，强化看跌信号 +3%置信度"
+                    result["msg"] = (
+                        f"✅ 3卖信号后出现向下缺口{gap_size:.1f}%，强化看跌信号 +3%置信度"
+                    )
                 break
 
         if not result["has_gap"]:
@@ -17219,11 +18710,15 @@ def _calc_volatility_regime_change_v54(
         if atr_change_pct > 20:
             result["regime"] = "expanding"
             result["confidence_adjust"] = 0.02
-            result["msg"] = f"📈 波动率扩张{atr_change_pct:.1f}%，ATR占比{atr_pct:.2f}%，趋势加速确认 +2%置信度"
+            result["msg"] = (
+                f"📈 波动率扩张{atr_change_pct:.1f}%，ATR占比{atr_pct:.2f}%，趋势加速确认 +2%置信度"
+            )
         elif atr_change_pct < -20:
             result["regime"] = "contracting"
             result["confidence_adjust"] = -0.02
-            result["msg"] = f"📉 波动率收缩{abs(atr_change_pct):.1f}%，ATR占比{atr_pct:.2f}%，可能进入盘整 -2%置信度"
+            result["msg"] = (
+                f"📉 波动率收缩{abs(atr_change_pct):.1f}%，ATR占比{atr_pct:.2f}%，可能进入盘整 -2%置信度"
+            )
         else:
             result["regime"] = "stable"
             result["confidence_adjust"] = 0.0
@@ -17235,7 +18730,7 @@ def _calc_volatility_regime_change_v54(
 
 
 def _calc_volume_price_coordination_v54(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -17329,40 +18824,44 @@ def _calc_volume_price_coordination_v54(
             if price_trend == "up" and volume_trend == "expanding":
                 score += 2
                 result["confidence_adjust"] = min(0.05, score * 0.01)
-                result["msg"] = f"✅ 量价配合优秀：价格上涨+量能放大，+{result['confidence_adjust']:.0%}置信度"
+                result["msg"] = (
+                    f"✅ 量价配合优秀：价格上涨+量能放大，+{result['confidence_adjust']:.0%}置信度"
+                )
             elif price_trend == "up" and volume_trend == "shrinking":
                 score -= 2
                 result["confidence_adjust"] = -0.03
-                result["msg"] = f"⚠️ 量价背离：价格上涨但量能萎缩，-3%置信度"
+                result["msg"] = "⚠️ 量价背离：价格上涨但量能萎缩，-3%置信度"
             elif price_trend == "up" and volume_trend == "stable":
                 score += 1
                 result["confidence_adjust"] = 0.01
-                result["msg"] = f"量价配合正常：价格上涨+量能稳定，+1%置信度"
+                result["msg"] = "量价配合正常：价格上涨+量能稳定，+1%置信度"
             elif price_trend == "flat":
                 result["confidence_adjust"] = -0.01
-                result["msg"] = f"量价配合一般：价格震荡，-1%置信度"
+                result["msg"] = "量价配合一般：价格震荡，-1%置信度"
             else:
                 result["confidence_adjust"] = -0.04
-                result["msg"] = f"🚨 量价恶化：价格下跌，-4%置信度"
+                result["msg"] = "🚨 量价恶化：价格下跌，-4%置信度"
         elif is_sell:
             if price_trend == "down" and volume_trend == "expanding":
                 score += 2
                 result["confidence_adjust"] = min(0.05, score * 0.01)
-                result["msg"] = f"✅ 量价配合优秀：价格下跌+量能放大，+{result['confidence_adjust']:.0%}置信度"
+                result["msg"] = (
+                    f"✅ 量价配合优秀：价格下跌+量能放大，+{result['confidence_adjust']:.0%}置信度"
+                )
             elif price_trend == "down" and volume_trend == "shrinking":
                 score -= 1
                 result["confidence_adjust"] = -0.01
-                result["msg"] = f"量价配合一般：价格下跌但量能萎缩，-1%置信度"
+                result["msg"] = "量价配合一般：价格下跌但量能萎缩，-1%置信度"
             elif price_trend == "down" and volume_trend == "stable":
                 score += 1
                 result["confidence_adjust"] = 0.01
-                result["msg"] = f"量价配合正常：价格下跌+量能稳定，+1%置信度"
+                result["msg"] = "量价配合正常：价格下跌+量能稳定，+1%置信度"
             elif price_trend == "flat":
                 result["confidence_adjust"] = -0.01
-                result["msg"] = f"量价配合一般：价格震荡，-1%置信度"
+                result["msg"] = "量价配合一般：价格震荡，-1%置信度"
             else:
                 result["confidence_adjust"] = -0.04
-                result["msg"] = f"🚨 量价恶化：价格上涨，-4%置信度"
+                result["msg"] = "🚨 量价恶化：价格上涨，-4%置信度"
         else:
             result["msg"] = "非3买/3卖信号，跳过此条件"
 
@@ -17374,8 +18873,9 @@ def _calc_volume_price_coordination_v54(
 
 # ── V55: 条件160-163 缠论模型精准度与决策帮助进一步提升 ────────────────────────
 
+
 def _calc_multi_tf_resonance_filter_v55(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -17413,12 +18913,12 @@ def _calc_multi_tf_resonance_filter_v55(
         # 计算短期动量（5根K线）
         short_closes = closes[-5:]
         short_return = (short_closes[-1] - short_closes[0]) / (short_closes[0] + 1e-10)
-        short_vol = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else 0
+        _ = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else 0
 
         # 计算中期动量（20根K线）
         mid_closes = closes[-20:]
         mid_return = (mid_closes[-1] - mid_closes[0]) / (mid_closes[0] + 1e-10)
-        mid_vol = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else 0
+        _ = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else 0
 
         # 计算长期动量（60根K线，若可用）
         long_return = 0.0
@@ -17432,8 +18932,10 @@ def _calc_multi_tf_resonance_filter_v55(
         long_dir = "up" if long_return > 0.01 else ("down" if long_return < -0.01 else "flat")
 
         # 判断共振
-        aligned_count = sum(1 for d in [short_dir, mid_dir, long_dir] if d != "flat")
-        same_dir_count = sum(1 for d in [short_dir, mid_dir] if (is_buy and d == "up") or (is_sell and d == "down"))
+        _ = sum(1 for d in [short_dir, mid_dir, long_dir] if d != "flat")
+        same_dir_count = sum(
+            1 for d in [short_dir, mid_dir] if (is_buy and d == "up") or (is_sell and d == "down")
+        )
 
         result["timeframes"] = [f"{short_dir}({short_return:.1%})", f"{mid_dir}({mid_return:.1%})"]
         if long_dir != "flat":
@@ -17444,7 +18946,9 @@ def _calc_multi_tf_resonance_filter_v55(
                 # 短中期都向上 → 强共振
                 result["resonated"] = True
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"✅ 多时间框架共振确认：{' + '.join(result['timeframes'])}，+3%置信度"
+                result["msg"] = (
+                    f"✅ 多时间框架共振确认：{' + '.join(result['timeframes'])}，+3%置信度"
+                )
             elif same_dir_count == 1:
                 # 仅一个时间框架支持 → 部分共振
                 result["resonated"] = False
@@ -17460,7 +18964,9 @@ def _calc_multi_tf_resonance_filter_v55(
             if opposite_dir_count >= 2:
                 result["resonated"] = True
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"✅ 多时间框架共振确认：{' + '.join(result['timeframes'])}，+3%置信度"
+                result["msg"] = (
+                    f"✅ 多时间框架共振确认：{' + '.join(result['timeframes'])}，+3%置信度"
+                )
             elif opposite_dir_count == 1:
                 result["resonated"] = False
                 result["confidence_adjust"] = 0.01
@@ -17476,8 +18982,8 @@ def _calc_multi_tf_resonance_filter_v55(
 
 
 def _calc_zhongshu_level_weight_v55(
-    mmd: "MMD",
-    zss: list["ZS"],
+    mmd: MMD,
+    zss: list[ZS],
 ) -> dict[str, Any]:
     """中枢级别权重自适应（V55 条件161）。
 
@@ -17576,7 +19082,7 @@ def _calc_zhongshu_level_weight_v55(
 
 
 def _calc_weak_stock_risk_v55(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
     highs: list[float],
@@ -17706,7 +19212,7 @@ def _calc_weak_stock_risk_v55(
 
 
 def _calc_signal_trend_alignment_v55(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """信号与趋势方向对齐验证（V55 条件163）。
@@ -17833,11 +19339,11 @@ def _calc_signal_trend_alignment_v55(
         return result
 
 
-
 # ── V56: 条件164-167 缠论模型精准度与决策帮助进一步提升 ───────────────────────────
 
+
 def _calc_false_breakout_detection_v56(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
     highs: list[float] | None,
@@ -17872,7 +19378,9 @@ def _calc_false_breakout_detection_v56(
 
         bi_end_idx = 0
         if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
-            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else len(closes) - 1
+            bi_end_idx = (
+                mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else len(closes) - 1
+            )
         else:
             bi_end_idx = max(0, len(closes) - 20)
 
@@ -17883,23 +19391,31 @@ def _calc_false_breakout_detection_v56(
             result["msg"] = "信号后无K线数据，无法验证"
             return result
 
-        post_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
-        post_highs = highs[bi_end_idx + 1:bi_end_idx + 1 + check_bars] if highs else post_closes
-        post_lows = lows[bi_end_idx + 1:bi_end_idx + 1 + check_bars] if lows else post_closes
-        post_volumes = volumes[bi_end_idx + 1:bi_end_idx + 1 + check_bars] if volumes else [1.0] * check_bars
+        post_closes = closes[bi_end_idx + 1 : bi_end_idx + 1 + check_bars]
+        post_highs = highs[bi_end_idx + 1 : bi_end_idx + 1 + check_bars] if highs else post_closes
+        post_lows = lows[bi_end_idx + 1 : bi_end_idx + 1 + check_bars] if lows else post_closes
+        post_volumes = (
+            volumes[bi_end_idx + 1 : bi_end_idx + 1 + check_bars] if volumes else [1.0] * check_bars
+        )
 
         if is_buy:
             breakout_range = max(post_highs) - signal_price if post_highs else 0
             lowest_after = min(post_lows) if post_lows else signal_price
-            retracement = (signal_price - lowest_after) / (signal_price + 1e-10) if signal_price > 0 else 0
+            retracement = (
+                (signal_price - lowest_after) / (signal_price + 1e-10) if signal_price > 0 else 0
+            )
         else:
             breakout_range = signal_price - min(post_lows) if post_lows else 0
             highest_after = max(post_highs) if post_highs else signal_price
-            retracement = (highest_after - signal_price) / (signal_price + 1e-10) if signal_price > 0 else 0
+            retracement = (
+                (highest_after - signal_price) / (signal_price + 1e-10) if signal_price > 0 else 0
+            )
 
         result["retracement_pct"] = round(retracement * 100, 2)
 
-        avg_vol = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else sum(volumes) / max(1, len(volumes))
+        avg_vol = (
+            sum(volumes[-20:]) / 20 if len(volumes) >= 20 else sum(volumes) / max(1, len(volumes))
+        )
         recent_vol = sum(post_volumes) / max(1, len(post_volumes))
         volume_ratio = recent_vol / (avg_vol + 1e-10)
         result["volume_ratio"] = round(volume_ratio, 2)
@@ -17951,7 +19467,7 @@ def _calc_false_breakout_detection_v56(
 
 
 def _calc_zhongshu_structure_complexity_v56(
-    mmd: "MMD",
+    mmd: MMD,
     zss: list[Any],
 ) -> dict[str, Any]:
     """中枢结构复杂度分析（V56 条件165）。
@@ -18003,7 +19519,12 @@ def _calc_zhongshu_structure_complexity_v56(
             for j in range(i + 1, len(nearby_zss)):
                 zs_i = nearby_zss[i]
                 zs_j = nearby_zss[j]
-                if hasattr(zs_i, "zg") and hasattr(zs_i, "zd") and hasattr(zs_j, "zg") and hasattr(zs_j, "zd"):
+                if (
+                    hasattr(zs_i, "zg")
+                    and hasattr(zs_i, "zd")
+                    and hasattr(zs_j, "zg")
+                    and hasattr(zs_j, "zd")
+                ):
                     zg_i, zd_i = zs_i.zg, zs_i.zd
                     zg_j, zd_j = zs_j.zg, zs_j.zd
                     if zd_i < zg_j and zd_j < zg_i:
@@ -18034,7 +19555,7 @@ def _calc_zhongshu_structure_complexity_v56(
 
 
 def _calc_volatility_adaptive_position_v56(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -18117,7 +19638,7 @@ def _calc_volatility_adaptive_position_v56(
 
 
 def _calc_multi_signal_resonance_v56(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -18219,8 +19740,12 @@ def _calc_multi_signal_resonance_v56(
                 confirming.append("放量下跌")
 
         # 5. 价格动量确认
-        momentum_5 = (closes[-1] - closes[-6]) / (closes[-6] + 1e-10) * 100 if len(closes) >= 6 else 0
-        momentum_10 = (closes[-1] - closes[-11]) / (closes[-11] + 1e-10) * 100 if len(closes) >= 11 else 0
+        momentum_5 = (
+            (closes[-1] - closes[-6]) / (closes[-6] + 1e-10) * 100 if len(closes) >= 6 else 0
+        )
+        momentum_10 = (
+            (closes[-1] - closes[-11]) / (closes[-11] + 1e-10) * 100 if len(closes) >= 11 else 0
+        )
         if is_buy and momentum_5 > 0 and momentum_10 > 0:
             confirming.append("短中期动量向上")
         elif is_sell and momentum_5 < 0 and momentum_10 < 0:
@@ -18231,7 +19756,9 @@ def _calc_multi_signal_resonance_v56(
 
         if len(confirming) >= 3:
             result["confidence_adjust"] = 0.04
-            result["msg"] = f"强共振确认({len(confirming)}项)：{', '.join(confirming[:3])}，+4%置信度"
+            result["msg"] = (
+                f"强共振确认({len(confirming)}项)：{', '.join(confirming[:3])}，+4%置信度"
+            )
         elif len(confirming) >= 2:
             result["confidence_adjust"] = 0.02
             result["msg"] = f"弱共振确认({len(confirming)}项)：{', '.join(confirming)}，+2%置信度"
@@ -18249,8 +19776,9 @@ def _calc_multi_signal_resonance_v56(
 
 # ── V57: 条件168-171 缠论模型精准度与决策帮助进一步提升 ───────────────────────────
 
+
 def _calc_pullback_filter_v57(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -18283,7 +19811,11 @@ def _calc_pullback_filter_v57(
 
         bi_end_idx = 0
         if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
-            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 25)
+            bi_end_idx = (
+                mmd.bi.end.k.k_index
+                if hasattr(mmd.bi.end.k, "k_index")
+                else max(0, len(closes) - 25)
+            )
         else:
             bi_end_idx = max(0, len(closes) - 25)
 
@@ -18294,9 +19826,9 @@ def _calc_pullback_filter_v57(
             result["msg"] = "信号后无K线数据，无法验证回踩"
             return result
 
-        post_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
-        post_highs = highs[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
-        post_lows = lows[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
+        _ = closes[bi_end_idx + 1 : bi_end_idx + 1 + check_bars]
+        post_highs = highs[bi_end_idx + 1 : bi_end_idx + 1 + check_bars]
+        post_lows = lows[bi_end_idx + 1 : bi_end_idx + 1 + check_bars]
 
         if is_buy:
             breakout_peak = max(post_highs) if post_highs else signal_price
@@ -18325,7 +19857,9 @@ def _calc_pullback_filter_v57(
         else:
             breakout_trough = min(post_lows) if post_lows else signal_price
             pullback_high = max(post_highs) if post_highs else signal_price
-            breakout_range = signal_price - breakout_trough if signal_price > breakout_trough else 0.01
+            breakout_range = (
+                signal_price - breakout_trough if signal_price > breakout_trough else 0.01
+            )
 
             if breakout_range > 0:
                 pullback_depth = (pullback_high - signal_price) / (breakout_range + 1e-10)
@@ -18353,7 +19887,7 @@ def _calc_pullback_filter_v57(
 
 
 def _calc_breakout_strength_validation_v57(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -18383,7 +19917,11 @@ def _calc_breakout_strength_validation_v57(
 
         bi_end_idx = 0
         if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
-            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 30)
+            bi_end_idx = (
+                mmd.bi.end.k.k_index
+                if hasattr(mmd.bi.end.k, "k_index")
+                else max(0, len(closes) - 30)
+            )
         else:
             bi_end_idx = max(0, len(closes) - 30)
 
@@ -18391,14 +19929,28 @@ def _calc_breakout_strength_validation_v57(
             result["msg"] = "信号位置太早，无法计算力度"
             return result
 
-        breakout_bi_force = abs(closes[bi_end_idx] - closes[bi_end_idx - 5]) / (closes[bi_end_idx - 5] + 1e-10) * 100
-        enter_bi_force = abs(closes[bi_end_idx - 5] - closes[bi_end_idx - 10]) / (closes[bi_end_idx - 10] + 1e-10) * 100
+        breakout_bi_force = (
+            abs(closes[bi_end_idx] - closes[bi_end_idx - 5])
+            / (closes[bi_end_idx - 5] + 1e-10)
+            * 100
+        )
+        enter_bi_force = (
+            abs(closes[bi_end_idx - 5] - closes[bi_end_idx - 10])
+            / (closes[bi_end_idx - 10] + 1e-10)
+            * 100
+        )
 
         force_ratio = breakout_bi_force / (enter_bi_force + 1e-10)
         result["force_ratio"] = round(force_ratio, 2)
 
-        recent_vol = sum(volumes[bi_end_idx - 5:bi_end_idx]) / 5 if bi_end_idx >= 5 else sum(volumes[-5:]) / 5
-        avg_zs_vol = sum(volumes[-30:-5]) / 25 if len(volumes) >= 30 else sum(volumes) / max(1, len(volumes))
+        recent_vol = (
+            sum(volumes[bi_end_idx - 5 : bi_end_idx]) / 5
+            if bi_end_idx >= 5
+            else sum(volumes[-5:]) / 5
+        )
+        avg_zs_vol = (
+            sum(volumes[-30:-5]) / 25 if len(volumes) >= 30 else sum(volumes) / max(1, len(volumes))
+        )
         volume_ratio = recent_vol / (avg_zs_vol + 1e-10)
         result["volume_ratio"] = round(volume_ratio, 2)
 
@@ -18411,15 +19963,21 @@ def _calc_breakout_strength_validation_v57(
         if strength_score == 2:
             result["strength_adequate"] = True
             result["confidence_adjust"] = 0.04
-            result["msg"] = f"突破力度充分：力度比{force_ratio:.2f}≥0.7 + 量比{volume_ratio:.2f}≥1.2，+4%置信度"
+            result["msg"] = (
+                f"突破力度充分：力度比{force_ratio:.2f}≥0.7 + 量比{volume_ratio:.2f}≥1.2，+4%置信度"
+            )
         elif strength_score == 1:
             result["confidence_adjust"] = 0.01
             force_note = "≥0.7" if force_ratio >= 0.7 else "<0.7"
             vol_note = "≥1.2" if volume_ratio >= 1.2 else "<1.2"
-            result["msg"] = f"突破力度部分达标：力度比{force_ratio:.2f}{force_note} + 量比{volume_ratio:.2f}{vol_note}，+1%置信度"
+            result["msg"] = (
+                f"突破力度部分达标：力度比{force_ratio:.2f}{force_note} + 量比{volume_ratio:.2f}{vol_note}，+1%置信度"
+            )
         else:
             result["confidence_adjust"] = -0.04
-            result["msg"] = f"突破力度不足：力度比{force_ratio:.2f}<0.7 且 量比{volume_ratio:.2f}<1.2，-4%置信度"
+            result["msg"] = (
+                f"突破力度不足：力度比{force_ratio:.2f}<0.7 且 量比{volume_ratio:.2f}<1.2，-4%置信度"
+            )
 
         return result
     except Exception:
@@ -18427,7 +19985,7 @@ def _calc_breakout_strength_validation_v57(
 
 
 def _calc_zs_divergence_check_v57(
-    mmd: "MMD",
+    mmd: MMD,
     bis: list[Any],
     bc_list: list[Any] | None,
 ) -> dict[str, Any]:
@@ -18496,7 +20054,7 @@ def _calc_zs_divergence_check_v57(
 
 
 def _calc_signal_decay_detection_v57(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """信号衰减检测（V57 条件171）。
@@ -18525,7 +20083,11 @@ def _calc_signal_decay_detection_v57(
 
         bi_end_idx = 0
         if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
-            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 20)
+            bi_end_idx = (
+                mmd.bi.end.k.k_index
+                if hasattr(mmd.bi.end.k, "k_index")
+                else max(0, len(closes) - 20)
+            )
         else:
             bi_end_idx = max(0, len(closes) - 20)
 
@@ -18535,7 +20097,7 @@ def _calc_signal_decay_detection_v57(
 
         signal_price = closes[bi_end_idx]
         check_bars = min(10, len(closes) - 1 - bi_end_idx)
-        post_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + check_bars]
+        post_closes = closes[bi_end_idx + 1 : bi_end_idx + 1 + check_bars]
 
         if not post_closes:
             result["msg"] = "无后续价格数据"
@@ -18553,7 +20115,9 @@ def _calc_signal_decay_detection_v57(
                 result["is_decaying"] = True
                 result["price_trend"] = "declining"
                 result["confidence_adjust"] = -0.04
-                result["msg"] = f"信号衰减：买入后价格下跌{price_change:.1f}%，{mid_change:.1f}%→{price_change:.1f}%，-4%置信度"
+                result["msg"] = (
+                    f"信号衰减：买入后价格下跌{price_change:.1f}%，{mid_change:.1f}%→{price_change:.1f}%，-4%置信度"
+                )
             elif price_change > 1.0:
                 result["price_trend"] = "strong"
                 result["confidence_adjust"] = 0.03
@@ -18577,7 +20141,9 @@ def _calc_signal_decay_detection_v57(
                 result["is_decaying"] = True
                 result["price_trend"] = "recovering"
                 result["confidence_adjust"] = -0.04
-                result["msg"] = f"信号衰减：卖出后价格反弹{price_change:.1f}%，{mid_change:.1f}%→{price_change:.1f}%，-4%置信度"
+                result["msg"] = (
+                    f"信号衰减：卖出后价格反弹{price_change:.1f}%，{mid_change:.1f}%→{price_change:.1f}%，-4%置信度"
+                )
             elif price_change > 1.0:
                 result["price_trend"] = "strong"
                 result["confidence_adjust"] = 0.03
@@ -18597,7 +20163,7 @@ def _calc_signal_decay_detection_v57(
 
 
 def _calc_multi_tf_trend_consistency_v58(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多时间框架趋势一致性验证（V58 条件172）。
@@ -18646,21 +20212,27 @@ def _calc_multi_tf_trend_consistency_v58(
         if is_buy:
             if bullish:
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"多头排列确认( MA5={short_ma:.2f} > MA20={mid_ma:.2f} > MA60={long_ma:.2f} )，+3%置信度"
+                result["msg"] = (
+                    f"多头排列确认( MA5={short_ma:.2f} > MA20={mid_ma:.2f} > MA60={long_ma:.2f} )，+3%置信度"
+                )
             elif bearish:
                 result["confidence_adjust"] = -0.03
-                result["msg"] = f"空头排列确认( MA5={short_ma:.2f} < MA20={mid_ma:.2f} < MA60={long_ma:.2f} )，-3%置信度"
+                result["msg"] = (
+                    f"空头排列确认( MA5={short_ma:.2f} < MA20={mid_ma:.2f} < MA60={long_ma:.2f} )，-3%置信度"
+                )
             else:
-                result["msg"] = f"均线交错( MA5={short_ma:.2f}, MA20={mid_ma:.2f}, MA60={long_ma:.2f} )，无明确方向，0%调整"
+                result["msg"] = (
+                    f"均线交错( MA5={short_ma:.2f}, MA20={mid_ma:.2f}, MA60={long_ma:.2f} )，无明确方向，0%调整"
+                )
         else:
             if bearish:
                 result["confidence_adjust"] = 0.03
-                result["msg"] = f"空头排列确认，卖出信号增强，+3%置信度"
+                result["msg"] = "空头排列确认，卖出信号增强，+3%置信度"
             elif bullish:
                 result["confidence_adjust"] = -0.03
-                result["msg"] = f"多头排列确认，卖出信号弱化，-3%置信度"
+                result["msg"] = "多头排列确认，卖出信号弱化，-3%置信度"
             else:
-                result["msg"] = f"均线交错，无明确方向，0%调整"
+                result["msg"] = "均线交错，无明确方向，0%调整"
 
         return result
     except Exception:
@@ -18668,7 +20240,7 @@ def _calc_multi_tf_trend_consistency_v58(
 
 
 def _calc_volume_accumulation_validation_v58(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -18726,7 +20298,7 @@ def _calc_volume_accumulation_validation_v58(
 
 
 def _calc_atr_adaptive_stop_v58(
-    mmd: "MMD",
+    mmd: MMD,
     highs: list[float],
     lows: list[float],
 ) -> dict[str, Any]:
@@ -18822,7 +20394,7 @@ def _calc_atr_adaptive_stop_v58(
 
 
 def _calc_composite_quality_score_v58(
-    mmd: "MMD",
+    mmd: MMD,
 ) -> dict[str, Any]:
     """信号质量综合评分（V58 条件175）。
 
@@ -18883,11 +20455,11 @@ def _calc_composite_quality_score_v58(
         result["grade"] = grade
         result["grade_desc"] = desc
 
-        detail_str = "，".join(f"{k}={v:+.0%}" for k, v in details.items()) if details else "无有效条件"
+        detail_str = (
+            "，".join(f"{k}={v:+.0%}" for k, v in details.items()) if details else "无有效条件"
+        )
         result["msg"] = (
-            f"综合质量评分：{grade}档({desc}) | "
-            f"总调整={total:+.0%} | "
-            f"明细：{detail_str}"
+            f"综合质量评分：{grade}档({desc}) | 总调整={total:+.0%} | 明细：{detail_str}"
         )
 
         return result
@@ -18899,8 +20471,9 @@ def _calc_composite_quality_score_v58(
 # V59 条件176-179：参数自适应 + 多TF共振 + 信号衰减速度评估
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _calc_volatility_adaptive_ma_v59(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """波动率自适应MA周期（V59 条件176）。
@@ -18934,7 +20507,7 @@ def _calc_volatility_adaptive_ma_v59(
         recent_20 = closes[-20:]
         mean_20 = sum(recent_20) / 20
         var_20 = sum((x - mean_20) ** 2 for x in recent_20) / 20
-        std_20 = var_20 ** 0.5
+        std_20 = var_20**0.5
         vol_pct = (std_20 / (mean_20 + 1e-10)) * 100
 
         # 波动率分级并调整MA周期
@@ -18967,7 +20540,7 @@ def _calc_volatility_adaptive_ma_v59(
 
 
 def _calc_atr_multiplier_adapt_v59(
-    mmd: "MMD",
+    mmd: MMD,
     highs: list[float],
     lows: list[float],
 ) -> dict[str, Any]:
@@ -19053,7 +20626,7 @@ def _calc_atr_multiplier_adapt_v59(
 
 
 def _calc_multi_tf_resonance_signal_v59(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float] | None = None,
 ) -> dict[str, Any]:
@@ -19086,7 +20659,9 @@ def _calc_multi_tf_resonance_signal_v59(
 
         # 短期趋势：近5根K线收盘价变化
         close_5 = closes[-5:]
-        short_trend = "up" if close_5[-1] > close_5[0] else ("down" if close_5[-1] < close_5[0] else "flat")
+        short_trend = (
+            "up" if close_5[-1] > close_5[0] else ("down" if close_5[-1] < close_5[0] else "flat")
+        )
 
         # 短期动量：近5根K线的涨跌比例
         up_bars = sum(1 for i in range(1, len(close_5)) if close_5[i] > close_5[i - 1])
@@ -19105,7 +20680,9 @@ def _calc_multi_tf_resonance_signal_v59(
             prior_20 = closes[-40:-20]
             recent_avg = sum(recent_20) / 20
             prior_avg = sum(prior_20) / 20
-            mid_trend = "up" if recent_avg > prior_avg else ("down" if recent_avg < prior_avg else "flat")
+            mid_trend = (
+                "up" if recent_avg > prior_avg else ("down" if recent_avg < prior_avg else "flat")
+            )
         else:
             mid_trend = "unknown"
 
@@ -19168,7 +20745,7 @@ def _calc_multi_tf_resonance_signal_v59(
 
 
 def _calc_signal_decay_speed_v59(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """信号衰减速度评估（V59 条件179）。
@@ -19206,10 +20783,12 @@ def _calc_signal_decay_speed_v59(
             result["msg"] = "信号后K线不足，无法评估"
             return result
 
-        post_signal = closes[signal_idx + 1: signal_idx + 1 + lookback]
-        changes = [(post_signal[i] - post_signal[i - 1]) / (post_signal[i - 1] + 1e-10) * 100
-                   for i in range(1, len(post_signal))]
-        avg_change = sum(changes) / len(changes) if changes else 0.0
+        post_signal = closes[signal_idx + 1 : signal_idx + 1 + lookback]
+        changes = [
+            (post_signal[i] - post_signal[i - 1]) / (post_signal[i - 1] + 1e-10) * 100
+            for i in range(1, len(post_signal))
+        ]
+        _ = sum(changes) / len(changes) if changes else 0.0
         total_change = (post_signal[-1] - signal_price) / (signal_price + 1e-10) * 100
 
         result["price_speed_after_signal"] = round(abs(total_change), 2)
@@ -19265,8 +20844,9 @@ def _calc_signal_decay_speed_v59(
 
 # ── V60 条件 180-183 ──
 
+
 def _calc_rsi_deep_divergence_v60(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """RSI深度背离过滤（V60 条件180）。
@@ -19314,7 +20894,7 @@ def _calc_rsi_deep_divergence_v60(
             return result
 
         recent = closes[-window:]
-        prior = closes[-window * 2:-window] if len(closes) >= window * 2 else closes[:window]
+        prior = closes[-window * 2 : -window] if len(closes) >= window * 2 else closes[:window]
 
         price_curr_low = min(recent)
         price_prev_low = min(prior)
@@ -19322,7 +20902,11 @@ def _calc_rsi_deep_divergence_v60(
         price_prev_high = max(prior)
 
         rsi_curr_window = rsi_values[-window:]
-        rsi_prior_window = rsi_values[-window * 2:-window] if len(rsi_values) >= window * 2 else rsi_values[:window]
+        rsi_prior_window = (
+            rsi_values[-window * 2 : -window]
+            if len(rsi_values) >= window * 2
+            else rsi_values[:window]
+        )
 
         rsi_curr_low = min(rsi_curr_window)
         rsi_prev_low = min(rsi_prior_window)
@@ -19364,7 +20948,9 @@ def _calc_rsi_deep_divergence_v60(
             # 3卖：价格创新高 + RSI未创新高 → 顶背离
             if price_curr_high > price_prev_high * 1.005 and rsi_curr_high < rsi_prev_high:
                 divergence_type = "bearish_deep"
-                price_rise_pct = (price_curr_high - price_prev_high) / (price_prev_high + 1e-10) * 100
+                price_rise_pct = (
+                    (price_curr_high - price_prev_high) / (price_prev_high + 1e-10) * 100
+                )
                 if price_rise_pct > 5.0:
                     divergence_depth = "deep"
                     adj = 0.04
@@ -19396,7 +20982,7 @@ def _calc_rsi_deep_divergence_v60(
 
 
 def _calc_ma_spacing_strength_v60(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """MA排列间距强度评分（V60 条件181）。
@@ -19438,7 +21024,7 @@ def _calc_ma_spacing_strength_v60(
         m5 = float(ma5[-1])
         m20 = float(ma20[-1])
         m60 = float(ma60[-1])
-        price = closes[-1]
+        _ = closes[-1]
 
         result["ma5"] = round(m5, 2)
         result["ma20"] = round(m20, 2)
@@ -19506,7 +21092,7 @@ def _calc_ma_spacing_strength_v60(
 
 
 def _calc_zs_distance_enhanced_v60(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """中枢支撑/阻力距离评分增强（V60 条件182）。
@@ -19576,14 +21162,20 @@ def _calc_zs_distance_enhanced_v60(
             # 3买：突破中枢后回踩确认
             lookback = min(10, len(closes) - 1)
             if lookback >= 3:
-                recent_lows = [min(closes[-i:-i+2]) if i < len(closes) else closes[-1] for i in range(1, lookback + 1, 2)]
+                recent_lows = [
+                    min(closes[-i : -i + 2]) if i < len(closes) else closes[-1]
+                    for i in range(1, lookback + 1, 2)
+                ]
                 if recent_lows and min(recent_lows) >= zd * 0.98:
                     pullback_confirmed = True
 
         if is_sell and position == "below_zs":
             lookback = min(10, len(closes) - 1)
             if lookback >= 3:
-                recent_highs = [max(closes[-i:-i+2]) if i < len(closes) else closes[-1] for i in range(1, lookback + 1, 2)]
+                recent_highs = [
+                    max(closes[-i : -i + 2]) if i < len(closes) else closes[-1]
+                    for i in range(1, lookback + 1, 2)
+                ]
                 if recent_highs and max(recent_highs) <= zg * 1.02:
                     pullback_confirmed = True
         result["pullback_confirmed"] = pullback_confirmed
@@ -19638,7 +21230,7 @@ def _calc_zs_distance_enhanced_v60(
 
 
 def _calc_kdj_ob_os_confirm_v60(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """KDJ超买超卖确认（V60 条件183）。
@@ -19765,7 +21357,7 @@ def _calc_kdj_ob_os_confirm_v60(
 
 
 def _calc_macd_histogram_divergence_v61(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     macd_data: dict[str, list[float]],
 ) -> dict[str, Any]:
@@ -19828,7 +21420,7 @@ def _calc_macd_histogram_divergence_v61(
             return result
 
         recent = closes[-window:]
-        prior = closes[-window * 2:-window] if len(closes) >= window * 2 else closes[:window]
+        prior = closes[-window * 2 : -window] if len(closes) >= window * 2 else closes[:window]
 
         price_curr_low = min(recent)
         price_prev_low = min(prior)
@@ -19836,7 +21428,9 @@ def _calc_macd_histogram_divergence_v61(
         price_prev_high = max(prior)
 
         hist_curr_window = hist[-window:]
-        hist_prior_window = hist[-window * 2:-window] if len(hist) >= window * 2 else hist[:window]
+        hist_prior_window = (
+            hist[-window * 2 : -window] if len(hist) >= window * 2 else hist[:window]
+        )
 
         hist_curr_low = min(hist_curr_window)
         hist_prev_low = min(hist_prior_window)
@@ -19877,7 +21471,9 @@ def _calc_macd_histogram_divergence_v61(
             # 3卖：价格创新高 + MACD柱未创新高 → 顶背离
             if price_curr_high > price_prev_high * 1.005 and hist_curr_high < hist_prev_high:
                 divergence_type = "bearish_macd"
-                price_rise_pct = (price_curr_high - price_prev_high) / (price_prev_high + 1e-10) * 100
+                price_rise_pct = (
+                    (price_curr_high - price_prev_high) / (price_prev_high + 1e-10) * 100
+                )
                 if price_rise_pct > 5.0:
                     divergence_depth = "deep"
                     adj = 0.04
@@ -19901,10 +21497,18 @@ def _calc_macd_histogram_divergence_v61(
         rsi_div = getattr(mmd, "_rsi_deep_divergence_v60", None)
         rsi_fusion = "none"
         if rsi_div and rsi_div.get("divergence_type") in ("bullish_deep", "bearish_deep"):
-            if is_buy and rsi_div.get("divergence_type") == "bullish_deep" and divergence_type == "bullish_macd":
+            if (
+                is_buy
+                and rsi_div.get("divergence_type") == "bullish_deep"
+                and divergence_type == "bullish_macd"
+            ):
                 rsi_fusion = "fused_bullish"
                 adj += 0.02  # 双指标确认额外加分
-            elif not is_buy and rsi_div.get("divergence_type") == "bearish_deep" and divergence_type == "bearish_macd":
+            elif (
+                not is_buy
+                and rsi_div.get("divergence_type") == "bearish_deep"
+                and divergence_type == "bearish_macd"
+            ):
                 rsi_fusion = "fused_bearish"
                 adj += 0.02  # 双指标确认额外加分
 
@@ -19922,7 +21526,7 @@ def _calc_macd_histogram_divergence_v61(
 
 
 def _calc_composite_signal_score_v61(
-    mmd: "MMD",
+    mmd: MMD,
 ) -> dict[str, Any]:
     """综合多信号评分（V61 条件185）。
 
@@ -20059,7 +21663,9 @@ def _calc_composite_signal_score_v61(
                 decision_help = f"多方信号{signals_positive}个，可逢低布局但需设好止损"
         elif is_sell:
             if signals_negative > signals_positive:
-                decision_help = f"空方信号{signals_negative}个，多方信号{signals_positive}个，建议果断离场"
+                decision_help = (
+                    f"空方信号{signals_negative}个，多方信号{signals_positive}个，建议果断离场"
+                )
             elif signals_positive >= 3:
                 decision_help = f"空方信号强劲（{signals_negative}个确认），可在反弹时减仓"
             else:
@@ -20085,8 +21691,9 @@ def _calc_composite_signal_score_v61(
 # V62: 条件 186-189（BOLL带宽确认 + 动态阈值）
 # =============================================================================
 
+
 def _calc_boll_bandwidth_breakout_confirm_v62(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """BOLL带宽突破确认（V62 条件186）。
@@ -20134,16 +21741,22 @@ def _calc_boll_bandwidth_breakout_confirm_v62(
         result["boll_upper"] = round(upper, 2)
         result["boll_lower"] = round(lower, 2)
         result["band_width"] = round(band_width, 3)
-        result["price_position"] = "upper" if percent_b > 0.8 else ("lower" if percent_b < 0.2 else "mid")
+        result["price_position"] = (
+            "upper" if percent_b > 0.8 else ("lower" if percent_b < 0.2 else "mid")
+        )
 
         # 带宽趋势：比较当前带宽与10根K线前的带宽
-        prev_window = closes[-(period + 10):-(10)] if len(closes) >= period + 10 else closes[:period]
+        prev_window = (
+            closes[-(period + 10) : -(10)] if len(closes) >= period + 10 else closes[:period]
+        )
         if len(prev_window) >= period:
             prev_mid = sum(prev_window) / period
             prev_std = (sum((x - prev_mid) ** 2 for x in prev_window) / period) ** 0.5
             prev_upper = prev_mid + 2 * prev_std
             prev_lower = prev_mid - 2 * prev_std
-            prev_band_width = (prev_upper - prev_lower) / (prev_mid + 1e-10) * 100 if prev_mid > 0 else 0
+            prev_band_width = (
+                (prev_upper - prev_lower) / (prev_mid + 1e-10) * 100 if prev_mid > 0 else 0
+            )
             band_change = (band_width - prev_band_width) / (prev_band_width + 1e-10) * 100
 
             if band_change > 10:
@@ -20189,7 +21802,7 @@ def _calc_boll_bandwidth_breakout_confirm_v62(
 
 
 def _calc_boll_bandwidth_reversal_confirm_v62(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """BOLL带宽压缩反弹确认（V62 条件187）。
@@ -20224,7 +21837,7 @@ def _calc_boll_bandwidth_reversal_confirm_v62(
         # 计算过去lookback期内各期BOLL带宽
         widths = []
         for i in range(period, lookback + 1):
-            segment = closes[i - period:i]
+            segment = closes[i - period : i]
             mid = sum(segment) / period
             std = (sum((x - mid) ** 2 for x in segment) / period) ** 0.5
             bw = (4 * std / (mid + 1e-10)) * 100
@@ -20254,7 +21867,9 @@ def _calc_boll_bandwidth_reversal_confirm_v62(
 
         if squeeze_active:
             if is_buy:
-                lows_recent = [min(recent_closes[i:i+3]) for i in range(0, len(recent_closes)-2, 2)]
+                lows_recent = [
+                    min(recent_closes[i : i + 3]) for i in range(0, len(recent_closes) - 2, 2)
+                ]
                 if len(lows_recent) >= 2 and lows_recent[-1] > lows_recent[0] * 1.01:
                     reversal_confirmed = True
                     reversal_type = "bullish_reversal"
@@ -20263,7 +21878,9 @@ def _calc_boll_bandwidth_reversal_confirm_v62(
                     reversal_type = "no_reversal"
                     adj = 0.005
             else:
-                highs_recent = [max(recent_closes[i:i+3]) for i in range(0, len(recent_closes)-2, 2)]
+                highs_recent = [
+                    max(recent_closes[i : i + 3]) for i in range(0, len(recent_closes) - 2, 2)
+                ]
                 if len(highs_recent) >= 2 and highs_recent[-1] < highs_recent[0] * 0.99:
                     reversal_confirmed = True
                     reversal_type = "bearish_reversal"
@@ -20286,7 +21903,7 @@ def _calc_boll_bandwidth_reversal_confirm_v62(
 
 
 def _calc_dynamic_threshold_volatility_regime_v62(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """动态阈值-波动率状态切换（V62 条件188）。
@@ -20343,8 +21960,7 @@ def _calc_dynamic_threshold_volatility_regime_v62(
         result["volatility_regime"] = regime
         result["confidence_adjust"] = adj
         result["msg"] = (
-            f"ATR(14)={atr_14:.4f}({atr_pct:.2f}%) | "
-            f"波动率={regime} | 置信度调整{adj:+.0%}"
+            f"ATR(14)={atr_14:.4f}({atr_pct:.2f}%) | 波动率={regime} | 置信度调整{adj:+.0%}"
         )
         return result
     except Exception:
@@ -20352,7 +21968,7 @@ def _calc_dynamic_threshold_volatility_regime_v62(
 
 
 def _calc_dynamic_threshold_atr_multiplier_v62(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None = None,
     lows: list[float] | None = None,
@@ -20384,8 +22000,8 @@ def _calc_dynamic_threshold_atr_multiplier_v62(
             if len(closes) < 2:
                 result["msg"] = "数据不足"
                 return result
-            highs = [max(closes[i-1], closes[i]) for i in range(1, len(closes))]
-            lows = [min(closes[i-1], closes[i]) for i in range(1, len(closes))]
+            highs = [max(closes[i - 1], closes[i]) for i in range(1, len(closes))]
+            lows = [min(closes[i - 1], closes[i]) for i in range(1, len(closes))]
 
         if len(highs) < 15 or len(lows) < 15:
             result["msg"] = "highs/lows数据不足"
@@ -20448,9 +22064,10 @@ def _calc_dynamic_threshold_atr_multiplier_v62(
 # V63: 条件 190-191（中枢级别权重优化增强 + 多周期信号衰减追踪）
 # =============================================================================
 
+
 def _calc_zhongshu_level_weight_enhanced_v63(
-    mmd: "MMD",
-    zss: list["ZS"],
+    mmd: MMD,
+    zss: list[ZS],
     closes: list[float] | None = None,
 ) -> dict[str, Any]:
     """中枢级别权重优化增强（V63 条件190）。
@@ -20599,7 +22216,7 @@ def _calc_zhongshu_level_weight_enhanced_v63(
         result["total_weight_bonus"] = total_bonus
         result["confidence_adjust"] = confidence_adj
 
-        direction_hint = "买入" if is_buy else "卖出"
+        _ = "买入" if is_buy else "卖出"
         result["msg"] = (
             f"中枢级别权重优化：{level}中枢({line_count}笔)"
             f"，距离分={distance_score}/4"
@@ -20614,7 +22231,7 @@ def _calc_zhongshu_level_weight_enhanced_v63(
 
 
 def _calc_multi_period_signal_decay_v63(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多周期信号衰减追踪（V63 条件191）。
@@ -20650,7 +22267,11 @@ def _calc_multi_period_signal_decay_v63(
         # 计算信号点位置
         bi_end_idx = 0
         if mmd.bi is not None and hasattr(mmd.bi, "end") and hasattr(mmd.bi.end, "k"):
-            bi_end_idx = mmd.bi.end.k.k_index if hasattr(mmd.bi.end.k, "k_index") else max(0, len(closes) - 25)
+            bi_end_idx = (
+                mmd.bi.end.k.k_index
+                if hasattr(mmd.bi.end.k, "k_index")
+                else max(0, len(closes) - 25)
+            )
         else:
             bi_end_idx = max(0, len(closes) - 25)
 
@@ -20663,7 +22284,7 @@ def _calc_multi_period_signal_decay_v63(
         # ── 短期（5根K线）───────────────────────────────────────────
         short_window = min(5, len(closes) - bi_end_idx - 1)
         if short_window >= 2:
-            short_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + short_window]
+            short_closes = closes[bi_end_idx + 1 : bi_end_idx + 1 + short_window]
             short_change = (short_closes[-1] - signal_price) / (signal_price + 1e-10) * 100
             result["short_term_momentum"] = round(short_change, 2)
         else:
@@ -20672,7 +22293,7 @@ def _calc_multi_period_signal_decay_v63(
         # ── 中期（10根K线）──────────────────────────────────────────
         mid_window = min(10, len(closes) - bi_end_idx - 1)
         if mid_window >= 3:
-            mid_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + mid_window]
+            mid_closes = closes[bi_end_idx + 1 : bi_end_idx + 1 + mid_window]
             mid_change = (mid_closes[-1] - signal_price) / (signal_price + 1e-10) * 100
             result["mid_term_momentum"] = round(mid_change, 2)
         else:
@@ -20681,7 +22302,7 @@ def _calc_multi_period_signal_decay_v63(
         # ── 长期（20根K线）──────────────────────────────────────────
         long_window = min(20, len(closes) - bi_end_idx - 1)
         if long_window >= 5:
-            long_closes = closes[bi_end_idx + 1:bi_end_idx + 1 + long_window]
+            long_closes = closes[bi_end_idx + 1 : bi_end_idx + 1 + long_window]
             long_change = (long_closes[-1] - signal_price) / (signal_price + 1e-10) * 100
             result["long_term_momentum"] = round(long_change, 2)
         else:
@@ -20766,8 +22387,9 @@ def _calc_multi_period_signal_decay_v63(
 
 # ── V65: 条件 192-195（精准度进一步提升）────────────────────────────────
 
+
 def _calc_volume_price_divergence_secondary_v65(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -20797,7 +22419,9 @@ def _calc_volume_price_divergence_secondary_v65(
         n = len(closes)
         lookback = min(30, n - 1)
         recent_closes = closes[-lookback:]
-        recent_vols = volumes[-lookback:] if len(volumes) >= n else volumes[-lookback:] if volumes else []
+        recent_vols = (
+            volumes[-lookback:] if len(volumes) >= n else volumes[-lookback:] if volumes else []
+        )
 
         if len(recent_vols) < 10:
             result["msg"] = "成交量数据不足"
@@ -20805,7 +22429,9 @@ def _calc_volume_price_divergence_secondary_v65(
 
         # 第一层：基础量价背离
         price_trend = (recent_closes[-1] - recent_closes[0]) / max(recent_closes[0], 1e-10)
-        vol_trend = (recent_vols[-1] - recent_vols[0]) / max(sum(recent_vols) / len(recent_vols), 1e-10)
+        vol_trend = (recent_vols[-1] - recent_vols[0]) / max(
+            sum(recent_vols) / len(recent_vols), 1e-10
+        )
 
         if is_buy:
             # 买入信号：价格下跌但成交量萎缩（卖压衰竭）
@@ -20817,7 +22443,11 @@ def _calc_volume_price_divergence_secondary_v65(
         # 第二层：背离强度量化
         avg_vol = sum(recent_vols) / len(recent_vols) if recent_vols else 1.0
         vol_ratio = recent_vols[-1] / max(avg_vol, 1e-10)
-        price_slope = (recent_closes[-1] - recent_closes[-5]) / max(recent_closes[-5], 1e-10) if len(recent_closes) >= 5 else 0.0
+        price_slope = (
+            (recent_closes[-1] - recent_closes[-5]) / max(recent_closes[-5], 1e-10)
+            if len(recent_closes) >= 5
+            else 0.0
+        )
 
         strength = abs(price_slope) * 10 + (1.0 - vol_ratio) * 0.5
         strength = min(1.0, max(0.0, strength))
@@ -20853,9 +22483,7 @@ def _calc_volume_price_divergence_secondary_v65(
             )
         else:
             result["confidence_adjust"] = -0.01
-            result["msg"] = (
-                f"量价背离未确认 | 强度={strength:.2f} 持续{duration}根 | 置信度-1%"
-            )
+            result["msg"] = f"量价背离未确认 | 强度={strength:.2f} 持续{duration}根 | 置信度-1%"
 
         return result
     except Exception:
@@ -20863,8 +22491,8 @@ def _calc_volume_price_divergence_secondary_v65(
 
 
 def _calc_breakout_retest_confirmation_v65(
-    mmd: "MMD",
-    zss: list["ZS"],
+    mmd: MMD,
+    zss: list[ZS],
     closes: list[float],
 ) -> dict[str, Any]:
     """中枢突破回踩确认（V65 条件193）。
@@ -20902,10 +22530,10 @@ def _calc_breakout_retest_confirmation_v65(
             return result
 
         # 获取中枢区间
-        if hasattr(recent_zs, 'high') and hasattr(recent_zs, 'low'):
+        if hasattr(recent_zs, "high") and hasattr(recent_zs, "low"):
             zs_high = recent_zs.high
             zs_low = recent_zs.low
-        elif hasattr(recent_zs, 'zg') and hasattr(recent_zs, 'zd'):
+        elif hasattr(recent_zs, "zg") and hasattr(recent_zs, "zd"):
             zs_high = recent_zs.zg
             zs_low = recent_zs.zd
         else:
@@ -20930,9 +22558,14 @@ def _calc_breakout_retest_confirmation_v65(
             breakout_level = zs_high
             lowest_post = min(post_bars)
             highest_post = max(post_bars)
-            retest_depth = (breakout_level - lowest_post) / breakout_level if breakout_level > 0 else 0
+            retest_depth = (
+                (breakout_level - lowest_post) / breakout_level if breakout_level > 0 else 0
+            )
             # 回踩确认：最低点在中枢上沿附近（回撤不超过20%）或直接上涨
-            retest_valid = lowest_post >= zs_low * 0.95 or (highest_post - breakout_level) / breakout_level > 0.02
+            retest_valid = (
+                lowest_post >= zs_low * 0.95
+                or (highest_post - breakout_level) / breakout_level > 0.02
+            )
             result["breakout_valid"] = retest_valid
             result["retest_depth"] = round(max(0, retest_depth), 4)
         else:
@@ -20940,8 +22573,13 @@ def _calc_breakout_retest_confirmation_v65(
             breakout_level = zs_low
             lowest_post = min(post_bars)
             highest_post = max(post_bars)
-            retest_depth = (highest_post - breakout_level) / breakout_level if breakout_level > 0 else 0
-            retest_valid = highest_post <= zs_high * 1.05 or (breakout_level - lowest_post) / breakout_level > 0.02
+            retest_depth = (
+                (highest_post - breakout_level) / breakout_level if breakout_level > 0 else 0
+            )
+            retest_valid = (
+                highest_post <= zs_high * 1.05
+                or (breakout_level - lowest_post) / breakout_level > 0.02
+            )
             result["breakout_valid"] = retest_valid
             result["retest_depth"] = round(max(0, retest_depth), 4)
 
@@ -20951,15 +22589,11 @@ def _calc_breakout_retest_confirmation_v65(
             result["confidence_adjust"] = round(adj, 3)
             result["retest_confirmed"] = True
             result["msg"] = (
-                f"突破回踩确认 | 回撤={retest_depth:.1%} 有效={retest_valid}"
-                f" | 置信度+{adj:.0%}"
+                f"突破回踩确认 | 回撤={retest_depth:.1%} 有效={retest_valid} | 置信度+{adj:.0%}"
             )
         else:
             result["confidence_adjust"] = -0.03
-            result["msg"] = (
-                f"突破回踩失败 | 回撤={retest_depth:.1%} 可能假突破"
-                f" | 置信度-3%"
-            )
+            result["msg"] = f"突破回踩失败 | 回撤={retest_depth:.1%} 可能假突破 | 置信度-3%"
 
         return result
     except Exception:
@@ -20967,7 +22601,7 @@ def _calc_breakout_retest_confirmation_v65(
 
 
 def _calc_volatility_compression_breakout_v65(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """波动率压缩突破信号（V65 条件194）。
@@ -21002,7 +22636,7 @@ def _calc_volatility_compression_breakout_v65(
         period = 20
         upper, mid, lower = [], [], []
         for i in range(period - 1, n):
-            window = closes[i - period + 1:i + 1]
+            window = closes[i - period + 1 : i + 1]
             m_val = sum(window) / period
             std_val = (sum((x - m_val) ** 2 for x in window) / period) ** 0.5
             upper.append(m_val + 2 * std_val)
@@ -21013,14 +22647,16 @@ def _calc_volatility_compression_breakout_v65(
             result["msg"] = "BOLL计算失败"
             return result
 
-        widths = [(u - l) / m if m > 0 else 0 for u, l, m in zip(upper, lower, mid)]
+        widths = [(u - low) / m if m > 0 else 0 for u, low, m in zip(upper, lower, mid)]
         if not widths:
             result["msg"] = "带宽计算失败"
             return result
 
         # 检测压缩状态
         current_width = widths[-1]
-        hist_percentile = sum(1 for w in widths[:-1] if w <= current_width) / max(len(widths) - 1, 1)
+        hist_percentile = sum(1 for w in widths[:-1] if w <= current_width) / max(
+            len(widths) - 1, 1
+        )
 
         # 压缩判定：当前带宽处于历史25%分位以下
         is_squeeze = hist_percentile < 0.25
@@ -21034,10 +22670,18 @@ def _calc_volatility_compression_breakout_v65(
 
         if is_buy:
             # 买入：价格从压缩区向上突破
-            breakout_strength = (latest_close - latest_lower) / (latest_upper - latest_lower) if latest_upper != latest_lower else 0.5
+            breakout_strength = (
+                (latest_close - latest_lower) / (latest_upper - latest_lower)
+                if latest_upper != latest_lower
+                else 0.5
+            )
             breakout_valid = latest_close > latest_mid * 1.01  # 突破中轨
         else:
-            breakout_strength = (latest_upper - latest_close) / (latest_upper - latest_lower) if latest_upper != latest_lower else 0.5
+            breakout_strength = (
+                (latest_upper - latest_close) / (latest_upper - latest_lower)
+                if latest_upper != latest_lower
+                else 0.5
+            )
             breakout_valid = latest_close < latest_mid * 0.99  # 跌破中轨
 
         if is_squeeze and breakout_valid:
@@ -21054,9 +22698,7 @@ def _calc_volatility_compression_breakout_v65(
             result["compression_detected"] = True
             result["squeeze_score"] = round(squeeze_score, 2)
             result["confidence_adjust"] = -0.01
-            result["msg"] = (
-                f"波动率压缩中 | 评分={squeeze_score:.2f} 等待突破确认 | 置信度-1%"
-            )
+            result["msg"] = f"波动率压缩中 | 评分={squeeze_score:.2f} 等待突破确认 | 置信度-1%"
         else:
             result["confidence_adjust"] = 0.0
             result["msg"] = f"无压缩状态（分位={hist_percentile:.0%}）"
@@ -21067,7 +22709,7 @@ def _calc_volatility_compression_breakout_v65(
 
 
 def _calc_signal_time_window_freshness_v65(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """买卖点时间窗口新鲜度（V65 条件195）。
@@ -21176,7 +22818,7 @@ def _calc_signal_time_window_freshness_v65(
 
 
 def _calc_macd_momentum_acceleration_v66(
-    mmd: "MMD",
+    mmd: MMD,
     macd_data: dict[str, list[float]],
 ) -> dict[str, Any]:
     """MACD动能锥加速确认（V66 条件196）。
@@ -21208,12 +22850,16 @@ def _calc_macd_momentum_acceleration_v66(
         hist_changes.reverse()
 
         if is_buy:
-            accelerating = all(c > 0 for c in hist_changes[-3:]) if len(hist_changes) >= 3 else False
+            accelerating = (
+                all(c > 0 for c in hist_changes[-3:]) if len(hist_changes) >= 3 else False
+            )
             golden_cross = len(dif) >= 2 and dif[-2] <= 0 and dif[-1] > 0
             turning_positive = hist[-1] > 0 and hist[-2] <= 0
             strong_confirm = accelerating or (golden_cross and hist[-1] > 0) or turning_positive
         else:
-            decelerating = all(c < 0 for c in hist_changes[-3:]) if len(hist_changes) >= 3 else False
+            decelerating = (
+                all(c < 0 for c in hist_changes[-3:]) if len(hist_changes) >= 3 else False
+            )
             dead_cross = len(dif) >= 2 and dif[-2] >= 0 and dif[-1] < 0
             turning_negative = hist[-1] < 0 and hist[-2] >= 0
             strong_confirm = decelerating or (dead_cross and hist[-1] < 0) or turning_negative
@@ -21233,8 +22879,7 @@ def _calc_macd_momentum_acceleration_v66(
             adj = min(0.06, cone_count * 0.015 + 0.02)
             result["confidence_adjust"] = round(adj, 3)
             result["msg"] = (
-                f"MACD动能加速 | 方向={'↑' if is_buy else '↓'} 锥={cone_count}根"
-                f" | 置信度+{adj:.0%}"
+                f"MACD动能加速 | 方向={'↑' if is_buy else '↓'} 锥={cone_count}根 | 置信度+{adj:.0%}"
             )
         elif strong_confirm:
             result["acceleration_detected"] = True
@@ -21251,7 +22896,7 @@ def _calc_macd_momentum_acceleration_v66(
 
 
 def _calc_volume_price_coordination_deep_v66(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -21283,9 +22928,13 @@ def _calc_volume_price_coordination_deep_v66(
         short_vol_dir = short_vols[-1] - short_vol_avg
 
         if is_buy:
-            short_ok = (short_price_dir < 0 and short_vol_dir < 0) or (short_price_dir > 0 and short_vol_dir > 0)
+            short_ok = (short_price_dir < 0 and short_vol_dir < 0) or (
+                short_price_dir > 0 and short_vol_dir > 0
+            )
         else:
-            short_ok = (short_price_dir > 0 and short_vol_dir < 0) or (short_price_dir < 0 and short_vol_dir > 0)
+            short_ok = (short_price_dir > 0 and short_vol_dir < 0) or (
+                short_price_dir < 0 and short_vol_dir > 0
+            )
 
         short_score = 0.8 if short_ok else 0.3
 
@@ -21295,9 +22944,13 @@ def _calc_volume_price_coordination_deep_v66(
         mid_vol_trend = sum(mid_vols[-5:]) / 5 - sum(mid_vols[:5]) / 5
 
         if is_buy:
-            mid_ok = (mid_price_dir <= 0 and mid_vol_trend <= 0) or (mid_price_dir > 0 and mid_vol_trend > 0)
+            mid_ok = (mid_price_dir <= 0 and mid_vol_trend <= 0) or (
+                mid_price_dir > 0 and mid_vol_trend > 0
+            )
         else:
-            mid_ok = (mid_price_dir >= 0 and mid_vol_trend <= 0) or (mid_price_dir < 0 and mid_vol_trend > 0)
+            mid_ok = (mid_price_dir >= 0 and mid_vol_trend <= 0) or (
+                mid_price_dir < 0 and mid_vol_trend > 0
+            )
 
         mid_score = 0.75 if mid_ok else 0.35
 
@@ -21323,7 +22976,9 @@ def _calc_volume_price_coordination_deep_v66(
         if overall >= 0.7:
             adj = 0.04
             result["confidence_adjust"] = round(adj, 3)
-            result["msg"] = f"量价配合良好 | 短={short_score:.0%} 中={mid_score:.0%} 极端={extreme_flag} | 置信度+{adj:.0%}"
+            result["msg"] = (
+                f"量价配合良好 | 短={short_score:.0%} 中={mid_score:.0%} 极端={extreme_flag} | 置信度+{adj:.0%}"
+            )
         elif overall >= 0.5:
             adj = 0.01
             result["confidence_adjust"] = round(adj, 3)
@@ -21339,7 +22994,7 @@ def _calc_volume_price_coordination_deep_v66(
 
 
 def _calc_multi_tf_convergence_intensity_v66(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多时间框架共振强度评分（V66 条件198）。
@@ -21390,17 +23045,23 @@ def _calc_multi_tf_convergence_intensity_v66(
             adj = 0.05
             result["convergence_score"] = 1.0
             result["confidence_adjust"] = round(adj, 3)
-            result["msg"] = f"三周期共振 {'↑' if is_buy else '↓'} | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振=1.0 | 置信度+{adj:.0%}"
+            result["msg"] = (
+                f"三周期共振 {'↑' if is_buy else '↓'} | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振=1.0 | 置信度+{adj:.0%}"
+            )
         elif convergence_score >= 0.6:
             adj = 0.02
             result["convergence_score"] = round(convergence_score, 2)
             result["confidence_adjust"] = round(adj, 3)
-            result["msg"] = f"双周期共振 {'↑' if is_buy else '↓'} | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振={convergence_score:.0%} | 置信度+{adj:.0%}"
+            result["msg"] = (
+                f"双周期共振 {'↑' if is_buy else '↓'} | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振={convergence_score:.0%} | 置信度+{adj:.0%}"
+            )
         else:
             adj = -0.02
             result["convergence_score"] = round(convergence_score, 2)
             result["confidence_adjust"] = round(adj, 3)
-            result["msg"] = f"周期分歧 | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振={convergence_score:.0%} | 置信度-2%"
+            result["msg"] = (
+                f"周期分歧 | 短={short_trend} 中={mid_trend} 长={long_trend} | 共振={convergence_score:.0%} | 置信度-2%"
+            )
 
         return result
     except Exception:
@@ -21408,7 +23069,7 @@ def _calc_multi_tf_convergence_intensity_v66(
 
 
 def _calc_signal_execution_priority_v66(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """信号执行优先级建议（V66 条件199）。
@@ -21443,8 +23104,7 @@ def _calc_signal_execution_priority_v66(
         ma_spread = abs(ma5 - ma20) / max(ma20, 1e-10)
 
         returns = [
-            (closes[-i] - closes[-i - 1]) / max(closes[-i - 1], 1e-10)
-            for i in range(1, min(11, n))
+            (closes[-i] - closes[-i - 1]) / max(closes[-i - 1], 1e-10) for i in range(1, min(11, n))
         ]
         avg_return = sum(abs(r) for r in returns) / len(returns) if returns else 0.02
 
@@ -21509,8 +23169,8 @@ def _calc_signal_execution_priority_v66(
 
 
 def _calc_zhongshu_divergence_strength_v67(
-    mmd: "MMD",
-    zss: list["ZS"],
+    mmd: MMD,
+    zss: list[ZS],
     closes: list[float],
     macd_data: dict[str, list[float]] | None = None,
 ) -> dict[str, Any]:
@@ -21544,11 +23204,11 @@ def _calc_zhongshu_divergence_strength_v67(
         latest_zs = zss[-1]
         zs_high = max(bc.high for bc in latest_zs.lines) if latest_zs.lines else 0
         zs_low = min(bc.low for bc in latest_zs.lines) if latest_zs.lines else 0
-        zs_range = zs_high - zs_low if zs_high != zs_low else 1.0
+        _ = zs_high - zs_low if zs_high != zs_low else 1.0
 
         # 计算突破前最后一笔的MACD面积（中枢内）
         pre_break_idx = max(0, len(hist) - 20)
-        post_break_idx = min(len(hist) - 1, pre_break_idx + 10)
+        _ = min(len(hist) - 1, pre_break_idx + 10)
 
         # 简化：用最近10根与之前10根的MACD柱面积对比
         recent_hist = hist[-10:] if len(hist) >= 10 else hist
@@ -21563,7 +23223,7 @@ def _calc_zhongshu_divergence_strength_v67(
         backchi_ratio = prev_area / max(recent_area, 1e-10)
 
         current_price = closes[-1]
-        zs_mid = (zs_high + zs_low) / 2
+        _ = (zs_high + zs_low) / 2
 
         result["backchi_ratio"] = round(backchi_ratio, 3)
 
@@ -21618,7 +23278,7 @@ def _calc_zhongshu_divergence_strength_v67(
 
 
 def _calc_multi_level_mmd_consistency_v67(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多级别买卖点一致性验证（V67 条件201）。
@@ -21693,7 +23353,7 @@ def _calc_multi_level_mmd_consistency_v67(
 
 
 def _calc_post_signal_trajectory_health_v67(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """信号后价格轨迹健康度（V67 条件202）。
@@ -21779,7 +23439,7 @@ def _calc_post_signal_trajectory_health_v67(
 
 
 def _calc_dynamic_sl_tp_recommendation_v67(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -21872,7 +23532,7 @@ def _calc_dynamic_sl_tp_recommendation_v67(
 
 
 def _calc_gap_trend_consistency_v68(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """缺口方向与趋势一致性验证（V68 条件204）。
@@ -21899,7 +23559,7 @@ def _calc_gap_trend_consistency_v68(
             result["msg"] = "数据不足（需≥30根）"
             return result
 
-        current = closes[-1]
+        _ = closes[-1]
 
         # 检测最近5根K线内的缺口
         gap_found = False
@@ -21932,8 +23592,9 @@ def _calc_gap_trend_consistency_v68(
 
         # 一致性评估
         if gap_found:
-            if (is_buy and gap_dir == "up" and trend_dir == "up") or \
-               (not is_buy and gap_dir == "down" and trend_dir == "down"):
+            if (is_buy and gap_dir == "up" and trend_dir == "up") or (
+                not is_buy and gap_dir == "down" and trend_dir == "down"
+            ):
                 alignment = "aligned"
                 quality = "strong"
                 adj = 0.04 if gap_magnitude > 0.03 else 0.03
@@ -21959,7 +23620,9 @@ def _calc_gap_trend_consistency_v68(
         result["confidence_adjust"] = round(adj, 3)
 
         gap_info = f"缺口{gap_dir}({gap_magnitude:.1%})" if gap_found else "无显著缺口"
-        align_label = "一致" if alignment == "aligned" else "背离" if alignment == "opposing" else "中性"
+        align_label = (
+            "一致" if alignment == "aligned" else "背离" if alignment == "opposing" else "中性"
+        )
         result["msg"] = (
             f"{gap_info} | 趋势={trend_dir} | 一致性={align_label} "
             f"质量={quality} | 置信度{adj:+.0%}"
@@ -21970,8 +23633,8 @@ def _calc_gap_trend_consistency_v68(
 
 
 def _calc_range_set_multi_level_v68(
-    mmd: "MMD",
-    zss: list["ZS"],
+    mmd: MMD,
+    zss: list[ZS],
     closes: list[float],
 ) -> dict[str, Any]:
     """多级别区间套一致性验证（V68 条件205）。
@@ -22006,14 +23669,16 @@ def _calc_range_set_multi_level_v68(
         for zs in zss:
             zs_mid = (zs.zg + zs.zd) / 2
             zs_dist = (current - zs_mid) / max(current, 1e-10)
-            zs_list.append({
-                "mid": zs_mid,
-                "zg": zs.zg,
-                "zd": zs.zd,
-                "dist_pct": zs_dist,
-                "above": current > zs.zg,
-                "below": current < zs.zd,
-            })
+            zs_list.append(
+                {
+                    "mid": zs_mid,
+                    "zg": zs.zg,
+                    "zd": zs.zd,
+                    "dist_pct": zs_dist,
+                    "above": current > zs.zg,
+                    "below": current < zs.zd,
+                }
+            )
 
         result["zhongshu_count"] = len(zs_list)
         zs_above = sum(1 for z in zs_list if z["above"])
@@ -22070,7 +23735,7 @@ def _calc_range_set_multi_level_v68(
 
 
 def _calc_post_signal_fund_flow_v68(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -22184,7 +23849,7 @@ def _calc_post_signal_fund_flow_v68(
 
 
 def _calc_market_regime_adaptation_v68(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
     highs: list[float],
@@ -22294,8 +23959,9 @@ def _calc_market_regime_adaptation_v68(
 # V69: 条件 208-211（量价背离+结构完整+多指标背离+回踩深度）
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _calc_price_volume_divergence_v69(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -22408,8 +24074,8 @@ def _calc_price_volume_divergence_v69(
 
         result["confidence_adjust"] = round(adj, 3)
         result["msg"] = (
-            f"价格{'↑' if price_trend=='up' else '↓' if price_trend=='down' else '→'}"
-            f"量能{'放' if volume_trend=='expanding' else '缩' if volume_trend=='shrinking' else '平'}"
+            f"价格{'↑' if price_trend == 'up' else '↓' if price_trend == 'down' else '→'}"
+            f"量能{'放' if volume_trend == 'expanding' else '缩' if volume_trend == 'shrinking' else '平'}"
             f" 背离={divergence_dir} 强度={strength:.2f} | 置信度{adj:+.0%}"
         )
         return result
@@ -22418,9 +24084,9 @@ def _calc_price_volume_divergence_v69(
 
 
 def _calc_structural_integrity_v69(
-    mmd: "MMD",
-    bis: list["BI"],
-    zss: list["ZS"],
+    mmd: MMD,
+    bis: list[BI],
+    zss: list[ZS],
     closes: list[float],
 ) -> dict[str, Any]:
     """结构完整性评分（V69 条件209）。
@@ -22442,8 +24108,8 @@ def _calc_structural_integrity_v69(
         "msg": "",
     }
     try:
-        is_buy = mmd.mmd_type == MMDType.BUY_3
-        n = len(closes)
+        _ = mmd.mmd_type == MMDType.BUY_3
+        _ = len(closes)
 
         bi_complete = mmd.bi is not None and mmd.bi.end.done if mmd.bi else False
         result["bi_complete"] = bi_complete
@@ -22495,7 +24161,7 @@ def _calc_structural_integrity_v69(
 
 
 def _calc_multi_indicator_divergence_v69(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float] | None,
     volumes: list[float] | None,
     macd_data: dict[str, list[float]] | None = None,
@@ -22511,7 +24177,14 @@ def _calc_multi_indicator_divergence_v69(
     返回：macd_divergence, rsi_divergence, kdj_divergence, resonance_count, confidence_adjust, msg
     """
     if closes is None:
-        return {"macd_divergence": "none", "rsi_divergence": "none", "kdj_divergence": "none", "resonance_count": 0, "confidence_adjust": 0.0, "msg": ""}
+        return {
+            "macd_divergence": "none",
+            "rsi_divergence": "none",
+            "kdj_divergence": "none",
+            "resonance_count": 0,
+            "confidence_adjust": 0.0,
+            "msg": "",
+        }
     result: dict[str, Any] = {
         "macd_divergence": "none",
         "rsi_divergence": "none",
@@ -22539,7 +24212,9 @@ def _calc_multi_indicator_divergence_v69(
             if is_buy:
                 price_low_recent = min(price_recent[-5:])
                 price_low_early = min(price_recent[:5])
-                hist_low_recent = min(hist_recent[-5:]) if any(h < 0 for h in hist_recent[-5:]) else 0
+                hist_low_recent = (
+                    min(hist_recent[-5:]) if any(h < 0 for h in hist_recent[-5:]) else 0
+                )
                 hist_low_early = min(hist_recent[:5]) if any(h < 0 for h in hist_recent[:5]) else 0
                 if price_low_recent < price_low_early and hist_low_recent > hist_low_early:
                     macd_div = "bullish"
@@ -22548,7 +24223,9 @@ def _calc_multi_indicator_divergence_v69(
             else:
                 price_high_recent = max(price_recent[-5:])
                 price_high_early = max(price_recent[:5])
-                hist_high_recent = max(hist_recent[-5:]) if any(h > 0 for h in hist_recent[-5:]) else 0
+                hist_high_recent = (
+                    max(hist_recent[-5:]) if any(h > 0 for h in hist_recent[-5:]) else 0
+                )
                 hist_high_early = max(hist_recent[:5]) if any(h > 0 for h in hist_recent[:5]) else 0
                 if price_high_recent > price_high_early and hist_high_recent < hist_high_early:
                     macd_div = "bearish"
@@ -22596,8 +24273,11 @@ def _calc_multi_indicator_divergence_v69(
         result["kdj_divergence"] = kdj_div
 
         # 4. 共振计数
-        positive_div = sum(1 for d in [macd_div, rsi_div, kdj_div]
-                          if (is_buy and d == "bullish") or (not is_buy and d == "bearish"))
+        positive_div = sum(
+            1
+            for d in [macd_div, rsi_div, kdj_div]
+            if (is_buy and d == "bullish") or (not is_buy and d == "bearish")
+        )
         result["resonance_count"] = positive_div
 
         if positive_div >= 3:
@@ -22611,8 +24291,7 @@ def _calc_multi_indicator_divergence_v69(
 
         result["confidence_adjust"] = round(adj, 3)
         result["msg"] = (
-            f"MACD={macd_div} RSI={rsi_div} KDJ={kdj_div} "
-            f"共振={positive_div}/3 | 置信度{adj:+.0%}"
+            f"MACD={macd_div} RSI={rsi_div} KDJ={kdj_div} 共振={positive_div}/3 | 置信度{adj:+.0%}"
         )
         return result
     except Exception:
@@ -22620,7 +24299,7 @@ def _calc_multi_indicator_divergence_v69(
 
 
 def _calc_retracement_depth_v69(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -22702,7 +24381,7 @@ def _calc_retracement_depth_v69(
         result["confidence_adjust"] = round(adj, 3)
         result["msg"] = (
             f"回踩深度={retracement_pct:.1f}% 类型={retype} "
-            f"最优={'✓' if optimal=='yes' else '△' if optimal=='partial' else '✗'} "
+            f"最优={'✓' if optimal == 'yes' else '△' if optimal == 'partial' else '✗'} "
             f"| 置信度{adj:+.0%}"
         )
         return result
@@ -22714,8 +24393,9 @@ def _calc_retracement_depth_v69(
 # V70: 条件 212-215（量峰检测+时间衰减+假突破过滤+置信度校准）
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _calc_volume_peak_detection_v70(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -22795,7 +24475,7 @@ def _calc_volume_peak_detection_v70(
 
 
 def _calc_signal_time_decay_v70(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """买卖点时间窗口衰减（V70 条件213）。
@@ -22852,17 +24532,14 @@ def _calc_signal_time_decay_v70(
         # 置信度调整（相对于基准1.0）
         adj = decay - 1.0
         result["confidence_adjust"] = round(adj, 3)
-        result["msg"] = (
-            f"信号后{bar_count}根K线 衰减因子={decay:.2f} "
-            f"时效={age} | 置信度{adj:+.0%}"
-        )
+        result["msg"] = f"信号后{bar_count}根K线 衰减因子={decay:.2f} 时效={age} | 置信度{adj:+.0%}"
         return result
     except Exception:
         return result
 
 
 def _calc_false_breakout_filter_v70(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -22964,7 +24641,7 @@ def _calc_false_breakout_filter_v70(
 
 
 def _calc_final_confidence_calibration_v70(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """信号置信度最终校准（V70 条件215）。
@@ -23057,8 +24734,9 @@ def _calc_final_confidence_calibration_v70(
 # V71: 条件 216-219（均线排列强度+多周期共振+历史胜率+动态风险收益）
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 def _calc_ma_alignment_strength_v71(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """均线排列强度评估（V71 条件216）。
@@ -23148,7 +24826,7 @@ def _calc_ma_alignment_strength_v71(
 
 
 def _calc_multi_tf_ma_resonance_v71(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多周期均线共振确认（V71 条件217）。
@@ -23195,11 +24873,13 @@ def _calc_multi_tf_ma_resonance_v71(
         result["long_aligned"] = long_up if is_buy else (not long_up)
 
         # 共振计数
-        alignment_count = sum([
-            (short_up if is_buy else not short_up),
-            (mid_up if is_buy else not mid_up),
-            (long_up if is_buy else not long_up),
-        ])
+        alignment_count = sum(
+            [
+                (short_up if is_buy else not short_up),
+                (mid_up if is_buy else not mid_up),
+                (long_up if is_buy else not long_up),
+            ]
+        )
         result["resonance_count"] = alignment_count
 
         # 置信度调整
@@ -23223,7 +24903,7 @@ def _calc_multi_tf_ma_resonance_v71(
 
 
 def _calc_mmd_history_winrate_v71(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -23260,14 +24940,14 @@ def _calc_mmd_history_winrate_v71(
         pattern_window = 20
 
         for i in range(0, n - lookback - 1, pattern_window):
-            slice_closes = hist_closes[i:i + pattern_window * 2]
-            slice_volumes = hist_volumes[i:i + pattern_window * 2]
+            slice_closes = hist_closes[i : i + pattern_window * 2]
+            slice_volumes = hist_volumes[i : i + pattern_window * 2]
             if len(slice_closes) < pattern_window * 2:
                 continue
 
             # 检查形态：前pattern_window根K线的价格趋势
             start_price = slice_closes[0]
-            mid_price = slice_closes[pattern_window]
+            _ = slice_closes[pattern_window]
             end_price = slice_closes[-1]
             mid_vol = sum(slice_volumes[:pattern_window]) / pattern_window
             end_vol = sum(slice_volumes[pattern_window:]) / pattern_window
@@ -23278,7 +24958,11 @@ def _calc_mmd_history_winrate_v71(
                 vol_shrink = end_vol / max(mid_vol, 1e-10)
                 if 0.03 < price_drop < 0.15 and vol_shrink < 0.8:
                     # 检查后续表现
-                    future_return = (end_price - slice_closes[-5]) / max(slice_closes[-5], 1e-10) if len(slice_closes) > 5 else 0
+                    future_return = (
+                        (end_price - slice_closes[-5]) / max(slice_closes[-5], 1e-10)
+                        if len(slice_closes) > 5
+                        else 0
+                    )
                     if future_return > 0:
                         wins += 1
                     samples += 1
@@ -23287,7 +24971,11 @@ def _calc_mmd_history_winrate_v71(
                 price_rise = (end_price - start_price) / max(start_price, 1e-10)
                 vol_expand = end_vol / max(mid_vol, 1e-10)
                 if 0.03 < price_rise < 0.15 and vol_expand > 1.2:
-                    future_return = (slice_closes[-5] - end_price) / max(end_price, 1e-10) if len(slice_closes) > 5 else 0
+                    future_return = (
+                        (slice_closes[-5] - end_price) / max(end_price, 1e-10)
+                        if len(slice_closes) > 5
+                        else 0
+                    )
                     if future_return > 0:
                         wins += 1
                     samples += 1
@@ -23307,17 +24995,14 @@ def _calc_mmd_history_winrate_v71(
             adj = 0.0
 
         result["confidence_adjust"] = round(adj, 3)
-        result["msg"] = (
-            f"回溯胜率={winrate:.0%} ({samples}样本) "
-            f"| 置信度{adj:+.0%}"
-        )
+        result["msg"] = f"回溯胜率={winrate:.0%} ({samples}样本) | 置信度{adj:+.0%}"
         return result
     except Exception:
         return result
 
 
 def _calc_dynamic_rr_optimization_v71(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -23391,7 +25076,7 @@ def _calc_dynamic_rr_optimization_v71(
 
 # V72: 条件 220-223（均线收敛发散+支撑阻力距离+量价结构质量+信号衰减速度）
 def _calc_ma_convergence_divergence_v72(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """均线收敛发散状态评估（V72 条件220）。
@@ -23457,7 +25142,7 @@ def _calc_ma_convergence_divergence_v72(
 
 
 def _calc_support_resistance_proximity_v72(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -23526,7 +25211,7 @@ def _calc_support_resistance_proximity_v72(
 
 
 def _calc_volume_structure_quality_v72(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -23554,7 +25239,7 @@ def _calc_volume_structure_quality_v72(
             return result
 
         recent = min(30, n)
-        price_changes = [closes[-i] - closes[-i-1] for i in range(1, recent + 1)]
+        price_changes = [closes[-i] - closes[-i - 1] for i in range(1, recent + 1)]
         recent_volumes = volumes[-recent:]
         avg_vol = sum(recent_volumes) / max(len(recent_volumes), 1)
 
@@ -23572,7 +25257,9 @@ def _calc_volume_structure_quality_v72(
         elif up_vol_ratio < 1.0 and down_vol_ratio > 1.0:
             health = max(0.0, -((1.0 - up_vol_ratio) * 2 + (down_vol_ratio - 1.0) * 2))
 
-        vol_std = (sum((v - avg_vol) ** 2 for v in recent_volumes) / max(len(recent_volumes), 1)) ** 0.5
+        vol_std = (
+            sum((v - avg_vol) ** 2 for v in recent_volumes) / max(len(recent_volumes), 1)
+        ) ** 0.5
         vol_cv = vol_std / max(avg_vol, 1e-10)
         stability = max(0.0, 1.0 - vol_cv)
 
@@ -23599,9 +25286,9 @@ def _calc_volume_structure_quality_v72(
 
 
 def _calc_signal_decay_velocity_v72(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
-    mmds_all: list["MMD"] | None = None,
+    mmds_all: list[MMD] | None = None,
 ) -> dict[str, Any]:
     """信号衰减速度评估（V72 条件223）。
 
@@ -23663,7 +25350,7 @@ def _calc_signal_decay_velocity_v72(
         if len(recent_conf) >= 2:
             mean_c = sum(recent_conf) / len(recent_conf)
             var_c = sum((c - mean_c) ** 2 for c in recent_conf) / len(recent_conf)
-            vol = var_c ** 0.5
+            vol = var_c**0.5
         else:
             vol = 0.0
 
@@ -23695,7 +25382,7 @@ def _calc_signal_decay_velocity_v72(
 
 # V73: 条件 224-227（买卖点位置风险+中枢突破验证+多指标一致性+波动率适配）
 def _calc_mmd_position_risk_v73(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -23766,7 +25453,7 @@ def _calc_mmd_position_risk_v73(
 
 
 def _calc_zhongshu_breakout_validity_v73(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float] | None,
     highs: list[float] | None,
@@ -23813,12 +25500,14 @@ def _calc_zhongshu_breakout_validity_v73(
 
         if is_buy:
             sustain_count = sum(
-                1 for i in range(bi_idx + 1, min(bi_idx + 1 + confirm_period, n))
+                1
+                for i in range(bi_idx + 1, min(bi_idx + 1 + confirm_period, n))
                 if closes[i] > breakout_price * 1.001
             )
         else:
             sustain_count = sum(
-                1 for i in range(bi_idx + 1, min(bi_idx + 1 + confirm_period, n))
+                1
+                for i in range(bi_idx + 1, min(bi_idx + 1 + confirm_period, n))
                 if closes[i] < breakout_price * 0.999
             )
 
@@ -23843,10 +25532,14 @@ def _calc_zhongshu_breakout_validity_v73(
 
         if valid:
             adjust = 0.05
-            result["msg"] = f"突破有效（维持{sustain_count}/{confirm_period}根，量能比{vol_ratio:.2f}）"
+            result["msg"] = (
+                f"突破有效（维持{sustain_count}/{confirm_period}根，量能比{vol_ratio:.2f}）"
+            )
         else:
             adjust = -0.03
-            result["msg"] = f"突破可疑（维持{sustain_count}/{confirm_period}根，量能比{vol_ratio:.2f}）"
+            result["msg"] = (
+                f"突破可疑（维持{sustain_count}/{confirm_period}根，量能比{vol_ratio:.2f}）"
+            )
 
         result["confidence_adjust"] = round(adjust, 3)
         return result
@@ -23855,7 +25548,7 @@ def _calc_zhongshu_breakout_validity_v73(
 
 
 def _calc_multi_indicator_consistency_v73(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     macd_data: dict[str, list[float]] | None,
     kdj_data: dict[str, list[float]] | None,
@@ -23976,7 +25669,7 @@ def _calc_multi_indicator_consistency_v73(
 
 
 def _calc_volatility_regime_adaptation_v73(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -24063,8 +25756,7 @@ def _calc_volatility_regime_adaptation_v73(
         result["regime_score"] = round(regime_score, 3)
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"ATR={atr_pct:.2f}% 历史分位={atr_rank:.0%} "
-            f"环境={vol_regime} 置信度{adjust:+.0%}"
+            f"ATR={atr_pct:.2f}% 历史分位={atr_rank:.0%} 环境={vol_regime} 置信度{adjust:+.0%}"
         )
         return result
     except Exception:
@@ -24073,8 +25765,9 @@ def _calc_volatility_regime_adaptation_v73(
 
 # V74: 条件 228-231（量价背离二次确认+趋势动能持续+中枢重叠度+信号共振深度）
 
+
 def _calc_volume_price_divergence_secondary_v74(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float] | None,
 ) -> dict[str, Any]:
@@ -24101,7 +25794,7 @@ def _calc_volume_price_divergence_secondary_v74(
 
         recent_closes = closes[-10:]
         recent_vols = volumes[-10:]
-        prev_closes = closes[-20:-10]
+        _ = closes[-20:-10]
         prev_vols = volumes[-20:-10]
 
         price_trend = (recent_closes[-1] - recent_closes[0]) / max(recent_closes[0], 1e-10)
@@ -24170,7 +25863,7 @@ def _calc_volume_price_divergence_secondary_v74(
 
 
 def _calc_trend_momentum_continuity_v74(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -24241,8 +25934,8 @@ def _calc_trend_momentum_continuity_v74(
 
 
 def _calc_zhongshu_overlap_density_v74(
-    mmd: "MMD",
-    zss: list["ZS"],
+    mmd: MMD,
+    zss: list[ZS],
     current_price: float,
 ) -> dict[str, Any]:
     """中枢重叠度评估（V74 条件230）。
@@ -24315,7 +26008,7 @@ def _calc_zhongshu_overlap_density_v74(
 
 
 def _calc_signal_resonance_depth_v74(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -24359,6 +26052,7 @@ def _calc_signal_resonance_depth_v74(
         if highs is not None and lows is not None and n >= 30:
             total += 1
             from easy_tdx.MyTT import KDJ as _mytt_kdj
+
             try:
                 _k, _d, _j = _mytt_kdj(closes, highs, lows, N=9, M1=3, M2=3)
                 if len(_k) >= 2 and len(_d) >= 2:
@@ -24374,6 +26068,7 @@ def _calc_signal_resonance_depth_v74(
         if n >= 14:
             total += 1
             from easy_tdx.MyTT import RSI as _mytt_rsi
+
             try:
                 rsi_vals = _mytt_rsi(closes, N=14)
                 if rsi_vals and len(rsi_vals) >= 2:
@@ -24389,6 +26084,7 @@ def _calc_signal_resonance_depth_v74(
         if n >= 20:
             total += 1
             from easy_tdx.MyTT import MA as _mytt_ma
+
             try:
                 ma5 = _mytt_ma(closes, N=5)
                 ma20 = _mytt_ma(closes, N=20)
@@ -24455,8 +26151,9 @@ def _calc_signal_resonance_depth_v74(
 
 # V75: 条件 232-235（回调深度验证+中枢回踩确认+量峰持续评分+多信号时间一致性）
 
+
 def _calc_pullback_depth_validation_v75(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -24516,7 +26213,7 @@ def _calc_pullback_depth_validation_v75(
             else:
                 fib_level = "deep_over_50"
                 confirm = False
-            strength = min(pullback * 2, 1.0) if confirm else 0.0
+            _ = min(pullback * 2, 1.0) if confirm else 0.0
         else:
             # 卖出信号后，价格从低点反弹的深度
             pullback = (current_price - recent_low) / recent_low
@@ -24536,7 +26233,7 @@ def _calc_pullback_depth_validation_v75(
             else:
                 fib_level = "deep_over_50"
                 confirm = False
-            strength = min(pullback * 2, 1.0) if confirm else 0.0
+            _ = min(pullback * 2, 1.0) if confirm else 0.0
 
         if confirm and pullback <= 0.236:
             adjust = 0.05
@@ -24564,8 +26261,8 @@ def _calc_pullback_depth_validation_v75(
 
 
 def _calc_zhongshu_retracement_confirm_v75(
-    mmd: "MMD",
-    zss: list["ZS"],
+    mmd: MMD,
+    zss: list[ZS],
     closes: list[float],
 ) -> dict[str, Any]:
     """中枢区间回踩确认（V75 条件233）。
@@ -24612,19 +26309,19 @@ def _calc_zhongshu_retracement_confirm_v75(
         zs_top = nearest_zs.zg
         zs_bottom = nearest_zs.zd
         zs_range = zs_top - zs_bottom
-        price_range = max(max(closes[-10:]) - min(closes[-10:]), 1e-10)
+        _ = max(max(closes[-10:]) - min(closes[-10:]), 1e-10)
 
         # 计算价格相对中枢的位置
         if current_price >= zs_top:
-            above_zs = (current_price - zs_top) / max(zs_range, 1e-10)
+            _ = (current_price - zs_top) / max(zs_range, 1e-10)
             retracement_type = "above_zs"
         elif current_price <= zs_bottom:
-            below_zs = (zs_bottom - current_price) / max(zs_range, 1e-10)
+            _ = (zs_bottom - current_price) / max(zs_range, 1e-10)
             retracement_type = "below_zs"
         else:
             retracement_type = "inside_zs"
-            above_zs = 0.0
-            below_zs = 0.0
+            _ = 0.0
+            _ = 0.0
 
         # 检查回踩后的反弹（最近10根K线的最低价是否收回）
         # 简化：用closes的局部极值近似
@@ -24633,7 +26330,9 @@ def _calc_zhongshu_retracement_confirm_v75(
         # 简单判断：最近几根K线是否从中枢区域反弹
         if is_buy and retracement_type in ("inside_zs", "below_zs"):
             # 买入信号在中枢下方或内部，检查是否有反弹
-            recent_high = max(last_10_closes[-5:]) if len(last_10_closes) >= 5 else max(last_10_closes)
+            recent_high = (
+                max(last_10_closes[-5:]) if len(last_10_closes) >= 5 else max(last_10_closes)
+            )
             bounce = (recent_high - current_price) / max(current_price, 1e-10)
             if bounce > 0.01 and current_price < zs_top:
                 confirm = True
@@ -24647,7 +26346,9 @@ def _calc_zhongshu_retracement_confirm_v75(
                 confirm = False
                 bounce_strength = 0.0
         elif not is_buy and retracement_type in ("inside_zs", "above_zs"):
-            recent_low = min(last_10_closes[-5:]) if len(last_10_closes) >= 5 else min(last_10_closes)
+            recent_low = (
+                min(last_10_closes[-5:]) if len(last_10_closes) >= 5 else min(last_10_closes)
+            )
             bounce = (current_price - recent_low) / max(current_price, 1e-10)
             if bounce > 0.01 and current_price > zs_bottom:
                 confirm = True
@@ -24688,7 +26389,7 @@ def _calc_zhongshu_retracement_confirm_v75(
 
 
 def _calc_volume_peak_duration_v75(
-    mmd: "MMD",
+    mmd: MMD,
     volumes: list[float],
     closes: list[float],
 ) -> dict[str, Any]:
@@ -24796,7 +26497,7 @@ def _calc_volume_peak_duration_v75(
 
 
 def _calc_multi_signal_time_consistency_v75(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
@@ -24947,8 +26648,9 @@ def _calc_multi_signal_time_consistency_v75(
 
 # V76: 条件 236-239（价格结构完整性+趋势方向对齐+波动率自适应置信度+买卖点最终有效性）
 
+
 def _calc_price_structure_integrity_v76(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float] | None,
 ) -> dict[str, Any]:
@@ -25048,7 +26750,7 @@ def _calc_price_structure_integrity_v76(
 
 
 def _calc_trend_alignment_validation_v76(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """趋势方向对齐验证（V76 条件237）。
@@ -25079,9 +26781,11 @@ def _calc_trend_alignment_validation_v76(
         for period in [5, 10, 20, 60]:
             if n >= period:
                 ma_val = sum(closes[-period:]) / period
-                ma_prev = sum(closes[-period - 1:-1]) / period if n >= period + 1 else ma_val
-                ma_trend = "up" if closes[-1] > ma_val and ma_val > ma_prev else (
-                    "down" if closes[-1] < ma_val and ma_val < ma_prev else "flat"
+                ma_prev = sum(closes[-period - 1 : -1]) / period if n >= period + 1 else ma_val
+                ma_trend = (
+                    "up"
+                    if closes[-1] > ma_val and ma_val > ma_prev
+                    else ("down" if closes[-1] < ma_val and ma_val < ma_prev else "flat")
                 )
                 mas[period] = {"trend": ma_trend}
 
@@ -25119,17 +26823,14 @@ def _calc_trend_alignment_validation_v76(
         result["trend_direction"] = trend_dir
         result["confirm_signal"] = aligned and alignment_pct >= 0.5
         result["confidence_adjust"] = round(alignment_pct * 0.06 - 0.03, 3)
-        result["msg"] = (
-            f"趋势对齐={status} {trend_dir} "
-            f"置信度{alignment_pct * 0.06 - 0.03:+.0%}"
-        )
+        result["msg"] = f"趋势对齐={status} {trend_dir} 置信度{alignment_pct * 0.06 - 0.03:+.0%}"
         return result
     except Exception:
         return result
 
 
 def _calc_volatility_adaptive_confidence_v76(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """波动率自适应置信度（V76 条件238）。
@@ -25154,7 +26855,7 @@ def _calc_volatility_adaptive_confidence_v76(
             result["msg"] = "数据不足（需≥30根）"
             return result
 
-        is_buy = "buy" in mmd.mmd_type.value
+        _ = "buy" in mmd.mmd_type.value
 
         # 计算简化 ATR（使用负索引兼容 Python）
         trs: list[float] = []
@@ -25220,7 +26921,7 @@ def _calc_volatility_adaptive_confidence_v76(
 
 
 def _calc_signal_final_validity_v76(
-    mmd: "MMD",
+    mmd: MMD,
 ) -> dict[str, Any]:
     """买卖点最终有效性评分（V76 条件239）。
 
@@ -25238,7 +26939,7 @@ def _calc_signal_final_validity_v76(
         "msg": "",
     }
     try:
-        is_buy = "buy" in mmd.mmd_type.value
+        _ = "buy" in mmd.mmd_type.value
 
         adjustments: list[float] = []
         adjust_fields = [
@@ -25298,8 +26999,9 @@ def _calc_signal_final_validity_v76(
 
 # ── V77: 条件 240-243（量能分布深度+中枢结构权重+信号新鲜度+价格动能加速度）────────────
 
+
 def _calc_volume_distribution_depth_v77(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -25332,7 +27034,9 @@ def _calc_volume_distribution_depth_v77(
         # 计算近期高低点及成交量分布
         lookback = min(60, n)
         recent_closes = closes[-lookback:]
-        recent_vols = volumes[-lookback:] if len(volumes) >= lookback else volumes[-len(recent_closes):]
+        recent_vols = (
+            volumes[-lookback:] if len(volumes) >= lookback else volumes[-len(recent_closes) :]
+        )
 
         high_price = max(recent_closes)
         low_price = min(recent_closes)
@@ -25359,7 +27063,7 @@ def _calc_volume_distribution_depth_v77(
         # 当前价格所在成交量分位
         current_bin = min(int((current_price - low_price) / bin_width), n_bins - 1)
         current_vol_ratio = vol_by_bin[current_bin] / max(total_vol, 1e-10)
-        volume_rank = sum(vol_by_bin[:current_bin + 1]) / max(total_vol, 1e-10)
+        volume_rank = sum(vol_by_bin[: current_bin + 1]) / max(total_vol, 1e-10)
 
         # 支撑/阻力距离
         support_dist = (current_price - low_price) / current_price
@@ -25398,7 +27102,7 @@ def _calc_volume_distribution_depth_v77(
 
 
 def _calc_zhongshu_structure_weight_v77(
-    mmd: "MMD",
+    mmd: MMD,
     zss: list[Any],
     closes: list[float],
 ) -> dict[str, Any]:
@@ -25437,7 +27141,7 @@ def _calc_zhongshu_structure_weight_v77(
             if zg <= 0 or zd <= 0:
                 continue
             zs_center = (zg + zd) / 2
-            zs_half_width = (zg - zd) / 2
+            _ = (zg - zd) / 2
             dist = abs(current_price - zs_center) / max(zs_center, 1e-10)
             if dist < nearest_dist:
                 nearest_dist = dist
@@ -25494,7 +27198,7 @@ def _calc_zhongshu_structure_weight_v77(
 
 
 def _calc_signal_freshness_validation_v77(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """信号新鲜度验证（V77 条件242）。
@@ -25551,8 +27255,7 @@ def _calc_signal_freshness_validation_v77(
         result["age_label"] = age_label
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"新鲜度={freshness:.0%} 信号后{bars_since}根K线 "
-            f"年龄={age_label} 调整{adjust:+.0%}"
+            f"新鲜度={freshness:.0%} 信号后{bars_since}根K线 年龄={age_label} 调整{adjust:+.0%}"
         )
         return result
     except Exception:
@@ -25560,7 +27263,7 @@ def _calc_signal_freshness_validation_v77(
 
 
 def _calc_price_momentum_acceleration_v77(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """价格动能加速度（V77 条件243）。
@@ -25645,8 +27348,7 @@ def _calc_price_momentum_acceleration_v77(
         result["acceleration_strength"] = strength
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"加速度={norm_accel:.4f} 方向={direction} 强度={strength} "
-            f"调整{adjust:+.0%}"
+            f"加速度={norm_accel:.4f} 方向={direction} 强度={strength} 调整{adjust:+.0%}"
         )
         return result
     except Exception:
@@ -25655,8 +27357,9 @@ def _calc_price_momentum_acceleration_v77(
 
 # ── V78: 条件 244-247（买卖点周期位置+多信号一致性+波动率压缩突破+资金流向背离）────────────
 
+
 def _calc_mmd_cycle_position_v78(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -25757,8 +27460,8 @@ def _calc_mmd_cycle_position_v78(
 
 
 def _calc_multi_signal_consensus_v78(
-    mmds: list["MMD"],
-    current_mmd: "MMD",
+    mmds: list[MMD],
+    current_mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多信号时间窗口一致性（V78 条件245）。
@@ -25894,7 +27597,7 @@ def _calc_volatility_compression_breakout_v78(
         window = 50
         widths = []
         for i in range(window, len(closes)):
-            period_closes = closes[i-window:i]
+            period_closes = closes[i - window : i]
             ma = sum(period_closes) / window
             std = (sum((x - ma) ** 2 for x in period_closes) / window) ** 0.5
             width = 4 * std  # 2*2*std = 4*std (上下轨距离)
@@ -25991,8 +27694,10 @@ def _calc_fund_flow_divergence_v78(
         recent_vols = volumes[-lookback:]
 
         # 计算价格变化和成交量变化
-        price_changes = [recent_closes[i] - recent_closes[i-1] for i in range(1, len(recent_closes))]
-        vol_changes = [recent_vols[i] - recent_vols[i-1] for i in range(1, len(recent_vols))]
+        price_changes = [
+            recent_closes[i] - recent_closes[i - 1] for i in range(1, len(recent_closes))
+        ]
+        vol_changes = [recent_vols[i] - recent_vols[i - 1] for i in range(1, len(recent_vols))]
 
         if not price_changes or not vol_changes:
             result["msg"] = "变化计算失败"
@@ -26054,8 +27759,9 @@ def _calc_fund_flow_divergence_v78(
 
 # ── V79: 条件 248-251（分型稳定性+距离安全+多级别一致性+动能持续性）────────────
 
+
 def _calc_fractal_stability_validation_v79(
-    mmd: "MMD",
+    mmd: MMD,
     highs: list[float],
     lows: list[float],
 ) -> dict[str, Any]:
@@ -26126,17 +27832,15 @@ def _calc_fractal_stability_validation_v79(
         result["stability_score"] = stability
         result["fractal_status"] = status
         result["confidence_adjust"] = round(adjust, 3)
-        result["msg"] = (
-            f"分型状态={status} 稳定分={stability:.0%} 调整{adjust:+.0%}"
-        )
+        result["msg"] = f"分型状态={status} 稳定分={stability:.0%} 调整{adjust:+.0%}"
         return result
     except Exception:
         return result
 
 
 def _calc_mmd_distance_safety_v79(
-    mmds: list["MMD"],
-    mmd: "MMD",
+    mmds: list[MMD],
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """买卖点距离安全阈值（V79 条件249）。
@@ -26200,8 +27904,7 @@ def _calc_mmd_distance_safety_v79(
         result["safety_level"] = safety
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"最近同向={nearest_dist}根K线 安全={safety} "
-            f"距离分={score:.0%} 调整{adjust:+.0%}"
+            f"最近同向={nearest_dist}根K线 安全={safety} 距离分={score:.0%} 调整{adjust:+.0%}"
         )
         return result
     except Exception:
@@ -26209,7 +27912,7 @@ def _calc_mmd_distance_safety_v79(
 
 
 def _calc_multi_level_structure_consistency_v79(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -26290,7 +27993,7 @@ def _calc_multi_level_structure_consistency_v79(
 
 
 def _calc_price_momentum_continuity_v79(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float] | None,
 ) -> dict[str, Any]:
@@ -26337,7 +28040,11 @@ def _calc_price_momentum_continuity_v79(
             vol_prev = volumes[-10:-5] if len(volumes) >= 10 else vol_recent
             avg_vol_recent = sum(vol_recent) / len(vol_recent)
             avg_vol_prev = sum(vol_prev) / len(vol_prev) if vol_prev else avg_vol_recent
-            vol_trend = "up" if avg_vol_recent > avg_vol_prev * 1.1 else ("down" if avg_vol_recent < avg_vol_prev * 0.9 else "neutral")
+            vol_trend = (
+                "up"
+                if avg_vol_recent > avg_vol_prev * 1.1
+                else ("down" if avg_vol_recent < avg_vol_prev * 0.9 else "neutral")
+            )
         else:
             vol_trend = "neutral"
 
@@ -26387,8 +28094,9 @@ def _calc_price_momentum_continuity_v79(
 
 # ── V80: 条件 252-255（中枢距离+量能配合+均线排列+盈亏比）────────────────────
 
+
 def _calc_mmd_zhongshu_distance_v80(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -26454,8 +28162,7 @@ def _calc_mmd_zhongshu_distance_v80(
         result["zs_position"] = zs_pos
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"中枢距离={dist_pct:+.1f}% 位置={zs_pos} "
-            f"距离分={distance_score:.0%} 调整{adjust:+.0%}"
+            f"中枢距离={dist_pct:+.1f}% 位置={zs_pos} 距离分={distance_score:.0%} 调整{adjust:+.0%}"
         )
         return result
     except Exception:
@@ -26463,7 +28170,7 @@ def _calc_mmd_zhongshu_distance_v80(
 
 
 def _calc_volume_confirmation_v80(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float],
 ) -> dict[str, Any]:
@@ -26500,7 +28207,11 @@ def _calc_volume_confirmation_v80(
         else:
             price_recent = sum(recent_closes) / len(recent_closes)
             price_prev = price_recent
-        price_trend = "up" if price_recent > price_prev * 1.01 else ("down" if price_recent < price_prev * 0.99 else "flat")
+        price_trend = (
+            "up"
+            if price_recent > price_prev * 1.01
+            else ("down" if price_recent < price_prev * 0.99 else "flat")
+        )
 
         if len(recent_vols) >= 10:
             vol_recent = sum(recent_vols[-5:]) / 5
@@ -26538,8 +28249,8 @@ def _calc_volume_confirmation_v80(
         result["confirmation_score"] = confirmation
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"量比={vol_ratio:.2f} 价{'↑' if price_trend=='up' else '↓' if price_trend=='down' else '→'} "
-            f"量{'↑' if vol_trend=='up' else '↓' if vol_trend=='down' else '→'} "
+            f"量比={vol_ratio:.2f} 价{'↑' if price_trend == 'up' else '↓' if price_trend == 'down' else '→'} "
+            f"量{'↑' if vol_trend == 'up' else '↓' if vol_trend == 'down' else '→'} "
             f"配合分={confirmation:.0%} 调整{adjust:+.0%}"
         )
         return result
@@ -26548,7 +28259,7 @@ def _calc_volume_confirmation_v80(
 
 
 def _calc_ma_alignment_strength_v80(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """均线排列强度确认（V80 条件254）。
@@ -26622,8 +28333,7 @@ def _calc_ma_alignment_strength_v80(
         result["alignment_score"] = alignment_score
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"排列={alignment} 价格={price_pos} "
-            f"排列分={alignment_score:.0%} 调整{adjust:+.0%}"
+            f"排列={alignment} 价格={price_pos} 排列分={alignment_score:.0%} 调整{adjust:+.0%}"
         )
         return result
     except Exception:
@@ -26631,7 +28341,7 @@ def _calc_ma_alignment_strength_v80(
 
 
 def _calc_dynamic_risk_reward_v80(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -26713,8 +28423,9 @@ def _calc_dynamic_risk_reward_v80(
 
 # ── V81 条件 256-259 实现 ──────────────────────────────────────────────
 
+
 def _calc_volatility_regime_transition_v81(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -26768,7 +28479,7 @@ def _calc_volatility_regime_transition_v81(
 
 
 def _calc_support_resistance_strength_v81(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -26870,7 +28581,7 @@ def _calc_support_resistance_strength_v81(
 
 
 def _calc_volume_price_energy_distribution_v81(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     volumes: list[float] | None,
     highs: list[float],
@@ -26961,7 +28672,7 @@ def _calc_volume_price_energy_distribution_v81(
 
 
 def _calc_signal_execution_window_v81(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -27042,8 +28753,9 @@ def _calc_signal_execution_window_v81(
 
 # ── V82 条件 260-263 实现 ──────────────────────────────────────────────
 
+
 def _calc_mmd_age_decay_v82(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -27109,7 +28821,7 @@ def _calc_mmd_age_decay_v82(
 
 
 def _calc_breakout_retest_confirm_v82(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -27157,11 +28869,19 @@ def _calc_breakout_retest_confirm_v82(
             breakout_span = (max_after - extreme) / extreme if extreme > 0 else 0.0
             # 找到回踩低点（极值之后的最低点）
             retest_low = min_after
-            pullback_pct = (max_after - retest_low) / (max_after - extreme) if (max_after - extreme) > 0 else 0.0
+            pullback_pct = (
+                (max_after - retest_low) / (max_after - extreme)
+                if (max_after - extreme) > 0
+                else 0.0
+            )
         else:
             breakout_span = (extreme - min_after) / extreme if extreme > 0 else 0.0
             retest_high = max_after
-            pullback_pct = (retest_high - min_after) / (extreme - min_after) if (extreme - min_after) > 0 else 0.0
+            pullback_pct = (
+                (retest_high - min_after) / (extreme - min_after)
+                if (extreme - min_after) > 0
+                else 0.0
+            )
 
         # 突破幅度过小视为未突破
         if breakout_span < 0.01:
@@ -27190,8 +28910,7 @@ def _calc_breakout_retest_confirm_v82(
         result["retest_quality"] = quality
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"突破幅度{breakout_span:.1%} 回撤{pullback_pct:.1%} "
-            f"回踩={quality} 调整{adjust:+.0%}"
+            f"突破幅度{breakout_span:.1%} 回撤{pullback_pct:.1%} 回踩={quality} 调整{adjust:+.0%}"
         )
         return result
     except Exception:
@@ -27201,7 +28920,7 @@ def _calc_breakout_retest_confirm_v82(
 
 
 def _calc_macd_multi_tf_resonance_v82(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
 ) -> dict[str, Any]:
     """多级别MACD共振验证（V82 条件262）。
@@ -27247,10 +28966,7 @@ def _calc_macd_multi_tf_resonance_v82(
             )
         # 中期趋势：DIF 符号与斜率
         if len(dif_m) >= 6:
-            mid_trend = float(
-                (1 if dif_m[-1] > 0 else 0)
-                + (1 if dif_m[-1] > dif_m[-2] else 0)
-            )
+            mid_trend = float((1 if dif_m[-1] > 0 else 0) + (1 if dif_m[-1] > dif_m[-2] else 0))
         # 长期趋势：用更慢的 EMA 差
         long_slow = sum(closes[-50:]) / 50 if len(closes) >= 50 else sum(closes) / len(closes)
         long_fast = sum(closes[-10:]) / 10 if len(closes) >= 10 else sum(closes) / len(closes)
@@ -27284,7 +29000,9 @@ def _calc_macd_multi_tf_resonance_v82(
 
         result["resonance"] = resonance
         result["confidence_adjust"] = round(adjust, 3)
-        result["msg"] = f"多周期共振={resonance} 短加={result['short_acceleration']} 中={result['mid_trend']} 长={result['long_trend']} 调整{adjust:+.0%}"
+        result["msg"] = (
+            f"多周期共振={resonance} 短加={result['short_acceleration']} 中={result['mid_trend']} 长={result['long_trend']} 调整{adjust:+.0%}"
+        )
         return result
     except Exception:
         result["msg"] = "数据不足"
@@ -27293,7 +29011,7 @@ def _calc_macd_multi_tf_resonance_v82(
 
 
 def _calc_volatility_compression_breakout_v82(
-    mmd: "MMD",
+    mmd: MMD,
     closes: list[float],
     highs: list[float],
     lows: list[float],
@@ -27360,12 +29078,10 @@ def _calc_volatility_compression_breakout_v82(
 
         result["confidence_adjust"] = round(adjust, 3)
         result["msg"] = (
-            f"压缩度={compression} 区间宽{range_pct:.1f}% 近端波动{move_pct:.1f}% "
-            f"调整{adjust:+.0%}"
+            f"压缩度={compression} 区间宽{range_pct:.1f}% 近端波动{move_pct:.1f}% 调整{adjust:+.0%}"
         )
         return result
     except Exception:
         result["msg"] = "数据不足"
         result["compression_level"] = "unknown"
         return result
-

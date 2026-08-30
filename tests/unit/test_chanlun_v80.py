@@ -6,20 +6,19 @@
 条件255：盈亏比动态评估（Dynamic Risk-Reward Assessment）
 """
 
-import pytest
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from easy_tdx.backtest.chanlun_validator import ConditionGroup
 from easy_tdx.chanlun.mmd import (
+    _calc_dynamic_risk_reward_v80,
+    _calc_ma_alignment_strength_v80,
     _calc_mmd_zhongshu_distance_v80,
     _calc_volume_confirmation_v80,
-    _calc_ma_alignment_strength_v80,
-    _calc_dynamic_risk_reward_v80,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
-from easy_tdx.backtest.chanlun_validator import ConditionGroup
 
 
 def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
@@ -30,6 +29,7 @@ def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
 def _make_closes(n: int = 80, base: float = 100.0, trend: str = "flat") -> list[float]:
     """Generate test closing prices."""
     import random
+
     random.seed(42)
     if trend == "up":
         return [base + i * 0.05 + random.uniform(-1, 1) for i in range(n)]
@@ -49,11 +49,13 @@ def _make_lows(closes: list[float], spread: float = 1.0) -> list[float]:
 
 def _make_volumes(n: int = 80, base: float = 1000.0) -> list[float]:
     import random
+
     random.seed(43)
     return [base + random.uniform(-200, 200) for _ in range(n)]
 
 
 # ── TestV80ConditionGroup：ConditionGroup 枚举测试 ───────────────────────────
+
 
 class TestV80ConditionGroup:
     """V80 ConditionGroup 存在性和正确性测试。"""
@@ -72,6 +74,7 @@ class TestV80ConditionGroup:
 
 # ── TestV80MMDFields：MMD 对象字段测试 ───────────────────────────────────────
 
+
 class TestV80MMDFields:
     """MMD 对象包含 V80 字段。"""
 
@@ -85,16 +88,24 @@ class TestV80MMDFields:
 
 # ── TestV80BacktestValidator：回测验证器测试 ─────────────────────────────────
 
+
 class TestV80BacktestValidator:
     """V80 条件回测验证器测试。"""
 
     def test_v80_validator_usage(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
-        validator = ChanlunConditionBacktestValidator()
+
+        _ = ChanlunConditionBacktestValidator()
         assert ConditionGroup.V80 in list(ConditionGroup)
 
     def test_v80_multi_group_validation(self):
-        groups = [ConditionGroup.V76, ConditionGroup.V77, ConditionGroup.V78, ConditionGroup.V79, ConditionGroup.V80]
+        groups = [
+            ConditionGroup.V76,
+            ConditionGroup.V77,
+            ConditionGroup.V78,
+            ConditionGroup.V79,
+            ConditionGroup.V80,
+        ]
         ranges = [g.condition_range for g in groups]
         assert ranges[0] == (236, 239)
         assert ranges[1] == (240, 243)
@@ -104,12 +115,14 @@ class TestV80BacktestValidator:
 
     def test_v80_summary_output(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
+
         validator = ChanlunConditionBacktestValidator()
         summary = validator.validate_conditions({}, [ConditionGroup.V80])
         assert summary is not None
 
 
 # ── TestV80Functions：各计算函数单元测试 ─────────────────────────────────────
+
 
 class TestV80Functions:
     """V80 四个计算函数的单元测试。"""
@@ -255,7 +268,14 @@ class TestV80Functions:
         assert "stop_loss_pct" in result
         assert "take_profit_pct" in result
         assert isinstance(result["rr_ratio"], float)
-        assert result["risk_level"] in ["excellent", "good", "moderate", "poor", "dangerous", "unknown"]
+        assert result["risk_level"] in [
+            "excellent",
+            "good",
+            "moderate",
+            "poor",
+            "dangerous",
+            "unknown",
+        ]
 
     def test_drr_good_ratio(self):
         """盈亏比1.5:1~2:1 → 中等偏上。"""
@@ -319,6 +339,7 @@ class TestV80Functions:
             _calc_fractal_stability_validation_v79,
             _calc_price_momentum_continuity_v79,
         )
+
         mmd = _make_mmd("3buy", 0.6)
         closes = _make_closes(80, base=100.0)
         volumes = _make_volumes(80)

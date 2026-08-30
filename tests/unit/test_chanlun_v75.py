@@ -3,15 +3,15 @@ V75 缠论条件测试 — 条件232-235
 回调深度验证 + 中枢回踩确认 + 量峰持续评分 + 多信号时间一致性
 """
 
-import pytest
 import numpy as np
-from easy_tdx.backtest.chanlun_validator import ConditionGroup, ChanlunConditionBacktestValidator
-from easy_tdx.chanlun.types import MMD, MMDType, ZS
 
+from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator, ConditionGroup
+from easy_tdx.chanlun.types import MMD, ZS, MMDType
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 测试数据辅助
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 def _make_trending_df(n: int = 100, trend: str = "up"):
     """生成趋势K线数据用于测试。"""
@@ -29,23 +29,27 @@ def _make_trending_df(n: int = 100, trend: str = "up"):
 
 def _make_df(closes, highs, lows, volumes):
     import pandas as pd
-    return pd.DataFrame({
-        "close": closes,
-        "high": highs,
-        "low": lows,
-        "volume": volumes,
-    })
+
+    return pd.DataFrame(
+        {
+            "close": closes,
+            "high": highs,
+            "low": lows,
+            "volume": volumes,
+        }
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # V75 ConditionGroup 枚举测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestV75ConditionGroup:
     """V75 ConditionGroup 枚举测试。"""
 
     def test_v75_group_exists(self):
-        assert hasattr(ConditionGroup, 'V75')
+        assert hasattr(ConditionGroup, "V75")
         assert ConditionGroup.V75.value == "v75"
 
     def test_v75_condition_range(self):
@@ -63,11 +67,11 @@ class TestV75ConditionGroup:
 # V75 MMD 增强字段存在性测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestV75MMDFields:
     """V75 MMD 增强字段存在性测试。"""
 
     def test_v75_fields_exist_on_mmd(self):
-        from easy_tdx.chanlun.types import MMD
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_pullback_depth_validation_v75")
         assert hasattr(mmd, "_zhongshu_retracement_confirm_v75")
@@ -78,6 +82,7 @@ class TestV75MMDFields:
 # ──────────────────────────────────────────────────────────────────────────────
 # V75 回测验证器测试
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestV75BacktestValidator:
     """V75 回测验证器测试。"""
@@ -109,13 +114,14 @@ class TestV75BacktestValidator:
 # V75 计算函数功能测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestV75Functions:
     """V75 计算函数功能测试。"""
 
     def test_pullback_depth_validation(self):
         """回调深度验证应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_pullback_depth_validation_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(88)
         closes = [100.0]
         highs = [100.5]
@@ -123,10 +129,10 @@ class TestV75Functions:
         for _ in range(80):
             c = closes[-1] * (1 + np.random.randn() * 0.012)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.005)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         result = _calc_pullback_depth_validation_v75(mmd, closes, highs, lows)
         assert "pullback_depth" in result
@@ -136,13 +142,18 @@ class TestV75Functions:
         assert "confidence_adjust" in result
         assert "msg" in result
         assert result["fibonacci_level"] in (
-            "shallow_15", "fib_236", "fib_382", "fib_50", "deep_over_50", "none"
+            "shallow_15",
+            "fib_236",
+            "fib_382",
+            "fib_50",
+            "deep_over_50",
+            "none",
         )
 
     def test_pullback_depth_validation_sell(self):
         """卖出信号时回调深度验证逻辑正确。"""
         from easy_tdx.chanlun.mmd import _calc_pullback_depth_validation_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(89)
         closes = [100.0]
         highs = [100.5]
@@ -150,10 +161,10 @@ class TestV75Functions:
         for _ in range(80):
             c = closes[-1] * (1 + np.random.randn() * 0.01)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.005)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
         mmd_sell = MMD(mmd_type=MMDType.SELL_3, confidence=0.5, bi=None)
         result = _calc_pullback_depth_validation_v75(mmd_sell, closes, highs, lows)
         assert "pullback_depth" in result
@@ -163,7 +174,7 @@ class TestV75Functions:
     def test_zhongshu_retracement_confirm(self):
         """中枢区间回踩确认应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_zhongshu_retracement_confirm_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(90)
         closes = [100.0]
         for _ in range(80):
@@ -183,14 +194,19 @@ class TestV75Functions:
         assert "confidence_adjust" in result
         assert "msg" in result
         assert result["retracement_type"] in (
-            "zs_support_bounce", "above_zs_confirmed", "inside_zs",
-            "below_zs", "zs_resistance_bounce", "below_zs_confirmed", "none"
+            "zs_support_bounce",
+            "above_zs_confirmed",
+            "inside_zs",
+            "below_zs",
+            "zs_resistance_bounce",
+            "below_zs_confirmed",
+            "none",
         )
 
     def test_zhongshu_retracement_no_zs(self):
         """无中枢数据时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_zhongshu_retracement_confirm_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         result = _calc_zhongshu_retracement_confirm_v75(mmd, [], [100.0, 101.0])
         assert result["msg"] != ""
@@ -199,7 +215,7 @@ class TestV75Functions:
     def test_volume_peak_duration(self):
         """量峰持续时间评分应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_volume_peak_duration_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(91)
         volumes = [1e6]
         closes = [100.0]
@@ -224,7 +240,7 @@ class TestV75Functions:
     def test_volume_peak_duration_buy_vs_sell(self):
         """买入与卖出信号的量峰判断逻辑。"""
         from easy_tdx.chanlun.mmd import _calc_volume_peak_duration_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(92)
         volumes = [1e6] * 100
         closes = [100.0]
@@ -239,7 +255,7 @@ class TestV75Functions:
     def test_multi_signal_time_consistency(self):
         """多信号时间一致性应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_multi_signal_time_consistency_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(93)
         closes = [100.0]
         highs = [100.5]
@@ -248,10 +264,10 @@ class TestV75Functions:
         for _ in range(80):
             c = closes[-1] * (1 + np.random.randn() * 0.01)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.005)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
             volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.2))
         macd_data = [{"hist": 0.05} for _ in range(80)]
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
@@ -269,19 +285,17 @@ class TestV75Functions:
     def test_multi_signal_time_consistency_insufficient(self):
         """数据不足时应返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_multi_signal_time_consistency_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         short_closes = [100.0, 101.0, 102.0]
-        result = _calc_multi_signal_time_consistency_v75(
-            mmd, short_closes, None, None, None, None
-        )
+        result = _calc_multi_signal_time_consistency_v75(mmd, short_closes, None, None, None, None)
         assert result["msg"] != ""
         assert result["consistency_score"] == 0.0
 
     def test_pullback_depth_insufficient_data(self):
         """回调深度验证数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_pullback_depth_validation_v75
-        from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         short_closes = [100.0, 101.0, 102.0]
         result = _calc_pullback_depth_validation_v75(mmd, short_closes, None, None)
@@ -290,12 +304,13 @@ class TestV75Functions:
     def test_all_v75_functions_no_crash(self):
         """所有V75函数在正常输入下不应抛出异常。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_pullback_depth_validation_v75,
-            _calc_zhongshu_retracement_confirm_v75,
-            _calc_volume_peak_duration_v75,
             _calc_multi_signal_time_consistency_v75,
+            _calc_pullback_depth_validation_v75,
+            _calc_volume_peak_duration_v75,
+            _calc_zhongshu_retracement_confirm_v75,
         )
-        from easy_tdx.chanlun.types import MMD, MMDType, ZS
+        from easy_tdx.chanlun.types import ZS
+
         np.random.seed(94)
         closes = [100.0]
         highs = [100.5]
@@ -304,10 +319,10 @@ class TestV75Functions:
         for _ in range(100):
             c = closes[-1] * (1 + np.random.randn() * 0.01)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.005)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
             volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.2))
         macd_data = [{"hist": 0.05} for _ in range(100)]
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
@@ -325,8 +340,6 @@ class TestV75Functions:
         assert r3 is not None
         assert r3["peak_days"] >= 0
 
-        r4 = _calc_multi_signal_time_consistency_v75(
-            mmd, closes, highs, lows, macd_data, volumes
-        )
+        r4 = _calc_multi_signal_time_consistency_v75(mmd, closes, highs, lows, macd_data, volumes)
         assert r4 is not None
         assert 0.0 <= r4["consistency_score"] <= 1.0

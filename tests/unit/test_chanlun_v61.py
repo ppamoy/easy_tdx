@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import pytest
-
 from easy_tdx.chanlun.mmd import (
     MMDType,
-    _calc_macd_histogram_divergence_v61,
     _calc_composite_signal_score_v61,
+    _calc_macd_histogram_divergence_v61,
 )
 from easy_tdx.chanlun.types import MMD
 
@@ -26,6 +24,7 @@ def _make_mmd(mmd_type: MMDType, confidence: float = 0.5) -> MMD:
 def _make_closes(n: int = 60, base: float = 10.0, trend: str = "down") -> list[float]:
     """创建测试用的收盘价序列。"""
     import math
+
     closes = []
     for i in range(n):
         if trend == "down":
@@ -39,6 +38,7 @@ def _make_closes(n: int = 60, base: float = 10.0, trend: str = "down") -> list[f
 def _make_macd_data(closes: list[float]) -> dict[str, list[float]]:
     """根据收盘价计算简易MACD数据。"""
     from easy_tdx.MyTT import MACD
+
     dif, dea, hist = MACD(closes)
     return {"dif": dif, "dea": dea, "hist": hist}
 
@@ -205,9 +205,10 @@ class TestFindMMDsV61Integration:
     def test_v61_functions_importable(self):
         """V61函数可导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_macd_histogram_divergence_v61,
             _calc_composite_signal_score_v61,
+            _calc_macd_histogram_divergence_v61,
         )
+
         assert callable(_calc_macd_histogram_divergence_v61)
         assert callable(_calc_composite_signal_score_v61)
 
@@ -255,8 +256,10 @@ class TestFindMMDsV61Integration:
 
     def test_v61_integration_pass(self):
         """V61集成通过测试。"""
-        from easy_tdx.chanlun.mmd import find_mmds_v39
         import inspect
+
+        from easy_tdx.chanlun.mmd import find_mmds_v39
+
         source = inspect.getsource(find_mmds_v39)
         assert "_calc_macd_histogram_divergence_v61" in source
         assert "_calc_composite_signal_score_v61" in source

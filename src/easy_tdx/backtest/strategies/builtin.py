@@ -632,7 +632,7 @@ class RsiDivergenceStrategy(ParametrizedStrategy):
         # 再往前看一个窗口
         prev_start = max(0, i - lb * 2)
         prev_window = close_arr[prev_start : i - lb]
-        prev_rsi_window = rsi_arr[prev_start : i - lb]
+        _ = rsi_arr[prev_start : i - lb]
 
         if len(prev_window) < 5:
             return
@@ -715,14 +715,10 @@ class SuperTrendStrategy(ParametrizedStrategy):
                 direction[idx] = 1
             else:
                 st_upper[idx] = (
-                    basic_upper[idx]
-                    if basic_upper[idx] < st_upper[idx - 1]
-                    else st_upper[idx - 1]
+                    basic_upper[idx] if basic_upper[idx] < st_upper[idx - 1] else st_upper[idx - 1]
                 )
                 st_lower[idx] = (
-                    basic_lower[idx]
-                    if basic_lower[idx] > st_lower[idx - 1]
-                    else st_lower[idx - 1]
+                    basic_lower[idx] if basic_lower[idx] > st_lower[idx - 1] else st_lower[idx - 1]
                 )
                 if close_arr[idx] <= st_upper[idx - 1]:
                     direction[idx] = -1
@@ -805,7 +801,9 @@ class AdxTrendStrategy(ParametrizedStrategy):
 
     params = [
         Param("adx_period", int, default=14, min_value=5, max_value=30, label="ADX周期"),
-        Param("adx_threshold", float, default=25.0, min_value=15.0, max_value=50.0, label="ADX阈值"),
+        Param(
+            "adx_threshold", float, default=25.0, min_value=15.0, max_value=50.0, label="ADX阈值"
+        ),
         Param("pdi_period", int, default=14, min_value=5, max_value=30, label="PDI周期"),
     ]
 
@@ -826,18 +824,10 @@ class AdxTrendStrategy(ParametrizedStrategy):
             return
 
         # 强趋势 + PDI > MDI → 买入
-        if (
-            self.strong_trend[i]
-            and self.trend_up[i]
-            and self.position["size"] == 0
-        ):
+        if self.strong_trend[i] and self.trend_up[i] and self.position["size"] == 0:
             self.buy()
         # 强趋势 + PDI < MDI → 卖出
-        elif (
-            self.strong_trend[i]
-            and not self.trend_up[i]
-            and self.position["size"] > 0
-        ):
+        elif self.strong_trend[i] and not self.trend_up[i] and self.position["size"] > 0:
             self.sell()
 
 
@@ -894,8 +884,12 @@ class RsiMacdComboStrategy(ParametrizedStrategy):
 
     params = [
         Param("rsi_period", int, default=14, min_value=5, max_value=30, label="RSI周期"),
-        Param("rsi_oversold", float, default=30.0, min_value=10.0, max_value=40.0, label="RSI超卖线"),
-        Param("rsi_overbought", float, default=70.0, min_value=60.0, max_value=90.0, label="RSI超买线"),
+        Param(
+            "rsi_oversold", float, default=30.0, min_value=10.0, max_value=40.0, label="RSI超卖线"
+        ),
+        Param(
+            "rsi_overbought", float, default=70.0, min_value=60.0, max_value=90.0, label="RSI超买线"
+        ),
         Param("macd_fast", int, default=12, min_value=6, max_value=20, label="MACD快线"),
         Param("macd_slow", int, default=26, min_value=12, max_value=50, label="MACD慢线"),
         Param("macd_signal", int, default=9, min_value=5, max_value=15, label="MACD信号线"),
@@ -918,16 +912,8 @@ class RsiMacdComboStrategy(ParametrizedStrategy):
             return
 
         # RSI 超卖 + MACD 金叉 → 买入（双重确认）
-        if (
-            self.rsi_oversold[i]
-            and self.macd_gold[i]
-            and self.position["size"] == 0
-        ):
+        if self.rsi_oversold[i] and self.macd_gold[i] and self.position["size"] == 0:
             self.buy()
         # RSI 超买 + MACD 死叉 → 卖出（双重确认）
-        elif (
-            self.rsi_overbought[i]
-            and self.macd_dead[i]
-            and self.position["size"] > 0
-        ):
+        elif self.rsi_overbought[i] and self.macd_dead[i] and self.position["size"] > 0:
             self.sell()

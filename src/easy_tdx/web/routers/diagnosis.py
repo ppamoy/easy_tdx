@@ -56,6 +56,7 @@ def _calc_volume_profile_for_diagnosis(
         return None
     try:
         from easy_tdx.chanlun.mmd import _calc_volume_profile
+
         profile = _calc_volume_profile(closes, volumes, lookback=60, num_bins=20)
         return {
             "support": profile.get("high_volume_support"),
@@ -67,11 +68,13 @@ def _calc_volume_profile_for_diagnosis(
     except Exception:
         return None
 
+
 router = APIRouter(tags=["diagnosis"])
 logger = logging.getLogger(__name__)
 
 
 # ── 辅助函数 ────────────────────────────────────────────────────────────────────
+
 
 def _detect_divergence(
     prices: list[float],
@@ -97,13 +100,21 @@ def _detect_divergence(
 
     for i in range(2, len(recent_prices) - 2):
         # 局部高点
-        if (recent_prices[i] > recent_prices[i-1] and recent_prices[i] > recent_prices[i-2]
-                and recent_prices[i] > recent_prices[i+1] and recent_prices[i] > recent_prices[i+2]):
+        if (
+            recent_prices[i] > recent_prices[i - 1]
+            and recent_prices[i] > recent_prices[i - 2]
+            and recent_prices[i] > recent_prices[i + 1]
+            and recent_prices[i] > recent_prices[i + 2]
+        ):
             peaks_price.append(i)
             peaks_ind.append(i)
         # 局部低点
-        if (recent_prices[i] < recent_prices[i-1] and recent_prices[i] < recent_prices[i-2]
-                and recent_prices[i] < recent_prices[i+1] and recent_prices[i] < recent_prices[i+2]):
+        if (
+            recent_prices[i] < recent_prices[i - 1]
+            and recent_prices[i] < recent_prices[i - 2]
+            and recent_prices[i] < recent_prices[i + 1]
+            and recent_prices[i] < recent_prices[i + 2]
+        ):
             troughs_price.append(i)
             troughs_ind.append(i)
 
@@ -118,8 +129,12 @@ def _detect_divergence(
         ind_lower = recent_indicators[last_peak] < recent_indicators[prev_peak]
         if price_higher and ind_lower:
             detected_type = "bearish"
-            price_diff = (recent_prices[last_peak] - recent_prices[prev_peak]) / recent_prices[prev_peak]
-            ind_diff = (recent_indicators[prev_peak] - recent_indicators[last_peak]) / max(abs(recent_indicators[prev_peak]), 1e-10)
+            price_diff = (recent_prices[last_peak] - recent_prices[prev_peak]) / recent_prices[
+                prev_peak
+            ]
+            ind_diff = (recent_indicators[prev_peak] - recent_indicators[last_peak]) / max(
+                abs(recent_indicators[prev_peak]), 1e-10
+            )
             strength = min(1.0, abs(price_diff) * 10 + min(ind_diff, 0.5))
 
     # 底背离：最近低点 < 前一个低点，但指标低点 > 前一个指标低点
@@ -130,8 +145,12 @@ def _detect_divergence(
         ind_higher = recent_indicators[last_trough] > recent_indicators[prev_trough]
         if price_lower and ind_higher:
             detected_type = "bullish"
-            price_diff = (recent_prices[prev_trough] - recent_prices[last_trough]) / max(abs(recent_prices[prev_trough]), 1e-10)
-            ind_diff = (recent_indicators[last_trough] - recent_indicators[prev_trough]) / max(abs(recent_indicators[prev_trough]), 1e-10)
+            price_diff = (recent_prices[prev_trough] - recent_prices[last_trough]) / max(
+                abs(recent_prices[prev_trough]), 1e-10
+            )
+            ind_diff = (recent_indicators[last_trough] - recent_indicators[prev_trough]) / max(
+                abs(recent_indicators[prev_trough]), 1e-10
+            )
             strength = min(1.0, abs(price_diff) * 10 + min(ind_diff, 0.5))
 
     return {
@@ -160,12 +179,12 @@ def _detect_candlestick_patterns(
     for i in range(-lookback, 0):
         o = opens[i]
         h = highs[i]
-        l = lows[i]
+        low = lows[i]
         c = closes[i]
         body = abs(c - o)
-        range_val = h - l
+        range_val = h - low
         upper_shadow = h - max(c, o)
-        lower_shadow = min(c, o) - l
+        lower_shadow = min(c, o) - low
 
         if range_val == 0:
             continue
@@ -187,8 +206,8 @@ def _detect_candlestick_patterns(
             patterns.append({"bar_index": i, "type": "hanging_leg", "bullish": False})
         # 吞没形态
         elif i < -1:
-            prev_o = opens[i-1]
-            prev_c = closes[i-1]
+            prev_o = opens[i - 1]
+            prev_c = closes[i - 1]
             prev_bearish = bool(prev_c < prev_o)
             prev_bullish = bool(prev_c > prev_o)
             if is_bullish and prev_bearish:
@@ -233,7 +252,12 @@ async def diagnose_stock(
     - code: 6位股票代码
     """
     from easy_tdx.chanlun import ChanlunAnalyser
-    from easy_tdx.chanlun.mmd import _calc_atr_volatility, calc_signal_quality_report, find_mmds, find_mmds_v39
+    from easy_tdx.chanlun.mmd import (
+        _calc_atr_volatility,
+        calc_signal_quality_report,
+        find_mmds,
+        find_mmds_v39,
+    )
     from easy_tdx.MyTT import ATR, BOLL, DMI, KDJ, MA, MACD, OBV, RSI
 
     market = req.market
@@ -275,12 +299,20 @@ async def diagnose_stock(
     latest_macd = macd_hist[-1] if len(macd_hist) > 0 else 0
 
     # MACD状态
-    macd_golden = bool(dif[-2] <= dea[-2] and dif[-1] > dea[-1]) if len(dif) >= 2 and len(dea) >= 2 else False
-    macd_dead = bool(dif[-2] >= dea[-2] and dif[-1] < dea[-1]) if len(dif) >= 2 and len(dea) >= 2 else False
+    macd_golden = (
+        bool(dif[-2] <= dea[-2] and dif[-1] > dea[-1]) if len(dif) >= 2 and len(dea) >= 2 else False
+    )
+    macd_dead = (
+        bool(dif[-2] >= dea[-2] and dif[-1] < dea[-1]) if len(dif) >= 2 and len(dea) >= 2 else False
+    )
 
     macd_above_zero = bool(latest_dif > 0 and latest_dea > 0)
-    macd_trending_up = bool(latest_macd > 0 and len(macd_hist) >= 2 and macd_hist[-1] > macd_hist[-2])
-    macd_trending_down = bool(latest_macd < 0 and len(macd_hist) >= 2 and macd_hist[-1] < macd_hist[-2])
+    macd_trending_up = bool(
+        latest_macd > 0 and len(macd_hist) >= 2 and macd_hist[-1] > macd_hist[-2]
+    )
+    macd_trending_down = bool(
+        latest_macd < 0 and len(macd_hist) >= 2 and macd_hist[-1] < macd_hist[-2]
+    )
 
     # ── KDJ分析 ──────────────────────────────────────────────────────
     k, d, j = KDJ(closes, highs, lows, N=9, M1=3, M2=3)
@@ -309,7 +341,7 @@ async def diagnose_stock(
     # RSI状态
     rsi_overbought = bool(latest_rsi > 70)
     rsi_oversold = bool(latest_rsi < 30)
-    rsi_divergence = False  # 简化：实际需比较价格和RSI走势
+    _ = False  # 简化：实际需比较价格和RSI走势
 
     # RSI位置
     if latest_rsi > 80:
@@ -329,7 +361,11 @@ async def diagnose_stock(
     latest_mid = boll_mid[-1] if len(boll_mid) > 0 else 0
     latest_lower = boll_lower[-1] if len(boll_lower) > 0 else 0
     boll_width = (latest_upper - latest_lower) / latest_mid if latest_mid > 0 else 0
-    percent_b = (latest_close - latest_lower) / (latest_upper - latest_lower) if (latest_upper - latest_lower) > 0 else 0.5
+    percent_b = (
+        (latest_close - latest_lower) / (latest_upper - latest_lower)
+        if (latest_upper - latest_lower) > 0
+        else 0.5
+    )
 
     # BOLL状态
     boll_position = "mid"  # upper/mid/lower
@@ -370,8 +406,12 @@ async def diagnose_stock(
         fib_position = 0.5
 
     # ── 成交量分析 ────────────────────────────────────────────────────
-    vol_ma5 = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else (volumes[-1] if len(volumes) > 0 else 0)
-    vol_ma20 = sum(volumes[-20:]) / 20 if len(volumes) >= 20 else (volumes[-1] if len(volumes) > 0 else 0)
+    vol_ma5 = (
+        sum(volumes[-5:]) / 5 if len(volumes) >= 5 else (volumes[-1] if len(volumes) > 0 else 0)
+    )
+    vol_ma20 = (
+        sum(volumes[-20:]) / 20 if len(volumes) >= 20 else (volumes[-1] if len(volumes) > 0 else 0)
+    )
     vol_ratio = vol_ma5 / vol_ma20 if vol_ma20 > 0 else 1.0
     vol_expanding = bool(vol_ratio > 1.2)  # 放量
     vol_contracting = bool(vol_ratio < 0.8)  # 缩量
@@ -441,10 +481,20 @@ async def diagnose_stock(
     obv_values = OBV(closes, volumes)
     latest_obv = obv_values[-1] if len(obv_values) > 0 else 0
     obv_ma20 = MA(obv_values, 20)[-1] if len(obv_values) >= 20 else latest_obv
-    obv_trending_up = bool(latest_obv > obv_ma20 and len(obv_values) >= 2 and obv_values[-1] > obv_values[-2])
-    obv_trending_down = bool(latest_obv < obv_ma20 and len(obv_values) >= 2 and obv_values[-1] < obv_values[-2])
-    obv_divergence_price = "bullish" if (latest_close > closes[-20] if len(closes) >= 20 else False) and obv_trending_down else (
-        "bearish" if (latest_close < closes[-20] if len(closes) >= 20 else False) and obv_trending_up else "none"
+    obv_trending_up = bool(
+        latest_obv > obv_ma20 and len(obv_values) >= 2 and obv_values[-1] > obv_values[-2]
+    )
+    obv_trending_down = bool(
+        latest_obv < obv_ma20 and len(obv_values) >= 2 and obv_values[-1] < obv_values[-2]
+    )
+    obv_divergence_price = (
+        "bullish"
+        if (latest_close > closes[-20] if len(closes) >= 20 else False) and obv_trending_down
+        else (
+            "bearish"
+            if (latest_close < closes[-20] if len(closes) >= 20 else False) and obv_trending_up
+            else "none"
+        )
     )
 
     # ── 背离检测（MACD / KDJ / RSI） ─────────────────────────────────
@@ -457,8 +507,10 @@ async def diagnose_stock(
     bullish_div_count = sum(1 for d in all_divs if d["type"] == "bullish")
     bearish_div_count = sum(1 for d in all_divs if d["type"] == "bearish")
     has_divergence = bullish_div_count > 0 or bearish_div_count > 0
-    dominant_div = "bullish" if bullish_div_count >= bearish_div_count and bullish_div_count > 0 else (
-        "bearish" if bearish_div_count > 0 else "none"
+    dominant_div = (
+        "bullish"
+        if bullish_div_count >= bearish_div_count and bullish_div_count > 0
+        else ("bearish" if bearish_div_count > 0 else "none")
     )
     div_strength = max(d["strength"] for d in all_divs) if has_divergence else 0
 
@@ -476,8 +528,8 @@ async def diagnose_stock(
     sell_1_count = sum(1 for m in result.mmds if m.mmd_type.value == "1sell")
     buy_2_count = sum(1 for m in result.mmds if m.mmd_type.value == "2buy")
     sell_2_count = sum(1 for m in result.mmds if m.mmd_type.value == "2sell")
-    buy_3_count = sum(1 for m in result.mmds if m.mmd_type.value == "3buy")
-    sell_3_count = sum(1 for m in result.mmds if m.mmd_type.value == "3sell")
+    _ = sum(1 for m in result.mmds if m.mmd_type.value == "3buy")
+    _ = sum(1 for m in result.mmds if m.mmd_type.value == "3sell")
     latest_mmd = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0) if result.mmds else None
 
     # V8: 多信号融合权重（按类型和置信度动态调整）
@@ -489,9 +541,12 @@ async def diagnose_stock(
 
         # V8: 类型权重 + 置信度加成 + 质量评级加成
         type_weights = {
-            "1buy": 20, "1sell": -20,
-            "2buy": 15, "2sell": -15,
-            "3buy": 10, "3sell": -10,
+            "1buy": 20,
+            "1sell": -20,
+            "2buy": 15,
+            "2sell": -15,
+            "3buy": 10,
+            "3sell": -10,
         }
         base_score = type_weights.get(latest_mmd.mmd_type.value, 0)
 
@@ -636,16 +691,18 @@ async def diagnose_stock(
     # V76: 基于最终有效性评分调整阈值
     v76_validity = getattr(latest_mmd, "_signal_final_validity_v76", None) if latest_mmd else None
     v76_validity_score = v76_validity.get("validity_score", 0.5) if v76_validity else 0.5
-    v76_validity_level = v76_validity.get("final_validity", "unknown") if v76_validity else "unknown"
+    v76_validity_level = (
+        v76_validity.get("final_validity", "unknown") if v76_validity else "unknown"
+    )
 
     # V76 有效性对操作建议的修正：无效信号需降低一级操作建议
     validity_adjust = 0
     if v76_validity_level == "invalid":
         validity_adjust = -15  # 无效信号扣分
     elif v76_validity_level == "weak":
-        validity_adjust = -8   # 弱信号扣分
+        validity_adjust = -8  # 弱信号扣分
     elif v76_validity_level == "strong":
-        validity_adjust = 5    # 强信号加成
+        validity_adjust = 5  # 强信号加成
 
     # V77: 四维度量摘要（条件240-243）—— 顶层快速可见
     v77_vdd = getattr(latest_mmd, "_volume_distribution_depth_v77", None) if latest_mmd else None
@@ -655,15 +712,19 @@ async def diagnose_stock(
 
     # 综合V77四维度量评分
     v77_adjust_total = 0.0
-    v77_vdd_score = (v77_vdd.get("confidence_adjust", 0) if v77_vdd else 0)
-    v77_zsw_score = (v77_zsw.get("confidence_adjust", 0) if v77_zsw else 0)
-    v77_sfv_score = (v77_sfv.get("confidence_adjust", 0) if v77_sfv else 0)
-    v77_pma_score = (v77_pma.get("confidence_adjust", 0) if v77_pma else 0)
+    v77_vdd_score = v77_vdd.get("confidence_adjust", 0) if v77_vdd else 0
+    v77_zsw_score = v77_zsw.get("confidence_adjust", 0) if v77_zsw else 0
+    v77_sfv_score = v77_sfv.get("confidence_adjust", 0) if v77_sfv else 0
+    v77_pma_score = v77_pma.get("confidence_adjust", 0) if v77_pma else 0
     v77_adjust_total = v77_vdd_score + v77_zsw_score + v77_sfv_score + v77_pma_score
 
     # V77 综合质量等级
-    v77_positive_count = sum(1 for s in [v77_vdd_score, v77_zsw_score, v77_sfv_score, v77_pma_score] if s > 0)
-    v77_negative_count = sum(1 for s in [v77_vdd_score, v77_zsw_score, v77_sfv_score, v77_pma_score] if s < 0)
+    v77_positive_count = sum(
+        1 for s in [v77_vdd_score, v77_zsw_score, v77_sfv_score, v77_pma_score] if s > 0
+    )
+    v77_negative_count = sum(
+        1 for s in [v77_vdd_score, v77_zsw_score, v77_sfv_score, v77_pma_score] if s < 0
+    )
     if v77_positive_count >= 3 and v77_negative_count == 0:
         v77_quality_level = "strong"
         v77_recommendation = "四维信号共振，高置信度"
@@ -680,18 +741,24 @@ async def diagnose_stock(
     # V78: 四维度量摘要（条件244-247）—— 顶层快速可见
     v78_mcp = getattr(latest_mmd, "_mmd_cycle_position_v78", None) if latest_mmd else None
     v78_msc = getattr(latest_mmd, "_multi_signal_consensus_v78", None) if latest_mmd else None
-    v78_vcb = getattr(latest_mmd, "_volatility_compression_breakout_v78", None) if latest_mmd else None
+    v78_vcb = (
+        getattr(latest_mmd, "_volatility_compression_breakout_v78", None) if latest_mmd else None
+    )
     v78_ffd = getattr(latest_mmd, "_fund_flow_divergence_v78", None) if latest_mmd else None
 
     v78_adjust_total = 0.0
-    v78_mcp_score = (v78_mcp.get("confidence_adjust", 0) if v78_mcp else 0)
-    v78_msc_score = (v78_msc.get("confidence_adjust", 0) if v78_msc else 0)
-    v78_vcb_score = (v78_vcb.get("confidence_adjust", 0) if v78_vcb else 0)
-    v78_ffd_score = (v78_ffd.get("confidence_adjust", 0) if v78_ffd else 0)
+    v78_mcp_score = v78_mcp.get("confidence_adjust", 0) if v78_mcp else 0
+    v78_msc_score = v78_msc.get("confidence_adjust", 0) if v78_msc else 0
+    v78_vcb_score = v78_vcb.get("confidence_adjust", 0) if v78_vcb else 0
+    v78_ffd_score = v78_ffd.get("confidence_adjust", 0) if v78_ffd else 0
     v78_adjust_total = v78_mcp_score + v78_msc_score + v78_vcb_score + v78_ffd_score
 
-    v78_positive_count = sum(1 for s in [v78_mcp_score, v78_msc_score, v78_vcb_score, v78_ffd_score] if s > 0)
-    v78_negative_count = sum(1 for s in [v78_mcp_score, v78_msc_score, v78_vcb_score, v78_ffd_score] if s < 0)
+    v78_positive_count = sum(
+        1 for s in [v78_mcp_score, v78_msc_score, v78_vcb_score, v78_ffd_score] if s > 0
+    )
+    v78_negative_count = sum(
+        1 for s in [v78_mcp_score, v78_msc_score, v78_vcb_score, v78_ffd_score] if s < 0
+    )
     if v78_positive_count >= 3 and v78_negative_count == 0:
         v78_quality_level = "strong"
         v78_recommendation = "四维信号共振，高置信度"
@@ -708,18 +775,24 @@ async def diagnose_stock(
     # ── V79: 四维度量摘要（条件248-251）──────────────────────────────
     v79_fsv = getattr(latest_mmd, "_fractal_stability_validation_v79", None) if latest_mmd else None
     v79_mds = getattr(latest_mmd, "_mmd_distance_safety_v79", None) if latest_mmd else None
-    v79_mls = getattr(latest_mmd, "_multi_level_structure_consistency_v79", None) if latest_mmd else None
+    v79_mls = (
+        getattr(latest_mmd, "_multi_level_structure_consistency_v79", None) if latest_mmd else None
+    )
     v79_pmc = getattr(latest_mmd, "_price_momentum_continuity_v79", None) if latest_mmd else None
 
     v79_adjust_total = 0.0
-    v79_fsv_score = (v79_fsv.get("confidence_adjust", 0) if v79_fsv else 0)
-    v79_mds_score = (v79_mds.get("confidence_adjust", 0) if v79_mds else 0)
-    v79_mls_score = (v79_mls.get("confidence_adjust", 0) if v79_mls else 0)
-    v79_pmc_score = (v79_pmc.get("confidence_adjust", 0) if v79_pmc else 0)
+    v79_fsv_score = v79_fsv.get("confidence_adjust", 0) if v79_fsv else 0
+    v79_mds_score = v79_mds.get("confidence_adjust", 0) if v79_mds else 0
+    v79_mls_score = v79_mls.get("confidence_adjust", 0) if v79_mls else 0
+    v79_pmc_score = v79_pmc.get("confidence_adjust", 0) if v79_pmc else 0
     v79_adjust_total = v79_fsv_score + v79_mds_score + v79_mls_score + v79_pmc_score
 
-    v79_positive_count = sum(1 for s in [v79_fsv_score, v79_mds_score, v79_mls_score, v79_pmc_score] if s > 0)
-    v79_negative_count = sum(1 for s in [v79_fsv_score, v79_mds_score, v79_mls_score, v79_pmc_score] if s < 0)
+    v79_positive_count = sum(
+        1 for s in [v79_fsv_score, v79_mds_score, v79_mls_score, v79_pmc_score] if s > 0
+    )
+    v79_negative_count = sum(
+        1 for s in [v79_fsv_score, v79_mds_score, v79_mls_score, v79_pmc_score] if s < 0
+    )
     if v79_positive_count >= 3 and v79_negative_count == 0:
         v79_quality_level = "strong"
         v79_recommendation = "四维结构确认，高置信度"
@@ -740,14 +813,18 @@ async def diagnose_stock(
     v80_drr = getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None
 
     v80_adjust_total = 0.0
-    v80_msd_score = (v80_msd.get("confidence_adjust", 0) if v80_msd else 0)
-    v80_vcf_score = (v80_vcf.get("confidence_adjust", 0) if v80_vcf else 0)
-    v80_mas_score = (v80_mas.get("confidence_adjust", 0) if v80_mas else 0)
-    v80_drr_score = (v80_drr.get("confidence_adjust", 0) if v80_drr else 0)
+    v80_msd_score = v80_msd.get("confidence_adjust", 0) if v80_msd else 0
+    v80_vcf_score = v80_vcf.get("confidence_adjust", 0) if v80_vcf else 0
+    v80_mas_score = v80_mas.get("confidence_adjust", 0) if v80_mas else 0
+    v80_drr_score = v80_drr.get("confidence_adjust", 0) if v80_drr else 0
     v80_adjust_total = v80_msd_score + v80_vcf_score + v80_mas_score + v80_drr_score
 
-    v80_positive_count = sum(1 for s in [v80_msd_score, v80_vcf_score, v80_mas_score, v80_drr_score] if s > 0)
-    v80_negative_count = sum(1 for s in [v80_msd_score, v80_vcf_score, v80_mas_score, v80_drr_score] if s < 0)
+    v80_positive_count = sum(
+        1 for s in [v80_msd_score, v80_vcf_score, v80_mas_score, v80_drr_score] if s > 0
+    )
+    v80_negative_count = sum(
+        1 for s in [v80_msd_score, v80_vcf_score, v80_mas_score, v80_drr_score] if s < 0
+    )
     if v80_positive_count >= 3 and v80_negative_count == 0:
         v80_quality_level = "strong"
         v80_recommendation = "四维结构确认，高置信度"
@@ -764,18 +841,24 @@ async def diagnose_stock(
     # ── V81: 四维度量摘要（条件256-259）──────────────────────────────
     v81_vrt = getattr(latest_mmd, "_volatility_regime_transition_v81", None) if latest_mmd else None
     v81_srs = getattr(latest_mmd, "_support_resistance_strength_v81", None) if latest_mmd else None
-    v81_vped = getattr(latest_mmd, "_volume_price_energy_distribution_v81", None) if latest_mmd else None
+    v81_vped = (
+        getattr(latest_mmd, "_volume_price_energy_distribution_v81", None) if latest_mmd else None
+    )
     v81_sew = getattr(latest_mmd, "_signal_execution_window_v81", None) if latest_mmd else None
 
     v81_adjust_total = 0.0
-    v81_vrt_score = (v81_vrt.get("confidence_adjust", 0) if v81_vrt else 0)
-    v81_srs_score = (v81_srs.get("confidence_adjust", 0) if v81_srs else 0)
-    v81_vped_score = (v81_vped.get("confidence_adjust", 0) if v81_vped else 0)
-    v81_sew_score = (v81_sew.get("confidence_adjust", 0) if v81_sew else 0)
+    v81_vrt_score = v81_vrt.get("confidence_adjust", 0) if v81_vrt else 0
+    v81_srs_score = v81_srs.get("confidence_adjust", 0) if v81_srs else 0
+    v81_vped_score = v81_vped.get("confidence_adjust", 0) if v81_vped else 0
+    v81_sew_score = v81_sew.get("confidence_adjust", 0) if v81_sew else 0
     v81_adjust_total = v81_vrt_score + v81_srs_score + v81_vped_score + v81_sew_score
 
-    v81_positive_count = sum(1 for s in [v81_vrt_score, v81_srs_score, v81_vped_score, v81_sew_score] if s > 0)
-    v81_negative_count = sum(1 for s in [v81_vrt_score, v81_srs_score, v81_vped_score, v81_sew_score] if s < 0)
+    v81_positive_count = sum(
+        1 for s in [v81_vrt_score, v81_srs_score, v81_vped_score, v81_sew_score] if s > 0
+    )
+    v81_negative_count = sum(
+        1 for s in [v81_vrt_score, v81_srs_score, v81_vped_score, v81_sew_score] if s < 0
+    )
     if v81_positive_count >= 3 and v81_negative_count == 0:
         v81_quality_level = "strong"
         v81_recommendation = "四维环境确认，高置信度"
@@ -793,16 +876,22 @@ async def diagnose_stock(
     v82_mad = getattr(latest_mmd, "_mmd_age_decay_v82", None) if latest_mmd else None
     v82_brc = getattr(latest_mmd, "_breakout_retest_confirm_v82", None) if latest_mmd else None
     v82_mtr = getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None) if latest_mmd else None
-    v82_vcb = getattr(latest_mmd, "_volatility_compression_breakout_v82", None) if latest_mmd else None
+    v82_vcb = (
+        getattr(latest_mmd, "_volatility_compression_breakout_v82", None) if latest_mmd else None
+    )
 
-    v82_mad_score = (v82_mad.get("confidence_adjust", 0) if v82_mad else 0)
-    v82_brc_score = (v82_brc.get("confidence_adjust", 0) if v82_brc else 0)
-    v82_mtr_score = (v82_mtr.get("confidence_adjust", 0) if v82_mtr else 0)
-    v82_vcb_score = (v82_vcb.get("confidence_adjust", 0) if v82_vcb else 0)
+    v82_mad_score = v82_mad.get("confidence_adjust", 0) if v82_mad else 0
+    v82_brc_score = v82_brc.get("confidence_adjust", 0) if v82_brc else 0
+    v82_mtr_score = v82_mtr.get("confidence_adjust", 0) if v82_mtr else 0
+    v82_vcb_score = v82_vcb.get("confidence_adjust", 0) if v82_vcb else 0
     v82_adjust_total = v82_mad_score + v82_brc_score + v82_mtr_score + v82_vcb_score
 
-    v82_positive_count = sum(1 for s in [v82_mad_score, v82_brc_score, v82_mtr_score, v82_vcb_score] if s > 0)
-    v82_negative_count = sum(1 for s in [v82_mad_score, v82_brc_score, v82_mtr_score, v82_vcb_score] if s < 0)
+    v82_positive_count = sum(
+        1 for s in [v82_mad_score, v82_brc_score, v82_mtr_score, v82_vcb_score] if s > 0
+    )
+    v82_negative_count = sum(
+        1 for s in [v82_mad_score, v82_brc_score, v82_mtr_score, v82_vcb_score] if s < 0
+    )
     if v82_positive_count >= 3 and v82_negative_count == 0:
         v82_quality_level = "strong"
         v82_recommendation = "四维验证通过，高置信度"
@@ -823,14 +912,14 @@ async def diagnose_stock(
         action_label = "强烈买入"
         action_color = "#22c55e"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        v76_note = f"，V76有效性【强信号】确认" if v76_validity_level == "strong" else ""
+        v76_note = "，V76有效性【强信号】确认" if v76_validity_level == "strong" else ""
         reason = f"多指标共振看涨，缠论高置信度信号确认{extra}{v76_note}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），止盈 {take_profit_price} 元（+{take_profit_pct}%）"
     elif adjusted_score >= 60 and latest_mmd and latest_mmd.confidence >= 0.65:
         action = "buy"
         action_label = "买入"
         action_color = "#4ade80"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        v76_note = f"，V76有效性【强信号】确认" if v76_validity_level == "strong" else ""
+        v76_note = "，V76有效性【强信号】确认" if v76_validity_level == "strong" else ""
         reason = f"技术面偏多，缠论信号可参考{extra}{v76_note}。建议止损 {stop_loss_price} 元（-{stop_loss_pct}%），注意上方阻力 {resistance_1} 元"
     elif adjusted_score >= 45:
         action = "hold"
@@ -848,7 +937,7 @@ async def diagnose_stock(
         action_label = "卖出"
         action_color = "#f97316"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        v76_note = f"，V76有效性【弱信号】确认" if v76_validity_level == "weak" else ""
+        v76_note = "，V76有效性【弱信号】确认" if v76_validity_level == "weak" else ""
         reason = f"技术面偏空，缠论信号可参考{extra}{v76_note}。下方支撑 {support_1} 元，跌破可考虑止损 {stop_loss_price} 元"
     elif adjusted_score >= 30:
         action = "sell"
@@ -864,745 +953,1588 @@ async def diagnose_stock(
         action_label = "强烈卖出"
         action_color = "#ef4444"
         extra = f"。{chanlun_desc}" if chanlun_desc else ""
-        v76_note = f"，V76有效性【不建议操作】" if v76_validity_level == "invalid" else ""
+        v76_note = "，V76有效性【不建议操作】" if v76_validity_level == "invalid" else ""
         reason = f"多指标共振看跌，建议清仓回避{extra}{v76_note}。止损位 {stop_loss_price} 元，远离多头趋势"
 
     # ── 仓位建议 ──────────────────────────────────────────────────────
     position_recommendation = _calculate_position_recommendation(
-        score, volatility_level, atr_pct, ma_bullish, macd_golden,
-        has_divergence=has_divergence, dominant_div=dominant_div, adx_level=adx_level,
+        score,
+        volatility_level,
+        atr_pct,
+        ma_bullish,
+        macd_golden,
+        has_divergence=has_divergence,
+        dominant_div=dominant_div,
+        adx_level=adx_level,
     )
 
     # ── 返回结果 ──────────────────────────────────────────────────────
-    return cast(dict[str, Any], _to_json_safe({
-        "symbol": symbol,
-        "date": latest_date,
-        "close": round(latest_close, 2),
-        "score": round(score, 1),
-        "action": action,
-        "action_label": action_label,
-        "action_color": action_color,
-        "reason": reason,
-        # V76: 四维验证摘要（条件236-239）—— 顶层快速可见
-        "v76_summary": {
-            "structure_integrity": v76_validity_level if v76_validity else None,
-            "validity_score": round(v76_validity_score, 2) if v76_validity else None,
-            "recommendation": v76_validity.get("recommendation", "") if v76_validity else "",
-        },
-        # V77: 四维度量摘要（条件240-243）—— 顶层快速可见
-        "v77_summary": {
-            "quality_level": v77_quality_level,
-            "total_adjust": round(v77_adjust_total, 3),
-            "positive_count": v77_positive_count,
-            "negative_count": v77_negative_count,
-            "recommendation": v77_recommendation,
-            "vdd_energy_zone": v77_vdd.get("energy_zone") if v77_vdd else None,
-            "zs_weight_score": round(v77_zsw.get("weight_score", 0), 2) if v77_zsw else None,
-            "signal_freshness": v77_sfv.get("age_label") if v77_sfv else None,
-            "momentum_direction": v77_pma.get("momentum_direction") if v77_pma else None,
-        },
-        # V78: 四维度量摘要（条件244-247）—— 顶层快速可见
-        "v78_summary": {
-            "quality_level": v78_quality_level,
-            "total_adjust": round(v78_adjust_total, 3),
-            "positive_count": v78_positive_count,
-            "negative_count": v78_negative_count,
-            "recommendation": v78_recommendation,
-            "cycle_position": v78_mcp.get("cycle_position") if v78_mcp else None,
-            "consensus_level": v78_msc.get("consensus_level") if v78_msc else None,
-            "breakout_direction": v78_vcb.get("breakout_direction") if v78_vcb else None,
-            "divergence_type": v78_ffd.get("divergence_type") if v78_ffd else None,
-        },
-        # V79: 四维度量摘要（条件248-251）—— 顶层快速可见
-        "v79_summary": {
-            "quality_level": v79_quality_level,
-            "total_adjust": round(v79_adjust_total, 3),
-            "positive_count": v79_positive_count,
-            "negative_count": v79_negative_count,
-            "recommendation": v79_recommendation,
-            "fractal_status": v79_fsv.get("fractal_status") if v79_fsv else None,
-            "safety_level": v79_mds.get("safety_level") if v79_mds else None,
-            "consistency_level": v79_mls.get("msg", "").split("一致=")[1].split(" ")[0] if v79_mls and "一致=" in v79_mls.get("msg", "") else None,
-            "momentum_level": v79_pmc.get("momentum_level") if v79_pmc else None,
-        },
-        # V80: 四维度量摘要（条件252-255）—— 顶层快速可见
-        "v80_summary": {
-            "quality_level": v80_quality_level,
-            "total_adjust": round(v80_adjust_total, 3),
-            "positive_count": v80_positive_count,
-            "negative_count": v80_negative_count,
-            "recommendation": v80_recommendation,
-            "zs_position": v80_msd.get("zs_position") if v80_msd else None,
-            "volume_confirmed": f"{'↑' if v80_vcf.get('price_trend')=='up' else '↓'}{'↑' if v80_vcf.get('volume_trend')=='up' else '↓'}" if v80_vcf else None,
-            "ma_alignment": v80_mas.get("ma_alignment") if v80_mas else None,
-            "risk_level": v80_drr.get("risk_level") if v80_drr else None,
-        },
-        # V81: 四维度量摘要（条件256-259）—— 顶层快速可见
-        "v81_summary": {
-            "quality_level": v81_quality_level,
-            "total_adjust": round(v81_adjust_total, 3),
-            "positive_count": v81_positive_count,
-            "negative_count": v81_negative_count,
-            "recommendation": v81_recommendation,
-            "regime": v81_vrt.get("regime") if v81_vrt else None,
-            "strength_level": v81_srs.get("strength_level") if v81_srs else None,
-            "energy_zone": v81_vped.get("energy_zone") if v81_vped else None,
-            "window_quality": v81_sew.get("window_quality") if v81_sew else None,
-        },
-        # V82: 四维度量摘要（条件260-263）—— 顶层快速可见
-        "v82_summary": {
-            "quality_level": v82_quality_level,
-            "total_adjust": round(v82_adjust_total, 3),
-            "positive_count": v82_positive_count,
-            "negative_count": v82_negative_count,
-            "recommendation": v82_recommendation,
-            "age_label": v82_mad.get("age_label") if v82_mad else None,
-            "retest_quality": v82_brc.get("retest_quality") if v82_brc else None,
-            "resonance": v82_mtr.get("resonance") if v82_mtr else None,
-            "compression_level": v82_vcb.get("compression_level") if v82_vcb else None,
-        },
-        "chanlun": {
-            "bi_count": len(result.bis),
-            "zs_count": len(result.zss),
-            "mmd_count": len(result.mmds),
-            "buy_1_count": buy_1_count,
-            "sell_1_count": sell_1_count,
-            "buy_2_count": buy_2_count,
-            "sell_2_count": sell_2_count,
-            "latest_mmd": {
-                "type": latest_mmd.mmd_type.value if latest_mmd else None,
-                "confidence": round(latest_mmd.confidence, 2) if latest_mmd else None,
-                "msg": latest_mmd.msg if latest_mmd else None,
-                "quality": {
-                    "grade": getattr(getattr(latest_mmd, "quality", None), "grade", None),
-                    "score": getattr(getattr(getattr(latest_mmd, "quality", None), "score", None), "score", None),
-                    "reasons": getattr(getattr(getattr(latest_mmd, "quality", None), "reasons", None), "reasons", None),
-                } if latest_mmd and getattr(latest_mmd, "quality", None) else None,
-                # V79 缠论增强条件（条件248-251）
-                "v79_fractal_stability": getattr(latest_mmd, "_fractal_stability_validation_v79", None) if latest_mmd else None,
-                "v79_distance_safety": getattr(latest_mmd, "_mmd_distance_safety_v79", None) if latest_mmd else None,
-                "v79_multi_level_consistency": getattr(latest_mmd, "_multi_level_structure_consistency_v79", None) if latest_mmd else None,
-                "v79_momentum_continuity": getattr(latest_mmd, "_price_momentum_continuity_v79", None) if latest_mmd else None,
-                # V80 缠论增强条件（条件252-255）
-                "v80_zhongshu_distance": getattr(latest_mmd, "_mmd_zhongshu_distance_v80", None) if latest_mmd else None,
-                "v80_volume_confirmation": getattr(latest_mmd, "_volume_confirmation_v80", None) if latest_mmd else None,
-                "v80_ma_alignment": getattr(latest_mmd, "_ma_alignment_strength_v80", None) if latest_mmd else None,
-                "v80_risk_reward": getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None,
-                "v81_volatility_regime": getattr(latest_mmd, "_volatility_regime_transition_v81", None) if latest_mmd else None,
-                "v81_support_resistance": getattr(latest_mmd, "_support_resistance_strength_v81", None) if latest_mmd else None,
-                "v81_energy_distribution": getattr(latest_mmd, "_volume_price_energy_distribution_v81", None) if latest_mmd else None,
-                "v81_execution_window": getattr(latest_mmd, "_signal_execution_window_v81", None) if latest_mmd else None,
-                "v82_age_decay": getattr(latest_mmd, "_mmd_age_decay_v82", None) if latest_mmd else None,
-                "v82_breakout_retest": getattr(latest_mmd, "_breakout_retest_confirm_v82", None) if latest_mmd else None,
-                "v82_macd_resonance": getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None) if latest_mmd else None,
-                "v82_volatility_compression": getattr(latest_mmd, "_volatility_compression_breakout_v82", None) if latest_mmd else None,
-            } if latest_mmd else None,
-            # V6: 最近3个高质量买卖点
-            "recent_signals": [
-                {
-                    "type": m.mmd_type.value,
-                    "confidence": round(m.confidence, 2),
-                    "quality": {
-                        "grade": getattr(getattr(m, "quality", None), "grade", None),
-                        "score": getattr(getattr(getattr(m, "quality", None), "score", None), "score", None),
-                    } if getattr(m, "quality", None) else None,
-                    # V79 缠论增强条件（条件248-251）
-                    "v79_fractal_stability": getattr(m, "_fractal_stability_validation_v79", None),
-                    "v79_distance_safety": getattr(m, "_mmd_distance_safety_v79", None),
-                    "v79_multi_level_consistency": getattr(m, "_multi_level_structure_consistency_v79", None),
-                    "v79_momentum_continuity": getattr(m, "_price_momentum_continuity_v79", None),
-                    # V80 缠论增强条件（条件252-255）
-                    "v80_zhongshu_distance": getattr(m, "_mmd_zhongshu_distance_v80", None),
-                    "v80_volume_confirmation": getattr(m, "_volume_confirmation_v80", None),
-                    "v80_ma_alignment": getattr(m, "_ma_alignment_strength_v80", None),
-                    "v80_risk_reward": getattr(m, "_dynamic_risk_reward_v80", None),
-                    # V81 缠论增强条件（条件256-259）
-                    "v81_volatility_regime": getattr(m, "_volatility_regime_transition_v81", None),
-                    "v81_support_resistance": getattr(m, "_support_resistance_strength_v81", None),
-                    "v81_energy_distribution": getattr(m, "_volume_price_energy_distribution_v81", None),
-                    "v81_execution_window": getattr(m, "_signal_execution_window_v81", None),
-                    # V82 缠论增强条件（条件260-263）
-                    "v82_age_decay": getattr(m, "_mmd_age_decay_v82", None),
-                    "v82_breakout_retest": getattr(m, "_breakout_retest_confirm_v82", None),
-                    "v82_macd_resonance": getattr(m, "_macd_multi_tf_resonance_v82", None),
-                    "v82_volatility_compression": getattr(m, "_volatility_compression_breakout_v82", None),
-                }
-                for m in sorted(result.mmds, key=lambda x: getattr(getattr(x, "quality", None), "score", 0) if getattr(x, "quality", None) else 0, reverse=True)[:3]
-            ],
-            # V7: 信号质量报告（入场/止损/止盈建议）
-            "signal_report": calc_signal_quality_report(
-                latest_mmd, closes, volumes,
-                {
-                    "dif": dif.tolist(), "dea": dea.tolist(), "hist": macd_hist.tolist(),
-                }
-                if len(dif) > 0 else None,
-                volatility,
-            ) if latest_mmd else None,
-            # V12: 多时间框架共振评分（如有）
-            "confluence_score": round(getattr(latest_mmd, "confluence_score", 0.0), 2) if latest_mmd else None,
-            # V13: 成交量剖面分析
-            "volume_profile": _calc_volume_profile_for_diagnosis(closes, volumes) if latest_mmd else None,
-            # V21: 决策辅助输出（入场/止损/止盈/仓位建议/风险提示）
-            "decision_recommendation": getattr(latest_mmd, "_decision_recommendation", None) if latest_mmd else None,
-            # V21: 组合信号信息
-            "combo_signal": {
-                "type": getattr(latest_mmd, "_signal_combo", None),
-                "bonus": round(getattr(latest_mmd, "_combo_confidence_bonus", 0.0), 2),
-            } if latest_mmd else None,
-            # V22: 波动率双重确认
-            "vol_regime_dual": getattr(latest_mmd, "_vol_regime_dual", None) if latest_mmd else None,
-            # V22: 量价背离检测
-            "vol_price_divergence": getattr(latest_mmd, "_vol_price_divergence", None) if latest_mmd else None,
-            # V23: Fibonacci回撤位确认（条件40）
-            "fib_retracement": getattr(latest_mmd, "_fib_retracement", None) if latest_mmd else None,
-            # V23: RSI区域分类（条件41）
-            "rsi_zone": getattr(latest_mmd, "_rsi_zone", None) if latest_mmd else None,
-            # V23: MACD零轴穿越确认（条件42）
-            "macd_zero_cross": getattr(latest_mmd, "_macd_zero_cross", None) if latest_mmd else None,
-            # V24: 笔质量评分（条件43）
-            "bi_quality": getattr(latest_mmd, "_bi_quality", None) if latest_mmd else None,
-            # V24: 中枢强度分析（条件44）
-            "zs_strength": getattr(latest_mmd, "_zs_strength", None) if latest_mmd else None,
-            # V24: 增强背离检测（条件45）
-            "enhanced_divergence": getattr(latest_mmd, "_enhanced_divergence", None) if latest_mmd else None,
-            # V24: 信号交叉验证评分（条件46）
-            "cross_validation": getattr(latest_mmd, "_cross_validation", None) if latest_mmd else None,
-            # V25: 信号后确认验证（条件47）
-            "post_signal_confirm": getattr(latest_mmd, "_post_signal_confirm", None) if latest_mmd else None,
-            # V25: 动量衰减预警（条件48）
-            "momentum_decay": getattr(latest_mmd, "_momentum_decay", None) if latest_mmd else None,
-            # V25: 波动率自适应过滤（条件49）
-            "vol_regime_filter": getattr(latest_mmd, "_vol_regime_filter", None) if latest_mmd else None,
-            # V25: 综合信号质量评分（条件50）
-            "composite_quality": getattr(latest_mmd, "_composite_quality", None) if latest_mmd else None,
-            # V26: 信号历史验证（条件51）
-            "signal_history": getattr(latest_mmd, "_signal_history", None) if latest_mmd else None,
-            # V26: 动态风险收益优化（条件52）
-            "dynamic_rr_optimization": getattr(latest_mmd, "_dynamic_rr_optimization", None) if latest_mmd else None,
-            # V26: 多标的对比评分（条件53）
-            "cross_stock_comparison": getattr(latest_mmd, "_cross_stock_comparison", None) if latest_mmd else None,
-            # V27: 多级别区间套共振验证（条件54）
-            "multi_tf_confluence": getattr(latest_mmd, "_multi_tf_confluence", None) if latest_mmd else None,
-            # V27: 买卖点结构位置评分（条件55）
-            "structure_position": getattr(latest_mmd, "_structure_position", None) if latest_mmd else None,
-            # V27: 个股信号特征学习（条件56）
-            "stock_profile": getattr(latest_mmd, "_stock_profile", None) if latest_mmd else None,
-            # V28: BOLL带宽压缩确认（条件57）
-            "boll_squeeze": getattr(latest_mmd, "_boll_squeeze", None) if latest_mmd else None,
-            # V28: 突破量价确认（条件58）
-            "breakout_vol_price": getattr(latest_mmd, "_breakout_vol_price", None) if latest_mmd else None,
-            # V28: 动态ATR止损位（条件59）
-            "dynamic_atr_stop": getattr(latest_mmd, "_dynamic_atr_stop", None) if latest_mmd else None,
-            # V29: 趋势方向持续性确认（条件60）
-            "trend_continuity": getattr(latest_mmd, "_trend_continuity", None) if latest_mmd else None,
-            # V29: 盘整区背离预警（条件61）
-            "consolidation_divergence": getattr(latest_mmd, "_consolidation_divergence", None) if latest_mmd else None,
-            # V30: K线形态反向确认（条件62）
-            "kline_pattern_confirm": getattr(latest_mmd, "_kline_pattern_confirm", None) if latest_mmd else None,
-            # V30: 中枢突破方向确认（条件63）
-            "zs_breakout_confirm": getattr(latest_mmd, "_zs_breakout_confirm", None) if latest_mmd else None,
-            # V30: 近期波动区间止损优化（条件64）
-            "recent_range_stop": getattr(latest_mmd, "_recent_range_stop", None) if latest_mmd else None,
-            # V31: 均线排列确认（条件65）
-            "ma_alignment": getattr(latest_mmd, "_ma_alignment", None) if latest_mmd else None,
-            # V31: MACD柱状图加速度（条件66）
-            "macd_histogram_acceleration": getattr(latest_mmd, "_macd_histogram_acceleration", None) if latest_mmd else None,
-            # V31: 信号综合健康度报告（条件67）
-            "signal_health_dashboard": getattr(latest_mmd, "_signal_health_dashboard", None) if latest_mmd else None,
-            # V32: 量价背离检测增强（条件68）
-            "vol_price_divergence_enhanced": getattr(latest_mmd, "_vol_price_divergence_enhanced", None) if latest_mmd else None,
-            # V32: 信号优先级动态排序（条件69）
-            "signal_priority": getattr(latest_mmd, "_signal_priority", None) if latest_mmd else None,
-            # V32: 支撑阻力位突破确认（条件70）
-            "sr_breakout_confirm": getattr(latest_mmd, "_sr_breakout_confirm", None) if latest_mmd else None,
-            # V33: OBV能量潮趋势确认（条件71）
-            "obv_trend_confirm": getattr(latest_mmd, "_obv_trend_confirm", None) if latest_mmd else None,
-            # V33: MACD动能锥面积确认（条件72）
-            "macd_hist_area": getattr(latest_mmd, "_macd_hist_area", None) if latest_mmd else None,
-            # V33: RSI动量确认（条件73）
-            "rsi_momentum_confirm": getattr(latest_mmd, "_rsi_momentum_confirm", None) if latest_mmd else None,
-            # V34: 趋势动能延续确认（条件74）
-            "trend_momentum_continuation": getattr(latest_mmd, "_trend_momentum_continuation", None) if latest_mmd else None,
-            # V34: 多指标共振强度评分（条件75）
-            "multi_indicator_resonance": getattr(latest_mmd, "_multi_indicator_resonance", None) if latest_mmd else None,
-            # V34: 波动率环境自适应阈值（条件76）
-            "volatility_regime": getattr(latest_mmd, '_last_vol_result', None) if latest_mmd else None,
-            # V35: 市场大环境过滤（条件77）
-            "market_context": getattr(find_mmds, '_last_market_context', None) if latest_mmd else None,
-            # V35: 信号衰减增强（条件78）
-            "enhanced_signal_decay": getattr(latest_mmd, "_enhanced_signal_decay", None) if latest_mmd else None,
-            # V35: 假信号过滤（条件79）
-            "false_signal_filter": getattr(latest_mmd, "_false_signal_filter", None) if latest_mmd else None,
-            # V35: 动态止损止盈增强（条件80）
-            "dynamic_sl_tp_enhanced": getattr(latest_mmd, "_dynamic_sl_tp_enhanced", None) if latest_mmd else None,
-            # V35: 板块轮动上下文（条件81）
-            "sector_rotation_context": getattr(latest_mmd, "_sector_rotation_context", None) if latest_mmd else None,
-            # V35: 多维背离确认（条件82）
-            "multi_dim_divergence": getattr(latest_mmd, "_multi_dim_divergence", None) if latest_mmd else None,
-            # V36: 信号执行窗口优化（条件83）
-            "execution_window": getattr(latest_mmd, "_execution_window", None) if latest_mmd else None,
-            # V36: 多时间框架一致性（条件84）
-            "tf_consistency": getattr(latest_mmd, "_tf_consistency", None) if latest_mmd else None,
-            # V36: 风险调整后收益（条件85）
-            "risk_adjusted_return": getattr(latest_mmd, "_risk_adjusted_return", None) if latest_mmd else None,
-            # V36: 信号时效性紧急度（条件86）
-            "urgency_score": getattr(latest_mmd, "_urgency_score", None) if latest_mmd else None,
-            # V36: 市场环境综合评分（条件87）
-            "market_composite": getattr(find_mmds, '_last_market_composite', None) if latest_mmd else None,
-            # V36: 买卖点策略推荐（条件88）
-            "strategy_recommendation": getattr(latest_mmd, "_strategy_recommendation", None) if latest_mmd else None,
-            # V37: 连续确认过滤（条件89）
-            "consecutive_confirmation": getattr(latest_mmd, "_consecutive_confirmation", None) if latest_mmd else None,
-            # V37: 价格动能加速度（条件90）
-            "momentum_acceleration": getattr(latest_mmd, "_momentum_acceleration", None) if latest_mmd else None,
-            # V37: 波动率状态转换检测（条件91）
-            "volatility_regime_change": getattr(find_mmds, '_last_vol_regime_change', None) if latest_mmd else None,
-            # V37: 买卖点时间序列关联分析（条件92）
-            "temporal_correlation": getattr(latest_mmd, "_temporal_correlation", None) if latest_mmd else None,
-            # V37: 多时间框架动量一致性（条件93）
-            "multi_tf_momentum": getattr(latest_mmd, "_multi_tf_momentum", None) if latest_mmd else None,
-            # V37: 信号综合质量排名（条件94）
-            "quality_ranking": getattr(latest_mmd, "_quality_ranking", None) if latest_mmd else None,
-            # V38: 中枢结构完整性评分（条件95）
-            "zs_structure_integrity": getattr(latest_mmd, "_zs_structure_integrity", None) if latest_mmd else None,
-            # V38: 买卖点位置评分（条件96）
-            "mmd_position_score": getattr(latest_mmd, "_mmd_position_score", None) if latest_mmd else None,
-            # V38: 信号后收益跟踪（条件97）
-            "post_signal_return": getattr(latest_mmd, "_post_signal_return", None) if latest_mmd else None,
-            # V38: 中枢突破力度评估（条件98）
-            "breakout_strength": getattr(latest_mmd, "_breakout_strength", None) if latest_mmd else None,
-            # V38: 多指标偏离度综合评分（条件99）
-            "composite_deviation": getattr(find_mmds, '_last_composite_deviation', None) if latest_mmd else None,
-            # V38: 信号衰减预警（条件100）
-            "signal_decay_warning": getattr(latest_mmd, "_signal_decay_warning", None) if latest_mmd else None,
-            # V39: 买卖点信号一致性验证（条件101）
-            "signal_consistency": getattr(latest_mmd, "_signal_consistency", None) if latest_mmd else None,
-            # V39: 中枢级别匹配验证（条件102）
-            "zs_level_match": getattr(latest_mmd, "_zs_level_match", None) if latest_mmd else None,
-            # V39: 多时间框架背离确认（条件103）
-            "multi_tf_divergence": getattr(find_mmds_v39, '_last_multi_tf_divergence', None) if latest_mmd else None,
-            # V39: 独立交叉验证（条件104）
-            "independent_cross_validation": getattr(latest_mmd, "_independent_cross_validation", None) if latest_mmd else None,
-            # V39: 决策质量综合评分（条件105）
-            "decision_quality_score": getattr(latest_mmd, "_decision_quality_score", None) if latest_mmd else None,
-            # V40: 时间衰减自适应过滤（条件106）
-            "time_decay_adaptive": getattr(latest_mmd, "_time_decay_adaptive", None) if latest_mmd else None,
-            # V40: 中枢突破回踩验证（条件107）
-            "breakout_retest_validation": getattr(latest_mmd, "_breakout_retest_validation", None) if latest_mmd else None,
-            # V40: 多周期MACD共振确认（条件108）
-            "multi_cycle_macd_resonance": getattr(find_mmds_v39, '_last_macd_resonance', None) if latest_mmd else None,
-            # V40: K线形态综合评分（条件109）
-            "kline_pattern_composite": getattr(latest_mmd, "_kline_pattern_composite", None) if latest_mmd else None,
-            # V40: 置信度动态校准（条件110）
-            "confidence_calibration": getattr(latest_mmd, "_confidence_calibration", None) if latest_mmd else None,
-            # V41: 量价能量分布分析（条件111）
-            "volume_price_energy_dist": getattr(latest_mmd, "_volume_price_energy_dist", None) if latest_mmd else None,
-            # V41: 量能周期检测（条件112）
-            "volume_cycle_detection": getattr(find_mmds_v39, '_last_volume_cycle', None) if latest_mmd else None,
-            # V41: 走势预测（条件113）
-            "post_signal_trajectory": getattr(find_mmds_v39, '_last_trajectory_prediction', None) if latest_mmd else None,
-            # V41: 动态质量分层（条件114）
-            "quality_tier_classification": getattr(latest_mmd, "_quality_tier_classification", None) if latest_mmd else None,
-            # V41: 反转风险评估（条件115）
-            "reversal_risk_assessment": getattr(find_mmds_v39, '_last_reversal_risk', None) if latest_mmd else None,
-            # V42: 后确认验证（条件116）
-            "post_signal_confirmation": getattr(latest_mmd, "_post_signal_confirmation", None) if latest_mmd else None,
-            # V42: 突破-回调量比验证（条件117）
-            "break_pullback_volume_ratio": getattr(latest_mmd, "_break_pullback_volume_ratio", None) if latest_mmd else None,
-            # V42: 中枢距离验证（条件118）
-            "zhongshu_distance_validation": getattr(latest_mmd, "_zhongshu_distance_validation", None) if latest_mmd else None,
-            # V42: ADX趋势强度确认（条件119）
-            "adx_trend_strength": getattr(latest_mmd, "_adx_trend_strength", None) if latest_mmd else None,
-            # V42: 信号时效性衰减增强（条件120）
-            "signal_freshness": getattr(latest_mmd, "_signal_freshness", None) if latest_mmd else None,
-            # V44: 趋势方向对齐验证（条件121）
-            "trend_direction_alignment": getattr(latest_mmd, "_trend_direction_alignment", None) if latest_mmd else None,
-            # V44: 突破笔力度对比（条件122）
-            "breakout_bi_strength_compare": getattr(latest_mmd, "_breakout_bi_strength_compare", None) if latest_mmd else None,
-            # V44: 回踩时间窗口过滤（条件123）
-            "pullback_time_window": getattr(latest_mmd, "_pullback_time_window", None) if latest_mmd else None,
-            # V44: 波动率自适应阈值（条件124）
-            "volatility_adaptive_threshold": getattr(latest_mmd, "_volatility_adaptive_threshold", None) if latest_mmd else None,
-            # V44: 多指标背离共振（条件125）
-            "multi_indicator_divergence_resonance": getattr(latest_mmd, "_multi_indicator_divergence_resonance", None) if latest_mmd else None,
-            # V46: 趋势动能强度过滤（条件126）
-            "trend_momentum_strength": getattr(latest_mmd, "_trend_momentum_strength", None) if latest_mmd else None,
-            # V46: 量价背离二次确认（条件127）
-            "volume_price_divergence_secondary": getattr(latest_mmd, "_volume_price_divergence_secondary", None) if latest_mmd else None,
-            # V46: 中枢突破真实性验证（条件128）
-            "zs_breakout_authenticity": getattr(latest_mmd, "_zs_breakout_authenticity", None) if latest_mmd else None,
-            # V46: 多时间框架信号一致性（条件129）
-            "multi_tf_signal_consistency": getattr(latest_mmd, "_multi_tf_signal_consistency", None) if latest_mmd else None,
-            # V46: 动态市场环境适配（条件130）
-            # V47: 后确认价格跟随过滤（条件131）
-            "post_signal_price_follow_through": getattr(latest_mmd, "_post_signal_price_follow_through", None) if latest_mmd else None,
-            # V47: 信号有效性窗口（条件132）
-            "signal_validity_window": getattr(latest_mmd, "_signal_validity_window", None) if latest_mmd else None,
-            # V47: 置信度动态校准（条件133）
-            "confidence_v47_calibrated": getattr(latest_mmd, "_confidence_v47_calibrated", None) if latest_mmd else None,
-            # V48: 量价背离二次确认（条件134）
-            "volume_price_divergence_secondary_v48": getattr(latest_mmd, "_volume_price_divergence_secondary_v48", None) if latest_mmd else None,
-            # V48: 趋势强度加权（条件135）
-            "trend_strength_weighting": getattr(latest_mmd, "_trend_strength_weighting", None) if latest_mmd else None,
-            # V48: 动态风险收益比（条件136）
-            "dynamic_risk_reward_ratio": getattr(latest_mmd, "_dynamic_risk_reward_ratio", None) if latest_mmd else None,
-            "dynamic_market_regime": getattr(latest_mmd, "_dynamic_market_regime", None) if latest_mmd else None,
-            # V49: 突破力度二次验证（条件137）
-            "breakout_strength_revalidation_v49": getattr(latest_mmd, "_breakout_strength_revalidation_v49", None) if latest_mmd else None,
-            # V49: 回踩结构完整性（条件138）
-            "pullback_structure_integrity_v49": getattr(latest_mmd, "_pullback_structure_integrity_v49", None) if latest_mmd else None,
-            # V49: 中枢级别权重（条件139）
-            "zhongshu_level_weight_v49": getattr(latest_mmd, "_zhongshu_level_weight_v49", None) if latest_mmd else None,
-            # V50: 板块联动分析（条件140）
-            "sector_correlation_v50": getattr(latest_mmd, "_sector_correlation_v50", None) if latest_mmd else None,
-            # V50: 多时间框架共振验证（条件141）
-            "multi_tf_resonance_v50": getattr(latest_mmd, "_multi_tf_resonance_v50", None) if latest_mmd else None,
-            # V50: 缠论级别递归验证（条件142）
-            "level_recursive_validation_v50": getattr(latest_mmd, "_level_recursive_validation_v50", None) if latest_mmd else None,
-            # V50: 市场情绪指标融合（条件143）
-            "market_sentiment_fusion_v50": getattr(latest_mmd, "_market_sentiment_fusion_v50", None) if latest_mmd else None,
-            # V51: 突破笔力度二次确认增强（条件144）
-            "breakout_bi_strength_enhanced_v51": getattr(latest_mmd, "_breakout_bi_strength_enhanced_v51", None) if latest_mmd else None,
-            # V51: 回踩笔深度+时间综合验证（条件145）
-            "pullback_depth_time_v51": getattr(latest_mmd, "_pullback_depth_time_v51", None) if latest_mmd else None,
-            # V51: 趋势强度综合评分（条件146）
-            "trend_strength_composite_v51": getattr(latest_mmd, "_trend_strength_composite_v51", None) if latest_mmd else None,
-            # V51: 交易决策建议（条件147）
-            "trading_decision_v51": getattr(latest_mmd, "_trading_decision_v51", None) if latest_mmd else None,
-            # V52: 量价持续确认（条件148）
-            "volume_sustain_after_signal_v52": getattr(latest_mmd, "_volume_sustain_after_signal_v52", None) if latest_mmd else None,
-            # V52: 多指标背离共振（条件149）
-            "multi_indicator_divergence_fusion_v52": getattr(latest_mmd, "_multi_indicator_divergence_fusion_v52", None) if latest_mmd else None,
-            # V52: 近期极端价位检测（条件150）
-            "recent_extreme_price_v52": getattr(latest_mmd, "_recent_extreme_price_v52", None) if latest_mmd else None,
-            # V52: 市场环境健康评分（条件151）
-            "market_regime_score_v52": getattr(latest_mmd, "_market_regime_score_v52", None) if latest_mmd else None,
-            # V53: 趋势阶段识别与顺势确认（条件152）
-            "trend_stage_follow_confirmation_v53": getattr(latest_mmd, "_trend_stage_follow_confirmation_v53", None) if latest_mmd else None,
-            # V53: ATR自适应止损距离（条件153）
-            "atr_adaptive_stop_v53": getattr(latest_mmd, "_atr_adaptive_stop_v53", None) if latest_mmd else None,
-            # V53: 中枢突破力度验证（条件154）
-            "zs_breakout_strength_v53": getattr(latest_mmd, "_zs_breakout_strength_v53", None) if latest_mmd else None,
-            # V53: 信号质量综合分层（条件155）
-            "signal_quality_tier_v53": getattr(latest_mmd, "_signal_quality_tier_v53", None) if latest_mmd else None,
-            # V54: 多K线确认后确认（条件156）
-            "multi_bar_confirmation_v54": getattr(latest_mmd, "_multi_bar_confirmation_v54", None) if latest_mmd else None,
-            # V54: 缺口风险评估（条件157）
-            "gap_risk_assessment_v54": getattr(latest_mmd, "_gap_risk_assessment_v54", None) if latest_mmd else None,
-            # V54: 波动率 regime 切换检测（条件158）
-            "volatility_regime_change_v54": getattr(latest_mmd, "_volatility_regime_change_v54", None) if latest_mmd else None,
-            # V54: 量价配合度评分（条件159）
-            "volume_price_coordination_v54": getattr(latest_mmd, "_volume_price_coordination_v54", None) if latest_mmd else None,
-            # V55: 分钟级多时间框架共振过滤（条件160）
-            "multi_tf_resonance_filter_v55": getattr(latest_mmd, "_multi_tf_resonance_filter_v55", None) if latest_mmd else None,
-            # V55: 中枢级别权重自适应（条件161）
-            "zhongshu_level_weight_v55": getattr(latest_mmd, "_zhongshu_level_weight_v55", None) if latest_mmd else None,
-            # V55: 弱势股专项风险检测（条件162）
-            "weak_stock_risk_v55": getattr(latest_mmd, "_weak_stock_risk_v55", None) if latest_mmd else None,
-            # V55: 信号与趋势方向对齐验证（条件163）
-            "signal_trend_alignment_v55": getattr(latest_mmd, "_signal_trend_alignment_v55", None) if latest_mmd else None,
-            # V56: 假突破识别（条件164）
-            "false_breakout_detection_v56": getattr(latest_mmd, "_false_breakout_detection_v56", None) if latest_mmd else None,
-            # V56: 中枢结构复杂度分析（条件165）
-            "zhongshu_structure_complexity_v56": getattr(latest_mmd, "_zhongshu_structure_complexity_v56", None) if latest_mmd else None,
-            # V56: 波动率自适应仓位建议（条件166）
-            "volatility_adaptive_position_v56": getattr(latest_mmd, "_volatility_adaptive_position_v56", None) if latest_mmd else None,
-            # V56: 多信号共振评分（条件167）
-            "multi_signal_resonance_v56": getattr(latest_mmd, "_multi_signal_resonance_v56", None) if latest_mmd else None,
-            # V57: 回踩幅度与时间双重过滤（条件168）
-            "pullback_filter_v57": getattr(latest_mmd, "_pullback_filter_v57", None) if latest_mmd else None,
-            # V57: 突破力度验证（条件169）
-            "breakout_strength_validation_v57": getattr(latest_mmd, "_breakout_strength_validation_v57", None) if latest_mmd else None,
-            # V57: 中枢背驰检测（条件170）
-            "zs_divergence_check_v57": getattr(latest_mmd, "_zs_divergence_check_v57", None) if latest_mmd else None,
-            # V57: 信号衰减检测（条件171）
-            "signal_decay_detection_v57": getattr(latest_mmd, "_signal_decay_detection_v57", None) if latest_mmd else None,
-            # V58: 多时间框架趋势一致性验证（条件172）
-            "multi_tf_trend_consistency_v58": getattr(latest_mmd, "_multi_tf_trend_consistency_v58", None) if latest_mmd else None,
-            # V58: 成交量堆积验证（条件173）
-            "volume_accumulation_validation_v58": getattr(latest_mmd, "_volume_accumulation_validation_v58", None) if latest_mmd else None,
-            # V58: ATR自适应止损距离（条件174）
-            "atr_adaptive_stop_v58": getattr(latest_mmd, "_atr_adaptive_stop_v58", None) if latest_mmd else None,
-            # V58: 信号质量综合评分（条件175）
-            "composite_quality_score_v58": getattr(latest_mmd, "_composite_quality_score_v58", None) if latest_mmd else None,
-            # V59: 波动率自适应MA周期（条件176）
-            "volatility_adaptive_ma_v59": getattr(latest_mmd, "_volatility_adaptive_ma_v59", None) if latest_mmd else None,
-            # V59: ATR倍数自适应（条件177）
-            "atr_multiplier_adapt_v59": getattr(latest_mmd, "_atr_multiplier_adapt_v59", None) if latest_mmd else None,
-            # V59: 多时间框架共振信号（条件178）
-            "multi_tf_resonance_signal_v59": getattr(latest_mmd, "_multi_tf_resonance_signal_v59", None) if latest_mmd else None,
-            # V59: 信号衰减速度评估（条件179）
-            "signal_decay_speed_v59": getattr(latest_mmd, "_signal_decay_speed_v59", None) if latest_mmd else None,
-            # V60: RSI深度背离过滤（条件180）
-            "rsi_deep_divergence_v60": getattr(latest_mmd, "_rsi_deep_divergence_v60", None) if latest_mmd else None,
-            # V60: MA排列间距强度评分（条件181）
-            "ma_spacing_strength_v60": getattr(latest_mmd, "_ma_spacing_strength_v60", None) if latest_mmd else None,
-            # V60: 中枢支撑/阻力距离评分增强（条件182）
-            "zs_distance_enhanced_v60": getattr(latest_mmd, "_zs_distance_enhanced_v60", None) if latest_mmd else None,
-            # V60: KDJ超买超卖确认（条件183）
-            "kdj_ob_os_confirm_v60": getattr(latest_mmd, "_kdj_ob_os_confirm_v60", None) if latest_mmd else None,
-            # V61: MACD柱状图背离融合（条件184）
-            "macd_hist_divergence_v61": getattr(latest_mmd, "_macd_hist_divergence_v61", None) if latest_mmd else None,
-            # V61: 综合多信号评分（条件185）
-            "composite_signal_score_v61": getattr(latest_mmd, "_composite_signal_score_v61", None) if latest_mmd else None,
-            # V62: BOLL带宽突破确认（条件186）
-            "boll_bandwidth_breakout_v62": getattr(latest_mmd, "_boll_bandwidth_breakout_v62", None) if latest_mmd else None,
-            # V62: BOLL带宽压缩反弹确认（条件187）
-            "boll_bandwidth_reversal_v62": getattr(latest_mmd, "_boll_bandwidth_reversal_v62", None) if latest_mmd else None,
-            # V62: 动态阈值-波动率状态切换（条件188）
-            "dynamic_threshold_volatility_regime_v62": getattr(latest_mmd, "_dynamic_threshold_volatility_regime_v62", None) if latest_mmd else None,
-            # V62: 动态阈值-ATR倍数自适应（条件189）
-            "dynamic_threshold_atr_multiplier_v62": getattr(latest_mmd, "_dynamic_threshold_atr_multiplier_v62", None) if latest_mmd else None,
-            # V63: 中枢级别权重优化增强（条件190）
-            "zhongshu_level_weight_enhanced_v63": getattr(latest_mmd, "_zhongshu_level_weight_enhanced_v63", None) if latest_mmd else None,
-            # V63: 多周期信号衰减追踪（条件191）
-            "multi_period_signal_decay_v63": getattr(latest_mmd, "_multi_period_signal_decay_v63", None) if latest_mmd else None,
-            # V65: 量价背离二次确认增强（条件192）
-            "volume_price_divergence_secondary_v65": getattr(latest_mmd, "_volume_price_divergence_secondary_v65", None) if latest_mmd else None,
-            # V65: 中枢突破回踩确认（条件193）
-            "breakout_retest_confirmation_v65": getattr(latest_mmd, "_breakout_retest_confirmation_v65", None) if latest_mmd else None,
-            # V65: 波动率压缩突破信号（条件194）
-            "volatility_compression_breakout_v65": getattr(latest_mmd, "_volatility_compression_breakout_v65", None) if latest_mmd else None,
-            # V65: 买卖点时间窗口新鲜度（条件195）
-            "signal_time_window_freshness_v65": getattr(latest_mmd, "_signal_time_window_freshness_v65", None) if latest_mmd else None,
-            # V66: MACD动能加速确认（条件196）
-            "macd_momentum_acceleration_v66": getattr(latest_mmd, "_macd_momentum_acceleration_v66", None) if latest_mmd else None,
-            # V66: 量价配合深度评分（条件197）
-            "volume_price_coordination_deep_v66": getattr(latest_mmd, "_volume_price_coordination_deep_v66", None) if latest_mmd else None,
-            # V66: 多时间框架共振强度（条件198）
-            "multi_tf_convergence_intensity_v66": getattr(latest_mmd, "_multi_tf_convergence_intensity_v66", None) if latest_mmd else None,
-            # V66: 信号执行优先级（条件199）
-            "signal_execution_priority_v66": getattr(latest_mmd, "_signal_execution_priority_v66", None) if latest_mmd else None,
-            # V67: 中枢背驰力度量化（条件200）
-            "zhongshu_divergence_strength_v67": getattr(latest_mmd, "_zhongshu_divergence_strength_v67", None) if latest_mmd else None,
-            # V67: 多级别买卖点一致性验证（条件201）
-            "multi_level_mmd_consistency_v67": getattr(latest_mmd, "_multi_level_mmd_consistency_v67", None) if latest_mmd else None,
-            # V67: 信号后价格轨迹健康度（条件202）
-            "post_signal_trajectory_health_v67": getattr(latest_mmd, "_post_signal_trajectory_health_v67", None) if latest_mmd else None,
-            # V67: 动态止损止盈推荐（条件203）
-            "dynamic_sl_tp_recommendation_v67": getattr(latest_mmd, "_dynamic_sl_tp_recommendation_v67", None) if latest_mmd else None,
-            # V68: 缺口方向与趋势一致性验证（条件204）
-            "gap_trend_consistency_v68": getattr(latest_mmd, "_gap_trend_consistency_v68", None) if latest_mmd else None,
-            # V68: 多级别区间套一致性验证（条件205）
-            "range_set_multi_level_v68": getattr(latest_mmd, "_range_set_multi_level_v68", None) if latest_mmd else None,
-            # V68: 信号后资金流向确认（条件206）
-            "post_signal_fund_flow_v68": getattr(latest_mmd, "_post_signal_fund_flow_v68", None) if latest_mmd else None,
-            # V68: 市场风格适配评分（条件207）
-            "market_regime_adaptation_v68": getattr(latest_mmd, "_market_regime_adaptation_v68", None) if latest_mmd else None,
-            # V69: 量价背离二次确认（条件208）
-            "price_volume_divergence_v69": getattr(latest_mmd, "_price_volume_divergence_v69", None) if latest_mmd else None,
-            # V69: 结构完整性评分（条件209）
-            "structural_integrity_v69": getattr(latest_mmd, "_structural_integrity_v69", None) if latest_mmd else None,
-            # V69: 多指标背离融合（条件210）
-            "multi_indicator_divergence_v69": getattr(latest_mmd, "_multi_indicator_divergence_v69", None) if latest_mmd else None,
-            # V69: 回踩深度量化（条件211）
-            "retracement_depth_v69": getattr(latest_mmd, "_retracement_depth_v69", None) if latest_mmd else None,
-            # V70: 分时量峰检测（条件212）
-            "volume_peak_detection_v70": getattr(latest_mmd, "_volume_peak_detection_v70", None) if latest_mmd else None,
-            # V70: 买卖点时间窗口衰减（条件213）
-            "signal_time_decay_v70": getattr(latest_mmd, "_signal_time_decay_v70", None) if latest_mmd else None,
-            # V70: 假突破二次过滤（条件214）
-            "false_breakout_filter_v70": getattr(latest_mmd, "_false_breakout_filter_v70", None) if latest_mmd else None,
-            # V70: 信号置信度最终校准（条件215）
-            "final_confidence_calibration_v70": getattr(latest_mmd, "_final_confidence_calibration_v70", None) if latest_mmd else None,
-            # V71: 均线排列强度评估（条件216）
-            "ma_alignment_strength_v71": getattr(latest_mmd, "_ma_alignment_strength_v71", None) if latest_mmd else None,
-            # V71: 多周期均线共振（条件217）
-            "multi_tf_ma_resonance_v71": getattr(latest_mmd, "_multi_tf_ma_resonance_v71", None) if latest_mmd else None,
-            # V71: 买卖点历史胜率回溯（条件218）
-            "mmd_history_winrate_v71": getattr(latest_mmd, "_mmd_history_winrate_v71", None) if latest_mmd else None,
-            # V71: 动态风险收益比优化（条件219）
-            "dynamic_rr_optimization_v71": getattr(latest_mmd, "_dynamic_rr_optimization_v71", None) if latest_mmd else None,
-            # V72: 均线收敛发散状态评估（条件220）
-            "ma_convergence_divergence_v72": getattr(latest_mmd, "_ma_convergence_divergence_v72", None) if latest_mmd else None,
-            # V72: 支撑/阻力位距离评估（条件221）
-            "support_resistance_proximity_v72": getattr(latest_mmd, "_support_resistance_proximity_v72", None) if latest_mmd else None,
-            # V72: 量价结构质量评分（条件222）
-            "volume_structure_quality_v72": getattr(latest_mmd, "_volume_structure_quality_v72", None) if latest_mmd else None,
-            # V72: 信号衰减速度评估（条件223）
-            "signal_decay_velocity_v72": getattr(latest_mmd, "_signal_decay_velocity_v72", None) if latest_mmd else None,
-            # V73: 买卖点位置风险评估（条件224）
-            "mmd_position_risk_v73": getattr(latest_mmd, "_mmd_position_risk_v73", None) if latest_mmd else None,
-            # V73: 中枢突破有效性验证（条件225）
-            "zhongshu_breakout_validity_v73": getattr(latest_mmd, "_zhongshu_breakout_validity_v73", None) if latest_mmd else None,
-            # V73: 多指标确认一致性（条件226）
-            "multi_indicator_consistency_v73": getattr(latest_mmd, "_multi_indicator_consistency_v73", None) if latest_mmd else None,
-            # V73: 波动率环境适配（条件227）
-            "volatility_regime_adaptation_v73": getattr(latest_mmd, "_volatility_regime_adaptation_v73", None) if latest_mmd else None,
-            # V74: 量价背离二次确认（条件228）
-            "volume_price_divergence_secondary_v74": getattr(latest_mmd, "_volume_price_divergence_secondary_v74", None) if latest_mmd else None,
-            # V74: 趋势动能持续验证（条件229）
-            "trend_momentum_continuity_v74": getattr(latest_mmd, "_trend_momentum_continuity_v74", None) if latest_mmd else None,
-            # V74: 中枢重叠度评估（条件230）
-            "zhongshu_overlap_density_v74": getattr(latest_mmd, "_zhongshu_overlap_density_v74", None) if latest_mmd else None,
-            # V74: 信号共振深度评分（条件231）
-            "signal_resonance_depth_v74": getattr(latest_mmd, "_signal_resonance_depth_v74", None) if latest_mmd else None,
-            # V75: 回调深度验证（条件232）
-            "pullback_depth_validation_v75": getattr(latest_mmd, "_pullback_depth_validation_v75", None) if latest_mmd else None,
-            # V75: 中枢区间回踩确认（条件233）
-            "zhongshu_retracement_confirm_v75": getattr(latest_mmd, "_zhongshu_retracement_confirm_v75", None) if latest_mmd else None,
-            # V75: 量峰持续时间评分（条件234）
-            "volume_peak_duration_v75": getattr(latest_mmd, "_volume_peak_duration_v75", None) if latest_mmd else None,
-            # V75: 多信号时间一致性（条件235）
-            "multi_signal_time_consistency_v75": getattr(latest_mmd, "_multi_signal_time_consistency_v75", None) if latest_mmd else None,
-            # V76: 价格结构完整性验证（条件236）
-            "price_structure_integrity_v76": getattr(latest_mmd, "_price_structure_integrity_v76", None) if latest_mmd else None,
-            # V76: 趋势方向对齐验证（条件237）
-            "trend_alignment_validation_v76": getattr(latest_mmd, "_trend_alignment_validation_v76", None) if latest_mmd else None,
-            # V76: 波动率自适应置信度（条件238）
-            "volatility_adaptive_confidence_v76": getattr(latest_mmd, "_volatility_adaptive_confidence_v76", None) if latest_mmd else None,
-            # V76: 买卖点最终有效性评分（条件239）
-            "signal_final_validity_v76": getattr(latest_mmd, "_signal_final_validity_v76", None) if latest_mmd else None,
-            # V77: 量能分布深度分析（条件240）
-            "volume_distribution_depth_v77": getattr(latest_mmd, "_volume_distribution_depth_v77", None) if latest_mmd else None,
-            # V77: 中枢结构权重评估（条件241）
-            "zhongshu_structure_weight_v77": getattr(latest_mmd, "_zhongshu_structure_weight_v77", None) if latest_mmd else None,
-            # V77: 信号新鲜度验证（条件242）
-            "signal_freshness_validation_v77": getattr(latest_mmd, "_signal_freshness_validation_v77", None) if latest_mmd else None,
-            # V77: 价格动能加速度（条件243）
-            "price_momentum_acceleration_v77": getattr(latest_mmd, "_price_momentum_acceleration_v77", None) if latest_mmd else None,
-            # V78: 买卖点周期位置评分（条件244）
-            "mmd_cycle_position_v78": getattr(latest_mmd, "_mmd_cycle_position_v78", None) if latest_mmd else None,
-            # V78: 多信号时间窗口一致性（条件245）
-            "multi_signal_consensus_v78": getattr(latest_mmd, "_multi_signal_consensus_v78", None) if latest_mmd else None,
-            # V78: 波动率压缩突破预测（条件246）
-            "volatility_compression_breakout_v78": getattr(latest_mmd, "_volatility_compression_breakout_v78", None) if latest_mmd else None,
-            # V78: 资金流向与价格背离检测（条件247）
-            "fund_flow_divergence_v78": getattr(latest_mmd, "_fund_flow_divergence_v78", None) if latest_mmd else None,
-            # V79: 分型稳定性验证（条件248）
-            "fractal_stability_validation_v79": getattr(latest_mmd, "_fractal_stability_validation_v79", None) if latest_mmd else None,
-            # V79: 买卖点距离安全阈值（条件249）
-            "mmd_distance_safety_v79": getattr(latest_mmd, "_mmd_distance_safety_v79", None) if latest_mmd else None,
-            # V79: 多级别结构一致性评分（条件250）
-            "multi_level_structure_consistency_v79": getattr(latest_mmd, "_multi_level_structure_consistency_v79", None) if latest_mmd else None,
-            # V79: 价格动能持续性评分（条件251）
-            "price_momentum_continuity_v79": getattr(latest_mmd, "_price_momentum_continuity_v79", None) if latest_mmd else None,
-            # V80: 买卖点与中枢距离验证（条件252）
-            "mmd_zhongshu_distance_v80": getattr(latest_mmd, "_mmd_zhongshu_distance_v80", None) if latest_mmd else None,
-            # V80: 量能配合度评分（条件253）
-            "volume_confirmation_v80": getattr(latest_mmd, "_volume_confirmation_v80", None) if latest_mmd else None,
-            # V80: 均线排列强度确认（条件254）
-            "ma_alignment_strength_v80": getattr(latest_mmd, "_ma_alignment_strength_v80", None) if latest_mmd else None,
-            # V80: 盈亏比动态评估（条件255）
-            "dynamic_risk_reward_v80": getattr(latest_mmd, "_dynamic_risk_reward_v80", None) if latest_mmd else None,
-            # V81: 波动率状态转换检测（条件256）
-            "volatility_regime_transition_v81": getattr(latest_mmd, "_volatility_regime_transition_v81", None) if latest_mmd else None,
-            # V81: 关键支撑阻力强度验证（条件257）
-            "support_resistance_strength_v81": getattr(latest_mmd, "_support_resistance_strength_v81", None) if latest_mmd else None,
-            # V81: 量价能量分布验证（条件258）
-            "volume_price_energy_distribution_v81": getattr(latest_mmd, "_volume_price_energy_distribution_v81", None) if latest_mmd else None,
-            # V81: 信号执行窗口评估（条件259）
-            "signal_execution_window_v81": getattr(latest_mmd, "_signal_execution_window_v81", None) if latest_mmd else None,
-            # V82: 买卖点时间衰减验证（条件260）
-            "mmd_age_decay_v82": getattr(latest_mmd, "_mmd_age_decay_v82", None) if latest_mmd else None,
-            # V82: 中枢突破回踩确认（条件261）
-            "breakout_retest_confirm_v82": getattr(latest_mmd, "_breakout_retest_confirm_v82", None) if latest_mmd else None,
-            # V82: 多级别MACD共振（条件262）
-            "macd_multi_tf_resonance_v82": getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None) if latest_mmd else None,
-            # V82: 波动率压缩突破确认（条件263）
-            "volatility_compression_breakout_v82": getattr(latest_mmd, "_volatility_compression_breakout_v82", None) if latest_mmd else None,
-        },
-        # V12: 多级别联立分析结果（需前端传入低级别数据）
-        "multi_level_confluence": None,
-        "macd": {
-            "dif": round(latest_dif, 4),
-            "dea": round(latest_dea, 4),
-            "hist": round(latest_macd, 4),
-            "golden_cross": macd_golden,
-            "dead_cross": macd_dead,
-            "above_zero": macd_above_zero,
-            "trending": "up" if macd_trending_up else ("down" if macd_trending_down else "flat"),
-        },
-        "boll": {
-            "upper": round(latest_upper, 2),
-            "mid": round(latest_mid, 2),
-            "lower": round(latest_lower, 2),
-            "width": round(boll_width, 4),
-            "percent_b": round(percent_b, 3),
-            "position": boll_position,
-        },
-        "moving_averages": {
-            "ma5": round(ma5, 2),
-            "ma10": round(ma10, 2),
-            "ma20": round(ma20, 2),
-            "ma60": round(ma60, 2),
-            "bullish_arrangement": ma_bullish,
-            "bearish_arrangement": ma_bearish,
-        },
-        "fibonacci": {
-            "levels": fib_levels,
-            "position": round(fib_position, 3),
-            "period_high": round(max(highs[-fib_lookback:]), 2) if len(highs) >= fib_lookback else None,
-            "period_low": round(min(lows[-fib_lookback:]), 2) if len(lows) >= fib_lookback else None,
-        },
-        "volume": {
-            "ratio": round(vol_ratio, 2),
-            "expanding": vol_expanding,
-            "contracting": vol_contracting,
-        },
-        "kdj": {
-            "k": round(latest_k, 2),
-            "d": round(latest_d, 2),
-            "j": round(latest_j, 2),
-            "golden_cross": kdj_golden,
-            "dead_cross": kdj_dead,
-            "overbought": kdj_overbought,
-            "oversold": kdj_oversold,
-            "position": kdj_position,
-        },
-        "rsi": {
-            "value": round(latest_rsi, 2),
-            "overbought": rsi_overbought,
-            "oversold": rsi_oversold,
-            "position": rsi_position,
-            "zone": rsi_position,  # V23: RSI区域（与position相同，前端可直接使用）
-        },
-        "adx": {
-            "pdi": round(latest_pdi, 2),
-            "mdi": round(latest_mdi, 2),
-            "adx": round(latest_adx, 2),
-            "adxr": round(latest_adxr, 2),
-            "trend_direction": trend_direction,
-            "strength": adx_strength,
-            "level": adx_level,
-        },
-        "obv": {
-            "value": round(latest_obv, 2),
-            "ma20": round(obv_ma20, 2),
-            "trending_up": obv_trending_up,
-            "trending_down": obv_trending_down,
-            "divergence_with_price": obv_divergence_price,
-        },
-        "divergence": {
-            "macd": macd_div,
-            "kdj": kdj_div,
-            "rsi": rsi_div,
-            "dominant": dominant_div,
-            "strength": round(div_strength, 2),
-            "has_divergence": has_divergence,
-        },
-        "candlestick": {
-            "signal": candle_signal,
-            "strength": round(candle_strength, 2),
-            "recent_patterns": recent_patterns,
-        },
-        "risk": {
-            "stop_loss_price": stop_loss_price,
-            "take_profit_price": take_profit_price,
-            "stop_loss_pct": stop_loss_pct,
-            "take_profit_pct": take_profit_pct,
-            "risk_reward_ratio": risk_reward_ratio,
-            "atr": round(latest_atr, 2),
-            "atr_pct": round(atr_pct, 2),
-            "volatility_label": volatility_label,
-            "support_1": round(support_1, 2),
-            "resistance_1": round(resistance_1, 2),
-            "support_2": round(support_2, 2),
-            "resistance_2": round(resistance_2, 2),
-        },
-        "position_suggestion": position_recommendation,
-    }
-))
+    return cast(
+        dict[str, Any],
+        _to_json_safe(
+            {
+                "symbol": symbol,
+                "date": latest_date,
+                "close": round(latest_close, 2),
+                "score": round(score, 1),
+                "action": action,
+                "action_label": action_label,
+                "action_color": action_color,
+                "reason": reason,
+                # V76: 四维验证摘要（条件236-239）—— 顶层快速可见
+                "v76_summary": {
+                    "structure_integrity": v76_validity_level if v76_validity else None,
+                    "validity_score": round(v76_validity_score, 2) if v76_validity else None,
+                    "recommendation": v76_validity.get("recommendation", "")
+                    if v76_validity
+                    else "",
+                },
+                # V77: 四维度量摘要（条件240-243）—— 顶层快速可见
+                "v77_summary": {
+                    "quality_level": v77_quality_level,
+                    "total_adjust": round(v77_adjust_total, 3),
+                    "positive_count": v77_positive_count,
+                    "negative_count": v77_negative_count,
+                    "recommendation": v77_recommendation,
+                    "vdd_energy_zone": v77_vdd.get("energy_zone") if v77_vdd else None,
+                    "zs_weight_score": round(v77_zsw.get("weight_score", 0), 2)
+                    if v77_zsw
+                    else None,
+                    "signal_freshness": v77_sfv.get("age_label") if v77_sfv else None,
+                    "momentum_direction": v77_pma.get("momentum_direction") if v77_pma else None,
+                },
+                # V78: 四维度量摘要（条件244-247）—— 顶层快速可见
+                "v78_summary": {
+                    "quality_level": v78_quality_level,
+                    "total_adjust": round(v78_adjust_total, 3),
+                    "positive_count": v78_positive_count,
+                    "negative_count": v78_negative_count,
+                    "recommendation": v78_recommendation,
+                    "cycle_position": v78_mcp.get("cycle_position") if v78_mcp else None,
+                    "consensus_level": v78_msc.get("consensus_level") if v78_msc else None,
+                    "breakout_direction": v78_vcb.get("breakout_direction") if v78_vcb else None,
+                    "divergence_type": v78_ffd.get("divergence_type") if v78_ffd else None,
+                },
+                # V79: 四维度量摘要（条件248-251）—— 顶层快速可见
+                "v79_summary": {
+                    "quality_level": v79_quality_level,
+                    "total_adjust": round(v79_adjust_total, 3),
+                    "positive_count": v79_positive_count,
+                    "negative_count": v79_negative_count,
+                    "recommendation": v79_recommendation,
+                    "fractal_status": v79_fsv.get("fractal_status") if v79_fsv else None,
+                    "safety_level": v79_mds.get("safety_level") if v79_mds else None,
+                    "consistency_level": v79_mls.get("msg", "").split("一致=")[1].split(" ")[0]
+                    if v79_mls and "一致=" in v79_mls.get("msg", "")
+                    else None,
+                    "momentum_level": v79_pmc.get("momentum_level") if v79_pmc else None,
+                },
+                # V80: 四维度量摘要（条件252-255）—— 顶层快速可见
+                "v80_summary": {
+                    "quality_level": v80_quality_level,
+                    "total_adjust": round(v80_adjust_total, 3),
+                    "positive_count": v80_positive_count,
+                    "negative_count": v80_negative_count,
+                    "recommendation": v80_recommendation,
+                    "zs_position": v80_msd.get("zs_position") if v80_msd else None,
+                    "volume_confirmed": f"{'↑' if v80_vcf.get('price_trend') == 'up' else '↓'}{'↑' if v80_vcf.get('volume_trend') == 'up' else '↓'}"
+                    if v80_vcf
+                    else None,
+                    "ma_alignment": v80_mas.get("ma_alignment") if v80_mas else None,
+                    "risk_level": v80_drr.get("risk_level") if v80_drr else None,
+                },
+                # V81: 四维度量摘要（条件256-259）—— 顶层快速可见
+                "v81_summary": {
+                    "quality_level": v81_quality_level,
+                    "total_adjust": round(v81_adjust_total, 3),
+                    "positive_count": v81_positive_count,
+                    "negative_count": v81_negative_count,
+                    "recommendation": v81_recommendation,
+                    "regime": v81_vrt.get("regime") if v81_vrt else None,
+                    "strength_level": v81_srs.get("strength_level") if v81_srs else None,
+                    "energy_zone": v81_vped.get("energy_zone") if v81_vped else None,
+                    "window_quality": v81_sew.get("window_quality") if v81_sew else None,
+                },
+                # V82: 四维度量摘要（条件260-263）—— 顶层快速可见
+                "v82_summary": {
+                    "quality_level": v82_quality_level,
+                    "total_adjust": round(v82_adjust_total, 3),
+                    "positive_count": v82_positive_count,
+                    "negative_count": v82_negative_count,
+                    "recommendation": v82_recommendation,
+                    "age_label": v82_mad.get("age_label") if v82_mad else None,
+                    "retest_quality": v82_brc.get("retest_quality") if v82_brc else None,
+                    "resonance": v82_mtr.get("resonance") if v82_mtr else None,
+                    "compression_level": v82_vcb.get("compression_level") if v82_vcb else None,
+                },
+                "chanlun": {
+                    "bi_count": len(result.bis),
+                    "zs_count": len(result.zss),
+                    "mmd_count": len(result.mmds),
+                    "buy_1_count": buy_1_count,
+                    "sell_1_count": sell_1_count,
+                    "buy_2_count": buy_2_count,
+                    "sell_2_count": sell_2_count,
+                    "latest_mmd": {
+                        "type": latest_mmd.mmd_type.value if latest_mmd else None,
+                        "confidence": round(latest_mmd.confidence, 2) if latest_mmd else None,
+                        "msg": latest_mmd.msg if latest_mmd else None,
+                        "quality": {
+                            "grade": getattr(getattr(latest_mmd, "quality", None), "grade", None),
+                            "score": getattr(
+                                getattr(getattr(latest_mmd, "quality", None), "score", None),
+                                "score",
+                                None,
+                            ),
+                            "reasons": getattr(
+                                getattr(getattr(latest_mmd, "quality", None), "reasons", None),
+                                "reasons",
+                                None,
+                            ),
+                        }
+                        if latest_mmd and getattr(latest_mmd, "quality", None)
+                        else None,
+                        # V79 缠论增强条件（条件248-251）
+                        "v79_fractal_stability": getattr(
+                            latest_mmd, "_fractal_stability_validation_v79", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v79_distance_safety": getattr(latest_mmd, "_mmd_distance_safety_v79", None)
+                        if latest_mmd
+                        else None,
+                        "v79_multi_level_consistency": getattr(
+                            latest_mmd, "_multi_level_structure_consistency_v79", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v79_momentum_continuity": getattr(
+                            latest_mmd, "_price_momentum_continuity_v79", None
+                        )
+                        if latest_mmd
+                        else None,
+                        # V80 缠论增强条件（条件252-255）
+                        "v80_zhongshu_distance": getattr(
+                            latest_mmd, "_mmd_zhongshu_distance_v80", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v80_volume_confirmation": getattr(
+                            latest_mmd, "_volume_confirmation_v80", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v80_ma_alignment": getattr(latest_mmd, "_ma_alignment_strength_v80", None)
+                        if latest_mmd
+                        else None,
+                        "v80_risk_reward": getattr(latest_mmd, "_dynamic_risk_reward_v80", None)
+                        if latest_mmd
+                        else None,
+                        "v81_volatility_regime": getattr(
+                            latest_mmd, "_volatility_regime_transition_v81", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v81_support_resistance": getattr(
+                            latest_mmd, "_support_resistance_strength_v81", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v81_energy_distribution": getattr(
+                            latest_mmd, "_volume_price_energy_distribution_v81", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v81_execution_window": getattr(
+                            latest_mmd, "_signal_execution_window_v81", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v82_age_decay": getattr(latest_mmd, "_mmd_age_decay_v82", None)
+                        if latest_mmd
+                        else None,
+                        "v82_breakout_retest": getattr(
+                            latest_mmd, "_breakout_retest_confirm_v82", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v82_macd_resonance": getattr(
+                            latest_mmd, "_macd_multi_tf_resonance_v82", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v82_volatility_compression": getattr(
+                            latest_mmd, "_volatility_compression_breakout_v82", None
+                        )
+                        if latest_mmd
+                        else None,
+                    }
+                    if latest_mmd
+                    else None,
+                    # V6: 最近3个高质量买卖点
+                    "recent_signals": [
+                        {
+                            "type": m.mmd_type.value,
+                            "confidence": round(m.confidence, 2),
+                            "quality": {
+                                "grade": getattr(getattr(m, "quality", None), "grade", None),
+                                "score": getattr(
+                                    getattr(getattr(m, "quality", None), "score", None),
+                                    "score",
+                                    None,
+                                ),
+                            }
+                            if getattr(m, "quality", None)
+                            else None,
+                            # V79 缠论增强条件（条件248-251）
+                            "v79_fractal_stability": getattr(
+                                m, "_fractal_stability_validation_v79", None
+                            ),
+                            "v79_distance_safety": getattr(m, "_mmd_distance_safety_v79", None),
+                            "v79_multi_level_consistency": getattr(
+                                m, "_multi_level_structure_consistency_v79", None
+                            ),
+                            "v79_momentum_continuity": getattr(
+                                m, "_price_momentum_continuity_v79", None
+                            ),
+                            # V80 缠论增强条件（条件252-255）
+                            "v80_zhongshu_distance": getattr(m, "_mmd_zhongshu_distance_v80", None),
+                            "v80_volume_confirmation": getattr(m, "_volume_confirmation_v80", None),
+                            "v80_ma_alignment": getattr(m, "_ma_alignment_strength_v80", None),
+                            "v80_risk_reward": getattr(m, "_dynamic_risk_reward_v80", None),
+                            # V81 缠论增强条件（条件256-259）
+                            "v81_volatility_regime": getattr(
+                                m, "_volatility_regime_transition_v81", None
+                            ),
+                            "v81_support_resistance": getattr(
+                                m, "_support_resistance_strength_v81", None
+                            ),
+                            "v81_energy_distribution": getattr(
+                                m, "_volume_price_energy_distribution_v81", None
+                            ),
+                            "v81_execution_window": getattr(
+                                m, "_signal_execution_window_v81", None
+                            ),
+                            # V82 缠论增强条件（条件260-263）
+                            "v82_age_decay": getattr(m, "_mmd_age_decay_v82", None),
+                            "v82_breakout_retest": getattr(m, "_breakout_retest_confirm_v82", None),
+                            "v82_macd_resonance": getattr(m, "_macd_multi_tf_resonance_v82", None),
+                            "v82_volatility_compression": getattr(
+                                m, "_volatility_compression_breakout_v82", None
+                            ),
+                        }
+                        for m in sorted(
+                            result.mmds,
+                            key=lambda x: (
+                                getattr(getattr(x, "quality", None), "score", 0)
+                                if getattr(x, "quality", None)
+                                else 0
+                            ),
+                            reverse=True,
+                        )[:3]
+                    ],
+                    # V7: 信号质量报告（入场/止损/止盈建议）
+                    "signal_report": calc_signal_quality_report(
+                        latest_mmd,
+                        closes,
+                        volumes,
+                        {
+                            "dif": dif.tolist(),
+                            "dea": dea.tolist(),
+                            "hist": macd_hist.tolist(),
+                        }
+                        if len(dif) > 0
+                        else None,
+                        volatility,
+                    )
+                    if latest_mmd
+                    else None,
+                    # V12: 多时间框架共振评分（如有）
+                    "confluence_score": round(getattr(latest_mmd, "confluence_score", 0.0), 2)
+                    if latest_mmd
+                    else None,
+                    # V13: 成交量剖面分析
+                    "volume_profile": _calc_volume_profile_for_diagnosis(closes, volumes)
+                    if latest_mmd
+                    else None,
+                    # V21: 决策辅助输出（入场/止损/止盈/仓位建议/风险提示）
+                    "decision_recommendation": getattr(latest_mmd, "_decision_recommendation", None)
+                    if latest_mmd
+                    else None,
+                    # V21: 组合信号信息
+                    "combo_signal": {
+                        "type": getattr(latest_mmd, "_signal_combo", None),
+                        "bonus": round(getattr(latest_mmd, "_combo_confidence_bonus", 0.0), 2),
+                    }
+                    if latest_mmd
+                    else None,
+                    # V22: 波动率双重确认
+                    "vol_regime_dual": getattr(latest_mmd, "_vol_regime_dual", None)
+                    if latest_mmd
+                    else None,
+                    # V22: 量价背离检测
+                    "vol_price_divergence": getattr(latest_mmd, "_vol_price_divergence", None)
+                    if latest_mmd
+                    else None,
+                    # V23: Fibonacci回撤位确认（条件40）
+                    "fib_retracement": getattr(latest_mmd, "_fib_retracement", None)
+                    if latest_mmd
+                    else None,
+                    # V23: RSI区域分类（条件41）
+                    "rsi_zone": getattr(latest_mmd, "_rsi_zone", None) if latest_mmd else None,
+                    # V23: MACD零轴穿越确认（条件42）
+                    "macd_zero_cross": getattr(latest_mmd, "_macd_zero_cross", None)
+                    if latest_mmd
+                    else None,
+                    # V24: 笔质量评分（条件43）
+                    "bi_quality": getattr(latest_mmd, "_bi_quality", None) if latest_mmd else None,
+                    # V24: 中枢强度分析（条件44）
+                    "zs_strength": getattr(latest_mmd, "_zs_strength", None)
+                    if latest_mmd
+                    else None,
+                    # V24: 增强背离检测（条件45）
+                    "enhanced_divergence": getattr(latest_mmd, "_enhanced_divergence", None)
+                    if latest_mmd
+                    else None,
+                    # V24: 信号交叉验证评分（条件46）
+                    "cross_validation": getattr(latest_mmd, "_cross_validation", None)
+                    if latest_mmd
+                    else None,
+                    # V25: 信号后确认验证（条件47）
+                    "post_signal_confirm": getattr(latest_mmd, "_post_signal_confirm", None)
+                    if latest_mmd
+                    else None,
+                    # V25: 动量衰减预警（条件48）
+                    "momentum_decay": getattr(latest_mmd, "_momentum_decay", None)
+                    if latest_mmd
+                    else None,
+                    # V25: 波动率自适应过滤（条件49）
+                    "vol_regime_filter": getattr(latest_mmd, "_vol_regime_filter", None)
+                    if latest_mmd
+                    else None,
+                    # V25: 综合信号质量评分（条件50）
+                    "composite_quality": getattr(latest_mmd, "_composite_quality", None)
+                    if latest_mmd
+                    else None,
+                    # V26: 信号历史验证（条件51）
+                    "signal_history": getattr(latest_mmd, "_signal_history", None)
+                    if latest_mmd
+                    else None,
+                    # V26: 动态风险收益优化（条件52）
+                    "dynamic_rr_optimization": getattr(latest_mmd, "_dynamic_rr_optimization", None)
+                    if latest_mmd
+                    else None,
+                    # V26: 多标的对比评分（条件53）
+                    "cross_stock_comparison": getattr(latest_mmd, "_cross_stock_comparison", None)
+                    if latest_mmd
+                    else None,
+                    # V27: 多级别区间套共振验证（条件54）
+                    "multi_tf_confluence": getattr(latest_mmd, "_multi_tf_confluence", None)
+                    if latest_mmd
+                    else None,
+                    # V27: 买卖点结构位置评分（条件55）
+                    "structure_position": getattr(latest_mmd, "_structure_position", None)
+                    if latest_mmd
+                    else None,
+                    # V27: 个股信号特征学习（条件56）
+                    "stock_profile": getattr(latest_mmd, "_stock_profile", None)
+                    if latest_mmd
+                    else None,
+                    # V28: BOLL带宽压缩确认（条件57）
+                    "boll_squeeze": getattr(latest_mmd, "_boll_squeeze", None)
+                    if latest_mmd
+                    else None,
+                    # V28: 突破量价确认（条件58）
+                    "breakout_vol_price": getattr(latest_mmd, "_breakout_vol_price", None)
+                    if latest_mmd
+                    else None,
+                    # V28: 动态ATR止损位（条件59）
+                    "dynamic_atr_stop": getattr(latest_mmd, "_dynamic_atr_stop", None)
+                    if latest_mmd
+                    else None,
+                    # V29: 趋势方向持续性确认（条件60）
+                    "trend_continuity": getattr(latest_mmd, "_trend_continuity", None)
+                    if latest_mmd
+                    else None,
+                    # V29: 盘整区背离预警（条件61）
+                    "consolidation_divergence": getattr(
+                        latest_mmd, "_consolidation_divergence", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V30: K线形态反向确认（条件62）
+                    "kline_pattern_confirm": getattr(latest_mmd, "_kline_pattern_confirm", None)
+                    if latest_mmd
+                    else None,
+                    # V30: 中枢突破方向确认（条件63）
+                    "zs_breakout_confirm": getattr(latest_mmd, "_zs_breakout_confirm", None)
+                    if latest_mmd
+                    else None,
+                    # V30: 近期波动区间止损优化（条件64）
+                    "recent_range_stop": getattr(latest_mmd, "_recent_range_stop", None)
+                    if latest_mmd
+                    else None,
+                    # V31: 均线排列确认（条件65）
+                    "ma_alignment": getattr(latest_mmd, "_ma_alignment", None)
+                    if latest_mmd
+                    else None,
+                    # V31: MACD柱状图加速度（条件66）
+                    "macd_histogram_acceleration": getattr(
+                        latest_mmd, "_macd_histogram_acceleration", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V31: 信号综合健康度报告（条件67）
+                    "signal_health_dashboard": getattr(latest_mmd, "_signal_health_dashboard", None)
+                    if latest_mmd
+                    else None,
+                    # V32: 量价背离检测增强（条件68）
+                    "vol_price_divergence_enhanced": getattr(
+                        latest_mmd, "_vol_price_divergence_enhanced", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V32: 信号优先级动态排序（条件69）
+                    "signal_priority": getattr(latest_mmd, "_signal_priority", None)
+                    if latest_mmd
+                    else None,
+                    # V32: 支撑阻力位突破确认（条件70）
+                    "sr_breakout_confirm": getattr(latest_mmd, "_sr_breakout_confirm", None)
+                    if latest_mmd
+                    else None,
+                    # V33: OBV能量潮趋势确认（条件71）
+                    "obv_trend_confirm": getattr(latest_mmd, "_obv_trend_confirm", None)
+                    if latest_mmd
+                    else None,
+                    # V33: MACD动能锥面积确认（条件72）
+                    "macd_hist_area": getattr(latest_mmd, "_macd_hist_area", None)
+                    if latest_mmd
+                    else None,
+                    # V33: RSI动量确认（条件73）
+                    "rsi_momentum_confirm": getattr(latest_mmd, "_rsi_momentum_confirm", None)
+                    if latest_mmd
+                    else None,
+                    # V34: 趋势动能延续确认（条件74）
+                    "trend_momentum_continuation": getattr(
+                        latest_mmd, "_trend_momentum_continuation", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V34: 多指标共振强度评分（条件75）
+                    "multi_indicator_resonance": getattr(
+                        latest_mmd, "_multi_indicator_resonance", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V34: 波动率环境自适应阈值（条件76）
+                    "volatility_regime": getattr(latest_mmd, "_last_vol_result", None)
+                    if latest_mmd
+                    else None,
+                    # V35: 市场大环境过滤（条件77）
+                    "market_context": getattr(find_mmds, "_last_market_context", None)
+                    if latest_mmd
+                    else None,
+                    # V35: 信号衰减增强（条件78）
+                    "enhanced_signal_decay": getattr(latest_mmd, "_enhanced_signal_decay", None)
+                    if latest_mmd
+                    else None,
+                    # V35: 假信号过滤（条件79）
+                    "false_signal_filter": getattr(latest_mmd, "_false_signal_filter", None)
+                    if latest_mmd
+                    else None,
+                    # V35: 动态止损止盈增强（条件80）
+                    "dynamic_sl_tp_enhanced": getattr(latest_mmd, "_dynamic_sl_tp_enhanced", None)
+                    if latest_mmd
+                    else None,
+                    # V35: 板块轮动上下文（条件81）
+                    "sector_rotation_context": getattr(latest_mmd, "_sector_rotation_context", None)
+                    if latest_mmd
+                    else None,
+                    # V35: 多维背离确认（条件82）
+                    "multi_dim_divergence": getattr(latest_mmd, "_multi_dim_divergence", None)
+                    if latest_mmd
+                    else None,
+                    # V36: 信号执行窗口优化（条件83）
+                    "execution_window": getattr(latest_mmd, "_execution_window", None)
+                    if latest_mmd
+                    else None,
+                    # V36: 多时间框架一致性（条件84）
+                    "tf_consistency": getattr(latest_mmd, "_tf_consistency", None)
+                    if latest_mmd
+                    else None,
+                    # V36: 风险调整后收益（条件85）
+                    "risk_adjusted_return": getattr(latest_mmd, "_risk_adjusted_return", None)
+                    if latest_mmd
+                    else None,
+                    # V36: 信号时效性紧急度（条件86）
+                    "urgency_score": getattr(latest_mmd, "_urgency_score", None)
+                    if latest_mmd
+                    else None,
+                    # V36: 市场环境综合评分（条件87）
+                    "market_composite": getattr(find_mmds, "_last_market_composite", None)
+                    if latest_mmd
+                    else None,
+                    # V36: 买卖点策略推荐（条件88）
+                    "strategy_recommendation": getattr(latest_mmd, "_strategy_recommendation", None)
+                    if latest_mmd
+                    else None,
+                    # V37: 连续确认过滤（条件89）
+                    "consecutive_confirmation": getattr(
+                        latest_mmd, "_consecutive_confirmation", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V37: 价格动能加速度（条件90）
+                    "momentum_acceleration": getattr(latest_mmd, "_momentum_acceleration", None)
+                    if latest_mmd
+                    else None,
+                    # V37: 波动率状态转换检测（条件91）
+                    "volatility_regime_change": getattr(find_mmds, "_last_vol_regime_change", None)
+                    if latest_mmd
+                    else None,
+                    # V37: 买卖点时间序列关联分析（条件92）
+                    "temporal_correlation": getattr(latest_mmd, "_temporal_correlation", None)
+                    if latest_mmd
+                    else None,
+                    # V37: 多时间框架动量一致性（条件93）
+                    "multi_tf_momentum": getattr(latest_mmd, "_multi_tf_momentum", None)
+                    if latest_mmd
+                    else None,
+                    # V37: 信号综合质量排名（条件94）
+                    "quality_ranking": getattr(latest_mmd, "_quality_ranking", None)
+                    if latest_mmd
+                    else None,
+                    # V38: 中枢结构完整性评分（条件95）
+                    "zs_structure_integrity": getattr(latest_mmd, "_zs_structure_integrity", None)
+                    if latest_mmd
+                    else None,
+                    # V38: 买卖点位置评分（条件96）
+                    "mmd_position_score": getattr(latest_mmd, "_mmd_position_score", None)
+                    if latest_mmd
+                    else None,
+                    # V38: 信号后收益跟踪（条件97）
+                    "post_signal_return": getattr(latest_mmd, "_post_signal_return", None)
+                    if latest_mmd
+                    else None,
+                    # V38: 中枢突破力度评估（条件98）
+                    "breakout_strength": getattr(latest_mmd, "_breakout_strength", None)
+                    if latest_mmd
+                    else None,
+                    # V38: 多指标偏离度综合评分（条件99）
+                    "composite_deviation": getattr(find_mmds, "_last_composite_deviation", None)
+                    if latest_mmd
+                    else None,
+                    # V38: 信号衰减预警（条件100）
+                    "signal_decay_warning": getattr(latest_mmd, "_signal_decay_warning", None)
+                    if latest_mmd
+                    else None,
+                    # V39: 买卖点信号一致性验证（条件101）
+                    "signal_consistency": getattr(latest_mmd, "_signal_consistency", None)
+                    if latest_mmd
+                    else None,
+                    # V39: 中枢级别匹配验证（条件102）
+                    "zs_level_match": getattr(latest_mmd, "_zs_level_match", None)
+                    if latest_mmd
+                    else None,
+                    # V39: 多时间框架背离确认（条件103）
+                    "multi_tf_divergence": getattr(find_mmds_v39, "_last_multi_tf_divergence", None)
+                    if latest_mmd
+                    else None,
+                    # V39: 独立交叉验证（条件104）
+                    "independent_cross_validation": getattr(
+                        latest_mmd, "_independent_cross_validation", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V39: 决策质量综合评分（条件105）
+                    "decision_quality_score": getattr(latest_mmd, "_decision_quality_score", None)
+                    if latest_mmd
+                    else None,
+                    # V40: 时间衰减自适应过滤（条件106）
+                    "time_decay_adaptive": getattr(latest_mmd, "_time_decay_adaptive", None)
+                    if latest_mmd
+                    else None,
+                    # V40: 中枢突破回踩验证（条件107）
+                    "breakout_retest_validation": getattr(
+                        latest_mmd, "_breakout_retest_validation", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V40: 多周期MACD共振确认（条件108）
+                    "multi_cycle_macd_resonance": getattr(
+                        find_mmds_v39, "_last_macd_resonance", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V40: K线形态综合评分（条件109）
+                    "kline_pattern_composite": getattr(latest_mmd, "_kline_pattern_composite", None)
+                    if latest_mmd
+                    else None,
+                    # V40: 置信度动态校准（条件110）
+                    "confidence_calibration": getattr(latest_mmd, "_confidence_calibration", None)
+                    if latest_mmd
+                    else None,
+                    # V41: 量价能量分布分析（条件111）
+                    "volume_price_energy_dist": getattr(
+                        latest_mmd, "_volume_price_energy_dist", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V41: 量能周期检测（条件112）
+                    "volume_cycle_detection": getattr(find_mmds_v39, "_last_volume_cycle", None)
+                    if latest_mmd
+                    else None,
+                    # V41: 走势预测（条件113）
+                    "post_signal_trajectory": getattr(
+                        find_mmds_v39, "_last_trajectory_prediction", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V41: 动态质量分层（条件114）
+                    "quality_tier_classification": getattr(
+                        latest_mmd, "_quality_tier_classification", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V41: 反转风险评估（条件115）
+                    "reversal_risk_assessment": getattr(find_mmds_v39, "_last_reversal_risk", None)
+                    if latest_mmd
+                    else None,
+                    # V42: 后确认验证（条件116）
+                    "post_signal_confirmation": getattr(
+                        latest_mmd, "_post_signal_confirmation", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V42: 突破-回调量比验证（条件117）
+                    "break_pullback_volume_ratio": getattr(
+                        latest_mmd, "_break_pullback_volume_ratio", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V42: 中枢距离验证（条件118）
+                    "zhongshu_distance_validation": getattr(
+                        latest_mmd, "_zhongshu_distance_validation", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V42: ADX趋势强度确认（条件119）
+                    "adx_trend_strength": getattr(latest_mmd, "_adx_trend_strength", None)
+                    if latest_mmd
+                    else None,
+                    # V42: 信号时效性衰减增强（条件120）
+                    "signal_freshness": getattr(latest_mmd, "_signal_freshness", None)
+                    if latest_mmd
+                    else None,
+                    # V44: 趋势方向对齐验证（条件121）
+                    "trend_direction_alignment": getattr(
+                        latest_mmd, "_trend_direction_alignment", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V44: 突破笔力度对比（条件122）
+                    "breakout_bi_strength_compare": getattr(
+                        latest_mmd, "_breakout_bi_strength_compare", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V44: 回踩时间窗口过滤（条件123）
+                    "pullback_time_window": getattr(latest_mmd, "_pullback_time_window", None)
+                    if latest_mmd
+                    else None,
+                    # V44: 波动率自适应阈值（条件124）
+                    "volatility_adaptive_threshold": getattr(
+                        latest_mmd, "_volatility_adaptive_threshold", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V44: 多指标背离共振（条件125）
+                    "multi_indicator_divergence_resonance": getattr(
+                        latest_mmd, "_multi_indicator_divergence_resonance", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V46: 趋势动能强度过滤（条件126）
+                    "trend_momentum_strength": getattr(latest_mmd, "_trend_momentum_strength", None)
+                    if latest_mmd
+                    else None,
+                    # V46: 量价背离二次确认（条件127）
+                    "volume_price_divergence_secondary": getattr(
+                        latest_mmd, "_volume_price_divergence_secondary", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V46: 中枢突破真实性验证（条件128）
+                    "zs_breakout_authenticity": getattr(
+                        latest_mmd, "_zs_breakout_authenticity", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V46: 多时间框架信号一致性（条件129）
+                    "multi_tf_signal_consistency": getattr(
+                        latest_mmd, "_multi_tf_signal_consistency", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V46: 动态市场环境适配（条件130）
+                    # V47: 后确认价格跟随过滤（条件131）
+                    "post_signal_price_follow_through": getattr(
+                        latest_mmd, "_post_signal_price_follow_through", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V47: 信号有效性窗口（条件132）
+                    "signal_validity_window": getattr(latest_mmd, "_signal_validity_window", None)
+                    if latest_mmd
+                    else None,
+                    # V47: 置信度动态校准（条件133）
+                    "confidence_v47_calibrated": getattr(
+                        latest_mmd, "_confidence_v47_calibrated", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V48: 量价背离二次确认（条件134）
+                    "volume_price_divergence_secondary_v48": getattr(
+                        latest_mmd, "_volume_price_divergence_secondary_v48", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V48: 趋势强度加权（条件135）
+                    "trend_strength_weighting": getattr(
+                        latest_mmd, "_trend_strength_weighting", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V48: 动态风险收益比（条件136）
+                    "dynamic_risk_reward_ratio": getattr(
+                        latest_mmd, "_dynamic_risk_reward_ratio", None
+                    )
+                    if latest_mmd
+                    else None,
+                    "dynamic_market_regime": getattr(latest_mmd, "_dynamic_market_regime", None)
+                    if latest_mmd
+                    else None,
+                    # V49: 突破力度二次验证（条件137）
+                    "breakout_strength_revalidation_v49": getattr(
+                        latest_mmd, "_breakout_strength_revalidation_v49", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V49: 回踩结构完整性（条件138）
+                    "pullback_structure_integrity_v49": getattr(
+                        latest_mmd, "_pullback_structure_integrity_v49", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V49: 中枢级别权重（条件139）
+                    "zhongshu_level_weight_v49": getattr(
+                        latest_mmd, "_zhongshu_level_weight_v49", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V50: 板块联动分析（条件140）
+                    "sector_correlation_v50": getattr(latest_mmd, "_sector_correlation_v50", None)
+                    if latest_mmd
+                    else None,
+                    # V50: 多时间框架共振验证（条件141）
+                    "multi_tf_resonance_v50": getattr(latest_mmd, "_multi_tf_resonance_v50", None)
+                    if latest_mmd
+                    else None,
+                    # V50: 缠论级别递归验证（条件142）
+                    "level_recursive_validation_v50": getattr(
+                        latest_mmd, "_level_recursive_validation_v50", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V50: 市场情绪指标融合（条件143）
+                    "market_sentiment_fusion_v50": getattr(
+                        latest_mmd, "_market_sentiment_fusion_v50", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V51: 突破笔力度二次确认增强（条件144）
+                    "breakout_bi_strength_enhanced_v51": getattr(
+                        latest_mmd, "_breakout_bi_strength_enhanced_v51", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V51: 回踩笔深度+时间综合验证（条件145）
+                    "pullback_depth_time_v51": getattr(latest_mmd, "_pullback_depth_time_v51", None)
+                    if latest_mmd
+                    else None,
+                    # V51: 趋势强度综合评分（条件146）
+                    "trend_strength_composite_v51": getattr(
+                        latest_mmd, "_trend_strength_composite_v51", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V51: 交易决策建议（条件147）
+                    "trading_decision_v51": getattr(latest_mmd, "_trading_decision_v51", None)
+                    if latest_mmd
+                    else None,
+                    # V52: 量价持续确认（条件148）
+                    "volume_sustain_after_signal_v52": getattr(
+                        latest_mmd, "_volume_sustain_after_signal_v52", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V52: 多指标背离共振（条件149）
+                    "multi_indicator_divergence_fusion_v52": getattr(
+                        latest_mmd, "_multi_indicator_divergence_fusion_v52", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V52: 近期极端价位检测（条件150）
+                    "recent_extreme_price_v52": getattr(
+                        latest_mmd, "_recent_extreme_price_v52", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V52: 市场环境健康评分（条件151）
+                    "market_regime_score_v52": getattr(latest_mmd, "_market_regime_score_v52", None)
+                    if latest_mmd
+                    else None,
+                    # V53: 趋势阶段识别与顺势确认（条件152）
+                    "trend_stage_follow_confirmation_v53": getattr(
+                        latest_mmd, "_trend_stage_follow_confirmation_v53", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V53: ATR自适应止损距离（条件153）
+                    "atr_adaptive_stop_v53": getattr(latest_mmd, "_atr_adaptive_stop_v53", None)
+                    if latest_mmd
+                    else None,
+                    # V53: 中枢突破力度验证（条件154）
+                    "zs_breakout_strength_v53": getattr(
+                        latest_mmd, "_zs_breakout_strength_v53", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V53: 信号质量综合分层（条件155）
+                    "signal_quality_tier_v53": getattr(latest_mmd, "_signal_quality_tier_v53", None)
+                    if latest_mmd
+                    else None,
+                    # V54: 多K线确认后确认（条件156）
+                    "multi_bar_confirmation_v54": getattr(
+                        latest_mmd, "_multi_bar_confirmation_v54", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V54: 缺口风险评估（条件157）
+                    "gap_risk_assessment_v54": getattr(latest_mmd, "_gap_risk_assessment_v54", None)
+                    if latest_mmd
+                    else None,
+                    # V54: 波动率 regime 切换检测（条件158）
+                    "volatility_regime_change_v54": getattr(
+                        latest_mmd, "_volatility_regime_change_v54", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V54: 量价配合度评分（条件159）
+                    "volume_price_coordination_v54": getattr(
+                        latest_mmd, "_volume_price_coordination_v54", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V55: 分钟级多时间框架共振过滤（条件160）
+                    "multi_tf_resonance_filter_v55": getattr(
+                        latest_mmd, "_multi_tf_resonance_filter_v55", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V55: 中枢级别权重自适应（条件161）
+                    "zhongshu_level_weight_v55": getattr(
+                        latest_mmd, "_zhongshu_level_weight_v55", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V55: 弱势股专项风险检测（条件162）
+                    "weak_stock_risk_v55": getattr(latest_mmd, "_weak_stock_risk_v55", None)
+                    if latest_mmd
+                    else None,
+                    # V55: 信号与趋势方向对齐验证（条件163）
+                    "signal_trend_alignment_v55": getattr(
+                        latest_mmd, "_signal_trend_alignment_v55", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V56: 假突破识别（条件164）
+                    "false_breakout_detection_v56": getattr(
+                        latest_mmd, "_false_breakout_detection_v56", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V56: 中枢结构复杂度分析（条件165）
+                    "zhongshu_structure_complexity_v56": getattr(
+                        latest_mmd, "_zhongshu_structure_complexity_v56", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V56: 波动率自适应仓位建议（条件166）
+                    "volatility_adaptive_position_v56": getattr(
+                        latest_mmd, "_volatility_adaptive_position_v56", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V56: 多信号共振评分（条件167）
+                    "multi_signal_resonance_v56": getattr(
+                        latest_mmd, "_multi_signal_resonance_v56", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V57: 回踩幅度与时间双重过滤（条件168）
+                    "pullback_filter_v57": getattr(latest_mmd, "_pullback_filter_v57", None)
+                    if latest_mmd
+                    else None,
+                    # V57: 突破力度验证（条件169）
+                    "breakout_strength_validation_v57": getattr(
+                        latest_mmd, "_breakout_strength_validation_v57", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V57: 中枢背驰检测（条件170）
+                    "zs_divergence_check_v57": getattr(latest_mmd, "_zs_divergence_check_v57", None)
+                    if latest_mmd
+                    else None,
+                    # V57: 信号衰减检测（条件171）
+                    "signal_decay_detection_v57": getattr(
+                        latest_mmd, "_signal_decay_detection_v57", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V58: 多时间框架趋势一致性验证（条件172）
+                    "multi_tf_trend_consistency_v58": getattr(
+                        latest_mmd, "_multi_tf_trend_consistency_v58", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V58: 成交量堆积验证（条件173）
+                    "volume_accumulation_validation_v58": getattr(
+                        latest_mmd, "_volume_accumulation_validation_v58", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V58: ATR自适应止损距离（条件174）
+                    "atr_adaptive_stop_v58": getattr(latest_mmd, "_atr_adaptive_stop_v58", None)
+                    if latest_mmd
+                    else None,
+                    # V58: 信号质量综合评分（条件175）
+                    "composite_quality_score_v58": getattr(
+                        latest_mmd, "_composite_quality_score_v58", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V59: 波动率自适应MA周期（条件176）
+                    "volatility_adaptive_ma_v59": getattr(
+                        latest_mmd, "_volatility_adaptive_ma_v59", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V59: ATR倍数自适应（条件177）
+                    "atr_multiplier_adapt_v59": getattr(
+                        latest_mmd, "_atr_multiplier_adapt_v59", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V59: 多时间框架共振信号（条件178）
+                    "multi_tf_resonance_signal_v59": getattr(
+                        latest_mmd, "_multi_tf_resonance_signal_v59", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V59: 信号衰减速度评估（条件179）
+                    "signal_decay_speed_v59": getattr(latest_mmd, "_signal_decay_speed_v59", None)
+                    if latest_mmd
+                    else None,
+                    # V60: RSI深度背离过滤（条件180）
+                    "rsi_deep_divergence_v60": getattr(latest_mmd, "_rsi_deep_divergence_v60", None)
+                    if latest_mmd
+                    else None,
+                    # V60: MA排列间距强度评分（条件181）
+                    "ma_spacing_strength_v60": getattr(latest_mmd, "_ma_spacing_strength_v60", None)
+                    if latest_mmd
+                    else None,
+                    # V60: 中枢支撑/阻力距离评分增强（条件182）
+                    "zs_distance_enhanced_v60": getattr(
+                        latest_mmd, "_zs_distance_enhanced_v60", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V60: KDJ超买超卖确认（条件183）
+                    "kdj_ob_os_confirm_v60": getattr(latest_mmd, "_kdj_ob_os_confirm_v60", None)
+                    if latest_mmd
+                    else None,
+                    # V61: MACD柱状图背离融合（条件184）
+                    "macd_hist_divergence_v61": getattr(
+                        latest_mmd, "_macd_hist_divergence_v61", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V61: 综合多信号评分（条件185）
+                    "composite_signal_score_v61": getattr(
+                        latest_mmd, "_composite_signal_score_v61", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V62: BOLL带宽突破确认（条件186）
+                    "boll_bandwidth_breakout_v62": getattr(
+                        latest_mmd, "_boll_bandwidth_breakout_v62", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V62: BOLL带宽压缩反弹确认（条件187）
+                    "boll_bandwidth_reversal_v62": getattr(
+                        latest_mmd, "_boll_bandwidth_reversal_v62", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V62: 动态阈值-波动率状态切换（条件188）
+                    "dynamic_threshold_volatility_regime_v62": getattr(
+                        latest_mmd, "_dynamic_threshold_volatility_regime_v62", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V62: 动态阈值-ATR倍数自适应（条件189）
+                    "dynamic_threshold_atr_multiplier_v62": getattr(
+                        latest_mmd, "_dynamic_threshold_atr_multiplier_v62", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V63: 中枢级别权重优化增强（条件190）
+                    "zhongshu_level_weight_enhanced_v63": getattr(
+                        latest_mmd, "_zhongshu_level_weight_enhanced_v63", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V63: 多周期信号衰减追踪（条件191）
+                    "multi_period_signal_decay_v63": getattr(
+                        latest_mmd, "_multi_period_signal_decay_v63", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V65: 量价背离二次确认增强（条件192）
+                    "volume_price_divergence_secondary_v65": getattr(
+                        latest_mmd, "_volume_price_divergence_secondary_v65", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V65: 中枢突破回踩确认（条件193）
+                    "breakout_retest_confirmation_v65": getattr(
+                        latest_mmd, "_breakout_retest_confirmation_v65", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V65: 波动率压缩突破信号（条件194）
+                    "volatility_compression_breakout_v65": getattr(
+                        latest_mmd, "_volatility_compression_breakout_v65", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V65: 买卖点时间窗口新鲜度（条件195）
+                    "signal_time_window_freshness_v65": getattr(
+                        latest_mmd, "_signal_time_window_freshness_v65", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V66: MACD动能加速确认（条件196）
+                    "macd_momentum_acceleration_v66": getattr(
+                        latest_mmd, "_macd_momentum_acceleration_v66", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V66: 量价配合深度评分（条件197）
+                    "volume_price_coordination_deep_v66": getattr(
+                        latest_mmd, "_volume_price_coordination_deep_v66", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V66: 多时间框架共振强度（条件198）
+                    "multi_tf_convergence_intensity_v66": getattr(
+                        latest_mmd, "_multi_tf_convergence_intensity_v66", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V66: 信号执行优先级（条件199）
+                    "signal_execution_priority_v66": getattr(
+                        latest_mmd, "_signal_execution_priority_v66", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V67: 中枢背驰力度量化（条件200）
+                    "zhongshu_divergence_strength_v67": getattr(
+                        latest_mmd, "_zhongshu_divergence_strength_v67", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V67: 多级别买卖点一致性验证（条件201）
+                    "multi_level_mmd_consistency_v67": getattr(
+                        latest_mmd, "_multi_level_mmd_consistency_v67", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V67: 信号后价格轨迹健康度（条件202）
+                    "post_signal_trajectory_health_v67": getattr(
+                        latest_mmd, "_post_signal_trajectory_health_v67", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V67: 动态止损止盈推荐（条件203）
+                    "dynamic_sl_tp_recommendation_v67": getattr(
+                        latest_mmd, "_dynamic_sl_tp_recommendation_v67", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V68: 缺口方向与趋势一致性验证（条件204）
+                    "gap_trend_consistency_v68": getattr(
+                        latest_mmd, "_gap_trend_consistency_v68", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V68: 多级别区间套一致性验证（条件205）
+                    "range_set_multi_level_v68": getattr(
+                        latest_mmd, "_range_set_multi_level_v68", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V68: 信号后资金流向确认（条件206）
+                    "post_signal_fund_flow_v68": getattr(
+                        latest_mmd, "_post_signal_fund_flow_v68", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V68: 市场风格适配评分（条件207）
+                    "market_regime_adaptation_v68": getattr(
+                        latest_mmd, "_market_regime_adaptation_v68", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V69: 量价背离二次确认（条件208）
+                    "price_volume_divergence_v69": getattr(
+                        latest_mmd, "_price_volume_divergence_v69", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V69: 结构完整性评分（条件209）
+                    "structural_integrity_v69": getattr(
+                        latest_mmd, "_structural_integrity_v69", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V69: 多指标背离融合（条件210）
+                    "multi_indicator_divergence_v69": getattr(
+                        latest_mmd, "_multi_indicator_divergence_v69", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V69: 回踩深度量化（条件211）
+                    "retracement_depth_v69": getattr(latest_mmd, "_retracement_depth_v69", None)
+                    if latest_mmd
+                    else None,
+                    # V70: 分时量峰检测（条件212）
+                    "volume_peak_detection_v70": getattr(
+                        latest_mmd, "_volume_peak_detection_v70", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V70: 买卖点时间窗口衰减（条件213）
+                    "signal_time_decay_v70": getattr(latest_mmd, "_signal_time_decay_v70", None)
+                    if latest_mmd
+                    else None,
+                    # V70: 假突破二次过滤（条件214）
+                    "false_breakout_filter_v70": getattr(
+                        latest_mmd, "_false_breakout_filter_v70", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V70: 信号置信度最终校准（条件215）
+                    "final_confidence_calibration_v70": getattr(
+                        latest_mmd, "_final_confidence_calibration_v70", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V71: 均线排列强度评估（条件216）
+                    "ma_alignment_strength_v71": getattr(
+                        latest_mmd, "_ma_alignment_strength_v71", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V71: 多周期均线共振（条件217）
+                    "multi_tf_ma_resonance_v71": getattr(
+                        latest_mmd, "_multi_tf_ma_resonance_v71", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V71: 买卖点历史胜率回溯（条件218）
+                    "mmd_history_winrate_v71": getattr(latest_mmd, "_mmd_history_winrate_v71", None)
+                    if latest_mmd
+                    else None,
+                    # V71: 动态风险收益比优化（条件219）
+                    "dynamic_rr_optimization_v71": getattr(
+                        latest_mmd, "_dynamic_rr_optimization_v71", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V72: 均线收敛发散状态评估（条件220）
+                    "ma_convergence_divergence_v72": getattr(
+                        latest_mmd, "_ma_convergence_divergence_v72", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V72: 支撑/阻力位距离评估（条件221）
+                    "support_resistance_proximity_v72": getattr(
+                        latest_mmd, "_support_resistance_proximity_v72", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V72: 量价结构质量评分（条件222）
+                    "volume_structure_quality_v72": getattr(
+                        latest_mmd, "_volume_structure_quality_v72", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V72: 信号衰减速度评估（条件223）
+                    "signal_decay_velocity_v72": getattr(
+                        latest_mmd, "_signal_decay_velocity_v72", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V73: 买卖点位置风险评估（条件224）
+                    "mmd_position_risk_v73": getattr(latest_mmd, "_mmd_position_risk_v73", None)
+                    if latest_mmd
+                    else None,
+                    # V73: 中枢突破有效性验证（条件225）
+                    "zhongshu_breakout_validity_v73": getattr(
+                        latest_mmd, "_zhongshu_breakout_validity_v73", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V73: 多指标确认一致性（条件226）
+                    "multi_indicator_consistency_v73": getattr(
+                        latest_mmd, "_multi_indicator_consistency_v73", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V73: 波动率环境适配（条件227）
+                    "volatility_regime_adaptation_v73": getattr(
+                        latest_mmd, "_volatility_regime_adaptation_v73", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V74: 量价背离二次确认（条件228）
+                    "volume_price_divergence_secondary_v74": getattr(
+                        latest_mmd, "_volume_price_divergence_secondary_v74", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V74: 趋势动能持续验证（条件229）
+                    "trend_momentum_continuity_v74": getattr(
+                        latest_mmd, "_trend_momentum_continuity_v74", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V74: 中枢重叠度评估（条件230）
+                    "zhongshu_overlap_density_v74": getattr(
+                        latest_mmd, "_zhongshu_overlap_density_v74", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V74: 信号共振深度评分（条件231）
+                    "signal_resonance_depth_v74": getattr(
+                        latest_mmd, "_signal_resonance_depth_v74", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V75: 回调深度验证（条件232）
+                    "pullback_depth_validation_v75": getattr(
+                        latest_mmd, "_pullback_depth_validation_v75", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V75: 中枢区间回踩确认（条件233）
+                    "zhongshu_retracement_confirm_v75": getattr(
+                        latest_mmd, "_zhongshu_retracement_confirm_v75", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V75: 量峰持续时间评分（条件234）
+                    "volume_peak_duration_v75": getattr(
+                        latest_mmd, "_volume_peak_duration_v75", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V75: 多信号时间一致性（条件235）
+                    "multi_signal_time_consistency_v75": getattr(
+                        latest_mmd, "_multi_signal_time_consistency_v75", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V76: 价格结构完整性验证（条件236）
+                    "price_structure_integrity_v76": getattr(
+                        latest_mmd, "_price_structure_integrity_v76", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V76: 趋势方向对齐验证（条件237）
+                    "trend_alignment_validation_v76": getattr(
+                        latest_mmd, "_trend_alignment_validation_v76", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V76: 波动率自适应置信度（条件238）
+                    "volatility_adaptive_confidence_v76": getattr(
+                        latest_mmd, "_volatility_adaptive_confidence_v76", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V76: 买卖点最终有效性评分（条件239）
+                    "signal_final_validity_v76": getattr(
+                        latest_mmd, "_signal_final_validity_v76", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V77: 量能分布深度分析（条件240）
+                    "volume_distribution_depth_v77": getattr(
+                        latest_mmd, "_volume_distribution_depth_v77", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V77: 中枢结构权重评估（条件241）
+                    "zhongshu_structure_weight_v77": getattr(
+                        latest_mmd, "_zhongshu_structure_weight_v77", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V77: 信号新鲜度验证（条件242）
+                    "signal_freshness_validation_v77": getattr(
+                        latest_mmd, "_signal_freshness_validation_v77", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V77: 价格动能加速度（条件243）
+                    "price_momentum_acceleration_v77": getattr(
+                        latest_mmd, "_price_momentum_acceleration_v77", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V78: 买卖点周期位置评分（条件244）
+                    "mmd_cycle_position_v78": getattr(latest_mmd, "_mmd_cycle_position_v78", None)
+                    if latest_mmd
+                    else None,
+                    # V78: 多信号时间窗口一致性（条件245）
+                    "multi_signal_consensus_v78": getattr(
+                        latest_mmd, "_multi_signal_consensus_v78", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V78: 波动率压缩突破预测（条件246）
+                    "volatility_compression_breakout_v78": getattr(
+                        latest_mmd, "_volatility_compression_breakout_v78", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V78: 资金流向与价格背离检测（条件247）
+                    "fund_flow_divergence_v78": getattr(
+                        latest_mmd, "_fund_flow_divergence_v78", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V79: 分型稳定性验证（条件248）
+                    "fractal_stability_validation_v79": getattr(
+                        latest_mmd, "_fractal_stability_validation_v79", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V79: 买卖点距离安全阈值（条件249）
+                    "mmd_distance_safety_v79": getattr(latest_mmd, "_mmd_distance_safety_v79", None)
+                    if latest_mmd
+                    else None,
+                    # V79: 多级别结构一致性评分（条件250）
+                    "multi_level_structure_consistency_v79": getattr(
+                        latest_mmd, "_multi_level_structure_consistency_v79", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V79: 价格动能持续性评分（条件251）
+                    "price_momentum_continuity_v79": getattr(
+                        latest_mmd, "_price_momentum_continuity_v79", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V80: 买卖点与中枢距离验证（条件252）
+                    "mmd_zhongshu_distance_v80": getattr(
+                        latest_mmd, "_mmd_zhongshu_distance_v80", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V80: 量能配合度评分（条件253）
+                    "volume_confirmation_v80": getattr(latest_mmd, "_volume_confirmation_v80", None)
+                    if latest_mmd
+                    else None,
+                    # V80: 均线排列强度确认（条件254）
+                    "ma_alignment_strength_v80": getattr(
+                        latest_mmd, "_ma_alignment_strength_v80", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V80: 盈亏比动态评估（条件255）
+                    "dynamic_risk_reward_v80": getattr(latest_mmd, "_dynamic_risk_reward_v80", None)
+                    if latest_mmd
+                    else None,
+                    # V81: 波动率状态转换检测（条件256）
+                    "volatility_regime_transition_v81": getattr(
+                        latest_mmd, "_volatility_regime_transition_v81", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V81: 关键支撑阻力强度验证（条件257）
+                    "support_resistance_strength_v81": getattr(
+                        latest_mmd, "_support_resistance_strength_v81", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V81: 量价能量分布验证（条件258）
+                    "volume_price_energy_distribution_v81": getattr(
+                        latest_mmd, "_volume_price_energy_distribution_v81", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V81: 信号执行窗口评估（条件259）
+                    "signal_execution_window_v81": getattr(
+                        latest_mmd, "_signal_execution_window_v81", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V82: 买卖点时间衰减验证（条件260）
+                    "mmd_age_decay_v82": getattr(latest_mmd, "_mmd_age_decay_v82", None)
+                    if latest_mmd
+                    else None,
+                    # V82: 中枢突破回踩确认（条件261）
+                    "breakout_retest_confirm_v82": getattr(
+                        latest_mmd, "_breakout_retest_confirm_v82", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V82: 多级别MACD共振（条件262）
+                    "macd_multi_tf_resonance_v82": getattr(
+                        latest_mmd, "_macd_multi_tf_resonance_v82", None
+                    )
+                    if latest_mmd
+                    else None,
+                    # V82: 波动率压缩突破确认（条件263）
+                    "volatility_compression_breakout_v82": getattr(
+                        latest_mmd, "_volatility_compression_breakout_v82", None
+                    )
+                    if latest_mmd
+                    else None,
+                },
+                # V12: 多级别联立分析结果（需前端传入低级别数据）
+                "multi_level_confluence": None,
+                "macd": {
+                    "dif": round(latest_dif, 4),
+                    "dea": round(latest_dea, 4),
+                    "hist": round(latest_macd, 4),
+                    "golden_cross": macd_golden,
+                    "dead_cross": macd_dead,
+                    "above_zero": macd_above_zero,
+                    "trending": "up"
+                    if macd_trending_up
+                    else ("down" if macd_trending_down else "flat"),
+                },
+                "boll": {
+                    "upper": round(latest_upper, 2),
+                    "mid": round(latest_mid, 2),
+                    "lower": round(latest_lower, 2),
+                    "width": round(boll_width, 4),
+                    "percent_b": round(percent_b, 3),
+                    "position": boll_position,
+                },
+                "moving_averages": {
+                    "ma5": round(ma5, 2),
+                    "ma10": round(ma10, 2),
+                    "ma20": round(ma20, 2),
+                    "ma60": round(ma60, 2),
+                    "bullish_arrangement": ma_bullish,
+                    "bearish_arrangement": ma_bearish,
+                },
+                "fibonacci": {
+                    "levels": fib_levels,
+                    "position": round(fib_position, 3),
+                    "period_high": round(max(highs[-fib_lookback:]), 2)
+                    if len(highs) >= fib_lookback
+                    else None,
+                    "period_low": round(min(lows[-fib_lookback:]), 2)
+                    if len(lows) >= fib_lookback
+                    else None,
+                },
+                "volume": {
+                    "ratio": round(vol_ratio, 2),
+                    "expanding": vol_expanding,
+                    "contracting": vol_contracting,
+                },
+                "kdj": {
+                    "k": round(latest_k, 2),
+                    "d": round(latest_d, 2),
+                    "j": round(latest_j, 2),
+                    "golden_cross": kdj_golden,
+                    "dead_cross": kdj_dead,
+                    "overbought": kdj_overbought,
+                    "oversold": kdj_oversold,
+                    "position": kdj_position,
+                },
+                "rsi": {
+                    "value": round(latest_rsi, 2),
+                    "overbought": rsi_overbought,
+                    "oversold": rsi_oversold,
+                    "position": rsi_position,
+                    "zone": rsi_position,  # V23: RSI区域（与position相同，前端可直接使用）
+                },
+                "adx": {
+                    "pdi": round(latest_pdi, 2),
+                    "mdi": round(latest_mdi, 2),
+                    "adx": round(latest_adx, 2),
+                    "adxr": round(latest_adxr, 2),
+                    "trend_direction": trend_direction,
+                    "strength": adx_strength,
+                    "level": adx_level,
+                },
+                "obv": {
+                    "value": round(latest_obv, 2),
+                    "ma20": round(obv_ma20, 2),
+                    "trending_up": obv_trending_up,
+                    "trending_down": obv_trending_down,
+                    "divergence_with_price": obv_divergence_price,
+                },
+                "divergence": {
+                    "macd": macd_div,
+                    "kdj": kdj_div,
+                    "rsi": rsi_div,
+                    "dominant": dominant_div,
+                    "strength": round(div_strength, 2),
+                    "has_divergence": has_divergence,
+                },
+                "candlestick": {
+                    "signal": candle_signal,
+                    "strength": round(candle_strength, 2),
+                    "recent_patterns": recent_patterns,
+                },
+                "risk": {
+                    "stop_loss_price": stop_loss_price,
+                    "take_profit_price": take_profit_price,
+                    "stop_loss_pct": stop_loss_pct,
+                    "take_profit_pct": take_profit_pct,
+                    "risk_reward_ratio": risk_reward_ratio,
+                    "atr": round(latest_atr, 2),
+                    "atr_pct": round(atr_pct, 2),
+                    "volatility_label": volatility_label,
+                    "support_1": round(support_1, 2),
+                    "resistance_1": round(resistance_1, 2),
+                    "support_2": round(support_2, 2),
+                    "resistance_2": round(resistance_2, 2),
+                },
+                "position_suggestion": position_recommendation,
+            }
+        ),
+    )
 
 
 def _calculate_position_recommendation(
@@ -1666,8 +2598,13 @@ def _calculate_position_recommendation(
 
 
 def _get_position_notes(
-    score: float, volatility: str, ma_bullish: bool, macd_golden: bool,
-    has_divergence: bool = False, dominant_div: str = "none", adx_level: str = "medium",
+    score: float,
+    volatility: str,
+    ma_bullish: bool,
+    macd_golden: bool,
+    has_divergence: bool = False,
+    dominant_div: str = "none",
+    adx_level: str = "medium",
 ) -> str:
     """获取仓位建议说明。"""
     notes = []
@@ -1740,30 +2677,37 @@ async def multi_stock_comparison(
                 500,
             )
             if not bar_data:
-                results.append({
-                    "stock_code": stock.code,
-                    "stock_name": stock.code,
-                    "error": "无K线数据",
-                })
+                results.append(
+                    {
+                        "stock_code": stock.code,
+                        "stock_name": stock.code,
+                        "error": "无K线数据",
+                    }
+                )
                 continue
 
             import pandas as pd
+
             df = pd.DataFrame(bar_data)
             if len(df) < 100:
-                results.append({
-                    "stock_code": stock.code,
-                    "stock_name": stock.code,
-                    "error": f"数据不足（{len(df)} bars）",
-                })
+                results.append(
+                    {
+                        "stock_code": stock.code,
+                        "stock_name": stock.code,
+                        "error": f"数据不足（{len(df)} bars）",
+                    }
+                )
                 continue
 
             from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+
             config = ChanlunConfig()
             analyser = ChanlunAnalyser(code=stock.code, frequency="daily", config=config)
             chanlun_result = analyser.process_klines(df)
 
             valid_signals = [
-                mmd for mmd in chanlun_result.mmds
+                mmd
+                for mmd in chanlun_result.mmds
                 if mmd.mmd_type.name in ("BUY_1", "BUY_2", "BUY_3", "SELL_1", "SELL_2", "SELL_3")
                 and mmd.bi is not None
                 and mmd.confidence >= 0.0
@@ -1781,161 +2725,299 @@ async def multi_stock_comparison(
                             condition_counts[key] = condition_counts.get(key, 0) + 1
                         # V63 特有字段
                         if c == 190 and hasattr(mmd, "_zhongshu_level_weight_enhanced_v63"):
-                            condition_counts["v63_cond190"] = condition_counts.get("v63_cond190", 0) + 1
+                            condition_counts["v63_cond190"] = (
+                                condition_counts.get("v63_cond190", 0) + 1
+                            )
                         if c == 191 and hasattr(mmd, "_multi_period_signal_decay_v63"):
-                            condition_counts["v63_cond191"] = condition_counts.get("v63_cond191", 0) + 1
+                            condition_counts["v63_cond191"] = (
+                                condition_counts.get("v63_cond191", 0) + 1
+                            )
                         # V65 特有字段
                         if c == 192 and hasattr(mmd, "_volume_price_divergence_secondary_v65"):
-                            condition_counts["v65_cond192"] = condition_counts.get("v65_cond192", 0) + 1
+                            condition_counts["v65_cond192"] = (
+                                condition_counts.get("v65_cond192", 0) + 1
+                            )
                         if c == 193 and hasattr(mmd, "_breakout_retest_confirmation_v65"):
-                            condition_counts["v65_cond193"] = condition_counts.get("v65_cond193", 0) + 1
+                            condition_counts["v65_cond193"] = (
+                                condition_counts.get("v65_cond193", 0) + 1
+                            )
                         if c == 194 and hasattr(mmd, "_volatility_compression_breakout_v65"):
-                            condition_counts["v65_cond194"] = condition_counts.get("v65_cond194", 0) + 1
+                            condition_counts["v65_cond194"] = (
+                                condition_counts.get("v65_cond194", 0) + 1
+                            )
                         if c == 195 and hasattr(mmd, "_signal_time_window_freshness_v65"):
-                            condition_counts["v65_cond195"] = condition_counts.get("v65_cond195", 0) + 1
+                            condition_counts["v65_cond195"] = (
+                                condition_counts.get("v65_cond195", 0) + 1
+                            )
                         if c == 196 and hasattr(mmd, "_macd_momentum_acceleration_v66"):
-                            condition_counts["v66_cond196"] = condition_counts.get("v66_cond196", 0) + 1
+                            condition_counts["v66_cond196"] = (
+                                condition_counts.get("v66_cond196", 0) + 1
+                            )
                         if c == 197 and hasattr(mmd, "_volume_price_coordination_deep_v66"):
-                            condition_counts["v66_cond197"] = condition_counts.get("v66_cond197", 0) + 1
+                            condition_counts["v66_cond197"] = (
+                                condition_counts.get("v66_cond197", 0) + 1
+                            )
                         if c == 198 and hasattr(mmd, "_multi_tf_convergence_intensity_v66"):
-                            condition_counts["v66_cond198"] = condition_counts.get("v66_cond198", 0) + 1
+                            condition_counts["v66_cond198"] = (
+                                condition_counts.get("v66_cond198", 0) + 1
+                            )
                         if c == 199 and hasattr(mmd, "_signal_execution_priority_v66"):
-                            condition_counts["v66_cond199"] = condition_counts.get("v66_cond199", 0) + 1
+                            condition_counts["v66_cond199"] = (
+                                condition_counts.get("v66_cond199", 0) + 1
+                            )
                         # V67 特有字段
                         if c == 200 and hasattr(mmd, "_zhongshu_divergence_strength_v67"):
-                            condition_counts["v67_cond200"] = condition_counts.get("v67_cond200", 0) + 1
+                            condition_counts["v67_cond200"] = (
+                                condition_counts.get("v67_cond200", 0) + 1
+                            )
                         if c == 201 and hasattr(mmd, "_multi_level_mmd_consistency_v67"):
-                            condition_counts["v67_cond201"] = condition_counts.get("v67_cond201", 0) + 1
+                            condition_counts["v67_cond201"] = (
+                                condition_counts.get("v67_cond201", 0) + 1
+                            )
                         if c == 202 and hasattr(mmd, "_post_signal_trajectory_health_v67"):
-                            condition_counts["v67_cond202"] = condition_counts.get("v67_cond202", 0) + 1
+                            condition_counts["v67_cond202"] = (
+                                condition_counts.get("v67_cond202", 0) + 1
+                            )
                         if c == 203 and hasattr(mmd, "_dynamic_sl_tp_recommendation_v67"):
-                            condition_counts["v67_cond203"] = condition_counts.get("v67_cond203", 0) + 1
+                            condition_counts["v67_cond203"] = (
+                                condition_counts.get("v67_cond203", 0) + 1
+                            )
                         # V68 特有字段
                         if c == 204 and hasattr(mmd, "_gap_trend_consistency_v68"):
-                            condition_counts["v68_cond204"] = condition_counts.get("v68_cond204", 0) + 1
+                            condition_counts["v68_cond204"] = (
+                                condition_counts.get("v68_cond204", 0) + 1
+                            )
                         if c == 205 and hasattr(mmd, "_range_set_multi_level_v68"):
-                            condition_counts["v68_cond205"] = condition_counts.get("v68_cond205", 0) + 1
+                            condition_counts["v68_cond205"] = (
+                                condition_counts.get("v68_cond205", 0) + 1
+                            )
                         if c == 206 and hasattr(mmd, "_post_signal_fund_flow_v68"):
-                            condition_counts["v68_cond206"] = condition_counts.get("v68_cond206", 0) + 1
+                            condition_counts["v68_cond206"] = (
+                                condition_counts.get("v68_cond206", 0) + 1
+                            )
                         if c == 207 and hasattr(mmd, "_market_regime_adaptation_v68"):
-                            condition_counts["v68_cond207"] = condition_counts.get("v68_cond207", 0) + 1
+                            condition_counts["v68_cond207"] = (
+                                condition_counts.get("v68_cond207", 0) + 1
+                            )
                         # V69 特有字段
                         if c == 208 and hasattr(mmd, "_price_volume_divergence_v69"):
-                            condition_counts["v69_cond208"] = condition_counts.get("v69_cond208", 0) + 1
+                            condition_counts["v69_cond208"] = (
+                                condition_counts.get("v69_cond208", 0) + 1
+                            )
                         if c == 209 and hasattr(mmd, "_structural_integrity_v69"):
-                            condition_counts["v69_cond209"] = condition_counts.get("v69_cond209", 0) + 1
+                            condition_counts["v69_cond209"] = (
+                                condition_counts.get("v69_cond209", 0) + 1
+                            )
                         if c == 210 and hasattr(mmd, "_multi_indicator_divergence_v69"):
-                            condition_counts["v69_cond210"] = condition_counts.get("v69_cond210", 0) + 1
+                            condition_counts["v69_cond210"] = (
+                                condition_counts.get("v69_cond210", 0) + 1
+                            )
                         if c == 211 and hasattr(mmd, "_retracement_depth_v69"):
-                            condition_counts["v69_cond211"] = condition_counts.get("v69_cond211", 0) + 1
+                            condition_counts["v69_cond211"] = (
+                                condition_counts.get("v69_cond211", 0) + 1
+                            )
                         # V70 特有字段
                         if c == 212 and hasattr(mmd, "_volume_peak_detection_v70"):
-                            condition_counts["v70_cond212"] = condition_counts.get("v70_cond212", 0) + 1
+                            condition_counts["v70_cond212"] = (
+                                condition_counts.get("v70_cond212", 0) + 1
+                            )
                         if c == 213 and hasattr(mmd, "_signal_time_decay_v70"):
-                            condition_counts["v70_cond213"] = condition_counts.get("v70_cond213", 0) + 1
+                            condition_counts["v70_cond213"] = (
+                                condition_counts.get("v70_cond213", 0) + 1
+                            )
                         if c == 214 and hasattr(mmd, "_false_breakout_filter_v70"):
-                            condition_counts["v70_cond214"] = condition_counts.get("v70_cond214", 0) + 1
+                            condition_counts["v70_cond214"] = (
+                                condition_counts.get("v70_cond214", 0) + 1
+                            )
                         if c == 215 and hasattr(mmd, "_final_confidence_calibration_v70"):
-                            condition_counts["v70_cond215"] = condition_counts.get("v70_cond215", 0) + 1
+                            condition_counts["v70_cond215"] = (
+                                condition_counts.get("v70_cond215", 0) + 1
+                            )
                         if c == 216 and hasattr(mmd, "_ma_alignment_strength_v71"):
-                            condition_counts["v71_cond216"] = condition_counts.get("v71_cond216", 0) + 1
+                            condition_counts["v71_cond216"] = (
+                                condition_counts.get("v71_cond216", 0) + 1
+                            )
                         if c == 217 and hasattr(mmd, "_multi_tf_ma_resonance_v71"):
-                            condition_counts["v71_cond217"] = condition_counts.get("v71_cond217", 0) + 1
+                            condition_counts["v71_cond217"] = (
+                                condition_counts.get("v71_cond217", 0) + 1
+                            )
                         if c == 218 and hasattr(mmd, "_mmd_history_winrate_v71"):
-                            condition_counts["v71_cond218"] = condition_counts.get("v71_cond218", 0) + 1
+                            condition_counts["v71_cond218"] = (
+                                condition_counts.get("v71_cond218", 0) + 1
+                            )
                         if c == 219 and hasattr(mmd, "_dynamic_rr_optimization_v71"):
-                            condition_counts["v71_cond219"] = condition_counts.get("v71_cond219", 0) + 1
+                            condition_counts["v71_cond219"] = (
+                                condition_counts.get("v71_cond219", 0) + 1
+                            )
                         if c == 220 and hasattr(mmd, "_ma_convergence_divergence_v72"):
-                            condition_counts["v72_cond220"] = condition_counts.get("v72_cond220", 0) + 1
+                            condition_counts["v72_cond220"] = (
+                                condition_counts.get("v72_cond220", 0) + 1
+                            )
                         if c == 221 and hasattr(mmd, "_support_resistance_proximity_v72"):
-                            condition_counts["v72_cond221"] = condition_counts.get("v72_cond221", 0) + 1
+                            condition_counts["v72_cond221"] = (
+                                condition_counts.get("v72_cond221", 0) + 1
+                            )
                         if c == 222 and hasattr(mmd, "_volume_structure_quality_v72"):
-                            condition_counts["v72_cond222"] = condition_counts.get("v72_cond222", 0) + 1
+                            condition_counts["v72_cond222"] = (
+                                condition_counts.get("v72_cond222", 0) + 1
+                            )
                         if c == 223 and hasattr(mmd, "_signal_decay_velocity_v72"):
-                            condition_counts["v72_cond223"] = condition_counts.get("v72_cond223", 0) + 1
+                            condition_counts["v72_cond223"] = (
+                                condition_counts.get("v72_cond223", 0) + 1
+                            )
                         if c == 224 and hasattr(mmd, "_mmd_position_risk_v73"):
-                            condition_counts["v73_cond224"] = condition_counts.get("v73_cond224", 0) + 1
+                            condition_counts["v73_cond224"] = (
+                                condition_counts.get("v73_cond224", 0) + 1
+                            )
                         if c == 225 and hasattr(mmd, "_zhongshu_breakout_validity_v73"):
-                            condition_counts["v73_cond225"] = condition_counts.get("v73_cond225", 0) + 1
+                            condition_counts["v73_cond225"] = (
+                                condition_counts.get("v73_cond225", 0) + 1
+                            )
                         if c == 226 and hasattr(mmd, "_multi_indicator_consistency_v73"):
-                            condition_counts["v73_cond226"] = condition_counts.get("v73_cond226", 0) + 1
+                            condition_counts["v73_cond226"] = (
+                                condition_counts.get("v73_cond226", 0) + 1
+                            )
                         if c == 227 and hasattr(mmd, "_volatility_regime_adaptation_v73"):
-                            condition_counts["v73_cond227"] = condition_counts.get("v73_cond227", 0) + 1
+                            condition_counts["v73_cond227"] = (
+                                condition_counts.get("v73_cond227", 0) + 1
+                            )
                         if c == 228 and hasattr(mmd, "_volume_price_divergence_secondary_v74"):
-                            condition_counts["v74_cond228"] = condition_counts.get("v74_cond228", 0) + 1
+                            condition_counts["v74_cond228"] = (
+                                condition_counts.get("v74_cond228", 0) + 1
+                            )
                         if c == 229 and hasattr(mmd, "_trend_momentum_continuity_v74"):
-                            condition_counts["v74_cond229"] = condition_counts.get("v74_cond229", 0) + 1
+                            condition_counts["v74_cond229"] = (
+                                condition_counts.get("v74_cond229", 0) + 1
+                            )
                         if c == 230 and hasattr(mmd, "_zhongshu_overlap_density_v74"):
-                            condition_counts["v74_cond230"] = condition_counts.get("v74_cond230", 0) + 1
+                            condition_counts["v74_cond230"] = (
+                                condition_counts.get("v74_cond230", 0) + 1
+                            )
                         if c == 231 and hasattr(mmd, "_signal_resonance_depth_v74"):
-                            condition_counts["v74_cond231"] = condition_counts.get("v74_cond231", 0) + 1
+                            condition_counts["v74_cond231"] = (
+                                condition_counts.get("v74_cond231", 0) + 1
+                            )
                         if c == 232 and hasattr(mmd, "_pullback_depth_validation_v75"):
-                            condition_counts["v75_cond232"] = condition_counts.get("v75_cond232", 0) + 1
+                            condition_counts["v75_cond232"] = (
+                                condition_counts.get("v75_cond232", 0) + 1
+                            )
                         if c == 233 and hasattr(mmd, "_zhongshu_retracement_confirm_v75"):
-                            condition_counts["v75_cond233"] = condition_counts.get("v75_cond233", 0) + 1
+                            condition_counts["v75_cond233"] = (
+                                condition_counts.get("v75_cond233", 0) + 1
+                            )
                         if c == 234 and hasattr(mmd, "_volume_peak_duration_v75"):
-                            condition_counts["v75_cond234"] = condition_counts.get("v75_cond234", 0) + 1
+                            condition_counts["v75_cond234"] = (
+                                condition_counts.get("v75_cond234", 0) + 1
+                            )
                         if c == 235 and hasattr(mmd, "_multi_signal_time_consistency_v75"):
-                            condition_counts["v75_cond235"] = condition_counts.get("v75_cond235", 0) + 1
+                            condition_counts["v75_cond235"] = (
+                                condition_counts.get("v75_cond235", 0) + 1
+                            )
                         if c == 236 and hasattr(mmd, "_price_structure_integrity_v76"):
-                            condition_counts["v76_cond236"] = condition_counts.get("v76_cond236", 0) + 1
+                            condition_counts["v76_cond236"] = (
+                                condition_counts.get("v76_cond236", 0) + 1
+                            )
                         if c == 237 and hasattr(mmd, "_trend_alignment_validation_v76"):
-                            condition_counts["v76_cond237"] = condition_counts.get("v76_cond237", 0) + 1
+                            condition_counts["v76_cond237"] = (
+                                condition_counts.get("v76_cond237", 0) + 1
+                            )
                         if c == 238 and hasattr(mmd, "_volatility_adaptive_confidence_v76"):
-                            condition_counts["v76_cond238"] = condition_counts.get("v76_cond238", 0) + 1
+                            condition_counts["v76_cond238"] = (
+                                condition_counts.get("v76_cond238", 0) + 1
+                            )
                         if c == 239 and hasattr(mmd, "_signal_final_validity_v76"):
-                            condition_counts["v76_cond239"] = condition_counts.get("v76_cond239", 0) + 1
+                            condition_counts["v76_cond239"] = (
+                                condition_counts.get("v76_cond239", 0) + 1
+                            )
                         if c == 240 and hasattr(mmd, "_volume_distribution_depth_v77"):
-                            condition_counts["v77_cond240"] = condition_counts.get("v77_cond240", 0) + 1
+                            condition_counts["v77_cond240"] = (
+                                condition_counts.get("v77_cond240", 0) + 1
+                            )
                         if c == 241 and hasattr(mmd, "_zhongshu_structure_weight_v77"):
-                            condition_counts["v77_cond241"] = condition_counts.get("v77_cond241", 0) + 1
+                            condition_counts["v77_cond241"] = (
+                                condition_counts.get("v77_cond241", 0) + 1
+                            )
                         if c == 242 and hasattr(mmd, "_signal_freshness_validation_v77"):
-                            condition_counts["v77_cond242"] = condition_counts.get("v77_cond242", 0) + 1
+                            condition_counts["v77_cond242"] = (
+                                condition_counts.get("v77_cond242", 0) + 1
+                            )
                         if c == 243 and hasattr(mmd, "_price_momentum_acceleration_v77"):
-                            condition_counts["v77_cond243"] = condition_counts.get("v77_cond243", 0) + 1
+                            condition_counts["v77_cond243"] = (
+                                condition_counts.get("v77_cond243", 0) + 1
+                            )
                         if c == 244 and hasattr(mmd, "_mmd_cycle_position_v78"):
-                            condition_counts["v78_cond244"] = condition_counts.get("v78_cond244", 0) + 1
+                            condition_counts["v78_cond244"] = (
+                                condition_counts.get("v78_cond244", 0) + 1
+                            )
                         if c == 245 and hasattr(mmd, "_multi_signal_consensus_v78"):
-                            condition_counts["v78_cond245"] = condition_counts.get("v78_cond245", 0) + 1
+                            condition_counts["v78_cond245"] = (
+                                condition_counts.get("v78_cond245", 0) + 1
+                            )
                         if c == 246 and hasattr(mmd, "_volatility_compression_breakout_v78"):
-                            condition_counts["v78_cond246"] = condition_counts.get("v78_cond246", 0) + 1
+                            condition_counts["v78_cond246"] = (
+                                condition_counts.get("v78_cond246", 0) + 1
+                            )
                         if c == 247 and hasattr(mmd, "_fund_flow_divergence_v78"):
-                            condition_counts["v78_cond247"] = condition_counts.get("v78_cond247", 0) + 1
+                            condition_counts["v78_cond247"] = (
+                                condition_counts.get("v78_cond247", 0) + 1
+                            )
                         if c == 248 and hasattr(mmd, "_fractal_stability_validation_v79"):
-                            condition_counts["v79_cond248"] = condition_counts.get("v79_cond248", 0) + 1
+                            condition_counts["v79_cond248"] = (
+                                condition_counts.get("v79_cond248", 0) + 1
+                            )
                         if c == 249 and hasattr(mmd, "_mmd_distance_safety_v79"):
-                            condition_counts["v79_cond249"] = condition_counts.get("v79_cond249", 0) + 1
+                            condition_counts["v79_cond249"] = (
+                                condition_counts.get("v79_cond249", 0) + 1
+                            )
                         if c == 250 and hasattr(mmd, "_multi_level_structure_consistency_v79"):
-                            condition_counts["v79_cond250"] = condition_counts.get("v79_cond250", 0) + 1
+                            condition_counts["v79_cond250"] = (
+                                condition_counts.get("v79_cond250", 0) + 1
+                            )
                         if c == 251 and hasattr(mmd, "_price_momentum_continuity_v79"):
-                            condition_counts["v79_cond251"] = condition_counts.get("v79_cond251", 0) + 1
+                            condition_counts["v79_cond251"] = (
+                                condition_counts.get("v79_cond251", 0) + 1
+                            )
                         if c == 252 and hasattr(mmd, "_mmd_zhongshu_distance_v80"):
-                            condition_counts["v80_cond252"] = condition_counts.get("v80_cond252", 0) + 1
+                            condition_counts["v80_cond252"] = (
+                                condition_counts.get("v80_cond252", 0) + 1
+                            )
                         if c == 253 and hasattr(mmd, "_volume_confirmation_v80"):
-                            condition_counts["v80_cond253"] = condition_counts.get("v80_cond253", 0) + 1
+                            condition_counts["v80_cond253"] = (
+                                condition_counts.get("v80_cond253", 0) + 1
+                            )
                         if c == 254 and hasattr(mmd, "_ma_alignment_strength_v80"):
-                            condition_counts["v80_cond254"] = condition_counts.get("v80_cond254", 0) + 1
+                            condition_counts["v80_cond254"] = (
+                                condition_counts.get("v80_cond254", 0) + 1
+                            )
                         if c == 255 and hasattr(mmd, "_dynamic_risk_reward_v80"):
-                            condition_counts["v80_cond255"] = condition_counts.get("v80_cond255", 0) + 1
+                            condition_counts["v80_cond255"] = (
+                                condition_counts.get("v80_cond255", 0) + 1
+                            )
             buy_count = sum(1 for s in valid_signals if "buy" in s.mmd_type.value)
             sell_count = sum(1 for s in valid_signals if "sell" in s.mmd_type.value)
-            avg_conf = float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0
+            avg_conf = (
+                float(np.mean([s.confidence for s in valid_signals])) if valid_signals else 0.0
+            )
 
-            results.append({
-                "stock_code": stock.code,
-                "stock_name": stock.code,
-                "total_bars": len(df),
-                "signal_count": len(valid_signals),
-                "buy_count": buy_count,
-                "sell_count": sell_count,
-                "avg_confidence": round(avg_conf, 4),
-                "condition_breakdown": condition_counts,
-            })
+            results.append(
+                {
+                    "stock_code": stock.code,
+                    "stock_name": stock.code,
+                    "total_bars": len(df),
+                    "signal_count": len(valid_signals),
+                    "buy_count": buy_count,
+                    "sell_count": sell_count,
+                    "avg_confidence": round(avg_conf, 4),
+                    "condition_breakdown": condition_counts,
+                }
+            )
         except Exception as e:
-            results.append({
-                "stock_code": stock.code,
-                "error": str(e),
-            })
+            results.append(
+                {
+                    "stock_code": stock.code,
+                    "error": str(e),
+                }
+            )
 
     return {
         "stocks": results,

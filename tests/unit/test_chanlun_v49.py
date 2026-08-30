@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from easy_tdx.chanlun import ChanlunAnalyser
 from easy_tdx.chanlun.mmd import (
@@ -12,23 +11,30 @@ from easy_tdx.chanlun.mmd import (
     _calc_pullback_structure_integrity_v49,
     _calc_zhongshu_level_weight_v49,
 )
-from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, ZS
+from easy_tdx.chanlun.types import BI, FX, MMD, ZS, CLKline, FXType, MMDType
 
 
 def _make_bi(index_start: int, index_end: int, price_start: float, price_end: float) -> BI:
     """辅助函数：创建一个简单的笔。"""
     from datetime import datetime
+
     k1 = CLKline(
         k_index=index_start,
         date=datetime(2024, 1, 1),
-        open=price_start, close=price_start, high=price_start, low=price_start,
+        open=price_start,
+        close=price_start,
+        high=price_start,
+        low=price_start,
         amount=1e6,
     )
     fx1 = FX(fx_type=FXType.DI, k=k1, klines=[k1, k1, k1], val=price_start)
     k2 = CLKline(
         k_index=index_end,
         date=datetime(2024, 1, 6),
-        open=price_end, close=price_end, high=price_end, low=price_end,
+        open=price_end,
+        close=price_end,
+        high=price_end,
+        low=price_end,
         amount=1e6,
     )
     fx2 = FX(fx_type=FXType.DING, k=k2, klines=[k1, k2, k2], val=price_end)
@@ -128,12 +134,17 @@ class TestPullbackStructureIntegrityV49:
     def test_invalid_structure_filtered(self):
         """测试结构无效时被过滤（3买时非递减）。"""
         from datetime import datetime
+
         price_seq = [44.0, 46.0, 48.0, 50.0, 52.0, 54.0, 55.0, 56.0]
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
         # 创建向上的笔（3买需要向下的回踩，所以这应该是无效的）
-        k1 = CLKline(k_index=0, date=datetime(2024, 1, 1), open=44, close=44, high=44, low=44, amount=1e6)
+        k1 = CLKline(
+            k_index=0, date=datetime(2024, 1, 1), open=44, close=44, high=44, low=44, amount=1e6
+        )
         fx1 = FX(fx_type=FXType.DI, k=k1, klines=[k1, k1, k1], val=44)
-        k2 = CLKline(k_index=7, date=datetime(2024, 1, 8), open=56, close=56, high=56, low=56, amount=1e6)
+        k2 = CLKline(
+            k_index=7, date=datetime(2024, 1, 8), open=56, close=56, high=56, low=56, amount=1e6
+        )
         fx2 = FX(fx_type=FXType.DING, k=k2, klines=[k1, k2, k2], val=56)
         bi = BI(start=fx1, end=fx2, direction="up")
         mmd.bi = bi
@@ -153,10 +164,15 @@ class TestPullbackStructureIntegrityV49:
     def test_insufficient_data_returns_default(self):
         """测试数据不足时返回默认值。"""
         from datetime import datetime
+
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
-        k1 = CLKline(k_index=0, date=datetime(2024, 1, 1), open=50, close=50, high=50, low=50, amount=1e6)
+        k1 = CLKline(
+            k_index=0, date=datetime(2024, 1, 1), open=50, close=50, high=50, low=50, amount=1e6
+        )
         fx1 = FX(fx_type=FXType.DI, k=k1, klines=[k1, k1, k1], val=50)
-        k2 = CLKline(k_index=2, date=datetime(2024, 1, 3), open=48, close=48, high=48, low=48, amount=1e6)
+        k2 = CLKline(
+            k_index=2, date=datetime(2024, 1, 3), open=48, close=48, high=48, low=48, amount=1e6
+        )
         fx2 = FX(fx_type=FXType.DING, k=k2, klines=[k1, k2, k2], val=48)
         bi = BI(start=fx1, end=fx2, direction="down")
         mmd.bi = bi
@@ -242,15 +258,17 @@ class TestFindMMDsV49Integration:
             else:
                 close.append(close[-1] * (1 + np.random.normal(0, 0.005)))
         close = np.array(close)
-        return pd.DataFrame({
-            "datetime": dates,
-            "open": close * (1 + np.random.uniform(-0.005, 0.005, n)),
-            "high": close * (1 + np.random.uniform(0, 0.01, n)),
-            "low": close * (1 + np.random.uniform(-0.01, 0, n)),
-            "close": close,
-            "amount": [1e6] * n,
-            "vol": [1e5] * n,
-        })
+        return pd.DataFrame(
+            {
+                "datetime": dates,
+                "open": close * (1 + np.random.uniform(-0.005, 0.005, n)),
+                "high": close * (1 + np.random.uniform(0, 0.01, n)),
+                "low": close * (1 + np.random.uniform(-0.01, 0, n)),
+                "close": close,
+                "amount": [1e6] * n,
+                "vol": [1e5] * n,
+            }
+        )
 
     def test_v49_fields_present_in_mmd(self):
         """测试V49字段存在于MMD对象中。"""
@@ -261,9 +279,9 @@ class TestFindMMDsV49Integration:
         buy_3_signals = [m for m in result.mmds if m.mmd_type == MMDType.BUY_3]
         if buy_3_signals:
             mmd = buy_3_signals[0]
-            assert hasattr(mmd, '_breakout_strength_revalidation_v49')
-            assert hasattr(mmd, '_pullback_structure_integrity_v49')
-            assert hasattr(mmd, '_zhongshu_level_weight_v49')
+            assert hasattr(mmd, "_breakout_strength_revalidation_v49")
+            assert hasattr(mmd, "_pullback_structure_integrity_v49")
+            assert hasattr(mmd, "_zhongshu_level_weight_v49")
 
     def test_v49_no_crash(self):
         """测试V49不会导致崩溃。"""
@@ -271,7 +289,7 @@ class TestFindMMDsV49Integration:
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)
         assert result is not None
-        assert hasattr(result, 'mmds')
+        assert hasattr(result, "mmds")
 
     def test_v49_confidence_bounds(self):
         """测试V49调整后置信度仍在合理范围内。"""

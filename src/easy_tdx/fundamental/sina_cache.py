@@ -78,8 +78,7 @@ def store_rows(
                 "report_date": _iso(r.report_date),
                 "disclosure_date": _iso(r.disclosure_date),
                 "indicators": {
-                    k: (float(v) if v is not None else None)
-                    for k, v in r.indicators.items()
+                    k: (float(v) if v is not None else None) for k, v in r.indicators.items()
                 },
             }
             for r in rows
@@ -131,9 +130,7 @@ def load_rows(code: str) -> list[dict[str, Any]] | None:
         ).fetchone()
         if fv is None or fv[0] != str(FORMAT_VERSION):
             return None
-        row = conn.execute(
-            "SELECT payload FROM sina_rows WHERE code = ?", (code,)
-        ).fetchone()
+        row = conn.execute("SELECT payload FROM sina_rows WHERE code = ?", (code,)).fetchone()
     finally:
         conn.close()
     if row is None:
@@ -181,6 +178,12 @@ def clear_cache() -> int:
 
 
 __all__ = [
-    "CACHE_DIR", "DB_PATH", "FORMAT_VERSION",
-    "store_rows", "load_rows", "has_rows", "cache_stats", "clear_cache",
+    "CACHE_DIR",
+    "DB_PATH",
+    "FORMAT_VERSION",
+    "store_rows",
+    "load_rows",
+    "has_rows",
+    "cache_stats",
+    "clear_cache",
 ]

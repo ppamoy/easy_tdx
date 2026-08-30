@@ -89,9 +89,7 @@ def _pct(v: Any) -> float | None:
 
 
 def _contrib(score: float, max_score: float, reason: str) -> ScoreDetail:
-    return ScoreDetail(
-        name=reason.split("：")[0][:12], score=score, max=max_score, reason=reason
-    )
+    return ScoreDetail(name=reason.split("：")[0][:12], score=score, max=max_score, reason=reason)
 
 
 def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:

@@ -14,9 +14,9 @@ import pytest
 
 from easy_tdx.chanlun.mmd import (
     _calc_false_breakout_detection_v56,
-    _calc_zhongshu_structure_complexity_v56,
-    _calc_volatility_adaptive_position_v56,
     _calc_multi_signal_resonance_v56,
+    _calc_volatility_adaptive_position_v56,
+    _calc_zhongshu_structure_complexity_v56,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -64,6 +64,7 @@ class TestFalseBreakoutDetectionV56:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_false_breakout_detection_v56
+
         assert callable(_calc_false_breakout_detection_v56)
 
     def test_buy3_fake_breakout(self):
@@ -74,7 +75,11 @@ class TestFalseBreakoutDetectionV56:
         volumes = [1000.0] * 26
         highs = [c + 0.5 for c in closes]
         lows = [c - 0.5 for c in closes]
-        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 19})()})()})()
+        mmd.bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 19})()})()},
+        )()
         result = _calc_false_breakout_detection_v56(mmd, closes, volumes, highs, lows)
         assert isinstance(result["retracement_pct"], float)
         assert isinstance(result["confidence_adjust"], float)
@@ -86,7 +91,11 @@ class TestFalseBreakoutDetectionV56:
         volumes = [1000.0] * 20 + [1500.0, 1600.0, 1700.0, 1800.0, 1900.0]
         highs = [c + 0.5 for c in closes]
         lows = [c - 0.5 for c in closes]
-        mmd.bi = type('obj', (object,), {'end': type('obj', (object,), {'k': type('obj', (object,), {'k_index': 19})()})()})()
+        mmd.bi = type(
+            "obj",
+            (object,),
+            {"end": type("obj", (object,), {"k": type("obj", (object,), {"k_index": 19})()})()},
+        )()
         result = _calc_false_breakout_detection_v56(mmd, closes, volumes, highs, lows)
         assert isinstance(result["breakout_valid"], bool)
         assert isinstance(result["confidence_adjust"], float)
@@ -112,6 +121,7 @@ class TestZhongshuStructureComplexityV56:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_zhongshu_structure_complexity_v56
+
         assert callable(_calc_zhongshu_structure_complexity_v56)
 
     def test_simple_structure(self):
@@ -141,7 +151,9 @@ class TestVolatilityAdaptivePositionV56:
     def test_insufficient_data(self):
         """数据不足时返回默认值。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
-        result = _calc_volatility_adaptive_position_v56(mmd, [100.0] * 10, [100.5] * 10, [99.5] * 10)
+        result = _calc_volatility_adaptive_position_v56(
+            mmd, [100.0] * 10, [100.5] * 10, [99.5] * 10
+        )
         assert result["volatility_level"] == "unknown"
         assert result["confidence_adjust"] == 0.0
 
@@ -167,6 +179,7 @@ class TestVolatilityAdaptivePositionV56:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_volatility_adaptive_position_v56
+
         assert callable(_calc_volatility_adaptive_position_v56)
 
     def test_low_volatility(self):
@@ -223,6 +236,7 @@ class TestMultiSignalResonanceV56:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_multi_signal_resonance_v56
+
         assert callable(_calc_multi_signal_resonance_v56)
 
     def test_bearish_signal(self):
@@ -244,10 +258,11 @@ class TestFindMMDsV56Integration:
         """所有V56函数可正常导入。"""
         from easy_tdx.chanlun.mmd import (
             _calc_false_breakout_detection_v56,
-            _calc_zhongshu_structure_complexity_v56,
-            _calc_volatility_adaptive_position_v56,
             _calc_multi_signal_resonance_v56,
+            _calc_volatility_adaptive_position_v56,
+            _calc_zhongshu_structure_complexity_v56,
         )
+
         assert callable(_calc_false_breakout_detection_v56)
         assert callable(_calc_zhongshu_structure_complexity_v56)
         assert callable(_calc_volatility_adaptive_position_v56)
@@ -256,6 +271,7 @@ class TestFindMMDsV56Integration:
     def test_v56_fields_in_mmd_type(self):
         """MMD类型包含V56字段定义。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, msg="test")
         assert hasattr(mmd, "_false_breakout_detection_v56")
         assert hasattr(mmd, "_zhongshu_structure_complexity_v56")

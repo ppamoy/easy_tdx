@@ -93,9 +93,7 @@ def load_pool(
         frame = pd.DataFrame()
     else:
         # V89：每份报告期走 SQLite 指标帧缓存，重复选股/扫描只解析一次
-        frame = load_all_periods_frame(
-            zips, client, codes=codes, markets=markets
-        )
+        frame = load_all_periods_frame(zips, client, codes=codes, markets=markets)
     rows: list[pd.Series] = []
     missing: list[dict[str, str]] = []
     for p in pool:
@@ -232,9 +230,7 @@ def _summarize_periods(
             st[f"ret_{h}d"] = {
                 "count": len(vals),
                 "avg": round(sum(vals) / len(vals), 2) if vals else None,
-                "hit_rate": round(sum(1 for v in vals if v > 0) / len(vals), 2)
-                if vals
-                else None,
+                "hit_rate": round(sum(1 for v in vals if v > 0) / len(vals), 2) if vals else None,
             }
         return st
 
@@ -329,9 +325,7 @@ def run_screen(
                 continue
             d = sr.as_dict()
             if with_performance:
-                d["performance"] = subsequent_performance(
-                    sr.market, sr.code, target, client=client
-                )
+                d["performance"] = subsequent_performance(sr.market, sr.code, target, client=client)
             results.append(d)
     season = detect_season_for_date(target, client=client)
     results.sort(key=lambda r: r["scores"].get(r["category"], 0), reverse=True)
@@ -410,9 +404,7 @@ def scan_market(
     if zips is None:
         zips = pick_report_zips(target, client=client)
     # V89：全市场记录经 SQLite 指标帧缓存加载，重复扫描不再重复解析 zip
-    frame = load_all_periods_frame(
-        zips, client, codes=None, markets=set(markets)
-    )
+    frame = load_all_periods_frame(zips, client, codes=None, markets=set(markets))
     season = detect_season_for_date(target, client=client)
     base_out: dict[str, Any] = {
         "date": str(target),
@@ -425,7 +417,8 @@ def scan_market(
 
     picked = (
         pick_reports_bulk(frame, target, markets=set(markets))
-        if not frame.empty else pd.DataFrame()
+        if not frame.empty
+        else pd.DataFrame()
     )
 
     # V91：新浪补充——gpcw 未覆盖的股票（frame 空或单只缺失）走新浪财报
@@ -484,11 +477,13 @@ def scan_market(
             )
             d["performance"] = perf
 
-    base_out.update({
-        "by_category": by_category,
-        "total_scanned": pool_size,
-        "results": kept,
-    })
+    base_out.update(
+        {
+            "by_category": by_category,
+            "total_scanned": pool_size,
+            "results": kept,
+        }
+    )
     if scored and len(scored) > len(kept):
         base_out["truncated"] = len(scored) - len(kept)
     return base_out

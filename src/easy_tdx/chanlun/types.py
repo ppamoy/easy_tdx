@@ -362,7 +362,9 @@ class MMD:
     _dynamic_market_regime: dict[str, Any] | None = None  # 动态市场环境适配（条件130）
 
     # V48 enhancement fields (2026-08-24)
-    _volume_price_divergence_secondary_v48: dict[str, Any] | None = None  # 量价背离二次确认（条件134）
+    _volume_price_divergence_secondary_v48: dict[str, Any] | None = (
+        None  # 量价背离二次确认（条件134）
+    )
     _trend_strength_weighting: dict[str, Any] | None = None  # 趋势强度加权（条件135）
     _dynamic_risk_reward_ratio: dict[str, Any] | None = None  # 动态风险收益比（条件136）
 
@@ -378,19 +380,25 @@ class MMD:
     _market_sentiment_fusion_v50: dict[str, Any] | None = None  # 市场情绪指标融合（条件143）
 
     # V51 enhancement fields (2026-08-25)
-    _breakout_bi_strength_enhanced_v51: dict[str, Any] | None = None  # 突破笔力度二次确认增强（条件144）
+    _breakout_bi_strength_enhanced_v51: dict[str, Any] | None = (
+        None  # 突破笔力度二次确认增强（条件144）
+    )
     _pullback_depth_time_v51: dict[str, Any] | None = None  # 回踩笔深度+时间综合验证（条件145）
     _trend_strength_composite_v51: dict[str, Any] | None = None  # 趋势强度综合评分（条件146）
     _trading_decision_v51: dict[str, Any] | None = None  # 交易决策建议（条件147）
 
     # V52 enhancement fields (2026-08-25)
     _volume_sustain_after_signal_v52: dict[str, Any] | None = None  # 量价持续确认（条件148）
-    _multi_indicator_divergence_fusion_v52: dict[str, Any] | None = None  # 多指标背离共振（条件149）
+    _multi_indicator_divergence_fusion_v52: dict[str, Any] | None = (
+        None  # 多指标背离共振（条件149）
+    )
     _recent_extreme_price_v52: dict[str, Any] | None = None  # 近期极端价位检测（条件150）
     _market_regime_score_v52: dict[str, Any] | None = None  # 市场环境健康评分（条件151）
 
     # V53 enhancement fields (2026-08-25)
-    _trend_stage_follow_confirmation_v53: dict[str, Any] | None = None  # 趋势阶段识别与顺势确认（条件152）
+    _trend_stage_follow_confirmation_v53: dict[str, Any] | None = (
+        None  # 趋势阶段识别与顺势确认（条件152）
+    )
     _atr_adaptive_stop_v53: dict[str, Any] | None = None  # ATR自适应止损距离（条件153）
     _zs_breakout_strength_v53: dict[str, Any] | None = None  # 中枢突破力度验证（条件154）
     _signal_quality_tier_v53: dict[str, Any] | None = None  # 信号质量综合分层（条件155）
@@ -402,15 +410,21 @@ class MMD:
     _volume_price_coordination_v54: dict[str, Any] | None = None  # 量价配合度评分（条件159）
 
     # V55 enhancement fields (2026-08-26)
-    _multi_tf_resonance_filter_v55: dict[str, Any] | None = None  # 分钟级多时间框架共振过滤（条件160）
+    _multi_tf_resonance_filter_v55: dict[str, Any] | None = (
+        None  # 分钟级多时间框架共振过滤（条件160）
+    )
     _zhongshu_level_weight_v55: dict[str, Any] | None = None  # 中枢级别权重自适应（条件161）
     _weak_stock_risk_v55: dict[str, Any] | None = None  # 弱势股专项风险检测（条件162）
     _signal_trend_alignment_v55: dict[str, Any] | None = None  # 信号与趋势方向对齐验证（条件163）
 
     # V56 enhancement fields (2026-08-26)
     _false_breakout_detection_v56: dict[str, Any] | None = None  # 假突破识别（条件164）
-    _zhongshu_structure_complexity_v56: dict[str, Any] | None = None  # 中枢结构复杂度分析（条件165）
-    _volatility_adaptive_position_v56: dict[str, Any] | None = None  # 波动率自适应仓位建议（条件166）
+    _zhongshu_structure_complexity_v56: dict[str, Any] | None = (
+        None  # 中枢结构复杂度分析（条件165）
+    )
+    _volatility_adaptive_position_v56: dict[str, Any] | None = (
+        None  # 波动率自适应仓位建议（条件166）
+    )
     _multi_signal_resonance_v56: dict[str, Any] | None = None  # 多信号共振评分（条件167）
 
     # V57 enhancement fields (2026-08-26)
@@ -420,7 +434,9 @@ class MMD:
     _signal_decay_detection_v57: dict[str, Any] | None = None  # 信号衰减检测（条件171）
 
     # V58 enhancement fields (2026-08-26)
-    _multi_tf_trend_consistency_v58: dict[str, Any] | None = None  # 多时间框架趋势一致性验证（条件172）
+    _multi_tf_trend_consistency_v58: dict[str, Any] | None = (
+        None  # 多时间框架趋势一致性验证（条件172）
+    )
     _volume_accumulation_validation_v58: dict[str, Any] | None = None  # 成交量堆积验证（条件173）
     _atr_adaptive_stop_v58: dict[str, Any] | None = None  # ATR自适应止损距离（条件174）
     _composite_quality_score_v58: dict[str, Any] | None = None  # 信号质量综合评分（条件175）
@@ -444,29 +460,47 @@ class MMD:
     # V62 enhancement fields (2026-08-28)
     _boll_bandwidth_breakout_v62: dict[str, Any] | None = None  # BOLL带宽突破确认（条件186）
     _boll_bandwidth_reversal_v62: dict[str, Any] | None = None  # BOLL带宽压缩反弹确认（条件187）
-    _dynamic_threshold_volatility_regime_v62: dict[str, Any] | None = None  # 动态阈值-波动率状态切换（条件188）
-    _dynamic_threshold_atr_multiplier_v62: dict[str, Any] | None = None  # 动态阈值-ATR倍数自适应（条件189）
+    _dynamic_threshold_volatility_regime_v62: dict[str, Any] | None = (
+        None  # 动态阈值-波动率状态切换（条件188）
+    )
+    _dynamic_threshold_atr_multiplier_v62: dict[str, Any] | None = (
+        None  # 动态阈值-ATR倍数自适应（条件189）
+    )
 
     # V63 enhancement fields (2026-08-28)
-    _zhongshu_level_weight_enhanced_v63: dict[str, Any] | None = None  # 中枢级别权重优化增强（条件190）
+    _zhongshu_level_weight_enhanced_v63: dict[str, Any] | None = (
+        None  # 中枢级别权重优化增强（条件190）
+    )
     _multi_period_signal_decay_v63: dict[str, Any] | None = None  # 多周期信号衰减追踪（条件191）
 
     # V65 enhancement fields (2026-08-28)
-    _volume_price_divergence_secondary_v65: dict[str, Any] | None = None  # 量价背离二次确认增强（条件192）
+    _volume_price_divergence_secondary_v65: dict[str, Any] | None = (
+        None  # 量价背离二次确认增强（条件192）
+    )
     _breakout_retest_confirmation_v65: dict[str, Any] | None = None  # 中枢突破回踩确认（条件193）
-    _volatility_compression_breakout_v65: dict[str, Any] | None = None  # 波动率压缩突破信号（条件194）
-    _signal_time_window_freshness_v65: dict[str, Any] | None = None  # 买卖点时间窗口新鲜度（条件195）
+    _volatility_compression_breakout_v65: dict[str, Any] | None = (
+        None  # 波动率压缩突破信号（条件194）
+    )
+    _signal_time_window_freshness_v65: dict[str, Any] | None = (
+        None  # 买卖点时间窗口新鲜度（条件195）
+    )
 
     # V66 enhancement fields (2026-08-28)
     _macd_momentum_acceleration_v66: dict[str, Any] | None = None  # MACD动能锥加速确认（条件196）
     _volume_price_coordination_deep_v66: dict[str, Any] | None = None  # 量价配合深度评分（条件197）
-    _multi_tf_convergence_intensity_v66: dict[str, Any] | None = None  # 多时间框架共振强度评分（条件198）
+    _multi_tf_convergence_intensity_v66: dict[str, Any] | None = (
+        None  # 多时间框架共振强度评分（条件198）
+    )
     _signal_execution_priority_v66: dict[str, Any] | None = None  # 信号执行优先级建议（条件199）
 
     # V67 enhancement fields (2026-08-28)
     _zhongshu_divergence_strength_v67: dict[str, Any] | None = None  # 中枢背驰力度量化（条件200）
-    _multi_level_mmd_consistency_v67: dict[str, Any] | None = None  # 多级别买卖点一致性验证（条件201）
-    _post_signal_trajectory_health_v67: dict[str, Any] | None = None  # 信号后价格轨迹健康度（条件202）
+    _multi_level_mmd_consistency_v67: dict[str, Any] | None = (
+        None  # 多级别买卖点一致性验证（条件201）
+    )
+    _post_signal_trajectory_health_v67: dict[str, Any] | None = (
+        None  # 信号后价格轨迹健康度（条件202）
+    )
     _dynamic_sl_tp_recommendation_v67: dict[str, Any] | None = None  # 动态止损止盈推荐（条件203）
 
     # V68 enhancement fields (2026-08-29)
@@ -495,7 +529,9 @@ class MMD:
 
     # V72 enhancement fields (2026-08-26)
     _ma_convergence_divergence_v72: dict[str, Any] | None = None  # 均线收敛发散状态评估（条件220）
-    _support_resistance_proximity_v72: dict[str, Any] | None = None  # 支撑/阻力位距离评估（条件221）
+    _support_resistance_proximity_v72: dict[str, Any] | None = (
+        None  # 支撑/阻力位距离评估（条件221）
+    )
     _volume_structure_quality_v72: dict[str, Any] | None = None  # 量价结构质量评分（条件222）
     _signal_decay_velocity_v72: dict[str, Any] | None = None  # 信号衰减速度评估（条件223）
 
@@ -506,7 +542,9 @@ class MMD:
     _volatility_regime_adaptation_v73: dict[str, Any] | None = None  # 波动率环境适配（条件227）
 
     # V74 enhancement fields (2026-08-26)
-    _volume_price_divergence_secondary_v74: dict[str, Any] | None = None  # 量价背离二次确认（条件228）
+    _volume_price_divergence_secondary_v74: dict[str, Any] | None = (
+        None  # 量价背离二次确认（条件228）
+    )
     _trend_momentum_continuity_v74: dict[str, Any] | None = None  # 趋势动能持续验证（条件229）
     _zhongshu_overlap_density_v74: dict[str, Any] | None = None  # 中枢重叠度评估（条件230）
     _signal_resonance_depth_v74: dict[str, Any] | None = None  # 信号共振深度评分（条件231）
@@ -520,7 +558,9 @@ class MMD:
     # V76 enhancement fields (2026-08-26)
     _price_structure_integrity_v76: dict[str, Any] | None = None  # 价格结构完整性验证（条件236）
     _trend_alignment_validation_v76: dict[str, Any] | None = None  # 趋势方向对齐验证（条件237）
-    _volatility_adaptive_confidence_v76: dict[str, Any] | None = None  # 波动率自适应置信度（条件238）
+    _volatility_adaptive_confidence_v76: dict[str, Any] | None = (
+        None  # 波动率自适应置信度（条件238）
+    )
     _signal_final_validity_v76: dict[str, Any] | None = None  # 买卖点最终有效性评分（条件239）
 
     # V77 enhancement fields (2026-08-27)
@@ -532,13 +572,17 @@ class MMD:
     # V78 enhancement fields (2026-08-28)
     _mmd_cycle_position_v78: dict[str, Any] | None = None  # 买卖点周期位置评分（条件244）
     _multi_signal_consensus_v78: dict[str, Any] | None = None  # 多信号时间窗口一致性（条件245）
-    _volatility_compression_breakout_v78: dict[str, Any] | None = None  # 波动率压缩突破预测（条件246）
+    _volatility_compression_breakout_v78: dict[str, Any] | None = (
+        None  # 波动率压缩突破预测（条件246）
+    )
     _fund_flow_divergence_v78: dict[str, Any] | None = None  # 资金流向与价格背离检测（条件247）
 
     # V79 enhancement fields (2026-08-28)
     _fractal_stability_validation_v79: dict[str, Any] | None = None  # 分型稳定性验证（条件248）
     _mmd_distance_safety_v79: dict[str, Any] | None = None  # 买卖点距离安全阈值（条件249）
-    _multi_level_structure_consistency_v79: dict[str, Any] | None = None  # 多级别结构一致性评分（条件250）
+    _multi_level_structure_consistency_v79: dict[str, Any] | None = (
+        None  # 多级别结构一致性评分（条件250）
+    )
     _price_momentum_continuity_v79: dict[str, Any] | None = None  # 价格动能持续性评分（条件251）
 
     # V80 enhancement fields (2026-08-28)
@@ -549,15 +593,21 @@ class MMD:
 
     # V81 enhancement fields (2026-08-28)
     _volatility_regime_transition_v81: dict[str, Any] | None = None  # 波动率状态转换检测（条件256）
-    _support_resistance_strength_v81: dict[str, Any] | None = None  # 关键支撑阻力强度验证（条件257）
-    _volume_price_energy_distribution_v81: dict[str, Any] | None = None  # 量价能量分布验证（条件258）
+    _support_resistance_strength_v81: dict[str, Any] | None = (
+        None  # 关键支撑阻力强度验证（条件257）
+    )
+    _volume_price_energy_distribution_v81: dict[str, Any] | None = (
+        None  # 量价能量分布验证（条件258）
+    )
     _signal_execution_window_v81: dict[str, Any] | None = None  # 信号执行窗口评估（条件259）
 
     # V82 enhancement fields (2026-08-28)
     _mmd_age_decay_v82: dict[str, Any] | None = None  # 买卖点时间衰减验证（条件260）
     _breakout_retest_confirm_v82: dict[str, Any] | None = None  # 中枢突破回踩确认（条件261）
     _macd_multi_tf_resonance_v82: dict[str, Any] | None = None  # 多级别MACD共振（条件262）
-    _volatility_compression_breakout_v82: dict[str, Any] | None = None  # 波动率压缩突破确认（条件263）
+    _volatility_compression_breakout_v82: dict[str, Any] | None = (
+        None  # 波动率压缩突破确认（条件263）
+    )
 
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"
@@ -588,16 +638,17 @@ class BC:
 
 # ── BOLL 指标 ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class BOLLResult:
     """BOLL 布林带结果。"""
-    
-    upper: list[float] = field(default_factory=list)   # 上轨
-    mid: list[float] = field(default_factory=list)     # 中轨
-    lower: list[float] = field(default_factory=list)   # 下轨
-    width: list[float] = field(default_factory=list)   # 带宽 (upper - lower) / mid
+
+    upper: list[float] = field(default_factory=list)  # 上轨
+    mid: list[float] = field(default_factory=list)  # 中轨
+    lower: list[float] = field(default_factory=list)  # 下轨
+    width: list[float] = field(default_factory=list)  # 带宽 (upper - lower) / mid
     percent_b: list[float] = field(default_factory=list)  # %B = (close - lower) / (upper - lower)
-    
+
     @property
     def latest_upper(self) -> float:
         return self.upper[-1] if len(self.upper) > 0 else 0.0

@@ -41,7 +41,6 @@ def _period_from_filename(filename: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-
 def _to_date(v: Any) -> date | None:
     """gpcw 公告日期字段（float，YYMMDD 或 YYYYMMDD）→ date。0/NaN 返回 None。"""
     if v is None:
@@ -103,7 +102,6 @@ def _calc_client() -> TdxClient:
     return TdxClient(host=host) if host else TdxClient()
 
 
-
 def _cached_zip(filename: str, client: TdxClient | None = None) -> bytes | None:
     """下载并缓存 gpcw zip。返回原始字节，失败返回 None。"""
     _GPCW_CACHE.mkdir(parents=True, exist_ok=True)
@@ -143,7 +141,6 @@ class ReportRecord:
         if a is None or not b:
             return None
         return a / b
-
 
 
 def _market_from_code(code: str) -> str:
@@ -381,7 +378,7 @@ def pick_report(
             usable.append(row)
     if not usable:
         return None
-    usable.sort(key=lambda r: (r["disclosure_date"] or r["report_date"] or date.min), reverse=True)
+    usable.sort(key=lambda r: r["disclosure_date"] or r["report_date"] or date.min, reverse=True)
     return usable[0]
 
 
@@ -421,10 +418,7 @@ def pick_reports_bulk(
     usable_dd = dd.notna() & (dd <= target_ts)
     # 披露日缺失：报告期 ≤ target 且相差 ≤100 天（近似，避免用未披露数据）
     usable_rd = (
-        rd.notna()
-        & dd.isna()
-        & (rd <= target_ts)
-        & ((target_ts - rd) <= pd.Timedelta(days=100))
+        rd.notna() & dd.isna() & (rd <= target_ts) & ((target_ts - rd) <= pd.Timedelta(days=100))
     )
     usable = usable_dd | usable_rd
     sub = sub[usable]

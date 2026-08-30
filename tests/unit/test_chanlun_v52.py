@@ -13,10 +13,10 @@ from __future__ import annotations
 import pytest
 
 from easy_tdx.chanlun.mmd import (
-    _calc_volume_sustain_after_signal_v52,
+    _calc_market_regime_score_v52,
     _calc_multi_indicator_divergence_fusion_v52,
     _calc_recent_extreme_price_v52,
-    _calc_market_regime_score_v52,
+    _calc_volume_sustain_after_signal_v52,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -40,7 +40,9 @@ class TestVolumeSustainAfterSignalV52:
         mmd = _make_mock_mmd(MMDType.BUY_3)
         closes = [100.0] * 20
         # 前10根量能低，后10根中前5低后5高 → post比pre高
-        volumes = [1000.0] * 5 + [800.0] * 5 + [1200.0] * 10  # indices 0-4:1000, 5-9:800, 10-19:1200
+        volumes = (
+            [1000.0] * 5 + [800.0] * 5 + [1200.0] * 10
+        )  # indices 0-4:1000, 5-9:800, 10-19:1200
         # lookback=5: pre=volumes[-10:-5]=indices 10-14=1200, post=volumes[-5:]=indices 15-19=1200 → ratio=1.0 (normal)
         # 需要让 post > pre，所以调整数据：
         volumes = [1000.0] * 10 + [1000.0] * 5 + [1300.0] * 5  # pre=1000, post=1300, ratio=1.3
@@ -100,7 +102,9 @@ class TestMultiIndicatorDivergenceFusionV52:
     def test_insufficient_data(self):
         """数据不足时返回默认值。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
-        result = _calc_multi_indicator_divergence_fusion_v52(mmd, [100.0] * 10, {"macd_hist": [0.0] * 10})
+        result = _calc_multi_indicator_divergence_fusion_v52(
+            mmd, [100.0] * 10, {"macd_hist": [0.0] * 10}
+        )
         assert result["fusion_score"] == 0
 
     def test_all_three_divergence(self):
@@ -192,6 +196,7 @@ class TestMarketRegimeScoreV52:
     def test_bad_regime(self):
         """高波动+横盘 → 环境较差，-3%。"""
         import random
+
         random.seed(42)
         closes = [100.0]
         for _ in range(70):
@@ -205,7 +210,9 @@ class TestMarketRegimeScoreV52:
 
     def test_insufficient_data(self):
         """数据不足时返回默认值。"""
-        result = _calc_market_regime_score_v52([100.0] * 30, [1000.0] * 30, [100.0] * 30, [90.0] * 30)
+        result = _calc_market_regime_score_v52(
+            [100.0] * 30, [1000.0] * 30, [100.0] * 30, [90.0] * 30
+        )
         assert result["regime_score"] == 0
         assert result["confidence_adjust"] == 0.0
 
@@ -236,11 +243,12 @@ class TestFindMMDsV52Integration:
     def test_v52_functions_importable(self):
         """所有V52函数可正常导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_volume_sustain_after_signal_v52,
+            _calc_market_regime_score_v52,
             _calc_multi_indicator_divergence_fusion_v52,
             _calc_recent_extreme_price_v52,
-            _calc_market_regime_score_v52,
+            _calc_volume_sustain_after_signal_v52,
         )
+
         assert callable(_calc_volume_sustain_after_signal_v52)
         assert callable(_calc_multi_indicator_divergence_fusion_v52)
         assert callable(_calc_recent_extreme_price_v52)
@@ -249,6 +257,7 @@ class TestFindMMDsV52Integration:
     def test_v52_fields_in_mmd_type(self):
         """MMD类型包含V52字段定义。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, msg="test")
         assert hasattr(mmd, "_volume_sustain_after_signal_v52")
         assert hasattr(mmd, "_multi_indicator_divergence_fusion_v52")

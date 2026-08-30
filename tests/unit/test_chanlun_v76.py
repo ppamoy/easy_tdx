@@ -1,18 +1,18 @@
 """V76 缠论模型增强测试 — 条件236-239"""
-import pytest
+
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from easy_tdx.backtest.chanlun_validator import ConditionGroup
 from easy_tdx.chanlun.mmd import (
     _calc_price_structure_integrity_v76,
+    _calc_signal_final_validity_v76,
     _calc_trend_alignment_validation_v76,
     _calc_volatility_adaptive_confidence_v76,
-    _calc_signal_final_validity_v76,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
-from easy_tdx.backtest.chanlun_validator import ConditionGroup
 
 
 def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
@@ -22,6 +22,7 @@ def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
 
 def _make_closes(n: int = 100, base: float = 100.0) -> list[float]:
     import random
+
     random.seed(42)
     return [base + random.uniform(-5, 5) * (i / n) for i in range(n)]
 
@@ -59,6 +60,7 @@ class TestV76BacktestValidator:
     def test_v76_in_all_groups(self):
         """V76 应在所有 ConditionGroup 列表中"""
         from easy_tdx.backtest.chanlun_validator import ConditionGroup
+
         all_groups = [g for g in ConditionGroup]
         assert ConditionGroup.V76 in all_groups
 
@@ -115,10 +117,17 @@ class TestV76Functions:
         closes = [100.0 + i * 0.5 for i in range(100)]  # 上升趋势
         result = _calc_trend_alignment_validation_v76(mmd, closes)
         assert result["alignment_status"] in (
-            "strong_aligned", "moderately_aligned", "diverged", "unknown"
+            "strong_aligned",
+            "moderately_aligned",
+            "diverged",
+            "unknown",
         )
         assert result["trend_direction"] in (
-            "bullish", "weak_bullish", "bearish", "weak_bearish", "neutral"
+            "bullish",
+            "weak_bullish",
+            "bearish",
+            "weak_bearish",
+            "neutral",
         )
 
     def test_tav_bearish_alignment(self):
@@ -126,7 +135,11 @@ class TestV76Functions:
         closes = [100.0 - i * 0.5 for i in range(100)]  # 下降趋势
         result = _calc_trend_alignment_validation_v76(mmd, closes)
         assert result["trend_direction"] in (
-            "bullish", "weak_bullish", "bearish", "weak_bearish", "neutral"
+            "bullish",
+            "weak_bullish",
+            "bearish",
+            "weak_bearish",
+            "neutral",
         )
 
     def test_tav_insufficient_data(self):
@@ -156,6 +169,7 @@ class TestV76Functions:
 
     def test_vac_high_volatility(self):
         import random
+
         random.seed(99)
         mmd = _make_mmd("3buy", 0.6)
         closes = [100.0 + random.uniform(-10, 10) for _ in range(100)]

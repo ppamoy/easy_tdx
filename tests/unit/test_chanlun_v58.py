@@ -10,13 +10,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from easy_tdx.chanlun.mmd import (
-    _calc_multi_tf_trend_consistency_v58,
-    _calc_volume_accumulation_validation_v58,
     _calc_atr_adaptive_stop_v58,
     _calc_composite_quality_score_v58,
+    _calc_multi_tf_trend_consistency_v58,
+    _calc_volume_accumulation_validation_v58,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -263,11 +261,12 @@ class TestFindMMDsV58Integration:
     def test_v58_functions_importable(self):
         """所有V58函数可导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_multi_tf_trend_consistency_v58,
-            _calc_volume_accumulation_validation_v58,
             _calc_atr_adaptive_stop_v58,
             _calc_composite_quality_score_v58,
+            _calc_multi_tf_trend_consistency_v58,
+            _calc_volume_accumulation_validation_v58,
         )
+
         assert callable(_calc_multi_tf_trend_consistency_v58)
         assert callable(_calc_volume_accumulation_validation_v58)
         assert callable(_calc_atr_adaptive_stop_v58)

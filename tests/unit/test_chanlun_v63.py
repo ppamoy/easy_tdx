@@ -11,17 +11,15 @@ from __future__ import annotations
 import pytest
 
 from easy_tdx.chanlun.mmd import (
-    _calc_zhongshu_level_weight_enhanced_v63,
     _calc_multi_period_signal_decay_v63,
-    find_mmds_v39,
+    _calc_zhongshu_level_weight_enhanced_v63,
 )
-from easy_tdx.chanlun.types import MMD, MMDType, ZS
-from easy_tdx.chanlun.bi import BI
-
+from easy_tdx.chanlun.types import MMD, ZS, MMDType
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 条件190: 中枢级别权重优化增强
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestZhongshuLevelWeightEnhancedV63:
     """条件190 测试。"""
@@ -35,8 +33,11 @@ class TestZhongshuLevelWeightEnhancedV63:
             msg="",
         )
 
-    def _make_zs(self, line_count: int, zg: float = 100.0, zd: float = 90.0, done: bool = True) -> ZS:
+    def _make_zs(
+        self, line_count: int, zg: float = 100.0, zd: float = 90.0, done: bool = True
+    ) -> ZS:
         from unittest.mock import MagicMock
+
         lines = [MagicMock() for _ in range(line_count)]
         zs = ZS(index=0, lines=lines, zg=zg, zd=zd, gg=zg, dd=zd, direction="up", done=done)
         return zs
@@ -128,6 +129,7 @@ class TestZhongshuLevelWeightEnhancedV63:
 # 条件191: 多周期信号衰减追踪
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestMultiPeriodSignalDecayV63:
     """条件191 测试。"""
 
@@ -142,6 +144,7 @@ class TestMultiPeriodSignalDecayV63:
         # 模拟 bi.end.k.k_index
         if mmd.bi is None:
             from unittest.mock import MagicMock
+
             mock_k = MagicMock()
             mock_k.k_index = signal_idx
             mock_end = MagicMock()
@@ -187,7 +190,27 @@ class TestMultiPeriodSignalDecayV63:
         mmd = self._make_mmd(MMDType.BUY_3, signal_idx=5)
         # 短期涨但长期跌 (需要至少25根，总共30根)
         # closes[5]=100是信号价，closes[6:11]涨到102然后持续下跌
-        closes = [100.0] * 6 + [102.0, 101.0, 99.0, 97.0, 95.0, 93.0, 91.0, 89.0, 87.0, 85.0, 83.0, 81.0, 79.0, 77.0, 75.0, 73.0, 71.0, 69.0, 67.0]
+        closes = [100.0] * 6 + [
+            102.0,
+            101.0,
+            99.0,
+            97.0,
+            95.0,
+            93.0,
+            91.0,
+            89.0,
+            87.0,
+            85.0,
+            83.0,
+            81.0,
+            79.0,
+            77.0,
+            75.0,
+            73.0,
+            71.0,
+            69.0,
+            67.0,
+        ]
         result = _calc_multi_period_signal_decay_v63(mmd, closes)
         # 长期跌幅大，应标记为衰减
         assert result["overall_health"] in ("declining", "weak", "decaying")
@@ -242,22 +265,26 @@ class TestMultiPeriodSignalDecayV63:
 # 集成测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestFindMMDsV63Integration:
     """V63 条件集成到 find_mmds_v39 的测试。"""
 
     def test_v63_functions_importable(self):
         """V63 函数应可正常导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_zhongshu_level_weight_enhanced_v63,
             _calc_multi_period_signal_decay_v63,
+            _calc_zhongshu_level_weight_enhanced_v63,
         )
+
         assert callable(_calc_zhongshu_level_weight_enhanced_v63)
         assert callable(_calc_multi_period_signal_decay_v63)
 
     def test_v63_fields_in_mmd_type(self):
         """MMD 类型应包含 V63 字段定义。"""
-        from easy_tdx.chanlun.types import MMD
         import dataclasses
+
+        from easy_tdx.chanlun.types import MMD
+
         field_names = [f.name for f in dataclasses.fields(MMD)]
         assert "_zhongshu_level_weight_enhanced_v63" in field_names
         assert "_multi_period_signal_decay_v63" in field_names
@@ -272,6 +299,7 @@ class TestFindMMDsV63Integration:
             msg="",
         )
         from unittest.mock import MagicMock
+
         mock_k = MagicMock()
         mock_k.k_index = 20
         mock_end = MagicMock()
@@ -288,19 +316,30 @@ class TestFindMMDsV63Integration:
         decay_result = _calc_multi_period_signal_decay_v63(mmd, closes)
 
         orig_conf = mmd.confidence
-        mmd.confidence = max(0.0, min(1.0, mmd.confidence + zs_result.get("confidence_adjust", 0.0)))
-        mmd.confidence = max(0.0, min(1.0, mmd.confidence + decay_result.get("confidence_adjust", 0.0)))
+        mmd.confidence = max(
+            0.0, min(1.0, mmd.confidence + zs_result.get("confidence_adjust", 0.0))
+        )
+        mmd.confidence = max(
+            0.0, min(1.0, mmd.confidence + decay_result.get("confidence_adjust", 0.0))
+        )
 
         assert 0.0 <= mmd.confidence <= 1.0
         # 置信度应有变化
-        assert mmd.confidence != orig_conf or (zs_result.get("confidence_adjust", 0) == 0 and decay_result.get("confidence_adjust", 0) == 0)
+        assert mmd.confidence != orig_conf or (
+            zs_result.get("confidence_adjust", 0) == 0
+            and decay_result.get("confidence_adjust", 0) == 0
+        )
 
     def test_all_v63_conditions_callable(self):
         """所有 V63 条件函数应可正常调用且返回有效结果。"""
         from unittest.mock import MagicMock
+
         mmd = MMD(
             mmd_type=MMDType.BUY_3,
-            bi=None, zs=None, confidence=0.5, msg="",
+            bi=None,
+            zs=None,
+            confidence=0.5,
+            msg="",
         )
         mock_k = MagicMock()
         mock_k.k_index = 20

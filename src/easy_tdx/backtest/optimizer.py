@@ -222,9 +222,7 @@ class ParamGridOptimizer:
             heatmap=heatmap,
         )
 
-    def run_walk_forward(
-        self, train_ratio: float = 0.7, step_ratio: float = 0.1
-    ) -> OptimizeResult:
+    def run_walk_forward(self, train_ratio: float = 0.7, step_ratio: float = 0.1) -> OptimizeResult:
         """执行 walk-forward 验证寻优。
 
         将数据切分为多个训练/测试窗口，在每个训练窗口上寻优，

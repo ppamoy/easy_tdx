@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+from easy_tdx.chanlun import ChanlunAnalyser
 from easy_tdx.chanlun.mmd import (
-    _calc_volume_price_divergence_secondary_v48,
-    _calc_trend_strength_weighting_v48,
     _calc_dynamic_risk_reward_ratio_v48,
+    _calc_trend_strength_weighting_v48,
+    _calc_volume_price_divergence_secondary_v48,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -18,7 +17,9 @@ from easy_tdx.chanlun.types import MMD, MMDType
 class TestVolumePriceDivergenceSecondaryV48:
     """测试量价背离二次确认（条件134）。"""
 
-    def _make_data(self, n: int = 100, start_price: float = 50.0, trend: str = "up") -> tuple[list[float], list[float]]:
+    def _make_data(
+        self, n: int = 100, start_price: float = 50.0, trend: str = "up"
+    ) -> tuple[list[float], list[float]]:
         """生成测试数据。"""
         np.random.seed(42)
         closes = [start_price]
@@ -36,11 +37,17 @@ class TestVolumePriceDivergenceSecondaryV48:
         closes, volumes = self._make_data(n=100, start_price=50.0, trend="up")
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买: 突破确认")
         # 创建一个模拟的笔
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline
         from datetime import datetime
-        k = CLKline(k_index=90, date=datetime(2024, 1, 1), open=50, close=52, high=53, low=49, amount=1e6)
+
+        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
+
+        k = CLKline(
+            k_index=90, date=datetime(2024, 1, 1), open=50, close=52, high=53, low=49, amount=1e6
+        )
         fx = FX(fx_type=FXType.DI, k=k, klines=[k, k, k], val=49)
-        k2 = CLKline(k_index=95, date=datetime(2024, 1, 6), open=52, close=53, high=54, low=51, amount=1e6)
+        k2 = CLKline(
+            k_index=95, date=datetime(2024, 1, 6), open=52, close=53, high=54, low=51, amount=1e6
+        )
         fx2 = FX(fx_type=FXType.DING, k=k2, klines=[k, k2, k2], val=54)
         bi = BI(start=fx, end=fx2, direction="up")
         mmd.bi = bi
@@ -53,11 +60,17 @@ class TestVolumePriceDivergenceSecondaryV48:
         """测试卖出信号时VWAP偏离度为负。"""
         closes, volumes = self._make_data(n=100, start_price=50.0, trend="down")
         mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖: 跌破确认")
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline
         from datetime import datetime
-        k = CLKline(k_index=90, date=datetime(2024, 1, 1), open=50, close=48, high=51, low=47, amount=1e6)
+
+        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
+
+        k = CLKline(
+            k_index=90, date=datetime(2024, 1, 1), open=50, close=48, high=51, low=47, amount=1e6
+        )
         fx = FX(fx_type=FXType.DING, k=k, klines=[k, k, k], val=51)
-        k2 = CLKline(k_index=95, date=datetime(2024, 1, 6), open=48, close=47, high=49, low=46, amount=1e6)
+        k2 = CLKline(
+            k_index=95, date=datetime(2024, 1, 6), open=48, close=47, high=49, low=46, amount=1e6
+        )
         fx2 = FX(fx_type=FXType.DI, k=k2, klines=[k, k2, k2], val=46)
         bi = BI(start=fx, end=fx2, direction="down")
         mmd.bi = bi
@@ -76,7 +89,9 @@ class TestVolumePriceDivergenceSecondaryV48:
 class TestTrendStrengthWeightingV48:
     """测试趋势强度加权（条件135）。"""
 
-    def _make_data(self, n: int = 100, start_price: float = 50.0) -> tuple[list[float], list[float], list[float]]:
+    def _make_data(
+        self, n: int = 100, start_price: float = 50.0
+    ) -> tuple[list[float], list[float], list[float]]:
         np.random.seed(42)
         closes = [start_price]
         highs = [start_price * 1.01]
@@ -92,11 +107,17 @@ class TestTrendStrengthWeightingV48:
         """测试强趋势且方向一致时加分。"""
         closes, highs, lows = self._make_data(n=100, start_price=50.0)
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline
         from datetime import datetime
-        k = CLKline(k_index=90, date=datetime(2024, 1, 1), open=50, close=52, high=53, low=49, amount=1e6)
+
+        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
+
+        k = CLKline(
+            k_index=90, date=datetime(2024, 1, 1), open=50, close=52, high=53, low=49, amount=1e6
+        )
         fx = FX(fx_type=FXType.DI, k=k, klines=[k, k, k], val=49)
-        k2 = CLKline(k_index=95, date=datetime(2024, 1, 6), open=52, close=53, high=54, low=51, amount=1e6)
+        k2 = CLKline(
+            k_index=95, date=datetime(2024, 1, 6), open=52, close=53, high=54, low=51, amount=1e6
+        )
         fx2 = FX(fx_type=FXType.DING, k=k2, klines=[k, k2, k2], val=54)
         bi = BI(start=fx, end=fx2, direction="up")
         mmd.bi = bi
@@ -108,14 +129,18 @@ class TestTrendStrengthWeightingV48:
     def test_none_bi_returns_empty(self):
         """测试bi为None时返回空结果。"""
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
-        result = _calc_trend_strength_weighting_v48(mmd, [50.0, 51.0], [51.0, 52.0], [49.0, 50.0], 0.5)
+        result = _calc_trend_strength_weighting_v48(
+            mmd, [50.0, 51.0], [51.0, 52.0], [49.0, 50.0], 0.5
+        )
         assert result["confidence_adjust"] == 0.0
 
 
 class TestDynamicRiskRewardRatioV48:
     """测试动态风险收益比（条件136）。"""
 
-    def _make_data(self, n: int = 100, start_price: float = 50.0) -> tuple[list[float], list[float], list[float]]:
+    def _make_data(
+        self, n: int = 100, start_price: float = 50.0
+    ) -> tuple[list[float], list[float], list[float]]:
         np.random.seed(42)
         closes = [start_price]
         highs = [start_price * 1.01]
@@ -131,11 +156,17 @@ class TestDynamicRiskRewardRatioV48:
         """测试买入信号的风险收益比计算。"""
         closes, highs, lows = self._make_data(n=100, start_price=50.0)
         mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline
         from datetime import datetime
-        k = CLKline(k_index=90, date=datetime(2024, 1, 1), open=50, close=52, high=53, low=49, amount=1e6)
+
+        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
+
+        k = CLKline(
+            k_index=90, date=datetime(2024, 1, 1), open=50, close=52, high=53, low=49, amount=1e6
+        )
         fx = FX(fx_type=FXType.DI, k=k, klines=[k, k, k], val=49)
-        k2 = CLKline(k_index=95, date=datetime(2024, 1, 6), open=52, close=53, high=54, low=51, amount=1e6)
+        k2 = CLKline(
+            k_index=95, date=datetime(2024, 1, 6), open=52, close=53, high=54, low=51, amount=1e6
+        )
         fx2 = FX(fx_type=FXType.DING, k=k2, klines=[k, k2, k2], val=54)
         bi = BI(start=fx, end=fx2, direction="up")
         mmd.bi = bi
@@ -152,11 +183,17 @@ class TestDynamicRiskRewardRatioV48:
         """测试卖出信号的风险收益比计算。"""
         closes, highs, lows = self._make_data(n=100, start_price=50.0)
         mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖")
-        from easy_tdx.chanlun.types import BI, FX, FXType, CLKline
         from datetime import datetime
-        k = CLKline(k_index=90, date=datetime(2024, 1, 1), open=50, close=48, high=51, low=47, amount=1e6)
+
+        from easy_tdx.chanlun.types import BI, FX, CLKline, FXType
+
+        k = CLKline(
+            k_index=90, date=datetime(2024, 1, 1), open=50, close=48, high=51, low=47, amount=1e6
+        )
         fx = FX(fx_type=FXType.DING, k=k, klines=[k, k, k], val=51)
-        k2 = CLKline(k_index=95, date=datetime(2024, 1, 6), open=48, close=47, high=49, low=46, amount=1e6)
+        k2 = CLKline(
+            k_index=95, date=datetime(2024, 1, 6), open=48, close=47, high=49, low=46, amount=1e6
+        )
         fx2 = FX(fx_type=FXType.DI, k=k2, klines=[k, k2, k2], val=46)
         bi = BI(start=fx, end=fx2, direction="down")
         mmd.bi = bi
@@ -187,15 +224,17 @@ class TestFindMMDsV48Integration:
             else:
                 close.append(close[-1] * (1 + np.random.normal(0, 0.005)))
         close = np.array(close)
-        return pd.DataFrame({
-            "datetime": dates,
-            "open": close * (1 + np.random.uniform(-0.005, 0.005, n)),
-            "high": close * (1 + np.random.uniform(0, 0.01, n)),
-            "low": close * (1 + np.random.uniform(-0.01, 0, n)),
-            "close": close,
-            "amount": [1e6] * n,
-            "vol": [1e5] * n,
-        })
+        return pd.DataFrame(
+            {
+                "datetime": dates,
+                "open": close * (1 + np.random.uniform(-0.005, 0.005, n)),
+                "high": close * (1 + np.random.uniform(0, 0.01, n)),
+                "low": close * (1 + np.random.uniform(-0.01, 0, n)),
+                "close": close,
+                "amount": [1e6] * n,
+                "vol": [1e5] * n,
+            }
+        )
 
     def test_v48_fields_present_in_mmd(self):
         """测试V48字段存在于MMD对象中。"""
@@ -207,9 +246,9 @@ class TestFindMMDsV48Integration:
         if buy_3_signals:
             mmd = buy_3_signals[0]
             # V48字段应存在（可能为None，但不报错）
-            assert hasattr(mmd, '_volume_price_divergence_secondary_v48')
-            assert hasattr(mmd, '_trend_strength_weighting')
-            assert hasattr(mmd, '_dynamic_risk_reward_ratio')
+            assert hasattr(mmd, "_volume_price_divergence_secondary_v48")
+            assert hasattr(mmd, "_trend_strength_weighting")
+            assert hasattr(mmd, "_dynamic_risk_reward_ratio")
 
     def test_v48_no_crash(self):
         """测试V48不会导致崩溃。"""
@@ -218,4 +257,4 @@ class TestFindMMDsV48Integration:
         result = analyser.process_klines(df)
         # 应该正常返回，不抛出异常
         assert result is not None
-        assert hasattr(result, 'mmds')
+        assert hasattr(result, "mmds")

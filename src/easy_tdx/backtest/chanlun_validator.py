@@ -269,8 +269,7 @@ class ChanlunConditionBacktestValidator:
             logger.warning("数据不足 %d bars，跳过验证", self.min_bars)
             note = f"数据不足 {len(df)} bars < min_bars={self.min_bars}"
             return [
-                ConditionValidationResult(group=g, condition_details={"note": note})
-                for g in groups
+                ConditionValidationResult(group=g, condition_details={"note": note}) for g in groups
             ]
 
         from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
@@ -304,8 +303,7 @@ class ChanlunConditionBacktestValidator:
         signals = [
             mmd
             for mmd in chanlun_result.mmds
-            if self._is_valid_signal(mmd)
-            and mmd.confidence >= self.min_confidence
+            if self._is_valid_signal(mmd) and mmd.confidence >= self.min_confidence
         ]
 
         if not signals:
@@ -318,8 +316,14 @@ class ChanlunConditionBacktestValidator:
         """检查信号是否有效。"""
         from easy_tdx.chanlun.types import MMDType
 
-        valid_types = {MMDType.BUY_1, MMDType.BUY_2, MMDType.BUY_3,
-                       MMDType.SELL_1, MMDType.SELL_2, MMDType.SELL_3}
+        valid_types = {
+            MMDType.BUY_1,
+            MMDType.BUY_2,
+            MMDType.BUY_3,
+            MMDType.SELL_1,
+            MMDType.SELL_2,
+            MMDType.SELL_3,
+        }
         return mmd.mmd_type in valid_types and mmd.bi is not None
 
     def _simulate_trades(
@@ -352,8 +356,13 @@ class ChanlunConditionBacktestValidator:
 
             # 查找出场bar
             exit_bar = self._find_exit_bar(
-                entry_bar, stops=stop_loss, profit=take_profit,
-                highs=highs, lows=lows, closes=closes, max_bars=self.MAX_HOLDING_BARS,
+                entry_bar,
+                stops=stop_loss,
+                profit=take_profit,
+                highs=highs,
+                lows=lows,
+                closes=closes,
+                max_bars=self.MAX_HOLDING_BARS,
             )
 
             if exit_bar < 0:
@@ -370,19 +379,24 @@ class ChanlunConditionBacktestValidator:
                 pnl_pct = (entry_price - closes[exit_bar]) / entry_price * 100
                 hit = pnl_pct > 0
 
-            results.append(SignalResult(
-                signal_type=signal_type,
-                entry_bar=entry_bar,
-                exit_bar=exit_bar,
-                entry_price=entry_price,
-                exit_price=closes[exit_bar],
-                pnl_pct=pnl_pct,
-                holding_days=holding_days,
-                hit=hit,
-                signal_confidence=mmd.confidence,
-                condition_tags=[f"cond_{i}" for i in range(cond_low, cond_high + 1)
-                               if hasattr(mmd, f"_condition_{i}")],
-            ))
+            results.append(
+                SignalResult(
+                    signal_type=signal_type,
+                    entry_bar=entry_bar,
+                    exit_bar=exit_bar,
+                    entry_price=entry_price,
+                    exit_price=closes[exit_bar],
+                    pnl_pct=pnl_pct,
+                    holding_days=holding_days,
+                    hit=hit,
+                    signal_confidence=mmd.confidence,
+                    condition_tags=[
+                        f"cond_{i}"
+                        for i in range(cond_low, cond_high + 1)
+                        if hasattr(mmd, f"_condition_{i}")
+                    ],
+                )
+            )
 
         return results
 
@@ -481,14 +495,15 @@ class ChanlunConditionBacktestValidator:
                 continue
 
             from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+
             config = ChanlunConfig()
             analyser = ChanlunAnalyser(code=code, frequency="daily", config=config)
             chanlun_result = analyser.process_klines(df)
 
             valid_signals = [
-                mmd for mmd in chanlun_result.mmds
-                if self._is_valid_signal(mmd)
-                and mmd.confidence >= self.min_confidence
+                mmd
+                for mmd in chanlun_result.mmds
+                if self._is_valid_signal(mmd) and mmd.confidence >= self.min_confidence
             ]
 
             # 统计各条件命中
@@ -502,17 +517,20 @@ class ChanlunConditionBacktestValidator:
                             key = f"{g.value}_cond{c}"
                             condition_counts[key] = condition_counts.get(key, 0) + 1
 
-            results.append(MultiStockResult(
-                stock_code=code,
-                stock_name=code,
-                signal_count=len(valid_signals),
-                win_rate=0.0,  # 需历史回测填充
-                avg_confidence=(
-                    float(np.mean([s.confidence for s in valid_signals]))
-                    if valid_signals else 0.0
-                ),
-                condition_breakdown=condition_counts,
-            ))
+            results.append(
+                MultiStockResult(
+                    stock_code=code,
+                    stock_name=code,
+                    signal_count=len(valid_signals),
+                    win_rate=0.0,  # 需历史回测填充
+                    avg_confidence=(
+                        float(np.mean([s.confidence for s in valid_signals]))
+                        if valid_signals
+                        else 0.0
+                    ),
+                    condition_breakdown=condition_counts,
+                )
+            )
 
         return results
 
@@ -529,18 +547,20 @@ class ChanlunConditionBacktestValidator:
         validations = self.validate_conditions(df, groups)
         rows = []
         for v in validations:
-            rows.append({
-                "分组": v.group.value,
-                "描述": v.group.description,
-                "总信号": v.total_signals,
-                "买信号": v.buy_signals,
-                "卖信号": v.sell_signals,
-                "胜率": f"{v.hit_rate:.2%}",
-                "平均收益%": f"{v.avg_pnl_pct:.2f}",
-                "平均持仓天": round(v.avg_holding_days, 1),
-                "最大收益%": f"{v.max_pnl_pct:.2f}",
-                "最小收益%": f"{v.min_pnl_pct:.2f}",
-                "置信度相关": f"{v.confidence_correlation:.3f}",
-                "提升": "✅" if v.improved else "❌",
-            })
+            rows.append(
+                {
+                    "分组": v.group.value,
+                    "描述": v.group.description,
+                    "总信号": v.total_signals,
+                    "买信号": v.buy_signals,
+                    "卖信号": v.sell_signals,
+                    "胜率": f"{v.hit_rate:.2%}",
+                    "平均收益%": f"{v.avg_pnl_pct:.2f}",
+                    "平均持仓天": round(v.avg_holding_days, 1),
+                    "最大收益%": f"{v.max_pnl_pct:.2f}",
+                    "最小收益%": f"{v.min_pnl_pct:.2f}",
+                    "置信度相关": f"{v.confidence_correlation:.3f}",
+                    "提升": "✅" if v.improved else "❌",
+                }
+            )
         return pd.DataFrame(rows)

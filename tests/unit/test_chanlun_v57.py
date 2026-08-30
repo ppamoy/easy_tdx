@@ -10,13 +10,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from easy_tdx.chanlun.mmd import (
-    _calc_pullback_filter_v57,
     _calc_breakout_strength_validation_v57,
-    _calc_zs_divergence_check_v57,
+    _calc_pullback_filter_v57,
     _calc_signal_decay_detection_v57,
+    _calc_zs_divergence_check_v57,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -52,11 +50,22 @@ class TestPullbackFilterV57:
 
     def test_buy3_shallow_pullback(self):
         """3买浅回踩时应通过过滤。"""
-        from easy_tdx.chanlun.types import BI, CLKline, Direction
         from datetime import datetime
-        k = CLKline(k_index=25, date=datetime.now(), open=100.0, close=102.0, high=102.5, low=99.5, amount=1000.0, index=25)
-        fx_end = type('obj', (object,), {'k': k})()
-        fx_start = type('obj', (object,), {'k': type('obj', (object,), {'k_index': 20})()})()
+
+        from easy_tdx.chanlun.types import BI, CLKline, Direction
+
+        k = CLKline(
+            k_index=25,
+            date=datetime.now(),
+            open=100.0,
+            close=102.0,
+            high=102.5,
+            low=99.5,
+            amount=1000.0,
+            index=25,
+        )
+        fx_end = type("obj", (object,), {"k": k})()
+        fx_start = type("obj", (object,), {"k": type("obj", (object,), {"k_index": 20})()})()
         bi = BI(start=fx_start, end=fx_end, direction=Direction.UP)
         mmd = MMD(mmd_type=MMDType.BUY_3, bi=bi, zs=None, confidence=0.5, msg="test")
         # 信号点(25)后上涨2%然后轻微回撤
@@ -68,11 +77,22 @@ class TestPullbackFilterV57:
 
     def test_buy3_deep_pullback(self):
         """3买深回踩时应记录较大回撤比例。"""
-        from easy_tdx.chanlun.types import BI, CLKline, Direction
         from datetime import datetime
-        k = CLKline(k_index=25, date=datetime.now(), open=100.0, close=102.0, high=102.5, low=99.5, amount=1000.0, index=25)
-        fx_end = type('obj', (object,), {'k': k})()
-        fx_start = type('obj', (object,), {'k': type('obj', (object,), {'k_index': 20})()})()
+
+        from easy_tdx.chanlun.types import BI, CLKline, Direction
+
+        k = CLKline(
+            k_index=25,
+            date=datetime.now(),
+            open=100.0,
+            close=102.0,
+            high=102.5,
+            low=99.5,
+            amount=1000.0,
+            index=25,
+        )
+        fx_end = type("obj", (object,), {"k": k})()
+        fx_start = type("obj", (object,), {"k": type("obj", (object,), {"k_index": 20})()})()
         bi = BI(start=fx_start, end=fx_end, direction=Direction.UP)
         mmd = MMD(mmd_type=MMDType.BUY_3, bi=bi, zs=None, confidence=0.5, msg="test")
         base = [100.0] * 15
@@ -189,15 +209,38 @@ class TestSignalDecayDetectionV57:
 
     def test_buy3_strong_signal(self):
         """3买信号强效时应获得正向调整。"""
-        from easy_tdx.chanlun.types import BI, CLKline, Direction
         from datetime import datetime
-        k = CLKline(k_index=18, date=datetime.now(), open=100.0, close=105.0, high=105.5, low=99.5, amount=1000.0, index=18)
-        fx_end = type('obj', (object,), {'k': k})()
-        fx_start = type('obj', (object,), {'k': type('obj', (object,), {'k_index': 10})()})()
+
+        from easy_tdx.chanlun.types import BI, CLKline, Direction
+
+        k = CLKline(
+            k_index=18,
+            date=datetime.now(),
+            open=100.0,
+            close=105.0,
+            high=105.5,
+            low=99.5,
+            amount=1000.0,
+            index=18,
+        )
+        fx_end = type("obj", (object,), {"k": k})()
+        fx_start = type("obj", (object,), {"k": type("obj", (object,), {"k_index": 10})()})()
         bi = BI(start=fx_start, end=fx_end, direction=Direction.UP)
         mmd = MMD(mmd_type=MMDType.BUY_3, bi=bi, zs=None, confidence=0.5, msg="test")
         # 信号点后持续上涨
-        closes = [100.0] * 10 + [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 109.0, 110.0]
+        closes = [100.0] * 10 + [
+            100.0,
+            101.0,
+            102.0,
+            103.0,
+            104.0,
+            105.0,
+            106.0,
+            107.0,
+            108.0,
+            109.0,
+            110.0,
+        ]
         result = _calc_signal_decay_detection_v57(mmd, closes)
         assert isinstance(result["trend_momentum"], float)
         assert result["msg"] != ""
@@ -217,11 +260,12 @@ class TestFindMMDsV57Integration:
     def test_v57_functions_importable(self):
         """V57函数可正常导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_pullback_filter_v57,
             _calc_breakout_strength_validation_v57,
-            _calc_zs_divergence_check_v57,
+            _calc_pullback_filter_v57,
             _calc_signal_decay_detection_v57,
+            _calc_zs_divergence_check_v57,
         )
+
         assert callable(_calc_pullback_filter_v57)
         assert callable(_calc_breakout_strength_validation_v57)
         assert callable(_calc_zs_divergence_check_v57)
@@ -230,6 +274,7 @@ class TestFindMMDsV57Integration:
     def test_v57_fields_in_mmd_type(self):
         """MMD类型包含V57字段。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type=MMDType.BUY_3, bi=None, zs=None, confidence=0.5, msg="test")
         assert hasattr(mmd, "_pullback_filter_v57")
         assert hasattr(mmd, "_breakout_strength_validation_v57")
@@ -239,7 +284,18 @@ class TestFindMMDsV57Integration:
     def test_v57_confidence_bounds(self):
         """V57调整后的置信度仍在有效范围内。"""
         mmd = _make_mock_mmd(MMDType.BUY_3, confidence=0.5)
-        closes = [100.0] * 10 + [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 109.0]
+        closes = [100.0] * 10 + [
+            100.0,
+            101.0,
+            102.0,
+            103.0,
+            104.0,
+            105.0,
+            106.0,
+            107.0,
+            108.0,
+            109.0,
+        ]
         highs = [c + 0.5 for c in closes]
         lows = [c - 0.5 for c in closes]
         volumes = [1000.0] * len(closes)
@@ -248,11 +304,13 @@ class TestFindMMDsV57Integration:
         result2 = _calc_breakout_strength_validation_v57(mmd, closes, volumes)
         result4 = _calc_signal_decay_detection_v57(mmd, closes)
 
-        total_adjust = sum([
-            result1.get("confidence_adjust", 0),
-            result2.get("confidence_adjust", 0),
-            result4.get("confidence_adjust", 0),
-        ])
+        total_adjust = sum(
+            [
+                result1.get("confidence_adjust", 0),
+                result2.get("confidence_adjust", 0),
+                result4.get("confidence_adjust", 0),
+            ]
+        )
         new_confidence = max(0.0, min(1.0, 0.5 + total_adjust))
         assert 0.0 <= new_confidence <= 1.0
 

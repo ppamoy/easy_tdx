@@ -1,11 +1,9 @@
 """V81 缠论模型精准度提升测试（条件256-259）。"""
 
-import pytest
 import numpy as np
 
 from easy_tdx.backtest.chanlun_validator import ConditionGroup
 from easy_tdx.chanlun.types import MMD, MMDType
-
 
 # ── V81 条件组定义测试 ───────────────────────────────────────────────
 
@@ -49,7 +47,8 @@ class TestV81BacktestValidator:
 
     def test_v81_validator_single_group(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
-        validator = ChanlunConditionBacktestValidator()
+
+        _ = ChanlunConditionBacktestValidator()
         # 验证 V81 组可被识别
         low, high = ConditionGroup.V81.condition_range
         assert low == 256
@@ -57,7 +56,8 @@ class TestV81BacktestValidator:
 
     def test_v81_validator_multi_group(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
-        validator = ChanlunConditionBacktestValidator()
+
+        _ = ChanlunConditionBacktestValidator()
         # V79+V80+V81 联合验证
         groups = [ConditionGroup.V79, ConditionGroup.V80, ConditionGroup.V81]
         ranges = [g.condition_range for g in groups]
@@ -66,7 +66,8 @@ class TestV81BacktestValidator:
     def test_v81_summary_output(self):
         """V81 summary 输出结构正确。"""
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
-        validator = ChanlunConditionBacktestValidator()
+
+        _ = ChanlunConditionBacktestValidator()
         # 验证 V81 组条件范围
         low, high = ConditionGroup.V81.condition_range
         assert low == 256
@@ -84,7 +85,9 @@ class TestV81Functions:
     def _make_mmd(self, mmd_type: str = "1buy") -> MMD:
         return MMD(mmd_type=MMDType(mmd_type), confidence=0.5, msg="test")
 
-    def _make_data(self, n: int = 50, trend: str = "up") -> tuple[list[float], list[float], list[float], list[float]]:
+    def _make_data(
+        self, n: int = 50, trend: str = "up"
+    ) -> tuple[list[float], list[float], list[float], list[float]]:
         np.random.seed(42)
         if trend == "up":
             base = np.linspace(10, 15, n) + np.random.randn(n) * 0.3
@@ -103,6 +106,7 @@ class TestV81Functions:
     def test_v81_volatility_regime_compressed(self):
         """波动率压缩状态 → 加分。"""
         from easy_tdx.chanlun.mmd import _calc_volatility_regime_transition_v81
+
         mmd = self._make_mmd("1buy")
         # 构造低波动数据（ATR收缩）
         np.random.seed(100)
@@ -118,6 +122,7 @@ class TestV81Functions:
     def test_v81_volatility_regime_insufficient_data(self):
         """数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_volatility_regime_transition_v81
+
         mmd = self._make_mmd("1sell")
         result = _calc_volatility_regime_transition_v81(mmd, [1.0, 2.0], [1.1, 2.1], [0.9, 1.9])
         assert result["msg"] == "数据不足"
@@ -126,6 +131,7 @@ class TestV81Functions:
     def test_v81_volatility_regime_buy_sell_different(self):
         """买入和卖出信号的调整方向可能不同。"""
         from easy_tdx.chanlun.mmd import _calc_volatility_regime_transition_v81
+
         closes, highs, lows, _ = self._make_data(50, "up")
         mmd_buy = self._make_mmd("1buy")
         mmd_sell = self._make_mmd("1sell")
@@ -141,6 +147,7 @@ class TestV81Functions:
     def test_v81_sr_strength_strong(self):
         """强支撑/阻力 → 加分。"""
         from easy_tdx.chanlun.mmd import _calc_support_resistance_strength_v81
+
         mmd = self._make_mmd("1buy")
         # 构造有明显支撑位的数据
         np.random.seed(200)
@@ -160,6 +167,7 @@ class TestV81Functions:
     def test_v81_sr_insufficient_data(self):
         """数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_support_resistance_strength_v81
+
         mmd = self._make_mmd("1sell")
         result = _calc_support_resistance_strength_v81(mmd, [1.0], [1.1], [0.9])
         assert result["msg"] == "数据不足"
@@ -167,6 +175,7 @@ class TestV81Functions:
     def test_v81_sr_fields_complete(self):
         """返回字段完整性。"""
         from easy_tdx.chanlun.mmd import _calc_support_resistance_strength_v81
+
         mmd = self._make_mmd("1buy")
         closes, highs, lows, _ = self._make_data(50, "up")
         result = _calc_support_resistance_strength_v81(mmd, closes, highs, lows)
@@ -181,6 +190,7 @@ class TestV81Functions:
     def test_v81_energy_distribution_buy(self):
         """买入信号的能量分布评估。"""
         from easy_tdx.chanlun.mmd import _calc_volume_price_energy_distribution_v81
+
         mmd = self._make_mmd("1buy")
         closes, highs, lows, volumes = self._make_data(50, "up")
         result = _calc_volume_price_energy_distribution_v81(mmd, closes, volumes, highs, lows)
@@ -192,6 +202,7 @@ class TestV81Functions:
     def test_v81_energy_distribution_sell(self):
         """卖出信号的能量分布评估。"""
         from easy_tdx.chanlun.mmd import _calc_volume_price_energy_distribution_v81
+
         mmd = self._make_mmd("1sell")
         closes, highs, lows, volumes = self._make_data(50, "down")
         result = _calc_volume_price_energy_distribution_v81(mmd, closes, volumes, highs, lows)
@@ -201,13 +212,17 @@ class TestV81Functions:
     def test_v81_energy_insufficient_data(self):
         """数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_volume_price_energy_distribution_v81
+
         mmd = self._make_mmd("1buy")
-        result = _calc_volume_price_energy_distribution_v81(mmd, [1.0, 2.0], [100, 200], [1.1, 2.1], [0.9, 1.9])
+        result = _calc_volume_price_energy_distribution_v81(
+            mmd, [1.0, 2.0], [100, 200], [1.1, 2.1], [0.9, 1.9]
+        )
         assert result["msg"] == "数据不足"
 
     def test_v81_energy_no_volumes(self):
         """无成交量数据时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_volume_price_energy_distribution_v81
+
         mmd = self._make_mmd("1buy")
         closes, highs, lows, _ = self._make_data(50, "up")
         result = _calc_volume_price_energy_distribution_v81(mmd, closes, None, highs, lows)
@@ -218,16 +233,24 @@ class TestV81Functions:
     def test_v81_execution_window_favorable(self):
         """理想执行窗口 → 加分。"""
         from easy_tdx.chanlun.mmd import _calc_signal_execution_window_v81
+
         mmd = self._make_mmd("1buy")
         closes, highs, lows, volumes = self._make_data(30, "up")
         result = _calc_signal_execution_window_v81(mmd, closes, highs, lows, volumes)
         assert "window_quality" in result
         assert "confidence_adjust" in result
-        assert result["window_quality"] in ("favorable", "acceptable", "caution", "unfavorable", "unknown")
+        assert result["window_quality"] in (
+            "favorable",
+            "acceptable",
+            "caution",
+            "unfavorable",
+            "unknown",
+        )
 
     def test_v81_execution_window_insufficient_data(self):
         """数据不足时返回默认值。"""
         from easy_tdx.chanlun.mmd import _calc_signal_execution_window_v81
+
         mmd = self._make_mmd("1sell")
         result = _calc_signal_execution_window_v81(mmd, [1.0], [1.1], [0.9], None)
         assert result["msg"] == "数据不足"
@@ -235,6 +258,7 @@ class TestV81Functions:
     def test_v81_execution_window_fields_complete(self):
         """返回字段完整性。"""
         from easy_tdx.chanlun.mmd import _calc_signal_execution_window_v81
+
         mmd = self._make_mmd("1buy")
         closes, highs, lows, volumes = self._make_data(30, "up")
         result = _calc_signal_execution_window_v81(mmd, closes, highs, lows, volumes)
@@ -249,11 +273,12 @@ class TestV81Functions:
     def test_v81_all_functions_smoke(self):
         """所有V81函数在正常数据下不抛出异常。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_volatility_regime_transition_v81,
-            _calc_support_resistance_strength_v81,
-            _calc_volume_price_energy_distribution_v81,
             _calc_signal_execution_window_v81,
+            _calc_support_resistance_strength_v81,
+            _calc_volatility_regime_transition_v81,
+            _calc_volume_price_energy_distribution_v81,
         )
+
         mmd = self._make_mmd("1buy")
         closes, highs, lows, volumes = self._make_data(50, "up")
 
@@ -280,6 +305,7 @@ class TestV81Functions:
             _calc_mmd_zhongshu_distance_v80,
             _calc_volatility_regime_transition_v81,
         )
+
         mmd = self._make_mmd("1buy")
         closes, highs, lows, _ = self._make_data(50, "up")
 

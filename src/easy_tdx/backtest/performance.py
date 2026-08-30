@@ -350,9 +350,7 @@ class PerformanceAnalyzer:
         return int(max_dd_idx - peak_idx)
 
     @staticmethod
-    def _compute_max_consecutive_trades(
-        pnl_series: NDArray | pd.Series, positive: bool
-    ) -> int:
+    def _compute_max_consecutive_trades(pnl_series: NDArray | pd.Series, positive: bool) -> int:
         """计算最大连续盈利（positive=True）或连续亏损（positive=False）次数。
 
         Args:
@@ -364,7 +362,11 @@ class PerformanceAnalyzer:
         """
         if len(pnl_series) == 0:
             return 0
-        vals = pnl_series.to_numpy(dtype=np.float64) if isinstance(pnl_series, pd.Series) else pnl_series
+        vals = (
+            pnl_series.to_numpy(dtype=np.float64)
+            if isinstance(pnl_series, pd.Series)
+            else pnl_series
+        )
         if len(vals) == 0:
             return 0
         mask = vals > 0 if positive else vals <= 0

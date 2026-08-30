@@ -9,6 +9,7 @@ import pytest
 
 pytest.importorskip("fastapi")
 
+from fastapi.testclient import TestClient
 
 # ── 测试夹具 ───────────────────────────────────────────────────────────────────
 
@@ -44,8 +45,9 @@ def mock_client() -> AsyncMock:
 @pytest.fixture()
 def app_client(mock_client):
     """FastAPI TestClient，注入 mock client。"""
-    from easy_tdx.web.app import _create_app
     from fastapi.testclient import TestClient
+
+    from easy_tdx.web.app import _create_app
 
     app = _create_app()
     # 把 mock client 注入到 app.state（deps.get_client 从这里读取）
@@ -67,9 +69,7 @@ def test_scan_missing_date(app_client: TestClient):
 
 def test_scan_invalid_date(app_client: TestClient):
     """无效日期格式应返回错误。"""
-    resp = app_client.post(
-        "/api/v1/screening/scan", json={"date": "not-a-date", "market": "SZ"}
-    )
+    resp = app_client.post("/api/v1/screening/scan", json={"date": "not-a-date", "market": "SZ"})
     assert resp.status_code == 200
     body = resp.json()
     assert "error" in body

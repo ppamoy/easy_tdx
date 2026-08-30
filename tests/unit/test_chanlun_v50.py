@@ -10,16 +10,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import pytest
 
 from easy_tdx.chanlun.mmd import (
-    _calc_sector_correlation_v50,
-    _calc_multi_tf_resonance_v50,
     _calc_level_recursive_validation_v50,
     _calc_market_sentiment_fusion_v50,
+    _calc_multi_tf_resonance_v50,
+    _calc_sector_correlation_v50,
 )
-from easy_tdx.chanlun.types import MMD, MMDType, BI, FX, FXType, CLKline, ZS, Direction
-from datetime import datetime
+from easy_tdx.chanlun.types import BI, FX, MMD, ZS, CLKline, Direction, FXType, MMDType
 
 
 def _make_mock_mmd(mmd_type: MMDType) -> MMD:
@@ -37,17 +38,39 @@ def _make_mock_bi(direction: str = "up") -> BI:
     """创建Mock BI对象。"""
     start_fx = FX(
         fx_type=FXType.DI if direction == "up" else FXType.DING,
-        k=CLKline(k_index=0, date=datetime.now(), open=100.0, close=100.0, high=101.0, low=99.0, amount=1000000.0),
+        k=CLKline(
+            k_index=0,
+            date=datetime.now(),
+            open=100.0,
+            close=100.0,
+            high=101.0,
+            low=99.0,
+            amount=1000000.0,
+        ),
         klines=[],
         val=100.0,
     )
     end_fx = FX(
         fx_type=FXType.DING if direction == "up" else FXType.DI,
-        k=CLKline(k_index=10, date=datetime.now(), open=110.0, close=110.0, high=112.0, low=108.0, amount=1000000.0),
+        k=CLKline(
+            k_index=10,
+            date=datetime.now(),
+            open=110.0,
+            close=110.0,
+            high=112.0,
+            low=108.0,
+            amount=1000000.0,
+        ),
         klines=[],
         val=112.0,
     )
-    return BI(start=start_fx, end=end_fx, direction=Direction.UP if direction == "up" else Direction.DOWN, high=112.0, low=99.0)
+    return BI(
+        start=start_fx,
+        end=end_fx,
+        direction=Direction.UP if direction == "up" else Direction.DOWN,
+        high=112.0,
+        low=99.0,
+    )
 
 
 class TestSectorCorrelationV50:
@@ -135,10 +158,7 @@ class TestLevelRecursiveValidationV50:
         """3买：中枢高度较大 → 递归验证通过。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
         # 创建模拟中枢 - 使用较大地高度来触发normal验证
-        zs = ZS(
-            zg=120.0, zd=100.0, gg=125.0, dd=90.0,
-            lines=[], direction="up"
-        )
+        zs = ZS(zg=120.0, zd=100.0, gg=125.0, dd=90.0, lines=[], direction="up")
         mmd.zs = zs
         result = _calc_level_recursive_validation_v50(mmd, None)
         # 中枢高度占比 > 10% 时验证通过
@@ -147,10 +167,7 @@ class TestLevelRecursiveValidationV50:
     def test_weak_level_for_buy(self):
         """3买：中枢结构较弱 → 递归验证未通过。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
-        zs = ZS(
-            zg=101.0, zd=100.0, gg=102.0, dd=99.0,
-            lines=[], direction="up"
-        )
+        zs = ZS(zg=101.0, zd=100.0, gg=102.0, dd=99.0, lines=[], direction="up")
         mmd.zs = zs
         result = _calc_level_recursive_validation_v50(mmd, None)
         assert result["level_quality"] == "weak"
@@ -210,7 +227,6 @@ class TestFindMMDsV50Integration:
 
     def test_v50_fields_present_in_mmd(self):
         """V50字段应存在于MMD对象中。"""
-        from easy_tdx.chanlun.types import MMD
         mmd = _make_mock_mmd(MMDType.BUY_3)
         assert hasattr(mmd, "_sector_correlation_v50")
         assert hasattr(mmd, "_multi_tf_resonance_v50")
@@ -219,7 +235,6 @@ class TestFindMMDsV50Integration:
 
     def test_v50_no_crash(self):
         """V50集成不崩溃。"""
-        from easy_tdx.chanlun.mmd import find_mmds_v39
         # 基本集成测试，确保不会因缺少函数而崩溃
         assert callable(_calc_sector_correlation_v50)
         assert callable(_calc_multi_tf_resonance_v50)

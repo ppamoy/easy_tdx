@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 import numpy as np
 import pandas as pd
 
@@ -48,7 +46,9 @@ class TestLatestBarDatetime:
 class TestSeasonSwitchTiming:
     """季节切换必须按K线日期计时，且未满30个交易日不能重复切换。"""
 
-    def _make_strategy(self, dates: pd.DatetimeIndex) -> tuple[cy.ChangyingChanlunStrategy, pd.DataFrame]:
+    def _make_strategy(
+        self, dates: pd.DatetimeIndex
+    ) -> tuple[cy.ChangyingChanlunStrategy, pd.DataFrame]:
         s = cy.ChangyingChanlunStrategy()
         s._bar_index = len(dates) - 1
         s._current_season = cy.Season.UNKNOWN
@@ -58,14 +58,16 @@ class TestSeasonSwitchTiming:
         opens = [c - 0.1 for c in closes]
         highs = [c + 0.3 for c in closes]
         lows = [c - 0.3 for c in closes]
-        df = pd.DataFrame({
-            "datetime": [int(d.strftime("%Y%m%d")) for d in dates],
-            "open": opens,
-            "close": closes,
-            "high": highs,
-            "low": lows,
-            "vol": [1e6] * n,
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": [int(d.strftime("%Y%m%d")) for d in dates],
+                "open": opens,
+                "close": closes,
+                "high": highs,
+                "low": lows,
+                "vol": [1e6] * n,
+            }
+        )
         return s, df
 
     def test_season_can_switch_with_30d_gap(self) -> None:
@@ -74,6 +76,7 @@ class TestSeasonSwitchTiming:
         s, df = self._make_strategy(dates)
         # _update_season 需要已存在的缠论分析结果（否则提前返回）
         from easy_tdx.chanlun import ChanlunAnalyser
+
         an = ChanlunAnalyser(code="T", frequency="daily")
         s._chanlun_result = an.process_klines(df)  # type: ignore[assignment]
         # 上涨趋势 → 综合评分应产出 SUMMER/SPRING 且非 UNKNOWN
@@ -94,14 +97,15 @@ class TestSeasonSwitchTiming:
         s._season_history = [(base_date, cy.Season.WINTER, 0)]
         # 20个交易日后即触发重评（不足30日）→ 不允许切换
         s._bar_index = 20
-        df20 = pd.DataFrame({
-            "datetime": [int(d.strftime("%Y%m%d")) for d in dates[:21]],
-            "open": [20.0] * 21,
-            "close": [20 + i * 0.05 for i in range(21)],
-            "high": [21.0] * 21,
-            "low": [19.5] * 21,
-            "vol": [1e6] * 21,
-        })
+        df20 = pd.DataFrame(
+            {
+                "datetime": [int(d.strftime("%Y%m%d")) for d in dates[:21]],
+                "open": [20.0] * 21,
+                "close": [20 + i * 0.05 for i in range(21)],
+                "high": [21.0] * 21,
+                "low": [19.5] * 21,
+                "vol": [1e6] * 21,
+            }
+        )
         s._update_season(df20)
         assert s._current_season == cy.Season.WINTER, "不足30个交易日不应切换季节"
-

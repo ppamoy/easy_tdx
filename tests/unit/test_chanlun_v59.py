@@ -10,13 +10,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from easy_tdx.chanlun.mmd import (
-    _calc_volatility_adaptive_ma_v59,
     _calc_atr_multiplier_adapt_v59,
     _calc_multi_tf_resonance_signal_v59,
     _calc_signal_decay_speed_v59,
+    _calc_volatility_adaptive_ma_v59,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
 
@@ -53,6 +51,7 @@ class TestVolatilityAdaptiveMAV59:
         mmd = _make_mock_mmd(MMDType.BUY_3)
         # 生成约2%波动率的数据（std/mean ≈ 0.02）
         import random
+
         random.seed(123)
         closes = []
         price = 100.0
@@ -74,6 +73,7 @@ class TestVolatilityAdaptiveMAV59:
         mmd = _make_mock_mmd(MMDType.BUY_3)
         # 高波动：大幅增加标准差
         import random
+
         random.seed(42)
         closes = []
         price = 100.0
@@ -300,11 +300,12 @@ class TestFindMMDsV59Integration:
     def test_v59_functions_importable(self):
         """所有V59函数可导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_volatility_adaptive_ma_v59,
             _calc_atr_multiplier_adapt_v59,
             _calc_multi_tf_resonance_signal_v59,
             _calc_signal_decay_speed_v59,
+            _calc_volatility_adaptive_ma_v59,
         )
+
         assert callable(_calc_volatility_adaptive_ma_v59)
         assert callable(_calc_atr_multiplier_adapt_v59)
         assert callable(_calc_multi_tf_resonance_signal_v59)
@@ -312,8 +313,10 @@ class TestFindMMDsV59Integration:
 
     def test_v59_fields_in_mmd_type(self):
         """MMD类型包含V59字段。"""
-        from easy_tdx.chanlun.types import MMD
         import dataclasses
+
+        from easy_tdx.chanlun.types import MMD
+
         fields = {f.name for f in dataclasses.fields(MMD)}
         assert "_volatility_adaptive_ma_v59" in fields
         assert "_atr_multiplier_adapt_v59" in fields
@@ -369,13 +372,14 @@ class TestFindMMDsV59Integration:
 
     def test_v59_integration_pass(self):
         """集成测试通过。"""
-        from easy_tdx.chanlun.mmd import find_mmds_v39
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
+
+        from easy_tdx.chanlun import ChanlunAnalyser
 
         # 生成模拟上涨数据
         n = 200
         import numpy as np
+
         np.random.seed(42)
         dates = pd.date_range("2024-01-01", periods=n, freq="D")
         close = [100.0]
@@ -383,14 +387,16 @@ class TestFindMMDsV59Integration:
             close.append(close[-1] * (1.001 + np.random.normal(0, 0.005)))
         close = np.array(close)
 
-        df = pd.DataFrame({
-            "datetime": dates,
-            "open": close * (1 + np.random.uniform(-0.002, 0.002, n)),
-            "high": close * (1 + np.random.uniform(0, 0.008, n)),
-            "low": close * (1 + np.random.uniform(-0.008, 0, n)),
-            "close": close,
-            "vol": [1e6] * n,
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": dates,
+                "open": close * (1 + np.random.uniform(-0.002, 0.002, n)),
+                "high": close * (1 + np.random.uniform(0, 0.008, n)),
+                "low": close * (1 + np.random.uniform(-0.008, 0, n)),
+                "close": close,
+                "vol": [1e6] * n,
+            }
+        )
 
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)

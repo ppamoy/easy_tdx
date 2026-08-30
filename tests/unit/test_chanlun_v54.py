@@ -13,8 +13,8 @@ from __future__ import annotations
 import pytest
 
 from easy_tdx.chanlun.mmd import (
-    _calc_multi_bar_confirmation_v54,
     _calc_gap_risk_assessment_v54,
+    _calc_multi_bar_confirmation_v54,
     _calc_volatility_regime_change_v54,
     _calc_volume_price_coordination_v54,
 )
@@ -60,6 +60,7 @@ class TestMultiBarConfirmationV54:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_multi_bar_confirmation_v54
+
         assert callable(_calc_multi_bar_confirmation_v54)
 
 
@@ -94,6 +95,7 @@ class TestGapRiskAssessmentV54:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_gap_risk_assessment_v54
+
         assert callable(_calc_gap_risk_assessment_v54)
 
 
@@ -124,6 +126,7 @@ class TestVolatilityRegimeChangeV54:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_volatility_regime_change_v54
+
         assert callable(_calc_volatility_regime_change_v54)
 
 
@@ -157,6 +160,7 @@ class TestVolumePriceCoordinationV54:
     def test_importable(self):
         """函数可正常导入。"""
         from easy_tdx.chanlun.mmd import _calc_volume_price_coordination_v54
+
         assert callable(_calc_volume_price_coordination_v54)
 
 
@@ -166,11 +170,12 @@ class TestFindMMDsV54Integration:
     def test_v54_functions_importable(self):
         """所有V54函数可正常导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_multi_bar_confirmation_v54,
             _calc_gap_risk_assessment_v54,
+            _calc_multi_bar_confirmation_v54,
             _calc_volatility_regime_change_v54,
             _calc_volume_price_coordination_v54,
         )
+
         assert callable(_calc_multi_bar_confirmation_v54)
         assert callable(_calc_gap_risk_assessment_v54)
         assert callable(_calc_volatility_regime_change_v54)
@@ -179,6 +184,7 @@ class TestFindMMDsV54Integration:
     def test_v54_fields_in_mmd_type(self):
         """MMD类型包含V54字段定义。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, msg="test")
         assert hasattr(mmd, "_multi_bar_confirmation_v54")
         assert hasattr(mmd, "_gap_risk_assessment_v54")

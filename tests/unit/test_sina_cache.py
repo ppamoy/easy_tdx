@@ -24,15 +24,18 @@ class _Row:
 def _rows():
     return [
         _Row(
-            date(2026, 6, 30), date(2026, 8, 31),
+            date(2026, 6, 30),
+            date(2026, 8, 31),
             {"eps": 35.57, "roe": 16.98, "gross_margin": 89.73},
         ),
         _Row(
-            date(2026, 3, 31), date(2026, 4, 30),
+            date(2026, 3, 31),
+            date(2026, 4, 30),
             {"eps": 21.76, "roe": 9.7, "gross_margin": 91.2},
         ),
         _Row(
-            date(2025, 12, 31), date(2026, 4, 30),
+            date(2025, 12, 31),
+            date(2026, 4, 30),
             {"eps": 35.0, "roe": 22.0, "gross_margin": 90.0},
         ),
     ]
@@ -107,19 +110,33 @@ class TestSinaAdapterCacheIntegration:
                     import pandas as pd
 
                     if rtype == "lrb":
-                        return pd.DataFrame([{"报告期": "2026-06-30", "营业总收入": 100.0,
-                                              "归属于母公司所有者的净利润": 20.0,
-                                              "基本每股收益": 2.0,
-                                              "营业成本": 55.0,
-                                              "营业总收入_同比": 0.1,
-                                              "归属于母公司所有者的净利润_同比": 0.2}])
+                        return pd.DataFrame(
+                            [
+                                {
+                                    "报告期": "2026-06-30",
+                                    "营业总收入": 100.0,
+                                    "归属于母公司所有者的净利润": 20.0,
+                                    "基本每股收益": 2.0,
+                                    "营业成本": 55.0,
+                                    "营业总收入_同比": 0.1,
+                                    "归属于母公司所有者的净利润_同比": 0.2,
+                                }
+                            ]
+                        )
                     if rtype == "fzb":
-                        return pd.DataFrame([{"报告期": "2026-06-30",
-                                              "所有者权益(或股东权益)合计": 80.0,
-                                              "资产总计": 200.0,
-                                              "负债合计": 80.0}])
-                    return pd.DataFrame([{"报告期": "2026-06-30",
-                                          "经营活动产生的现金流量净额": 25.0}])
+                        return pd.DataFrame(
+                            [
+                                {
+                                    "报告期": "2026-06-30",
+                                    "所有者权益(或股东权益)合计": 80.0,
+                                    "资产总计": 200.0,
+                                    "负债合计": 80.0,
+                                }
+                            ]
+                        )
+                    return pd.DataFrame(
+                        [{"报告期": "2026-06-30", "经营活动产生的现金流量净额": 25.0}]
+                    )
 
             return _C()
 
@@ -136,9 +153,7 @@ class TestScanMarketSinaFallback:
         from easy_tdx.fundamental import pipeline
 
         # gpcw 无覆盖 → 空帧
-        monkeypatch.setattr(
-            pipeline, "load_all_periods_frame", lambda *a, **k: pd.DataFrame()
-        )
+        monkeypatch.setattr(pipeline, "load_all_periods_frame", lambda *a, **k: pd.DataFrame())
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
         monkeypatch.setattr(pipeline, "subsequent_performance", lambda *a, **k: {})
 
@@ -147,12 +162,21 @@ class TestScanMarketSinaFallback:
 
             return [
                 SinaFinancialRow(
-                    code=code, market=market,
-                    report_date=date(2019, 9, 30), disclosure_date=date(2019, 10, 31),
+                    code=code,
+                    market=market,
+                    report_date=date(2019, 9, 30),
+                    disclosure_date=date(2019, 10, 31),
                     indicators={
-                        "eps": 24.24, "roe": 23.28, "revenue": 6.09e10,
-                        "net_profit": 3.04e10, "gross_margin": 91.2, "net_margin": 49.9,
-                        "debt_ratio": 20.5, "ocf": 4.4e10, "rev_yoy": 15.54, "np_yoy": 23.13,
+                        "eps": 24.24,
+                        "roe": 23.28,
+                        "revenue": 6.09e10,
+                        "net_profit": 3.04e10,
+                        "gross_margin": 91.2,
+                        "net_margin": 49.9,
+                        "debt_ratio": 20.5,
+                        "ocf": 4.4e10,
+                        "rev_yoy": 15.54,
+                        "np_yoy": 23.13,
                     },
                 ),
             ]
@@ -162,7 +186,9 @@ class TestScanMarketSinaFallback:
         # target 在披露日(2019-10-31)之后，三季报可用
         out = pipeline.scan_market(
             date(2019, 11, 15),
-            top_n=5, with_performance=False, min_score=0,
+            top_n=5,
+            with_performance=False,
+            min_score=0,
             sina_pool=[{"market": "SH", "code": "600519"}],
         )
         results = out.get("results", [])
@@ -177,24 +203,30 @@ class TestScanMarketSinaFallback:
 
         ind = indicator_values(
             {
-                "基本每股收益": 1.5, "净资产收益率": 18.0,
-                "其中：营业收入": 100.0, "其中：营业成本": 60.0,
+                "基本每股收益": 1.5,
+                "净资产收益率": 18.0,
+                "其中：营业收入": 100.0,
+                "其中：营业成本": 60.0,
                 "归属于母公司所有者的净利润": 20.0,
-                "资产总计": 200.0, "负债合计": 80.0,
+                "资产总计": 200.0,
+                "负债合计": 80.0,
                 "经营活动产生的现金流量净额": 25.0,
-                "营业收入增长率(%)": 12.0, "净利润增长率(%)": 15.0,
+                "营业收入增长率(%)": 12.0,
+                "净利润增长率(%)": 15.0,
             }
         )
         frame = pd.DataFrame(
-            [{
-                "code": "600519", "market": "SH",
-                "report_date": date(2026, 3, 31), "disclosure_date": date(2026, 4, 25),
-                **ind,
-            }]
+            [
+                {
+                    "code": "600519",
+                    "market": "SH",
+                    "report_date": date(2026, 3, 31),
+                    "disclosure_date": date(2026, 4, 25),
+                    **ind,
+                }
+            ]
         )
-        monkeypatch.setattr(
-            pipeline, "load_all_periods_frame", lambda *a, **k: frame
-        )
+        monkeypatch.setattr(pipeline, "load_all_periods_frame", lambda *a, **k: frame)
         monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
         monkeypatch.setattr(pipeline, "subsequent_performance", lambda *a, **k: {})
 

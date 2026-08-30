@@ -87,6 +87,7 @@ def test_create_app_returns_fastapi_instance():
     assert any("/api/v1/chanlun" in p for p in api_paths)
     # WebSocket routes are nested inside _IncludedRouter; verify via the router directly
     from easy_tdx.web.routers.realtime import router as realtime_router
+
     ws_paths = [r.path for r in realtime_router.routes]
     assert any("/ws/realtime" in p for p in ws_paths), f"WebSocket route not found in {ws_paths}"
 
@@ -412,6 +413,7 @@ def test_full_app_routes_registered():
         assert matched, f"Expected route with prefix '{prefix}' not found in {api_paths[:5]}..."
     # Also check WebSocket route directly (not in OpenAPI schema)
     from easy_tdx.web.routers.realtime import router as realtime_router
+
     ws_paths = [r.path for r in realtime_router.routes]
     assert any("/ws/realtime" in p for p in ws_paths), f"WebSocket route not found in {ws_paths}"
 

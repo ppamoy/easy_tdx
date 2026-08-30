@@ -2,7 +2,7 @@
 
 中枢定义：至少三笔（或线段）的价格区间有重叠。
 - zg（上沿）= 重叠区间的最高点
-- zd（下沿）= 重叠区间的最低点  
+- zd（下沿）= 重叠区间的最低点
 - gg = 中枢内所有笔的最高价
 - dd = 中枢内所有笔的最低价
 
@@ -45,7 +45,7 @@ def find_zss(
         return []
 
     zss: list[ZS] = []
-    
+
     # 用第一笔初始化中枢候选区间
     first_bi = bis[0]
     zg_candidate = first_bi.high
@@ -58,11 +58,11 @@ def find_zss(
 
     for i in range(1, len(bis)):
         bi = bis[i]
-        
+
         # 检查新笔与当前中枢候选区间是否有重叠
         overlap_high = min(zg_candidate, bi.high)
         overlap_low = max(zd_candidate, bi.low)
-        
+
         if overlap_high > overlap_low:
             # 有重叠，加入中枢候选
             candidate_lines.append(bi)
@@ -86,7 +86,7 @@ def find_zss(
                     done=True,
                 )
                 zss.append(zs)
-            
+
             # 开始新的中枢候选
             candidate_lines = [bi]
             zg_candidate = bi.high

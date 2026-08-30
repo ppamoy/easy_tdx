@@ -205,8 +205,8 @@ def _create_app(
     from easy_tdx.web.routers.board_mac import router as board_mac_router
     from easy_tdx.web.routers.chanlun import router as chanlun_router
     from easy_tdx.web.routers.ex_market import router as ex_market_router
-    from easy_tdx.web.routers.fundamental import router as fundamental_router
     from easy_tdx.web.routers.finance import router as finance_router
+    from easy_tdx.web.routers.fundamental import router as fundamental_router
     from easy_tdx.web.routers.indicator import router as indicator_router
     from easy_tdx.web.routers.mac_data import router as mac_data_router
     from easy_tdx.web.routers.mac_quotes import router as mac_quotes_router
@@ -247,9 +247,11 @@ def _create_app(
     app.include_router(screening_router, prefix="/api/v1")
     # 信号监控路由
     from easy_tdx.web.routers.monitor import router as monitor_router
+
     app.include_router(monitor_router, prefix="/api/v1")
     # 股票诊断路由
     from easy_tdx.web.routers.diagnosis import router as diagnosis_router
+
     app.include_router(diagnosis_router, prefix="/api/v1")
 
     # --- 前端 dist 托管（生产/打包态同源服务，开发态可缺省） ---

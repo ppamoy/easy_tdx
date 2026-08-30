@@ -10,15 +10,13 @@
 
 from __future__ import annotations
 
-import pytest
-
 from easy_tdx.chanlun.mmd import (
-    _calc_rsi_deep_divergence_v60,
-    _calc_ma_spacing_strength_v60,
-    _calc_zs_distance_enhanced_v60,
     _calc_kdj_ob_os_confirm_v60,
+    _calc_ma_spacing_strength_v60,
+    _calc_rsi_deep_divergence_v60,
+    _calc_zs_distance_enhanced_v60,
 )
-from easy_tdx.chanlun.types import MMD, MMDType, ZS
+from easy_tdx.chanlun.types import MMD, ZS, MMDType
 
 
 def _make_mock_mmd(mmd_type: MMDType, confidence: float = 0.5, zs=None) -> MMD:
@@ -112,6 +110,7 @@ class TestMASpacingStrengthV60:
         mmd = _make_mock_mmd(MMDType.BUY_3)
         # 震荡数据，均线接近
         import random
+
         random.seed(42)
         closes = []
         price = 100.0
@@ -246,11 +245,12 @@ class TestFindMMDsV60Integration:
     def test_v60_functions_importable(self):
         """所有V60函数可导入。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_rsi_deep_divergence_v60,
-            _calc_ma_spacing_strength_v60,
-            _calc_zs_distance_enhanced_v60,
             _calc_kdj_ob_os_confirm_v60,
+            _calc_ma_spacing_strength_v60,
+            _calc_rsi_deep_divergence_v60,
+            _calc_zs_distance_enhanced_v60,
         )
+
         assert callable(_calc_rsi_deep_divergence_v60)
         assert callable(_calc_ma_spacing_strength_v60)
         assert callable(_calc_zs_distance_enhanced_v60)
@@ -258,8 +258,10 @@ class TestFindMMDsV60Integration:
 
     def test_v60_fields_in_mmd_type(self):
         """MMD类型包含V60字段。"""
-        from easy_tdx.chanlun.types import MMD
         import dataclasses
+
+        from easy_tdx.chanlun.types import MMD
+
         fields = {f.name for f in dataclasses.fields(MMD)}
         assert "_rsi_deep_divergence_v60" in fields
         assert "_ma_spacing_strength_v60" in fields
@@ -270,8 +272,8 @@ class TestFindMMDsV60Integration:
         """V60置信度调整不越界。"""
         mmd = _make_mock_mmd(MMDType.BUY_3)
         closes = [100.0 + i * 0.5 for i in range(100)]
-        highs = [c + 0.5 for c in closes]
-        lows = [c - 0.5 for c in closes]
+        _ = [c + 0.5 for c in closes]
+        _ = [c - 0.5 for c in closes]
 
         r1 = _calc_rsi_deep_divergence_v60(mmd, closes)
         r2 = _calc_ma_spacing_strength_v60(mmd, closes)
@@ -313,13 +315,14 @@ class TestFindMMDsV60Integration:
 
     def test_v60_integration_pass(self):
         """集成测试通过。"""
-        from easy_tdx.chanlun.mmd import find_mmds_v39
-        from easy_tdx.chanlun import ChanlunAnalyser
         import pandas as pd
+
+        from easy_tdx.chanlun import ChanlunAnalyser
 
         # 生成模拟上涨数据
         n = 200
         import numpy as np
+
         np.random.seed(42)
         dates = pd.date_range("2024-01-01", periods=n, freq="D")
         close = [100.0]
@@ -327,14 +330,16 @@ class TestFindMMDsV60Integration:
             close.append(close[-1] * (1.001 + np.random.normal(0, 0.005)))
         close = np.array(close)
 
-        df = pd.DataFrame({
-            "datetime": dates,
-            "open": close * (1 + np.random.uniform(-0.002, 0.002, n)),
-            "high": close * (1 + np.random.uniform(0, 0.008, n)),
-            "low": close * (1 + np.random.uniform(-0.008, 0, n)),
-            "close": close,
-            "vol": [1e6] * n,
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": dates,
+                "open": close * (1 + np.random.uniform(-0.002, 0.002, n)),
+                "high": close * (1 + np.random.uniform(0, 0.008, n)),
+                "low": close * (1 + np.random.uniform(-0.008, 0, n)),
+                "close": close,
+                "vol": [1e6] * n,
+            }
+        )
 
         analyser = ChanlunAnalyser(code="TEST", frequency="daily")
         result = analyser.process_klines(df)

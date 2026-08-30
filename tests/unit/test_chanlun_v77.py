@@ -6,20 +6,19 @@
 条件243：价格动能加速度（Price Momentum Acceleration）
 """
 
-import pytest
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
+from easy_tdx.backtest.chanlun_validator import ConditionGroup
 from easy_tdx.chanlun.mmd import (
+    _calc_price_momentum_acceleration_v77,
+    _calc_signal_freshness_validation_v77,
     _calc_volume_distribution_depth_v77,
     _calc_zhongshu_structure_weight_v77,
-    _calc_signal_freshness_validation_v77,
-    _calc_price_momentum_acceleration_v77,
 )
 from easy_tdx.chanlun.types import MMD, MMDType
-from easy_tdx.backtest.chanlun_validator import ConditionGroup
 
 
 def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
@@ -29,17 +28,20 @@ def _make_mmd(mmd_type: str = "3buy", confidence: float = 0.6) -> MMD:
 
 def _make_closes(n: int = 60, base: float = 100.0) -> list[float]:
     import random
+
     random.seed(42)
     return [base + random.uniform(-5, 5) * (i / n) for i in range(n)]
 
 
 def _make_volumes(n: int = 60, base: float = 1000.0) -> list[float]:
     import random
+
     random.seed(43)
     return [base + random.uniform(-200, 200) for _ in range(n)]
 
 
 # ── TestV77ConditionGroup：ConditionGroup 枚举测试 ───────────────────────────
+
 
 class TestV77ConditionGroup:
     """V77 ConditionGroup 存在性和正确性测试。"""
@@ -57,6 +59,7 @@ class TestV77ConditionGroup:
 
 # ── TestV77MMDFields：MMD 对象字段测试 ───────────────────────────────────────
 
+
 class TestV77MMDFields:
     """MMD 对象包含 V77 字段。"""
 
@@ -70,12 +73,14 @@ class TestV77MMDFields:
 
 # ── TestV77BacktestValidator：回测验证器测试 ─────────────────────────────────
 
+
 class TestV77BacktestValidator:
     """V77 条件回测验证器测试。"""
 
     def test_v77_validator_usage(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
-        validator = ChanlunConditionBacktestValidator()
+
+        _ = ChanlunConditionBacktestValidator()
         assert ConditionGroup.V77 in list(ConditionGroup)
 
     def test_v77_multi_group_validation(self):
@@ -87,12 +92,14 @@ class TestV77BacktestValidator:
 
     def test_v77_summary_output(self):
         from easy_tdx.backtest.chanlun_validator import ChanlunConditionBacktestValidator
+
         validator = ChanlunConditionBacktestValidator()
         summary = validator.validate_conditions({}, [ConditionGroup.V77])
         assert summary is not None
 
 
 # ── TestV77Functions：各计算函数单元测试 ─────────────────────────────────────
+
 
 class TestV77Functions:
     """V77 四个计算函数的单元测试。"""
@@ -133,7 +140,11 @@ class TestV77Functions:
         volumes = [500.0] * 50 + [1500.0, 1800.0, 2000.0, 2200.0, 2500.0]
         result = _calc_volume_distribution_depth_v77(mmd, closes, volumes)
         assert result["energy_zone"] in [
-            "accumulation", "low_zone", "neutral", "distribution", "high_zone"
+            "accumulation",
+            "low_zone",
+            "neutral",
+            "distribution",
+            "high_zone",
         ]
 
     # ── 条件241：中枢结构权重评估 ──────────────────────────────────────────
@@ -141,6 +152,7 @@ class TestV77Functions:
     def test_zsw_near_zhongshu_support(self):
         """买入信号靠近中枢支撑 → 权重评分高。"""
         from easy_tdx.chanlun.types import ZS
+
         mmd = _make_mmd("3buy", 0.6)
         zss = [
             ZS(index=0, zg=100.5, zd=99.5),
@@ -156,6 +168,7 @@ class TestV77Functions:
     def test_zsw_far_from_zhongshu(self):
         """买入信号远离中枢 → 权重评分低。"""
         from easy_tdx.chanlun.types import ZS
+
         mmd = _make_mmd("3buy", 0.6)
         zss = [
             ZS(index=0, zg=100.5, zd=99.5),
@@ -175,6 +188,7 @@ class TestV77Functions:
     def test_zsw_insufficient_closes(self):
         """价格数据不足时返回默认值。"""
         from easy_tdx.chanlun.types import ZS
+
         mmd = _make_mmd("3buy", 0.6)
         zss = [ZS(index=0, zg=100.5, zd=99.5)]
         result = _calc_zhongshu_structure_weight_v77(mmd, zss, [10.0, 11.0])
@@ -194,10 +208,13 @@ class TestV77Functions:
 
     def test_sfv_aging_signal(self):
         """模拟有笔信息的衰老信号。"""
-        from easy_tdx.chanlun.types import CLKline, BI
         from datetime import datetime
 
-        k = CLKline(k_index=50, date=datetime(2026, 8, 1), open=10, close=10, high=10, low=10, amount=100)
+        from easy_tdx.chanlun.types import BI, CLKline
+
+        k = CLKline(
+            k_index=50, date=datetime(2026, 8, 1), open=10, close=10, high=10, low=10, amount=100
+        )
         bi = BI(start=k, end=k, direction="up", index=0)
         mmd = _make_mmd("3buy", 0.6)
         mmd.bi = bi
@@ -233,11 +250,15 @@ class TestV77Functions:
     def test_pma_decelerating(self):
         """动能衰减场景 → 买入信号应减分。"""
         mmd = _make_mmd("3buy", 0.6)
-        closes = [10.0 + 5.0 * (1 - 0.95 ** i) for i in range(30)]
+        closes = [10.0 + 5.0 * (1 - 0.95**i) for i in range(30)]
         result = _calc_price_momentum_acceleration_v77(mmd, closes)
         assert "momentum_direction" in result
         assert result["momentum_direction"] in [
-            "accelerating_up", "growing_up", "flat", "decelerating", "sharp_reversal"
+            "accelerating_up",
+            "growing_up",
+            "flat",
+            "decelerating",
+            "sharp_reversal",
         ]
 
     def test_pma_insufficient_data(self):
@@ -269,6 +290,7 @@ class TestV77Functions:
         closes = _make_closes(60)
         volumes = _make_volumes(60)
         from easy_tdx.chanlun.types import ZS
+
         zss = [ZS(index=0, zg=100.5, zd=99.5)]
 
         r1 = _calc_volume_distribution_depth_v77(mmd, closes, volumes)

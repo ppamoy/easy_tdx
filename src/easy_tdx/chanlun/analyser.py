@@ -22,8 +22,8 @@ from easy_tdx.chanlun.macd import calc_macd  # noqa: F401
 from easy_tdx.chanlun.mmd import find_mmds_v44  # noqa: F401
 from easy_tdx.chanlun.types import BC, BI, FX, MMD, XD, ZS, CLKline, Kline
 from easy_tdx.chanlun.xd import find_xds  # noqa: F401
-from easy_tdx.MyTT import BOLL
 from easy_tdx.chanlun.zs import find_zss
+from easy_tdx.MyTT import BOLL
 
 
 def _df_to_klines(df: pd.DataFrame) -> list[Kline]:
@@ -140,11 +140,17 @@ class ChanlunResult:
                         "grade": getattr(mmd.quality, "grade", None) if mmd.quality else None,
                         "score": getattr(mmd.quality, "score", None) if mmd.quality else None,
                         "reasons": getattr(mmd.quality, "reasons", None) if mmd.quality else None,
-                    } if mmd.quality else None,
+                    }
+                    if mmd.quality
+                    else None,
                     # V79 缠论增强条件（条件248-251）
-                    "v79_fractal_stability": getattr(mmd, "_fractal_stability_validation_v79", None),
+                    "v79_fractal_stability": getattr(
+                        mmd, "_fractal_stability_validation_v79", None
+                    ),
                     "v79_distance_safety": getattr(mmd, "_mmd_distance_safety_v79", None),
-                    "v79_multi_level_consistency": getattr(mmd, "_multi_level_structure_consistency_v79", None),
+                    "v79_multi_level_consistency": getattr(
+                        mmd, "_multi_level_structure_consistency_v79", None
+                    ),
                     "v79_momentum_continuity": getattr(mmd, "_price_momentum_continuity_v79", None),
                     # V80 缠论增强条件（条件252-255）
                     "v80_zhongshu_distance": getattr(mmd, "_mmd_zhongshu_distance_v80", None),
@@ -152,15 +158,23 @@ class ChanlunResult:
                     "v80_ma_alignment": getattr(mmd, "_ma_alignment_strength_v80", None),
                     "v80_risk_reward": getattr(mmd, "_dynamic_risk_reward_v80", None),
                     # V81 缠论增强条件（条件256-259）
-                    "v81_volatility_regime": getattr(mmd, "_volatility_regime_transition_v81", None),
-                    "v81_support_resistance": getattr(mmd, "_support_resistance_strength_v81", None),
-                    "v81_energy_distribution": getattr(mmd, "_volume_price_energy_distribution_v81", None),
+                    "v81_volatility_regime": getattr(
+                        mmd, "_volatility_regime_transition_v81", None
+                    ),
+                    "v81_support_resistance": getattr(
+                        mmd, "_support_resistance_strength_v81", None
+                    ),
+                    "v81_energy_distribution": getattr(
+                        mmd, "_volume_price_energy_distribution_v81", None
+                    ),
                     "v81_execution_window": getattr(mmd, "_signal_execution_window_v81", None),
                     # V82 缠论增强条件（条件260-263）
                     "v82_age_decay": getattr(mmd, "_mmd_age_decay_v82", None),
                     "v82_breakout_retest": getattr(mmd, "_breakout_retest_confirm_v82", None),
                     "v82_macd_resonance": getattr(mmd, "_macd_multi_tf_resonance_v82", None),
-                    "v82_volatility_compression": getattr(mmd, "_volatility_compression_breakout_v82", None),
+                    "v82_volatility_compression": getattr(
+                        mmd, "_volatility_compression_breakout_v82", None
+                    ),
                 }
                 for mmd in self.mmds
             ],
@@ -266,16 +280,22 @@ class ChanlunAnalyser:
         # Step 7.5: BOLL 指标计算
         if len(closes) >= 20:
             from easy_tdx.chanlun.types import BOLLResult
+
             _upper, _mid, _lower = BOLL(closes, N=20, P=2)
-            _width = [(_upper[i] - _lower[i]) / _mid[i] if _mid[i] > 0 else 0 for i in range(len(_upper))]
+            _width = [
+                (_upper[i] - _lower[i]) / _mid[i] if _mid[i] > 0 else 0 for i in range(len(_upper))
+            ]
             _pb = []
             for i in range(len(closes)):
                 ub = _upper[i]
                 lb = _lower[i]
                 _pb.append((closes[i] - lb) / (ub - lb) if (ub - lb) > 0 else 0.5)
             self._result.boll = BOLLResult(
-                upper=_upper.tolist(), mid=_mid.tolist(), lower=_lower.tolist(),
-                width=_width, percent_b=_pb,
+                upper=_upper.tolist(),
+                mid=_mid.tolist(),
+                lower=_lower.tolist(),
+                width=_width,
+                percent_b=_pb,
             )
 
         # Step 8: 买卖点识别（传入收盘价用于MACD力度计算）
@@ -283,11 +303,22 @@ class ChanlunAnalyser:
         volumes = [k.amount for k in klines]
         # V5: 计算波动率用于动态阈值
         from easy_tdx.chanlun.mmd import _calc_atr_volatility
+
         volatility = _calc_atr_volatility(closes) if len(closes) > 0 else None
         # V12: 传递highs/lows用于真实ADX计算
         highs = [k.high for k in klines]
         lows = [k.low for k in klines]
-        mmds = find_mmds_v44(bis, zss, closes=closes, config=self._config, volumes=volumes, macd_data=self._result.macd, volatility=volatility, highs=highs, lows=lows)
+        mmds = find_mmds_v44(
+            bis,
+            zss,
+            closes=closes,
+            config=self._config,
+            volumes=volumes,
+            macd_data=self._result.macd,
+            volatility=volatility,
+            highs=highs,
+            lows=lows,
+        )
         self._result.mmds = mmds
 
         # Step 9: 背驰判断（传入收盘价用于MACD面积计算）

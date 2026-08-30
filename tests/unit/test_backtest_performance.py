@@ -657,9 +657,7 @@ def test_max_consecutive_losses() -> None:
 def test_max_consecutive_no_trades() -> None:
     """无交易时最大连续盈亏应为 0。"""
     equity = _make_equity_curve(n=252, total_return=0.0)
-    trades = pd.DataFrame(
-        columns=["datetime", "direction", "pnl", "cost_basis", "rejected"]
-    )
+    trades = pd.DataFrame(columns=["datetime", "direction", "pnl", "cost_basis", "rejected"])
 
     analyzer = PerformanceAnalyzer(equity, trades)
     metrics = analyzer.compute()
@@ -689,12 +687,29 @@ def test_all_metric_keys_present() -> None:
     metrics = analyzer.compute()
 
     required_keys = {
-        "total_return", "annual_return", "max_drawdown", "max_dd_duration",
-        "sharpe", "sortino", "calmar",
-        "total_trades", "win_trades", "lose_trades", "rejected_trades",
-        "win_rate", "profit_factor", "avg_win", "avg_loss",
-        "max_win", "max_loss", "avg_holding_days", "volatility",
-        "max_consec_win", "max_consec_loss",
-        "sharpe_ratio", "start_cash", "end_value",
+        "total_return",
+        "annual_return",
+        "max_drawdown",
+        "max_dd_duration",
+        "sharpe",
+        "sortino",
+        "calmar",
+        "total_trades",
+        "win_trades",
+        "lose_trades",
+        "rejected_trades",
+        "win_rate",
+        "profit_factor",
+        "avg_win",
+        "avg_loss",
+        "max_win",
+        "max_loss",
+        "avg_holding_days",
+        "volatility",
+        "max_consec_win",
+        "max_consec_loss",
+        "sharpe_ratio",
+        "start_cash",
+        "end_value",
     }
     assert required_keys.issubset(set(metrics.keys()))

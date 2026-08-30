@@ -11,18 +11,18 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from easy_tdx.chanlun.mmd import _is_strong_beichi, _reference_zs_for_bi
-from easy_tdx.chanlun.types import BI, CLKline, Direction, FX, FXType, ZS
+from easy_tdx.chanlun.mmd import _calc_zs_avg_volume, _is_strong_beichi, _reference_zs_for_bi
+from easy_tdx.chanlun.types import BI, FX, ZS, CLKline, Direction, FXType
 
 
-def _ck(idx: int, h: float, l: float) -> CLKline:
+def _ck(idx: int, h: float, low: float) -> CLKline:
     return CLKline(
         k_index=idx,
         date=datetime(2025, 1, 1),
-        open=(h + l) / 2,
-        close=(h + l) / 2,
+        open=(h + low) / 2,
+        close=(h + low) / 2,
         high=h,
-        low=l,
+        low=low,
         amount=1.0,
         index=0,
     )
@@ -35,8 +35,16 @@ def _fx(fx_type: FXType, mid: CLKline, val: float) -> FX:
 def _bi(index: int, direction: Direction, start_k: int, end_k: int, high: float, low: float) -> BI:
     start_mid = _ck(start_k, high, low)
     end_mid = _ck(end_k, high, low)
-    start_fx = _fx(FXType.DI if direction == Direction.UP else FXType.DING, start_mid, low if direction == Direction.UP else high)
-    end_fx = _fx(FXType.DING if direction == Direction.UP else FXType.DI, end_mid, high if direction == Direction.UP else low)
+    start_fx = _fx(
+        FXType.DI if direction == Direction.UP else FXType.DING,
+        start_mid,
+        low if direction == Direction.UP else high,
+    )
+    end_fx = _fx(
+        FXType.DING if direction == Direction.UP else FXType.DI,
+        end_mid,
+        high if direction == Direction.UP else low,
+    )
     return BI(
         start=start_fx,
         end=end_fx,
@@ -53,13 +61,23 @@ class TestReferenceZsForBi:
     def test_returns_contemporaneous_center(self) -> None:
         zs_a = ZS(
             lines=[_bi(0, Direction.UP, 100, 110, 22.0, 18.0)],
-            zg=21.0, zd=19.0, gg=22.0, dd=18.0, index=0, done=True,
+            zg=21.0,
+            zd=19.0,
+            gg=22.0,
+            dd=18.0,
+            index=0,
+            done=True,
             start=_fx(FXType.DI, _ck(100, 22.0, 18.0), 18.0),
             end=_fx(FXType.DING, _ck(110, 22.0, 18.0), 22.0),
         )
         zs_b = ZS(
             lines=[_bi(1, Direction.UP, 200, 210, 18.0, 14.0)],
-            zg=17.0, zd=15.0, gg=18.0, dd=14.0, index=1, done=True,
+            zg=17.0,
+            zd=15.0,
+            gg=18.0,
+            dd=14.0,
+            index=1,
+            done=True,
             start=_fx(FXType.DI, _ck(200, 18.0, 14.0), 14.0),
             end=_fx(FXType.DING, _ck(210, 18.0, 14.0), 18.0),
         )
@@ -72,7 +90,12 @@ class TestReferenceZsForBi:
         """最终跌破笔（中枢尚未在其前结束）应退而取最后中枢。"""
         zs = ZS(
             lines=[_bi(0, Direction.UP, 100, 110, 20.0, 16.0)],
-            zg=19.0, zd=17.0, gg=20.0, dd=16.0, index=0, done=False,
+            zg=19.0,
+            zd=17.0,
+            gg=20.0,
+            dd=16.0,
+            index=0,
+            done=False,
             start=_fx(FXType.DI, _ck(100, 20.0, 16.0), 16.0),
             end=_fx(FXType.DING, _ck(130, 20.0, 16.0), 20.0),
         )
@@ -93,7 +116,12 @@ class TestTrendBeichiExcludesConsolidation:
                 _bi(1, Direction.UP, 109, 115, 19.5, 16.5),
                 _bi(2, Direction.DOWN, 116, 122, 19.0, 16.8),
             ],
-            zg=19.5, zd=16.8, gg=20.0, dd=16.0, index=0, done=True,
+            zg=19.5,
+            zd=16.8,
+            gg=20.0,
+            dd=16.0,
+            index=0,
+            done=True,
             start=_fx(FXType.DING, _ck(100, 20.0, 16.0), 20.0),
             end=_fx(FXType.DI, _ck(122, 19.0, 16.8), 16.8),
         )
@@ -116,9 +144,6 @@ class TestTrendBeichiExcludesConsolidation:
         assert result is True
 
 
-from easy_tdx.chanlun.mmd import _calc_zs_avg_volume
-
-
 class TestZsAvgVolume:
     """中枢盘整期均量：作为突破/跌破量能比较基准。"""
 
@@ -130,7 +155,12 @@ class TestZsAvgVolume:
                 _bi(1, Direction.DOWN, 111, 120, 19.5, 16.5),
                 _bi(2, Direction.UP, 121, 130, 19.8, 16.8),
             ],
-            zg=19.5, zd=16.8, gg=20.0, dd=16.0, index=0, done=True,
+            zg=19.5,
+            zd=16.8,
+            gg=20.0,
+            dd=16.0,
+            index=0,
+            done=True,
             start=_fx(FXType.DING, _ck(100, 20.0, 16.0), 20.0),
             end=_fx(FXType.DI, _ck(130, 19.8, 16.8), 16.8),
         )
@@ -150,7 +180,9 @@ class TestZsAvgVolume:
         """K线索引超出成交量长度时应收敛到有效区间，不崩溃。"""
         zs = ZS(
             lines=[_bi(0, Direction.UP, 95, 200, 20.0, 16.0)],
-            zg=19.0, zd=17.0, index=0,
+            zg=19.0,
+            zd=17.0,
+            index=0,
             start=_fx(FXType.DI, _ck(95, 20.0, 16.0), 16.0),
             end=_fx(FXType.DING, _ck(200, 20.0, 16.0), 20.0),
         )
@@ -158,4 +190,3 @@ class TestZsAvgVolume:
         avg = _calc_zs_avg_volume(volumes, zs)
         # 区间被钳制到 [0, 9]，均量为 1.0
         assert avg == 1.0
-

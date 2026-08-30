@@ -11,23 +11,24 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
+import pandas as pd
 
 from easy_tdx.backtest.chanlun_validator import (
-    ConditionGroup,
     ChanlunConditionBacktestValidator,
+    ConditionGroup,
     ConditionValidationResult,
-    MultiStockResult,
     SignalResult,
 )
 from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 测试数据生成工具
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _make_trending_df(n: int = 300, start_price: float = 50.0, trend: str = "up") -> tuple[list[float], list[float], list[float], list[float]]:
+
+def _make_trending_df(
+    n: int = 300, start_price: float = 50.0, trend: str = "up"
+) -> tuple[list[float], list[float], list[float], list[float]]:
     """生成趋势数据 (open, high, low, close)。"""
     np.random.seed(42)
     returns = np.random.randn(n) * 0.02
@@ -43,12 +44,14 @@ def _make_trending_df(n: int = 300, start_price: float = 50.0, trend: str = "up"
     opens = [c * (1 + np.random.randn() * 0.005) for c in closes]
     highs = [max(o, c) * (1 + abs(np.random.randn()) * 0.01) for o, c in zip(opens, closes)]
     lows = [min(o, c) * (1 - abs(np.random.randn()) * 0.01) for o, c in zip(opens, closes)]
-    vols = [1e6 * (1 + abs(np.random.randn()) * 0.5) for _ in range(n)]
+    _ = [1e6 * (1 + abs(np.random.randn()) * 0.5) for _ in range(n)]
 
     return opens, highs, lows, closes
 
 
-def _make_oscillating_df(n: int = 300, start_price: float = 30.0) -> tuple[list[float], list[float], list[float], list[float]]:
+def _make_oscillating_df(
+    n: int = 300, start_price: float = 30.0
+) -> tuple[list[float], list[float], list[float], list[float]]:
     """生成震荡数据（适合测试中枢）。"""
     np.random.seed(123)
     base = start_price
@@ -60,29 +63,63 @@ def _make_oscillating_df(n: int = 300, start_price: float = 30.0) -> tuple[list[
     opens = [c * (1 + np.random.randn() * 0.003) for c in closes]
     highs = [max(o, c) * (1 + abs(np.random.randn()) * 0.008) for o, c in zip(opens, closes)]
     lows = [min(o, c) * (1 - abs(np.random.randn()) * 0.008) for o, c in zip(opens, closes)]
-    vols = [5e5 * (1 + abs(np.random.randn()) * 0.3) for _ in range(n)]
+    _ = [5e5 * (1 + abs(np.random.randn()) * 0.3) for _ in range(n)]
 
     return opens, highs, lows, closes
 
 
-def _make_df(opens: list, highs: list, lows: list, closes: list) -> "pd.DataFrame":
+def _make_df(opens: list, highs: list, lows: list, closes: list) -> pd.DataFrame:
     """构造 DataFrame。"""
     import pandas as pd
-    return pd.DataFrame({
-        "open": opens, "high": highs, "low": lows, "close": closes, "vol": [1e6] * len(closes),
-    })
+
+    return pd.DataFrame(
+        {
+            "open": opens,
+            "high": highs,
+            "low": lows,
+            "close": closes,
+            "vol": [1e6] * len(closes),
+        }
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # ConditionGroup 枚举测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestConditionGroup:
     """ConditionGroup 枚举正确性测试。"""
 
     def test_all_groups_defined(self):
         """所有 V58-V82 分组都应定义。"""
-        expected = {"V58", "V59", "V60", "V61", "V62", "V63", "V64", "V65", "V66", "V67", "V68", "V69", "V70", "V71", "V72", "V73", "V74", "V75", "V76", "V77", "V78", "V79", "V80", "V81", "V82"}
+        expected = {
+            "V58",
+            "V59",
+            "V60",
+            "V61",
+            "V62",
+            "V63",
+            "V64",
+            "V65",
+            "V66",
+            "V67",
+            "V68",
+            "V69",
+            "V70",
+            "V71",
+            "V72",
+            "V73",
+            "V74",
+            "V75",
+            "V76",
+            "V77",
+            "V78",
+            "V79",
+            "V80",
+            "V81",
+            "V82",
+        }
         actual = {g.name for g in ConditionGroup}
         assert expected == actual
 
@@ -108,6 +145,7 @@ class TestConditionGroup:
 # ──────────────────────────────────────────────────────────────────────────────
 # 基础回测验证器测试
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestBacktestValidatorBasic:
     """回测验证器基础功能测试。"""
@@ -142,6 +180,7 @@ class TestBacktestValidatorBasic:
 # ──────────────────────────────────────────────────────────────────────────────
 # V63 条件专项回测测试（重点）
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestV63Backtest:
     """V63 条件190/191 回测验证测试。"""
@@ -203,6 +242,7 @@ class TestV63Backtest:
 # 多股票对比分析测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestMultiStockComparison:
     """多股票对比分析测试。"""
 
@@ -247,7 +287,7 @@ class TestMultiStockComparison:
         assert len(results) == 1
         # condition_breakdown 应有 V63 相关条目
         breakdown = results[0].condition_breakdown
-        v63_keys = [k for k in breakdown if "v63" in k.lower()]
+        _ = [k for k in breakdown if "v63" in k.lower()]
         # 至少结构存在（可能为0）
         assert isinstance(breakdown, dict)
 
@@ -255,6 +295,7 @@ class TestMultiStockComparison:
 # ──────────────────────────────────────────────────────────────────────────────
 # 条件组对比表格测试
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestGroupComparison:
     """条件组对比表格测试。"""
@@ -284,6 +325,7 @@ class TestGroupComparison:
 # ──────────────────────────────────────────────────────────────────────────────
 # SignalResult 数据类测试
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestSignalResult:
     """SignalResult 数据类测试。"""
@@ -325,6 +367,7 @@ class TestSignalResult:
 # ──────────────────────────────────────────────────────────────────────────────
 # 边界条件和错误处理测试
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestEdgeCases:
     """边界条件和错误处理测试。"""
@@ -380,6 +423,7 @@ class TestEdgeCases:
 # 集成测试：与实际 chanlun 分析器联动
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestIntegrationWithChanlun:
     """与实际缠论分析器的集成测试。"""
 
@@ -434,6 +478,7 @@ class TestIntegrationWithChanlun:
 # V65 条件 192-195 专项测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestV65ConditionGroup:
     """V65 ConditionGroup 枚举正确性测试。"""
 
@@ -461,7 +506,6 @@ class TestV65MMDFields:
 
     def test_v65_fields_on_mmd(self):
         """缠论分析产生的 MMD 对象应包含 V65 增强字段。"""
-        from easy_tdx.chanlun.types import MMDType
         df = _make_df(*_make_oscillating_df(500))
         config = ChanlunConfig()
         analyser = ChanlunAnalyser(code="test", frequency="daily", config=config)
@@ -535,6 +579,7 @@ class TestV65MultiStock:
 # ──────────────────────────────────────────────────────────────────────────────
 # V66 条件 196-199 专项测试
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 class TestV66ConditionGroup:
     """V66 ConditionGroup 枚举正确性测试。"""
@@ -628,17 +673,20 @@ class TestV66MultiStock:
             v66_keys = [k for k in r.condition_breakdown if "v66" in k.lower()]
             assert len(v66_keys) >= 0
 
+
 class TestV67ConditionGroup:
     """V67 条件组枚举测试。"""
 
     def test_v67_exists(self):
         """ConditionGroup.V67 应存在。"""
         from easy_tdx.backtest.chanlun_validator import ConditionGroup
+
         assert hasattr(ConditionGroup, "V67")
 
     def test_v67_condition_range(self):
         """V67 应覆盖条件200-203。"""
         from easy_tdx.backtest.chanlun_validator import ConditionGroup
+
         start, end = ConditionGroup.V67.condition_range
         assert start == 200
         assert end == 203
@@ -646,6 +694,7 @@ class TestV67ConditionGroup:
     def test_v67_description(self):
         """V67 应有描述。"""
         from easy_tdx.backtest.chanlun_validator import ConditionGroup
+
         assert len(ConditionGroup.V67.description) > 0
 
 
@@ -726,7 +775,6 @@ class TestV67MultiStock:
             assert len(v67_keys) >= 0
 
 
-
 class TestV68ConditionGroup:
     """V68 条件组枚举测试。"""
 
@@ -743,7 +791,9 @@ class TestV68ConditionGroup:
     def test_v68_description(self):
         """V68 应有描述。"""
         assert len(ConditionGroup.V68.description) > 0
-        assert "缺口" in ConditionGroup.V68.description or "区间套" in ConditionGroup.V68.description
+        assert (
+            "缺口" in ConditionGroup.V68.description or "区间套" in ConditionGroup.V68.description
+        )
 
 
 class TestV68MMDFields:
@@ -752,6 +802,7 @@ class TestV68MMDFields:
     def test_v68_fields_exist_on_mmd(self):
         """缠论分析产生的 MMD 对象应包含 V68 增强字段。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_gap_trend_consistency_v68")
         assert hasattr(mmd, "_range_set_multi_level_v68")
@@ -831,6 +882,7 @@ class TestV69MMDFields:
     def test_v69_fields_exist_on_mmd(self):
         """缠论分析产生的 MMD 对象应包含 V69 增强字段。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_price_volume_divergence_v69")
         assert hasattr(mmd, "_structural_integrity_v69")
@@ -910,6 +962,7 @@ class TestV70MMDFields:
     def test_v70_fields_exist_on_mmd(self):
         """缠论分析产生的 MMD 对象应包含 V70 增强字段。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_volume_peak_detection_v70")
         assert hasattr(mmd, "_signal_time_decay_v70")
@@ -989,6 +1042,7 @@ class TestV71MMDFields:
     def test_v71_fields_exist_on_mmd(self):
         """缠论分析产生的 MMD 对象应包含 V71 增强字段。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_ma_alignment_strength_v71")
         assert hasattr(mmd, "_multi_tf_ma_resonance_v71")
@@ -1049,6 +1103,7 @@ class TestV71Functions:
         """均线排列强度计算应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_ma_alignment_strength_v71
         from easy_tdx.chanlun.types import MMD, MMDType
+
         closes = list(range(100, 200))
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         result = _calc_ma_alignment_strength_v71(mmd, closes)
@@ -1061,6 +1116,7 @@ class TestV71Functions:
         """多周期均线共振计算应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_multi_tf_ma_resonance_v71
         from easy_tdx.chanlun.types import MMD, MMDType
+
         closes = [100 + i * 0.5 for i in range(150)]
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         result = _calc_multi_tf_ma_resonance_v71(mmd, closes)
@@ -1072,9 +1128,11 @@ class TestV71Functions:
 
     def test_dynamic_rr_optimization(self):
         """动态风险收益比计算应返回正确结构。"""
+        import random
+
         from easy_tdx.chanlun.mmd import _calc_dynamic_rr_optimization_v71
         from easy_tdx.chanlun.types import MMD, MMDType
-        import random
+
         random.seed(42)
         # 生成更有波动性的数据
         closes = [100.0]
@@ -1092,9 +1150,11 @@ class TestV71Functions:
 
     def test_mmd_history_winrate(self):
         """历史胜率回溯计算应返回正确结构。"""
+        import random
+
         from easy_tdx.chanlun.mmd import _calc_mmd_history_winrate_v71
         from easy_tdx.chanlun.types import MMD, MMDType
-        import random
+
         random.seed(42)
         closes = [100 + sum(random.uniform(-1, 1.5) for _ in range(i)) for i in range(200)]
         volumes = [random.uniform(0.5, 2.0) for _ in range(200)]
@@ -1109,11 +1169,12 @@ class TestV71Functions:
 # V72: 条件 220-223（均线收敛发散+支撑阻力距离+量价结构质量+信号衰减速度）
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestV72ConditionGroup:
     """V72 ConditionGroup 枚举测试。"""
 
     def test_v72_group_exists(self):
-        assert hasattr(ConditionGroup, 'V72')
+        assert hasattr(ConditionGroup, "V72")
         assert ConditionGroup.V72.value == "v72"
 
     def test_v72_condition_range(self):
@@ -1124,7 +1185,9 @@ class TestV72ConditionGroup:
 
     def test_v72_description(self):
         desc = ConditionGroup.V72.description
-        assert "均线收敛发散" in desc or "支撑阻力" in desc or "量价结构" in desc or "信号衰减" in desc
+        assert (
+            "均线收敛发散" in desc or "支撑阻力" in desc or "量价结构" in desc or "信号衰减" in desc
+        )
 
 
 class TestV72MMDFields:
@@ -1133,6 +1196,7 @@ class TestV72MMDFields:
     def test_v72_fields_exist_on_mmd(self):
         """MMD 对象应包含 V72 增强字段。"""
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_ma_convergence_divergence_v72")
         assert hasattr(mmd, "_support_resistance_proximity_v72")
@@ -1167,6 +1231,7 @@ class TestV72BacktestValidator:
         summary = results[0].summary()
         assert "V72" in summary
 
+
 class TestV72Functions:
     """V72 计算函数功能测试。"""
 
@@ -1174,6 +1239,7 @@ class TestV72Functions:
         """均线收敛发散评估应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_ma_convergence_divergence_v72
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(99)
         closes = [100.0]
         for _ in range(100):
@@ -1190,6 +1256,7 @@ class TestV72Functions:
         """支撑阻力位距离评估应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_support_resistance_proximity_v72
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(77)
         closes = [50.0]
         highs = [50.0]
@@ -1197,10 +1264,10 @@ class TestV72Functions:
         for _ in range(50):
             c = closes[-1] * (1 + np.random.randn() * 0.02)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         result = _calc_support_resistance_proximity_v72(mmd, closes, highs, lows)
         assert "current_price" in result
@@ -1213,6 +1280,7 @@ class TestV72Functions:
         """量价结构质量评分应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_volume_structure_quality_v72
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(55)
         closes = [100.0]
         volumes = [1e6]
@@ -1231,6 +1299,7 @@ class TestV72Functions:
         """信号衰减速度评估应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_signal_decay_velocity_v72
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(33)
         closes = [100.0]
         for _ in range(80):
@@ -1255,6 +1324,7 @@ class TestV72Functions:
             _calc_volume_structure_quality_v72,
         )
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         short_closes = [100.0, 101.0, 102.0]
         result = _calc_ma_convergence_divergence_v72(mmd, short_closes)
@@ -1269,7 +1339,7 @@ class TestV73ConditionGroup:
     """V73 ConditionGroup 枚举测试。"""
 
     def test_v73_group_exists(self):
-        assert hasattr(ConditionGroup, 'V73')
+        assert hasattr(ConditionGroup, "V73")
         assert ConditionGroup.V73.value == "v73"
 
     def test_v73_condition_range(self):
@@ -1288,6 +1358,7 @@ class TestV73MMDFields:
 
     def test_v73_fields_exist_on_mmd(self):
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_mmd_position_risk_v73")
         assert hasattr(mmd, "_zhongshu_breakout_validity_v73")
@@ -1327,6 +1398,7 @@ class TestV73Functions:
         """买卖点位置风险评估应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_mmd_position_risk_v73
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(11)
         closes = [100.0]
         highs = [100.0]
@@ -1334,10 +1406,10 @@ class TestV73Functions:
         for _ in range(80):
             c = closes[-1] * (1 + np.random.randn() * 0.015)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         result = _calc_mmd_position_risk_v73(mmd, closes, highs, lows)
         assert "position_pct" in result
@@ -1352,6 +1424,7 @@ class TestV73Functions:
         """中枢突破有效性验证应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_zhongshu_breakout_validity_v73
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(22)
         closes = [100.0]
         highs = [100.0]
@@ -1360,19 +1433,21 @@ class TestV73Functions:
         for _ in range(80):
             c = closes[-1] * (1 + np.random.randn() * 0.015)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
             volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.3))
         # 构造一个有笔索引的MMD
         from easy_tdx.chanlun.bi import BI
+
         # 构造一个有笔索引的MMD
         class MockK:
             k_index = 50
             close = 105.0
-        from easy_tdx.chanlun.bi import BI
+
         from easy_tdx.chanlun.fractal import FX
+
         fx1 = FX(fx_type="low", k=MockK(), klines=[], val=99.0, index=10)
         fx2 = FX(fx_type="high", k=MockK(), klines=[], val=105.0, index=50)
         bi = BI(start=fx1, end=fx2, direction="up", index=30)
@@ -1388,18 +1463,28 @@ class TestV73Functions:
         """多指标确认一致性应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_multi_indicator_consistency_v73
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(33)
         closes = [100.0]
         for _ in range(50):
             closes.append(closes[-1] * (1 + np.random.randn() * 0.01))
-        macd_data = {"dif": [0.1]*50, "dea": [0.08]*50, "hist": [0.04, *([0.03]*49)], "rsi": [40+i*0.5 for i in range(50)], "k": [50+i*0.3 for i in range(50)], "d": [48+i*0.3 for i in range(50)]}
-        kdj_data = {"k": [50+i*0.3 for i in range(50)], "d": [48+i*0.3 for i in range(50)]}
+        macd_data = {
+            "dif": [0.1] * 50,
+            "dea": [0.08] * 50,
+            "hist": [0.04, *([0.03] * 49)],
+            "rsi": [40 + i * 0.5 for i in range(50)],
+            "k": [50 + i * 0.3 for i in range(50)],
+            "d": [48 + i * 0.3 for i in range(50)],
+        }
+        kdj_data = {"k": [50 + i * 0.3 for i in range(50)], "d": [48 + i * 0.3 for i in range(50)]}
         rsi_vals = [40 + i * 0.5 for i in range(50)]
-        boll_data = {"upper": [105]*50, "lower": [95]*50, "mid": [100]*50}
+        boll_data = {"upper": [105] * 50, "lower": [95] * 50, "mid": [100] * 50}
         volumes = [1e6 * (1 + abs(np.random.randn()) * 0.3) for _ in range(50)]
 
         mmd_buy = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
-        result = _calc_multi_indicator_consistency_v73(mmd_buy, closes, macd_data, kdj_data, rsi_vals, boll_data, volumes)
+        result = _calc_multi_indicator_consistency_v73(
+            mmd_buy, closes, macd_data, kdj_data, rsi_vals, boll_data, volumes
+        )
         assert "agreement_count" in result
         assert "agreement_ratio" in result
         assert "consistency_score" in result
@@ -1407,13 +1492,16 @@ class TestV73Functions:
         assert "msg" in result
 
         mmd_sell = MMD(mmd_type=MMDType.SELL_3, confidence=0.5, bi=None)
-        result_sell = _calc_multi_indicator_consistency_v73(mmd_sell, closes, macd_data, kdj_data, rsi_vals, boll_data, volumes)
+        result_sell = _calc_multi_indicator_consistency_v73(
+            mmd_sell, closes, macd_data, kdj_data, rsi_vals, boll_data, volumes
+        )
         assert "confidence_adjust" in result_sell
 
     def test_volatility_regime_adaptation(self):
         """波动率环境适配应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_volatility_regime_adaptation_v73
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(44)
         closes = [100.0]
         highs = [100.5]
@@ -1421,10 +1509,10 @@ class TestV73Functions:
         for _ in range(100):
             c = closes[-1] * (1 + np.random.randn() * 0.015)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.01)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.01)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         result = _calc_volatility_regime_adaptation_v73(mmd, closes, highs, lows)
         assert "atr_pct" in result
@@ -1442,6 +1530,7 @@ class TestV73Functions:
             _calc_volatility_regime_adaptation_v73,
         )
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         short_closes = [100.0, 101.0, 102.0]
         result = _calc_mmd_position_risk_v73(mmd, short_closes, None, None)
@@ -1454,11 +1543,12 @@ class TestV73Functions:
 # V74 条件 228-231 测试
 # ──────────────────────────────────────────────────────────────────────────────
 
+
 class TestV74ConditionGroup:
     """V74 ConditionGroup 枚举测试。"""
 
     def test_v74_group_exists(self):
-        assert hasattr(ConditionGroup, 'V74')
+        assert hasattr(ConditionGroup, "V74")
         assert ConditionGroup.V74.value == "v74"
 
     def test_v74_condition_range(self):
@@ -1477,6 +1567,7 @@ class TestV74MMDFields:
 
     def test_v74_fields_exist_on_mmd(self):
         from easy_tdx.chanlun.types import MMD
+
         mmd = MMD(mmd_type="buy_3", confidence=0.5, bi=None)
         assert hasattr(mmd, "_volume_price_divergence_secondary_v74")
         assert hasattr(mmd, "_trend_momentum_continuity_v74")
@@ -1516,6 +1607,7 @@ class TestV74Functions:
         """量价背离二次确认应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_volume_price_divergence_secondary_v74
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(55)
         closes = [100.0]
         volumes = [1e6]
@@ -1530,12 +1622,19 @@ class TestV74Functions:
         assert "confirm_signal" in result
         assert "confidence_adjust" in result
         assert "msg" in result
-        assert result["divergence_type"] in ("bullish_divergence", "healthy_rally", "bearish_warning", "heavy_selling", "none")
+        assert result["divergence_type"] in (
+            "bullish_divergence",
+            "healthy_rally",
+            "bearish_warning",
+            "heavy_selling",
+            "none",
+        )
 
     def test_trend_momentum_continuity(self):
         """趋势动能持续验证应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_trend_momentum_continuity_v74
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(66)
         closes = [100.0]
         for _ in range(100):
@@ -1557,7 +1656,8 @@ class TestV74Functions:
     def test_zhongshu_overlap_density(self):
         """中枢重叠度评估应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_zhongshu_overlap_density_v74
-        from easy_tdx.chanlun.types import MMD, MMDType, ZS
+        from easy_tdx.chanlun.types import MMD, ZS, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         zss = [
             ZS(zg=110.0, zd=90.0, index=0),
@@ -1570,12 +1670,19 @@ class TestV74Functions:
         assert "distance_to_zs" in result
         assert "signal_strength" in result
         assert "confidence_adjust" in result
-        assert result["signal_strength"] in ("strong_support", "strong_resistance", "moderate", "near_zone", "weak")
+        assert result["signal_strength"] in (
+            "strong_support",
+            "strong_resistance",
+            "moderate",
+            "near_zone",
+            "weak",
+        )
 
     def test_signal_resonance_depth(self):
         """信号共振深度评分应返回正确结构。"""
         from easy_tdx.chanlun.mmd import _calc_signal_resonance_depth_v74
         from easy_tdx.chanlun.types import MMD, MMDType
+
         np.random.seed(77)
         closes = [100.0]
         highs = [100.5]
@@ -1584,10 +1691,10 @@ class TestV74Functions:
         for _ in range(60):
             c = closes[-1] * (1 + np.random.randn() * 0.01)
             h = max(c, closes[-1]) * (1 + abs(np.random.randn()) * 0.005)
-            l = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
+            low = min(c, closes[-1]) * (1 - abs(np.random.randn()) * 0.005)
             closes.append(c)
             highs.append(h)
-            lows.append(l)
+            lows.append(low)
             volumes.append(1e6 * (1 + abs(np.random.randn()) * 0.2))
         macd_data = {"hist": [0.05] * 60}
         mmd_buy = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
@@ -1602,12 +1709,13 @@ class TestV74Functions:
     def test_v74_data_insufficient(self):
         """数据不足时应返回默认值。"""
         from easy_tdx.chanlun.mmd import (
-            _calc_volume_price_divergence_secondary_v74,
-            _calc_trend_momentum_continuity_v74,
-            _calc_zhongshu_overlap_density_v74,
             _calc_signal_resonance_depth_v74,
+            _calc_trend_momentum_continuity_v74,
+            _calc_volume_price_divergence_secondary_v74,
+            _calc_zhongshu_overlap_density_v74,
         )
         from easy_tdx.chanlun.types import MMD, MMDType
+
         mmd = MMD(mmd_type=MMDType.BUY_3, confidence=0.5, bi=None)
         short_closes = [100.0, 101.0, 102.0]
         result1 = _calc_volume_price_divergence_secondary_v74(mmd, short_closes, None)
