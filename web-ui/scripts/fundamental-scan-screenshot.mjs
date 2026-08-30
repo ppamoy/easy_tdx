@@ -39,6 +39,8 @@ const state = await page.evaluate(() => ({
   season: document.querySelector('.season-card .season-title')?.textContent?.trim() ?? null,
   error: document.querySelector('.error-banner')?.textContent?.trim() ?? null,
   warning: document.querySelector('.warning-banner')?.textContent?.trim() ?? null,
+  tableExists: !!document.querySelector('.scan-table'),
+  loadingBtn: document.querySelector('button.primary.scan-btn')?.textContent?.trim() ?? '',
 }));
 await page.screenshot({ path: path.join(OUT, 'scan_config_result.png'), fullPage: true });
 
