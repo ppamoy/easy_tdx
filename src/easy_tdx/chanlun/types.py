@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 # ── K 线 ──────────────────────────────────────────────────────────────────
 
@@ -202,7 +203,7 @@ class MMD:
 
     # V15 enhancement fields
     _kline_pattern: str | None = None  # K线形态：hammer/bullish_engulfing/doji/bearish_engulfing
-    _signal_aging: dict | None = None  # 信号衰减信息
+    _signal_aging: dict[str, Any] | None = None  # 信号衰减信息
     _retest_break: bool = False  # 二次回踩确认
     _retest_retracement: float = 50.0  # 回踩深度（%）
 
@@ -212,6 +213,14 @@ class MMD:
     _signal_combo: str | None = None  # 组合信号类型：none/1+2buy/1+2sell/3buy_multi等
     _combo_confidence_bonus: float = 0.0  # 组合信号置信度加成
     _decision_recommendation: dict[str, Any] | None = None  # 决策辅助建议
+
+    # V20/V22 enhancement fields（运行时由 mmd.py 赋值）
+    _vol_regime: str | None = None  # 波动率 Regime（high/medium/low）
+    _trend_accel: str | None = None  # 趋势加速度状态（accelerating/neutral/decelerating）
+    _vol_regime_dual: dict[str, Any] | None = None  # 波动率 Regime 双重确认（条件38）
+    _vol_price_divergence: dict[str, Any] | None = None  # 量价背离检测（条件39）
+    _vol_dist_at_zg: dict[str, Any] | None = None  # 关键价位（中枢上沿）成交量分布
+    _vol_dist_at_zd: dict[str, Any] | None = None  # 关键价位（中枢下沿）成交量分布
 
     # V23 enhancement fields
     _fib_retracement: dict[str, Any] | None = None  # Fibonacci回撤位信息（条件40）

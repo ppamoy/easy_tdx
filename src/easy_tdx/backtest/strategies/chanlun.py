@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from easy_tdx.backtest.strategies.registry import (
     Param,
     ParametrizedStrategy,
@@ -134,7 +136,7 @@ class ChanlunStrategy(ParametrizedStrategy):
         self._position_count: int = 0
         self._last_signal_conf: float = 0.0
 
-    def _bi_end_bar_idx(self, bi) -> int:
+    def _bi_end_bar_idx(self, bi: Any) -> int:
         """获取笔结束分型的日期对应的 bar index。"""
         if bi.end is None:
             return -1

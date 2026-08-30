@@ -71,7 +71,7 @@ import numpy as np
 
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.macd import calc_macd, calc_macd_force
-from easy_tdx.chanlun.types import BI, BC, BCType, FX, MMD, MMDType, XD, ZS
+from easy_tdx.chanlun.types import BI, BCType, Line, MMD, MMDType, ZS
 from easy_tdx.MyTT import BIAS, KDJ, OBV, MA, RSI, BOLL, ATR, STD
 
 
@@ -99,12 +99,14 @@ class MMDQuality:
     reasons: list[str]  # 评分原因
 
 
-def _calc_atr_volatility(closes: list[float], lookback: int = 20) -> float:
+def _calc_atr_volatility(closes: list[float] | None, lookback: int = 20) -> float:
     """计算近期ATR波动率，用于动态调整阈值。
 
     Returns:
         ATR/价格比率（波动率），0-1之间。越高表示市场越波动，阈值应更宽松。
     """
+    if closes is None:
+        return 0.0
     if len(closes) < lookback + 1:
         return 0.02  # 默认低波动
 
@@ -279,7 +281,8 @@ def calc_signal_quality_report(
         tp2_dist = max(zs_height * 1.0, atr * 4)
         take_profit_1 = round(entry_price + tp1_dist, 2)
         take_profit_2 = round(entry_price + tp2_dist, 2)
-        entry_reason = f"3 买信号：回踩中枢上沿 ({mmd.zs.zg:.2f}) 后低点 {bi_low:.2f} 企稳"
+        zs_zg_text = f"{mmd.zs.zg:.2f}" if mmd.zs else "0.00"
+        entry_reason = f"3 买信号：回踩中枢上沿 ({zs_zg_text}) 后低点 {bi_low:.2f} 企稳"
         risk_notes = f"止损 {stop_loss:.2f}（-{(entry_price-stop_loss)/entry_price*100:.1f}%），第一止盈 {take_profit_1:.2f}"
 
     elif mmd_type == "3sell":
@@ -291,7 +294,8 @@ def calc_signal_quality_report(
         tp2_dist = max(zs_height * 1.0, atr * 4)
         take_profit_1 = round(entry_price - tp1_dist, 2)
         take_profit_2 = round(entry_price - tp2_dist, 2)
-        entry_reason = f"3 卖信号：反弹中枢下沿 ({mmd.zs.zd:.2f}) 后高点 {bi_high:.2f} 遇阻"
+        zs_zd_text = f"{mmd.zs.zd:.2f}" if mmd.zs else "0.00"
+        entry_reason = f"3 卖信号：反弹中枢下沿 ({zs_zd_text}) 后高点 {bi_high:.2f} 遇阻"
         risk_notes = f"止损 {stop_loss:.2f}（+{(stop_loss-entry_price)/entry_price*100:.1f}%），第一止盈 {take_profit_1:.2f}"
 
     elif mmd_type in ("1buy", "2buy"):
@@ -386,7 +390,7 @@ def calc_signal_quality_report(
         enhancement_notes.append(f"二次回踩确认(深度{retracement:.0f}%)")
 
     # 信号强度（综合置信度和质量评级）
-    grade = getattr(getattr(mmd, "quality", None), "grade", None)
+    grade = str(getattr(getattr(mmd, "quality", None), "grade", None) or "")
     grade_factor = {"S": 1.2, "A": 1.1, "B": 1.0, "C": 0.85, "D": 0.7}.get(grade, 0.8)
     signal_strength = round(min(1.0, mmd.confidence * grade_factor), 2)
 
@@ -787,11 +791,6 @@ def find_mmds(
     # V26: 条件53 - 多标的对比评分（Cross-Stock Comparison Scoring）
     if len(mmds) >= 2:
         try:
-            all_closes = []
-            for m in mmds:
-                if m.bi and hasattr(m.bi, 'end') and hasattr(m.bi.end, 'k'):
-                    # 尝试从 MMD 获取 closes（简化处理）
-                    pass
             comparison = _calc_cross_stock_comparison(mmds)
             # 将对比结果存储到每个 mmd 对象（简化：只存储第一个）
             if comparison.get("ranked_signals"):
@@ -1084,8 +1083,8 @@ def find_mmds(
                     mmd.confidence = max(0.0, min(1.0, mmd.confidence + vol_result["threshold_adjust"]))
             # 存储波动率结果供诊断API使用
             if not hasattr(find_mmds, '_last_vol_result'):
-                find_mmds._last_vol_result = {}
-            find_mmds._last_vol_result = vol_result
+                find_mmds._last_vol_result = {}  # type: ignore[attr-defined]
+            find_mmds._last_vol_result = vol_result  # type: ignore[attr-defined]
         except Exception:
             pass
 
@@ -1102,8 +1101,8 @@ def find_mmds(
         except Exception:
             pass
     if not hasattr(find_mmds, '_last_market_context'):
-        find_mmds._last_market_context = {}
-    find_mmds._last_market_context = market_context_result
+        find_mmds._last_market_context = {}  # type: ignore[attr-defined]
+    find_mmds._last_market_context = market_context_result  # type: ignore[attr-defined]
 
     # 条件78-82：逐信号处理
     for i, mmd in enumerate(mmds):
@@ -1201,8 +1200,8 @@ def find_mmds(
                     for m in mmds:
                         m.confidence = max(0.0, min(1.0, m.confidence + mkt_result["confidence_adjust"]))
                 if not hasattr(find_mmds, '_last_market_composite'):
-                    find_mmds._last_market_composite = {}
-                find_mmds._last_market_composite = mkt_result
+                    find_mmds._last_market_composite = {}  # type: ignore[attr-defined]
+                find_mmds._last_market_composite = mkt_result  # type: ignore[attr-defined]
             except Exception:
                 pass
 
@@ -1246,8 +1245,8 @@ def find_mmds(
         except Exception:
             pass
     if not hasattr(find_mmds, '_last_vol_regime_change'):
-        find_mmds._last_vol_regime_change = {}
-    find_mmds._last_vol_regime_change = vol_regime_result
+        find_mmds._last_vol_regime_change = {}  # type: ignore[attr-defined]
+    find_mmds._last_vol_regime_change = vol_regime_result  # type: ignore[attr-defined]
 
     # V37 条件92-94：逐信号处理
     for mmd in mmds:
@@ -1344,8 +1343,8 @@ def find_mmds(
         except Exception:
             pass
     if not hasattr(find_mmds, '_last_composite_deviation'):
-        find_mmds._last_composite_deviation = {}
-    find_mmds._last_composite_deviation = composite_dev_result
+        find_mmds._last_composite_deviation = {}  # type: ignore[attr-defined]
+    find_mmds._last_composite_deviation = composite_dev_result  # type: ignore[attr-defined]
 
     # 按时间排序
     mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
@@ -2127,7 +2126,7 @@ def _calc_volume_profile(
 
 
 def _is_volume_profile_support(
-    closes: list[float],
+    closes: list[float] | None,
     volumes: list[float] | None,
     bi_low: float,
     lookback: int = 60,
@@ -2137,6 +2136,8 @@ def _is_volume_profile_support(
     当2买/3买的回调低点位于高成交量密集区下方时，
     说明该位置有大量历史成交支撑，信号更可靠。
     """
+    if closes is None:
+        return False
     if not volumes or len(volumes) < lookback:
         return False
     try:
@@ -2145,13 +2146,13 @@ def _is_volume_profile_support(
         if support is None:
             return False
         # 低点在支撑位附近（±2%以内）
-        return abs(bi_low - support) / support < 0.02
+        return abs(bi_low - float(support)) / float(support) < 0.02
     except Exception:
         return False
 
 
 def _is_volume_profile_resistance(
-    closes: list[float],
+    closes: list[float] | None,
     volumes: list[float] | None,
     bi_high: float,
     lookback: int = 60,
@@ -2161,6 +2162,8 @@ def _is_volume_profile_resistance(
     当2卖/3卖的反抽高点位于高成交量密集区上方时，
     说明该位置有大量历史成交阻力，信号更可靠。
     """
+    if closes is None:
+        return False
     if not volumes or len(volumes) < lookback:
         return False
     try:
@@ -2169,7 +2172,7 @@ def _is_volume_profile_resistance(
         if resistance is None:
             return False
         # 高点在阻力位附近（±2%以内）
-        return abs(bi_high - resistance) / resistance < 0.02
+        return abs(bi_high - float(resistance)) / float(resistance) < 0.02
     except Exception:
         return False
 
@@ -2243,7 +2246,9 @@ def _calc_overall_trend_direction(zss: list[ZS]) -> str:
     return "neutral"
 
 
-def _calc_ma_trend_alignment(closes: list[float], bi_end_idx: int, ma_period: int = 20) -> str:
+def _calc_ma_trend_alignment(
+    closes: list[float] | None, bi_end_idx: int, ma_period: int = 20,
+) -> str:
     """计算价格相对均线的趋势对齐状态。
 
     Returns:
@@ -2251,6 +2256,8 @@ def _calc_ma_trend_alignment(closes: list[float], bi_end_idx: int, ma_period: in
         "below" - 价格在MA下方（偏空）
         "near" - 价格接近MA（震荡）
     """
+    if closes is None:
+        return "near"
     if len(closes) == 0 or bi_end_idx < ma_period:
         return "near"
     try:
@@ -2271,7 +2278,7 @@ def _calc_ma_trend_alignment(closes: list[float], bi_end_idx: int, ma_period: in
         return "near"
 
 
-def _calc_ma_slope(closes: list[float], bi_end_idx: int, ma_period: int = 20) -> str:
+def _calc_ma_slope(closes: list[float] | None, bi_end_idx: int, ma_period: int = 20) -> str:
     """计算MA斜率方向（V10新增）。
 
     检查MA20是否朝目标方向倾斜，用于确认趋势持续性。
@@ -2282,6 +2289,8 @@ def _calc_ma_slope(closes: list[float], bi_end_idx: int, ma_period: int = 20) ->
         "down" - MA20向下倾斜（趋势确认）
         "flat" - MA20横盘（趋势不明确）
     """
+    if closes is None:
+        return "flat"
     if len(closes) == 0 or bi_end_idx < ma_period * 2:
         return "flat"
     try:
@@ -2303,7 +2312,7 @@ def _calc_ma_slope(closes: list[float], bi_end_idx: int, ma_period: int = 20) ->
         return "flat"
 
 
-def _calc_ma60_slope(closes: list[float], bi_end_idx: int, ma_period: int = 60) -> str:
+def _calc_ma60_slope(closes: list[float] | None, bi_end_idx: int, ma_period: int = 60) -> str:
     """计算MA60斜率方向（V17新增）。
 
     MA60是中期趋势指标，比MA20更稳定。
@@ -2315,6 +2324,8 @@ def _calc_ma60_slope(closes: list[float], bi_end_idx: int, ma_period: int = 60) 
         "down" - MA60向下倾斜
         "flat" - MA60横盘
     """
+    if closes is None:
+        return "flat"
     if len(closes) == 0 or bi_end_idx < ma_period:
         return "flat"
     try:
@@ -2402,13 +2413,15 @@ def _check_pullback_time_window(
         return True, 0
 
 
-def _calc_boll_position(closes: list[float], bi_end_idx: int) -> dict[str, float]:
+def _calc_boll_position(closes: list[float] | None, bi_end_idx: int) -> dict[str, Any]:
     """计算BOLL位置信息（V10新增）。
 
     Returns:
         dict with keys: upper, mid, lower, percent_b, position
         position: "upper"/"mid"/"lower"
     """
+    if closes is None:
+        return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
     if len(closes) == 0 or bi_end_idx < 20:
         return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
     try:
@@ -2435,7 +2448,11 @@ def _calc_boll_position(closes: list[float], bi_end_idx: int) -> dict[str, float
         return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
 
 
-def _calc_adx_strength(closes: list[float], highs: list[float] | None, lows: list[float] | None, bi_end_idx: int) -> tuple[float, str]:
+def _calc_adx_strength(
+    closes: list[float] | None,
+    highs: list[float] | None, lows: list[float] | None,
+    bi_end_idx: int,
+) -> tuple[float, str]:
     """计算ADX趋势强度（V11修正版，使用MyTT DMI算法）。
 
     V11修复：原V10使用简化DX替代ADX导致数值偏低，现改用MyTT.DMI完整平滑算法。
@@ -2443,6 +2460,8 @@ def _calc_adx_strength(closes: list[float], highs: list[float] | None, lows: lis
     Returns:
         (adx_value, level) where level is "strong"/"medium"/"weak"/"none"
     """
+    if closes is None:
+        return (0.0, "none")
     if len(closes) == 0 or bi_end_idx < 30:
         return (0.0, "none")
     try:
@@ -2489,8 +2508,10 @@ def _calc_adx_strength(closes: list[float], highs: list[float] | None, lows: lis
         return (0.0, "none")
 
 
-def _calc_rsi(closes: list[float], period: int = 14) -> float:
+def _calc_rsi(closes: list[float] | None, period: int = 14) -> float:
     """简化版RSI计算。"""
+    if closes is None:
+        return 50.0
     if len(closes) < period + 1:
         return 50.0
     try:
@@ -2510,11 +2531,13 @@ def _calc_rsi(closes: list[float], period: int = 14) -> float:
         return 50.0
 
 
-def _calc_rsi_momentum(closes: list[float], period: int = 14) -> float:
+def _calc_rsi_momentum(closes: list[float] | None, period: int = 14) -> float:
     """计算RSI动量变化率（V10新增）。
 
     返回RSI的最近变化，正值表示RSI在上升（动量增强），负值表示下降。
     """
+    if closes is None:
+        return 0.0
     if len(closes) < period + 5:
         return 0.0
     try:
@@ -2525,12 +2548,14 @@ def _calc_rsi_momentum(closes: list[float], period: int = 14) -> float:
         return 0.0
 
 
-def _calc_kdj_j(closes: list[float], period: int = 9) -> float:
+def _calc_kdj_j(closes: list[float] | None, period: int = 9) -> float:
     """计算KDJ的J值（V12新增）。
 
     J值 > 80 超买，J值 < 20 超卖。
     用于确认买卖点的短期动能状态。
     """
+    if closes is None:
+        return 50.0
     if len(closes) < period + 5:
         return 50.0
     try:
@@ -2600,12 +2625,14 @@ def _check_volume_spike(
 
 
 def _detect_price_gap(
-    closes: list[float],
-    highs: list[float],
-    lows: list[float],
+    closes: list[float] | None,
+    highs: list[float] | None,
+    lows: list[float] | None,
     idx: int,
     gap_threshold: float = 0.01,
 ) -> dict[str, Any]:
+    if closes is None or highs is None or lows is None:
+        return {"has_gap": False, "gap_type": None, "gap_size_pct": 0.0, "filled": False}
     """检测指定位置的价格缺口。
 
     缺口定义：
@@ -2685,7 +2712,7 @@ def _check_macd_histogram_slope(
             "confirmed": bool,
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "slope_direction": "neutral",
         "slope_strength": 0.0,
         "confirmed": False,
@@ -2744,7 +2771,7 @@ def _check_macd_histogram_slope(
 
 
 def _check_breakout_persistence(
-    closes: list[float],
+    closes: list[float] | None,
     breakout_bi: BI,
     zs_zg: float,
     min_bars: int = 3,
@@ -2753,6 +2780,8 @@ def _check_breakout_persistence(
 
     突破后价格应在中枢上方站稳至少 min_bars 根K线。
     """
+    if closes is None:
+        return True
     if len(closes) == 0 or not breakout_bi or zs_zg <= 0:
         return True
 
@@ -2781,9 +2810,9 @@ def _check_breakout_persistence(
 
 
 def _detect_kline_pattern(
-    closes: list[float],
-    highs: list[float],
-    lows: list[float],
+    closes: list[float] | None,
+    highs: list[float] | None,
+    lows: list[float] | None,
     idx: int,
 ) -> dict[str, Any]:
     """检测指定位置的K线形态（V15新增）。
@@ -2797,6 +2826,8 @@ def _detect_kline_pattern(
     Returns:
         {"pattern": str|None, "strength": str} 其中 pattern 为形态名称或None
     """
+    if closes is None or highs is None or lows is None:
+        return {"pattern": None, "strength": "none"}
     if idx < 2 or idx >= len(closes):
         return {"pattern": None, "strength": "none"}
 
@@ -2877,7 +2908,7 @@ def _calc_signal_aging(
     Returns:
         {"aged": bool, "age_bars": int, "decay_factor": float}
     """
-    if not mmd.bi or len(closes) == 0:
+    if closes is None or not mmd.bi or len(closes) == 0:
         return {"aged": False, "age_bars": 0, "decay_factor": 1.0}
 
     try:
@@ -2901,9 +2932,11 @@ def _check_break_retest_break(
     bis: list[BI],
     break_bi: BI,
     zs_zg: float,
-    closes: list[float],
+    closes: list[float] | None,
     lookback: int = 5,
 ) -> dict[str, Any]:
+    if closes is None:
+        return {"exists": False, "retest_bi_idx": None, "second_break_bi_idx": None, "confidence_bonus": 0.0}
     """检查突破-回踩-再突破模式（V15新增）。
 
     3买：突破中枢 → 回踩不破zg → 再次突破确认。
@@ -2917,7 +2950,7 @@ def _check_break_retest_break(
             "confidence_bonus": float, # 置信度加成（0-0.08）
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "exists": False,
         "retest_bi_idx": None,
         "second_break_bi_idx": None,
@@ -3234,7 +3267,7 @@ def _find_third_type_mmds(
                         vol_spike = _check_volume_spike(volumes, break_bi_up.end.k.k_index, lookback=20, min_ratio=1.5)
 
                     # V14: 条件17 - 缺口分析（向上缺口突破=强势信号）
-                    gap_info = {"has_gap": False, "gap_type": None, "filled": True}
+                    gap_info: dict[str, Any] = {"has_gap": False, "gap_type": None, "filled": True}
                     if highs is not None and lows is not None:
                         gap_info = _detect_price_gap(closes, highs, lows, break_bi_up.end.k.k_index)
 
@@ -3257,7 +3290,7 @@ def _find_third_type_mmds(
                         extra_parts.append("MACD斜率确认✅")
 
                     # V15: 条件20 - K线形态确认（回踩笔出现锤子线或阳吞没=看涨增强）
-                    kline_pattern = {"pattern": None, "strength": "none"}
+                    kline_pattern: dict[str, Any] = {"pattern": None, "strength": "none"}
                     if highs is not None and lows is not None:
                         kline_pattern = _detect_kline_pattern(closes, highs, lows, bi.end.k.k_index)
                     if kline_pattern["pattern"] in ("hammer", "bullish_engulfing"):
@@ -3527,7 +3560,9 @@ def _find_third_type_mmds(
                         vol_spike_sell = _check_volume_spike(volumes, break_bi_down.end.k.k_index, lookback=20, min_ratio=1.5)
 
                     # V14: 条件17 - 缺口分析（向下缺口跌破=加速下跌信号）
-                    gap_info_sell = {"has_gap": False, "gap_type": None, "filled": True}
+                    gap_info_sell: dict[str, Any] = {
+                        "has_gap": False, "gap_type": None, "filled": True,
+                    }
                     if highs is not None and lows is not None:
                         gap_info_sell = _detect_price_gap(closes, highs, lows, break_bi_down.end.k.k_index)
 
@@ -3550,7 +3585,7 @@ def _find_third_type_mmds(
                         extra_parts_sell.append("MACD斜率确认✅")
 
                     # V15: 条件20 - K线形态确认（回抽笔出现锤子线或阴吞没=看跌增强）
-                    kline_pattern_sell = {"pattern": None, "strength": "none"}
+                    kline_pattern_sell: dict[str, Any] = {"pattern": None, "strength": "none"}
                     if highs is not None and lows is not None:
                         kline_pattern_sell = _detect_kline_pattern(closes, highs, lows, bi.end.k.k_index)
                     if kline_pattern_sell["pattern"] in ("hammer", "bullish_engulfing"):
@@ -3730,7 +3765,7 @@ def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
     
     # 每组按 (类型优先级, 置信度) 排序，同位置同方向只保留最高优先级的信号；
     # 但买卖方向不同的信号（如底部同时出现 1buy+2buy 候选）保留更高置信度者。
-    def _sort_key(m: MMD) -> tuple:
+    def _sort_key(m: MMD) -> tuple[int, float]:
         return (priority.get(m.mmd_type, 0), m.confidence)
     
     result = []
@@ -3868,7 +3903,7 @@ def _calc_trend_strength(zss: list[ZS]) -> float:
 
 
 def _calc_bi_force(
-    bi: BI,
+    bi: Line,
     closes: list[float] | None,
     bi_idx: int,
 ) -> float:
@@ -4025,7 +4060,7 @@ def _calc_confidence(
         try:
             if macd_data is None:
                 from easy_tdx.chanlun.macd import calc_macd
-                macd_data = calc_macd(closes)
+                macd_data = calc_macd(closes or [])
             latest_dif = macd_data["dif"][-1] if macd_data.get("dif") else 0
             prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
             latest_hist = macd_data["hist"][-1] if macd_data.get("hist") else 0
@@ -4064,7 +4099,7 @@ def _calc_confidence(
         confidence += confluence_bonus
 
     # V10: 多因子共振加成（3买/3卖额外加分）
-    if mmd.bi and len(closes) >= 30:
+    if closes is not None and mmd.bi and len(closes) >= 30:
         try:
             bi_end_idx = mmd.bi.end.k.k_index
             if 0 <= bi_end_idx < len(closes):
@@ -4148,7 +4183,7 @@ def _calc_confidence(
         confidence += 0.05  # 趋势明确时额外加成
 
     # V17: MA60趋势确认加成 - 3买/3卖有MA60趋势确认时加分
-    if mmd.bi and len(closes) >= 60:
+    if closes is not None and mmd.bi and len(closes) >= 60:
         try:
             bi_end_idx = mmd.bi.end.k.k_index
             if 0 <= bi_end_idx < len(closes):
@@ -4179,7 +4214,7 @@ def _calc_confidence(
     # V19: 信号新鲜度衰减（条件30）- 过时信号降低置信度
     # 类型感知：1买/1卖/2买/2卖是趋势反转信号，入场窗口宽（数周-数月），
     # 按 3买/3卖（突破确认，时效性强）的15根K线短窗口重罚会过度压制。
-    if mmd.bi and len(closes) > 0:
+    if closes is not None and mmd.bi and len(closes) > 0:
         try:
             signal_idx = mmd.bi.end.k.k_index
             if mmd.mmd_type in (
@@ -4269,12 +4304,18 @@ def _calc_confidence(
     return max(0.0, min(1.0, confidence))
 
 
-def _calc_atr(closes: list[float], highs: list[float] | None, lows: list[float] | None, idx: int, period: int = 14) -> float:
+def _calc_atr(
+    closes: list[float] | None,
+    highs: list[float] | None, lows: list[float] | None,
+    idx: int, period: int = 14,
+) -> float:
     """计算指定位置的ATR值（V19新增）。
 
     使用简化TR计算：max(high-low, abs(high-prev_close), abs(low-prev_close))
     返回ATR绝对值（非比率），用于支撑/阻力区域判断。
     """
+    if closes is None:
+        return 0.0
     if idx < period or len(closes) == 0:
         return 0.0
     try:
@@ -4305,7 +4346,7 @@ def _check_atr_support_zone(
     zg: float,
     zd: float,
     mmd_type: MMDType,
-    closes: list[float],
+    closes: list[float] | None,
     highs: list[float] | None,
     lows: list[float] | None,
     idx: int,
@@ -4316,6 +4357,8 @@ def _check_atr_support_zone(
     3买：回踩低点应在 zg - 1.0*ATR ~ zg + 0.3*ATR 范围内
     3卖：反弹高点应在 zd + 1.0*ATR ~ zd - 0.3*ATR 范围内
     """
+    if closes is None:
+        return True, "无ATR数据"
     atr = _calc_atr(closes, highs, lows, idx, atr_period)
     if atr <= 0:
         return True, "无ATR数据"
@@ -4340,12 +4383,14 @@ def _check_atr_support_zone(
 
 
 def _calc_signal_freshness(
-    closes: list[float], signal_idx: int, max_age_bars: int = 15
+    closes: list[float] | None, signal_idx: int, max_age_bars: int = 15
 ) -> tuple[float, str]:
     """计算信号新鲜度衰减因子（V19新增，条件30）。
 
     信号产生后每超过max_age_bars根K线，置信度乘以衰减因子。
     """
+    if closes is None:
+        return 1.0, "无K线数据"
     if len(closes) == 0 or signal_idx < 0 or signal_idx >= len(closes):
         return 1.0, "无K线数据"
     bars_since_signal = len(closes) - 1 - signal_idx
@@ -4359,11 +4404,13 @@ def _calc_signal_freshness(
 
 
 def _calc_breakout_force_ratio(
-    break_bi: "BI",
-    entry_bi: "BI",
-    closes: list[float],
+    break_bi: Line,
+    entry_bi: Line,
+    closes: list[float] | None,
 ) -> float:
     """计算突破力度与进入中枢笔力度的比率（V19新增）。"""
+    if closes is None:
+        return 1.0
     try:
         break_force = _calc_bi_force(break_bi, closes, break_bi.index)
         entry_force = _calc_bi_force(entry_bi, closes, entry_bi.index)
@@ -4461,7 +4508,7 @@ def _calc_mmd_quality(
         try:
             if macd_data is None:
                 from easy_tdx.chanlun.macd import calc_macd
-                macd_data = calc_macd(closes)
+                macd_data = calc_macd(closes or [])
             latest_dif = macd_data["dif"][-1] if macd_data.get("dif") else 0
             prev_dif = macd_data["dif"][-2] if macd_data and len(macd_data.get("dif", [])) > 1 else 0
 
@@ -4543,7 +4590,11 @@ def _calc_mmd_quality(
 
     # V19: 突破力度加成（10分）- 3买/3卖专属
     breakout_force_score = 5  # 基础分
-    if mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3) and mmd.zs and mmd.bi and len(closes) > 0:
+    if (
+        closes is not None
+        and mmd.mmd_type in (MMDType.BUY_3, MMDType.SELL_3)
+        and mmd.zs and mmd.bi and len(closes) > 0
+    ):
         try:
             if len(mmd.zs.lines) >= 1:
                 entry_bi = mmd.zs.lines[0]
@@ -4566,7 +4617,7 @@ def _calc_mmd_quality(
 
     # V19: 信号新鲜度加成（5分）
     freshness_bonus = 0
-    if mmd.bi and len(closes) > 0:
+    if closes is not None and mmd.bi and len(closes) > 0:
         try:
             signal_idx = mmd.bi.end.k.k_index
             freshness_factor, freshness_reason = _calc_signal_freshness(closes, signal_idx)
@@ -4730,13 +4781,15 @@ def _calc_trend_acceleration(
 
 
 def _analyze_volume_at_levels(
-    closes: list[float],
+    closes: list[float] | None,
     volumes: list[float] | None,
     level: float,
     level_type: str,
     lookback: int = 30,
     tolerance_pct: float = 0.02,
 ) -> dict[str, Any]:
+    if closes is None:
+        return {"volume_concentration": 0.0, "strength": "unknown", "signal": ""}
     """分析关键价位（支撑/阻力）附近的成交量分布。
 
     V20 条件33：判断支撑/阻力位的强度基于成交量分布。
@@ -4820,7 +4873,7 @@ def _calc_dynamic_stop_loss_take_profit(
     Returns:
         dict with entry_price, stop_loss, take_profit_1, take_profit_2, risk_reward_ratio
     """
-    if not mmd.bi or len(closes) == 0:
+    if closes is None or not mmd.bi or len(closes) == 0:
         return {}
 
     latest_close = closes[-1]
@@ -4911,7 +4964,7 @@ def sort_mmds_by_priority(mmds: list[MMD]) -> list[MMD]:
         MMDType.BUY_3: 7, MMDType.SELL_3: 8,
     }
 
-    def sort_key(mmd: MMD) -> tuple:
+    def sort_key(mmd: MMD) -> tuple[int, float, int]:
         grade = getattr(getattr(mmd, "quality", None), "grade", "D")
         grade_order = {"S": 0, "A": 1, "B": 2, "C": 3, "D": 4}
         return (
@@ -5147,7 +5200,7 @@ def _calc_multi_tf_resonance(
     Returns:
         额外共振加分（0~0.08）
     """
-    if not mmd.bi or len(closes) == 0:
+    if closes is None or not mmd.bi or len(closes) == 0:
         return 0.0
 
     try:
@@ -5225,7 +5278,7 @@ def _generate_decision_recommendation(
             "recommendation_text": str # 自然语言建议
         }
     """
-    if not mmd.bi or len(closes) == 0:
+    if closes is None or not mmd.bi or len(closes) == 0:
         return {}
 
     try:
@@ -5341,7 +5394,7 @@ def _calc_volatility_regime_dual_confirmation(
     Returns:
         {"regime": str, "price_action": str, "dual_confirmed": bool, "confidence_adjust": float}
     """
-    result = {
+    result: dict[str, Any] = {
         "regime": "medium",
         "price_action": "unknown",
         "dual_confirmed": False,
@@ -5423,7 +5476,7 @@ def _detect_volume_price_divergence(
     Returns:
         {"type": str, "strength": float, "signal": str, "description": str}
     """
-    result = {
+    result: dict[str, Any] = {
         "type": "none",
         "strength": 0.0,
         "signal": "",
@@ -5541,7 +5594,7 @@ def _calc_fibonacci_retracement_level(
             "confirmation_bonus": float,    # 置信度加成
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "near_fib_level": None,
         "fib_ratio": 0.0,
         "distance_to_level": 0.0,
@@ -5664,7 +5717,7 @@ def _detect_macd_zero_axis_cross(
             "confidence_bonus": float,  # 置信度加成
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "cross_type": "none",
         "distance_to_zero": 0.0,
         "strength": "none",
@@ -5757,7 +5810,7 @@ def _calc_bi_quality(
             "factors": dict,          # 各维度评分
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "quality_score": 0.5,
         "confidence_bonus": 0.0,
         "factors": {},
@@ -5852,7 +5905,7 @@ def _calc_zs_strength(
             "confidence_bonus": float, # 置信度加成
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "strength_level": "weak",
         "strength_score": 0.0,
         "confidence_bonus": 0.0,
@@ -5957,7 +6010,7 @@ def _detect_enhanced_divergence(
             "confidence_bonus": float,  # 置信度加成
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "divergence_type": "none",
         "strength": "none",
         "confidence_bonus": 0.0,
@@ -6069,7 +6122,7 @@ def _calc_cross_validation(
             "consensus_bonus": float,  # 置信度加成
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "consensus_score": 0.0,
         "confirmations": [],
         "consensus_bonus": 0.0,
@@ -6168,7 +6221,7 @@ def _check_post_signal_confirmation(
             "confidence_bonus": float,   # 置信度加成
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "confirmed": False,
         "bars_ahead": 0,
         "price_change_pct": 0.0,
@@ -6243,7 +6296,7 @@ def _detect_momentum_decay(
             "confidence_penalty": float,   # 置信度惩罚（负值）
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "decay_detected": False,
         "decay_type": "none",
         "momentum_score": 0.5,
@@ -6329,7 +6382,7 @@ def _apply_volatility_adaptive_filter(
             "confidence_bonus": float,     # 置信度加成
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "regime": "medium",
         "filter_applied": False,
         "threshold_adjustment": 1.0,
@@ -6392,7 +6445,7 @@ def _calc_composite_quality(
             "recommendation": str,       # 交易建议
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "overall_score": 0.0,
         "grade": "D",
         "breakdown": {},
@@ -6546,7 +6599,7 @@ def _calc_signal_history_validation(
             "validation_passed": bool,      # 是否通过验证
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "historical_accuracy": 0.5,
         "sample_size": 0,
         "confidence_adjust": 0.0,
@@ -6650,7 +6703,7 @@ def _calc_dynamic_rr_optimization(
             "adjustment_factor": float,       # 调整因子
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "optimal_stop_loss": 0.0,
         "optimal_take_profit_1": 0.0,
         "optimal_take_profit_2": 0.0,
@@ -6759,7 +6812,7 @@ def _calc_cross_stock_comparison(
             "diversification_score": float,  # 分散化评分
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "ranked_signals": [],
         "best_signal": None,
         "comparison_summary": {},
@@ -6773,7 +6826,7 @@ def _calc_cross_stock_comparison(
         # 收集所有信号的评分信息
         signals = []
         for i, mmd in enumerate(mmds):
-            signal_info = {
+            signal_info: dict[str, Any] = {
                 "index": i,
                 "mmd_type": mmd.mmd_type.value,
                 "confidence": mmd.confidence,
@@ -6866,7 +6919,7 @@ def _calc_multi_level_confluence_verification(
             "trend_alignment": str,             # 趋势对齐状态
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "overall_confluence_score": 0.0,
         "confidence_adjust": 0.0,
         "per_signal": {},
@@ -6996,7 +7049,7 @@ def _calc_structural_position(
             "position_desc": str,             # 位置描述
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "position_score": 0.5,
         "distance_to_support": 0.0,
         "distance_to_resistance": 0.0,
@@ -7140,7 +7193,7 @@ def _calc_stock_signal_profile(
             "personalized_rating": str,         # 个性化评级
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "signal_type_success_rate": 0.5,
         "stock_volatility_regime": "normal",
         "signal_frequency": "normal",
@@ -7297,7 +7350,7 @@ def _calc_boll_squeeze(
             "confidence_adjust": float,   # 置信度调整值
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "squeeze_score": 0.0,
         "band_width": 0.0,
         "band_width_rank": 0.5,
@@ -7377,7 +7430,7 @@ def _calc_breakout_vol_price(
     - 3卖：跌破中枢下沿时的成交量是否放大、价格跌破力度
     - 通过比较突破笔与进入中枢笔的量价关系来评估信号质量
     """
-    result = {
+    result: dict[str, Any] = {
         "breakout_strength": "unknown",
         "volume_ratio": 0.0,
         "price_force_ratio": 0.0,
@@ -7472,7 +7525,7 @@ def _calc_dynamic_atr_stop(
     - 结合中枢结构：中枢下沿/上沿可作为辅助参考
     - 提供更合理的风险收益比估算
     """
-    result = {
+    result: dict[str, Any] = {
         "stop_loss_price": 0.0,
         "stop_loss_pct": 0.0,
         "atr_value": 0.0,
@@ -7607,7 +7660,7 @@ def _calc_trend_continuity_confirmation(
             "confidence_adjust": float,   # 置信度调整值
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "continuity_score": 0.0,
         "future_trend": "unknown",
         "confirm_bars": 0,
@@ -7707,7 +7760,7 @@ def _calc_consolidation_divergence_warning(
     - 价格新高但MACD/成交量未同步 → 顶背离预警（卖出信号可能失效）
     - 价格新低但MACD/成交量未同步 → 底背离预警（买入信号可能失效）
     """
-    result = {
+    result: dict[str, Any] = {
         "has_divergence": False,
         "divergence_type": "none",
         "divergence_strength": 0.0,
@@ -7796,7 +7849,7 @@ def _calc_kline_pattern_confirmation(
     - 卖出信号：最近K线应显示看跌延续（连续阴线或上影线压力）
     - 方向不匹配则降低置信度
     """
-    result = {
+    result: dict[str, Any] = {
         "pattern_score": 0.0,
         "bar_direction": "neutral",
         "confidence_adjust": 0.0,
@@ -7892,7 +7945,7 @@ def _calc_zs_breakout_confirmation(
     对于3买/3卖信号，验证价格已真正突破最后一个中枢的边界，
     并用成交量确认突破有效性。
     """
-    result = {
+    result: dict[str, Any] = {
         "breakout_valid": False,
         "breakout_direction": "none",
         "volume_confirmed": False,
@@ -7960,7 +8013,7 @@ def _calc_recent_range_stop_loss(
 
     基于近期波动区间的支撑阻力位动态设置止损，比固定ATR更贴近实际支撑。
     """
-    result = {
+    result: dict[str, Any] = {
         "stop_loss_price": 0.0,
         "stop_loss_pct": 0.0,
         "atr_value": 0.0,
@@ -8046,7 +8099,7 @@ def _calc_ma_alignment_confirmation(
     - 卖出信号：空头排列(MA5<MA10<MA20) → +3%，多头排列 → -3%
     - 混乱排列 → 无调整
     """
-    result = {
+    result: dict[str, Any] = {
         "alignment": "neutral",
         "ma5": 0.0,
         "ma10": 0.0,
@@ -8114,7 +8167,7 @@ def _calc_macd_histogram_acceleration(
     - 买入信号：柱状图加速上升（加速度>0）→ +2%，加速下降 → -3%
     - 卖出信号：柱状图加速下降（加速度<0）→ +2%，加速上升 → -3%
     """
-    result = {
+    result: dict[str, Any] = {
         "hist_slope": 0.0,
         "hist_acceleration": 0.0,
         "acceleration_direction": "neutral",
@@ -8184,7 +8237,7 @@ def _calc_signal_health_dashboard(
     综合多个维度的信号健康状态，生成健康评分和健康报告。
     健康评分越高，信号质量越好，用户决策越可靠。
     """
-    result = {
+    result: dict[str, Any] = {
         "health_score": 0.0,
         "health_grade": "C",
         "dimensions": {},
@@ -8346,7 +8399,7 @@ def _calc_volume_price_divergence_enhanced(
     - 卖出信号：价格创新低但成交量未放大 → 背离预警（降权）
     - 量价配合良好 → 加分
     """
-    result = {
+    result: dict[str, Any] = {
         "divergence_detected": False,
         "divergence_type": "none",
         "strength": 0.0,
@@ -8428,7 +8481,7 @@ def _calc_signal_priority_ranking(
     - 新鲜信号（近期）优先级更高
     - 与健康度评分挂钩
     """
-    result = {
+    result: dict[str, Any] = {
         "priority_rank": 1,
         "total_signals": len(all_mmds),
         "priority_score": 50.0,
@@ -8504,7 +8557,7 @@ def _calc_sr_breakout_confirmation(
     识别最近的 Swing High / Swing Low 作为动态支撑阻力位，
     验证买卖点信号的突破是否有效。
     """
-    result = {
+    result: dict[str, Any] = {
         "sr_level": 0.0,
         "sr_type": "none",
         "breakout_valid": False,
@@ -8580,7 +8633,7 @@ def _calc_obv_trend_confirmation(
     通过OBV（On-Balance Volume）验证成交量趋势是否与价格趋势一致。
     买入信号需OBV同步上升确认，卖出信号需OBV同步下降确认。
     """
-    result = {
+    result: dict[str, Any] = {
         "obv_trend": "none",
         "price_trend": "none",
         "confirmation": False,
@@ -8663,7 +8716,7 @@ def _calc_macd_histogram_area(
     计算MACD柱状图在最近lookback根K线内的面积，
     对比前期面积变化，判断动能是否加速/衰减。
     """
-    result = {
+    result: dict[str, Any] = {
         "hist_area_recent": 0.0,
         "hist_area_prev": 0.0,
         "area_ratio": 0.0,
@@ -8756,7 +8809,7 @@ def _calc_rsi_momentum_confirmation(
     验证买卖信号的动量支持程度。
     同时检测RSI顶底背离。
     """
-    result = {
+    result: dict[str, Any] = {
         "rsi_value": 0.0,
         "rsi_prev": 0.0,
         "rsi_momentum": 0.0,
@@ -8882,7 +8935,7 @@ def _calc_trend_momentum_continuation(
     - 买入信号 + 趋势衰减（近期涨幅 < 前期涨幅）→ 降权 -2%
     - 卖出信号同理反向逻辑
     """
-    result = {
+    result: dict[str, Any] = {
         "price_change_5d": 0.0,
         "price_change_10d": 0.0,
         "price_change_20d": 0.0,
@@ -8977,7 +9030,7 @@ def _calc_multi_indicator_resonance(
     综合多个技术指标的确认结果，计算共振强度评分。
     共振越强，信号越可靠。
     """
-    result = {
+    result: dict[str, Any] = {
         "resonance_score": 0.0,
         "resonance_level": "none",
         "bullish_votes": 0,
@@ -9093,7 +9146,7 @@ def _calc_volatility_adaptive_threshold(
     根据当前波动率环境动态调整信号阈值。
     高波动环境需要更强的信号确认，低波动环境可以放宽阈值。
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_value": 0.0,
         "volatility_pct": 0.0,
         "volatility_regime": "normal",
@@ -9149,7 +9202,7 @@ def _calc_market_context_filter(
     - 若近期價格趨勢與信號方向一致，給予正向調整；
     - 若近期價格趨勢與信號方向相反，給予負向調整。
     """
-    result = {
+    result: dict[str, Any] = {
         "market_trend": "neutral",
         "price_change_30d": 0.0,
         "price_change_60d": 0.0,
@@ -9191,7 +9244,7 @@ def _calc_enhanced_signal_decay(
     - 高波動環境下信號衰減更快；
     - 低波動環境下信號保持更久。
     """
-    result = {
+    result: dict[str, Any] = {
         "bars_since_signal": 0,
         "decay_factor": 1.0,
         "volatility_adj": 1.0,
@@ -9244,7 +9297,7 @@ def _calc_fake_signal_filter(
     - MACD柱狀圖收斂卻出現信號；
     - 高波動環境中的小幅波動信號。
     """
-    result = {
+    result: dict[str, Any] = {
         "fake_signal_likelihood": "low",
         "volume_confirmed": False,
         "macd_confirmed": False,
@@ -9320,7 +9373,7 @@ def _calc_dynamic_sl_tp_enhanced(
     - 近期波動區間；
     - 支撐阻力位參考。
     """
-    result = {
+    result: dict[str, Any] = {
         "optimal_stop_loss": 0.0,
         "optimal_take_profit_1": 0.0,
         "optimal_take_profit_2": 0.0,
@@ -9404,7 +9457,7 @@ def _calc_sector_rotation_context(
     - 中期（趨勢穩定）：正常；
     - 末期（趨勢疲軟）：信號可靠性降低。
     """
-    result = {
+    result: dict[str, Any] = {
         "phase": "unknown",
         "trend_strength": 0.0,
         "confidence_adjust": 0.0,
@@ -9473,7 +9526,7 @@ def _calc_multi_dim_divergence(
     同時檢測價格-成交量背離、價格-MACD背離，
     當多個維度同時出現背離時，信號可靠性大幅提升。
     """
-    result = {
+    result: dict[str, Any] = {
         "price_volume_div": False,
         "price_macd_div": False,
         "divergence_count": 0,
@@ -9568,7 +9621,7 @@ def _calc_execution_window(
     - 已确认的信号 → 立即执行窗口
     - 老化信号 → 退出窗口
     """
-    result = {
+    result: dict[str, Any] = {
         "window_status": "unknown",
         "optimal_action": "wait",
         "confidence_adjust": 0.0,
@@ -9628,7 +9681,7 @@ def _calc_tf_consistency(
     通过比较短期和中期均线趋势，判断当前时间框架信号的一致性。
     多时间框架一致 → 置信度提升；不一致 → 置信度下降。
     """
-    result = {
+    result: dict[str, Any] = {
         "short_term_trend": "neutral",
         "mid_term_trend": "neutral",
         "consistency": "unknown",
@@ -9705,7 +9758,7 @@ def _calc_risk_adjusted_return(
 
     基于历史波动率和信号类型，估算该买卖点的风险调整后预期收益。
     """
-    result = {
+    result: dict[str, Any] = {
         "expected_return_pct": 0.0,
         "risk_adjusted_return": 0.0,
         "max_drawdown_est": 0.0,
@@ -9761,7 +9814,7 @@ def _calc_urgency_score(
     - 适中信号：正常紧急度
     - 老化信号：低紧急度，考虑退出
     """
-    result = {
+    result: dict[str, Any] = {
         "urgency_level": "normal",
         "urgency_score": 0.5,
         "confidence_adjust": 0.0,
@@ -9827,7 +9880,7 @@ def _calc_market_composite(
     - 成交量趋势
     - MACD动能
     """
-    result = {
+    result: dict[str, Any] = {
         "market_score": 0.5,
         "trend_score": 0.5,
         "vol_score": 0.5,
@@ -9899,7 +9952,7 @@ def _calc_market_composite(
 
 def _calc_strategy_recommendation(
     mmd: MMD,
-    closes: list[float],
+    closes: list[float] | None,
     volatility: float | None = None,
 ) -> dict[str, Any]:
     """买卖点策略推荐（V36 条件88）。
@@ -9909,7 +9962,9 @@ def _calc_strategy_recommendation(
     - 持仓周期预估
     - 风险管理建议
     """
-    result = {
+    if closes is None:
+        return {"strategy": "hold", "position_size_pct": 0.2, "hold_period": "medium", "risk_level": "medium", "action_priority": 0}
+    result: dict[str, Any] = {
         "strategy": "hold",
         "position_size_pct": 0.2,
         "hold_period": "medium",
@@ -10003,7 +10058,7 @@ def _calc_consecutive_confirmation(
     Returns:
         {"confirmed": bool, "confirm_bars": int, "confidence_adjust": float}
     """
-    result = {"confirmed": False, "confirm_bars": 0, "confidence_adjust": 0.0}
+    result: dict[str, Any] = {"confirmed": False, "confirm_bars": 0, "confidence_adjust": 0.0}
     try:
         if not mmd.bi or len(closes) < 10:
             return result
@@ -10056,7 +10111,9 @@ def _calc_momentum_acceleration(
     - 买入信号：价格上涨加速 → 加分；减速 → 减分
     - 卖出信号：价格下跌加速 → 加分；减速 → 减分
     """
-    result = {"acceleration": 0.0, "momentum_direction": "neutral", "confidence_adjust": 0.0}
+    result: dict[str, Any] = {
+        "acceleration": 0.0, "momentum_direction": "neutral", "confidence_adjust": 0.0,
+    }
     try:
         if not mmd.bi or len(closes) < 30:
             return result
@@ -10121,7 +10178,7 @@ def _calc_volatility_regime_change(
     Returns:
         {"regime_change": str, "vol_ratio": float, "confidence_adjust": float}
     """
-    result = {"regime_change": "none", "vol_ratio": 1.0, "confidence_adjust": 0.0}
+    result: dict[str, Any] = {"regime_change": "none", "vol_ratio": 1.0, "confidence_adjust": 0.0}
     try:
         if len(closes) < 60:
             return result
@@ -10171,7 +10228,9 @@ def _calc_temporal_correlation(
     Returns:
         {"interval_bars": int, "interval_status": str, "confidence_adjust": float}
     """
-    result = {"interval_bars": 0, "interval_status": "unknown", "confidence_adjust": 0.0}
+    result: dict[str, Any] = {
+        "interval_bars": 0, "interval_status": "unknown", "confidence_adjust": 0.0,
+    }
     try:
         if not mmd.bi:
             return result
@@ -10222,7 +10281,7 @@ def _calc_multi_tf_momentum_consistency(
         {"short_trend": str, "mid_trend": str, "long_trend": str,
          "consistency": str, "confidence_adjust": float}
     """
-    result = {
+    result: dict[str, Any] = {
         "short_trend": "neutral", "mid_trend": "neutral", "long_trend": "neutral",
         "consistency": "unknown", "confidence_adjust": 0.0,
     }
@@ -10286,7 +10345,7 @@ def _calc_quality_ranking(
     Returns:
         {"grade": str, "rank": int, "total": int, "score": float}
     """
-    result = {"grade": "C", "rank": 0, "total": len(all_mmds), "score": 0.0}
+    result: dict[str, Any] = {"grade": "C", "rank": 0, "total": len(all_mmds), "score": 0.0}
     try:
         if not all_mmds:
             return result
@@ -10349,7 +10408,9 @@ def _calc_zs_structure_integrity(
     Returns:
         {"integrity_score": float, "bi_count": int, "zs_range": float, "is_complete": bool}
     """
-    result = {"integrity_score": 0.5, "bi_count": 0, "zs_range": 0.0, "is_complete": False}
+    result: dict[str, Any] = {
+        "integrity_score": 0.5, "bi_count": 0, "zs_range": 0.0, "is_complete": False,
+    }
     try:
         if not zss or len(zss) == 0:
             return result
@@ -10404,7 +10465,9 @@ def _calc_mmd_position_score(
     - 买入信号：价格接近区间下沿 → 加分；接近上沿 → 减分
     - 卖出信号：价格接近区间上沿 → 加分；接近下沿 → 减分
     """
-    result = {"position_pct": 0.5, "position_label": "mid", "confidence_adjust": 0.0}
+    result: dict[str, Any] = {
+        "position_pct": 0.5, "position_label": "mid", "confidence_adjust": 0.0,
+    }
     try:
         if not closes or len(closes) < lookback:
             return result
@@ -10457,7 +10520,7 @@ def _calc_post_signal_return(
     回溯分析历史中同类型信号形成后的实际收益表现，
     为当前信号提供历史命中率参考。
     """
-    result = {
+    result: dict[str, Any] = {
         "signal_return_pct": 0.0,
         "lookback_bars": 0,
         "return_quality": "insufficient",
@@ -10535,7 +10598,7 @@ def _calc_breakout_strength(
     - 买入信号：突破中枢上沿时的成交量放大程度
     - 卖出信号：跌破中枢下沿时的成交量放大程度
     """
-    result = {
+    result: dict[str, Any] = {
         "breakout_strength": 0.0,
         "volume_confirmation": False,
         "obv_trend": "flat",
@@ -10613,7 +10676,7 @@ def _calc_composite_deviation(
     综合RSI、KDJ、BIAS三个指标的偏离度，给出极端偏离预警。
     极端偏离提示市场可能处于超买/超卖状态，信号可靠性降低。
     """
-    result = {
+    result: dict[str, Any] = {
         "composite_deviation": 0.0,
         "rsi_dev": 0.0,
         "kdj_dev": 0.0,
@@ -10641,10 +10704,12 @@ def _calc_composite_deviation(
         kdj_dev = abs(j_value[-1] - 50) / 50.0 if len(j_value) > 0 else 0
         result["kdj_dev"] = round(min(1.0, kdj_dev), 3)
 
-        # BIAS偏离度
+        # BIAS偏离度（L1=20 的乖离率线，即 BIAS1）
         bias_values = BIAS(closes, L1=20)
-        bias_dev = abs(bias_values[-1]) / 10.0 if len(bias_values) > 0 else 0
-        bias_dev = min(1.0, bias_dev)
+        bias1 = float(bias_values[0][-1]) if (
+            len(bias_values) > 0 and len(bias_values[0]) > 0
+        ) else 0.0
+        bias_dev = min(1.0, abs(bias1) / 10.0)
         result["bias_dev"] = round(bias_dev, 3)
 
         # 综合偏离度 = 三者的加权平均
@@ -10663,7 +10728,7 @@ def _calc_composite_deviation(
 
 def _calc_signal_decay_warning(
     mmd: MMD,
-    closes: list[float],
+    closes: list[float] | None,
     latest_idx: int | None = None,
 ) -> dict[str, Any]:
     """信号衰减预警（V38 条件100）。
@@ -10673,7 +10738,9 @@ def _calc_signal_decay_warning(
     - 卖出信号有效期：约15-25根K线
     - 价格大幅偏离信号形成位置时，信号衰减加速
     """
-    result = {
+    if closes is None:
+        return {"decay_stage": "fresh", "bars_since_signal": 0, "price_drift_pct": 0.0, "remaining_window_pct": 1.0, "confidence_adjust": 0.0}
+    result: dict[str, Any] = {
         "decay_stage": "fresh",
         "bars_since_signal": 0,
         "price_drift_pct": 0.0,
@@ -10738,7 +10805,7 @@ def _calc_signal_consistency_check(
     - 如果历史同类信号大部分盈利，则当前信号可信度加分
     - 如果历史同类信号大部分亏损，则降权
     """
-    result = {
+    result: dict[str, Any] = {
         "consistency_ratio": 0.5,
         "historical_win_rate": 0.0,
         "sample_size": 0,
@@ -10767,6 +10834,8 @@ def _calc_signal_consistency_check(
         # 检查每个历史信号形成后的收益
         win_count = 0
         for sig in similar_signals:
+            if sig.bi is None:
+                continue
             sig_idx = sig.bi.end.k.k_index
             if sig_idx + 10 < len(closes):
                 if is_buy:
@@ -10807,7 +10876,7 @@ def _calc_zs_level_match(
     - 3买/3卖：应对应较大级别中枢（≥1笔）
     级别不匹配则降权，匹配则加分。
     """
-    result = {
+    result: dict[str, Any] = {
         "level_match": True,
         "zs_level": 0,
         "mmd_type_level": 0,
@@ -10862,7 +10931,7 @@ def _calc_multi_tf_divergence_confirmation(
     在不同时间窗口检测背离，当多个窗口同时出现同向背离时强化信号。
     全局计算一次，存储到 find_mmds._last_multi_tf_divergence。
     """
-    result = {
+    result: dict[str, Any] = {
         "multi_tf_bullish": 0,
         "multi_tf_bearish": 0,
         "confirmation_strength": 0.0,
@@ -10931,7 +11000,7 @@ def _calc_independent_cross_validation(
     用独立于缠论的方法（统计动量+量价关系）验证信号方向的一致性。
     两种独立方法均支持同一方向则加分。
     """
-    result = {
+    result: dict[str, Any] = {
         "method1_support": False,
         "method2_support": False,
         "cross_validated": False,
@@ -10990,7 +11059,7 @@ def _calc_decision_quality_score(
     整合所有V38新增字段为一个综合决策评分，提供清晰的买入/卖出/观望建议。
     包括风险等级、持仓周期建议。
     """
-    result = {
+    result: dict[str, Any] = {
         "decision_score": 50.0,
         "risk_level": "medium",
         "hold_period": "medium",
@@ -11118,6 +11187,10 @@ def find_mmds_v39(
     if not mmds or not closes:
         return mmds
 
+    # V48/V57 条件复用 find_mmds 内的全局指标（此前未定义导致条件被 try 吞掉）
+    trend_strength = _calc_trend_strength(zss)
+    bc_list: list[Any] = []
+
     # V83: 记录校准基线置信度（find_mmds 内 V47 校验后的值）。
     # 后续 V39-V82 共 160+ 个条件各自做 ±0.01~±0.05 的小幅调整，
     # 累计漂移会把强信号压向 0/1 边界（实测强 1买 被压到 0.00~0.15）。
@@ -11128,7 +11201,7 @@ def find_mmds_v39(
     multi_tf_div = None
     try:
         multi_tf_div = _calc_multi_tf_divergence_confirmation(closes, volumes or [], macd_data)
-        find_mmds_v39._last_multi_tf_divergence = multi_tf_div
+        find_mmds_v39._last_multi_tf_divergence = multi_tf_div  # type: ignore[attr-defined]
     except Exception:
         pass
 
@@ -11136,7 +11209,7 @@ def find_mmds_v39(
     macd_resonance = None
     try:
         macd_resonance = _calc_multi_cycle_macd_resonance(closes, macd_data)
-        find_mmds_v39._last_macd_resonance = macd_resonance
+        find_mmds_v39._last_macd_resonance = macd_resonance  # type: ignore[attr-defined]
     except Exception:
         pass
 
@@ -11269,7 +11342,7 @@ def find_mmds_v39(
         if volume_cycle is None:
             try:
                 volume_cycle = _calc_volume_cycle_detection(closes, volumes)
-                find_mmds_v39._last_volume_cycle = volume_cycle
+                find_mmds_v39._last_volume_cycle = volume_cycle  # type: ignore[attr-defined]
             except Exception:
                 volume_cycle = {}
         if volume_cycle:
@@ -11289,7 +11362,7 @@ def find_mmds_v39(
         if trajectory is None:
             try:
                 trajectory = _calc_post_signal_trajectory(closes, volumes, macd_data)
-                find_mmds_v39._last_trajectory_prediction = trajectory
+                find_mmds_v39._last_trajectory_prediction = trajectory  # type: ignore[attr-defined]
             except Exception:
                 trajectory = {}
         if trajectory:
@@ -11324,7 +11397,7 @@ def find_mmds_v39(
         if reversal_risk is None:
             try:
                 reversal_risk = _calc_reversal_risk_assessment(closes, volumes, highs, lows, macd_data, volatility)
-                find_mmds_v39._last_reversal_risk = reversal_risk
+                find_mmds_v39._last_reversal_risk = reversal_risk  # type: ignore[attr-defined]
             except Exception:
                 reversal_risk = {}
         if reversal_risk:
@@ -12415,14 +12488,18 @@ def find_mmds_v39(
                 _mi_boll: dict[str, list[float]] | None = None
                 if len(closes) >= 14:
                     from easy_tdx.MyTT import RSI as _mytt_rsi, KDJ as _mytt_kdj, BOLL as _mytt_boll
-                    _mi_rsi = _mytt_rsi(closes, N=14)
+                    _mi_rsi = [float(x) for x in _mytt_rsi(closes, N=14)]
                 if len(closes) >= 30:
                     _k, _d, _j = _mytt_kdj(closes, highs or closes, lows or closes, N=9, M1=3, M2=3)
-                    _mi_kdj = {"k": _k, "d": _d}
+                    _mi_kdj = {"k": [float(x) for x in _k], "d": [float(x) for x in _d]}
                 if highs is not None and lows is not None and len(closes) >= 20:
                     _b = _mytt_boll(closes, N=20)
                     if len(_b) >= 3 and len(_b[0]) > 0:
-                        _mi_boll = {"upper": _b[0], "lower": _b[1], "mid": _b[2]}
+                        _mi_boll = {
+                            "upper": [float(x) for x in _b[0]],
+                            "lower": [float(x) for x in _b[1]],
+                            "mid": [float(x) for x in _b[2]],
+                        }
                 mi_cons = _calc_multi_indicator_consistency_v73(
                     mmd, closes, macd_data, _mi_kdj, _mi_rsi, _mi_boll, volumes
                 )
@@ -12919,12 +12996,12 @@ def find_mmds_v76(
     )
 
 
-# 类属性：存储多时间框架背离结果
-find_mmds_v39._last_multi_tf_divergence: dict[str, Any] = {}
-find_mmds_v39._last_macd_resonance: dict[str, Any] = {}
-find_mmds_v39._last_volume_cycle: dict[str, Any] = {}
-find_mmds_v39._last_trajectory_prediction: dict[str, Any] = {}
-find_mmds_v39._last_reversal_risk: dict[str, Any] = {}
+# 运行时挂载的诊断缓存属性（mypy 不跟踪函数对象属性，仅作初始化）
+setattr(find_mmds_v39, "_last_multi_tf_divergence", {})
+setattr(find_mmds_v39, "_last_macd_resonance", {})
+setattr(find_mmds_v39, "_last_volume_cycle", {})
+setattr(find_mmds_v39, "_last_trajectory_prediction", {})
+setattr(find_mmds_v39, "_last_reversal_risk", {})
 
 
 # ── V40: 条件106-110 缠论模型决策增强 ───────────────────────────────────────────
@@ -12941,7 +13018,7 @@ def _calc_time_decay_adaptive(
     - 高波动市场：信号衰减快，需尽快执行
     - 基于 K 线数量计算衰减因子，超过阈值则降低置信度
     """
-    result = {
+    result: dict[str, Any] = {
         "bars_since_signal": 0,
         "decay_factor": 1.0,
         "effective_age": 0,
@@ -13007,7 +13084,7 @@ def _calc_breakout_retest_validation(
     - 回踩时成交量萎缩（<均量70%）
     - 满足条件则加分，不满足则适当降权
     """
-    result = {
+    result: dict[str, Any] = {
         "retest_detected": False,
         "retest_depth": 0.0,
         "volume_confirm": False,
@@ -13020,8 +13097,8 @@ def _calc_breakout_retest_validation(
 
         is_buy = "buy" in mmd.mmd_type.value
         zs = mmd.zs
-        zs_high = zs.high
-        zs_low = zs.low
+        zs_high = zs.gg
+        zs_low = zs.dd
         zs_range = zs_high - zs_low
         if zs_range <= 0:
             return result
@@ -13098,7 +13175,7 @@ def _calc_multi_cycle_macd_resonance(
     - 慢速MACD（6,13,5）
     三个MACD同向时加成。
     """
-    result = {
+    result: dict[str, Any] = {
         "fast_macd_bullish": False,
         "fast_macd_bearish": False,
         "mid_macd_bullish": False,
@@ -13178,7 +13255,7 @@ def _calc_kline_pattern_composite(
     - 看涨形态加分，看跌形态在买入信号时减分
     - 多重形态叠加额外加成
     """
-    result = {
+    result: dict[str, Any] = {
         "pattern_score": 0.0,
         "patterns_found": [],
         "pattern_confidence": 0.0,
@@ -13269,7 +13346,7 @@ def _calc_confidence_calibration(
     - 应用Sigmoid校准函数使置信度分布更接近实际命中率
     - 防止置信度极端值
     """
-    result = {
+    result: dict[str, Any] = {
         "raw_confidence": base_confidence,
         "calibrated_confidence": base_confidence,
         "calibration_method": "none",
@@ -13333,7 +13410,7 @@ def _calc_volume_price_energy_dist(
     - 卖出信号：价格处于高成交量阻力区 → 加分
     - 价格处于低成交量真空区 → 减分（支撑/阻力不足）
     """
-    result = {
+    result: dict[str, Any] = {
         "energy_zone": "neutral",
         "volume_rank": 0.5,
         "support_distance": 0.0,
@@ -13419,7 +13496,7 @@ def _calc_volume_cycle_detection(
     - 收缩周期（量缩）：趋势可能衰竭，逆势信号警惕
     - 量价配合度：价格上涨时成交量是否同步放大
     """
-    result = {
+    result: dict[str, Any] = {
         "cycle_state": "unknown",
         "volume_trend": "flat",
         "volume_price_alignment": False,
@@ -13477,7 +13554,7 @@ def _calc_post_signal_trajectory(
     - 价格加速度判断趋势延续性
     - 综合预测近期走势方向及置信度
     """
-    result = {
+    result: dict[str, Any] = {
         "predicted_direction": "neutral",
         "prediction_confidence": 0.5,
         "expected_return_range": [0.0, 0.0],
@@ -13587,7 +13664,7 @@ def _calc_quality_tier_classification(
     - B级：综合质量分30%-70%，不调整
     - C级：综合质量分后30%，置信度调整-1%
     """
-    result = {}
+    result: dict[str, Any] = {}
     try:
         if not mmds or len(mmds) < 5:
             return result
@@ -13599,7 +13676,7 @@ def _calc_quality_tier_classification(
             if hasattr(mmd, 'confluence_score'):
                 quality_score += mmd.confluence_score * 0.1
             if hasattr(mmd, 'quality') and mmd.quality is not None:
-                quality_score += mmd.quality * 0.05
+                quality_score += float(getattr(mmd.quality, "score", 0) or 0) * 0.05
             scored_mmds.append((mmd, quality_score))
 
         # 按质量分排序
@@ -13647,7 +13724,7 @@ def _calc_reversal_risk_assessment(
     - 趋势加速度衰减
     - 综合输出反转风险等级
     """
-    result = {
+    result: dict[str, Any] = {
         "risk_level": "low",
         "divergence_strength": 0.0,
         "rsi_overbought": False,
@@ -13753,7 +13830,7 @@ def _calc_post_signal_confirmation(
     - 3卖：信号后价格应继续下跌或反弹幅度<20%（而非突破信号高点）
     - 信号后3根K线内出现反向K线组合则降权
     """
-    result = {
+    result: dict[str, Any] = {
         "confirmed": False,
         "bars_confirmed": 0,
         "direction_match": "unknown",
@@ -13845,7 +13922,7 @@ def _calc_break_pullback_volume_ratio(
     - 3买：突破放量倍数 > 回调缩量倍数 → 量价配合健康
     - 3卖：跌破放量倍数 > 反弹缩量倍数 → 量价配合健康
     """
-    result = {
+    result: dict[str, Any] = {
         "break_vol_ratio": 0.0,
         "pullback_vol_ratio": 0.0,
         "volume_ratio_ok": False,
@@ -13931,7 +14008,7 @@ def _calc_zhongshu_distance_validation(
     - 3卖：信号高点距zd应有至少1%的距离（避免在zd边缘出场）
     - 距离过近则降权，距离适中则加分
     """
-    result = {
+    result: dict[str, Any] = {
         "distance_pct": 0.0,
         "distance_valid": False,
         "confidence_adjust": 0.0,
@@ -13999,7 +14076,7 @@ def _calc_adx_trend_strength_check(
     - ADX 20-25：弱趋势，信号需谨慎 → -1%
     - ADX < 20：无趋势（盘整），3买/3卖信号可能无效 → -3%
     """
-    result = {
+    result: dict[str, Any] = {
         "adx_value": 0.0,
         "adx_level": "none",
         "trend_valid": False,
@@ -14045,7 +14122,7 @@ def _calc_enhanced_signal_freshness(
     - 高波动市场信号有效期更短（60根K线）
     - 超过有效期自动标记为过期（confidence_adjust = -0.15）
     """
-    result = {
+    result: dict[str, Any] = {
         "bars_since_signal": 0,
         "decay_factor": 1.0,
         "effective_age": 0.0,
@@ -14126,7 +14203,7 @@ def _calc_trend_direction_alignment(
 
     对齐加分，不对齐大幅降权（避免逆势交易是3买/3卖准确率提升的关键）。
     """
-    result = {
+    result: dict[str, Any] = {
         "trend_direction": "neutral",
         "aligned": True,
         "confidence_adjust": 0.0,
@@ -14194,7 +14271,7 @@ def _calc_breakout_bi_strength_compare(
     - 价格幅度对比：突破笔幅度 / 进入笔幅度 > 0.9 → 确认
     - 若突破笔力度弱于进入笔，可能是假突破，降权
     """
-    result = {
+    result: dict[str, Any] = {
         "breakout_bi_idx": -1,
         "entry_bi_idx": -1,
         "vol_ratio": 0.0,
@@ -14270,7 +14347,7 @@ def _calc_pullback_time_window(
     - 30-50根K线：过期窗口，-5%
     - 超过50根K线：严重过期，-10%
     """
-    result = {
+    result: dict[str, Any] = {
         "bars_since_signal": 0,
         "window_status": "unknown",
         "confidence_adjust": 0.0,
@@ -14325,7 +14402,7 @@ def _calc_volatility_adaptive_v44(
     - 高波动（0.03-0.05）：信号噪音多，加成缩小
     - 极端波动（vol > 0.05）：信号可靠性大幅降低
     """
-    result = {
+    result: dict[str, Any] = {
         "volatility": volatility,
         "vol_regime": "normal",
         "threshold_multiplier": 1.0,
@@ -14394,7 +14471,7 @@ def _calc_multi_indicator_divergence_resonance(
     - 1指标背离：+1%
     - 无背离：0%
     """
-    result = {
+    result: dict[str, Any] = {
         "macd_divergence": False,
         "rsi_divergence": False,
         "kdj_divergence": False,
@@ -14477,7 +14554,7 @@ def _calc_trend_momentum_strength(
     - 20 < ADX <= 40：中等趋势，+1.5%
     - ADX <= 20：弱趋势/震荡，-3%（避免在震荡市中交易）
     """
-    result = {
+    result: dict[str, Any] = {
         "adx_value": 0.0,
         "trend_strength": "neutral",
         "confidence_adjust": 0.0,
@@ -14560,7 +14637,7 @@ def _calc_volume_price_divergence_secondary(
     - 单一方向量价背离：+2%
     - 量价背离矛盾：-3%（潜在陷阱）
     """
-    result = {
+    result: dict[str, Any] = {
         "breakout_vol_price": False,
         "pullback_vol_price": False,
         "conflict": False,
@@ -14626,7 +14703,7 @@ def _calc_zs_breakout_authenticity(
     - 仅站稳1-2根：+1%
     - 未站稳（回到中枢内）：-5%（假突破）
     """
-    result = {
+    result: dict[str, Any] = {
         "bars_standing": 0,
         "authentic": False,
         "confidence_adjust": 0.0,
@@ -14637,8 +14714,8 @@ def _calc_zs_breakout_authenticity(
             return result
 
         is_buy = "buy" in mmd.mmd_type.value
-        zs_high = mmd.zs.get("high", float("inf"))
-        zs_low = mmd.zs.get("low", float("-inf"))
+        zs_high = mmd.zs.zg
+        zs_low = mmd.zs.zd
 
         if is_buy:
             threshold = zs_high
@@ -14686,7 +14763,7 @@ def _calc_multi_tf_signal_consistency(
     - 短期与中期同向，长期反向：+1%
     - 完全反向：-4%
     """
-    result = {
+    result: dict[str, Any] = {
         "ma5_slope": 0.0,
         "ma10_slope": 0.0,
         "ma20_slope": 0.0,
@@ -14765,7 +14842,7 @@ def _calc_dynamic_market_regime(
     - 盘整市场：信号噪音多，-2%
     - 高波动市场：需谨慎，-3%
     """
-    result = {
+    result: dict[str, Any] = {
         "regime": "unknown",
         "volatility": 0.0,
         "volume_trend": "flat",
@@ -14860,7 +14937,7 @@ def _check_post_signal_price_follow_through(
 
     这是最关键的准确率提升手段：通过后确认过滤掉大量假突破信号。
     """
-    result = {
+    result: dict[str, Any] = {
         "followed": False,
         "follow_pct": 0.0,
         "signal_bar_idx": -1,
@@ -14936,7 +15013,7 @@ def _calc_signal_validity_window(
     - 低波动标的：窗口更窄（要求快速确认）
     - 趋势强度高的标的：窗口可适当放宽
     """
-    result = {
+    result: dict[str, Any] = {
         "window_bars": 10,
         "window_pct": 0.03,
         "valid": True,
@@ -15011,7 +15088,7 @@ def _calc_confidence_v47(
     closes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
     volatility: float | None = None,
-    zss: list | None = None,
+    zss: list[ZS] | None = None,
     highs: list[float] | None = None,
     lows: list[float] | None = None,
 ) -> float:
@@ -15072,7 +15149,7 @@ def _calc_volume_price_divergence_secondary_v48(
     Returns:
         dict with keys: confirmed, divergence_pct, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "confirmed": False,
         "divergence_pct": 0.0,
         "confidence_adjust": 0.0,
@@ -15156,7 +15233,7 @@ def _calc_trend_strength_weighting_v48(
 
     同时考虑MA20斜率方向与信号方向的一致性。
     """
-    result = {
+    result: dict[str, Any] = {
         "adx_value": 0.0,
         "adx_level": "unknown",
         "ma_alignment": "unknown",
@@ -15223,7 +15300,7 @@ def _calc_dynamic_risk_reward_ratio_v48(
 
     返回值包含：entry_price, stop_loss, take_profit_1, risk_reward_ratio, quality_tier
     """
-    result = {
+    result: dict[str, Any] = {
         "entry_price": 0.0,
         "stop_loss": 0.0,
         "take_profit_1": 0.0,
@@ -15314,7 +15391,7 @@ def _calc_breakout_strength_revalidation_v49(
       - confidence_adjust: float 置信度调整（-0.04 ~ +0.02）
       - msg: str 诊断信息
     """
-    result = {
+    result: dict[str, Any] = {
         "confirmed": True,
         "hist_area_ratio": 1.0,
         "break_force_before": 0.0,
@@ -15421,7 +15498,7 @@ def _calc_pullback_structure_integrity_v49(
       - confidence_adjust: float 置信度调整（-0.03 ~ +0.02）
       - msg: str 诊断信息
     """
-    result = {
+    result: dict[str, Any] = {
         "confirmed": True,
         "structure_quality": "unknown",
         "confidence_adjust": 0.0,
@@ -15518,7 +15595,7 @@ def _calc_zhongshu_level_weight_v49(
       - confidence_adjust: float 置信度调整
       - msg: str 诊断信息
     """
-    result = {
+    result: dict[str, Any] = {
         "level": "unknown",
         "line_count": 0,
         "confidence_adjust": 0.0,
@@ -15568,7 +15645,7 @@ def _calc_sector_correlation_v50(
     Returns:
         dict with keys: correlated, correlation_pct, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "correlated": False,
         "correlation_pct": 0.0,
         "confidence_adjust": 0.0,
@@ -15633,7 +15710,7 @@ def _calc_multi_tf_resonance_v50(
     Returns:
         dict with keys: resonant, alignment_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "resonant": False,
         "alignment_score": 0.0,
         "confidence_adjust": 0.0,
@@ -15688,7 +15765,7 @@ def _calc_multi_tf_resonance_v50(
 
 def _calc_level_recursive_validation_v50(
     mmd: MMD,
-    zss: list | None,
+    zss: list[ZS] | None,
 ) -> dict[str, Any]:
     """缠论级别递归验证（V50 条件142）。
 
@@ -15698,7 +15775,7 @@ def _calc_level_recursive_validation_v50(
     Returns:
         dict with keys: validated, level_quality, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "validated": False,
         "level_quality": "unknown",
         "confidence_adjust": 0.0,
@@ -15778,7 +15855,7 @@ def _calc_market_sentiment_fusion_v50(
     Returns:
         dict with keys: sentiment, sentiment_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "sentiment": "neutral",
         "sentiment_score": 0.0,
         "confidence_adjust": 0.0,
@@ -15885,7 +15962,7 @@ def _calc_breakout_bi_strength_enhanced_v51(
     - MACD柱面积对比 >= 0.8 → 动能确认
     - 综合评分：3/3通过 → +4%，2/3通过 → +2%，1/3 → 0%，0/3 → -5%
     """
-    result = {
+    result: dict[str, Any] = {
         "vol_ratio": 0.0,
         "price_ratio": 0.0,
         "macd_area_ratio": 0.0,
@@ -15995,7 +16072,7 @@ def _calc_pullback_depth_time_v51(
     - 回踩深度：回踩笔相对中枢ZD/ZG的距离，不超过3%
     - 回踩时间：基于波动率动态调整上限（高波动20根/正常15根/低波动10根）
     """
-    result = {
+    result: dict[str, Any] = {
         "pullback_depth_pct": 0.0,
         "pullback_bars": 0,
         "depth_ok": False,
@@ -16074,7 +16151,7 @@ def _calc_trend_strength_composite_v51(
     - 5日动量与信号一致：+2分，相反：-2分
     - 总分>=5：强趋势(+4%)，3-4：中等(+2%)，<3：趋势不明(0%)，<0：逆势(-5%)
     """
-    result = {
+    result: dict[str, Any] = {
         "adx_value": 0.0,
         "adx_level": "unknown",
         "ma_slope": "unknown",
@@ -16156,7 +16233,7 @@ def _calc_trading_decision_v51(
     - 质量评级（S/A/B/C）
     - 综合决策建议（买入/观望/卖出）
     """
-    result = {
+    result: dict[str, Any] = {
         "entry_price": 0.0,
         "stop_loss": 0.0,
         "take_profit_1": 0.0,
@@ -16263,7 +16340,7 @@ def _calc_volume_sustain_after_signal_v52(
     Returns:
         dict with keys: vol_ratio_avg, vol_trend, confirmed, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "vol_ratio_avg": 0.0,
         "vol_trend": "unknown",
         "confirmed": False,
@@ -16318,7 +16395,7 @@ def _calc_multi_indicator_divergence_fusion_v52(
     Returns:
         dict with keys: macd_div, rsi_div, kdj_div, fusion_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "macd_div": False,
         "rsi_div": False,
         "kdj_div": False,
@@ -16362,7 +16439,7 @@ def _calc_multi_indicator_divergence_fusion_v52(
             k, d, j = KDJ(closes, 9, 3, 3)
             if len(j) >= 5:
                 j_recent = j[-5:]
-                j_prev = j[-10:-5] if len(j) >= 10 else []
+                j_prev = j[-10:-5] if len(j) >= 10 else j[:0]
                 if is_buy:
                     result["kdj_div"] = min(j_recent) < 20 and (not j_prev or max(j_prev) > 20)
                 else:
@@ -16406,7 +16483,7 @@ def _calc_recent_extreme_price_v52(
     Returns:
         dict with keys: price_position, is_extreme, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "price_position": "unknown",
         "is_extreme": False,
         "confidence_adjust": 0.0,
@@ -16467,7 +16544,7 @@ def _calc_market_regime_score_v52(
     Returns:
         dict with keys: volatility_regime, trend_health, momentum_score, regime_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "volatility_regime": "unknown",
         "trend_health": "unknown",
         "momentum_score": 0.0,
@@ -16557,7 +16634,7 @@ def _calc_trend_stage_follow_confirmation_v53(
     Returns:
         dict with keys: trend_stage, trend_direction, is_following_trend, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "trend_stage": "unknown",
         "trend_direction": "unknown",
         "is_following_trend": False,
@@ -16658,7 +16735,7 @@ def _calc_atr_adaptive_stop_v53(
     Returns:
         dict with keys: atr_value, stop_distance_pct, stop_level, position_suggestion, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_value": 0.0,
         "stop_distance_pct": 0.0,
         "stop_level": 0.0,
@@ -16742,7 +16819,7 @@ def _calc_zs_breakout_strength_v53(
     Returns:
         dict with keys: breakout_strength, entry_bi_strength, strength_ratio, confirmed, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "breakout_strength": 0.0,
         "entry_bi_strength": 0.0,
         "strength_ratio": 0.0,
@@ -16812,7 +16889,7 @@ def _calc_signal_quality_tier_v53(
     Returns:
         dict with keys: quality_tier, tier_score, tier_label, position_recommendation, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "quality_tier": "D",
         "tier_score": 0,
         "tier_label": "观望",
@@ -16914,7 +16991,7 @@ def _calc_multi_bar_confirmation_v54(
     Returns:
         dict with keys: confirmed, confirm_bars, total_bars, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "confirmed": False,
         "confirm_bars": 0,
         "total_bars": 0,
@@ -17011,7 +17088,7 @@ def _calc_gap_risk_assessment_v54(
     Returns:
         dict with keys: has_gap, gap_direction, gap_size_pct, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "has_gap": False,
         "gap_direction": "none",
         "gap_size_pct": 0.0,
@@ -17096,7 +17173,7 @@ def _calc_volatility_regime_change_v54(
     Returns:
         dict with keys: atr_expansion_pct, regime, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_expansion_pct": 0.0,
         "regime": "unknown",
         "confidence_adjust": 0.0,
@@ -17107,10 +17184,15 @@ def _calc_volatility_regime_change_v54(
             return result
 
         # 计算ATR(14)
-        def calc_atr(highs, lows, closes, period=14):
+        def calc_atr(
+            highs: list[float],
+            lows: list[float],
+            closes: list[float],
+            period: int = 14,
+        ) -> float | None:
             if len(highs) < period + 1:
                 return None
-            tr_list = []
+            tr_list: list[float] = []
             for i in range(1, len(highs)):
                 tr = max(
                     highs[i] - lows[i],
@@ -17168,7 +17250,7 @@ def _calc_volume_price_coordination_v54(
     Returns:
         dict with keys: score, volume_trend, price_trend, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "score": 0,
         "volume_trend": "unknown",
         "price_trend": "unknown",
@@ -17216,10 +17298,10 @@ def _calc_volume_price_coordination_v54(
         # 量价配合评分
         score = 0
         # 上涨日/下跌日的量价配合
-        up_days_volume = 0
-        up_days_count = 0
-        down_days_volume = 0
-        down_days_count = 0
+        up_days_volume: float = 0.0
+        up_days_count: int = 0
+        down_days_volume: float = 0.0
+        down_days_count: int = 0
         for i in range(1, len(recent_closes)):
             if recent_closes[i] > recent_closes[i - 1]:
                 up_days_volume += recent_volumes[i]
@@ -17312,7 +17394,7 @@ def _calc_multi_tf_resonance_filter_v55(
     Returns:
         dict with keys: resonated, timeframes, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "resonated": False,
         "timeframes": [],
         "confidence_adjust": 0.0,
@@ -17411,7 +17493,7 @@ def _calc_zhongshu_level_weight_v55(
     Returns:
         dict with keys: level, weight_bonus, level_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "level": "unknown",
         "weight_bonus": 0,
         "level_score": 0,
@@ -17514,7 +17596,7 @@ def _calc_weak_stock_risk_v55(
     Returns:
         dict with keys: is_weak, risk_factors, volatility_ratio, volume_ratio, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "is_weak": False,
         "risk_factors": [],
         "volatility_ratio": 0.0,
@@ -17542,7 +17624,7 @@ def _calc_weak_stock_risk_v55(
         for i in range(len(closes) - atr_period, len(closes)):
             high = highs[i]
             low = lows[i]
-            prev_close = closes[i - 1] if i > 0 else close
+            prev_close = closes[i - 1] if i > 0 else closes[0]
             tr = max(high - low, abs(high - prev_close), abs(low - prev_close))
             true_ranges.append(tr)
         atr = sum(true_ranges) / len(true_ranges) if true_ranges else 0
@@ -17648,7 +17730,7 @@ def _calc_signal_trend_alignment_v55(
     Returns:
         dict with keys: aligned, trend_direction, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "aligned": False,
         "trend_direction": "unknown",
         "confidence_adjust": 0.0,
@@ -17769,7 +17851,7 @@ def _calc_false_breakout_detection_v56(
     - 3卖信号：跌破后5根K线内反弹超过跌幅的50% → 假跌破风险
     - 3卖信号：跌破后成交量放大 + 价格继续下跌 → 真跌破确认
     """
-    result = {
+    result: dict[str, Any] = {
         "is_fake": False,
         "breakout_valid": False,
         "confidence_adjust": 0.0,
@@ -17878,7 +17960,7 @@ def _calc_zhongshu_structure_complexity_v56(
     - 简单结构：单一中枢突破，信号可信度高
     - 复杂结构：多重重叠中枢，信号噪音大
     """
-    result = {
+    result: dict[str, Any] = {
         "complexity": "unknown",
         "overlap_count": 0,
         "confidence_adjust": 0.0,
@@ -17965,7 +18047,7 @@ def _calc_volatility_adaptive_position_v56(
     - 高波动(3%-5%)：建议轻仓(20-40%)
     - 极高波动(>5%)：建议观望(0-20%)
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_value": 0.0,
         "volatility_level": "unknown",
         "position_suggestion": "unknown",
@@ -18054,7 +18136,7 @@ def _calc_multi_signal_resonance_v56(
     - 1个指标确认 → 0%
     - 无指标确认 → -2%（风险信号）
     """
-    result = {
+    result: dict[str, Any] = {
         "resonance_count": 0,
         "confirming_indicators": [],
         "confidence_adjust": 0.0,
@@ -18103,8 +18185,8 @@ def _calc_multi_signal_resonance_v56(
 
         # 3. RSI 确认
         if len(closes) >= 15:
-            gains = []
-            losses = []
+            gains: list[float] = []
+            losses: list[float] = []
             for i in range(-14, 0):
                 change = closes[i] - closes[i - 1]
                 if change > 0:
@@ -18179,7 +18261,7 @@ def _calc_pullback_filter_v57(
     - 3买：回踩深度不超过突破幅度的60%，回踩时间不超过15根K线
     - 3卖：反弹幅度不超过跌幅的60%，反弹时间不超过15根K线
     """
-    result = {
+    result: dict[str, Any] = {
         "pass_filter": True,
         "pullback_depth_pct": 0.0,
         "pullback_bars": 0,
@@ -18281,7 +18363,7 @@ def _calc_breakout_strength_validation_v57(
     - 突破笔收盘价变化必须大于进入中枢最后一笔的70%
     - 突破时成交量必须大于中枢内平均成交量的1.2倍
     """
-    result = {
+    result: dict[str, Any] = {
         "strength_adequate": False,
         "force_ratio": 0.0,
         "volume_ratio": 0.0,
@@ -18355,7 +18437,7 @@ def _calc_zs_divergence_check_v57(
     - 中枢内有背驰时，突破信号可信度降低
     - 中枢内无背驰时，突破信号更可靠
     """
-    result = {
+    result: dict[str, Any] = {
         "has_divergence": False,
         "divergence_type": "none",
         "confidence_adjust": 0.0,
@@ -18423,7 +18505,7 @@ def _calc_signal_decay_detection_v57(
     - 信号后5-10根K线持续走弱 → 信号衰减，降低置信度
     - 信号后价格稳定/走强 → 信号有效，提升置信度
     """
-    result = {
+    result: dict[str, Any] = {
         "is_decaying": False,
         "price_trend": "unknown",
         "trend_momentum": 0.0,
@@ -18525,7 +18607,7 @@ def _calc_multi_tf_trend_consistency_v58(
     - 3买信号：短期MA(5)<中期MA(20)<长期MA(60) = 空头排列 → -3%
     - 3卖信号方向相反
     """
-    result = {
+    result: dict[str, Any] = {
         "short_ma": 0.0,
         "mid_ma": 0.0,
         "long_ma": 0.0,
@@ -18597,7 +18679,7 @@ def _calc_volume_accumulation_validation_v58(
     - 量比 1.0-1.5（温和放量）→ +1%置信度
     - 量比 < 1.0（缩量突破）→ -3%置信度（无量突破可信度低）
     """
-    result = {
+    result: dict[str, Any] = {
         "volume_ratio": 0.0,
         "recent_vol": 0.0,
         "avg_vol_20": 0.0,
@@ -18655,7 +18737,7 @@ def _calc_atr_adaptive_stop_v58(
     - 波动率等级分类（低/中/高/极高）
     - 置信度微调（高波动时-1%，极高波动时-2%）
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_14": 0.0,
         "stop_loss_price": 0.0,
         "stop_distance_pct": 0.0,
@@ -18749,7 +18831,7 @@ def _calc_composite_quality_score_v58(
     - 评分等级：S(≥+10%) / A(+5~+10%) / B(0~+5%) / C(-5~0%) / D(<-5%)
     - 不直接调整confidence，仅作为参考输出
     """
-    result = {
+    result: dict[str, Any] = {
         "total_adjust": 0.0,
         "grade": "C",
         "grade_desc": "",
@@ -18828,7 +18910,7 @@ def _calc_volatility_adaptive_ma_v59(
     - 低波动：延长MA周期（MA5→MA8, MA20→MA30, MA60→MA90），减少噪音干扰
     - 正常波动：保持默认周期
     """
-    result = {
+    result: dict[str, Any] = {
         "adaptive_ma_short": 5,
         "adaptive_ma_mid": 20,
         "adaptive_ma_long": 60,
@@ -18896,7 +18978,7 @@ def _calc_atr_multiplier_adapt_v59(
     - 低波动：使用更小ATR倍数（1.5x），收紧止损减少损失
     - 正常波动：使用默认倍数（2x）
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_14": 0.0,
         "optimal_multiplier": 2.0,
         "stop_distance_pct": 0.0,
@@ -18983,7 +19065,7 @@ def _calc_multi_tf_resonance_signal_v59(
     - 短期上涨+中期下跌 → 共振弱（逆势），-4%置信度
     - 仅一级共振 → +1%置信度
     """
-    result = {
+    result: dict[str, Any] = {
         "short_tf_trend": "unknown",
         "short_tf_momentum": "unknown",
         "resonance_score": 0,
@@ -19094,7 +19176,7 @@ def _calc_signal_decay_speed_v59(
     测量信号产生后价格远离信号点的速度，快速远离 = 强信号，
     缓慢或回退 = 弱信号/假信号。
     """
-    result = {
+    result: dict[str, Any] = {
         "price_speed_after_signal": 0.0,
         "decay_rate": "unknown",
         "signal_strength": "unknown",
@@ -19194,7 +19276,7 @@ def _calc_rsi_deep_divergence_v60(
     - 深度顶背离：价格创新高但RSI未创新高，强烈确认3卖
     - 轻微背离：仅单次低点比较，温和确认
     """
-    result = {
+    result: dict[str, Any] = {
         "rsi_current": 0.0,
         "rsi_prev_low": 0.0,
         "price_curr_low": 0.0,
@@ -19324,7 +19406,7 @@ def _calc_ma_spacing_strength_v60(
     - 均线纠缠（间距小）→ 震荡，-2%置信度
     - 空头排列 → 对3买不利
     """
-    result = {
+    result: dict[str, Any] = {
         "ma5": 0.0,
         "ma20": 0.0,
         "ma60": 0.0,
@@ -19434,7 +19516,7 @@ def _calc_zs_distance_enhanced_v60(
     - 突破/跌破后的回踩/反弹确认
     - 中枢宽度与当前价格波动的关系
     """
-    result = {
+    result: dict[str, Any] = {
         "zs_zg": 0.0,
         "zs_zd": 0.0,
         "price": 0.0,
@@ -19566,7 +19648,7 @@ def _calc_kdj_ob_os_confirm_v60(
     - 3卖：J值应处于超买区或刚从超买区回落（J>70或J从高位拐头向下）
     - J值极端区域但方向错误 → 假信号预警
     """
-    result = {
+    result: dict[str, Any] = {
         "kdj_k": 0.0,
         "kdj_d": 0.0,
         "kdj_j": 0.0,
@@ -19705,7 +19787,7 @@ def _calc_macd_histogram_divergence_v61(
             "msg": str,
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "divergence_type": "none",
         "macd_hist_curr": 0.0,
         "macd_hist_prev": 0.0,
@@ -19863,7 +19945,7 @@ def _calc_composite_signal_score_v61(
             "recommendation": str,          # 推荐操作
         }
     """
-    result = {
+    result: dict[str, Any] = {
         "composite_score": 0.0,
         "quality_tier": "unknown",
         "tier_color": "#9ca3af",
@@ -20015,7 +20097,7 @@ def _calc_boll_bandwidth_breakout_confirm_v62(
     - 价格接近轨道但未突破 → +1%（潜在突破）
     - 带宽持续收缩 → -1%（可能即将反转，信号质量下降）
     """
-    result = {
+    result: dict[str, Any] = {
         "boll_upper": 0.0,
         "boll_lower": 0.0,
         "band_width": 0.0,
@@ -20117,7 +20199,7 @@ def _calc_boll_bandwidth_reversal_confirm_v62(
     - 3卖：带宽低位(分位数<30%) + 价格从上轨附近回落 → 回落有效，+2%
     - 带宽低位但无反弹/回落确认 → +0.5%
     """
-    result = {
+    result: dict[str, Any] = {
         "band_width_rank": 0.5,
         "squeeze_active": False,
         "reversal_confirmed": False,
@@ -20214,7 +20296,7 @@ def _calc_dynamic_threshold_volatility_regime_v62(
     - 低波动（ATR%<1%）：收紧阈值，提高置信度要求（+2%）
     - 正常波动：保持默认阈值
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_pct": 0.0,
         "volatility_regime": "normal",
         "threshold_adjustment": 0.0,
@@ -20282,7 +20364,7 @@ def _calc_dynamic_threshold_atr_multiplier_v62(
     - 低波动：使用更小ATR倍数（1.5x），收紧止损减少损失
     - 正常波动：使用默认倍数（2x）
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_14": 0.0,
         "optimal_multiplier": 2.0,
         "stop_distance_pct": 0.0,
@@ -20381,7 +20463,7 @@ def _calc_zhongshu_level_weight_enhanced_v63(
     返回字段：level, distance_score, quality_score, recent_test_score,
               total_weight_bonus, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "level": "unknown",
         "distance_score": 0,
         "quality_score": 0,
@@ -20545,7 +20627,7 @@ def _calc_multi_period_signal_decay_v63(
     返回字段：short_term_momentum, mid_term_momentum, long_term_momentum,
               overall_health, decay_detected, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "short_term_momentum": 0.0,
         "mid_term_momentum": 0.0,
         "long_term_momentum": 0.0,
@@ -20698,7 +20780,7 @@ def _calc_volume_price_divergence_secondary_v65(
 
     返回：diverge_confirmed, divergence_strength, duration_bars, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "diverge_confirmed": False,
         "divergence_strength": 0.0,
         "duration_bars": 0,
@@ -20794,7 +20876,7 @@ def _calc_breakout_retest_confirmation_v65(
 
     返回：retest_confirmed, retest_depth, breakout_valid, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "retest_confirmed": False,
         "retest_depth": 0.0,
         "breakout_valid": False,
@@ -20897,7 +20979,7 @@ def _calc_volatility_compression_breakout_v65(
 
     返回：compression_detected, squeeze_score, breakout_strength, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "compression_detected": False,
         "squeeze_score": 0.0,
         "breakout_strength": 0.0,
@@ -20997,7 +21079,7 @@ def _calc_signal_time_window_freshness_v65(
 
     返回：bars_since_signal, trend_health, freshness_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "bars_since_signal": 0,
         "trend_health": "unknown",
         "freshness_score": 0.0,
@@ -21106,7 +21188,7 @@ def _calc_macd_momentum_acceleration_v66(
 
     返回：acceleration_detected, acceleration_direction, cone_bars, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "acceleration_detected": False,
         "acceleration_direction": "unknown",
         "cone_bars": 0,
@@ -21179,7 +21261,7 @@ def _calc_volume_price_coordination_deep_v66(
 
     返回：short_score, mid_score, extreme_flag, overall_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "short_score": 0.0,
         "mid_score": 0.0,
         "extreme_flag": "normal",
@@ -21266,7 +21348,7 @@ def _calc_multi_tf_convergence_intensity_v66(
 
     返回：short_trend, mid_trend, long_trend, convergence_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "short_trend": "unknown",
         "mid_trend": "unknown",
         "long_trend": "unknown",
@@ -21336,7 +21418,7 @@ def _calc_signal_execution_priority_v66(
 
     返回：priority, priority_label, risk_level, suggested_action, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "priority": 3,
         "priority_label": "P3",
         "risk_level": "high",
@@ -21430,7 +21512,7 @@ def _calc_zhongshu_divergence_strength_v67(
     mmd: "MMD",
     zss: list["ZS"],
     closes: list[float],
-    macd_data: dict[str, list[float]],
+    macd_data: dict[str, list[float]] | None = None,
 ) -> dict[str, Any]:
     """中枢背驰力度量化（V67 条件200）。
 
@@ -21441,7 +21523,7 @@ def _calc_zhongshu_divergence_strength_v67(
 
     返回：backchi_ratio, zhongshu_strength, divergence_type, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "backchi_ratio": 0.0,
         "zhongshu_strength": "normal",
         "divergence_type": "none",
@@ -21449,6 +21531,9 @@ def _calc_zhongshu_divergence_strength_v67(
         "msg": "",
     }
     try:
+        if macd_data is None:
+            result["msg"] = "无MACD数据"
+            return result
         is_buy = mmd.mmd_type == MMDType.BUY_3
         hist = macd_data.get("hist", [])
         if len(hist) < 20 or len(zss) == 0:
@@ -21457,8 +21542,8 @@ def _calc_zhongshu_divergence_strength_v67(
 
         # 找到最近的中枢
         latest_zs = zss[-1]
-        zs_high = max(bc.high for bc in latest_zs.bcs) if latest_zs.bcs else 0
-        zs_low = min(bc.low for bc in latest_zs.bcs) if latest_zs.bcs else 0
+        zs_high = max(bc.high for bc in latest_zs.lines) if latest_zs.lines else 0
+        zs_low = min(bc.low for bc in latest_zs.lines) if latest_zs.lines else 0
         zs_range = zs_high - zs_low if zs_high != zs_low else 1.0
 
         # 计算突破前最后一笔的MACD面积（中枢内）
@@ -21545,7 +21630,7 @@ def _calc_multi_level_mmd_consistency_v67(
 
     返回：short_dir, mid_dir, long_dir, consistency_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "short_dir": "unknown",
         "mid_dir": "unknown",
         "long_dir": "unknown",
@@ -21620,7 +21705,7 @@ def _calc_post_signal_trajectory_health_v67(
 
     返回：max_drawdown_pct, up_bars, down_bars, trend_quality, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "max_drawdown_pct": 0.0,
         "up_bars": 0,
         "down_bars": 0,
@@ -21708,7 +21793,7 @@ def _calc_dynamic_sl_tp_recommendation_v67(
 
     返回：stop_loss, take_profit, risk_reward_ratio, position_size_pct, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "stop_loss": 0.0,
         "take_profit": 0.0,
         "risk_reward_ratio": 0.0,
@@ -21799,7 +21884,7 @@ def _calc_gap_trend_consistency_v68(
 
     返回：gap_detected, gap_direction, trend_alignment, gap_quality, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "gap_detected": False,
         "gap_direction": "none",
         "trend_alignment": "none",
@@ -21899,7 +21984,7 @@ def _calc_range_set_multi_level_v68(
 
     返回：zhongshu_count, zs_above_price, zs_below_price, multi_level_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "zhongshu_count": 0,
         "zs_above_price": 0.0,
         "zs_below_price": 0.0,
@@ -21998,7 +22083,7 @@ def _calc_post_signal_fund_flow_v68(
 
     返回：fund_flow_direction, avg_volume_ratio, flow_confidence, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "fund_flow_direction": "none",
         "avg_volume_ratio": 0.0,
         "flow_confidence": "unknown",
@@ -22114,7 +22199,7 @@ def _calc_market_regime_adaptation_v68(
 
     返回：atr_pct, volatility_regime, trend_strength, adaptation_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_pct": 0.0,
         "volatility_regime": "normal",
         "trend_strength": "weak",
@@ -22223,7 +22308,7 @@ def _calc_price_volume_divergence_v69(
 
     返回：divergence_type, price_trend, volume_trend, divergence_strength, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "divergence_type": "none",
         "price_trend": "flat",
         "volume_trend": "flat",
@@ -22348,7 +22433,7 @@ def _calc_structural_integrity_v69(
 
     返回：bi_complete, bi_sequence_valid, zhongshu_valid, structural_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "bi_complete": False,
         "bi_sequence_valid": True,
         "zhongshu_valid": False,
@@ -22411,9 +22496,9 @@ def _calc_structural_integrity_v69(
 
 def _calc_multi_indicator_divergence_v69(
     mmd: "MMD",
-    closes: list[float],
-    volumes: list[float],
-    macd_data: dict[str, list[float]],
+    closes: list[float] | None,
+    volumes: list[float] | None,
+    macd_data: dict[str, list[float]] | None = None,
 ) -> dict[str, Any]:
     """多指标背离融合（V69 条件210）。
 
@@ -22425,7 +22510,9 @@ def _calc_multi_indicator_divergence_v69(
 
     返回：macd_divergence, rsi_divergence, kdj_divergence, resonance_count, confidence_adjust, msg
     """
-    result = {
+    if closes is None:
+        return {"macd_divergence": "none", "rsi_divergence": "none", "kdj_divergence": "none", "resonance_count": 0, "confidence_adjust": 0.0, "msg": ""}
+    result: dict[str, Any] = {
         "macd_divergence": "none",
         "rsi_divergence": "none",
         "kdj_divergence": "none",
@@ -22547,7 +22634,7 @@ def _calc_retracement_depth_v69(
 
     返回：retracement_depth_pct, retracement_type, optimal_range, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "retracement_depth_pct": 0.0,
         "retracement_type": "none",
         "optimal_range": "unknown",
@@ -22641,7 +22728,7 @@ def _calc_volume_peak_detection_v70(
 
     返回：peak_ratio, peak_detected, volume_strength, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "peak_ratio": 0.0,
         "peak_detected": False,
         "volume_strength": "none",
@@ -22720,7 +22807,7 @@ def _calc_signal_time_decay_v70(
 
     返回：bar_count, decay_factor, signal_age, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "bar_count": 0,
         "decay_factor": 1.0,
         "signal_age": "fresh",
@@ -22789,7 +22876,7 @@ def _calc_false_breakout_filter_v70(
 
     返回：sustained_bars, is_sustained, breakout_quality, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "sustained_bars": 0,
         "is_sustained": False,
         "breakout_quality": "unknown",
@@ -22891,7 +22978,7 @@ def _calc_final_confidence_calibration_v70(
     返回：total_adjust, calibrated_confidence, calibration_level, adjust_count,
           positive_adjusts, negative_adjusts, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "total_adjust": 0.0,
         "calibrated_confidence": 0.0,
         "calibration_level": "unknown",
@@ -22984,7 +23071,7 @@ def _calc_ma_alignment_strength_v71(
 
     返回：alignment, strength, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "alignment": "unknown",
         "strength": 0.0,
         "confidence_adjust": 0.0,
@@ -23073,7 +23160,7 @@ def _calc_multi_tf_ma_resonance_v71(
 
     返回：short_aligned, mid_aligned, long_aligned, resonance_count, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "short_aligned": False,
         "mid_aligned": False,
         "long_aligned": False,
@@ -23149,7 +23236,7 @@ def _calc_mmd_history_winrate_v71(
 
     返回：lookback_winrate, sample_count, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "lookback_winrate": 0.0,
         "sample_count": 0,
         "confidence_adjust": 0.0,
@@ -23245,7 +23332,7 @@ def _calc_dynamic_rr_optimization_v71(
 
     返回：stop_loss_pct, take_profit_pct, rr_ratio, atr_based_sl, atr_based_tp, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "stop_loss_pct": 0.0,
         "take_profit_pct": 0.0,
         "rr_ratio": 0.0,
@@ -23316,7 +23403,7 @@ def _calc_ma_convergence_divergence_v72(
 
     返回：state, spread_pct, spread_change_pct, convergence_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "state": "unknown",
         "spread_pct": 0.0,
         "spread_change_pct": 0.0,
@@ -23384,7 +23471,7 @@ def _calc_support_resistance_proximity_v72(
 
     返回：current_price, nearest_support, nearest_resistance, support_dist_pct, resistance_dist_pct, proximity_bonus, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "current_price": 0.0,
         "nearest_support": 0.0,
         "nearest_resistance": 0.0,
@@ -23452,7 +23539,7 @@ def _calc_volume_structure_quality_v72(
 
     返回：up_vol_ratio, down_vol_ratio, volume_health, stability_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "up_vol_ratio": 0.0,
         "down_vol_ratio": 0.0,
         "volume_health": 0.0,
@@ -23525,7 +23612,7 @@ def _calc_signal_decay_velocity_v72(
 
     返回：recent_confidences, trend_direction, velocity, volatility, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "recent_confidences": [],
         "trend_direction": "unknown",
         "velocity": 0.0,
@@ -23622,7 +23709,7 @@ def _calc_mmd_position_risk_v73(
 
     返回：position_pct, risk_level, risk_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "position_pct": 0.0,
         "risk_level": "unknown",
         "risk_score": 0.0,
@@ -23693,7 +23780,7 @@ def _calc_zhongshu_breakout_validity_v73(
 
     返回：breakout_valid, confirm_bars, sustain_ratio, volume_ratio, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "breakout_valid": False,
         "confirm_bars": 0,
         "sustain_ratio": 0.0,
@@ -23785,7 +23872,7 @@ def _calc_multi_indicator_consistency_v73(
 
     返回：agreement_count, agreement_ratio, consistency_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "agreement_count": 0,
         "agreement_ratio": 0.0,
         "consistency_score": 0.0,
@@ -23904,7 +23991,7 @@ def _calc_volatility_regime_adaptation_v73(
 
     返回：atr_pct, atr_rank, vol_regime, regime_score, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "atr_pct": 0.0,
         "atr_rank": 0.0,
         "vol_regime": "unknown",
@@ -23997,7 +24084,7 @@ def _calc_volume_price_divergence_secondary_v74(
 
     返回：divergence_type, divergence_strength, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "divergence_type": "none",
         "divergence_strength": 0.0,
         "confirm_signal": False,
@@ -24094,7 +24181,7 @@ def _calc_trend_momentum_continuity_v74(
 
     返回：momentum_score, short_term, mid_term, long_term, continuity, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "momentum_score": 0.0,
         "short_term": 0.0,
         "mid_term": 0.0,
@@ -24164,7 +24251,7 @@ def _calc_zhongshu_overlap_density_v74(
 
     返回：overlap_density, nearby_zs_count, distance_to_zs, signal_strength, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "overlap_density": 0.0,
         "nearby_zs_count": 0,
         "distance_to_zs": 0.0,
@@ -24241,7 +24328,7 @@ def _calc_signal_resonance_depth_v74(
 
     返回：depth_score, confirming_dimensions, total_dimensions, resonance_level, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "depth_score": 0.0,
         "confirming_dimensions": 0,
         "total_dimensions": 0,
@@ -24381,7 +24468,7 @@ def _calc_pullback_depth_validation_v75(
 
     返回：pullback_depth, max_retracement, fibonacci_level, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "pullback_depth": 0.0,
         "max_retracement": 0.0,
         "fibonacci_level": "none",
@@ -24487,7 +24574,7 @@ def _calc_zhongshu_retracement_confirm_v75(
 
     返回：retracement_type, nearest_zs_dist, bounce_strength, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "retracement_type": "none",
         "nearest_zs_dist": 0.0,
         "bounce_strength": 0.0,
@@ -24611,7 +24698,7 @@ def _calc_volume_peak_duration_v75(
 
     返回：peak_duration, avg_vol_ratio, peak_days, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "peak_duration": 0,
         "avg_vol_ratio": 0.0,
         "peak_days": 0,
@@ -24713,7 +24800,7 @@ def _calc_multi_signal_time_consistency_v75(
     closes: list[float],
     highs: list[float] | None,
     lows: list[float] | None,
-    macd_data: list[dict[str, Any]] | None,
+    macd_data: dict[str, list[float]] | None,
     volumes: list[float] | None,
 ) -> dict[str, Any]:
     """多信号时间一致性（V75 条件235）。
@@ -24723,7 +24810,7 @@ def _calc_multi_signal_time_consistency_v75(
 
     返回：consistency_score, signal_dates, alignment_ratio, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "consistency_score": 0.0,
         "signal_dates": [],
         "alignment_ratio": 0.0,
@@ -24743,11 +24830,12 @@ def _calc_multi_signal_time_consistency_v75(
         signals: list[tuple[str, int]] = []  # (signal_name, days_ago)
 
         # 1. MACD金叉/死叉
-        if macd_data and len(macd_data) >= 10:
-            for i in range(len(macd_data) - 1, max(len(macd_data) - 20, 0), -1):
+        hist_arr = (macd_data or {}).get("hist", [])
+        if len(hist_arr) >= 10:
+            for i in range(len(hist_arr) - 1, max(len(hist_arr) - 20, 0), -1):
                 if i >= 1:
-                    prev_hist = macd_data[i - 1].get("hist", 0)
-                    curr_hist = macd_data[i].get("hist", 0)
+                    prev_hist = hist_arr[i - 1]
+                    curr_hist = hist_arr[i]
                     if is_buy and prev_hist <= 0 and curr_hist > 0:
                         signals.append(("macd_golden_cross", n - 1 - i))
                         break
@@ -24873,7 +24961,7 @@ def _calc_price_structure_integrity_v76(
 
     返回：structure_score, trend_structure, key_levels_valid, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "structure_score": 0.0,
         "trend_structure": "unknown",
         "key_levels_valid": False,
@@ -24970,7 +25058,7 @@ def _calc_trend_alignment_validation_v76(
 
     返回：alignment_status, ma_alignment, trend_direction, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "alignment_status": "unknown",
         "ma_alignment": [],
         "trend_direction": "unknown",
@@ -25052,7 +25140,7 @@ def _calc_volatility_adaptive_confidence_v76(
 
     返回：vol_level, atr_ratio, adaptive_confidence, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "vol_level": "unknown",
         "atr_ratio": 0.0,
         "adaptive_confidence": 0.0,
@@ -25141,7 +25229,7 @@ def _calc_signal_final_validity_v76(
 
     返回：final_validity, validity_score, recommendation, confirm_signal, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "final_validity": "unknown",
         "validity_score": 0.0,
         "recommendation": "观望",
@@ -25224,7 +25312,7 @@ def _calc_volume_distribution_depth_v77(
 
     返回：energy_zone, volume_rank, support_distance, resistance_distance, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "energy_zone": "unknown",
         "volume_rank": 0.5,
         "support_distance": 0.0,
@@ -25323,7 +25411,7 @@ def _calc_zhongshu_structure_weight_v77(
 
     返回：weight_score, nearest_zs_dist, zs_level, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "weight_score": 0.0,
         "nearest_zs_dist": 0.0,
         "zs_level": "none",
@@ -25418,7 +25506,7 @@ def _calc_signal_freshness_validation_v77(
 
     返回：freshness_score, bars_since_signal, age_label, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "freshness_score": 1.0,
         "bars_since_signal": 0,
         "age_label": "fresh",
@@ -25484,7 +25572,7 @@ def _calc_price_momentum_acceleration_v77(
 
     返回：acceleration, momentum_direction, acceleration_strength, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "acceleration": 0.0,
         "momentum_direction": "unknown",
         "acceleration_strength": "unknown",
@@ -25582,7 +25670,7 @@ def _calc_mmd_cycle_position_v78(
 
     返回：position_score, cycle_position, distance_to_low, distance_to_high, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "position_score": 0.5,
         "cycle_position": "mid",
         "distance_to_low": 0.5,
@@ -25681,7 +25769,7 @@ def _calc_multi_signal_consensus_v78(
 
     返回：consensus_score, nearby_buy_count, nearby_sell_count, consensus_level, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "consensus_score": 0.5,
         "nearby_buy_count": 0,
         "nearby_sell_count": 0,
@@ -25790,7 +25878,7 @@ def _calc_volatility_compression_breakout_v78(
 
     返回：compression_score, boll_width_percentile, breakout_direction, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "compression_score": 0.5,
         "boll_width_percentile": 0.5,
         "breakout_direction": "unknown",
@@ -25886,7 +25974,7 @@ def _calc_fund_flow_divergence_v78(
 
     返回：divergence_type, money_flow_score, volume_price_correlation, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "divergence_type": "none",
         "money_flow_score": 0.5,
         "volume_price_correlation": 0.0,
@@ -25980,7 +26068,7 @@ def _calc_fractal_stability_validation_v79(
 
     返回：stability_score, fractal_status, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "stability_score": 0.5,
         "fractal_status": "unknown",
         "confidence_adjust": 0.0,
@@ -26060,7 +26148,7 @@ def _calc_mmd_distance_safety_v79(
 
     返回：distance_score, bars_to_nearest, safety_level, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "distance_score": 0.5,
         "bars_to_nearest": 0,
         "safety_level": "unknown",
@@ -26136,7 +26224,7 @@ def _calc_multi_level_structure_consistency_v79(
 
     返回：consistency_score, short_align, mid_align, long_align, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "consistency_score": 0.5,
         "short_align": False,
         "mid_align": False,
@@ -26215,7 +26303,7 @@ def _calc_price_momentum_continuity_v79(
 
     返回：momentum_score, acceleration, vol_trend, momentum_level, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "momentum_score": 0.5,
         "acceleration": 0.0,
         "vol_trend": "neutral",
@@ -26313,7 +26401,7 @@ def _calc_mmd_zhongshu_distance_v80(
 
     返回：distance_score, nearest_zs_dist_pct, zs_position, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "distance_score": 0.5,
         "nearest_zs_dist_pct": 0.0,
         "zs_position": "unknown",
@@ -26389,7 +26477,7 @@ def _calc_volume_confirmation_v80(
 
     返回：confirmation_score, vol_ratio, volume_trend, price_trend, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "confirmation_score": 0.5,
         "vol_ratio": 1.0,
         "volume_trend": "neutral",
@@ -26472,7 +26560,7 @@ def _calc_ma_alignment_strength_v80(
 
     返回：alignment_score, ma_alignment, price_position, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "alignment_score": 0.5,
         "ma_alignment": "unknown",
         "price_position": "unknown",
@@ -26557,7 +26645,7 @@ def _calc_dynamic_risk_reward_v80(
 
     返回：rr_ratio, stop_loss_pct, take_profit_pct, risk_level, confidence_adjust, msg
     """
-    result = {
+    result: dict[str, Any] = {
         "rr_ratio": 1.0,
         "stop_loss_pct": 0.0,
         "take_profit_pct": 0.0,
@@ -26641,7 +26729,7 @@ def _calc_volatility_regime_transition_v81(
 
     买入/卖出在 compressed 与 expanding 两个极端环境下的调整方向不同。
     """
-    result = {
+    result: dict[str, Any] = {
         "regime": "unknown",
         "volatility_pct": 0.0,
         "confidence_adjust": 0.0,
@@ -26694,7 +26782,7 @@ def _calc_support_resistance_strength_v81(
     - moderate: 中等
     - distant: 支撑/阻力较远 → 中性
     """
-    result = {
+    result: dict[str, Any] = {
         "strength_level": "unknown",
         "nearest_sr_dist_pct": 0.0,
         "sr_count": 0,
@@ -26795,7 +26883,7 @@ def _calc_volume_price_energy_distribution_v81(
     - 卖出信号：价格处于高量能区（接盘充分）→ 加分
     - 量价背离（价格新高但量萎缩）→ 减分
     """
-    result = {
+    result: dict[str, Any] = {
         "energy_zone": "unknown",
         "energy_score": 0.5,
         "confidence_adjust": 0.0,
@@ -26886,7 +26974,7 @@ def _calc_signal_execution_window_v81(
     - 流动性分：近期量能充足 → 执行滑移小
     - 综合 window_quality：favorable / acceptable / caution / unfavorable
     """
-    result = {
+    result: dict[str, Any] = {
         "window_quality": "unknown",
         "volatility_score": 0.5,
         "liquidity_score": 0.5,
@@ -26969,7 +27057,7 @@ def _calc_mmd_age_decay_v82(
     - old: 200-300 根 → 明显减分
     - stale: >300 根 → 信号失效，大幅减分
     """
-    result = {
+    result: dict[str, Any] = {
         "age_bars": 0,
         "age_label": "unknown",
         "confidence_adjust": 0.0,
@@ -27034,7 +27122,7 @@ def _calc_breakout_retest_confirm_v82(
     - 突破后直接单边（无回踩）→ weak
     - 突破后跌破突破位（失败）→ broken
     """
-    result = {
+    result: dict[str, Any] = {
         "retest_detected": False,
         "retest_quality": "unknown",
         "confidence_adjust": 0.0,
@@ -27124,7 +27212,7 @@ def _calc_macd_multi_tf_resonance_v82(
     - long MACD(24,52,18)：长期方向
     三周期同向 → 强共振；冲突 → 中性/减分。
     """
-    result = {
+    result: dict[str, Any] = {
         "resonance": "none",
         "short_acceleration": 0.0,
         "mid_trend": 0.0,
@@ -27218,7 +27306,7 @@ def _calc_volatility_compression_breakout_v82(
     - moderate: 6%-10% → 中性
     - low: >10% → 无压缩，信号减分
     """
-    result = {
+    result: dict[str, Any] = {
         "compression_level": "none",
         "compression_pct": 0.0,
         "breakout_strength": 0.0,

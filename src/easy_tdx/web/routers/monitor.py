@@ -45,7 +45,7 @@ class SignalMonitor:
     def __init__(self) -> None:
         self._tasks: dict[str, MonitorTask] = {}
         self._lock = asyncio.Lock()
-        self._running_tasks: dict[str, asyncio.Task] = {}  # task_id -> asyncio.Task
+        self._running_tasks: dict[str, asyncio.Task[Any]] = {}  # task_id -> asyncio.Task
 
     async def create_task(
         self,

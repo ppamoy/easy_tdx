@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -139,7 +139,7 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
         base = closes[idx]
         if not base:
             return None
-        return round((closes[end] / base - 1) * 100, 2)
+        return round((float(closes[end]) / float(base) - 1) * 100, 2)
 
     mmd_outcomes: list[dict[str, Any]] = []
     for mmd in result.mmds:
@@ -165,7 +165,7 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
                     outcomes["min_5d"] = round((min(win) / base - 1) * 100, 2)
         mmd_outcomes.append(outcomes)
 
-    return _to_json_safe({
+    return cast(dict[str, Any], _to_json_safe({
         "code": result.code,
         "frequency": result.frequency,
         "category": category,
@@ -179,7 +179,7 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
         "boll": d.get("boll"),
         "candidates": candidates,
         "mmd_outcomes": mmd_outcomes,
-    })
+    }))
 
 
 @router.post("/chanlun/analyze")
@@ -341,7 +341,7 @@ async def chanlun_multi_level(
 
     # 格式化结果
     def fmt_result(result: Any) -> dict[str, Any]:
-        d = result.to_dict()
+        d: dict[str, Any] = result.to_dict()
         d["fractals"] = [
             {
                 "fx_type": fx.fx_type.value,
@@ -353,7 +353,7 @@ async def chanlun_multi_level(
         ]
         return d
 
-    return _to_json_safe({
+    return cast(dict[str, Any], _to_json_safe({
         "high_level": {
             "category": req.category,
             "result": fmt_result(high_result),
@@ -364,7 +364,7 @@ async def chanlun_multi_level(
         },
         "confluence": confluence,
         "low_level_qs": low_qs,
-    })
+    }))
 
 
 class ChanlunRecommendRequest(ChanlunRequest):
@@ -418,9 +418,10 @@ async def chanlun_recommend(
     mmds = chanlun_result.mmds
 
     # 取最高优先级买卖点（按质量评级排序）
-    def _mmd_sort_key(m):
+    def _mmd_sort_key(m: Any) -> tuple[int, float, int]:
         q = getattr(m, "quality", None)
-        grade_val = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1}.get(q.grade if q else None, 0)
+        grade = str(getattr(q, "grade", "")) if q else ""
+        grade_val = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1}.get(grade, 0)
         return (grade_val, m.confidence, m.bi.index if m.bi else 0)
 
     sorted_mmds = sorted(mmds, key=_mmd_sort_key, reverse=True)
@@ -490,8 +491,8 @@ async def chanlun_recommend(
         }
 
     # ── 4. 综合推荐逻辑 ──────────────────────────────────────────────
-    buy_signals = 0
-    sell_signals = 0
+    buy_signals: float = 0.0
+    sell_signals: float = 0.0
     reasons_buy: list[str] = []
     reasons_sell: list[str] = []
 
@@ -569,7 +570,12 @@ async def chanlun_recommend(
     all_reasons = reasons_buy + reasons_sell
     reason_text = "；".join(all_reasons) if all_reasons else "无明显信号"
 
-    return _to_json_safe({
+    # V79 一致性摘要（运行时挂载字段，类型不明，先归一为 str）
+    _v79_mlsc = getattr(latest_mmd, "_multi_level_structure_consistency_v79", None) if latest_mmd else None
+    _v79_mlsc_msg = str(getattr(_v79_mlsc, "msg", "")) if _v79_mlsc else ""
+    _v79_consistency = _v79_mlsc_msg.split("consistent")[0] if _v79_mlsc_msg else None
+
+    return cast(dict[str, Any], _to_json_safe({
         "symbol": symbol,
         "date": latest_date,
         "close": round(latest_close, 2),
@@ -595,7 +601,7 @@ async def chanlun_recommend(
         "v79_summary": {
             "fractal_status": getattr(getattr(latest_mmd, "_fractal_stability_validation_v79", None), "fractal_status", None) if latest_mmd else None,
             "safety_level": getattr(getattr(latest_mmd, "_mmd_distance_safety_v79", None), "safety_level", None) if latest_mmd else None,
-            "consistency_level": (getattr(getattr(latest_mmd, "_multi_level_structure_consistency_v79", None), "msg", "").split("consistent")[0] if latest_mmd and getattr(getattr(latest_mmd, "_multi_level_structure_consistency_v79", None), "msg", "") else None),
+            "consistency_level": _v79_consistency,
             "momentum_level": getattr(getattr(latest_mmd, "_price_momentum_continuity_v79", None), "momentum_level", None) if latest_mmd else None,
         } if latest_mmd else None,
         # V80 缠论四维度量摘要（条件252-255，基于最新买卖点）
@@ -619,7 +625,7 @@ async def chanlun_recommend(
             "resonance": getattr(getattr(latest_mmd, "_macd_multi_tf_resonance_v82", None), "resonance", None) if latest_mmd else None,
             "compression_level": getattr(getattr(latest_mmd, "_volatility_compression_breakout_v82", None), "compression_level", None) if latest_mmd else None,
         } if latest_mmd else None,
-    })
+    }))
 
 
 @router.post("/chanlun/train/session")

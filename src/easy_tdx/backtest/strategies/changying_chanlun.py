@@ -152,11 +152,11 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
     def init(self) -> None:
         """初始化策略。"""
         # 缠论分析器
-        self._analyser = None
-        self._chanlun_result = None
+        self._analyser: ChanlunAnalyser | None = None
+        self._chanlun_result: Any = None
         
         # 历史K线缓存
-        self._history: list[dict] = []
+        self._history: list[dict[str, Any]] = []
         self._max_history = self.p["season_lookback"] + 50
         
         # 当前周期状态
@@ -206,7 +206,7 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         # 生成交易信号
         self._generate_signals()
     
-    def _get_current_bar(self) -> dict:
+    def _get_current_bar(self) -> dict[str, Any]:
         """获取当前K线数据。"""
         return {
             "datetime": self.data.datetime.raw[self._bar_index] if hasattr(self.data, 'datetime') and self._bar_index < len(getattr(self.data, 'datetime', [])) else datetime.now(),
@@ -231,8 +231,9 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
             macd_signal=self.p["macd_signal"],
         )
         
-        self._analyser = ChanlunAnalyser(code="TEST", frequency="DAILY", config=config)
-        self._chanlun_result = self._analyser.process_klines(df)
+        analyser = ChanlunAnalyser(code="TEST", frequency="DAILY", config=config)
+        self._analyser = analyser
+        self._chanlun_result = analyser.process_klines(df)
     
     @staticmethod
     def _latest_bar_datetime(df: pd.DataFrame) -> Any:

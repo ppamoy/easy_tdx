@@ -297,7 +297,7 @@ def _calc_stock_quality(result: Any) -> float:
     return min(score, 100)
 
 
-def _get_latest_mmd(result: Any) -> dict | None:
+def _get_latest_mmd(result: Any) -> dict[str, Any] | None:
     """获取最新买卖点。"""
     if not result.mmds:
         return None
@@ -311,7 +311,7 @@ def _get_latest_mmd(result: Any) -> dict | None:
 
 
 def _pass_screening(
-    stock_result: dict,
+    stock_result: dict[str, Any],
     stock_type: str,
     season_filter: bool,
 ) -> bool:

@@ -137,9 +137,9 @@ class ChanlunResult:
                     "msg": mmd.msg,
                     "confidence": round(mmd.confidence, 2),
                     "quality": {
-                        "grade": mmd.quality.grade if mmd.quality else None,
-                        "score": mmd.quality.score if mmd.quality else None,
-                        "reasons": mmd.quality.reasons if mmd.quality else None,
+                        "grade": getattr(mmd.quality, "grade", None) if mmd.quality else None,
+                        "score": getattr(mmd.quality, "score", None) if mmd.quality else None,
+                        "reasons": getattr(mmd.quality, "reasons", None) if mmd.quality else None,
                     } if mmd.quality else None,
                     # V79 缠论增强条件（条件248-251）
                     "v79_fractal_stability": getattr(mmd, "_fractal_stability_validation_v79", None),
@@ -274,7 +274,7 @@ class ChanlunAnalyser:
                 lb = _lower[i]
                 _pb.append((closes[i] - lb) / (ub - lb) if (ub - lb) > 0 else 0.5)
             self._result.boll = BOLLResult(
-                upper=_upper, mid=_mid, lower=_lower,
+                upper=_upper.tolist(), mid=_mid.tolist(), lower=_lower.tolist(),
                 width=_width, percent_b=_pb,
             )
 

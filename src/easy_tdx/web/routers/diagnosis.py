@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from fastapi import APIRouter, Depends
@@ -108,7 +108,7 @@ def _detect_divergence(
             troughs_ind.append(i)
 
     detected_type = "none"
-    strength = 0
+    strength: float = 0.0
 
     # 顶背离：最近高点 > 前一个高点，但指标高点 < 前一个指标高点
     if len(peaks_price) >= 2:
@@ -204,7 +204,7 @@ def _detect_candlestick_patterns(
     total = len(patterns)
 
     if total == 0:
-        signal, strength = "none", 0
+        signal, strength = "none", 0.0
     elif bullish_signals > bearish_signals:
         signal = "bullish"
         strength = bullish_signals / total if total > 0 else 0
@@ -448,8 +448,8 @@ async def diagnose_stock(
     )
 
     # ── 背离检测（MACD / KDJ / RSI） ─────────────────────────────────
-    macd_div = _detect_divergence(closes, macd_hist, lookback=60)
-    kdj_div = _detect_divergence(closes, j, lookback=60)
+    macd_div = _detect_divergence(closes, macd_hist.tolist(), lookback=60)
+    kdj_div = _detect_divergence(closes, j.tolist(), lookback=60)
     rsi_div = _detect_divergence(closes, [v for v in RSI(closes, N=14)], lookback=60)
 
     # 综合背离信号：任意一个指标出现背离则标记
@@ -469,7 +469,7 @@ async def diagnose_stock(
     recent_patterns = candle_result["patterns"][:3]  # 最近3个形态
 
     # ── 综合评分（V8 增强版：多信号融合 + 置信度分层）────────────────────
-    score = 50  # 基础分
+    score: float = 50.0  # 基础分
 
     # V8: 缠论信号统计（按类型和置信度加权）
     buy_1_count = sum(1 for m in result.mmds if m.mmd_type.value == "1buy")
@@ -481,7 +481,7 @@ async def diagnose_stock(
     latest_mmd = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0) if result.mmds else None
 
     # V8: 多信号融合权重（按类型和置信度动态调整）
-    chanlun_score = 0
+    chanlun_score: float = 0.0
     if latest_mmd:
         q = getattr(latest_mmd, "quality", None)
         grade = q.grade if q else None
@@ -874,7 +874,7 @@ async def diagnose_stock(
     )
 
     # ── 返回结果 ──────────────────────────────────────────────────────
-    return _to_json_safe({
+    return cast(dict[str, Any], _to_json_safe({
         "symbol": symbol,
         "date": latest_date,
         "close": round(latest_close, 2),
@@ -1032,7 +1032,10 @@ async def diagnose_stock(
             # V7: 信号质量报告（入场/止损/止盈建议）
             "signal_report": calc_signal_quality_report(
                 latest_mmd, closes, volumes,
-                {"dif": dif, "dea": dea, "hist": macd_hist} if len(dif) > 0 else None,
+                {
+                    "dif": dif.tolist(), "dea": dea.tolist(), "hist": macd_hist.tolist(),
+                }
+                if len(dif) > 0 else None,
                 volatility,
             ) if latest_mmd else None,
             # V12: 多时间框架共振评分（如有）
@@ -1599,7 +1602,7 @@ async def diagnose_stock(
         },
         "position_suggestion": position_recommendation,
     }
-)
+))
 
 
 def _calculate_position_recommendation(
@@ -1730,12 +1733,11 @@ async def multi_stock_comparison(
     for stock in stocks:
         try:
             bar_data = client.get_security_bars(
-                category=stock.category,
-                exchange=stock.exchange,
-                code=stock.code,
-                start=-1,
-                end=-1,
-                count=500,
+                market_from_str(stock.market),
+                stock.code,
+                category_from_str("DAY"),
+                0,
+                500,
             )
             if not bar_data:
                 results.append({
