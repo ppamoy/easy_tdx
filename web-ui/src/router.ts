@@ -10,6 +10,7 @@ import MonitorView from './views/MonitorView.vue'
 import OptimizeView from './views/OptimizeView.vue'
 import PortfolioView from './views/PortfolioView.vue'
 import ScreeningView from './views/ScreeningView.vue'
+import FundamentalView from './views/FundamentalView.vue'
 import ServerSettingsView from './views/ServerSettingsView.vue'
 import StrategiesView from './views/StrategiesView.vue'
 
@@ -20,6 +21,7 @@ const routes = [
   { path: '/train', name: 'train', component: TrainView },
   { path: '/changying', name: 'changying', component: ChangyingView },
   { path: '/screening', name: 'screening', component: ScreeningView },
+  { path: '/fundamental', name: 'fundamental', component: FundamentalView },
   { path: '/portfolio', name: 'portfolio', component: PortfolioView },
   { path: '/optimize', name: 'optimize', component: OptimizeView },
   { path: '/compare', name: 'compare', component: CompareView },

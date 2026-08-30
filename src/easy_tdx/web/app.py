@@ -205,6 +205,7 @@ def _create_app(
     from easy_tdx.web.routers.board_mac import router as board_mac_router
     from easy_tdx.web.routers.chanlun import router as chanlun_router
     from easy_tdx.web.routers.ex_market import router as ex_market_router
+    from easy_tdx.web.routers.fundamental import router as fundamental_router
     from easy_tdx.web.routers.finance import router as finance_router
     from easy_tdx.web.routers.indicator import router as indicator_router
     from easy_tdx.web.routers.mac_data import router as mac_data_router
@@ -228,6 +229,8 @@ def _create_app(
     app.include_router(mac_quotes_router, prefix="/api/v1")
     # 扩展市场路由
     app.include_router(ex_market_router, prefix="/api/v1")
+    # 长赢基本面选股（P1）
+    app.include_router(fundamental_router, prefix="/api/v1")
     # 技术指标路由
     app.include_router(indicator_router, prefix="/api/v1")
     # 公告检索路由（巨潮资讯网，独立数据源）

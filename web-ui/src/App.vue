@@ -26,6 +26,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
         <RouterLink to="/train" active-class="active">缠论学习</RouterLink>
         <RouterLink to="/changying" active-class="active">长赢投资</RouterLink>
         <RouterLink to="/screening" active-class="active">动态选股</RouterLink>
+        <RouterLink to="/fundamental" active-class="active">长赢选股</RouterLink>
         <RouterLink to="/portfolio" active-class="active">组合回测</RouterLink>
         <RouterLink to="/optimize" active-class="active">参数寻优</RouterLink>
         <RouterLink to="/compare" active-class="active">结果对比</RouterLink>
