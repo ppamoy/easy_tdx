@@ -231,3 +231,87 @@ class TestBatchVerify:
         assert s["by_category"]["tree"]["ret_20d"]["avg"] is None
         # index beats overall here (2.0 > 1.0)
         assert s["beats_index"]["ret_20d"]["beats"] is False
+
+
+
+class TestSinaAdapterFallback:
+    """新浪数据源适配与 load_pool 回退（合成数据，不依赖网络）。"""
+
+    def _fake_sina_rows(self):
+        from easy_tdx.fundamental.sina_adapter import SinaFinancialRow
+
+        return [
+            SinaFinancialRow(
+                code="600519",
+                market="SH",
+                report_date=date(2019, 9, 30),
+                disclosure_date=date(2019, 10, 31),
+                indicators={
+                    "eps": 24.24,
+                    "roe": 23.28,
+                    "revenue": 6.09e10,
+                    "net_profit": 3.04e10,
+                    "gross_margin": 91.2,
+                    "net_margin": 49.9,
+                    "debt_ratio": 20.5,
+                    "ocf": 4.4e10,
+                    "rev_yoy": 15.54,
+                    "np_yoy": 23.13,
+                },
+            ),
+            SinaFinancialRow(
+                code="600519",
+                market="SH",
+                report_date=date(2019, 12, 31),
+                disclosure_date=date(2020, 4, 30),
+                indicators={
+                    "eps": 32.8,
+                    "roe": 30.1,
+                    "revenue": 8.9e10,
+                    "net_profit": 4.1e10,
+                    "gross_margin": 91.3,
+                    "net_margin": 46.3,
+                    "debt_ratio": 21.0,
+                    "ocf": 5.0e10,
+                    "rev_yoy": 16.0,
+                    "np_yoy": 17.1,
+                },
+            ),
+        ]
+
+    def test_load_pool_falls_back_to_sina(self, monkeypatch):
+        from easy_tdx.fundamental import pipeline
+
+        # 阻断 gpcw（返回空）
+        monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: [])
+        import easy_tdx.fundamental.sina_adapter as _sa
+        monkeypatch.setattr(_sa, "load_sina_rows", lambda *a, **k: self._fake_sina_rows())
+
+        fr = pipeline.load_pool(date(2020, 4, 15), [{"market": "SH", "code": "600519"}])
+        assert not fr.empty
+        row = fr.iloc[0]
+        # 2020-04-15：年报（4/30 披露）尚未披露 → 应选 2019 三季报
+        assert row["report_date"] == date(2019, 9, 30)
+        assert abs(row["eps"] - 24.24) < 1e-6
+
+    def test_load_pool_prefers_later_disclosed(self, monkeypatch):
+        from easy_tdx.fundamental import pipeline
+
+        monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: [])
+        import easy_tdx.fundamental.sina_adapter as _sa
+        monkeypatch.setattr(_sa, "load_sina_rows", lambda *a, **k: self._fake_sina_rows())
+
+        # 5 月 15 日：年报（4/30）已披露 → 应选 2019 年报
+        fr = pipeline.load_pool(date(2020, 5, 15), [{"market": "SH", "code": "600519"}])
+        assert not fr.empty
+        row = fr.iloc[0]
+        assert row["report_date"] == date(2019, 12, 31)
+
+    def test_disclosure_estimate(self):
+        from easy_tdx.fundamental.sina_adapter import _disclosure_estimate
+
+        assert _disclosure_estimate(date(2019, 12, 31)) == date(2020, 4, 30)
+        assert _disclosure_estimate(date(2020, 3, 31)) == date(2020, 4, 30)
+        assert _disclosure_estimate(date(2020, 6, 30)) == date(2020, 8, 31)
+        assert _disclosure_estimate(date(2020, 9, 30)) == date(2020, 10, 31)
+

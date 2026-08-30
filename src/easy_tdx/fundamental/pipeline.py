@@ -89,23 +89,62 @@ def load_pool(
     if zips is None:
         zips = pick_report_zips(target, client=client)
     if not zips:
-        logger.warning("无可用 gpcw 财报文件")
-        return pd.DataFrame()
-    recs = load_all_periods(zips, client, codes=codes, markets=markets)
-    if not recs:
-        return pd.DataFrame()
-    frame = build_indicator_frame(recs)
+        logger.warning("无可用 gpcw 财报文件，回退新浪财报")
+        frame = pd.DataFrame()
+    else:
+        recs = load_all_periods(zips, client, codes=codes, markets=markets)
+        frame = build_indicator_frame(recs) if recs else pd.DataFrame()
     rows: list[pd.Series] = []
+    missing: list[dict[str, str]] = []
     for p in pool:
-        row = pick_report(frame, p["code"], target, market=p.get("market"))
+        row = None
+        if not frame.empty:
+            row = pick_report(frame, p["code"], target, market=p.get("market"))
         if row is None:
+            missing.append(p)
             continue
         r2 = row.copy()
         r2["market"] = p.get("market", r2.get("market"))
         rows.append(r2)
+
+    # gpcw 未覆盖（更早历史/下载受限）时回退新浪财报
+    if missing:
+        from easy_tdx.fundamental.sina_adapter import load_sina_rows
+
+        for p in missing:
+            try:
+                sina_rows = load_sina_rows(p["code"], p.get("market", "SZ"))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("新浪财报 %s 失败: %s", p["code"], e)
+                continue
+            if not sina_rows:
+                continue
+            sframe = _sina_frame(sina_rows)
+            srow = pick_report(sframe, p["code"], target, market=p.get("market"))
+            if srow is not None:
+                r2 = srow.copy()
+                r2["market"] = p.get("market", r2.get("market"))
+                rows.append(r2)
+
     if not rows:
         return pd.DataFrame()
     return pd.DataFrame(rows)
+
+
+def _sina_frame(sina_rows: list[Any]) -> pd.DataFrame:
+    """把新浪财报行转成与 build_indicator_frame 同构的 DataFrame。"""
+    out: list[dict[str, Any]] = []
+    for r in sina_rows:
+        out.append(
+            {
+                "code": r.code,
+                "market": r.market,
+                "report_date": r.report_date,
+                "disclosure_date": r.disclosure_date,
+                **r.indicators,
+            }
+        )
+    return pd.DataFrame(out)
 
 
 def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, Any]:

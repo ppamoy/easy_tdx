@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 import re
 import zipfile
 from dataclasses import dataclass, field
@@ -86,7 +87,20 @@ def _f(v: Any) -> float | None:
         return None
 
 
-_GPCW_CACHE = Path.home() / ".easy_tdx" / "gpcw_cache"
+_GPCW_CACHE = Path(os.environ.get("HOME") or os.path.expanduser("~")) / ".easy_tdx" / "gpcw_cache"
+
+
+def _calc_client() -> TdxClient:
+    """创建连接计算服务器（gpcw 财报数据源）的客户端。
+
+    gpcw 文件只在 calc host 提供；用默认 TdxClient() 可能连到行情服务器
+    而拿到 0 字节，因此显式绑定 calc host。
+    """
+    from easy_tdx.config import get_calc_hosts
+
+    hosts = get_calc_hosts()
+    host = hosts[0] if hosts else None
+    return TdxClient(host=host) if host else TdxClient()
 
 
 
@@ -99,7 +113,7 @@ def _cached_zip(filename: str, client: TdxClient | None = None) -> bytes | None:
         return cache_path.read_bytes()
     try:
         if client is None:
-            client = TdxClient()
+            client = _calc_client()
         data = client.get_financial_file(filename)
     except Exception as e:  # noqa: BLE001
         logger.warning("gpcw 下载失败 %s: %s", filename, e)
