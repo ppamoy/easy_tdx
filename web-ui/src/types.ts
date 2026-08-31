@@ -244,6 +244,36 @@ export interface PortfolioBacktestRequest {
   end_date?: string
 }
 
+export interface PortfolioSymbolAccuracy {
+  symbol: string
+  allocation: number
+  total_return: number
+  win_rate: number
+  sharpe: number
+  max_drawdown: number
+  trades: number
+  hit_rate: number | null
+  baseline_hit_rate: number | null
+  excess_hit_rate: number | null
+}
+
+export interface PortfolioAccuracyReport {
+  symbols: PortfolioSymbolAccuracy[]
+  portfolio: {
+    symbols: number
+    symbols_with_accuracy: number
+    avg_hit_rate: number
+    avg_baseline_hit_rate: number
+    avg_excess_hit_rate: number
+    avg_win_rate: number
+    avg_total_return: number
+    avg_sharpe: number
+    positive_symbols: number
+    hit_above_baseline: number
+  }
+  verdict: string
+}
+
 export interface PortfolioResult {
   total_performance: {
     total_return: number
@@ -254,6 +284,7 @@ export interface PortfolioResult {
   individual_results: Record<string, BacktestResult>
   equity_allocation: Record<string, number>
   combined_equity: EquityPoint[]
+  accuracy_summary?: PortfolioAccuracyReport | null
 }
 
 // ── 参数网格寻优（Phase 4） ──────────────────────────────────────────────────

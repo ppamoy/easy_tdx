@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+**组合/多标的回测的准确度聚合验证（V99）—— 验证策略在多只股票上的整体择时/选股能力** —— V95 让单标的回测输出信号准确度，但组合回测页只展示净值与绩效，看不到「策略放在多只股票上整体命中率如何」。本次把组合内每只标的的 signal_accuracy 聚合为组合级报告，回答「策略在多标的上是否仍然靠谱、哪些标的贡献了准确度」。
+
+### 新增
+
+- **组合准确度聚合（backtest/signal_accuracy.py 新增 aggregate_portfolio_accuracy + _symbol_accuracy_row）** —— 从每只标的的 BacktestResult.signal_accuracy 提取 5 根前瞻命中率/随机基准/超额命中率，结合绩效（收益/胜率/夏普/回撤/交易数），按资金分配加权汇总为组合级统计：加权平均命中率/超额命中率/胜率/收益、正收益标的数、命中率高于基准标的数，并生成一句组合准确度结论（择时具备参考价值 / 贡献有限 / 不高于随机基准）。
+- **Web API（routers/backtest.py）** —— 组合回测（/backtest/portfolio/run/async）与多策略组合回测（/backtest/multi-strategy/run/async）结果新增 accuracy_summary 字段（按 individual_results + equity_allocation 聚合），失败不影响主结果。
+- **组合回测页新增「🎯 组合准确度验证」面板（web-ui/src/components/PortfolioAccuracyPanel.vue + PortfolioView.vue）** —— 在「各标的绩效对比」下方展示：组合准确度判定结论行、组合级汇总（标的数/加权命中率/加权超额命中率/正收益标的/命中率高于基准标的/加权平均收益）与逐标明细表（标的/资金占比/总收益/胜率/5根命中率/随机基准/超额命中率/夏普/交易数）。
+
+### 验证
+
+- 新增 6 项单测（tests/unit/test_backtest_portfolio_accuracy.py）：逐标行字段提取、缺准确度容错、加权聚合、命中率低于基准的判定、BacktestResult 对象输入兼容。
+- 端到端：组合回测（3 标的 ma_cross）accuracy_summary 返回逐标命中率/超额/聚合统计 + 结论。
+- Playwright 浏览器回归：组合回测页「组合准确度验证」面板可见、结论与 2 行逐标明细渲染、console 零错误。
+- ruff / mypy 对改动文件零告警；全量单测 **2353 passed**（新增 6 项，无回归）。
+
+## [Unreleased]
+
 **选股结果前瞻收益验证（V98）—— 用历史回测验证「选股模型选出的股票是否真的跑赢」** —— 之前动态选股只展示模型打分与买卖点，用户无法判断「选中 vs 未选中」哪组更强。本次在选股日之后回看 5/10/20/60 个交易日的收益，把模型选中的股票与整个扫描池（含未选中）对比，直接验证选股模型的择股能力。
 
 ### 新增

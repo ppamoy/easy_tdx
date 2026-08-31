@@ -6,6 +6,7 @@ import { useRoute } from 'vue-router'
 
 import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
+import PortfolioAccuracyPanel from '../components/PortfolioAccuracyPanel.vue'
 import PortfolioCompareChart from '../components/PortfolioCompareChart.vue'
 import PortfolioSummaryTable from '../components/PortfolioSummaryTable.vue'
 import StocksPicker from '../components/StocksPicker.vue'
@@ -298,6 +299,11 @@ async function onSave() {
             :results="store.portfolioResult.individual_results"
             :allocation="store.portfolioResult.equity_allocation"
           />
+        </section>
+
+        <section v-if="store.portfolioResult.accuracy_summary" class="report-section">
+          <h3>🎯 组合准确度验证（逐标的命中率聚合 vs 随机基准）</h3>
+          <PortfolioAccuracyPanel :report="store.portfolioResult.accuracy_summary" />
         </section>
 
         <section class="report-section">

@@ -403,7 +403,25 @@ def _run_portfolio_backtest(
         execution=req.execution,
     )
     result = engine.run()
-    return serialize_result(result)
+    result_dict = serialize_result(result)
+
+    # V99: 组合级准确度聚合（逐标的 signal_accuracy + 绩效加权汇总）
+    try:
+        from easy_tdx.backtest.signal_accuracy import aggregate_portfolio_accuracy
+
+        individual = getattr(result, "individual_results", None)
+        if individual:
+            allocations = {
+                str(k): float(v) for k, v in (result.equity_allocation or {}).items()
+            }
+            result_dict["accuracy_summary"] = aggregate_portfolio_accuracy(
+                individual, allocations
+            )
+    except Exception:
+        # 附加信息失败不阻断主结果
+        pass
+
+    return result_dict
 
 
 async def _fetch_portfolio_bars(
@@ -559,7 +577,24 @@ def _run_multi_strategy_backtest(
         execution=req.execution,
     )
     result = engine.run()
-    return serialize_result(result)
+    result_dict = serialize_result(result)
+
+    # V99: 多策略组合级准确度聚合
+    try:
+        from easy_tdx.backtest.signal_accuracy import aggregate_portfolio_accuracy
+
+        individual = getattr(result, "individual_results", None)
+        if individual:
+            allocations = {
+                str(k): float(v) for k, v in (result.equity_allocation or {}).items()
+            }
+            result_dict["accuracy_summary"] = aggregate_portfolio_accuracy(
+                individual, allocations
+            )
+    except Exception:
+        pass
+
+    return result_dict
 
 
 def _run_optimize(df: pd.DataFrame, req: OptimizeBacktestRequest) -> dict[str, Any]:

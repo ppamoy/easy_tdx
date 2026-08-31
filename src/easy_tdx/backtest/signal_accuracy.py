@@ -440,3 +440,138 @@ def _build_type_summary(by_type: dict[str, Any]) -> str:
         return "各类型样本均不足，无法验证可靠命中率"
     return "；".join(parts) + "。"
 
+
+# ── 组合/多标的聚合准确度验证 ───────────────────────────────────────────────
+
+
+def _symbol_accuracy_row(
+    key: str,
+    result: Any,
+    allocation: float = 0.0,
+) -> dict[str, Any]:
+    """从单个标的的 BacktestResult（或其 to_dict）提取准确度摘要行。"""
+    sa = getattr(result, "signal_accuracy", None)
+    if sa is None and isinstance(result, dict):
+        sa = result.get("signal_accuracy")
+    perf = getattr(result, "performance", None)
+    if perf is None and isinstance(result, dict):
+        perf = result.get("performance") or {}
+
+    hit_rate: float | None = None
+    baseline_hit: float | None = None
+    if sa:
+        buy = (sa.get("buy") if isinstance(sa, dict) else None) or {}
+        horizons = (buy.get("horizons") if isinstance(buy, dict) else None) or {}
+        for h in ("5", "3", "10"):
+            stats = horizons.get(h)
+            if stats and stats.get("count", 0) > 0:
+                hit_rate = float(stats["hit_rate"])
+                baseline_hit = float(stats.get("baseline_hit_rate", 0.0))
+                break
+
+    def _g(key_: str, default: float = 0.0) -> float:
+        if perf and isinstance(perf, dict):
+            v = perf.get(key_)
+            if v is not None:
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    return default
+        return default
+
+    return {
+        "symbol": str(key),
+        "allocation": allocation,
+        "total_return": _g("total_return"),
+        "win_rate": _g("win_rate"),
+        "sharpe": _g("sharpe"),
+        "max_drawdown": _g("max_drawdown"),
+        "trades": int(_g("total_trades")),
+        "hit_rate": hit_rate,
+        "baseline_hit_rate": baseline_hit,
+        "excess_hit_rate": (hit_rate - baseline_hit)
+        if hit_rate is not None and baseline_hit is not None
+        else None,
+    }
+
+
+def aggregate_portfolio_accuracy(
+    individual_results: dict[str, Any],
+    allocations: dict[str, float] | None = None,
+    alpha_key: str = "alpha",
+) -> dict[str, Any]:
+    """聚合组合回测中逐标的的准确度与绩效，生成组合级验证报告。
+
+    Args:
+        individual_results: {symbol: BacktestResult 或 result.to_dict()}，
+            每只标的的独立回测结果（V95 起 signal_accuracy 已随结果输出）。
+        allocations: 资金分配比例 {symbol: 比例}；缺省按均等处理。
+        alpha_key: 绩效字段中代表超额收益的键（组合场景可后续补充）。
+
+    Returns:
+        dict：{"symbols": [逐标摘要行], "portfolio": {...}, "verdict": str}
+        无有效标的数据时返回最小报告。
+    """
+    if not individual_results:
+        return {"symbols": [], "portfolio": {}, "verdict": "无标的，无法聚合准确度"}
+
+    n = len(individual_results)
+    rows: list[dict[str, Any]] = []
+    for key, result in individual_results.items():
+        alloc = (allocations or {}).get(str(key), 1.0 / n)
+        rows.append(_symbol_accuracy_row(str(key), result, alloc))
+
+    # 组合级汇总（按资金分配加权）
+    def _weighted(getter: Any) -> float:
+        vals = [(r["allocation"], getter(r)) for r in rows if getter(r) is not None]
+        if not vals:
+            return 0.0
+        w = sum(a for a, _ in vals)
+        return sum(a * v for a, v in vals) / w if w else 0.0
+
+    hit_rows = [r for r in rows if r["hit_rate"] is not None]
+    portfolio = {
+        "symbols": len(rows),
+        "symbols_with_accuracy": len(hit_rows),
+        "avg_hit_rate": _weighted(lambda r: r["hit_rate"]),
+        "avg_baseline_hit_rate": _weighted(lambda r: r["baseline_hit_rate"]),
+        "avg_excess_hit_rate": _weighted(lambda r: r["excess_hit_rate"]),
+        "avg_win_rate": _weighted(lambda r: r["win_rate"]),
+        "avg_total_return": _weighted(lambda r: r["total_return"]),
+        "avg_sharpe": _weighted(lambda r: r["sharpe"]),
+        "positive_symbols": sum(1 for r in rows if r["total_return"] > 0),
+        "hit_above_baseline": sum(
+            1 for r in hit_rows if r["excess_hit_rate"] is not None and r["excess_hit_rate"] > 0
+        ),
+    }
+
+    verdict = _build_portfolio_verdict(portfolio)
+    return {"symbols": rows, "portfolio": portfolio, "verdict": verdict}
+
+
+def _build_portfolio_verdict(portfolio: dict[str, Any]) -> str:
+    """生成组合级准确度结论。"""
+    n = int(portfolio["symbols"])
+    if n == 0:
+        return "无标的，无法评估"
+    hit_n = int(portfolio.get("symbols_with_accuracy", 0))
+    parts = [f"组合 {n} 只标的"]
+    if hit_n > 0:
+        avg_excess = float(portfolio.get("avg_excess_hit_rate", 0.0))
+        avg_hit = float(portfolio.get("avg_hit_rate", 0.0))
+        parts.append(f"{hit_n} 只有命中率数据")
+        parts.append(f"加权平均 5 根命中率 {avg_hit:.1%}")
+        if avg_excess > 0.03:
+            parts.append("整体命中率高于随机入场基准，模型择时具备参考价值")
+        elif avg_excess > 0:
+            parts.append("整体命中率略高于随机基准，择时贡献为正但有限")
+        else:
+            parts.append("整体命中率不高于随机基准，择时贡献有限")
+    pos = int(portfolio.get("positive_symbols", 0))
+    parts.append(f"{pos}/{n} 只标的正收益")
+    above = int(portfolio.get("hit_above_baseline", 0))
+    if hit_n > 0:
+        parts.append(f"{above}/{hit_n} 只命中率高于随机基准")
+    return "；".join(parts) + "。"
+
+
