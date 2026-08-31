@@ -223,6 +223,7 @@ class BacktestResultResponse(BaseModel):
     config: dict[str, Any]
     signal_accuracy: dict[str, Any] | None = None
     segment_robustness: dict[str, Any] | None = None
+    model_trust: dict[str, Any] | None = None
     diagnostic: str | None = None
 
 

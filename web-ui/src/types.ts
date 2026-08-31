@@ -185,6 +185,17 @@ export interface SegmentRobustnessReport {
   note?: string | null
 }
 
+export interface ModelTrustReport {
+  score: number
+  grade: '高' | '中' | '低'
+  components: {
+    accuracy: Record<string, number | string | null>
+    robustness: Record<string, number | string | boolean | null>
+    performance: Record<string, number | null>
+  }
+  verdict: string
+}
+
 export interface BacktestResult {
   performance: Performance
   equity_curve: EquityPoint[]
@@ -193,6 +204,7 @@ export interface BacktestResult {
   config: Record<string, unknown>
   signal_accuracy?: SignalAccuracyReport | null
   segment_robustness?: SegmentRobustnessReport | null
+  model_trust?: ModelTrustReport | null
   diagnostic?: string | null
 }
 

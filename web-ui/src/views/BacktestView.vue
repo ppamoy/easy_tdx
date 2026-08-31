@@ -10,6 +10,7 @@ import ChanlunChart from '../components/ChanlunChart.vue'
 // BUILD_TEST_MARKER_67890
 import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
+import ModelTrustPanel from '../components/ModelTrustPanel.vue'
 import SignalAccuracyPanel from '../components/SignalAccuracyPanel.vue'
 import ChanlunAccuracyPanel from '../components/ChanlunAccuracyPanel.vue'
 import SegmentRobustnessPanel from '../components/SegmentRobustnessPanel.vue'
@@ -539,6 +540,11 @@ async function onSave() {
         <section class="report-section">
           <h3>净值曲线与回撤</h3>
           <EquityChart :equity="store.result.equity_curve" />
+        </section>
+
+        <section v-if="store.result.model_trust" class="report-section trust-section">
+          <h3>📊 模型可信度综合评分（历史回测验证结论）</h3>
+          <ModelTrustPanel :report="store.result.model_trust" />
         </section>
 
         <section v-if="grade" class="report-section">

@@ -340,6 +340,18 @@ def _run_backtest(df: pd.DataFrame, req: BacktestRequest) -> dict[str, Any]:
         )
         result_dict["segment_robustness"] = robustness
 
+    # V101: 模型可信度综合评分（融合择时准确度 + 稳健性 + 绩效对比）
+    try:
+        from easy_tdx.backtest.model_trust import compute_model_trust
+
+        result_dict["model_trust"] = compute_model_trust(
+            result_dict.get("performance"),
+            result_dict.get("signal_accuracy"),
+            result_dict.get("segment_robustness"),
+        )
+    except Exception:
+        pass
+
     return result_dict
 
 
