@@ -10,13 +10,72 @@ import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 
-from easy_tdx.web.convert import category_from_str, market_from_str
-from easy_tdx.web.deps import get_client
+from easy_tdx.web.convert import (
+    adjust_from_str,
+    category_from_str,
+    market_from_str,
+    market_value_from_str,
+    period_times_from_category,
+)
+from easy_tdx.web.deps import get_client, get_mac_client_optional
 from easy_tdx.web.schemas import ChanlunRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chanlun"])
+
+
+async def fetch_qfq_klines(
+    mac_client: Any,
+    tdx_client: Any,
+    market: str,
+    code: str,
+    category: str,
+    start: int,
+    count: int,
+    bar_time: str = "start",
+) -> pd.DataFrame:
+    """按与前端 /bars 一致的方式取 K 线（默认 QFQ 前复权），保证缠论
+    结构与图表 K 线使用同一价格体系，避免复权差导致分型/笔/线段端点
+    画在错误价位上。
+
+    - 优先 AsyncMacClient.get_stock_kline(adjust=QFQ)（支持前复权）；
+    - MAC 不可用时回退标准 AsyncTdxClient.get_security_bars（无复权，
+      与 /bars 的回退行为一致）。
+    返回的 DataFrame 列契约与 analyser 兼容（date/datetime + OHLCV）。
+    """
+    from easy_tdx.models.enums import KlineCategory
+
+    cat = category_from_str(category)
+    if mac_client is not None:
+        period, times = period_times_from_category(cat)
+        df = await mac_client.get_stock_kline(
+            market_value_from_str(market),
+            code,
+            period,
+            start,
+            count,
+            times,
+            adjust=adjust_from_str("QFQ"),
+            bar_time=bar_time,
+        )
+        if not df.empty:
+            # 与 /bars 相同的列规整：日线及以上 datetime→date，保证 analyser 识别
+            daily_plus = int(cat) >= int(KlineCategory.DAY)
+            _time_col = "date" if daily_plus else "datetime"
+            out = df.copy()
+            if "float_shares" in out.columns:
+                out = out.drop(columns=["float_shares"])
+            if "datetime" in out.columns:
+                if daily_plus:
+                    out["datetime"] = pd.to_datetime(out["datetime"]).dt.normalize()
+                out = out.rename(columns={"datetime": _time_col})
+            return out
+        logger.warning("MAC QFQ 返回空，回退标准 TdxClient（不复权）")
+    df = await tdx_client.get_security_bars(
+        market_from_str(market), code, cat, start, count, bar_time=bar_time
+    )
+    return df
 
 
 def _to_json_safe(obj: Any) -> Any:
@@ -68,9 +127,10 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
     d["fractals"] = [
         {
             "fx_type": fx.fx_type.value,
-            "date": result._fmt_dt(fx.k.date),
+            "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
             "val": round(fx.val, 2),
             "index": fx.index,
+            "bar_index": fx.bar_index,
         }
         for fx in result.fractals
     ]
@@ -95,11 +155,11 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
     for mmd in result.mmds:
         if not mmd.bi:
             continue
-        k_idx = mmd.bi.end.k.k_index
+        k_idx = mmd.bi.end.bar_index
         mmd_cands.append(
             {
                 "index": k_idx,
-                "date": result._fmt_dt(mmd.bi.end.k.date),
+                "date": result._fmt_dt(result._fx_anchor_datetime(mmd.bi.end)),
                 "kind": "mmd",
                 "fx_type": None,
                 "signal": {
@@ -112,13 +172,13 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
     mmd_idx_set = {c["index"] for c in mmd_cands}
     fx_cands: list[dict[str, Any]] = []
     for fx in result.fractals:
-        k_idx = fx.k.k_index
+        k_idx = fx.bar_index
         if any(abs(k_idx - m) <= 3 for m in mmd_idx_set):
             continue
         fx_cands.append(
             {
                 "index": k_idx,
-                "date": result._fmt_dt(fx.k.date),
+                "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
                 "kind": "fractal",
                 "fx_type": fx.fx_type.value,
                 "signal": None,
@@ -198,6 +258,7 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
 async def chanlun_analyze(
     req: ChanlunRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """执行缠论分析。
 
@@ -206,11 +267,13 @@ async def chanlun_analyze(
     """
     from easy_tdx.chanlun import ChanlunAnalyser
 
-    # 1. Fetch kline data
-    df = await client.get_security_bars(
-        market_from_str(req.market),
+    # 1. Fetch kline data（QFQ 前复权，与前端 /bars 同一价格体系）
+    df = await fetch_qfq_klines(
+        mac_client,
+        client,
+        req.market,
         req.code,
-        category_from_str(req.category),
+        req.category,
         req.start,
         req.count,
     )
@@ -239,9 +302,10 @@ async def chanlun_analyze(
     d["fractals"] = [
         {
             "fx_type": fx.fx_type.value,
-            "date": result._fmt_dt(fx.k.date),
+            "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
             "val": round(fx.val, 2),
             "index": fx.index,
+            "bar_index": fx.bar_index,
         }
         for fx in result.fractals
     ]
@@ -275,6 +339,7 @@ class ChanlunMultiLevelRequest(ChanlunRequest):
 async def chanlun_multi_level(
     req: ChanlunMultiLevelRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """多级别缠论分析：同时分析高级别和低级别，返回一致性评分。
 
@@ -297,11 +362,13 @@ async def chanlun_multi_level(
 
     symbol = f"{req.market}{req.code}"
 
-    # 获取高级别数据
-    df_high = await client.get_security_bars(
-        market_from_str(req.market),
+    # 获取高级别数据（QFQ 前复权）
+    df_high = await fetch_qfq_klines(
+        mac_client,
+        client,
+        req.market,
         req.code,
-        category_from_str(req.category),
+        req.category,
         req.start,
         req.count,
     )
@@ -328,10 +395,12 @@ async def chanlun_multi_level(
             low_count = int(min(req.count * low_bars_per_day + 200, 10000))
     except Exception:
         low_count = int(min(req.count * low_bars_per_day + 200, 10000))
-    df_low = await client.get_security_bars(
-        market_from_str(req.market),
+    df_low = await fetch_qfq_klines(
+        mac_client,
+        client,
+        req.market,
         req.code,
-        category_from_str(req.low_level),
+        req.low_level,
         req.start,
         low_count,
     )
@@ -361,9 +430,10 @@ async def chanlun_multi_level(
         d["fractals"] = [
             {
                 "fx_type": fx.fx_type.value,
-                "date": result._fmt_dt(fx.k.date),
+                "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
                 "val": round(fx.val, 2),
                 "index": fx.index,
+                "bar_index": fx.bar_index,
             }
             for fx in result.fractals
         ]
@@ -398,6 +468,7 @@ class ChanlunRecommendRequest(ChanlunRequest):
 async def chanlun_recommend(
     req: ChanlunRecommendRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """缠论综合推荐：结合 V4 买卖点质量评级 + 技术指标诊断，给出最终操作建议。
 
@@ -423,13 +494,9 @@ async def chanlun_recommend(
     }
     _ = frequency_map.get(req.category.upper(), "daily")
 
-    # ── 1. 获取日线 K 线（缠论 + 诊断共用）──────────────────────────
-    df = await client.get_security_bars(
-        market_from_str(req.market),
-        req.code,
-        category_from_str("DAY"),
-        0,
-        500,
+    # ── 1. 获取日线 K 线（缠论 + 诊断共用，QFQ 前复权）────────────
+    df = await fetch_qfq_klines(
+        mac_client, client, req.market, req.code, "DAY", 0, 500
     )
     if df is None or len(df) < 100:
         return {"error": "数据不足", "symbol": symbol}
@@ -774,6 +841,7 @@ async def chanlun_recommend(
 async def chanlun_train_session(
     req: ChanlunRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """创建缠论学习训练会话（P0：逐步揭示训练 + 逐笔复盘讲解）。
 
@@ -786,13 +854,9 @@ async def chanlun_train_session(
     """
     from easy_tdx.chanlun import ChanlunAnalyser
 
-    # 1. 取行情
-    df = await client.get_security_bars(
-        market_from_str(req.market),
-        req.code,
-        category_from_str(req.category),
-        req.start,
-        req.count,
+    # 1. 取行情（QFQ 前复权，与 /bars 同一价格体系）
+    df = await fetch_qfq_klines(
+        mac_client, client, req.market, req.code, req.category, req.start, req.count
     )
     if df is None or len(df) == 0:
         return {"error": "未取到行情数据", "bars": [], "candidates": [], "mmd_outcomes": []}

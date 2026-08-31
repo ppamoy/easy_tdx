@@ -89,14 +89,47 @@ def find_bis(
                 continue
 
             if start_fx.fx_type == FXType.DING and current_fx.val > start_fx.val:
+                # 更极端的同型分型更新起点时，若上一笔终点就是旧起点
+                # （即当前起点尚未成笔、仍是被趋势穿越中的转折点），
+                # 同步延伸上一笔终点到新起点，保持笔序列首尾相连。
+                # 例：08-03 底分型被 08-17 更低的底分型穿越时，向下笔终点
+                # 应延伸到 08-17 低点，否则笔序列在 08-03 与 08-17 之间断裂，
+                # 线段划分（依赖连续笔序列）会因此失去共享转折点。
+                if bis and bis[-1].end is start_fx:
+                    bis[-1].end = current_fx
+                    bis[-1].high = max(bis[-1].high, current_fx.val)
+                    bis[-1].low = min(bis[-1].low, current_fx.val)
                 start_fx = current_fx
             elif start_fx.fx_type == FXType.DI and current_fx.val < start_fx.val:
+                if bis and bis[-1].end is start_fx:
+                    bis[-1].end = current_fx
+                    bis[-1].high = max(bis[-1].high, current_fx.val)
+                    bis[-1].low = min(bis[-1].low, current_fx.val)
                 start_fx = current_fx
             continue
 
         # 异类型分型，检查是否可以成笔
         if _can_form_bi(start_fx, current_fx, config):
             direction = Direction.UP if start_fx.fx_type == FXType.DI else Direction.DOWN
+
+            # 端点价格方向校验（缠论笔的基本要求）：
+            # 向上笔的终点顶分型必须高于起点底分型，向下笔反之。
+            # 若终点没有越过起点极值，说明起点极值已被趋势穿越（例如底分型之后
+            # 继续下跌、反弹顶分型仍低于起点低点），此时不应成笔——否则会产生
+            # "顶分型低于起点底分型的伪向上笔"，方向标注与图上价格走势矛盾。
+            current_price_ok = (
+                current_fx.val > start_fx.val
+                if direction == Direction.UP
+                else current_fx.val < start_fx.val
+            )
+            if not current_price_ok:
+                # 该失败只出现在"起点极值被穿越"的非陷阱路径：
+                # 清空 pending 让后续更极端的同型分型能正确更新起点，
+                # 避免起点停留在被穿越的高位/低位生成假笔。
+                # （陷阱场景的笔方向校验恒通过，此处逻辑不会触发，行为不变。）
+                pending_opposite = None
+                continue
+
             high = max(start_fx.val, current_fx.val)
             low = min(start_fx.val, current_fx.val)
 

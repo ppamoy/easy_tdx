@@ -50,6 +50,12 @@ class CLKline:
     has_gap: bool = False  # 是否有缺口
     direction: str = ""  # 合并方向 "up" / "down" / ""
     klines: list[Kline] = field(default_factory=list)  # 包含的原始 K 线
+    # 极值来源原始 K 线索引：合并后 high/low 可能来自合并组内其它原始K线
+    # （向上取高高时高点来自较早一根，向下取低低时低点来自较早一根）。
+    # 分型/笔/线段端点必须锚定在「产生极值的那根原始K线」上，否则画出的
+    # 端点会落在错误的K线位置、无法与K线极值对齐（用户反馈的视觉错位根因）。
+    high_k_index: int = 0  # 合并组内最高点来自哪根原始 K 线
+    low_k_index: int = 0  # 合并组内最低点来自哪根原始 K 线
 
     def __str__(self) -> str:
         return (
@@ -78,6 +84,10 @@ class FX:
     val: float  # 分型值（顶分型取 high，底分型取 low）
     index: int = 0  # 分型序号
     done: bool = True  # 分型是否完成
+    # 分型极值（val）对应的原始 K 线索引。顶分型取中间缠论K线的 high 来源，
+    # 底分型取中间缠论K线的 low 来源。画图时把端点锚定到此索引 + val，
+    # 确保端点恰好落在产生极值的那根K线的极值上、且前后笔/线段共享同一根K线。
+    bar_index: int = 0
 
     def __str__(self) -> str:
         return f"FX(i={self.index} {self.fx_type.value} {self.k.date:%Y-%m-%d} val={self.val:.2f})"

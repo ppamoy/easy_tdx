@@ -2,6 +2,54 @@
 
 本文件记录 easy-tdx 的版本变更。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
+## [Unreleased]
+
+**缠论笔画图端点错位系统性修复（V94 几何正确性）** —— 用户反馈缠论 K 线图"没有每一笔首尾相连、每个线段也没有首尾相连、笔端点没有在K线极值上，没有任何参考价值"。排查定位并修复模型层 + 序列化层 + 渲染层三类根因：
+
+### 根因与修复
+
+- **合并K线极值来源错位（模型层，kline_merge.py/types.py/fractal.py）** —— 缠论K线合并后只保留合并组最后一根原始K线的 k_index/date，而合并后的 high/low 可能来自组内**更早**的原始K线（向上取高高时高点来自较早一根、向下取低低时低点来自较早一根）。分型 val 取自合并极值、日期却锚在组末K线，导致端点 x（K线位置）与 y（极值价格）错开，视觉上"端点悬空、不在K线极值上"。修复：CLKline 新增 high_k_index/low_k_index 记录每个极值来自哪根原始K线，合并时随极值更新；FX 新增 bar_index（分型极值来源原始K线索引），find_fractals 据此锚定。
+- **分钟线端点索引错位（渲染层，ChanlunChart.vue）** —— 前端 findBarIndex 按日期字符串匹配K线：分钟线后端输出 YYYY-MM-DD HH:MM（16位无秒），前端 key 是 YYYY-MM-DDTHH:MM:SS（19位带秒），精确匹配失败后回退到"按日期前缀取当天第一根K线"，导致分钟图上**所有端点全部压到每天第一根K线**，笔/线段自然断裂、端点不在极值上（用户截图 WT2026/08/31 pengm 即此场景）。修复：后端为 bis/xds/zss/mmds/bcs/fractals 直接输出**原始K线索引锚点**（start_index/end_index/bar_index），前端 findAnchorIndex 优先用索引精确描点，日期仅作兜底；分钟线日期匹配同时支持 16 位补秒。
+- **序列化日期与锚点不一致（analyser.py）** —— bis/xds/zss/mmds/bcs 的 start_date/end_date 用合并组末根K线日期，与索引锚点（极值来源K线）可能不一致。新增 _fx_anchor_datetime：所有端点日期统一取极值来源原始K线时间，保证"按索引"与"按日期"锚到同一根K线。
+- **线段收尾方向校验（xd.py）** —— 线段未形成特征序列分型时，旧逻辑剩余 ≥2 笔就收尾且不校验端点价格方向，会产出"向上线段终点低于起点"的伪线段。修复：收尾要求剩余 ≥3 笔（缠论线段至少3笔）且端点价格方向与线段方向一致，否则丢弃未完成段，杜绝矛盾线段。
+
+### 验证
+
+- 新增 tests/unit/test_chanlun_geometry.py 几何正确性回归套件：笔端点极值对齐（顶分型==K线high/底分型==K线low）、笔首尾相连（bi[i].end 与 bi[i+1].start 同K线同价）、线段首尾相连+方向一致、分型 bar_index 对齐，日线+分钟线双覆盖。5 项全绿。
+- 真实 000001 日线 800 根 + 分钟线（MIN_5/MIN_15/MIN_60）实测：笔/线段全部首尾相连、端点落在极值K线上、线段方向无矛盾。
+
+- 全套缠论 + Web 相关单测 1302 通过；ruff/mypy 对改动文件零告警；vue-tsc + vite build 通过；Playwright 截图（日线 + MIN_5）笔/线段/分型/买卖点/背驰计数与 API 一致，视觉确认端点落极值、线首尾相连。
+
+### 第二轮（V94.1）多周期×多形态矩阵 + 机器可校验渲染回归
+
+- **新增单测矩阵（tests/unit/test_chanlun_geometry.py，27 项全绿）** —— 6 周期（DAILY/WEEK/MIN_5/MIN_15/MIN_30/MIN_60）× 4 形态（多中枢下跌反转/长锯齿/强包含/慢牛回调）参数化回归，校验笔端点极值对齐 + 首尾相连、线段对齐 + 相连 + 方向一致、分型/中枢/买卖点索引对齐、线段收尾无方向矛盾。
+- **新增画图渲染回归（web-ui/scripts/chanlun-geometry-render.mjs）** —— Playwright 读取 echarts 内部渲染状态，编程断言每条笔/线段 markLine 端点精确等于 API 的 start_index/end_index 与 start_val/end_val（半跳价容忍度）、相邻笔共享端点（真正首尾相连）、分型/买卖点/背驰 x 在界内，并截图。5 个场景（000001 DAY/MIN_5、600519 DAY、000858 DAY、600036 MIN_15）全部 passed=true、fails=0、console 零错误。
+- **修复：向下笔/线段端点 Y 坐标方向交换（web-ui/src/components/ChanlunChart.vue）** —— 渲染回归实测发现相邻笔共享同根 K 线索引但渲染价格不同（如 x=16 处 9.99 vs 9.48），屏幕上笔与笔存在可见纵向跳跃、向下笔被画成向上、端点悬空。根因：第一轮把端点从区间极值 high/low 升级为分型端点价 start_val/end_val 时，保留了旧的"按方向交换 startY/endY"逻辑（对区间极值正确，对 start_val/end_val 是双重交换）。修复：startY 恒取 start_val、endY 恒取 end_val，不再按方向交换。
+- **修复：线段收尾端点类型与方向一致（xd.py）** —— 多形态矩阵复现 inclusion_heavy 形态"向下线段终点落在顶分型"（13.5→11.5）。根因：未形成特征分型的收尾段取 bis[-1].end（最新分型），恰处反向笔中时端点类型反转。修复：向上收尾取剩余笔最高顶分型、向下取最低底分型（同价取最后出现保持相连），修复后同数据产出 xd0 down 13.5→9.0（终点为底分型）。
+- **数据层多标的 sweep（本地 8000 API，30/30 全绿）** —— 6 标的（000001/600519/000858/600036/300750/601318）× 5 周期（DAY/WEEK/MIN_5/MIN_15/MIN_60）全部笔相连、线段相连 + 方向一致、索引锚点齐全。
+
+## [Unreleased]
+
+**回测页缠论 K 线图乱七八糟修复** —— 用户反馈回测选择缠论策略后，K 线图上笔/线段/中枢/分型/买卖点/背驰全部挤在图表右侧一小段，左侧大片 K 线无标注，标签文字互相遮挡。排查定位：回测页把全部回测 K 线（默认 2020 至今约 1600+ 根）传给缠论图表，而后端 /chanlun/analyze 单次最多分析最近 800 根，叠加层全部压缩到右侧；同时 800 根图上叠 268 个带顶/底文字的分型 + 133 笔 + 35 背驰 + 17 买卖点，标签重叠严重。
+
+### 修复
+
+- 回测页 K 线窗口与分析窗口对齐（web-ui/src/views/BacktestView.vue）—— 缠论策略下 bars 截断为最近 CHANLUN_MAX_COUNT（800）根再传给 ChanlunChart，与分析接口的取数窗口一致，叠加层在整个 K 线图上均匀铺开，不再堆在右侧。仅对真正运行缠论分析并填充结构数据的 chanlun 策略生效；changying_chanlun 不做缠论结构图，保持全量 K 线由 KlineChart 展示，避免丢失回测区间。
+- 图表紧凑模式减噪（web-ui/src/components/ChanlunChart.vue）—— 分型「顶/底」文字标签默认关闭（新增 showFractalLabels prop 可选开启），买卖点/背驰/分型三个 scatter 系列加 labelLayout hideOverlap 自动避让重叠；compact prop 缩小分型符号；图表高度 560px 增至 760px 为主图 + MACD 副图提供空间。所有使用 ChanlunChart 的页面（回测/缠论分析/动态选股/缠论学习）统一受益。
+- **MACD 副图与背驰依据可视化** —— 缠论背驰判断基于笔内 MACD 红绿柱面积（calc_macd_force），但此前后端 analyze 不返回 MACD、前端也不展示，用户无法核对背驰依据。本次：1) 后端 ChanlunResult.to_dict 新增 macd 序列（dif/dea/hist，与 K 线一一对应，analyser.py）；2) ChanlunChart 新增 macd prop，双面板布局（主图 K线+缠论结构 + MACD 副图红绿柱 + DIF/DEA 线）；3) 背驰标记从主图移到 MACD 副图对应柱子上（背驰本质是该笔 MACD 面积较前笔缩小，落在柱上直观可核对）；4) 回测/缠论分析/动态选股/缠论学习四个视图均传入 macd。
+
+### 验证
+
+- **笔/线段端点正确性检查与修复** —— 用户要求核查笔和线段端点。用真实 000001 日线 800 根 + Playwright 与单测双重验证，发现并修复两处端点缺陷：
+  - **线段端点取错（xd.py）**：find_xds 取特征分型「右笔」（features[-1]）作为线段终点，导致向上线段落在底分型、向下线段落在顶分型，且相邻线段共享一整支笔而非转折点。修复为取特征分型「中间元素的前一支同向笔」作终点、下一段从中间特征笔开始；并补充线段端点价格方向校验（向上段终点顶分型须高于起点底分型，长下跌中的弱反弹不在此分段）。SZ000001 实测：20 段方向全部正确、相邻段共享转折点（修复前 12 处断裂）。
+  - **笔方向矛盾（bi.py）**：成笔未校验端点价格方向，10.8% 的笔方向与价格矛盾（如顶分型低于起点底分型的伪向上笔）。修复：成笔时要求向上笔终顶 > 起点底、向下笔终底 < 起点顶，不满足则清空 pending 让更极端同型分型接管起点，并同步延伸上一笔终点保持序列连续。修复后 126 笔方向矛盾为 0、序列连续、陷阱回归场景行为不变。
+  - **端点价格序列化（analyser.py）**：bis/xds 新增 start_val/end_val（端点分型价格），前端画线用它锚定，不再用区间极值 high/low（线段区间极值 ≠ 端点分型价，会让画的线段与转折分型错位）。
+- **K 线复权不一致导致全部端点错位（web/routers/chanlun.py）** —— 用户反馈顶底分型都是错的、笔/线段端点不落在 K 线上。排查定位：前端 /bars 默认 QFQ 前复权，而后端 /chanlun/analyze 及 multi-level/recommend/train-session 全部用标准 TdxClient.get_security_bars（不复权原始价），两套价格体系不一致——前复权会压低历史价（如 000001 2023-05-25 低点 11.81 → 9.60），导致缠论结构端点画在错误价位上，越早的 K 线错位越大。修复：新增 fetch_qfq_klines helper，所有缠论端点优先走 AsyncMacClient.get_stock_kline(adjust=QFQ)（与 /bars 同一价格体系），MAC 不可用时回退标准 TdxClient；并做与 /bars 相同的列规整（日线 datetime→date）。实测分型 val 与前端 K 线 high/low 精确命中 10/10，端点落在 K 线上。
+  - 全套 2264 单测通过；真实数据端点验证：笔/线段方向一致、端点类型正确、start_val/end_val 与分型 val 一致、相邻线段共享转折点 全绿。
+
+- Playwright 复现（dev hook 读取 echarts 内部状态）：修复前 xAxisLen=1612、标注只在 2023-05 之后；修复后图表仅显示最近 800 根（2023-05-16 至 2026-08-28），133 笔/15 线段/16 中枢/268 分型/17 买卖点/35 背驰 与 API 计数一致，分型标签关闭（fxLabelShow=false）、labelLayout 生效；MACD 副图三系列（MACD 柱 + DIF 线 + DEA 线）各 800 点与 K 线对齐，双 grid 双轴渲染，console 零错误。回测页与缠论分析页均验证通过，生产 8000 端口 API 返回 macd 序列。
+- vue-tsc --noEmit 通过。
+
 ## [1.20.6] — 2026-08-05
 
 **Web `/bars` 端点迁移到 MacClient + 支持复权**（Issue #43）—— 用户反馈 Web 获取 K 线用的还是标准 TdxClient（标准协议本身不支持复权），导致 REST API 无法取前复权/后复权数据。本次将 `/bars`（个股 K 线）迁移到 `AsyncMacClient.get_stock_kline`（MAC 协议，支持 NONE/QFQ/HFQ + QFQ 负价兜底），**保持旧输出契约不变**（日线 `date` 列、分钟线 `datetime` 列、OHLC 顺序、无 `float_shares`），新增 `adjust` 参数（默认 QFQ），MAC 主机不可用时自动回退标准 TdxClient。

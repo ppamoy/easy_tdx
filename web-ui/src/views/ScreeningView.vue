@@ -51,6 +51,7 @@ const chanlunZss = ref<any[]>([])
 const chanlunMmds = ref<any[]>([])
 const chanlunFxs = ref<any[]>([])
 const chanlunBcs = ref<any[]>([])
+const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 const chanlunLoading = ref(false)
 
 // 回测结果
@@ -279,6 +280,7 @@ async function runChanlunAnalysis(stock: StockResult) {
     chanlunMmds.value = data.mmds ?? []
     chanlunFxs.value = data.fractals ?? []
     chanlunBcs.value = data.bcs ?? []
+    chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
   } catch (e) {
     console.error('缠论分析失败:', e)
   } finally {
@@ -507,6 +509,7 @@ onMounted(() => {
             :mmds="chanlunMmds"
             :fxs="chanlunFxs"
             :bcs="chanlunBcs"
+            :macd="chanlunMacd ?? undefined"
             :frequency="'DAY'"
           />
         </div>

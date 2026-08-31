@@ -30,6 +30,8 @@ def _to_clkline(k: Kline, index: int) -> CLKline:
         merged_count=1,
         direction="",
         klines=[k],
+        high_k_index=k.index,
+        low_k_index=k.index,
     )
 
 
@@ -60,6 +62,8 @@ def merge_klines(klines: list[Kline]) -> list[CLKline]:
             low=k.low,
             amount=k.amount,
             klines=[k],
+            high_k_index=k.index,
+            low_k_index=k.index,
         )
 
         # 判断包含关系（双向判断：prev 包含 candidate 或 candidate 包含 prev）
@@ -74,16 +78,38 @@ def merge_klines(klines: list[Kline]) -> list[CLKline]:
                 direction = "up" if prev.close >= prev.open else "down"
 
             if direction == "up":
-                # 向上合并：取高高
-                merged_high = max(prev.high, candidate.high)
-                merged_low = max(prev.low, candidate.low)
+                # 向上合并：取高高（高点/低点都取两者较高者，来源跟随产生该极值的K线）
+                if candidate.high >= prev.high:
+                    merged_high = candidate.high
+                    high_src = candidate.high_k_index
+                else:
+                    merged_high = prev.high
+                    high_src = prev.high_k_index
+                if candidate.low >= prev.low:
+                    merged_low = candidate.low
+                    low_src = candidate.low_k_index
+                else:
+                    merged_low = prev.low
+                    low_src = prev.low_k_index
             else:
-                # 向下合并：取低低
-                merged_high = min(prev.high, candidate.high)
-                merged_low = min(prev.low, candidate.low)
+                # 向下合并：取低低（高点/低点都取两者较低者，来源跟随产生该极值的K线）
+                if candidate.high <= prev.high:
+                    merged_high = candidate.high
+                    high_src = candidate.high_k_index
+                else:
+                    merged_high = prev.high
+                    high_src = prev.high_k_index
+                if candidate.low <= prev.low:
+                    merged_low = candidate.low
+                    low_src = candidate.low_k_index
+                else:
+                    merged_low = prev.low
+                    low_src = prev.low_k_index
 
             prev.high = merged_high
             prev.low = merged_low
+            prev.high_k_index = high_src
+            prev.low_k_index = low_src
             prev.k_index = k.index
             prev.date = k.date
             prev.merged_count += 1

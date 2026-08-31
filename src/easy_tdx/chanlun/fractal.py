@@ -12,6 +12,21 @@ from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import FX, CLKline, FXType
 
 
+def _fx_bar_index(mid: CLKline, is_ding: bool) -> int:
+    """分型极值对应的原始 K 线索引。
+
+    顶分型取中间缠论K线 high 的来源原始K线（high_k_index），
+    底分型取中间缠论K线 low 的来源原始K线（low_k_index）。
+
+    生产路径（merge_klines）始终正确维护 high_k_index/low_k_index；
+    测试直接手构 CLKline 时未设置这两个字段，此时回退到 k_index
+    （未合并单根K线两者的语义一致），保证 fixture 计算不产生退化索引。
+    """
+    if is_ding:
+        return mid.high_k_index if mid.merged_count > 1 or mid.high_k_index else mid.k_index
+    return mid.low_k_index if mid.merged_count > 1 or mid.low_k_index else mid.k_index
+
+
 def find_fractals(
     cklines: list[CLKline],
     config: ChanlunConfig | None = None,
@@ -60,6 +75,7 @@ def find_fractals(
                 val=mid.high,
                 index=len(fxs),
                 done=True,
+                bar_index=_fx_bar_index(mid, is_ding=True),
             )
             fxs.append(fx)
         elif is_di:
@@ -70,6 +86,7 @@ def find_fractals(
                 val=mid.low,
                 index=len(fxs),
                 done=True,
+                bar_index=_fx_bar_index(mid, is_ding=False),
             )
             fxs.append(fx)
 

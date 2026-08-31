@@ -56,6 +56,7 @@ const chanlunZss = ref<any[]>([])
 const chanlunMmds = ref<any[]>([])
 const chanlunFxs = ref<any[]>([])
 const chanlunBcs = ref<any[]>([])
+const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 
 // 成交价模式（精简为 开盘价/收盘价）
 const EXECUTIONS: { value: ExecutionMode; label: string }[] = [
@@ -210,6 +211,7 @@ async function runChanlunAnalysis() {
     chanlunMmds.value = data.mmds ?? []
     chanlunFxs.value = data.fractals ?? []
     chanlunBcs.value = data.bcs ?? []
+    chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     chanlunError.value = msg
@@ -311,7 +313,19 @@ const isChanlunStrategy = computed(() => {
 })
 
 // 计算 bars（用于 ChanlunChart）
-const bars = computed(() => store.ohlcv)
+// 缠论图表必须与后端分析窗口对齐：分析接口最多取最近 CHANLUN_MAX_COUNT 根，
+// 若把全部回测 K 线（可能远超 800 根）传给图表，叠加层（笔/线段/中枢/分型/
+// 买卖点/背驰）会全部挤在右侧少数 K 线上，左侧一片空白，视觉上乱七八糟。
+// 仅对真正运行缠论分析并填充结构数据的 'chanlun' 策略截断窗口；
+// changying_chanlun 不做缠论结构图（onRun 只对 'chanlun' 调 runChanlunAnalysis），
+// 保持全量 K 线由 KlineChart 展示，避免丢失回测区间。
+const CHANLUN_MAX_COUNT = 800
+const bars = computed(() => {
+  if (strategy.value !== 'chanlun') return store.ohlcv
+  return store.ohlcv.length > CHANLUN_MAX_COUNT
+    ? store.ohlcv.slice(store.ohlcv.length - CHANLUN_MAX_COUNT)
+    : store.ohlcv
+})
 
 function openSaveForm() {
   saveName.value = `${strategyLabel.value} · ${code.value}`
@@ -478,7 +492,9 @@ async function onSave() {
             :mmds="chanlunMmds"
             :fxs="chanlunFxs"
             :bcs="chanlunBcs"
+            :macd="chanlunMacd ?? undefined"
             :frequency="category"
+            compact
           />
           <!-- 缠论分析中 -->
           <div v-else-if="strategy === 'chanlun' && chanlunLoading" class="chanlun-loading">

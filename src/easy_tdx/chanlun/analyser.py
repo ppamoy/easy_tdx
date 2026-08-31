@@ -80,8 +80,22 @@ class ChanlunResult:
         fmt = "%Y-%m-%d %H:%M" if "min" in self.frequency.lower() else "%Y-%m-%d"
         return dt.strftime(fmt)
 
+    def _fx_anchor_datetime(self, fx: FX) -> datetime:
+        """分型极值锚定的原始K线时间。
+
+        分型极值对应的原始K线是 fx.bar_index 那根（可能不是合并组最后一根，
+        例如向上取高高时高点来自较早一根K线）。返回该K线的 date，
+        保证序列化的 start_date/end_date 与 start_index/end_index 指向同一根K线，
+        前端按索引或按日期都能锚定到同一个点。
+        """
+        for k in fx.k.klines:
+            if k.index == fx.bar_index:
+                return k.date
+        return fx.k.date
+
     def to_dict(self) -> dict[str, Any]:
         """将结果转为可序列化的字典（用于 JSON 输出）。"""
+        macd = getattr(self, "macd", None) or {}
         return {
             "code": self.code,
             "frequency": self.frequency,
@@ -93,14 +107,28 @@ class ChanlunResult:
             "xd_count": len(self.xds),
             "mmd_count": len(self.mmds),
             "bc_count": len(self.bcs),
+            # MACD 序列（dif/dea/hist 与 K 线一一对应）。
+            # 背驰判断基于笔内 MACD 红绿柱面积（calc_macd_force），
+            # 返回完整序列供前端副图展示，用户可直观核对背驰依据。
+            "macd": {
+                "dif": [round(x, 6) for x in (macd.get("dif") or [])],
+                "dea": [round(x, 6) for x in (macd.get("dea") or [])],
+                "hist": [round(x, 6) for x in (macd.get("hist") or [])],
+            },
             "bis": [
                 {
                     "index": bi.index,
                     "direction": bi.direction.value,
-                    "start_date": self._fmt_dt(bi.start.k.date),
-                    "end_date": self._fmt_dt(bi.end.k.date),
+                    "start_date": self._fmt_dt(self._fx_anchor_datetime(bi.start)),
+                    "end_date": self._fmt_dt(self._fx_anchor_datetime(bi.end)),
                     "high": round(bi.high, 2),
                     "low": round(bi.low, 2),
+                    "start_val": round(bi.start.val, 2),
+                    "end_val": round(bi.end.val, 2),
+                    # 端点锚定的原始K线索引（极值来源），前端据此精确描点，
+                    # 避免按日期字符串模糊匹配在分钟线上错位。
+                    "start_index": bi.start.bar_index,
+                    "end_index": bi.end.bar_index,
                     "done": bi.is_done(),
                 }
                 for bi in self.bis
@@ -113,8 +141,14 @@ class ChanlunResult:
                     "gg": round(zs.gg, 2),
                     "dd": round(zs.dd, 2),
                     "line_count": zs.line_count,
-                    "start_date": self._fmt_dt(zs.start.k.date) if zs.start else None,
-                    "end_date": self._fmt_dt(zs.end.k.date) if zs.end else None,
+                    "start_date": (
+                        self._fmt_dt(self._fx_anchor_datetime(zs.start)) if zs.start else None
+                    ),
+                    "end_date": (
+                        self._fmt_dt(self._fx_anchor_datetime(zs.end)) if zs.end else None
+                    ),
+                    "start_index": zs.start.bar_index if zs.start else None,
+                    "end_index": zs.end.bar_index if zs.end else None,
                     "done": zs.done,
                 }
                 for zs in self.zss
@@ -123,17 +157,23 @@ class ChanlunResult:
                 {
                     "index": xd.index,
                     "direction": xd.direction.value,
-                    "start_date": self._fmt_dt(xd.start.k.date),
-                    "end_date": self._fmt_dt(xd.end.k.date),
+                    "start_date": self._fmt_dt(self._fx_anchor_datetime(xd.start)),
+                    "end_date": self._fmt_dt(self._fx_anchor_datetime(xd.end)),
                     "high": round(xd.high, 2),
                     "low": round(xd.low, 2),
+                    "start_val": round(xd.start.val, 2),
+                    "end_val": round(xd.end.val, 2),
+                    "start_index": xd.start.bar_index,
+                    "end_index": xd.end.bar_index,
                 }
                 for xd in self.xds
             ],
             "mmds": [
                 {
                     "type": mmd.mmd_type.value,
-                    "date": self._fmt_dt(mmd.bi.end.k.date) if mmd.bi else None,
+                    "date": self._fmt_dt(self._fx_anchor_datetime(mmd.bi.end)) if mmd.bi else None,
+                    # 买卖点锚定的原始K线索引（触发笔终点极值来源）
+                    "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
                     "msg": mmd.msg,
                     "confidence": round(mmd.confidence, 2),
                     "quality": {
@@ -185,14 +225,18 @@ class ChanlunResult:
                     # 背驰发生点日期（前端统一消费 date 字段）：
                     # 优先当前笔结束日，回退到前一笔结束日，避免缺失字段导致前端崩溃。
                     "date": (
-                        self._fmt_dt(bc.curr.end.k.date)
+                        self._fmt_dt(self._fx_anchor_datetime(bc.curr.end))
                         if bc.curr
-                        else self._fmt_dt(bc.prev.end.k.date)
+                        else self._fmt_dt(self._fx_anchor_datetime(bc.prev.end))
                         if bc.prev
                         else None
                     ),
-                    "curr_date": self._fmt_dt(bc.curr.end.k.date) if bc.curr else None,
-                    "prev_date": self._fmt_dt(bc.prev.end.k.date) if bc.prev else None,
+                    "curr_date": (
+                        self._fmt_dt(self._fx_anchor_datetime(bc.curr.end)) if bc.curr else None
+                    ),
+                    "prev_date": (
+                        self._fmt_dt(self._fx_anchor_datetime(bc.prev.end)) if bc.prev else None
+                    ),
                     "msg": bc.msg,
                 }
                 for bc in self.bcs

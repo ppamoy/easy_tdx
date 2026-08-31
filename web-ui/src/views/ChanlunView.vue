@@ -25,6 +25,10 @@ interface ChanlunBi {
   end_date: string
   high: number
   low: number
+  start_val?: number
+  end_val?: number
+  start_index?: number
+  end_index?: number
   done: boolean
 }
 
@@ -35,6 +39,10 @@ interface ChanlunXd {
   end_date: string
   high: number
   low: number
+  start_val?: number
+  end_val?: number
+  start_index?: number
+  end_index?: number
 }
 
 interface ChanlunZs {
@@ -46,6 +54,8 @@ interface ChanlunZs {
   line_count: number
   start_date: string
   end_date: string
+  start_index?: number
+  end_index?: number
   done: boolean
 }
 
@@ -60,6 +70,7 @@ interface ChanlunMmd {
   date: string | null
   msg: string
   confidence: number
+  bar_index?: number
   quality: ChanlunMmdQuality | null
 }
 
@@ -67,6 +78,7 @@ interface ChanlunFx {
   type: 'ding' | 'di'
   date: string
   val: number
+  bar_index?: number
 }
 
 interface ChanlunBc {
@@ -74,6 +86,7 @@ interface ChanlunBc {
   bc: boolean
   date: string | null
   msg: string
+  bar_index?: number
 }
 
 const bars = ref<Bar[]>([])
@@ -83,6 +96,7 @@ const zss = ref<ChanlunZs[]>([])
 const mmds = ref<ChanlunMmd[]>([])
 const fxs = ref<ChanlunFx[]>([])
 const bcs = ref<ChanlunBc[]>([])
+const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 
 interface ChanlunBoll {
   upper: number[]
@@ -456,6 +470,10 @@ async function analyze() {
         end_date: b.end_date,
         high: b.high,
         low: b.low,
+        start_val: b.start_val,
+        end_val: b.end_val,
+        start_index: b.start_index,
+        end_index: b.end_index,
         done: b.done,
       }))
       xds.value = (hr.xds ?? []).map((x: any) => ({
@@ -465,6 +483,10 @@ async function analyze() {
         end_date: x.end_date,
         high: x.high,
         low: x.low,
+        start_val: x.start_val,
+        end_val: x.end_val,
+        start_index: x.start_index,
+        end_index: x.end_index,
       }))
       zss.value = (hr.zss ?? []).map((z: any) => ({
         index: z.index,
@@ -475,6 +497,8 @@ async function analyze() {
         line_count: z.line_count,
         start_date: z.start_date,
         end_date: z.end_date,
+        start_index: z.start_index,
+        end_index: z.end_index,
         done: z.done,
       }))
       mmds.value = (hr.mmds ?? []).map((m: any) => ({
@@ -482,6 +506,7 @@ async function analyze() {
         date: m.date,
         msg: m.msg,
         confidence: m.confidence ?? 0,
+        bar_index: m.bar_index,
         quality: m.quality ? {
           grade: m.quality.grade ?? null,
           score: m.quality.score ?? null,
@@ -496,13 +521,16 @@ async function analyze() {
         type: f.fx_type,
         date: f.date,
         val: f.val,
+        bar_index: f.bar_index,
       }))
       bcs.value = (hr.bcs ?? []).map((bc: any) => ({
         type: bc.type,
         bc: bc.bc,
         date: bc.date ?? bc.curr_date,
         msg: bc.msg,
+        bar_index: bc.bar_index,
       }))
+      macd.value = hr.macd && hr.macd.dif?.length ? hr.macd : null
       // 保存多级别结果
       multiLevelResult.value = {
         confluence: data.confluence,
@@ -539,6 +567,10 @@ async function analyze() {
         end_date: b.end_date,
         high: b.high,
         low: b.low,
+        start_val: b.start_val,
+        end_val: b.end_val,
+        start_index: b.start_index,
+        end_index: b.end_index,
         done: b.done,
       }))
       xds.value = (data.xds ?? []).map((x: any) => ({
@@ -548,6 +580,10 @@ async function analyze() {
         end_date: x.end_date,
         high: x.high,
         low: x.low,
+        start_val: x.start_val,
+        end_val: x.end_val,
+        start_index: x.start_index,
+        end_index: x.end_index,
       }))
       zss.value = (data.zss ?? []).map((z: any) => ({
         index: z.index,
@@ -558,6 +594,8 @@ async function analyze() {
         line_count: z.line_count,
         start_date: z.start_date,
         end_date: z.end_date,
+        start_index: z.start_index,
+        end_index: z.end_index,
         done: z.done,
       }))
       mmds.value = (data.mmds ?? []).map((m: any) => ({
@@ -565,6 +603,7 @@ async function analyze() {
         date: m.date,
         msg: m.msg,
         confidence: m.confidence ?? 0,
+        bar_index: m.bar_index,
         quality: m.quality ? {
           grade: m.quality.grade ?? null,
           score: m.quality.score ?? null,
@@ -575,13 +614,16 @@ async function analyze() {
         type: f.fx_type,
         date: f.date,
         val: f.val,
+        bar_index: f.bar_index,
       }))
       bcs.value = (data.bcs ?? []).map((bc: any) => ({
         type: bc.type,
         bc: bc.bc,
         date: bc.date ?? bc.curr_date,
         msg: bc.msg,
+        bar_index: bc.bar_index,
       }))
+      macd.value = data.macd && data.macd.dif?.length ? data.macd : null
     }
   } catch (e) {
     error.value = formatError(e)
@@ -967,6 +1009,7 @@ onUnmounted(() => {
         :mmds="mmds"
         :fxs="fxs"
         :bcs="bcs"
+        :macd="macd ?? undefined"
         :frequency="category"
       />
     </div>

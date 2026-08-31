@@ -53,6 +53,7 @@ const zss = ref<ChanlunZs[]>([])
 const mmds = ref<ChanlunMmd[]>([])
 const fxs = ref<ChanlunFx[]>([])
 const bcs = ref<ChanlunBc[]>([])
+const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 const candidates = ref<Candidate[]>([])
 const outcomes = ref<MmdOutcome[]>([])
 
@@ -106,6 +107,7 @@ async function startTraining() {
     mmds.value = (d.mmds ?? []).map((m: any) => ({ type: m.type, date: m.date, msg: m.msg, confidence: m.confidence ?? 0 }))
     fxs.value = (d.fractals ?? []).map((f: any) => ({ type: f.fx_type, date: f.date, val: f.val }))
     bcs.value = (d.bcs ?? []).map((bc: any) => ({ type: bc.type, bc: bc.bc, date: bc.date ?? bc.curr_date, msg: bc.msg }))
+    macd.value = d.macd && d.macd.dif?.length ? d.macd : null
     candidates.value = d.candidates ?? []
     outcomes.value = d.mmd_outcomes ?? []
 
@@ -375,6 +377,7 @@ onMounted(() => {
               :mmds="mmds"
               :fxs="fxs"
               :bcs="bcs"
+              :macd="macd ?? undefined"
               :frequency="category"
               :reveal-index="chartReveal"
             />
