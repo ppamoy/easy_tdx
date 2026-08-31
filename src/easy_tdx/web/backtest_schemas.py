@@ -214,6 +214,8 @@ class BacktestResultResponse(BaseModel):
     trades: list[dict[str, Any]]
     positions: list[dict[str, Any]]
     config: dict[str, Any]
+    signal_accuracy: dict[str, Any] | None = None
+    diagnostic: str | None = None
 
 
 class TaskSubmitResponse(BaseModel):

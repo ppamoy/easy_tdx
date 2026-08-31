@@ -115,6 +115,7 @@ class BacktestResult:
     positions: pd.DataFrame
     config: dict[str, Any]
     diagnostic: str | None = None
+    signal_accuracy: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """将结果转换为 JSON 兼容字典。
@@ -128,6 +129,7 @@ class BacktestResult:
             "positions": self.positions.to_dict(orient="records"),
             "config": self.config,
             "diagnostic": self.diagnostic,
+            "signal_accuracy": self.signal_accuracy,
         }
 
     def to_json(self) -> str:

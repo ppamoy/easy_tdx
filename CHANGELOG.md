@@ -4,6 +4,29 @@
 
 ## [Unreleased]
 
+**回测新增「模型准确度验证」（V95）—— 用历史回测回答「模型择时是否真的准确」** —— 此前回测只给账户盈亏（总收益/夏普/回撤），用户无法判断收益来自「模型信号准确」还是「行情普涨」。本次为每次回测自动计算信号前瞻命中率，并与「随机入场基准」和「同期买入持有基准」对比，让用户直接核对模型质量。
+
+### 新增：信号前瞻命中率 + 基准对比（backtest/signal_accuracy.py）
+
+- **前瞻收益与命中率**：对每次实际成交的 BUY/SELL 信号，统计未来 1/3/5/10/20 根 K 线的收益。命中定义：买入后 N 根收益 > 0（择时进场正确）；卖出后 N 根下跌（回避下跌正确）。
+- **随机入场基准**：以相同信号数量在全部可入场 bar 上随机采样（可复现 seed，数据不足时直接用全量——小样本无放回偏差），统计同窗口平均命中率与收益，作为「抛硬币择时」下限参照。超额命中率 = 模型命中率 - 随机命中率，直接量化择时贡献。
+- **同期买入持有基准**：回测区间首末 close 的总收益；配合策略自身总收益率给出超额收益 alpha，回答「模型相对涨了就不动是否跑赢」。
+- **可读结论**：根据 5 根窗口命中率相对随机基准的差生成一句判定（显著高于 / 略高于 / 相当 / 低于随机基准），并提示样本不足时不可靠。
+
+### 集成
+
+- **引擎（backtest/engine.py）**：BacktestEngine.run() 第 5 步自动计算信号准确度，写入 BacktestResult.signal_accuracy；BacktestResult.to_dict() 输出该字段（backtest/types.py），包 __init__ 导出 compute_signal_accuracy。
+- **Web API（web/backtest_schemas.py）**：BacktestResultResponse 新增可选字段 signal_accuracy 与 diagnostic，同步/异步回测与组合回测结果均透出。
+- **前端（web-ui）**：新增 SignalAccuracyPanel.vue 面板，展示结论行、基准对比（策略收益/买入持有/alpha）与多窗口命中率表（信号数、命中率、随机基准、平均前瞻收益、基准收益，命中率相对基准着色）；BacktestView.vue 在绩效指标下新增「🎯 模型准确度验证」区块；types.ts 补充 SignalAccuracyReport 类型。
+
+### 测试与验证
+
+- 新增 tests/unit/test_backtest_signal_accuracy.py（13 项）：datetime 规整、空输入、缺列、单调上涨买入全命中、单调下跌买入全miss、卖出回避下跌命中、基准与 alpha 计算、小样本回退全量基准、引擎集成（result.signal_accuracy + to_dict 透出）。
+- 全套单测 2304 passed（含既有回测 146 项，无回归）；ruff/mypy 对改动文件零告警。
+- 端到端验证：本地 8000 API /backtest/run 返回 signal_accuracy（含 verdict/benchmark/多窗口命中率）；Playwright 浏览器回归——回测页「模型准确度验证」面板可见、verdict 与命中率表格渲染成功、console 零错误。
+
+## [Unreleased]
+
 **缠论笔画图端点错位系统性修复（V94 几何正确性）** —— 用户反馈缠论 K 线图"没有每一笔首尾相连、每个线段也没有首尾相连、笔端点没有在K线极值上，没有任何参考价值"。排查定位并修复模型层 + 序列化层 + 渲染层三类根因：
 
 ### 根因与修复

@@ -173,6 +173,15 @@ class BacktestEngine:
         )
         performance = analyzer.compute()
 
+        # Step 5: 信号前瞻命中率与模型准确度验证（随机基准 + 买入持有基准）
+        from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy
+
+        signal_accuracy = compute_signal_accuracy(
+            df,
+            trades_df,
+            strategy_total_return=performance.get("total_return"),
+        )
+
         # Config snapshot
         config = {
             "cash": self._cash,
@@ -189,6 +198,7 @@ class BacktestEngine:
             positions=tracker.positions,
             config=config,
             diagnostic=analyzer.diagnostic,
+            signal_accuracy=signal_accuracy,
         )
 
     def _execute_with_model(self, signals: list[Signal], df: pd.DataFrame) -> list[Trade]:

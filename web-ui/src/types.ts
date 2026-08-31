@@ -117,12 +117,33 @@ export interface Trade {
   rejected: boolean
 }
 
+export interface SignalHorizonStat {
+  count: number
+  hit_rate: number
+  avg_return: number
+  median_return: number
+  baseline_hit_rate: number
+  baseline_avg_return: number
+  excess_hit_rate: number
+  excess_avg_return: number
+}
+
+export interface SignalAccuracyReport {
+  buy: { signals: number; horizons: Record<string, SignalHorizonStat> } | null
+  sell: { signals: number; horizons: Record<string, SignalHorizonStat> } | null
+  benchmark: { buy_hold_return?: number; strategy_return?: number; alpha?: number }
+  verdict: string
+  note?: string
+}
+
 export interface BacktestResult {
   performance: Performance
   equity_curve: EquityPoint[]
   trades: Trade[]
   positions: Record<string, unknown>[]
   config: Record<string, unknown>
+  signal_accuracy?: SignalAccuracyReport | null
+  diagnostic?: string | null
 }
 
 // ── 后台任务（POST /api/v1/backtest/run/async + GET /tasks/{id}） ─────────────
