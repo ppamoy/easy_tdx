@@ -380,6 +380,31 @@ export interface ApiError {
 // ── 策略库（已保存策略，GET/POST/DELETE /api/v1/strategies） ─────────────────
 
 /** 新建一条已保存策略的请求体（前端在回测结果区点「保存」时提交）。 */
+/** V100: 保存策略时持久化的准确度验证快照（signal_accuracy 关键结论）。 */
+export interface StrategyAccuracySnapshot {
+  hit_rate: number | null
+  excess_hit_rate: number | null
+  verdict: string
+}
+
+/** V100: 保存策略时持久化的稳健性验证快照（segment_robustness 关键结论）。 */
+export interface StrategyRobustnessSnapshot {
+  overfit_likely: boolean
+  verdict: string
+}
+
+/** 策略成绩快照：绩效指标 + V100 新增的准确度/稳健性验证结论。 */
+export interface SavedStrategySnapshot extends Record<string, unknown> {
+  total_return?: number
+  annual_return?: number
+  max_drawdown?: number
+  sharpe?: number
+  win_rate?: number
+  trades_count?: number
+  accuracy?: StrategyAccuracySnapshot
+  robustness?: StrategyRobustnessSnapshot
+}
+
 export interface SavedStrategyCreate {
   name: string
   kind: 'single' | 'portfolio' | 'multi'
@@ -391,7 +416,7 @@ export interface SavedStrategyCreate {
   /** 资金与成本配置（cash/commission/...） */
   trade_config?: Record<string, unknown>
   /** 保存时的成绩快照（total_return/sharpe/...） */
-  snapshot?: Record<string, unknown>
+  snapshot?: SavedStrategySnapshot
   tags?: string[]
   notes?: string
 }
@@ -406,7 +431,7 @@ export interface SavedStrategy {
   params: Record<string, number | string | boolean>
   context: Record<string, unknown>
   trade_config: Record<string, unknown>
-  snapshot: Record<string, unknown>
+  snapshot: SavedStrategySnapshot
   tags: string[]
   notes: string
   created_at: string

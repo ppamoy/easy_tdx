@@ -374,6 +374,16 @@ async function onSave() {
         sharpe: store.result.performance.sharpe,
         win_rate: store.result.performance.win_rate,
         trades_count: store.result.performance.total_trades,
+        // V100: 持久化历史回测验证的准确度/稳健性结论，策略库按「验证过准不准」比较
+        accuracy: {
+          hit_rate: store.result.signal_accuracy?.buy?.horizons?.['5']?.hit_rate ?? null,
+          excess_hit_rate: store.result.signal_accuracy?.buy?.horizons?.['5']?.excess_hit_rate ?? null,
+          verdict: store.result.signal_accuracy?.verdict ?? '',
+        },
+        robustness: {
+          overfit_likely: store.result.segment_robustness?.overfit_likely ?? false,
+          verdict: store.result.segment_robustness?.verdict ?? '',
+        },
       },
       tags: saveTags.value
         .split(/[,，]/)

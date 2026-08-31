@@ -292,6 +292,14 @@ function num(v: unknown, d = 2): string {
   const n = typeof v === 'number' ? v : Number(v)
   return Number.isFinite(n) ? n.toFixed(d) : '-'
 }
+// V100: 准确度判定着色——命中率显著高于随机基准标绿，否则按文案关键词标色
+function accClass(acc: { hit_rate?: number | null; excess_hit_rate?: number | null; verdict?: string }): string {
+  const v = acc.verdict ?? ''
+  if (v.includes('显著') || v.includes('具备参考价值')) return 'pos'
+  if (v.includes('跑输') || v.includes('低于')) return 'neg'
+  if (v.includes('略')) return 'warn'
+  return ''
+}
 function ctxLabel(s: SavedStrategy): string {
   const ctx = s.context
   if (s.kind === 'multi') {
@@ -544,6 +552,18 @@ const comboGrade = computed(() =>
           </div>
           <div class="snap-item">
             <span class="k">回撤</span><span class="v mono neg">{{ pct(s.snapshot.max_drawdown) }}</span>
+          </div>
+          <div v-if="s.snapshot.accuracy?.verdict" class="snap-item wide">
+            <span class="k">🎯 准确度验证</span>
+            <span class="v acc" :class="accClass(s.snapshot.accuracy)">
+              {{ s.snapshot.accuracy.verdict }}
+            </span>
+          </div>
+          <div v-if="s.snapshot.robustness?.verdict" class="snap-item wide">
+            <span class="k">🧱 稳健性</span>
+            <span class="v acc" :class="s.snapshot.robustness.overfit_likely ? 'neg' : 'pos'">
+              {{ s.snapshot.robustness.verdict }}
+            </span>
           </div>
         </div>
 
@@ -982,6 +1002,19 @@ const comboGrade = computed(() =>
 .snap-item .v {
   font-size: 15px;
   font-weight: 600;
+}
+.snap-item.wide {
+  flex: 1 1 100%;
+  min-width: 200px;
+}
+.snap-item.wide .v {
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+}
+.snap-item.wide .v.warn {
+  color: var(--warn, #f59e0b);
 }
 .mono {
   font-family: var(--font-mono);
