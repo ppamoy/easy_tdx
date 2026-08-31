@@ -297,6 +297,7 @@ export interface PortfolioResult {
   equity_allocation: Record<string, number>
   combined_equity: EquityPoint[]
   accuracy_summary?: PortfolioAccuracyReport | null
+  portfolio_trust?: ModelTrustReport | null
 }
 
 // ── 参数网格寻优（Phase 4） ──────────────────────────────────────────────────

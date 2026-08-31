@@ -190,3 +190,137 @@ def _build_verdict(
         alpha = float(perf["alpha"])
         parts.append(f"相对买入持有超额 {alpha:+.1%}")
     return "；".join(parts) + "。"
+
+
+# ── 组合/多标的可信度评分（V103）─────────────────────────────────────────────
+
+
+def compute_portfolio_trust(accuracy_summary: dict[str, Any] | None) -> dict[str, Any]:
+    """基于 V99 的组合准确度聚合结果计算组合级可信度分。
+
+    输入为 aggregate_portfolio_accuracy 的输出（accuracy_summary）：
+      {"portfolio": {symbols, avg_hit_rate, avg_excess_hit_rate, avg_win_rate,
+                     avg_total_return, avg_sharpe, positive_symbols, hit_above_baseline,
+                     symbols_with_accuracy}, "verdict": str, "symbols": [...]}
+
+    与单标的 compute_model_trust 同一套权重哲学，但三个维度改用组合聚合口径：
+      1. 择时准确度（0.4）：组合加权平均超额命中率（5 根 vs 随机基准）
+      2. 稳健性（0.35）：跨标的一致性——命中率高于随机基准的标的比例 + 正收益标的占比
+         （组合层面用「标的间一致性」代替单标的的「时间分段一致性」）
+      3. 绩效对比（0.25）：组合加权平均收益/胜率
+
+    Returns:
+        dict：{"score": 0-100, "grade": 高/中/低, "components": {...}, "verdict": str}
+    """
+    if not accuracy_summary:
+        return {
+            "score": 37.0,
+            "grade": "低",
+            "components": {"accuracy": {"note": "无组合准确度数据", "score": 0.3},
+                           "robustness": {"note": "无组合稳健性数据", "score": 0.5},
+                           "performance": {"note": "无组合绩效数据", "score": 0.3}},
+            "verdict": "综合可信度 低（37/100）；无组合准确度数据。",
+        }
+
+    portfolio = accuracy_summary.get("portfolio") or {}
+    n_symbols = int(portfolio.get("symbols", 0))
+    if n_symbols == 0:
+        return {
+            "score": 37.0,
+            "grade": "低",
+            "components": {"accuracy": {"note": "无标的", "score": 0.3},
+                           "robustness": {"note": "无标的", "score": 0.3},
+                           "performance": {"note": "无标的", "score": 0.3}},
+            "verdict": "综合可信度 低（37/100）；组合无标的。",
+        }
+
+    # 1. 择时准确度：组合加权平均超额命中率
+    avg_excess = float(portfolio.get("avg_excess_hit_rate", 0.0) or 0.0)
+    with_acc = int(portfolio.get("symbols_with_accuracy", 0))
+    if with_acc > 0:
+        acc_score = _clamp(0.5 + avg_excess / 0.15 * 0.5)
+    else:
+        acc_score = 0.3
+    acc_comp = {
+        "score": acc_score,
+        "avg_excess_hit_rate": avg_excess,
+        "avg_hit_rate": float(portfolio.get("avg_hit_rate", 0.0) or 0.0),
+        "symbols_with_accuracy": with_acc,
+    }
+
+    # 2. 稳健性：跨标的一致性（命中率高于基准的比例 + 正收益占比）
+    hit_above = int(portfolio.get("hit_above_baseline", 0))
+    positive = int(portfolio.get("positive_symbols", 0))
+    above_ratio = hit_above / n_symbols if n_symbols else 0.0
+    positive_ratio = positive / n_symbols if n_symbols else 0.0
+    if with_acc >= 1:
+        rob_score = _clamp(0.3 + 0.7 * (0.6 * positive_ratio + 0.4 * above_ratio))
+    else:
+        rob_score = 0.4
+    rob_comp = {
+        "score": rob_score,
+        "hit_above_baseline": hit_above,
+        "positive_symbols": positive,
+        "symbols": n_symbols,
+    }
+
+    # 3. 绩效对比：组合加权平均收益/胜率
+    avg_ret = float(portfolio.get("avg_total_return", 0.0) or 0.0)
+    avg_win = float(portfolio.get("avg_win_rate", 0.0) or 0.0)
+    ret_score = _clamp(0.5 + avg_ret * 2.0)
+    win_score = _clamp(avg_win / 0.6)
+    perf_score = _clamp(0.6 * ret_score + 0.4 * win_score)
+    perf_comp = {"score": perf_score, "avg_total_return": avg_ret, "avg_win_rate": avg_win}
+
+    score01 = W_ACCURACY * acc_score + W_ROBUSTNESS * rob_score + W_PERFORMANCE * perf_score
+    score100 = round(_clamp(score01) * 100, 1)
+    if score100 >= 70:
+        grade = "高"
+    elif score100 >= 50:
+        grade = "中"
+    else:
+        grade = "低"
+
+    verdict = _build_portfolio_verdict(score100, grade, acc_comp, rob_comp, perf_comp, n_symbols)
+
+    return {
+        "score": score100,
+        "grade": grade,
+        "components": {
+            "accuracy": acc_comp,
+            "robustness": rob_comp,
+            "performance": perf_comp,
+        },
+        "verdict": verdict,
+    }
+
+
+def _build_portfolio_verdict(
+    score: float,
+    grade: str,
+    acc: dict[str, Any],
+    rob: dict[str, Any],
+    perf: dict[str, Any],
+    n_symbols: int,
+) -> str:
+    """根据组合各维度生成一句人类可读结论。"""
+    parts: list[str] = [f"组合可信度 {grade}（{score:.0f}/100）"]
+    exc = float(acc.get("avg_excess_hit_rate", 0.0) or 0.0)
+    if int(acc.get("symbols_with_accuracy", 0)) > 0:
+        if exc > 0.05:
+            parts.append("组合命中率明显优于随机")
+        elif exc > 0:
+            parts.append("组合略优于随机")
+        elif exc > -0.05:
+            parts.append("组合与随机相当")
+        else:
+            parts.append("组合弱于随机")
+    above = int(rob.get("hit_above_baseline", 0))
+    pos = int(rob.get("positive_symbols", 0))
+    parts.append(f"{pos}/{n_symbols} 标的正收益")
+    if int(acc.get("symbols_with_accuracy", 0)) > 0:
+        parts.append(f"{above}/{n_symbols} 标的命中率高于基准")
+    avg_ret = float(perf.get("avg_total_return", 0.0) or 0.0)
+    parts.append(f"加权平均收益 {avg_ret:+.1%}")
+    return "；".join(parts) + "。"
+

@@ -433,6 +433,16 @@ def _run_portfolio_backtest(
         # 附加信息失败不阻断主结果
         pass
 
+    # V103: 组合级模型可信度评分（基于 accuracy_summary 聚合）
+    try:
+        from easy_tdx.backtest.model_trust import compute_portfolio_trust
+
+        result_dict["portfolio_trust"] = compute_portfolio_trust(
+            result_dict.get("accuracy_summary")
+        )
+    except Exception:
+        pass
+
     return result_dict
 
 
@@ -603,6 +613,16 @@ def _run_multi_strategy_backtest(
             result_dict["accuracy_summary"] = aggregate_portfolio_accuracy(
                 individual, allocations
             )
+    except Exception:
+        pass
+
+    # V103: 多策略组合级模型可信度评分（基于 accuracy_summary 聚合）
+    try:
+        from easy_tdx.backtest.model_trust import compute_portfolio_trust
+
+        result_dict["portfolio_trust"] = compute_portfolio_trust(
+            result_dict.get("accuracy_summary")
+        )
     except Exception:
         pass
 

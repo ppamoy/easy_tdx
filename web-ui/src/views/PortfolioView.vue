@@ -303,7 +303,10 @@ async function onSave() {
 
         <section v-if="store.portfolioResult.accuracy_summary" class="report-section">
           <h3>🎯 组合准确度验证（逐标的命中率聚合 vs 随机基准）</h3>
-          <PortfolioAccuracyPanel :report="store.portfolioResult.accuracy_summary" />
+          <PortfolioAccuracyPanel
+            :report="store.portfolioResult.accuracy_summary"
+            :trust="store.portfolioResult.portfolio_trust"
+          />
         </section>
 
         <section class="report-section">

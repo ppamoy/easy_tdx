@@ -5,10 +5,11 @@
 import { computed } from 'vue'
 
 import { fmtPct } from '../format'
-import type { PortfolioAccuracyReport } from '../types'
+import type { ModelTrustReport, PortfolioAccuracyReport } from '../types'
 
 const props = defineProps<{
   report: PortfolioAccuracyReport | null | undefined
+  trust?: ModelTrustReport | null | undefined
 }>()
 
 const hasReport = computed(() => Boolean(props.report?.portfolio?.symbols))
@@ -22,10 +23,34 @@ const verdictClass = computed(() => {
 })
 
 const rows = computed(() => props.report?.symbols ?? [])
+
+const trustGradeClass = computed(() => {
+  if (!props.trust) return ''
+  if (props.trust.grade === '高') return 'grade-high'
+  if (props.trust.grade === '中') return 'grade-mid'
+  return 'grade-low'
+})
+const trustBarColor = computed(() => {
+  if (!props.trust) return ''
+  if (props.trust.score >= 70) return 'var(--up)'
+  if (props.trust.score >= 50) return 'var(--warn, #f59e0b)'
+  return 'var(--down)'
+})
 </script>
 
 <template>
   <div v-if="hasReport" class="portfolio-accuracy-panel">
+    <!-- 组合可信度（V103） -->
+    <div v-if="trust" class="trust-banner">
+      <div class="trust-score">
+        <span class="score-num" :style="{ color: trustBarColor }">{{ Math.round(trust.score) }}</span>
+        <span class="score-max">/100</span>
+        <span class="grade-badge" :class="trustGradeClass">{{ trust.grade }}可信</span>
+      </div>
+      <div class="trust-verdict">{{ trust.verdict }}</div>
+      <div class="bar-track"><div class="bar-fill" :style="{ width: trust.score + '%', background: trustBarColor }"></div></div>
+    </div>
+
     <!-- 结论行 -->
     <div class="verdict" :class="verdictClass">
       <span class="verdict-label">组合准确度判定：</span>
@@ -110,6 +135,64 @@ const rows = computed(() => props.report?.symbols ?? [])
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.trust-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+}
+.trust-score {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+.score-num {
+  font-family: var(--font-mono);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+.score-max {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+.grade-badge {
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.grade-high {
+  color: var(--up);
+  background: rgba(34, 197, 94, 0.12);
+}
+.grade-mid {
+  color: var(--warn, #f59e0b);
+  background: rgba(245, 158, 11, 0.12);
+}
+.grade-low {
+  color: var(--down);
+  background: rgba(239, 68, 68, 0.12);
+}
+.trust-verdict {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+.bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
 }
 .verdict {
   font-size: 14px;
