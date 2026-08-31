@@ -335,6 +335,64 @@ const bars = computed(() => {
     : store.ohlcv
 })
 
+
+// ── 回测报告导出（一键复制 Markdown 摘要） ────────────────────────────────
+// 把绩效 + 信号准确度 + 稳健性 + 可信度汇总成一份可粘贴/存档的文本报告。
+const copyMsg = ref('')
+function buildReportText(): string {
+  const r = store.result
+  if (!r) return ''
+  const pct = (v: number | undefined) => (v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%')
+  const lines: string[] = []
+  lines.push('# easy-tdx 回测报告')
+  lines.push('')
+  lines.push('- 策略：' + (strategyLabel.value || strategy.value))
+  lines.push('- 标的：' + fullSymbol(code.value) + ' · ' + category.value)
+  lines.push('- 区间：' + startDate.value + ' ~ ' + endDate.value)
+  lines.push('- 初始资金：' + cash.value.toLocaleString())
+  lines.push('')
+  lines.push('## 绩效')
+  const perf = r.performance
+  lines.push('- 总收益：' + pct(perf.total_return) + ' · 年化：' + pct(perf.annual_return))
+  lines.push('- 夏普：' + (perf.sharpe ?? 0).toFixed(2) + ' · 最大回撤：' + pct(perf.max_drawdown))
+  lines.push('- 胜率：' + pct(perf.win_rate) + ' · 交易数：' + (perf.total_trades ?? 0))
+  lines.push('')
+  if (r.model_trust) {
+    lines.push('## 模型可信度（历史回测验证）')
+    lines.push('- 综合评分：' + Math.round(r.model_trust.score) + '/100 · ' + r.model_trust.grade + '可信')
+    lines.push('- 结论：' + (r.model_trust.verdict || ''))
+    lines.push('')
+  }
+  if (r.signal_accuracy) {
+    lines.push('## 信号准确度（vs 随机基准）')
+    lines.push('- ' + (r.signal_accuracy.verdict || ''))
+    const h5 = r.signal_accuracy.buy?.horizons?.['5']
+    if (h5 && h5.count > 0) {
+      lines.push('- 5根命中率：' + pct(h5.hit_rate) + ' · 随机基准：' + pct(h5.baseline_hit_rate) + ' · 超额：' + (h5.excess_hit_rate >= 0 ? '+' : '') + pct(h5.excess_hit_rate))
+    }
+    lines.push('')
+  }
+  if (r.segment_robustness) {
+    lines.push('## 分段稳健性（过拟合检查）')
+    lines.push('- ' + (r.segment_robustness.verdict || ''))
+    lines.push('')
+  }
+  lines.push('---')
+  lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
+  return lines.join('\n')
+}
+async function copyReport() {
+  const text = buildReportText()
+  try {
+    await navigator.clipboard.writeText(text)
+    copyMsg.value = '✓ 已复制报告'
+  } catch {
+    copyMsg.value = '复制失败（浏览器权限），已弹出报告'
+    window.alert(text)
+  }
+  setTimeout(() => { copyMsg.value = '' }, 2500)
+}
+
 function openSaveForm() {
   saveName.value = `${strategyLabel.value} · ${code.value}`
   saveTags.value = ''
@@ -503,6 +561,8 @@ async function onSave() {
       <div v-if="store.result" class="report-content">
         <div class="result-toolbar">
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
+          <button class="ghost" @click="copyReport">📋 复制报告</button>
+          <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
         </div>
 
