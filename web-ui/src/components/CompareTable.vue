@@ -26,9 +26,38 @@ const ROWS: Row[] = [
 
 function fmt(row: Row, v: number | undefined): string {
   if (v === undefined || !Number.isFinite(v)) return '-'
-  if (row.format === 'percent') return `${(v * 100).toFixed(2)}%`
+  if (row.format === 'percent') return '' + (v * 100).toFixed(2) + '%'
   if (row.format === 'int') return String(Math.round(v))
   return v.toFixed(3)
+}
+
+// ── 准确度/可信度横向对比行（V102：按历史回测验证的准确度比较策略） ────────────
+
+function trustScore(item: { result: BacktestResult }): string {
+  const t = item.result.model_trust
+  if (!t || t.score === undefined) return '-'
+  return Math.round(t.score) + '/100 ' + t.grade
+}
+
+function trustClass(item: { result: BacktestResult }): string {
+  const t = item.result.model_trust
+  if (!t) return ''
+  if (t.grade === '高') return 'pos'
+  if (t.grade === '低') return 'neg'
+  return ''
+}
+
+function hitRate(item: { result: BacktestResult }): string {
+  const h = item.result.signal_accuracy?.buy?.horizons?.['5']
+  if (!h || h.count === 0) return '-'
+  return (h.hit_rate * 100).toFixed(0) + '%'
+}
+
+function excessHit(item: { result: BacktestResult }): string {
+  const h = item.result.signal_accuracy?.buy?.horizons?.['5']
+  if (!h || h.count === 0) return '-'
+  const sign = h.excess_hit_rate >= 0 ? '+' : ''
+  return sign + (h.excess_hit_rate * 100).toFixed(1) + '%'
 }
 </script>
 
@@ -45,6 +74,25 @@ function fmt(row: Row, v: number | undefined): string {
         <td class="metric-label">{{ row.label }}</td>
         <td v-for="item in props.items" :key="item.label" class="num">
           {{ fmt(row, item.result.performance[row.key] as number) }}
+        </td>
+      </tr>
+      <!-- 准确度/可信度行 -->
+      <tr>
+        <td class="metric-label">📊 可信度</td>
+        <td v-for="item in props.items" :key="item.label" class="num" :class="trustClass(item)">
+          {{ trustScore(item) }}
+        </td>
+      </tr>
+      <tr>
+        <td class="metric-label">🎯 5根命中率</td>
+        <td v-for="item in props.items" :key="item.label" class="num">
+          {{ hitRate(item) }}
+        </td>
+      </tr>
+      <tr>
+        <td class="metric-label">🎯 超额命中率</td>
+        <td v-for="item in props.items" :key="item.label" class="num">
+          {{ excessHit(item) }}
         </td>
       </tr>
     </tbody>

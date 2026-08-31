@@ -14,6 +14,9 @@ interface CompareItem {
   label: string
   equity: EquityPoint[]
   performance: Record<string, number>
+  // V102: 透传准确度/可信度字段，让对比表展示「验证过的准确度」而非只比收益
+  model_trust?: BacktestResult['model_trust']
+  signal_accuracy?: BacktestResult['signal_accuracy']
 }
 
 const taskList = ref<TaskSummary[]>([])
@@ -41,13 +44,20 @@ async function loadTasks() {
  * 支持单标的（equity_curve/performance）和组合（combined_equity/total_performance）。 */
 function extractComparable(
   result: Record<string, unknown> | null,
-): { equity: EquityPoint[]; performance: Record<string, number> } | null {
+): {
+  equity: EquityPoint[]
+  performance: Record<string, number>
+  model_trust?: BacktestResult['model_trust']
+  signal_accuracy?: BacktestResult['signal_accuracy']
+} | null {
   if (!result) return null
   // 单标的回测
   if (result.performance && result.equity_curve) {
     return {
       equity: result.equity_curve as EquityPoint[],
       performance: result.performance as Record<string, number>,
+      model_trust: result.model_trust as BacktestResult['model_trust'],
+      signal_accuracy: result.signal_accuracy as BacktestResult['signal_accuracy'],
     }
   }
   // 组合回测
@@ -55,6 +65,8 @@ function extractComparable(
     return {
       equity: result.combined_equity as EquityPoint[],
       performance: result.total_performance as Record<string, number>,
+      model_trust: result.model_trust as BacktestResult['model_trust'],
+      signal_accuracy: result.signal_accuracy as BacktestResult['signal_accuracy'],
     }
   }
   return null
@@ -89,7 +101,12 @@ function refreshItems() {
   // 这里把归一化的 equity/performance 包装回去
   compareItems.value = Array.from(details.value.values()).map((item) => ({
     label: item.label,
-    result: { equity_curve: item.equity, performance: item.performance } as unknown as BacktestResult,
+    result: {
+      equity_curve: item.equity,
+      performance: item.performance,
+      model_trust: item.model_trust,
+      signal_accuracy: item.signal_accuracy,
+    } as unknown as BacktestResult,
   }))
 }
 
