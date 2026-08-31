@@ -104,6 +104,9 @@ class BacktestEngine:
         self._slippage_model = slippage_model
         self._execution_model = execution_model
         self._warmup_bars = max(int(warmup_bars), 0)
+        # 最近一次信号生成使用的策略实例（供后续步骤读取策略内预计算数据，
+        # 如缠论策略的 _signal_traces 买卖点信号追踪）。
+        self._last_strategy: Strategy | None = None
 
     def run(self, df: pd.DataFrame, chanlun_result: Any | None = None) -> BacktestResult:
         """Run backtest.
@@ -181,6 +184,32 @@ class BacktestEngine:
             trades_df,
             strategy_total_return=performance.get("total_return"),
         )
+
+        # Step 5.5: 缠论策略专属信号准确度（按买卖点类型分组，复用现有函数）
+        if self._strategy_cls.__name__ in ("ChanlunStrategy", "ChangyingChanlunStrategy"):
+            try:
+                from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type
+
+                closes = [float(c) for c in df["close"]]
+                strat_used = self._last_strategy or self._strategy_instance
+                # 从 strategy 实例提取预计算的信号追踪（_generate_signals 已把实例
+                # 记录到 self._last_strategy，供此处读取）
+                if strat_used is not None and hasattr(strat_used, "_signal_traces"):
+                    signal_traces = strat_used._signal_traces
+                    if signal_traces:
+                        chanlun_signals: list[dict[str, Any]] = []
+                        for mmd_type, traces in signal_traces.items():
+                            for t in traces:
+                                chanlun_signals.append(
+                                    {"type": mmd_type, "bar_index": t["bar_index"]}
+                                )
+                        if chanlun_signals:
+                            chanlun_acc = compute_signal_accuracy_by_type(closes, chanlun_signals)
+                            signal_accuracy["chanlun_by_type"] = chanlun_acc.get("by_type")
+                            signal_accuracy["chanlun_ranking"] = chanlun_acc.get("ranking")
+                            signal_accuracy["chanlun_summary"] = chanlun_acc.get("summary")
+            except Exception:
+                pass  # 缠论准确度计算失败不影响主流程
 
         # Config snapshot
         config = {
@@ -271,6 +300,7 @@ class BacktestEngine:
         strat = (
             self._strategy_instance if self._strategy_instance is not None else self._strategy_cls()
         )
+        self._last_strategy = strat
 
         # Bind data
         strat._bind_data(df)

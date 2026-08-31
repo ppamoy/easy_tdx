@@ -1,4 +1,4 @@
-"""缠论买卖点策略（v8 - 精确日期映射版 + 置信度过滤）。
+"""缠论买卖点策略（v9 - 精确日期映射版 + 置信度过滤 + 信号类型追踪）。
 
 基于 easy_tdx.chanlun 模块，预计算全量缠论结构后按时间顺序执行信号。
 
@@ -13,6 +13,8 @@
 - 预计算一次性完成，运行时零开销
 - 支持置信度阈值过滤（只交易高置信度信号）
 - 支持类二买/类二卖信号
+- v9 新增：信号类型追踪（记录每种买卖点的进场/出场价格用于后续回测验证）
+- v9 新增：high_conf_only 参数（仅交易置信度 >= 70% 的信号）
 """
 
 from __future__ import annotations
@@ -32,7 +34,7 @@ from easy_tdx.backtest.strategies.registry import (
     description="基于缠论笔、中枢、买卖点的预计算回测策略。精确日期映射，支持置信度过滤。",
 )
 class ChanlunStrategy(ParametrizedStrategy):
-    """缠论买卖点策略（精确日期映射版 + 置信度过滤）。"""
+    """缠论买卖点策略（精确日期映射版 + 置信度过滤 + 信号追踪）。"""
 
     params = [
         Param("bi_type", str, default="new", choices=("new", "old", "simple"), label="笔类型"),
@@ -54,6 +56,12 @@ class ChanlunStrategy(ParametrizedStrategy):
         Param("stop_loss_pct", float, default=0.08, min_value=0.0, max_value=0.3, label="止损比例"),
         Param(
             "take_profit_pct", float, default=0.25, min_value=0.0, max_value=0.5, label="止盈比例"
+        ),
+        Param(
+            "high_conf_only",
+            bool,
+            default=False,
+            label="仅交易高置信度(>=70%)",
         ),
     ]
 
@@ -114,6 +122,7 @@ class ChanlunStrategy(ParametrizedStrategy):
         seen_bi: set[int] = set()
         min_conf = self.p["min_confidence"]
         use_2s = self.p["use_2s_signals"]
+        high_conf_only = self.p["high_conf_only"]
 
         for mmd in sorted(result.mmds, key=lambda m: m.bi.index if m.bi else 0):
             if mmd.bi is None:
@@ -128,7 +137,10 @@ class ChanlunStrategy(ParametrizedStrategy):
                 continue
 
             # 置信度过滤
-            if mmd.confidence < min_conf:
+            conf = mmd.confidence
+            if conf < min_conf:
+                continue
+            if high_conf_only and conf < 0.7:
                 continue
 
             # 类二买/类二卖过滤
@@ -140,13 +152,27 @@ class ChanlunStrategy(ParametrizedStrategy):
             if bar_idx < 0:
                 continue
 
-            self._chanlun_signals.append((bar_idx, mmd.mmd_type.value, mmd.confidence))
+            self._chanlun_signals.append((bar_idx, mmd.mmd_type.value, conf))
+
+        # v9: 信号类型追踪（供回测准确度分析使用）
+        self._signal_traces: dict[str, list[dict[str, Any]]] = {}
+        for mmd in result.mmds:
+            if mmd.bi is None:
+                continue
+            bar_idx = self._bi_end_bar_idx(mmd.bi)
+            if bar_idx >= 0:
+                key = mmd.mmd_type.value
+                self._signal_traces.setdefault(key, []).append(
+                    {"bar_index": bar_idx, "confidence": mmd.confidence}
+                )
 
         # 状态
         self._signal_ptr = 0
         self._entry_price: float = 0.0
         self._position_count: int = 0
         self._last_signal_conf: float = 0.0
+        self._last_signal_type: str = ""
+        self._trade_log: list[dict[str, Any]] = []
 
     def _bi_end_bar_idx(self, bi: Any) -> int:
         """获取笔结束分型的日期对应的 bar index。"""
@@ -166,11 +192,13 @@ class ChanlunStrategy(ParametrizedStrategy):
             if self.p["stop_loss_pct"] > 0 and current_price <= self._entry_price * (
                 1 - self.p["stop_loss_pct"]
             ):
+                self._record_trade("SELL", current_price, "stop_loss", 0.0)
                 self._close_position()
                 return
             if self.p["take_profit_pct"] > 0 and current_price >= self._entry_price * (
                 1 + self.p["take_profit_pct"]
             ):
+                self._record_trade("SELL", current_price, "take_profit", 0.0)
                 self._close_position()
                 return
 
@@ -181,42 +209,78 @@ class ChanlunStrategy(ParametrizedStrategy):
                 break
             self._signal_ptr += 1
             self._last_signal_conf = confidence
+            self._last_signal_type = mmd_type
 
             if mmd_type in ("1buy", "2buy"):
                 if self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
+                    self._record_trade("BUY", current_price, mmd_type, confidence)
                     self.buy()
 
             elif mmd_type in ("2buy_s",) and self.p["use_2s_signals"]:
                 if self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
+                    self._record_trade("BUY", current_price, mmd_type, confidence)
                     self.buy()
 
             elif mmd_type == "3buy" and self.p["use_3buy"]:
                 if self._position_count >= 1:
                     self._position_count += 1
+                    self._record_trade("BUY", current_price, mmd_type, confidence)
                     self.buy()
                 elif self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
+                    self._record_trade("BUY", current_price, mmd_type, confidence)
                     self.buy()
 
             elif mmd_type in ("1sell", "2sell"):
                 if self._position_count > 0:
+                    self._record_trade("SELL", current_price, mmd_type, confidence)
                     self._close_position()
 
             elif mmd_type in ("2sell_s",) and self.p["use_2s_signals"]:
                 if self._position_count > 0:
+                    self._record_trade("SELL", current_price, mmd_type, confidence)
                     self._close_position()
 
             elif mmd_type == "3sell" and self.p["use_3sell"]:
                 if self._position_count > 0:
+                    self._record_trade("SELL", current_price, mmd_type, confidence)
                     self._close_position()
+
+    def _record_trade(
+        self,
+        direction: str,
+        price: float,
+        signal_type: str,
+        confidence: float,
+    ) -> None:
+        """记录交易（含信号类型和置信度）。"""
+        self._trade_log.append(
+            {
+                "bar_index": self._bar_index,
+                "direction": direction,
+                "price": round(price, 4),
+                "signal_type": signal_type,
+                "confidence": round(confidence, 4),
+            }
+        )
 
     def _close_position(self) -> None:
         """平仓。"""
         self._position_count = 0
         self._entry_price = 0.0
         self.sell()
+
+    @property
+    def trade_log(self) -> list[dict[str, Any]]:
+        """返回交易记录（供外部分析信号类型准确率）。"""
+        return self._trade_log
+
+    @property
+    def signal_traces(self) -> dict[str, list[dict[str, Any]]]:
+        """返回预计算的信号类型追踪（供外部分析）。"""
+        return self._signal_traces

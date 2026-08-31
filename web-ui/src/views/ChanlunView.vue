@@ -98,6 +98,9 @@ const fxs = ref<ChanlunFx[]>([])
 const bcs = ref<ChanlunBc[]>([])
 const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 
+// 买卖点分类准确度验证（由 /chanlun/analyze 返回的 signal_accuracy）
+const signalAccuracy = ref<any>(null)
+
 interface ChanlunBoll {
   upper: number[]
   mid: number[]
@@ -355,6 +358,21 @@ function mlConfLabel(score: number): string {
   if (score >= 0.3) return '低度一致，需谨慎'
   return '不一致，信号不可靠'
 }
+// 买卖点准确度验证辅助
+function fmtAccPct(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  return (v * 100).toFixed(1) + '%'
+}
+function fmtAccSigned(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  const sign = v >= 0 ? '+' : ''
+  return sign + (v * 100).toFixed(1) + '%'
+}
+// 取某类型的 5 根窗口统计（缺则回退 3 根）
+function byTypeHorizon(type: string): { baseline_hit_rate?: number } | null {
+  const rep = signalAccuracy.value?.by_type?.[type]
+  return rep?.horizons?.['5'] ?? rep?.horizons?.['3'] ?? null
+}
 
 // 买卖点图例颜色
 const MMD_COLORS: Record<string, string> = {
@@ -430,6 +448,7 @@ async function analyze() {
   loading.value = true
   error.value = ''
   multiLevelResult.value = null
+  signalAccuracy.value = null
   try {
     // 1. 取行情 —— 只取最新 count 根，与研究分析的窗口保持一致，
     //    否则图表会显示 8000 根历史而笔/线段/中枢/买卖点只覆盖最近 800 根。
@@ -531,6 +550,7 @@ async function analyze() {
         bar_index: bc.bar_index,
       }))
       macd.value = hr.macd && hr.macd.dif?.length ? hr.macd : null
+      signalAccuracy.value = hr.signal_accuracy ?? null
       // 保存多级别结果
       multiLevelResult.value = {
         confluence: data.confluence,
@@ -624,6 +644,7 @@ async function analyze() {
         bar_index: bc.bar_index,
       }))
       macd.value = data.macd && data.macd.dif?.length ? data.macd : null
+      signalAccuracy.value = data.signal_accuracy ?? null
     }
   } catch (e) {
     error.value = formatError(e)
@@ -646,6 +667,18 @@ function goToBacktest() {
     query: {
       symbol: code.value,
       category: category.value,
+    },
+  })
+}
+
+// 快速跳转到回测页面（预选择缠论策略，用于回测验证）
+function goToBacktestWithChanlun() {
+  router.push({
+    path: '/',
+    query: {
+      symbol: code.value,
+      category: category.value,
+      strategy: 'chanlun',
     },
   })
 }
@@ -828,6 +861,9 @@ onUnmounted(() => {
       </button>
       <button class="ghost" :disabled="loading || bars.length === 0" @click="goToBacktest">
         📈 去回测
+      </button>
+      <button class="ghost" :disabled="loading || bars.length === 0" @click="goToBacktestWithChanlun">
+        🔬 回测验证
       </button>
       <button v-if="!loading && bars.length > 0" class="ghost" @click="exportAnalysis">
         💾 导出分析
@@ -1058,6 +1094,43 @@ onUnmounted(() => {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <!-- 买卖点分类准确度验证 -->
+    <div v-if="!loading && signalAccuracy && signalAccuracy.ranking?.length" class="mmd-accuracy">
+      <h3>🎯 买卖点准确度验证（命中率 vs 随机基准）</h3>
+      <div v-if="signalAccuracy.summary" class="accuracy-summary">{{ signalAccuracy.summary }}</div>
+      <table>
+        <thead>
+          <tr>
+            <th>信号类型</th>
+            <th>信号数</th>
+            <th>5根命中率</th>
+            <th>随机基准</th>
+            <th>超额命中率</th>
+            <th>5根均值收益</th>
+            <th>结论</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="rank in signalAccuracy.ranking" :key="rank.type"
+              :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }">
+            <td><strong>{{ rank.type }}</strong></td>
+            <td>{{ rank.signals }}</td>
+            <td>{{ fmtAccPct(rank.hit_rate) }}</td>
+            <td class="dim">{{ fmtAccPct((byTypeHorizon(rank.type)?.baseline_hit_rate)) }}</td>
+            <td :class="rank.excess_hit_rate >= 0.02 ? 'acc-pos' : (rank.excess_hit_rate <= -0.02 ? 'acc-neg' : '')">
+              {{ fmtAccSigned(rank.excess_hit_rate) }}
+            </td>
+            <td :class="rank.avg_return >= 0 ? 'acc-pos' : 'acc-neg'">{{ fmtAccPct(rank.avg_return) }}</td>
+            <td class="verdict-cell">{{ rank.verdict }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="acc-legend">
+        命中 = 买点后 5 根上涨 / 卖点后 5 根下跌。随机基准 = 同期任意一天进场的平均命中率；
+        超额命中率 &gt; 0 说明该类型信号比随机择时更准。前瞻收益不含交易成本。
+      </p>
     </div>
 
     <!-- 多级别联立分析结果 -->
@@ -1316,6 +1389,66 @@ onUnmounted(() => {
   height: 300px;
   color: var(--text-dim);
   gap: 8px;
+}
+.mmd-accuracy {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.mmd-accuracy h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.accuracy-summary {
+  font-size: 13px;
+  color: var(--text);
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  line-height: 1.5;
+}
+.mmd-accuracy table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.mmd-accuracy th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.mmd-accuracy td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text);
+}
+.mmd-accuracy tr:last-child td {
+  border-bottom: none;
+}
+.mmd-accuracy .dim {
+  color: var(--text-dim);
+}
+.acc-pos {
+  color: var(--up);
+}
+.acc-neg {
+  color: var(--down);
+}
+.acc-legend {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.verdict-cell {
+  color: var(--text-muted) !important;
 }
 
 .hint {

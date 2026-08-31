@@ -134,6 +134,18 @@ export interface SignalAccuracyReport {
   benchmark: { buy_hold_return?: number; strategy_return?: number; alpha?: number }
   verdict: string
   note?: string
+  // 缠论专属：按买卖点类型分组的准确度
+  chanlun_by_type?: Record<string, any> | null
+  chanlun_ranking?: Array<{
+    type: string
+    direction: string
+    signals: number
+    excess_hit_rate: number
+    hit_rate: number
+    avg_return: number
+    verdict: string
+  }> | null
+  chanlun_summary?: string | null
 }
 
 export interface BacktestResult {

@@ -9,6 +9,7 @@ import pytest
 from easy_tdx.backtest.signal_accuracy import (
     _datetime_to_int,
     compute_signal_accuracy,
+    compute_signal_accuracy_by_type,
 )
 
 
@@ -193,3 +194,72 @@ class TestComputeSignalAccuracy:
         d = result.to_dict()
         assert "signal_accuracy" in d
         assert d["signal_accuracy"]["buy"] is not None
+
+
+class TestSignalAccuracyByType:
+    """按信号类型分组的前瞻命中率验证（缠论买卖点场景）。"""
+
+    def test_uptrend_buy_signals_hit(self) -> None:
+        # 单调上涨市：1buy/2buy 买点未来 5 根全涨 → 命中率 100%
+        closes = [100 + i * 0.5 for i in range(80)]
+        signals = [
+            {"type": "1buy", "bar_index": 10},
+            {"type": "1buy", "bar_index": 30},
+            {"type": "2buy", "bar_index": 20},
+        ]
+        rep = compute_signal_accuracy_by_type(closes, signals)
+        assert "1buy" in rep["by_type"]
+        assert "2buy" in rep["by_type"]
+        buy1 = rep["by_type"]["1buy"]
+        assert buy1["signals"] == 2
+        h5 = buy1["horizons"]["5"]
+        assert h5["hit_rate"] == pytest.approx(1.0)
+        assert h5["avg_return"] > 0
+        # 排名：1buy 排在最前（超额命中率相同则按输入稳定性，至少都在榜）
+        assert any(r["type"] == "1buy" for r in rep["ranking"])
+
+    def test_downtrend_sell_signals_hit(self) -> None:
+        # 单调下跌市：1sell 卖点回避下跌 → 命中率 100%（下跌为命中）
+        closes = [100 - i * 0.5 for i in range(80)]
+        signals = [{"type": "1sell", "bar_index": 10}, {"type": "1sell", "bar_index": 30}]
+        rep = compute_signal_accuracy_by_type(closes, signals)
+        sell1 = rep["by_type"]["1sell"]
+        h5 = sell1["horizons"]["5"]
+        assert h5["hit_rate"] == pytest.approx(1.0)
+        assert sell1["direction"] == "SELL"
+
+    def test_sell_signal_hit_uses_downside(self) -> None:
+        # 卖点命中定义 = 未来下跌；上涨则 miss
+        closes = [100 + i for i in range(40)]
+        signals = [{"type": "2sell", "bar_index": 5}]
+        rep = compute_signal_accuracy_by_type(closes, signals)
+        sell2 = rep["by_type"]["2sell"]
+        h5 = sell2["horizons"]["5"]
+        assert h5["hit_rate"] == pytest.approx(0.0)  # 上涨市卖出=误杀
+        assert h5["avg_return"] < 0  # 折算收益为负
+
+    def test_empty_and_insufficient(self) -> None:
+        rep = compute_signal_accuracy_by_type([1.0, 2.0], [])
+        assert rep["by_type"] == {}
+        assert rep["ranking"] == []
+
+    def test_bar_index_out_of_range_skipped(self) -> None:
+        closes = [100 + i for i in range(20)]
+        signals = [{"type": "1buy", "bar_index": 18}]  # 18+5 >= 20 → 被跳过
+        rep = compute_signal_accuracy_by_type(closes, signals)
+        h5 = rep["by_type"]["1buy"]["horizons"]["5"]
+        assert h5["count"] == 0
+
+    def test_summary_present(self) -> None:
+        closes = [100 + i * 0.5 for i in range(80)]
+        signals = [{"type": "1buy", "bar_index": 10}, {"type": "1buy", "bar_index": 30}]
+        rep = compute_signal_accuracy_by_type(closes, signals)
+        assert isinstance(rep["summary"], str)
+        assert len(rep["summary"]) > 0
+
+    def test_verdict_per_type(self) -> None:
+        closes = [100 - i for i in range(60)]
+        signals = [{"type": "3sell", "bar_index": 10}]
+        rep = compute_signal_accuracy_by_type(closes, signals)
+        assert "显著优于随机" in rep["by_type"]["3sell"]["verdict"]
+

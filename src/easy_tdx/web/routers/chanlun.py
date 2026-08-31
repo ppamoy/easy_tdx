@@ -326,6 +326,24 @@ async def chanlun_analyze(
             "latest_width": round(result.boll.latest_width, 4),
         }
 
+    # 4. 买卖点分类准确度验证（前瞻命中率 vs 随机基准）——让用户核对
+    #    「哪类缠论买卖点信号真的准」，直接服务择时交易的可信度判断。
+    try:
+        from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type
+
+        closes = [float(k.close) for k in result.klines]
+        mmd_signals = [
+            {
+                "type": mmd.mmd_type.value,
+                "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
+            }
+            for mmd in result.mmds
+        ]
+        d["signal_accuracy"] = compute_signal_accuracy_by_type(closes, mmd_signals)
+    except Exception:
+        # 准确度验证是附加信息，失败不应阻断主分析结果
+        d["signal_accuracy"] = None
+
     return d
 
 

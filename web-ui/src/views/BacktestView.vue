@@ -11,6 +11,7 @@ import ChanlunChart from '../components/ChanlunChart.vue'
 import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
 import SignalAccuracyPanel from '../components/SignalAccuracyPanel.vue'
+import ChanlunAccuracyPanel from '../components/ChanlunAccuracyPanel.vue'
 import KlineChart from '../components/KlineChart.vue'
 import MetricTable from '../components/MetricTable.vue'
 import StrategyPicker from '../components/StrategyPicker.vue'
@@ -541,6 +542,15 @@ async function onSave() {
         <section v-if="store.result.signal_accuracy" class="report-section">
           <h3>🎯 模型准确度验证（信号命中率 vs 随机基准）</h3>
           <SignalAccuracyPanel :report="store.result.signal_accuracy" />
+        </section>
+
+        <section v-if="isChanlunStrategy && store.result.signal_accuracy?.chanlun_by_type" class="report-section">
+          <h3>📊 缠论买卖点类型准确度（按 1buy/2buy/3buy/... 分组验证）</h3>
+          <ChanlunAccuracyPanel
+            :by-type="store.result.signal_accuracy.chanlun_by_type"
+            :ranking="store.result.signal_accuracy.chanlun_ranking"
+            :summary="store.result.signal_accuracy.chanlun_summary"
+          />
         </section>
 
         <section class="report-section">

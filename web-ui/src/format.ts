@@ -11,3 +11,16 @@ export function fmtPct(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '-'
   return `${(v * 100).toFixed(2)}%`
 }
+
+/** 一位小数百分比（用于准确度面板）。 */
+export function fmtAccPct(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  return `${(v * 100).toFixed(1)}%`
+}
+
+/** 带符号百分比（用于超额命中率等）。 */
+export function fmtAccSigned(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  const sign = v >= 0 ? '+' : ''
+  return `${sign}${(v * 100).toFixed(1)}%`
+}

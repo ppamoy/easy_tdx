@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+**缠论买卖点分类准确度验证（V96）—— 让用户核对「哪类缠论买卖点信号真的准」** —— V95 在回测层验证了整体信号准确度；本次把同一套前瞻命中率方法论下沉到缠论分析层：对每个买卖点类型（1买/2买/3买/类二买/各卖点）分别统计历史前瞻命中率，并与随机入场基准对比，直接回答「一类买卖点 / 二类买卖点 / 三类买卖点，历史回测上究竟哪类准、准多少」。
+
+### 新增
+
+- **按信号类型分组的准确度验证（backtest/signal_accuracy.py 新增 compute_signal_accuracy_by_type）** —— 输入收盘价序列 + 带类型的信号列表（type + bar_index），按类型分组统计未来 1/3/5/10/20 根前瞻收益与命中率（买点=上涨命中、卖点=下跌命中），并给出随机入场基准命中率/收益与超额命中率；输出含 by_type 明细、按 5 根超额命中率降序的 ranking、以及一句总体结论（最强买点/最强卖点）。
+- **/chanlun/analyze 响应新增 signal_accuracy 字段（web/routers/chanlun.py）** —— 缠论分析完成后，用全部分析出的买卖点（含 bar_index 锚点）自动计算分类准确度；附加信息失败不阻断主分析结果（try/except 兜底为 None）。
+- **缠论分析页新增「🎯 买卖点准确度验证」面板（web-ui/src/views/ChanlunView.vue）** —— 在买卖点明细下方展示：总体结论行（最强买点/卖点 + 命中率 + 超额）、每类信号表格（类型/信号数/5根命中率/随机基准/超额命中率/5根均值收益/结论），命中率高于随机基准着色区分；多级别分析（high_level）同样透出。
+- **缠论回测结果按买卖点类型分组验证（backtest/strategies/chanlun.py + backtest/engine.py Step 5.5）** —— ChanlunStrategy 新增 _signal_traces（逐类型记录每个买卖点的 bar_index），引擎对缠论策略回测自动计算按类型的前瞻命中率，写入 signal_accuracy.chanlun_by_type / chanlun_ranking / chanlun_summary；新增 high_conf_only 参数（仅交易置信度 >=70% 的信号）。
+- **回测页新增「📊 缠论买卖点类型准确度」面板（web-ui/src/components/ChanlunAccuracyPanel.vue + BacktestView.vue）** —— 缠论策略回测后展示类型排名表（类型/方向/信号数/5根命中率/随机基准/超额命中率/5根均收益/判定）与各类型分窗口前瞻命中表；format.ts 增加 fmtAccPct/fmtAccSigned 辅助。
+
+### 验证
+
+- 新增 7 项单测（tests/unit/test_backtest_signal_accuracy.py，累计 20 项）：上涨市买点全命中、下跌市卖点全命中、卖点命中用下跌口径、空/不足输入、bar_index 越界跳过、summary/verdict 生成。
+- 新增 10 项缠论专属单测（tests/unit/test_chanlun_signal_accuracy.py + test_chanlun_strategy.py）：按类型分组、排名降序、越界跳过、min_confidence/high_conf_only 参数生效、边界数据不崩溃、回测结果含 chanlun 专属准确度。
+- 真实数据端到端：SZ000001 DAY 300 根 /chanlun/analyze 返回 signal_accuracy，如「1sell 5根命中 100%，超额 +53.9%」（vs 随机基准 46.1%）。
+- Playwright 浏览器回归：缠论分析页「买卖点准确度验证」面板可见、summary 与 5 行准确度表格渲染、console 零错误。
+- ruff / mypy 对改动文件零告警；全量单测 **2328 passed**（累计新增 17 项，无回归）。
+
+## [Unreleased]
+
 **回测新增「模型准确度验证」（V95）—— 用历史回测回答「模型择时是否真的准确」** —— 此前回测只给账户盈亏（总收益/夏普/回撤），用户无法判断收益来自「模型信号准确」还是「行情普涨」。本次为每次回测自动计算信号前瞻命中率，并与「随机入场基准」和「同期买入持有基准」对比，让用户直接核对模型质量。
 
 ### 新增：信号前瞻命中率 + 基准对比（backtest/signal_accuracy.py）

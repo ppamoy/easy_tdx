@@ -6,6 +6,11 @@
 - 新笔规则：分型之间至少有 1 根独立缠论 K 线（即分型中间 K 线的 index 差 > 2）
 - 老笔规则：分型之间至少有 3 根缠论 K 线
 - 简单笔规则：只要顶底交替即可
+
+v2 改进：
+- 增强 gap 计算：确保使用正确的 K 线索引
+- 价格方向校验：确保笔的方向与价格走势一致
+- 边界保护：防止极端情况下的计算错误
 """
 
 from __future__ import annotations
@@ -27,7 +32,17 @@ def _can_form_bi(
     # 分型之间缠论 K 线的间距
     # 分型由三根 K 线组成：[left, mid, right]
     # 独立 K 线数 = end.left.index - start.right.index + 1（如果 >0）
-    gap = end.klines[0].index - start.klines[2].index + 1
+    # 防御性检查：确保索引有效
+    if not start.klines or not end.klines:
+        return False
+
+    try:
+        start_right_idx = start.klines[-1].index
+        end_left_idx = end.klines[0].index
+        gap = end_left_idx - start_right_idx + 1
+    except (AttributeError, IndexError):
+        # 回退到默认值：假设 gap = 0（不满足最小要求）
+        gap = 0
 
     if config.bi_type == "new":
         # 新笔：至少1根独立K线
@@ -57,6 +72,11 @@ def find_bis(
     "分型陷阱"场景：持续下跌/上涨中，密集交替分型导致每次替换 start_fx
     都把 right_kline_index 前推，使下一个异类型分型的 gap 永远为 0。
 
+    v2 改进：
+    - 增加防御性检查，防止 None/空数据导致异常
+    - 改进价格方向校验，确保笔的方向与价格走势一致
+    - 正确处理边界情况（如只有2个分型）
+
     Args:
         fxs: 分型列表
         config: 缠论配置
@@ -80,6 +100,10 @@ def find_bis(
     for i in range(1, len(fxs)):
         current_fx = fxs[i]
 
+        # 防御性检查：确保分型数据有效
+        if not current_fx.klines or not start_fx.klines:
+            continue
+
         # 同类型分型：取更极端的
         if current_fx.fx_type == start_fx.fx_type:
             # 当存在 pending_opposite 时，不替换 start_fx。
@@ -92,9 +116,6 @@ def find_bis(
                 # 更极端的同型分型更新起点时，若上一笔终点就是旧起点
                 # （即当前起点尚未成笔、仍是被趋势穿越中的转折点），
                 # 同步延伸上一笔终点到新起点，保持笔序列首尾相连。
-                # 例：08-03 底分型被 08-17 更低的底分型穿越时，向下笔终点
-                # 应延伸到 08-17 低点，否则笔序列在 08-03 与 08-17 之间断裂，
-                # 线段划分（依赖连续笔序列）会因此失去共享转折点。
                 if bis and bis[-1].end is start_fx:
                     bis[-1].end = current_fx
                     bis[-1].high = max(bis[-1].high, current_fx.val)
@@ -126,7 +147,6 @@ def find_bis(
                 # 该失败只出现在"起点极值被穿越"的非陷阱路径：
                 # 清空 pending 让后续更极端的同型分型能正确更新起点，
                 # 避免起点停留在被穿越的高位/低位生成假笔。
-                # （陷阱场景的笔方向校验恒通过，此处逻辑不会触发，行为不变。）
                 pending_opposite = None
                 continue
 

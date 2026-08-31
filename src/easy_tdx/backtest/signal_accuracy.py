@@ -244,3 +244,199 @@ def _empty_report(
         report["note"] = note
     report["verdict"] = note or "无成交记录，无法验证择时准确度"
     return report
+
+
+
+# ── 按信号类型分组的准确度验证（缠论买卖点等） ───────────────────────────────
+
+
+def _classify_direction(sig_type: str) -> str:
+    """按类型名推断方向：含 buy 视为买点（上涨为命中），否则视为卖点（下跌为命中）。"""
+    return "BUY" if "buy" in sig_type.lower() else "SELL"
+
+
+def _signal_type_stats(
+    sig_type: str,
+    idx_list: list[int],
+    closes: np.ndarray,
+    horizons: tuple[int, ...],
+    baseline: dict[int, dict[str, float]],
+) -> dict[str, Any]:
+    """单个信号类型的前瞻统计。"""
+    n_bars = len(closes)
+    direction = _classify_direction(sig_type)
+    out: dict[str, Any] = {
+        "type": sig_type,
+        "signals": len(idx_list),
+        "direction": direction,
+        "horizons": {},
+    }
+    for h in horizons:
+        fwd_list: list[float] = []
+        for idx in idx_list:
+            if idx is None or idx < 0 or idx + h >= n_bars:
+                continue
+            fwd_list.append(float(closes[idx + h] / closes[idx] - 1.0))
+        fwd = np.asarray(fwd_list, dtype=float)
+        stats = _horizon_stats(fwd)
+        if direction == "SELL" and len(fwd) > 0:
+            stats["hit_rate"] = float(np.mean(fwd < 0))
+            stats["avg_return"] = float(np.mean(-fwd))
+            stats["median_return"] = float(np.median(-fwd))
+        base = baseline[h]
+        stats["baseline_hit_rate"] = base["hit_rate"]
+        stats["baseline_avg_return"] = base["avg_return"]
+        stats["excess_hit_rate"] = (
+            float(stats["hit_rate"] - base["hit_rate"]) if stats["count"] else 0.0
+        )
+        stats["excess_avg_return"] = (
+            float(stats["avg_return"] - base["avg_return"]) if stats["count"] else 0.0
+        )
+        out["horizons"][str(h)] = stats
+    out["verdict"] = _signal_type_verdict(out)
+    return out
+
+
+def _signal_type_verdict(report: dict[str, Any]) -> str:
+    """单类型一句结论（取 5 根窗口，缺则回退 3/10）。"""
+    horizons = report.get("horizons", {})
+    h5 = horizons.get("5") or horizons.get("3") or horizons.get("10")
+    if not h5 or h5.get("count", 0) == 0:
+        return "样本不足，无法可靠评估"
+    excess = float(h5.get("excess_hit_rate", 0.0))
+    n = int(h5.get("count", 0))
+    direction = report.get("direction", "BUY")
+    verb = "买入" if direction == "BUY" else "卖出"
+    if excess > 0.05:
+        return verb + "点显著优于随机（+" + f"{excess:.1%}" + "，n=" + str(n) + "）"
+    if excess > 0:
+        return verb + "点略优于随机（+" + f"{excess:.1%}" + "，n=" + str(n) + "）"
+    if excess > -0.05:
+        return verb + "点与随机相当（" + f"{excess:+.1%}" + "，n=" + str(n) + "）"
+    return verb + "点弱于随机（" + f"{excess:+.1%}" + "，n=" + str(n) + "）"
+
+
+def compute_signal_accuracy_by_type(
+    closes: list[float] | np.ndarray,
+    signals: list[dict[str, Any]],
+    horizons: tuple[int, ...] = DEFAULT_HORIZONS,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """按信号类型分组的前瞻命中率验证（适用于缠论买卖点等带类型的信号）。
+
+    与 compute_signal_accuracy 的区别：输入直接是带类型的信号列表
+    （每条含 type 与 bar_index），按类型（如 1buy/2buy/3buy/1sell/…）
+    分组，对每个类型统计未来 N 根前瞻收益、命中率，并与随机入场基准对比，
+    回答「哪类信号真的准」。
+
+    Args:
+        closes: 收盘价序列（与 K 线一一对应）
+        signals: 信号列表，每条为 {"type": str, "bar_index": int|None}
+        horizons: 前瞻窗口（根数）
+        seed: 随机基准采样种子
+
+    Returns:
+        dict：{"by_type": {类型: {signals, direction, horizons, verdict}},
+              "ranking": [按5根超额命中率降序的类型摘要],
+              "summary": 一句总体结论}
+    """
+    closes_arr = np.asarray(closes, dtype=float)
+    n_bars = len(closes_arr)
+    if n_bars < 2 or not signals:
+        return {"by_type": {}, "ranking": [], "summary": "无信号或数据不足，无法验证"}
+
+    # 随机基准（每窗口）
+    baseline: dict[int, dict[str, float]] = {}
+    for h in horizons:
+        if n_bars <= h:
+            baseline[h] = {"count": 0, "hit_rate": 0.0, "avg_return": 0.0}
+            continue
+        eligible = n_bars - h
+        sample_idx = _random_split(eligible, seed)
+        fwd = closes_arr[sample_idx + h] / closes_arr[sample_idx] - 1.0
+        baseline[h] = {
+            "count": int(len(sample_idx)),
+            "hit_rate": float(np.mean(fwd > 0)),
+            "avg_return": float(np.mean(fwd)),
+        }
+
+    # 按类型分组
+    grouped: dict[str, list[int]] = {}
+    for sig in signals:
+        sig_type = str(sig.get("type", "unknown"))
+        bar_index = sig.get("bar_index")
+        if bar_index is None:
+            continue
+        grouped.setdefault(sig_type, []).append(int(bar_index))
+
+    by_type: dict[str, Any] = {}
+    for sig_type, idx_list in grouped.items():
+        by_type[sig_type] = _signal_type_stats(
+            sig_type, idx_list, closes_arr, horizons, baseline
+        )
+
+    # 排名：按 5 根窗口超额命中率降序（缺窗口按 3/10）
+    def _key(item: tuple[str, dict[str, Any]]) -> float:
+        h5 = item[1]["horizons"].get("5")
+        if not h5 or h5.get("count", 0) == 0:
+            return -999.0
+        return float(h5.get("excess_hit_rate", 0.0))
+
+    ranking: list[dict[str, Any]] = []
+    for sig_type, report in sorted(by_type.items(), key=_key, reverse=True):
+        h5 = report["horizons"].get("5") or report["horizons"].get("3")
+        ranking.append(
+            {
+                "type": sig_type,
+                "direction": report["direction"],
+                "signals": report["signals"],
+                "excess_hit_rate": float(h5.get("excess_hit_rate", 0.0))
+                if h5
+                else 0.0,
+                "avg_return": float(h5.get("avg_return", 0.0)) if h5 else 0.0,
+                "hit_rate": float(h5.get("hit_rate", 0.0)) if h5 else 0.0,
+                "verdict": report["verdict"],
+            }
+        )
+
+    summary = _build_type_summary(by_type)
+    return {"by_type": by_type, "ranking": ranking, "summary": summary}
+
+
+def _build_type_summary(by_type: dict[str, Any]) -> str:
+    """从各类型报告中挑出最强买点/卖点，生成一句总体结论。"""
+    best_buy: dict[str, Any] | None = None
+    best_sell: dict[str, Any] | None = None
+    for sig_type, report in by_type.items():
+        h5 = report["horizons"].get("5") or report["horizons"].get("3")
+        if not h5 or h5.get("count", 0) == 0:
+            continue
+        excess = float(h5.get("excess_hit_rate", 0.0))
+        if report["direction"] == "BUY":
+            if best_buy is None or excess > float(
+                best_buy["horizons"].get("5", {}).get("excess_hit_rate", 0.0)
+            ):
+                best_buy = report
+        else:
+            if best_sell is None or excess > float(
+                best_sell["horizons"].get("5", {}).get("excess_hit_rate", 0.0)
+            ):
+                best_sell = report
+
+    parts: list[str] = []
+    if best_buy:
+        h5 = best_buy["horizons"].get("5") or best_buy["horizons"].get("3")
+        parts.append(
+            "最强买点 " + best_buy.get("type", "?") + "（5根命中 " + f"{h5['hit_rate']:.0%}" +
+            "，超额 " + f"{h5['excess_hit_rate']:+.1%}" + "）"
+        )
+    if best_sell:
+        h5 = best_sell["horizons"].get("5") or best_sell["horizons"].get("3")
+        parts.append(
+            "最强卖点 " + best_sell.get("type", "?") + "（5根命中 " + f"{h5['hit_rate']:.0%}" +
+            "，超额 " + f"{h5['excess_hit_rate']:+.1%}" + "）"
+        )
+    if not parts:
+        return "各类型样本均不足，无法验证可靠命中率"
+    return "；".join(parts) + "。"
+
