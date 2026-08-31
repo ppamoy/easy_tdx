@@ -322,7 +322,25 @@ def _run_backtest(df: pd.DataFrame, req: BacktestRequest) -> dict[str, Any]:
         execution=req.execution,
     )
     result = engine.run(df)
-    return serialize_result(result)
+    result_dict = serialize_result(result)
+
+    # 分段稳健性 / 过拟合检查（可选，默认关闭）：把区间均分为 N 段逐段重跑
+    if req.robustness_segments is not None:
+        from easy_tdx.backtest.robustness import compute_segment_robustness
+
+        robustness = compute_segment_robustness(
+            df,
+            lambda: entry.build(req.params),
+            segments=req.robustness_segments,
+            cash=req.cash,
+            commission=req.commission,
+            stamp_tax=req.stamp_tax,
+            slippage=req.slippage,
+            execution=req.execution,
+        )
+        result_dict["segment_robustness"] = robustness
+
+    return result_dict
 
 
 def _ohlcv_to_df(records: list[dict[str, Any]]) -> pd.DataFrame:

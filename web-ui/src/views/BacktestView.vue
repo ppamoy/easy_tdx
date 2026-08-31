@@ -12,6 +12,7 @@ import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
 import SignalAccuracyPanel from '../components/SignalAccuracyPanel.vue'
 import ChanlunAccuracyPanel from '../components/ChanlunAccuracyPanel.vue'
+import SegmentRobustnessPanel from '../components/SegmentRobustnessPanel.vue'
 import KlineChart from '../components/KlineChart.vue'
 import MetricTable from '../components/MetricTable.vue'
 import StrategyPicker from '../components/StrategyPicker.vue'
@@ -48,6 +49,9 @@ const cash = ref(1000000)
 const commission = ref(0.0003)
 const slippage = ref(0)
 const execution = ref<ExecutionMode>('next_open')
+// 分段稳健性/过拟合检查：false=不检查；true=按 robustnessSegmentCount 分段重跑
+const checkRobustness = ref(false)
+const robustnessSegmentCount = ref(3)
 
 // 缠论相关状态
 const chanlunLoading = ref(false)
@@ -157,6 +161,7 @@ async function onRun() {
     commission: commission.value,
     slippage: slippage.value,
     execution: execution.value,
+    robustness_segments: checkRobustness.value ? robustnessSegmentCount.value : null,
   })
   // 3. 如果选择了缠论策略，运行缠论分析
   if (strategy.value === 'chanlun' && store.ohlcv.length > 0) {
@@ -454,6 +459,17 @@ async function onSave() {
             <option v-for="e in EXECUTIONS" :key="e.value" :value="e.value">{{ e.label }}</option>
           </select>
         </div>
+        <div class="field">
+          <label>
+            <input type="checkbox" v-model="checkRobustness" />
+            分段稳健性检查（过拟合验证）
+          </label>
+          <select v-if="checkRobustness" v-model.number="robustnessSegmentCount" class="seg-count">
+            <option :value="2">2 段</option>
+            <option :value="3">3 段</option>
+            <option :value="4">4 段</option>
+          </select>
+        </div>
       </section>
 
       <button
@@ -551,6 +567,11 @@ async function onSave() {
             :ranking="store.result.signal_accuracy.chanlun_ranking"
             :summary="store.result.signal_accuracy.chanlun_summary"
           />
+        </section>
+
+        <section v-if="store.result.segment_robustness" class="report-section">
+          <h3>🧱 分段稳健性检查（过拟合验证）</h3>
+          <SegmentRobustnessPanel :report="store.result.segment_robustness" />
         </section>
 
         <section class="report-section">

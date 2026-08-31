@@ -61,6 +61,7 @@ export interface BacktestRequest {
   stamp_tax?: number
   slippage?: number
   execution?: ExecutionMode
+  robustness_segments?: number | null
   ohlcv?: Bar[]
   symbol?: string
   category?: Category
@@ -148,6 +149,42 @@ export interface SignalAccuracyReport {
   chanlun_summary?: string | null
 }
 
+export interface SegmentRobustnessReport {
+  segments: Array<{
+    label: string
+    bars: number
+    skipped?: boolean
+    note?: string
+    start?: string
+    end?: string
+    total_return?: number
+    win_rate?: number
+    sharpe?: number
+    max_drawdown?: number
+    trades?: number
+    hit_rate?: number | null
+    buy_hold_return?: number
+    alpha?: number
+  }>
+  consistency: {
+    segments_analyzed: number
+    positive_segment_ratio?: number
+    beats_buy_hold_ratio?: number
+    win_rate_mean?: number
+    win_rate_std?: number
+    win_rate_cv?: number
+    hit_rate_mean?: number | null
+    hit_rate_std?: number | null
+    return_mean?: number
+    return_std?: number
+    best_segment?: string
+    worst_segment?: string
+  }
+  overfit_likely: boolean
+  verdict: string
+  note?: string | null
+}
+
 export interface BacktestResult {
   performance: Performance
   equity_curve: EquityPoint[]
@@ -155,6 +192,7 @@ export interface BacktestResult {
   positions: Record<string, unknown>[]
   config: Record<string, unknown>
   signal_accuracy?: SignalAccuracyReport | null
+  segment_robustness?: SegmentRobustnessReport | null
   diagnostic?: string | null
 }
 
