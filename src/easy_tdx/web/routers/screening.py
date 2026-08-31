@@ -375,3 +375,70 @@ def _calc_quality_score(result: Any, target_date: datetime) -> float:
     score += min(len(result.zss) * 5, 20)
 
     return min(score, 100)
+
+
+@router.post("/screening/verify")
+async def verify_screening(
+    req: dict[str, Any],
+    client: Any = Depends(get_client),
+) -> dict[str, Any]:
+    from easy_tdx.backtest.screening_verify import compute_screening_verify
+
+    date_str = str(req.get("date", ""))
+    symbols = req.get("symbols") or []
+    selected = req.get("selected") or []
+    market = str(req.get("market", "SZ")).upper()[:2]
+
+    if not date_str or not symbols:
+        return {"error": "请提供选股日期和扫描池股票列表", "horizons": {}, "verdict": ""}
+    try:
+        datetime.strptime(date_str, "%Y-%m-%d")  # noqa: DTZ007 - 校验格式即可
+    except ValueError:
+        return {"error": "日期格式错误，请使用 YYYY-MM-DD", "horizons": {}, "verdict": ""}
+
+    def _norm(sym: str) -> str:
+        """规范化为 市场:6位代码（兼容 SZ:000001 / SZ000001 / 000001）。"""
+        if ":" in sym:
+            m, c = sym.split(":", 1)
+        elif len(sym) == 6:
+            m = "SH" if sym.startswith("6") else market
+            c = sym
+        else:
+            m = sym[:2].upper()
+            c = sym[2:]
+        return f"{m.upper()[:2]}:{c.zfill(6)}"
+
+    symbols_canon = [_norm(s) for s in symbols]
+    selected_codes = {_norm(s).split(":", 1)[1] for s in selected}
+    # 池内被选中的集合（按代码匹配，兼容前缀差异）
+    selected_in_pool = [
+        s for s in symbols_canon if s.split(":", 1)[1] in selected_codes
+    ]
+
+    bars_by_symbol: dict[str, dict[str, Any]] = {}
+    for sym in symbols_canon:
+        m, code = sym.split(":", 1)
+        try:
+            df = await client.get_security_bars(
+                market_from_str(m), code, category_from_str("DAY"), 0, 400
+            )
+        except Exception:  # noqa: BLE001
+            continue
+        if df is None or len(df) < 2:
+            continue
+        dt_col = "datetime" if "datetime" in df.columns else "date"
+        bars_by_symbol[sym] = {
+            "datetime": [str(d)[:10] for d in df[dt_col].tolist()],
+            "close": [float(c) for c in df["close"].tolist()],
+        }
+
+    if not bars_by_symbol:
+        return {"error": "未能取到池内任何股票的行情", "horizons": {}, "verdict": ""}
+
+    report = compute_screening_verify(
+        bars_by_symbol,
+        selected_in_pool,
+        date_str,
+    )
+    report["selected_matched"] = len(selected_in_pool)
+    return report

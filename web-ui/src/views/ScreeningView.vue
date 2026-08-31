@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import EquityChart from '../components/EquityChart.vue'
 import { formatError } from '../api'
+import { fmtPct } from '../format'
 import type { Bar } from '../types'
 
 // ── 状态变量 ────────────────────────────────────────────────────────────
@@ -17,6 +18,11 @@ const selectDate = ref('')
 const scanning = ref(false)
 const scanProgress = ref(0)
 const scanTotal = ref(0)
+
+// 选股结果前瞻收益验证
+const scanPool = ref<string[]>([]) // 本次扫描的全部股票（选中+未选中，symbol 规范为 市场:代码）
+const verifyResult = ref<any>(null)
+const verifyLoading = ref(false)
 const scanCurrent = ref(0)
 const error = ref('')
 
@@ -206,10 +212,47 @@ async function scanStocks() {
 
     scanProgress.value = 100
     scanTotal.value = qualifiedStocks.value.length
+
+    // 记录本次扫描的完整池（选中 + 未选中），供「选股效果验证」对比
+    const qualifiedSymbols = (data.qualified ?? []).map((s: any) => s.symbol)
+    const rejectedCodes = (data.details ?? []).map((d: any) => d.code)
+    scanPool.value = [
+      ...qualifiedSymbols,
+      ...rejectedCodes.map((c: string) => market.value + c),
+    ]
+    verifyResult.value = null
   } catch (e) {
     error.value = formatError(e)
   } finally {
     scanning.value = false
+  }
+}
+
+// ── 选股结果前瞻收益验证 ─────────────────────────────────────────────────
+async function verifyScreening() {
+  if (!selectDate.value || scanPool.value.length === 0) return
+  verifyLoading.value = true
+  verifyResult.value = null
+  try {
+    const resp = await fetch('/api/v1/screening/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        date: selectDate.value,
+        market: market.value,
+        symbols: scanPool.value,
+        selected: qualifiedStocks.value.map((s) => s.symbol),
+      }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error((err as { detail?: string }).detail ?? ('HTTP ' + resp.status))
+    }
+    verifyResult.value = await resp.json()
+  } catch (e) {
+    error.value = '选股验证失败: ' + formatError(e)
+  } finally {
+    verifyLoading.value = false
   }
 }
 
@@ -400,6 +443,49 @@ onMounted(() => {
         <span class="stat-label">平均质量分</span>
         <span class="stat-value">{{ stats.avgScore }}</span>
       </div>
+    </div>
+
+    <!-- 选股效果验证 -->
+    <div v-if="!scanning && qualifiedStocks.length > 0" class="verify-bar">
+      <button class="ghost verify-btn" :disabled="verifyLoading" @click="verifyScreening">
+        {{ verifyLoading ? '验证中（回看选股日后 5/10/20/60 日收益）…' : '📈 验证选股效果（回测：选中 vs 未选中）' }}
+      </button>
+    </div>
+    <div v-if="verifyResult" class="verify-panel">
+      <h3>📈 选股效果验证（选股日 {{ verifyResult.date }} · 池 {{ verifyResult.pool_size }} 只 · 选中 {{ verifyResult.selected_size }} 只）</h3>
+      <div class="verify-verdict">{{ verifyResult.verdict }}</div>
+      <table class="verify-table">
+        <thead>
+          <tr>
+            <th>持有交易日</th>
+            <th>选中平均收益</th>
+            <th>池平均收益</th>
+            <th>超额收益</th>
+            <th>选中命中率</th>
+            <th>池命中率</th>
+            <th>超额命中率</th>
+            <th>样本(选/池)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="h in ['5', '10', '20', '60']" :key="h">
+            <tr v-if="verifyResult.horizons[h]">
+              <td>{{ h }} 日</td>
+              <td :class="(verifyResult.horizons[h].selected_avg_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(verifyResult.horizons[h].selected_avg_return) }}</td>
+              <td class="dim">{{ fmtPct(verifyResult.horizons[h].pool_avg_return) }}</td>
+              <td :class="(verifyResult.horizons[h].excess_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(verifyResult.horizons[h].excess_return) }}</td>
+              <td :class="(verifyResult.horizons[h].selected_hit_rate ?? 0) >= 0.5 ? 'pos' : ''">{{ fmtPct(verifyResult.horizons[h].selected_hit_rate) }}</td>
+              <td class="dim">{{ fmtPct(verifyResult.horizons[h].pool_hit_rate) }}</td>
+              <td :class="(verifyResult.horizons[h].excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(verifyResult.horizons[h].excess_hit_rate) }}</td>
+              <td class="dim">{{ verifyResult.horizons[h].selected_n }} / {{ verifyResult.horizons[h].pool_n }}</td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p class="verify-legend">
+        方法：以选股日收盘价为基准，回看其后 5/10/20/60 个交易日的收益；
+        对比模型选中的股票 vs 整个扫描池（含未选中）。超额为正且命中率更高说明选股模型具备择股能力。
+      </p>
     </div>
 
     <!-- 主内容区 -->
@@ -658,6 +744,69 @@ onMounted(() => {
   color: var(--text);
 }
 
+.verify-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+.verify-btn {
+  font-size: 13px;
+}
+.verify-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.verify-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.verify-verdict {
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  color: var(--text);
+}
+.verify-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.verify-table th {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.verify-table th:first-child {
+  text-align: left;
+}
+.verify-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.verify-table td.dim {
+  font-family: inherit;
+  color: var(--text-muted);
+}
+.verify-legend {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
 .main-content {
   display: grid;
   grid-template-columns: 320px 1fr;
