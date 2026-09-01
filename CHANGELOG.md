@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V229（V230）—— 文档覆盖 CLI 多策略重验与指南自身迭代** —— V228 仅把指南更新到 V227，V229 新增的 CLI reverify 多策略组合入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V229：标题、全景表补 V228/V229 两行、3.9 命令行节 reverify 条目补多策略说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V229；全景表补 V228/V229；3.9 命令行节 reverify 补「支持多策略组合（V229）」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI reverify 支持多策略组合（V229）—— 命令行三类策略全部可一键刷新验证结论** —— Web 端策略库已支持多策略组合重验（V227），但 CLI reverify（V213）只处理 single/portfolio，multi 被拒。本次给 `easy-tdx reverify` 增加 kind='multi' 支持：用 context.items 各策略在原标的上取行情，跑 MultiStrategyEngine 组合回测 + 逐槽样本外（V128），刷新快照 performance/accuracy/trust/out_of_sample 并标记 source=reverify。
 
 ### 新增
