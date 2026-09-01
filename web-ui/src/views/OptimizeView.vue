@@ -15,6 +15,7 @@ import QuoteCarousel from '../components/QuoteCarousel.vue'
 import SymbolPicker from '../components/SymbolPicker.vue'
 import { gradeGridPoint } from '../grading'
 import type { GradeResult } from '../grading'
+import { fetchBars, formatError, runBacktest, saveStrategy } from '../api'
 import type { Category, ExecutionMode } from '../types'
 import { useBacktestStore } from '../stores/backtest'
 
@@ -301,6 +302,238 @@ async function copyOptimizeJson() {
   }
   setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
 }
+
+// V205: 批量验证自选股（用寻优得到的最优策略+参数对全局自选股逐只回测，按可信度排名）
+interface OptBatchRow {
+  symbol: string
+  market: string
+  code: string
+  total_return: number | null
+  win_rate: number | null
+  hit_rate: number | null
+  excess_hit_rate: number | null
+  trust_score: number | null
+  trust_grade: string | null
+  trades: number | null
+  oos_degraded: boolean | null
+  oos_verdict: string
+}
+const optBatchRows = ref<OptBatchRow[]>([])
+const optBatchLoading = ref(false)
+const optBatchMsg = ref('')
+const optBatchOnlyRobust = ref(false)
+const optBatchSort = ref<'return' | 'trust'>('trust')
+const sortedOptBatchRows = computed(() => {
+  const base = optBatchOnlyRobust.value
+    ? optBatchRows.value.filter((r) => r.oos_degraded === false)
+    : optBatchRows.value
+  if (!base.length || optBatchSort.value === 'trust') return base
+  return [...base].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+})
+function optBestStrategy(): { name: string; label: string; params: Record<string, number | string> } | null {
+  if (store.optimizeResult?.best) {
+    return {
+      name: store.optimizeResult.strategy,
+      label: store.optimizeResult.strategy,
+      params: store.optimizeResult.best.params,
+    }
+  }
+  if (store.optimizeAllResult?.best) {
+    const b = store.optimizeAllResult.best
+    return { name: b.strategy, label: b.strategy_label || b.strategy, params: b.params }
+  }
+  return null
+}
+async function runOptBatchVerify() {
+  if (optBatchLoading.value) return
+  const best = optBestStrategy()
+  if (!best) {
+    optBatchMsg.value = '请先完成寻优（得到最优参数）'
+    setTimeout(() => { optBatchMsg.value = '' }, 3500)
+    return
+  }
+  let raw: any[] = []
+  try { raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]') } catch { raw = [] }
+  const watch = raw.filter((w) => w && w.code && w.market).slice(0, 12)
+  if (watch.length === 0) {
+    optBatchMsg.value = '自选股为空：请先在缠论分析页「加入自选股」'
+    setTimeout(() => { optBatchMsg.value = '' }, 3500)
+    return
+  }
+  optBatchLoading.value = true
+  optBatchMsg.value = ''
+  const rows: OptBatchRow[] = []
+  try {
+    for (const w of watch) {
+      try {
+        const bars = await fetchBars(w.market, w.code, category.value, undefined, undefined, 500)
+        if (bars.length < 30) continue
+        const result = await runBacktest({
+          strategy: best.name,
+          params: best.params,
+          cash: cash.value,
+          commission: 0.0003,
+          slippage: 0,
+          execution: execution.value,
+          out_of_sample: true,
+          oos_train_ratio: 0.7,
+          ohlcv: bars,
+        })
+        const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+        const oos = result.out_of_sample
+        rows.push({
+          symbol: w.symbol || w.market + w.code,
+          market: w.market,
+          code: w.code,
+          total_return: result.performance.total_return ?? null,
+          win_rate: result.performance.win_rate ?? null,
+          hit_rate: h5 && h5.count > 0 ? h5.hit_rate : null,
+          excess_hit_rate: h5 && h5.count > 0 ? h5.excess_hit_rate : null,
+          trust_score: result.model_trust?.score ?? null,
+          trust_grade: result.model_trust?.grade ?? null,
+          trades: result.performance.total_trades ?? null,
+          oos_degraded: oos?.degraded ?? null,
+          oos_verdict: oos?.verdict ?? '',
+        })
+      } catch { /* 单只失败跳过 */ }
+    }
+    rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
+    optBatchRows.value = rows
+    if (rows.length === 0) optBatchMsg.value = '批量验证无结果（行情取数失败或数据不足）'
+  } catch (e) {
+    optBatchMsg.value = '批量验证失败：' + formatError(e)
+  } finally {
+    optBatchLoading.value = false
+  }
+}
+function optBatchPct(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(1) + '%'
+}
+function optBatchTrust(r: OptBatchRow): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
+function optBatchOosLabel(r: OptBatchRow): string {
+  if (r.oos_degraded === null || r.oos_degraded === undefined) return '-'
+  return r.oos_degraded ? '⚠衰减' : '✅泛化'
+}
+function optBatchOosCls(r: OptBatchRow): string {
+  if (r.oos_degraded === null || r.oos_degraded === undefined) return ''
+  return r.oos_degraded ? 'neg' : 'pos'
+}
+function optBatchOosTitle(r: OptBatchRow): string {
+  return r.oos_verdict || ''
+}
+const optBatchCopyMsg = ref('')
+function copyOptBatchRanking() {
+  if (optBatchRows.value.length === 0) return
+  const best = optBestStrategy()
+  const lines: string[] = []
+  lines.push('# easy-tdx 寻优批量验证（' + (best?.label ?? '') + '）')
+  lines.push('')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 样本外 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
+  sortedOptBatchRows.value.forEach((r, i) => {
+    lines.push(
+      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + optBatchPct(r.total_return) +
+      ' | ' + optBatchPct(r.win_rate) + ' | ' + optBatchPct(r.hit_rate) + ' | ' + optBatchPct(r.excess_hit_rate) +
+      ' | ' + optBatchTrust(r) + ' | ' + optBatchOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
+    )
+  })
+  lines.push('')
+  lines.push('方法：用寻优得到的最优策略+参数对全局自选股（最多 12 只）独立回测（最近 500 根日线，逐只开启样本外），按模型可信度降序排名。')
+  const text = lines.join('\n')
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    optBatchCopyMsg.value = '✓ 已复制批量验证排名'
+    setTimeout(() => { optBatchCopyMsg.value = '' }, 2500)
+  }
+  void doCopy()
+}
+const optBatchJsonMsg = ref('')
+async function copyOptBatchJson() {
+  if (optBatchRows.value.length === 0) return
+  const best = optBestStrategy()
+  const payload = {
+    strategy: best?.name ?? '',
+    strategy_label: best?.label ?? '',
+    params: best?.params ?? {},
+    generated_at: new Date().toISOString(),
+    rows: sortedOptBatchRows.value.map((r, i) => ({ rank: i + 1, ...r })),
+  }
+  const json = JSON.stringify(payload, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    optBatchJsonMsg.value = '✓ 已复制批量验证 JSON'
+  } catch {
+    optBatchJsonMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { optBatchJsonMsg.value = '' }, 2500)
+}
+const optBatchSaveMsg = ref('')
+const optBatchSaving = ref(false)
+async function saveOptBatchAsPortfolio() {
+  if (optBatchRows.value.length === 0 || optBatchSaving.value) return
+  const best = optBestStrategy()
+  if (!best) return
+  optBatchSaving.value = true
+  optBatchSaveMsg.value = ''
+  try {
+    const visible = optBatchOnlyRobust.value
+      ? optBatchRows.value.filter((r) => r.oos_degraded === false)
+      : optBatchRows.value
+    if (visible.length === 0) {
+      optBatchSaveMsg.value = '没有样本外稳健的候选股可保存（请关闭「仅看样本外稳健」再试）'
+      optBatchSaving.value = false
+      setTimeout(() => { optBatchSaveMsg.value = '' }, 4000)
+      return
+    }
+    const stocks = visible.map((r) => r.market + ':' + r.code)
+    const avgTrust = visible.length
+      ? visible.reduce((s, r) => s + (r.trust_score ?? 0), 0) / visible.length
+      : 0
+    const oosKnown = visible.filter((r) => r.oos_degraded !== null && r.oos_degraded !== undefined)
+    const oosDegradedN = oosKnown.filter((r) => r.oos_degraded === true).length
+    const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
+    const oosVerdict = oosKnown.length
+      ? (oosRatio! < 0.5 ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健' : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减')
+      : ''
+    await saveStrategy({
+      name: (best.label || best.name) + ' · 寻优验证' + stocks.length + '只',
+      kind: 'portfolio',
+      strategy: best.name,
+      strategy_label: best.label,
+      params: best.params,
+      context: { stocks, category: category.value },
+      trade_config: { cash: cash.value, execution: execution.value },
+      snapshot: {
+        total_stocks: stocks.length,
+        avg_trust_score: avgTrust,
+        avg_oos_degraded: oosRatio,
+        oos_verdict: oosVerdict,
+        source: 'batch-verify-optimize',
+        saved_at: new Date().toISOString().slice(0, 10),
+      },
+      tags: ['寻优验证'],
+      notes: '由寻优页批量验证自选股（最优参数，按可信度排名）生成，可在组合回测页载入复跑。',
+    })
+    optBatchSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
+    setTimeout(() => { optBatchSaveMsg.value = '' }, 4000)
+  } catch (e) {
+    optBatchSaveMsg.value = '保存失败：' + formatError(e)
+  } finally {
+    optBatchSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -425,8 +658,12 @@ async function copyOptimizeJson() {
         <div class="result-toolbar">
           <button class="ghost" @click="copyOptimizeReport">📋 复制报告</button>
           <button class="ghost" @click="copyOptimizeJson">⚙ 复制 JSON</button>
+          <button class="ghost" :disabled="optBatchLoading" @click="runOptBatchVerify">
+            {{ optBatchLoading ? '批量验证自选股中…' : '🗳️ 批量验证自选股' }}
+          </button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="jsonCopyMsg" class="save-msg">{{ jsonCopyMsg }}</span>
+          <span v-if="optBatchMsg" class="save-msg">{{ optBatchMsg }}</span>
         </div>
         <section class="report-section">
           <h3>最优结果</h3>
@@ -553,6 +790,49 @@ async function copyOptimizeJson() {
           </table>
         </section>
       </div>
+      <!-- V205: 批量验证自选股（用最优策略+参数对自选股逐只回测，按可信度排名） -->
+      <section v-if="optBatchRows.length" class="report-content opt-batch-panel">
+        <div class="opt-batch-head">
+          <h3>🗳️ 批量验证自选股（最优参数）</h3>
+          <div class="opt-batch-actions">
+            <button class="ghost small" :class="{ active: optBatchSort === 'return' }" @click="optBatchSort = 'return'">按收益</button>
+            <button class="ghost small" :class="{ active: optBatchSort === 'trust' }" @click="optBatchSort = 'trust'">按可信度</button>
+            <button class="ghost small" :class="{ active: optBatchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + optBatchRows.filter((r: OptBatchRow) => r.oos_degraded === false).length + ' 只）'" @click="optBatchOnlyRobust = !optBatchOnlyRobust">
+              ✅ 仅看样本外稳健
+            </button>
+            <button class="ghost small" @click="copyOptBatchRanking">📋 复制排名</button>
+            <button class="ghost small" @click="copyOptBatchJson">⚙ 复制 JSON</button>
+            <button class="ghost small" :disabled="optBatchSaving" @click="saveOptBatchAsPortfolio">
+              {{ optBatchSaving ? '保存中…' : '💾 保存为组合策略' }}
+            </button>
+            <span v-if="optBatchCopyMsg" class="save-msg">{{ optBatchCopyMsg }}</span>
+            <span v-if="optBatchJsonMsg" class="save-msg">{{ optBatchJsonMsg }}</span>
+            <span v-if="optBatchSaveMsg" class="save-msg" :class="{ err: optBatchSaveMsg.includes('失败') }">{{ optBatchSaveMsg }}</span>
+          </div>
+        </div>
+        <table class="opt-batch-table">
+          <thead>
+            <tr>
+              <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
+              <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
+              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(r, i) in sortedOptBatchRows" :key="r.symbol">
+              <td class="dim">{{ i + 1 }}</td>
+              <td>{{ r.symbol }}</td>
+              <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ optBatchPct(r.total_return) }}</td>
+              <td class="num">{{ optBatchPct(r.win_rate) }}</td>
+              <td class="num">{{ optBatchPct(r.hit_rate) }}</td>
+              <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ optBatchPct(r.excess_hit_rate) }}</td>
+              <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ optBatchTrust(r) }}</td>
+              <td class="num" :class="optBatchOosCls(r)" :title="optBatchOosTitle(r)">{{ optBatchOosLabel(r) }}</td>
+              <td class="num">{{ r.trades ?? '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
     </main>
   </div>
 </template>
@@ -806,4 +1086,31 @@ async function copyOptimizeJson() {
   color: var(--accent);
   border-color: var(--accent);
 }
+
+/* V205: 批量验证自选股面板 */
+.opt-batch-panel { margin-top: 8px; }
+.opt-batch-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.opt-batch-head h3 { margin: 0; font-size: 14px; }
+.opt-batch-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.opt-batch-actions .ghost.active {
+  background: rgba(96, 165, 250, 0.18); color: var(--accent); border-color: var(--accent);
+}
+.opt-batch-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.opt-batch-table th {
+  font-size: 11px; color: var(--text-dim); font-weight: 600;
+  padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: right;
+}
+.opt-batch-table th:first-child, .opt-batch-table td:first-child { text-align: left; }
+.opt-batch-table td {
+  padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  text-align: right; font-family: var(--font-mono);
+}
+.pos { color: var(--up); }
+.neg { color: var(--down); }
+.dim { color: var(--text-dim); }
+.save-msg { font-size: 12px; color: var(--up); }
+.save-msg.err { color: var(--down); }
 </style>

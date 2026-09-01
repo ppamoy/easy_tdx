@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**寻优页「批量验证自选股」（V205）—— 寻优得到的最优参数直接对自选股批量验证选股** —— 寻优页此前只能看单标的网格排名，选股要跳回测页用最优参数手动逐只跑。本次在寻优结果工具栏加「🗳️ 批量验证自选股」：读全局自选股（最多 12 只），用最优策略+参数（单策略寻优 best 或一键寻优全局 best）逐只独立回测并按 V101 可信度排名，支持「按收益/按可信度」、「仅看样本外稳健」过滤、「样本外」列、复制排名/JSON、保存为组合策略（source=batch-verify-optimize）——打通「寻优 → 批量验证选股」闭环。
+
+### 新增
+
+- **web-ui/src/views/OptimizeView.vue** —— 新增 OptBatchRow 状态、runOptBatchVerify（复用 fetchBars/runBacktest，逐只开启 out_of_sample）、optBestStrategy（取单策略/一键寻优最优）、sortedOptBatchRows（收益/可信度排序+样本外稳健过滤）、复制排名/JSON、saveOptBatchAsPortfolio（遵循过滤，快照含 OOS 聚合）；寻优工具栏新增按钮，结果区下方新增批量验证面板。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优（1×1 网格）→「批量验证自选股」→ 2 行结果（含样本外列）、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V201（V202）—— 文档覆盖 run-all --only-robust 与指南自身迭代** —— V200 仅把指南更新到 V199，V201 新增的 run-all `--only-robust` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V201：标题、全景表补 V200/V201 两行、3.9 命令行节 run-all 条目补 only-robust 说明。
 
 ### 新增
