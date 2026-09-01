@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**回测页批量验证「导出 CSV」（V253）—— 批量验证排名 Excel 友好导出** —— 批量验证已有 Markdown 复制（V139）与 JSON 复制（V157），但分析/归档常用 CSV。本次在批量验证操作区加「📊 导出 CSV」：BOM 前缀 + 表头（排名/标的/总收益/胜率/5根命中率/超额命中率/可信度/样本外/交易数）+ 排序后行数据，下载 easy_tdx_batch_verify_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 新增 csvEscape/exportBatchCsv（BOM+CSV 生成 + Blob 下载）+「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页批量验证 →「导出 CSV」→ 下载文件含 BOM 表头与 3 行数据、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V251（V252）—— 文档覆盖策略库验证 JSON 与指南自身迭代** —— V250 仅把指南更新到 V249，V251 新增的策略库卡片「验证 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V251：标题、全景表补 V250/V251 两行、3.6 策略库节验证摘要补「⚙ 验证 JSON」说明。
 
 ### 新增
