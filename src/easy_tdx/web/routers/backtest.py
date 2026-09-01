@@ -719,6 +719,11 @@ def _optimize_one_strategy(
         "win_rate": result.best.win_rate,
         "profit_factor": result.best.profit_factor,
         "grid_points": len(result.results),
+        # V111: 透出最优点信号准确度与模型可信度（GridPointResult 已携带）
+        "hit_rate": result.best.hit_rate,
+        "excess_hit_rate": result.best.excess_hit_rate,
+        "trust_score": result.best.trust_score,
+        "trust_grade": result.best.trust_grade,
     }
 
 
@@ -795,6 +800,10 @@ def _run_optimize_all(df: pd.DataFrame, req: OptimizeAllBacktestRequest) -> dict
             win_rate=res["win_rate"],
             profit_factor=res["profit_factor"],
             grid_points=res["grid_points"],
+            hit_rate=res.get("hit_rate"),
+            excess_hit_rate=res.get("excess_hit_rate"),
+            trust_score=res.get("trust_score"),
+            trust_grade=res.get("trust_grade"),
         )
         ranking.append(entry)
         per_strategy[strategy_name] = entry

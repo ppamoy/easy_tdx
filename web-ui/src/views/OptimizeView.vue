@@ -193,6 +193,19 @@ function pct(v: number | null | undefined): string {
 function num(v: number | null | undefined, d = 2): string {
   return v !== null && v !== undefined && Number.isFinite(v) ? v.toFixed(d) : '-'
 }
+// V111: 排名表准确度/可信度辅助
+function hitPct(v: number | null | undefined): string {
+  return v !== null && v !== undefined && Number.isFinite(v) ? (v * 100).toFixed(0) + '%' : '-'
+}
+function trustLabel(r: { trust_score?: number | null; trust_grade?: string | null }): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return (Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')).trim()
+}
+function trustClass(r: { trust_grade?: string | null }): string {
+  if (r.trust_grade === '高') return 'pos'
+  if (r.trust_grade === '低') return 'neg'
+  return ''
+}
 
 // 寻优评级：4 维度降级版（夏普30%/回撤28%/胜率22%/利润因子20%）。
 // 各网格点交易数独立判断「样本不足」否决。
@@ -397,6 +410,8 @@ const rankingGrades = computed<GradeResult[]>(() =>
                 <th class="num">最大回撤</th>
                 <th class="num">交易数</th>
                 <th class="num">胜率</th>
+                <th class="num" title="5根前瞻命中率 vs 随机基准">5根命中</th>
+                <th class="num" title="模型可信度综合评分（V101）">可信度</th>
                 <th></th>
               </tr>
             </thead>
@@ -424,6 +439,8 @@ const rankingGrades = computed<GradeResult[]>(() =>
                 <td class="num neg">{{ pct(r.max_drawdown) }}</td>
                 <td class="num">{{ r.total_trades }}</td>
                 <td class="num">{{ pct(r.win_rate) }}</td>
+                <td class="num">{{ hitPct(r.hit_rate) }}</td>
+                <td class="num" :class="trustClass(r)">{{ trustLabel(r) }}</td>
                 <td>
                   <button class="view-btn" @click="onViewAll(r.strategy, r.params)">查看</button>
                 </td>

@@ -284,6 +284,11 @@ class OptimizeAllRankEntry(BaseModel):
     win_rate: float = 0.0
     profit_factor: float = 0.0
     grid_points: int = 0  # 该策略本轮寻优的网格点数
+    # V111: 最优点信号准确度与模型可信度
+    hit_rate: float | None = None
+    excess_hit_rate: float | None = None
+    trust_score: float | None = None
+    trust_grade: str | None = None
 
 
 class OptimizeAllResult(BaseModel):

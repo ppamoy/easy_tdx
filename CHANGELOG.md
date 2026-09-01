@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+**「一键寻优」全局排名补准确度/可信度列（V111）—— 跨策略选最优点时也按验证过的准确度比较** —— V109 给单策略寻优网格点补了准确度/可信度，但「一键寻优所有策略」的全局排名仍只有收益/夏普/回撤等绩效指标，跨策略挑最优点仍易陷过拟合。本次把 GridPointResult 的 hit_rate/excess_hit_rate/trust_score/trust_grade 透出到全局排名表。
+
+### 新增
+
+- **后端透出（web/routers/backtest.py + backtest_schemas.py）** —— `_optimize_one_strategy` 返回最优点准确度/可信度字段；`OptimizeAllRankEntry` schema 新增 hit_rate/excess_hit_rate/trust_score/trust_grade，组装时透出。
+- **排名表新增两列（web-ui/src/views/OptimizeView.vue + types.ts）** —— 「5根命中」「可信度」（高/低着色），列头悬停提示口径；OptimizeAllRankEntry 类型补字段。
+
+### 验证
+
+- 端到端：/backtest/optimize-all/run/async 排名首行含 hit_rate/trust_score/trust_grade（如 ema_cross hit 1.0 / 52.4 中）。
+- Playwright 浏览器回归：「一键寻优所有策略」→ 策略排名表含「5根命中」「可信度」两列、21 行渲染、console 零错误。
+- ruff / mypy 零告警；全量单测 **2453 passed**（其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **组合回测逐标的「可信度」列（V110）—— 同一策略在哪些标的上验证最可信，一目了然** —— V99 组合聚合只给每股命中率，用户仍需自己脑补「哪只标的最可信」。本次给组合 accuracy_summary 的每股聚合行补上 V101 模型可信度分与等级，组合回测页逐标表新增「可信度」列，帮助按验证可信度比较标的选择。
 
 ### 新增

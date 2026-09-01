@@ -410,6 +410,11 @@ export interface OptimizeAllRankEntry {
   win_rate: number | null
   profit_factor: number | null
   grid_points: number
+  // V111: 最优点信号准确度与模型可信度
+  hit_rate?: number | null
+  excess_hit_rate?: number | null
+  trust_score?: number | null
+  trust_grade?: string | null
 }
 
 export interface OptimizeAllResult {
