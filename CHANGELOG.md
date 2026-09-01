@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**组合候选批量验证「查看该股」（V237）—— 从候选排名直达该股单标缠论回测** —— 选股页（V118）与回测页（V137）批量验证表都有「查看该股」跳转，组合候选批量验证（V160）此前只能看/加入组合。本次给候选表每行加「查看该股」按钮：router 跳转到回测页并带 symbol/category 参数，回测页 onMounted 自动回填重新取行情回测。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— 导入 useRouter；新增 viewCandStock（router.push 到回测页带 symbol/category 参数）；候选表每行「查看该股」按钮。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合候选批量验证 →「查看该股」→ 跳转 URL 含 symbol/category、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V235（V236）—— 文档覆盖策略库验证摘要与指南自身迭代** —— V234 仅把指南更新到 V233，V235 新增的策略库卡片「复制验证摘要」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V235：标题、全景表补 V234/V235 两行、3.6 策略库节补充验证摘要说明。
 
 ### 新增

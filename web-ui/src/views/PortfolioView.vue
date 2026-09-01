@@ -2,7 +2,7 @@
 // 组合回测主页面：左配置（多标的 + 策略 + 日期）/ 右报告（组合净值 + 各标的对比）。
 
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
@@ -20,6 +20,7 @@ import { useBacktestStore } from '../stores/backtest'
 
 const store = useBacktestStore()
 const route = useRoute()
+const router = useRouter()
 
 const stocks = ref<string[]>(['SZ:000001', 'SH:600519'])
 const strategy = ref('ma_cross')
@@ -215,6 +216,13 @@ async function runCandVerify() {
 function addCandToPortfolio(r: CandRow) {
   const sym = r.market + ':' + r.code
   if (!stocks.value.includes(sym)) stocks.value.push(sym)
+}
+// V237: 从候选排名直达该股单标缠论回测（与选股 V118 / 回测 V137 对齐）
+function viewCandStock(r: CandRow) {
+  router.push({
+    path: '/',
+    query: { symbol: r.market + r.code, category: 'DAY' },
+  })
 }
 function addAllCands() {
   for (const r of candRows.value) {
@@ -591,7 +599,10 @@ async function onSave() {
                 <td class="num">{{ candPct(r.hit_rate) }}</td>
                 <td class="num" :class="candOosCls(r)" :title="candOosTitle(r)">{{ candOosLabel(r) }}</td>
                 <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ candTrust(r) }}</td>
-                <td><button class="ghost small" @click="addCandToPortfolio(r)">加入组合</button></td>
+                <td>
+                  <button class="ghost small" @click="viewCandStock(r)">查看该股</button>
+                  <button class="ghost small" @click="addCandToPortfolio(r)">加入组合</button>
+                </td>
               </tr>
             </tbody>
           </table>
