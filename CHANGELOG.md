@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**监控页批量验证补「复制排名 + 保存为组合策略」（V145）—— 监控验证结论可导出/入库，与各页批量验证对齐** —— V143 的监控页批量验证只能看结果，无法导出/保存；动态选股页（V130/V131）与回测页（V139/V141）已有复制排名与保存组合能力。本次给监控批量验证面板补上这两个动作，让监控场景的验证结论也能留存、入库复跑。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— 监控批量验证面板头部新增「📋 复制排名」（copyMonBatchRanking，导出 Markdown 表 + 方法说明）与「💾 保存为组合策略」（saveMonBatchAsPortfolio，kind=portfolio + source=batch-verify-monitor 快照）两个按钮及对应提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：监控页批量验证 →「复制排名」Markdown 表（310 字符）+「保存为组合策略」→ API 含 source=batch-verify-monitor 组合、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V143（V144）—— 文档覆盖监控页批量验证与指南自身迭代** —— V142 仅把指南更新到 V141，V143 新增的信号监控页「批量验证监控股」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V143：标题、全景表补 V142/V143 两行、3.5 信号监控页新增批量验证监控股说明。
 
 ### 新增

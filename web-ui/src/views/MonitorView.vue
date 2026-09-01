@@ -2,7 +2,7 @@
 // 信号监控视图：订阅一批股票，实时检查高置信度缠论买卖点信号。
 
 import { onMounted, onUnmounted, ref } from 'vue'
-import { fetchBars, formatError } from '../api'
+import { fetchBars, formatError, saveStrategy } from '../api'
 
 interface MonitoredStock {
   market: string
@@ -405,6 +405,80 @@ function monTrust(r: typeof monBatchRows.value[number]): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
+// V145: 监控批量验证导出（复制排名）与入库（保存为组合策略）
+const monBatchCopyMsg = ref('')
+const monBatchSaving = ref(false)
+const monBatchSaveMsg = ref('')
+function copyMonBatchRanking() {
+  if (monBatchRows.value.length === 0) return
+  const lines: string[] = []
+  lines.push('# easy-tdx 监控批量验证（' + (batchStrategyLabel.value || batchStrategy.value) + '）')
+  lines.push('')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  monBatchRows.value.forEach((r, i) => {
+    lines.push(
+      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + monPct(r.total_return) +
+      ' | ' + monPct(r.win_rate) + ' | ' + monPct(r.hit_rate) + ' | ' + monPct(r.excess_hit_rate) +
+      ' | ' + monTrust(r) + ' | ' + (r.trades ?? '-') + ' |',
+    )
+  })
+  lines.push('')
+  lines.push('方法：对已选监控标的（最多 12 只）用所选策略独立回测（最近 500 根日线），按模型可信度（V101）降序排名。')
+  const text = lines.join('\n')
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    monBatchCopyMsg.value = '✓ 已复制批量验证排名'
+    setTimeout(() => { monBatchCopyMsg.value = '' }, 2500)
+  }
+  void doCopy()
+}
+async function saveMonBatchAsPortfolio() {
+  if (monBatchRows.value.length === 0 || monBatchSaving.value) return
+  monBatchSaving.value = true
+  monBatchSaveMsg.value = ''
+  try {
+    const stocks = monBatchRows.value.map((r) => r.market + ':' + r.code)
+    const avgTrust = monBatchRows.value.length
+      ? monBatchRows.value.reduce((s, r) => s + (r.trust_score ?? 0), 0) / monBatchRows.value.length
+      : 0
+    await saveStrategy({
+      name: (batchStrategyLabel.value || batchStrategy.value) + ' · 监控验证' + stocks.length + '只',
+      kind: 'portfolio',
+      strategy: batchStrategy.value,
+      strategy_label: batchStrategyLabel.value,
+      params: monBatchDefaults(),
+      context: {
+        stocks,
+        category: 'DAY',
+      },
+      trade_config: { cash: 1_000_000, execution: 'next_open' },
+      snapshot: {
+        total_stocks: stocks.length,
+        avg_trust_score: avgTrust,
+        source: 'batch-verify-monitor',
+        saved_at: new Date().toISOString().slice(0, 10),
+      },
+      tags: ['监控验证'],
+      notes: '由信号监控页批量验证监控股（按模型可信度排名）生成，可在组合回测页载入复跑。',
+    })
+    monBatchSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
+    setTimeout(() => { monBatchSaveMsg.value = '' }, 4000)
+  } catch (e) {
+    monBatchSaveMsg.value = '保存失败：' + formatError(e)
+  } finally {
+    monBatchSaving.value = false
+  }
+}
 
 onMounted(async () => {
   loadWatchList()
@@ -517,6 +591,14 @@ onUnmounted(() => {
     <div v-if="monBatchRows.length > 0" class="mon-batch-panel">
       <div class="mon-batch-head">
         <h4>🧪 批量验证监控股：{{ batchStrategyLabel }}（按模型可信度降序）</h4>
+        <div class="mon-batch-actions">
+          <button class="ghost small" @click="copyMonBatchRanking">📋 复制排名</button>
+          <button class="ghost small" :disabled="monBatchSaving" @click="saveMonBatchAsPortfolio">
+            {{ monBatchSaving ? '保存中…' : '💾 保存为组合策略' }}
+          </button>
+          <span v-if="monBatchCopyMsg" class="save-msg">{{ monBatchCopyMsg }}</span>
+          <span v-if="monBatchSaveMsg" class="save-msg" :class="{ err: monBatchSaveMsg.includes('失败') }">{{ monBatchSaveMsg }}</span>
+        </div>
       </div>
       <table class="mon-batch-table">
         <thead>
@@ -1026,11 +1108,31 @@ onUnmounted(() => {
   gap: 10px;
   margin-bottom: 10px;
 }
+.mon-batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .mon-batch-head h4 {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   margin: 0;
+}
+.mon-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mon-batch-actions .save-msg {
+  font-size: 12px;
+  color: var(--up);
+}
+.mon-batch-actions .save-msg.err {
+  color: var(--down);
 }
 .mon-batch-table {
   width: 100%;
