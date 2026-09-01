@@ -211,6 +211,12 @@ def verify(
 @click.option("--out-of-sample", "run_oos", is_flag=True, help="样本外验证（训练/持有切分）")
 @click.option("--train-ratio", "train_ratio", default=0.7, type=float, help="样本外训练段占比")
 @click.option(
+    "--only-robust",
+    "only_robust",
+    is_flag=True,
+    help="仅输出样本外 ✅泛化 的标的（需同时 --out-of-sample）",
+)
+@click.option(
     "--output-file",
     "output_file",
     default=None,
@@ -231,6 +237,7 @@ def verify_multi(
     segments: int | None,
     run_oos: bool,
     train_ratio: float,
+    only_robust: bool,
     output_file: str | None,
 ) -> None:
     """批量模型验证：对多只标的跑同一策略，按模型可信度排名选股。
@@ -362,6 +369,13 @@ def verify_multi(
                 rows.append(row)
             except Exception as exc:  # noqa: BLE001 — 单只失败跳出循环前记录
                 failures.append(symbol + "(" + str(exc) + ")")
+
+    # V199: 仅输出样本外稳健的标的（与 Web 四处批量验证「仅看样本外稳健」对齐）
+    if only_robust:
+        if not run_oos:
+            click.echo("错误: --only-robust 需要同时使用 --out-of-sample", err=True)
+            raise SystemExit(1)
+        rows = [r for r in rows if r.get("oos_degraded") is False]
 
     # 按可信度降序（缺可信度排最后）
     rows.sort(key=lambda r: (r["trust_score"] is not None, r["trust_score"]), reverse=True)

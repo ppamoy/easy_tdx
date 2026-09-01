@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**CLI verify-multi 支持 --only-robust（V199）—— 命令行选股同样只挑样本外稳健的标的** —— Web 四处批量验证已支持「仅看样本外稳健」过滤（V192–V195），CLI verify-multi 此前只能输出全部并人工筛选。本次给 verify-multi 新增 `--only-robust`：仅输出 oos_degraded=false（✅泛化）的标的（必须与 `--out-of-sample` 同时使用，否则报错），与 Web 端过滤对齐。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify-multi 新增 `--only-robust` 选项：未开 --out-of-sample 时报错；开启后 rows 过滤为 oos_degraded is False。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：--help 含 --only-robust；仅 --only-robust 无 --out-of-sample 报错。
+- ruff / mypy 零告警；全量单测 **2467 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V197（V198）—— 文档覆盖选股保存快照聚合与指南自身迭代** —— V196 仅把指南更新到 V195，V197 新增的选股页「保存为组合策略」快照样本外聚合入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V197：标题、全景表补 V196/V197 两行、3.3 动态选股页保存为组合策略补样本外聚合说明。
 
 ### 新增
