@@ -444,6 +444,12 @@ def verify_multi(
 @click.option("--slippage", default=0.0, type=float, help="滑点")
 @click.option("--out-of-sample", "run_oos", is_flag=True, help="组合级样本外验证（V126）")
 @click.option(
+    "--only-robust",
+    "only_robust",
+    is_flag=True,
+    help="仅输出组合中样本外 ✅泛化 的标的（需同时 --out-of-sample）",
+)
+@click.option(
     "--output-file",
     "output_file",
     default=None,
@@ -461,6 +467,7 @@ def verify_portfolio(
     commission: float,
     slippage: float,
     run_oos: bool,
+    only_robust: bool,
     output_file: str | None,
 ) -> None:
     """组合模型验证：多标的跑同一策略，输出组合绩效 + 组合准确度聚合 + 组合可信度。
@@ -610,6 +617,43 @@ def verify_portfolio(
         except Exception:
             pass
 
+    # V241: 仅输出样本外稳健标的（与 verify-multi V199 / run-all V201 对齐）
+    if only_robust:
+        if not run_oos:
+            click.echo("错误: --only-robust 需要同时使用 --out-of-sample", err=True)
+            raise SystemExit(1)
+        oos = report.get("out_of_sample") or {}
+        per_symbol = oos.get("per_symbol") or {}
+        if per_symbol:
+            kept = {s: v for s, v in per_symbol.items() if v.get("degraded") is False}
+            # 过滤 individual_results / equity_allocation 到稳健子集
+            ways = list(report.get("individual_results", {}).keys())
+            if ways:
+                keep_keys = {k for k in ways if any(k.startswith(s) for s in kept)}
+            else:
+                keep_keys = set(kept.keys())
+            report["individual_results"] = {
+                k: v for k, v in report.get("individual_results", {}).items() if k in keep_keys
+            }
+            report["equity_allocation"] = {
+                k: v for k, v in report.get("equity_allocation", {}).items() if k in keep_keys
+            }
+            report["only_robust"] = {
+                "kept": len(keep_keys),
+                "total": len(ways) if ways else len(per_symbol),
+                "symbols": sorted(kept.keys()),
+            }
+            report["verdict"] = "；".join(
+                [str(p) for p in [report.get("verdict", "")] if p]
+                + [f"仅保留 {len(keep_keys)} 只样本外稳健标的"]
+            )
+        else:
+            report["only_robust"] = {
+                "kept": 0,
+                "total": len(per_symbol) or 0,
+                "symbols": [],
+            }
+
     # 汇总结论
     verdict_parts: list[str] = []
     mt = report.get("portfolio_trust") or {}
@@ -625,6 +669,9 @@ def verify_portfolio(
     oos = report.get("out_of_sample") or {}
     if oos.get("verdict"):
         verdict_parts.append(str(oos["verdict"]))
+    if report.get("only_robust"):
+        kept_n = report["only_robust"].get("kept", 0)
+        verdict_parts.append(f"（仅保留 {kept_n} 只样本外稳健）")
     report["verdict"] = "；".join(verdict_parts) if verdict_parts else "无验证结论"
 
     text = json.dumps(report, ensure_ascii=False, indent=2, default=str)

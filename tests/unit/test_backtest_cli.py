@@ -231,6 +231,19 @@ class TestBacktestCLI:
         result = runner.invoke(cli, ["verify-portfolio", "SZ 000001", "--params", "{oops"])
         assert result.exit_code == 1
         assert "不是合法 JSON" in result.output
+
+    def test_verify_portfolio_only_robust(self):
+        """V241: verify-portfolio 应暴露 --only-robust；未开 --out-of-sample 时报错。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        help_result = runner.invoke(cli, ["verify-portfolio", "--help"])
+        assert help_result.exit_code == 0
+        assert "--only-robust" in help_result.output
+        # --only-robust 必须与 --out-of-sample 同时使用
+        bad = runner.invoke(cli, ["verify-portfolio", "SZ 000001", "--only-robust"])
+        assert bad.exit_code == 1
+        assert "需要同时使用 --out-of-sample" in bad.output
     def test_verify_multi_only_robust(self):
         """V199: verify-multi 应暴露 --only-robust；未开 --out-of-sample 时报错。"""
         from easy_tdx.cli import cli

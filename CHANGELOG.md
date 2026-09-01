@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**CLI verify-portfolio 支持 --only-robust（V241）—— 组合验证只输出样本外稳健的标的** —— verify-multi（V199）与 run-all（V201）已有 --only-robust，组合验证（V176）此前只能输出全部并人工筛选。本次给 verify-portfolio 新增 `--only-robust`：过滤到样本外 ✅泛化 的标的（individual_results/equity_allocation 收敛到稳健子集，report.only_robust 记录 kept/total/symbols），必须与 `--out-of-sample` 同时使用。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify-portfolio 新增 `--only-robust`：未开 --out-of-sample 时报错；开启后按 out_of_sample.per_symbol 过滤 individual_results/equity_allocation 到稳健子集，并写入 report.only_robust 与 verdict。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify-portfolio --help 含 --only-robust；未开 --out-of-sample 报错。
+- ruff / mypy 零告警；全量单测 **2473 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V239（V240）—— 文档覆盖监控查看该股与指南自身迭代** —— V238 仅把指南更新到 V237，V239 新增的监控页批量验证「查看该股」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V239：标题、全景表补 V238/V239 两行、3.5 信号监控页批量验证后补「查看该股」说明。
 
 ### 新增
