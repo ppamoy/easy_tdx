@@ -220,6 +220,13 @@ const bestAllGrade = computed<GradeResult | null>(() =>
 const rankingGrades = computed<GradeResult[]>(() =>
   (store.optimizeAllResult?.ranking ?? []).map((r) => gradeGridPoint(r)),
 )
+// V113: 一键寻优排名排序方式（收益 / 可信度）
+const rankSort = ref<'return' | 'trust'>('return')
+const sortedRanking = computed(() => {
+  const rows = store.optimizeAllResult?.ranking ?? []
+  if (!rows.length || rankSort.value === 'return') return rows
+  return [...rows].sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
+})
 </script>
 
 <template>
@@ -397,7 +404,13 @@ const rankingGrades = computed<GradeResult[]>(() =>
         </section>
 
         <section class="report-section">
-          <h3>策略排名（按总收益降序）</h3>
+          <div class="rank-head">
+            <h3>策略排名{{ rankSort === 'trust' ? '（按可信度降序）' : '（按总收益降序）' }}</h3>
+            <div class="rank-toggle">
+              <button class="ghost small" :class="{ active: rankSort === 'return' }" @click="rankSort = 'return'">按收益</button>
+              <button class="ghost small" :class="{ active: rankSort === 'trust' }" @click="rankSort = 'trust'">按可信度</button>
+            </div>
+          </div>
           <table class="opt-table">
             <thead>
               <tr>
@@ -417,7 +430,7 @@ const rankingGrades = computed<GradeResult[]>(() =>
             </thead>
             <tbody>
               <tr
-                v-for="(r, i) in store.optimizeAllResult.ranking"
+                v-for="(r, i) in sortedRanking"
                 :key="r.strategy"
                 :class="{ best: i === 0 }"
               >
@@ -659,5 +672,24 @@ const rankingGrades = computed<GradeResult[]>(() =>
 }
 .grade-cell {
   width: 56px;
+}
+.rank-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.rank-head h3 {
+  margin: 0;
+}
+.rank-toggle {
+  display: flex;
+  gap: 4px;
+}
+.rank-toggle button.active {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 </style>
