@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**组合候选批量验证「样本外」列（V184）—— 组合候选验证也能直接看每只候选股的泛化/衰减结论** —— 回测页（V178）、监控页（V180）、选股页（V182）批量验证已加「样本外」列，组合候选批量验证（V160）是最后一处缺该列的入口。本次给组合候选批量验证逐只开启 out_of_sample，候选表新增「样本外」列——✅泛化 / ⚠衰减（悬停显示完整判定），四处批量验证入口体验对齐。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— CandRow 追加 oos_degraded/oos_verdict；候选批量验证请求开启 out_of_sample:true、oos_train_ratio:0.7 并提取结论；候选表新增「样本外」列（candOosLabel/candOosCls/candOosTitle 辅助，悬停显示完整 verdict）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合页候选批量验证 →「样本外」列可见、首行 ⚠衰减、2 行结果、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V182（V183）—— 文档覆盖选股批量样本外列与指南自身迭代** —— V181 仅把指南更新到 V180，V182 新增的动态选股页批量验证「样本外」列入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V182：标题、全景表补 V181/V182 两行、3.3 动态选股页补充批量验证样本外列说明。
 
 ### 新增

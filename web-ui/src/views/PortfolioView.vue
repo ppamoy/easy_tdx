@@ -108,6 +108,9 @@ interface CandRow {
   trust_score: number | null
   trust_grade: string | null
   trades: number | null
+  // V184: 该候选股样本外验证结论
+  oos_degraded: boolean | null
+  oos_verdict: string
 }
 const candRows = ref<CandRow[]>([])
 const candLoading = ref(false)
@@ -143,9 +146,12 @@ async function runCandVerify() {
           commission: 0.0003,
           slippage: 0,
           execution: execution.value,
+          out_of_sample: true,
+          oos_train_ratio: 0.7,
           ohlcv: bars,
         })
         const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+        const oos = result.out_of_sample
         rows.push({
           symbol: w.symbol || w.market + w.code,
           market: w.market,
@@ -157,6 +163,8 @@ async function runCandVerify() {
           trust_score: result.model_trust?.score ?? null,
           trust_grade: result.model_trust?.grade ?? null,
           trades: result.performance.total_trades ?? null,
+          oos_degraded: oos?.degraded ?? null,
+          oos_verdict: oos?.verdict ?? '',
         })
       } catch { /* 单只失败跳过 */ }
     }
@@ -185,6 +193,18 @@ function candPct(v: number | null | undefined): string {
 function candTrust(r: CandRow): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
+// V184: 样本外列辅助
+function candOosLabel(r: CandRow): string {
+  if (r.oos_degraded === null || r.oos_degraded === undefined) return '-'
+  return r.oos_degraded ? '⚠衰减' : '✅泛化'
+}
+function candOosCls(r: CandRow): string {
+  if (r.oos_degraded === null || r.oos_degraded === undefined) return ''
+  return r.oos_degraded ? 'neg' : 'pos'
+}
+function candOosTitle(r: CandRow): string {
+  return r.oos_verdict || ''
 }
 // V170: 候选批量验证导出（复制排名 / 复制 JSON，与其它批量验证入口对齐）
 const candCopyMsg = ref('')
@@ -456,7 +476,7 @@ async function onSave() {
           </div>
           <table class="cand-table">
             <thead>
-              <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">5根命中率</th><th class="num">可信度</th><th></th></tr>
+              <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">5根命中率</th><th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">可信度</th><th></th></tr>
             </thead>
             <tbody>
               <tr v-for="(r, i) in sortedCandRows" :key="r.symbol">
@@ -464,6 +484,7 @@ async function onSave() {
                 <td>{{ r.symbol }}</td>
                 <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ candPct(r.total_return) }}</td>
                 <td class="num">{{ candPct(r.hit_rate) }}</td>
+                <td class="num" :class="candOosCls(r)" :title="candOosTitle(r)">{{ candOosLabel(r) }}</td>
                 <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ candTrust(r) }}</td>
                 <td><button class="ghost small" @click="addCandToPortfolio(r)">加入组合</button></td>
               </tr>
