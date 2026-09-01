@@ -487,6 +487,41 @@ function batchTrustV137(r: BatchVerifyRow): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
+// V139: 批量验证排名导出（Markdown 复制）
+const batchCopyMsg = ref('')
+function copyBatchRanking() {
+  if (batchRows.value.length === 0) return
+  const lines: string[] = []
+  lines.push('# easy-tdx 批量验证自选股（' + (strategyLabel.value || strategy.value) + '）')
+  lines.push('')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  batchRows.value.forEach((r, i) => {
+    lines.push(
+      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + batchPctV137(r.total_return) +
+      ' | ' + batchPctV137(r.win_rate) + ' | ' + batchPctV137(r.hit_rate) + ' | ' + batchPctV137(r.excess_hit_rate) +
+      ' | ' + batchTrustV137(r) + ' | ' + (r.trades ?? '-') + ' |',
+    )
+  })
+  lines.push('')
+  lines.push('方法：对全局自选股（最多 12 只）用当前策略与参数独立回测（最近 500 根日线），按模型可信度（V101）降序排名。')
+  const text = lines.join('\n')
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    batchCopyMsg.value = '✓ 已复制批量验证排名'
+    setTimeout(() => { batchCopyMsg.value = '' }, 2500)
+  }
+  void doCopy()
+}
 function openSaveForm() {
   saveName.value = `${strategyLabel.value} · ${code.value}`
   saveTags.value = ''
@@ -689,7 +724,13 @@ async function onSave() {
 
         <!-- V137 批量验证自选股（对全局自选股跑当前策略，按可信度排名） -->
         <section v-if="batchRows.length" class="report-section">
-          <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}，按模型可信度降序）</h3>
+          <div class="batch-panel-head">
+            <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}，按模型可信度降序）</h3>
+            <div class="batch-actions">
+              <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
+              <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
+            </div>
+          </div>
           <table class="batch-table">
             <thead>
               <tr>
@@ -949,6 +990,28 @@ async function onSave() {
   color: var(--accent);
 }
 .save-msg {
+  font-size: 12px;
+  color: var(--up);
+}
+.batch-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.batch-panel-head h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
+}
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-actions .save-msg {
   font-size: 12px;
   color: var(--up);
 }
