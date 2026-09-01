@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**组合候选批量验证结果持久化（V223）—— 补齐四处批量验证入口持久化** —— 回测（V217）/监控（V219）/选股（V221）批量验证已支持持久化，组合候选批量验证（V160）是最后一处未持久化的入口。本次给组合候选批量验证加 localStorage 持久化：rows + 策略 + 时间存入 easy_tdx_cand_batch_verify_last，onMounted 自动恢复，候选面板标题显示「🕒 上次验证时间」。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— 新增 CAND_BATCH_KEY / lastCandBatchAt / saveCandBatchPersist / restoreCandBatchPersist；候选批量验证完成后持久化，onMounted 恢复；候选面板标题新增时间标签（含 .cand-batch-at 样式）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合候选批量验证 →「上次验证时间」标签可见；刷新 → 候选表自动恢复 2 行、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V221（V222）—— 文档覆盖选股批量持久化与指南自身迭代** —— V220 仅把指南更新到 V219，V221 新增的动态选股页批量验证结果持久化入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V221：标题、全景表补 V220/V221 两行、3.3 动态选股页批量验证后补持久化说明。
 
 ### 新增

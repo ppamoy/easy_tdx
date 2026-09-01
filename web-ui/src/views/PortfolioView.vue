@@ -79,6 +79,9 @@ onMounted(async () => {
   if (qStartDate) startDate.value = qStartDate
   if (qEndDate) endDate.value = qEndDate
   if (qCategory) category.value = qCategory
+
+  // V223: 恢复上次候选批量验证结果（如有）
+  restoreCandBatchPersist()
 })
 
 async function onRun() {
@@ -115,6 +118,32 @@ interface CandRow {
 const candRows = ref<CandRow[]>([])
 const candLoading = ref(false)
 const candMsg = ref('')
+// V223: 组合候选批量验证结果持久化（与回测 V217 / 监控 V219 / 选股 V221 对齐）
+const CAND_BATCH_KEY = 'easy_tdx_cand_batch_verify_last'
+const lastCandBatchAt = ref('')
+function saveCandBatchPersist() {
+  if (!candRows.value.length) return
+  try {
+    localStorage.setItem(CAND_BATCH_KEY, JSON.stringify({
+      rows: candRows.value,
+      strategy: strategy.value,
+      strategy_label: strategyLabel.value || strategy.value,
+      at: new Date().toISOString(),
+    }))
+  } catch { /* localStorage 不可用忽略 */ }
+}
+function restoreCandBatchPersist() {
+  try {
+    const raw = localStorage.getItem(CAND_BATCH_KEY)
+    if (!raw) return
+    const data = JSON.parse(raw)
+    if (Array.isArray(data.rows) && data.rows.length) {
+      candRows.value = data.rows
+      lastCandBatchAt.value = data.at || ''
+      candMsg.value = '已恢复上次候选批量验证（' + (data.strategy_label || '') + '）'
+    }
+  } catch { /* 解析失败忽略 */ }
+}
 const candSort = ref<'return' | 'trust'>('trust')
 // V195: 仅看样本外稳健（过滤掉 oos_degraded=true 的候选股）
 const candOnlyRobust = ref(false)
@@ -174,6 +203,8 @@ async function runCandVerify() {
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     candRows.value = rows
+    lastCandBatchAt.value = new Date().toISOString()
+    saveCandBatchPersist()
     if (rows.length === 0) candMsg.value = '批量验证无结果（行情取数失败或数据不足）'
   } catch (e) {
     candMsg.value = '批量验证失败：' + formatError(e)
@@ -530,7 +561,9 @@ async function onSave() {
         </div>
         <div v-if="candRows.length" class="cand-table-wrap">
           <div class="cand-head">
-            <span>候选排名（{{ candRows.length }}）</span>
+            <span>候选排名（{{ candRows.length }}）
+              <span v-if="lastCandBatchAt" class="cand-batch-at" :title="'上次验证时间'">🕒 {{ new Date(lastCandBatchAt).toLocaleString() }}</span>
+            </span>
             <span class="cand-sort">
               <button class="ghost small" :class="{ active: candSort === 'return' }" @click="candSort = 'return'">按收益</button>
               <button class="ghost small" :class="{ active: candSort === 'trust' }" @click="candSort = 'trust'">按可信度</button>
@@ -993,6 +1026,13 @@ async function onSave() {
   font-size: 12px;
   color: var(--text-muted);
   margin-bottom: 6px;
+}
+/* V223: 上次组合候选批量验证时间 */
+.cand-batch-at {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+  margin-left: 8px;
 }
 .cand-sort {
   display: flex;
