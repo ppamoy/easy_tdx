@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V162（V163）—— 文档覆盖组合 JSON 导出与指南自身迭代** —— V161 仅把指南更新到 V160，V162 新增的组合回测页「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V162：标题、全景表补 V161/V162 两行、3.4 组合回测页第 3 步补充 JSON 导出说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V162；全景表补 V161/V162；3.4 组合回测页补「⚙ 复制 JSON」说明（完整结构化组合结果）。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **组合回测报告「复制 JSON」（V162）—— 组合验证档案机器可读导出，补齐 JSON 系列** —— 组合回测页有 Markdown 复制报告（V127），但脚本消费/存档需要结构化 JSON；单标（V153）/批量（V157）/寻优（V158）都已有 JSON 导出，组合页是最后一处缺口。本次在组合工具栏新增「⚙ 复制 JSON」：把当前组合回测结果（total_performance/individual_results/accuracy_summary/portfolio_trust/out_of_sample 等）以缩进 JSON 复制到剪贴板。
 
 ### 新增
