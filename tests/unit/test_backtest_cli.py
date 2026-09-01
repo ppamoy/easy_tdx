@@ -264,6 +264,16 @@ class TestBacktestCLI:
         result = runner.invoke(cli, ["run-all", "--help"])
         assert result.exit_code == 0
         assert "--only-robust" in result.output
+
+    def test_verify_multi_walk_forward_option(self):
+        """V243: verify-multi 应暴露 --walk-forward/--step-ratio 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-multi", "--help"])
+        assert result.exit_code == 0
+        assert "--walk-forward" in result.output
+        assert "--step-ratio" in result.output
     def test_reverify_help(self):
         """V213: reverify 命令应注册且 --help 正常。"""
         from easy_tdx.cli import cli

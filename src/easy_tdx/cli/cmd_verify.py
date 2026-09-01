@@ -250,6 +250,13 @@ def verify(
     help="仅输出样本外 ✅泛化 的标的（需同时 --out-of-sample）",
 )
 @click.option(
+    "--walk-forward",
+    "use_wf",
+    is_flag=True,
+    help="对每只标的输出 Walk-Forward 滚动验证判定（V243）",
+)
+@click.option("--step-ratio", "wf_step", default=0.1, type=float, help="Walk-Forward 滚动步长比例")
+@click.option(
     "--output-file",
     "output_file",
     default=None,
@@ -271,6 +278,8 @@ def verify_multi(
     run_oos: bool,
     train_ratio: float,
     only_robust: bool,
+    use_wf: bool,
+    wf_step: float,
     output_file: str | None,
 ) -> None:
     """批量模型验证：对多只标的跑同一策略，按模型可信度排名选股。
@@ -399,6 +408,26 @@ def verify_multi(
                     except Exception:  # noqa: BLE001
                         row["oos_degraded"] = None
                         row["oos_verdict"] = "样本外验证计算失败"
+                if use_wf:
+                    try:
+                        from .cmd_run_all import _compute_walk_forward_single
+
+                        wf = _compute_walk_forward_single(
+                            df,
+                            type(entry.build(params)),
+                            cash=cash,
+                            commission=commission,
+                            step_ratio=wf_step,
+                        )
+                        if wf:
+                            row["wf_degraded"] = bool(wf.get("degraded"))
+                            row["wf_verdict"] = str(wf.get("verdict", ""))
+                        else:
+                            row["wf_degraded"] = None
+                            row["wf_verdict"] = "数据不足以划分窗口"
+                    except Exception:  # noqa: BLE001
+                        row["wf_degraded"] = None
+                        row["wf_verdict"] = "Walk-Forward 计算失败"
                 rows.append(row)
             except Exception as exc:  # noqa: BLE001 — 单只失败跳出循环前记录
                 failures.append(symbol + "(" + str(exc) + ")")

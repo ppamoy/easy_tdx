@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**CLI verify-multi 支持 --walk-forward（V243）—— 批量验证每只标的也输出滚动窗口防过拟合判定** —— verify（V225）与 run-all（V233）已有 --walk-forward，批量验证（V119）此前只有每标的样本外/稳健性，缺滚动验证维度。本次给 verify-multi 加 `--walk-forward [--step-ratio 0.1]`：对每只标的逐窗口回测聚合（复用 run-all 的 _compute_walk_forward_single），行内输出 wf_degraded / wf_verdict。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify-multi 新增 --walk-forward/--step-ratio 选项；每标的回测后调用 _compute_walk_forward_single（复用 cmd_run_all V233 helper），行内追加 wf_degraded/wf_verdict。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify-multi --help 含 --walk-forward/--step-ratio。
+- ruff / mypy 零告警；全量单测 **2474 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V241（V242）—— 文档覆盖组合 only-robust 与指南自身迭代** —— V240 仅把指南更新到 V239，V241 新增的 CLI verify-portfolio `--only-robust` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V241：标题、全景表补 V240/V241 两行、3.9 命令行节 verify-portfolio 条目补 only-robust 说明。
 
 ### 新增
