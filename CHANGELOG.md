@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+**组合回测保存策略时把验证结论写入快照（V134）—— 组合策略同样以「验证档案」入库** —— 单标快照（V100/V122）已含准确度/可信度/样本外，但组合快照只有绩效。本次给组合保存策略补上 accuracy（组合准确度聚合结论）、trust（组合可信度）、out_of_sample（组合样本外结论）三组字段，策略库卡片对组合也能展示「📊 可信度」「🔬 样本外」，与单标的 V122 完全对齐。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— onSave 的 snapshot 追加 accuracy（avg_hit_rate/avg_excess_hit_rate/verdict）、trust（score/grade/verdict）、out_of_sample（degraded/verdict/train_return/test_return），字段命名与单标 V122 快照一致，策略库卡片复用现有渲染。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合回测（勾选样本外）→ 保存策略 → API 快照含 accuracy/trust/out_of_sample（如 组合可信度低40/100、样本外 0/2 稳健+衰减）→ 策略库「组合」tab 卡片展示「📊 可信度」「🔬 样本外」、console 零错误。
+- ruff / mypy 零告警；全量单测 **2461 passed**（其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V132（V133）—— 文档覆盖批量验证导出/入库与 CLI 验证增强** —— V129 的指南只到 V128，V130（批量验证排名导出）、V131（保存为组合策略）、V132（verify-multi 分段稳健性/样本外）未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V132：标题、全景表补 3 行、3.8 动态选股批量验证与 3.9 命令行章节补充入口说明。
 
 ### 新增

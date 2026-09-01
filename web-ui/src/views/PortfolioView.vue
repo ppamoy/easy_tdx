@@ -231,6 +231,23 @@ async function onSave() {
         total_return: perf.total_return,
         annual_return: perf.annual_return,
         total_stocks: perf.total_stocks,
+        // V134: 组合验证结论一并入快照（字段与单标 V122 对齐，策略库卡片可展示）
+        accuracy: {
+          hit_rate: store.portfolioResult.accuracy_summary?.portfolio?.avg_hit_rate ?? null,
+          excess_hit_rate: store.portfolioResult.accuracy_summary?.portfolio?.avg_excess_hit_rate ?? null,
+          verdict: store.portfolioResult.accuracy_summary?.verdict ?? '',
+        },
+        trust: {
+          score: store.portfolioResult.portfolio_trust?.score ?? null,
+          grade: store.portfolioResult.portfolio_trust?.grade ?? '',
+          verdict: store.portfolioResult.portfolio_trust?.verdict ?? '',
+        },
+        out_of_sample: {
+          degraded: store.portfolioResult.out_of_sample?.degraded ?? false,
+          verdict: store.portfolioResult.out_of_sample?.verdict ?? '',
+          train_return: store.portfolioResult.out_of_sample?.avg_train_return ?? null,
+          test_return: store.portfolioResult.out_of_sample?.avg_test_return ?? null,
+        },
       },
       tags: saveTags.value
         .split(/[,，]/)
