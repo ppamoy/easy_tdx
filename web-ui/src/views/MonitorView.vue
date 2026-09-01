@@ -2,6 +2,7 @@
 // 信号监控视图：订阅一批股票，实时检查高置信度缠论买卖点信号。
 
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { fetchBars, formatError, saveStrategy } from '../api'
 
 interface MonitoredStock {
@@ -442,9 +443,17 @@ async function runMonitorBatchVerify() {
 function monPct(v: number | null | undefined): string {
   return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(1) + '%'
 }
+const monRouter = useRouter()
 function monTrust(r: typeof monBatchRows.value[number]): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
+// V239: 从监控批量验证直达该股单标回测（与选股 V118 / 回测 V137 / 组合候选 V237 对齐）
+function viewMonBatchStock(r: typeof monBatchRows.value[number]) {
+  monRouter.push({
+    path: '/',
+    query: { symbol: r.market + r.code, category: 'DAY' },
+  })
 }
 // V180: 样本外列辅助
 function monOosLabel(r: typeof monBatchRows.value[number]): string {
@@ -717,7 +726,7 @@ onUnmounted(() => {
         <thead>
           <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
               <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th></tr>
+              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th><th></th></tr>
         </thead>
         <tbody>
           <tr v-for="(r, i) in sortedMonBatchRows" :key="r.symbol">
@@ -730,6 +739,7 @@ onUnmounted(() => {
             <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ monTrust(r) }}</td>
             <td class="num" :class="monOosCls(r)" :title="monOosTitle(r)">{{ monOosLabel(r) }}</td>
             <td class="num">{{ r.trades ?? '-' }}</td>
+            <td><button class="ghost small" @click="viewMonBatchStock(r)">查看该股</button></td>
           </tr>
         </tbody>
       </table>
