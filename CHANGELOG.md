@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**run-all CLI 支持 --output-file 写排名 JSON（V174）—— 命令行批量验证结论可落盘存档** —— verify/verify-multi 已有 --output-file（V172），run-all 一直是纯文本输出。本次给 run-all 新增 `--output-file`：把排名结果（symbol + 各策略绩效/准确度/稳健性/样本外字段）序列化为 JSON 写入文件（`-` 表示 stdout），方便脚本消费与存档。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_run_all.py** —— run-all 新增 `--output-file` 选项；`_print_ranking` 后若指定则把 {symbol, strategy_count, strategies} 写为 JSON（`-` 打印到 stdout），否则维持原输出。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：run-all --help 含 --output-file。
+- ruff / mypy 零告警；全量单测 **2464 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V172（V173）—— 文档覆盖 CLI 落盘与指南自身迭代** —— V171 仅把指南更新到 V170，V172 新增的 CLI `--output-file` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V172：标题、全景表补 V171/V172 两行、3.9 命令行节补充 output-file 说明。
 
 ### 新增

@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import time
 from pathlib import Path
@@ -452,6 +453,13 @@ def _show_best_chart(
     default="strategies",
     help="策略文件目录（默认 strategies/）",
 )
+@click.option(
+    "--output-file",
+    "output_file",
+    default=None,
+    type=str,
+    help="把排名结果 JSON 写入文件（默认打印到 stdout）",
+)
 def run_all(
     market: str,
     code: str,
@@ -464,6 +472,7 @@ def run_all(
     combo_mode: str,
     show_chart: bool,
     strategies_dir: str,
+    output_file: str | None,
 ) -> None:
     """批量运行 strategies/ 目录下所有策略并比较结果。
 
@@ -617,6 +626,21 @@ def run_all(
     has_valid = _print_ranking(results, backtest_results)
     if not has_valid:
         raise SystemExit(1)
+
+    # V174: 把排名结果 JSON 写入文件（- 作为 stdout 哨兵，与 verify 对齐）
+    if output_file:
+        report = {
+            "symbol": f"{market}{code}",
+            "strategy_count": len(results),
+            "strategies": results,
+        }
+        text = json.dumps(report, ensure_ascii=False, indent=2, default=str)
+        if output_file == "-":
+            click.echo(text)
+        else:
+            with open(output_file, "w", encoding="utf-8") as f:
+                f.write(text + "\n")
+            click.echo(f"已写入 {output_file}")
 
     # 5. 多因子组合回测
     if combo_sizes:
