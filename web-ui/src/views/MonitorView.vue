@@ -145,6 +145,52 @@ function accSigned(v: number | null | undefined): string {
   return sign + (v * 100).toFixed(1) + '%'
 }
 
+
+// ── 主监控列表每股历史信号准确度（V121：复用 /chanlun/analyze signal_accuracy） ──
+const stockAcc = ref<Record<string, WatchAccuracy>>({})
+
+async function toggleStockAcc(s: MonitoredStock) {
+  const key = s.market + s.code
+  const cur = stockAcc.value[key]
+  if (cur && !cur.loading) {
+    delete stockAcc.value[key]
+    stockAcc.value = { ...stockAcc.value }
+    return
+  }
+  stockAcc.value[key] = { loading: true, error: '', summary: '', ranking: [] }
+  try {
+    const resp = await fetch('/api/v1/chanlun/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        market: s.market,
+        code: s.code,
+        category: 'DAY',
+        count: 300,
+      }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error((err as { detail?: string }).detail ?? ('HTTP ' + resp.status))
+    }
+    const data = await resp.json()
+    const sa = data.signal_accuracy
+    stockAcc.value[key] = {
+      loading: false,
+      error: sa?.ranking?.length ? '' : '该股无足够历史信号，无法评估',
+      summary: sa?.summary ?? '',
+      ranking: sa?.ranking ?? [],
+    }
+  } catch (e) {
+    stockAcc.value[key] = {
+      loading: false,
+      error: formatError(e),
+      summary: '',
+      ranking: [],
+    }
+  }
+}
+
 function saveStocks() {
   localStorage.setItem('easy_tdx_monitor_stocks', JSON.stringify(stocks.value))
 }
@@ -333,9 +379,40 @@ onUnmounted(() => {
       <div class="stock-tags">
         <span v-for="(s, i) in stocks" :key="s.code" class="stock-tag">
           {{ s.market }}{{ s.code }}
+          <button class="acc-mini" :class="{ active: stockAcc[s.market + s.code] }" title="历史信号准确度" @click="toggleStockAcc(s)">🎯</button>
           <button class="remove-btn" @click="removeStock(i)">×</button>
         </span>
       </div>
+      <!-- V121: 主监控列表每股历史信号准确度面板 -->
+      <template v-for="(s, i) in stocks" :key="'stock-acc-' + i">
+        <div v-if="stockAcc[s.market + s.code]" class="watch-acc-panel stock-acc">
+          <template v-if="stockAcc[s.market + s.code].loading">
+            <span class="dim">分析 {{ s.market }}{{ s.code }} 历史信号命中率…</span>
+          </template>
+          <template v-else-if="stockAcc[s.market + s.code].error">
+            <span class="neg">⚠ {{ stockAcc[s.market + s.code].error }}</span>
+          </template>
+          <template v-else>
+            <div v-if="stockAcc[s.market + s.code].summary" class="acc-summary">
+              <b>{{ s.market }}{{ s.code }}</b>：{{ stockAcc[s.market + s.code].summary }}
+            </div>
+            <table class="acc-table">
+              <thead><tr><th>信号类型</th><th>信号数</th><th>5根命中率</th><th>超额命中率</th><th>5根均值</th><th>结论</th></tr></thead>
+              <tbody>
+                <tr v-for="rank in stockAcc[s.market + s.code].ranking" :key="rank.type"
+                    :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }">
+                  <td><strong>{{ rank.type }}</strong></td>
+                  <td>{{ rank.signals }}</td>
+                  <td>{{ accPct(rank.hit_rate) }}</td>
+                  <td :class="rank.excess_hit_rate >= 0 ? 'pos' : 'neg'">{{ accSigned(rank.excess_hit_rate) }}</td>
+                  <td :class="rank.avg_return >= 0 ? 'pos' : 'neg'">{{ accPct(rank.avg_return) }}</td>
+                  <td class="dim verdict-cell">{{ rank.verdict }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
+        </div>
+      </template>
     </div>
 
     <!-- 快速加入的 watchlist -->
@@ -777,5 +854,24 @@ onUnmounted(() => {
 }
 .verdict-cell {
   color: var(--text-muted) !important;
+}
+
+/* V121: 主监控列表每股历史信号准确度 */
+.acc-mini {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  opacity: 0.7;
+  border-radius: 3px;
+}
+.acc-mini:hover, .acc-mini.active {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+}
+.stock-acc {
+  margin-top: 6px;
+  margin-bottom: 2px;
 }
 </style>
