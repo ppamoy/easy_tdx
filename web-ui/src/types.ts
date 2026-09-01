@@ -62,6 +62,8 @@ export interface BacktestRequest {
   slippage?: number
   execution?: ExecutionMode
   robustness_segments?: number | null
+  out_of_sample?: boolean
+  oos_train_ratio?: number
   ohlcv?: Bar[]
   symbol?: string
   category?: Category
@@ -194,6 +196,31 @@ export interface ModelTrustReport {
     performance: Record<string, number | null>
   }
   verdict: string
+}
+
+export interface OutOfSampleSection {
+  bars: number
+  total_return?: number
+  win_rate?: number
+  sharpe?: number
+  max_drawdown?: number
+  trades?: number
+  buy_hold_return?: number
+  alpha?: number
+  hit_rate?: number | null
+  baseline_hit_rate?: number | null
+  excess_hit_rate?: number | null
+}
+
+export interface OutOfSampleReport {
+  train_ratio: number
+  train_bars: number
+  test_bars: number
+  train: OutOfSampleSection
+  test: OutOfSampleSection
+  degraded: boolean
+  verdict: string
+  note?: string | null
 }
 
 export interface BacktestResult {

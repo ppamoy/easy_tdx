@@ -58,6 +58,14 @@ class BacktestRequest(BaseModel):
         description="分段稳健性检查：设为 2~6 时把回测区间均分为该段数并逐段重跑，"
         "评估过拟合/行情依赖风险；None（默认）不做该检查。",
     )
+    out_of_sample: bool = Field(
+        default=False,
+        description="样本外验证：按时间切出训练段与样本外持有段，策略参数固定，"
+        "验证模型在从未见过的数据上是否仍准确。默认 False 不做。",
+    )
+    oos_train_ratio: float = Field(
+        default=0.7, ge=0.5, le=0.9, description="训练段占比（样本外验证用）"
+    )
 
     # 数据来源 A：内联 OHLCV（上限与 symbol 路径的 count 上限对齐，防 DoS）
     ohlcv: list[dict[str, Any]] | None = Field(
@@ -224,6 +232,7 @@ class BacktestResultResponse(BaseModel):
     signal_accuracy: dict[str, Any] | None = None
     segment_robustness: dict[str, Any] | None = None
     model_trust: dict[str, Any] | None = None
+    out_of_sample: dict[str, Any] | None = None
     diagnostic: str | None = None
 
 

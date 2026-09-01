@@ -352,6 +352,24 @@ def _run_backtest(df: pd.DataFrame, req: BacktestRequest) -> dict[str, Any]:
     except Exception:
         pass
 
+    # V105: 样本外验证（训练段 + 样本外持有段，验证模型在没见过的数据上是否仍准确）
+    if req.out_of_sample:
+        try:
+            from easy_tdx.backtest.out_of_sample import compute_out_of_sample
+
+            result_dict["out_of_sample"] = compute_out_of_sample(
+                df,
+                lambda: entry.build(req.params),
+                train_ratio=getattr(req, "oos_train_ratio", 0.7),
+                cash=req.cash,
+                commission=req.commission,
+                stamp_tax=req.stamp_tax,
+                slippage=req.slippage,
+                execution=req.execution,
+            )
+        except Exception:
+            pass
+
     return result_dict
 
 

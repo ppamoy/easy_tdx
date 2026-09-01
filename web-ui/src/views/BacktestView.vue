@@ -13,6 +13,7 @@ import GradeDetails from '../components/GradeDetails.vue'
 import ModelTrustPanel from '../components/ModelTrustPanel.vue'
 import SignalAccuracyPanel from '../components/SignalAccuracyPanel.vue'
 import ChanlunAccuracyPanel from '../components/ChanlunAccuracyPanel.vue'
+import OutOfSamplePanel from '../components/OutOfSamplePanel.vue'
 import SegmentRobustnessPanel from '../components/SegmentRobustnessPanel.vue'
 import KlineChart from '../components/KlineChart.vue'
 import MetricTable from '../components/MetricTable.vue'
@@ -53,6 +54,9 @@ const execution = ref<ExecutionMode>('next_open')
 // 分段稳健性/过拟合检查：false=不检查；true=按 robustnessSegmentCount 分段重跑
 const checkRobustness = ref(false)
 const robustnessSegmentCount = ref(3)
+// 样本外验证（V105）：把区间切成训练段 + 样本外持有段验证模型泛化能力
+const checkOutOfSample = ref(false)
+const oosTrainRatio = ref(0.7)
 
 // 缠论相关状态
 const chanlunLoading = ref(false)
@@ -163,6 +167,8 @@ async function onRun() {
     slippage: slippage.value,
     execution: execution.value,
     robustness_segments: checkRobustness.value ? robustnessSegmentCount.value : null,
+    out_of_sample: checkOutOfSample.value,
+    oos_train_ratio: oosTrainRatio.value,
   })
   // 3. 如果选择了缠论策略，运行缠论分析
   if (strategy.value === 'chanlun' && store.ohlcv.length > 0) {
@@ -539,6 +545,17 @@ async function onSave() {
             <option :value="4">4 段</option>
           </select>
         </div>
+        <div class="field">
+          <label>
+            <input type="checkbox" v-model="checkOutOfSample" />
+            样本外验证（训练/持有切分）
+          </label>
+          <select v-if="checkOutOfSample" v-model.number="oosTrainRatio" class="seg-count">
+            <option :value="0.6">训练 60%</option>
+            <option :value="0.7">训练 70%</option>
+            <option :value="0.8">训练 80%</option>
+          </select>
+        </div>
       </section>
 
       <button
@@ -648,6 +665,11 @@ async function onSave() {
         <section v-if="store.result.segment_robustness" class="report-section">
           <h3>🧱 分段稳健性检查（过拟合验证）</h3>
           <SegmentRobustnessPanel :report="store.result.segment_robustness" />
+        </section>
+
+        <section v-if="store.result.out_of_sample" class="report-section">
+          <h3>🔬 样本外验证（训练段 vs 未见过数据）</h3>
+          <OutOfSamplePanel :report="store.result.out_of_sample" />
         </section>
 
         <section class="report-section">
