@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+**CLI verify/verify-multi 支持 --output-file 写 JSON 报告（V172）—— 命令行验证结论可直接落盘存档** —— Web 端各页已有 JSON 导出（V153 起），CLI verify/verify-multi 一直只把 JSON 打印到 stdout。本次新增 `--output-file <路径>`：把验证报告写入文件（默认仍打印 stdout），方便脚本落盘、存档与程序化消费。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify 与 verify-multi 均新增 `--output-file` 选项；有值时把 JSON 写入指定文件并提示「已写入 <路径>」，否则打印到 stdout。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify/verify-multi --help 均含 --output-file。
+- 端到端：`verify SZ 000001 --output-file /tmp/r.json` → 文件生成且为合法 JSON（含 verdict）。
+- ruff / mypy 零告警；全量单测 **2463 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V170（V171）—— 文档覆盖组合候选导出与指南自身迭代** —— V169 仅把指南更新到 V168，V170 新增的组合候选批量验证「复制排名/复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V170：标题、全景表补 V169/V170 两行、3.4 组合回测页第 6 点补充候选导出说明。
 
 ### 新增

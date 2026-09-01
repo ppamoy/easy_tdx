@@ -184,3 +184,14 @@ class TestBacktestCLI:
             assert "⚠过拟合" in echoed
             assert "✅泛化" in echoed
             assert "⚠衰减" in echoed
+    def test_verify_output_file_option(self):
+        """V172: verify / verify-multi 应暴露 --output-file 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        r1 = runner.invoke(cli, ["verify", "--help"])
+        assert r1.exit_code == 0
+        assert "--output-file" in r1.output
+        r2 = runner.invoke(cli, ["verify-multi", "--help"])
+        assert r2.exit_code == 0
+        assert "--output-file" in r2.output

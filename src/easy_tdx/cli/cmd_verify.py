@@ -45,6 +45,13 @@ import click
 @click.option("--out-of-sample", "run_oos", is_flag=True, help="样本外验证（训练/持有切分）")
 @click.option("--train-ratio", "train_ratio", default=0.7, type=float, help="样本外训练段占比")
 @click.option("--output", "output_fmt", type=click.Choice(["json"]), default="json")
+@click.option(
+    "--output-file",
+    "output_file",
+    default=None,
+    type=str,
+    help="把 JSON 报告写入文件（默认打印到 stdout）",
+)
 def verify(
     market: str,
     code: str,
@@ -61,6 +68,7 @@ def verify(
     run_oos: bool,
     train_ratio: float,
     output_fmt: str,
+    output_file: str | None,
 ) -> None:
     """模型验证：单标的完整准确度报告。"""
     from ..cli.conn import get_mac_client
@@ -175,7 +183,13 @@ def verify(
         verdict_parts.append(str(oos["verdict"]))
     result_dict["verdict"] = "；".join(verdict_parts) if verdict_parts else "无验证结论（数据不足）"
 
-    click.echo(json.dumps(result_dict, ensure_ascii=False, indent=2, default=str))
+    text = json.dumps(result_dict, ensure_ascii=False, indent=2, default=str)
+    if output_file:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        click.echo("已写入 " + output_file)
+    else:
+        click.echo(text)
 
 
 @click.command("verify-multi")
@@ -196,6 +210,13 @@ def verify(
 @click.option("--segments", default=None, type=int, help="分段稳健性段数（2~6，不填则跳过）")
 @click.option("--out-of-sample", "run_oos", is_flag=True, help="样本外验证（训练/持有切分）")
 @click.option("--train-ratio", "train_ratio", default=0.7, type=float, help="样本外训练段占比")
+@click.option(
+    "--output-file",
+    "output_file",
+    default=None,
+    type=str,
+    help="把 JSON 报告写入文件（默认打印到 stdout）",
+)
 def verify_multi(
     stocks: str,
     strategy_name: str,
@@ -210,6 +231,7 @@ def verify_multi(
     segments: int | None,
     run_oos: bool,
     train_ratio: float,
+    output_file: str | None,
 ) -> None:
     """批量模型验证：对多只标的跑同一策略，按模型可信度排名选股。
 
@@ -350,4 +372,10 @@ def verify_multi(
         "symbols": rows,
         "failures": failures,
     }
-    click.echo(json.dumps(out, ensure_ascii=False, indent=2, default=str))
+    text = json.dumps(out, ensure_ascii=False, indent=2, default=str)
+    if output_file:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        click.echo("已写入 " + output_file)
+    else:
+        click.echo(text)
