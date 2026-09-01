@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**选股页保存组合策略快照补样本外聚合（V197）—— 与 V190 对齐，四处保存入口快照统一含 OOS 结论** —— V190 给「保存为组合策略」快照补样本外聚合时覆盖了回测/监控/组合候选三处（source=batch-verify-backtest/monitor/cand），但选股页（V131，source=batch-verify）未含。本次给选股页保存快照同样补 avg_oos_degraded 与 oos_verdict，四处保存入口快照字段完全对齐，策略库卡片「🧪 批量验证样本外」展示对选股页入库的组合也生效。
+
+### 新增
+
+- **web-ui/src/views/ScreeningView.vue** —— saveBatchAsPortfolio 保存快照补 avg_oos_degraded + oos_verdict（统计逐只样本外衰减比例，与 V190 相同逻辑）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：选股页批量验证 →保存 → API 快照含 avg_oos_degraded/oos_verdict（source=batch-verify）、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V195（V196）—— 文档覆盖四处样本外稳健过滤与指南自身迭代** —— V191 起各版本新增的批量验证「仅看样本外稳健」过滤（V192/V193/V194/V195）入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V195：标题、全景表补 V191–V195 五行、3.1/3.3/3.4/3.5 四处批量验证说明补「仅看样本外稳健」过滤。
 
 ### 新增
