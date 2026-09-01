@@ -406,6 +406,19 @@ async function copyReport() {
   }
   setTimeout(() => { copyMsg.value = '' }, 2500)
 }
+// V153: 机器可读 JSON 报告导出（Agent/脚本/存档友好）
+const jsonCopyMsg = ref('')
+async function copyJsonReport() {
+  if (!store.result) return
+  const json = JSON.stringify(store.result, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    jsonCopyMsg.value = '✓ 已复制 JSON 报告'
+  } catch {
+    jsonCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
+}
 
 // V137: 批量验证自选股（对全局自选股用当前策略各跑一次回测，按可信度排名）
 interface BatchVerifyRow {
@@ -763,10 +776,12 @@ async function onSave() {
         <div class="result-toolbar">
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
           <button class="ghost" @click="copyReport">📋 复制报告</button>
+          <button class="ghost" @click="copyJsonReport">⚙ 复制 JSON</button>
           <button class="ghost" :disabled="batchLoading" @click="runBatchVerifyWatchlist">
             {{ batchLoading ? '批量验证自选股中…' : '🗳️ 批量验证自选股' }}
           </button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
+          <span v-if="jsonCopyMsg" class="save-msg">{{ jsonCopyMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
           <span v-if="batchMsg" class="save-msg">{{ batchMsg }}</span>
         </div>

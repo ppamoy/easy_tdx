@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**回测报告「复制 JSON」（V153）—— 机器可读验证档案，Agent/脚本友好** —— 单标回测页已有 Markdown 复制报告（V104/V116），但写脚本/存档时更需要结构化 JSON。本次在工具栏新增「⚙ 复制 JSON」：把当前回测结果（performance/signal_accuracy/segment_robustness/model_trust/out_of_sample/equity_curve/trades 等）以缩进 JSON 复制到剪贴板，方便 Agent 消费、长期存档与程序化对比。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 工具栏「📋 复制报告」旁新增「⚙ 复制 JSON」（copyJsonReport）：JSON.stringify(store.result, null, 2) 写入剪贴板 + 「✓ 已复制 JSON 报告」提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测后「复制 JSON」→ 剪贴板为合法 JSON（含 performance/signal_accuracy）、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V151（V152）—— 文档覆盖监控排序切换与指南自身迭代** —— V150 仅把指南更新到 V149，V151 新增的监控页批量验证「按收益/按可信度」排序切换入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V151：标题、全景表补 V150/V151 两行、3.5 信号监控页补充排序切换说明。
 
 ### 新增
