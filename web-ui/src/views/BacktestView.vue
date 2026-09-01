@@ -522,6 +522,48 @@ function copyBatchRanking() {
   }
   void doCopy()
 }
+// V141: 把批量验证选出的股票保存为组合策略（kind=portfolio，可在策略库载入后组合页复跑）
+const batchSaveMsg = ref('')
+const batchSaving = ref(false)
+async function saveBatchAsPortfolio() {
+  if (batchRows.value.length === 0 || batchSaving.value) return
+  batchSaving.value = true
+  batchSaveMsg.value = ''
+  try {
+    const stocks = batchRows.value.map((r) => r.symbol)
+    const avgTrust = batchRows.value.length
+      ? batchRows.value.reduce((s, r) => s + (r.trust_score ?? 0), 0) / batchRows.value.length
+      : 0
+    await saveStrategy({
+      name: (strategyLabel.value || strategy.value) + ' · 批量验证' + stocks.length + '只',
+      kind: 'portfolio',
+      strategy: strategy.value,
+      strategy_label: strategyLabel.value,
+      params: params.value,
+      context: {
+        stocks,
+        category: category.value,
+        start_date: startDate.value || undefined,
+        end_date: endDate.value || undefined,
+      },
+      trade_config: { cash: cash.value, execution: execution.value },
+      snapshot: {
+        total_stocks: stocks.length,
+        avg_trust_score: avgTrust,
+        source: 'batch-verify-backtest',
+        saved_at: new Date().toISOString().slice(0, 10),
+      },
+      tags: ['批量验证'],
+      notes: '由回测页批量验证自选股（按模型可信度排名）生成，可在组合回测页载入复跑。',
+    })
+    batchSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
+    setTimeout(() => { batchSaveMsg.value = '' }, 4000)
+  } catch (e) {
+    batchSaveMsg.value = '保存失败：' + formatError(e)
+  } finally {
+    batchSaving.value = false
+  }
+}
 function openSaveForm() {
   saveName.value = `${strategyLabel.value} · ${code.value}`
   saveTags.value = ''
@@ -728,7 +770,11 @@ async function onSave() {
             <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}，按模型可信度降序）</h3>
             <div class="batch-actions">
               <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
+              <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
+                {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
+              </button>
               <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
+              <span v-if="batchSaveMsg" class="save-msg" :class="{ err: batchSaveMsg.includes('失败') }">{{ batchSaveMsg }}</span>
             </div>
           </div>
           <table class="batch-table">
@@ -1014,6 +1060,9 @@ async function onSave() {
 .batch-actions .save-msg {
   font-size: 12px;
   color: var(--up);
+}
+.batch-actions .save-msg.err {
+  color: var(--down);
 }
 .modal-overlay {
   position: fixed;

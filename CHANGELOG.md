@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**回测页批量验证「保存为组合策略」（V141）—— 单标调参后的批量验证结果也能入库复跑** —— V137 的回测页批量验证自选股只能看/复制排名，无法长期保存；动态选股页批量验证（V131）已有保存组合能力。本次给回测页批量验证加「💾 保存为组合策略」：把按可信度排名选出的自选股整理为 kind=portfolio 的策略库条目（context.stocks + source=batch-verify-backtest 快照），可在「策略库 → 组合」tab 载入后在组合回测页复跑。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 批量验证面板新增「💾 保存为组合策略」按钮（saveBatchAsPortfolio）：取批量验证结果按 symbol 组装 stocks 列表，saveStrategy 写入 kind=portfolio（context.stocks/category/start_date/end_date + snapshot 含 total_stocks/avg_trust_score/source=batch-verify-backtest + tags/notes），成功后提示可载入复跑。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页批量验证 →「保存为组合策略」→ 提示「已保存为组合策略」、API 含 source=batch-verify-backtest 的组合、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V139（V140）—— 文档覆盖批量验证复制排名与指南自身迭代** —— V138 仅把指南更新到 V137，V139 新增的回测页批量验证「复制排名」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V139：标题、全景表补 V138/V139 两行、3.1 回测页第 5 步补充复制排名说明。
 
 ### 新增
