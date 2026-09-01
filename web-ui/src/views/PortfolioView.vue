@@ -13,7 +13,7 @@ import PortfolioValidationSummary from '../components/PortfolioValidationSummary
 import PortfolioSummaryTable from '../components/PortfolioSummaryTable.vue'
 import StocksPicker from '../components/StocksPicker.vue'
 import StrategyPicker from '../components/StrategyPicker.vue'
-import { formatError, saveStrategy } from '../api'
+import { fetchBars, formatError, runBacktest, saveStrategy } from '../api'
 import { gradePortfolio } from '../grading'
 import type { Category, ExecutionMode } from '../types'
 import { useBacktestStore } from '../stores/backtest'
@@ -94,6 +94,97 @@ async function onRun() {
     out_of_sample: checkOutOfSample.value,
     oos_train_ratio: oosTrainRatio.value,
   })
+}
+
+// V160: 批量验证候选股（对全局自选股用当前策略各跑一次回测，按可信度排名）
+interface CandRow {
+  symbol: string
+  market: string
+  code: string
+  total_return: number | null
+  win_rate: number | null
+  hit_rate: number | null
+  excess_hit_rate: number | null
+  trust_score: number | null
+  trust_grade: string | null
+  trades: number | null
+}
+const candRows = ref<CandRow[]>([])
+const candLoading = ref(false)
+const candMsg = ref('')
+const candSort = ref<'return' | 'trust'>('trust')
+const sortedCandRows = computed(() => {
+  const rows = candRows.value
+  if (!rows.length || candSort.value === 'trust') return rows
+  return [...rows].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+})
+async function runCandVerify() {
+  if (candLoading.value) return
+  let raw: any[] = []
+  try { raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]') } catch { raw = [] }
+  const watch = raw.filter((w) => w && w.code && w.market).slice(0, 12)
+  if (watch.length === 0) {
+    candMsg.value = '自选股为空：请先在缠论分析页「加入自选股」'
+    setTimeout(() => { candMsg.value = '' }, 3500)
+    return
+  }
+  candLoading.value = true
+  candMsg.value = ''
+  const rows: CandRow[] = []
+  try {
+    for (const w of watch) {
+      try {
+        const bars = await fetchBars(w.market, w.code, category.value, undefined, undefined, 500)
+        if (bars.length < 30) continue
+        const result = await runBacktest({
+          strategy: strategy.value,
+          params: params.value,
+          cash: cash.value / Math.max(stocks.value.length, 1),
+          commission: 0.0003,
+          slippage: 0,
+          execution: execution.value,
+          ohlcv: bars,
+        })
+        const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+        rows.push({
+          symbol: w.symbol || w.market + w.code,
+          market: w.market,
+          code: w.code,
+          total_return: result.performance.total_return ?? null,
+          win_rate: result.performance.win_rate ?? null,
+          hit_rate: h5 && h5.count > 0 ? h5.hit_rate : null,
+          excess_hit_rate: h5 && h5.count > 0 ? h5.excess_hit_rate : null,
+          trust_score: result.model_trust?.score ?? null,
+          trust_grade: result.model_trust?.grade ?? null,
+          trades: result.performance.total_trades ?? null,
+        })
+      } catch { /* 单只失败跳过 */ }
+    }
+    rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
+    candRows.value = rows
+    if (rows.length === 0) candMsg.value = '批量验证无结果（行情取数失败或数据不足）'
+  } catch (e) {
+    candMsg.value = '批量验证失败：' + formatError(e)
+  } finally {
+    candLoading.value = false
+  }
+}
+function addCandToPortfolio(r: CandRow) {
+  const sym = r.market + ':' + r.code
+  if (!stocks.value.includes(sym)) stocks.value.push(sym)
+}
+function addAllCands() {
+  for (const r of candRows.value) {
+    const sym = r.market + ':' + r.code
+    if (!stocks.value.includes(sym)) stocks.value.push(sym)
+  }
+}
+function candPct(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(1) + '%'
+}
+function candTrust(r: CandRow): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
 
 // ── 保存策略（把当前组合结果 + 配置 + 上下文存进策略库）──────────────────────
@@ -274,6 +365,41 @@ async function onSave() {
         <div class="watchlist-load">
           <button class="ghost small" @click="loadFromWatchlist">📌 从自选股加载</button>
           <button class="ghost small" @click="clearAll">清空</button>
+        </div>
+      </section>
+      <section class="panel-section">
+        <h3>批量验证候选股（选股验证）</h3>
+        <p class="hint">读全局自选股（最多 12 只），用当前策略逐只回测并按可信度排名，可一键加入组合标的。</p>
+        <div class="cand-bar">
+          <button class="ghost small" :disabled="candLoading || !store.strategies.length" @click="runCandVerify">
+            {{ candLoading ? '批量验证中…' : '🧪 批量验证候选股' }}
+          </button>
+          <span v-if="candMsg" class="cand-msg">{{ candMsg }}</span>
+        </div>
+        <div v-if="candRows.length" class="cand-table-wrap">
+          <div class="cand-head">
+            <span>候选排名（{{ candRows.length }}）</span>
+            <span class="cand-sort">
+              <button class="ghost small" :class="{ active: candSort === 'return' }" @click="candSort = 'return'">按收益</button>
+              <button class="ghost small" :class="{ active: candSort === 'trust' }" @click="candSort = 'trust'">按可信度</button>
+              <button class="ghost small" @click="addAllCands">全部加入组合</button>
+            </span>
+          </div>
+          <table class="cand-table">
+            <thead>
+              <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">5根命中率</th><th class="num">可信度</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(r, i) in sortedCandRows" :key="r.symbol">
+                <td class="dim">{{ i + 1 }}</td>
+                <td>{{ r.symbol }}</td>
+                <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ candPct(r.total_return) }}</td>
+                <td class="num">{{ candPct(r.hit_rate) }}</td>
+                <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ candTrust(r) }}</td>
+                <td><button class="ghost small" @click="addCandToPortfolio(r)">加入组合</button></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -676,4 +802,65 @@ async function onSave() {
   font-size: 11px;
   padding: 3px 8px;
 }
+
+/* V160: 批量验证候选股 */
+.cand-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cand-msg {
+  font-size: 12px;
+  color: var(--warn, #f59e0b);
+}
+.cand-table-wrap {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+}
+.cand-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.cand-sort {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.cand-sort .ghost.active {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.cand-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.cand-table th {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.cand-table th:first-child, .cand-table td:first-child { text-align: left; }
+.cand-table td {
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.pos { color: var(--up); }
+.neg { color: var(--down); }
+.dim { color: var(--text-dim); }
 </style>
