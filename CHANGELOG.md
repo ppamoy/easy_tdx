@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V132（V133）—— 文档覆盖批量验证导出/入库与 CLI 验证增强** —— V129 的指南只到 V128，V130（批量验证排名导出）、V131（保存为组合策略）、V132（verify-multi 分段稳健性/样本外）未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V132：标题、全景表补 3 行、3.8 动态选股批量验证与 3.9 命令行章节补充入口说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V132；全景表补 V130/V131/V132（批量验证复制排名/保存组合策略/verify-multi 增强）；3.8 补复制排名与保存为组合策略说明、3.9 补 verify-multi --segments/--out-of-sample。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致，全景表新条目与 CHANGELOG 逐一对应。
+
+## [Unreleased]
+
 **CLI verify-multi 补分段稳健性/样本外验证（V132）—— 批量验证每只标的也给出过拟合与泛化结论** —— V119 的 verify-multi 只输出收益/命中率/可信度，缺少稳健性（V97）与样本外（V105）结论；V117 的单标 verify 有这两项。本次给 verify-multi 补 `--segments`（分段稳健性段数）与 `--out-of-sample`/`--train-ratio`，逐标计算后把 overfit_likely/robust_verdict 与 oos_degraded/oos_verdict/train_return/test_return 写入每行 JSON。
 
 ### 新增
