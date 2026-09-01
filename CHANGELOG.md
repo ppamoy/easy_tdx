@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**监控页批量验证结果持久化（V219）—— 与回测页 V217 对齐，刷新/切页后监控验证结论不丢失** —— 回测页批量验证已支持持久化（V217），监控页批量验证同样是慢操作、刷新即丢。本次给监控批量验证加 localStorage 持久化：rows + 策略 + 时间存入 easy_tdx_mon_batch_verify_last，onMounted 自动恢复，面板标题显示「🕒 上次验证时间」。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— 新增 MON_BATCH_KEY / lastMonBatchAt / saveMonBatchPersist / restoreMonBatchPersist；监控批量验证完成后持久化，onMounted 恢复；面板标题新增时间标签。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：监控批量验证 →「上次验证时间」标签可见；刷新 → 批量验证表自动恢复 2 行、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V217（V218）—— 文档覆盖批量验证持久化与指南自身迭代** —— V216 仅把指南更新到 V215，V217 新增的回测页批量验证结果持久化入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V217：标题、全景表补 V216/V217 两行、3.1 回测页第 5 步补充持久化说明。
 
 ### 新增

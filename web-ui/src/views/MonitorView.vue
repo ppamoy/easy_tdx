@@ -334,6 +334,32 @@ interface MonBatchRow {
 const monBatchRows = ref<MonBatchRow[]>([])
 const monBatchLoading = ref(false)
 const monBatchMsg = ref('')
+// V219: 监控批量验证结果持久化（与回测页 V217 对齐）
+const MON_BATCH_KEY = 'easy_tdx_mon_batch_verify_last'
+const lastMonBatchAt = ref('')
+function saveMonBatchPersist() {
+  if (!monBatchRows.value.length) return
+  try {
+    localStorage.setItem(MON_BATCH_KEY, JSON.stringify({
+      rows: monBatchRows.value,
+      strategy: batchStrategy.value,
+      strategy_label: batchStrategyLabel.value || batchStrategy.value,
+      at: new Date().toISOString(),
+    }))
+  } catch { /* localStorage 不可用忽略 */ }
+}
+function restoreMonBatchPersist() {
+  try {
+    const raw = localStorage.getItem(MON_BATCH_KEY)
+    if (!raw) return
+    const data = JSON.parse(raw)
+    if (Array.isArray(data.rows) && data.rows.length) {
+      monBatchRows.value = data.rows
+      lastMonBatchAt.value = data.at || ''
+      monBatchMsg.value = '已恢复上次监控批量验证（' + (data.strategy_label || '') + '）'
+    }
+  } catch { /* 解析失败忽略 */ }
+}
 
 async function loadMonitorStrategies() {
   if (strategyOptions.value.length) return
@@ -404,6 +430,8 @@ async function runMonitorBatchVerify() {
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     monBatchRows.value = rows
+    lastMonBatchAt.value = new Date().toISOString()
+    saveMonBatchPersist()
     if (rows.length === 0) monBatchMsg.value = '批量验证无结果（行情取数失败或数据不足）'
   } catch (e) {
     monBatchMsg.value = '批量验证失败：' + formatError(e)
@@ -558,6 +586,8 @@ onMounted(async () => {
   loadWatchList()
   await loadTasks()
   await loadMonitorStrategies()
+  // V219: 恢复上次监控批量验证结果（如有）
+  restoreMonBatchPersist()
   // 请求通知权限
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission()
@@ -664,7 +694,9 @@ onUnmounted(() => {
     </div>
     <div v-if="monBatchRows.length > 0" class="mon-batch-panel">
       <div class="mon-batch-head">
-        <h4>🧪 批量验证监控股：{{ batchStrategyLabel }}</h4>
+        <h4>🧪 批量验证监控股：{{ batchStrategyLabel }}
+          <span v-if="lastMonBatchAt" class="mon-batch-at" :title="'上次验证时间'">🕒 {{ new Date(lastMonBatchAt).toLocaleString() }}</span>
+        </h4>
         <div class="mon-batch-actions">
           <button class="ghost small" :class="{ active: monBatchSort === 'return' }" @click="monBatchSort = 'return'">按收益</button>
           <button class="ghost small" :class="{ active: monBatchSort === 'trust' }" @click="monBatchSort = 'trust'">按可信度</button>
@@ -1198,6 +1230,13 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 .mon-batch-head h4 {
+/* V219: 上次监控批量验证时间 */
+.mon-batch-at {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+  margin-left: 8px;
+}
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
