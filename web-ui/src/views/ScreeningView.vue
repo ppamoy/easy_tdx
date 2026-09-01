@@ -7,7 +7,7 @@ import { useRouter } from 'vue-router'
 
 import ChanlunChart from '../components/ChanlunChart.vue'
 import EquityChart from '../components/EquityChart.vue'
-import { formatError } from '../api'
+import { fetchBars, formatError } from '../api'
 import { fmtPct } from '../format'
 import type { Bar } from '../types'
 
@@ -256,6 +256,107 @@ async function verifyScreening() {
   }
 }
 
+
+// ── 批量策略验证（V114）：对筛选出的股票跑同一策略，按模型可信度排名选股 ──
+interface BatchRow {
+  symbol: string
+  total_return: number | null
+  win_rate: number | null
+  hit_rate: number | null
+  excess_hit_rate: number | null
+  trust_score: number | null
+  trust_grade: string | null
+  trades: number | null
+}
+const batchStrategy = ref('ma_cross')
+const batchStrategyLabel = ref('双均线交叉')
+const strategyOptions = ref<Array<{ name: string; label: string; params: Array<{ name: string; default?: number | string | boolean }> }>>([])
+const batchResults = ref<BatchRow[]>([])
+const batchLoading = ref(false)
+
+async function loadBatchStrategies() {
+  if (strategyOptions.value.length) return
+  try {
+    const resp = await fetch('/api/v1/backtest/strategies')
+    if (!resp.ok) return
+    const data = await resp.json()
+    strategyOptions.value = (data.strategies ?? []).map((s: any) => ({
+      name: s.name, label: s.label, params: s.params ?? [],
+    }))
+    if (strategyOptions.value.length) batchStrategy.value = strategyOptions.value[0].name
+  } catch { /* ignore */ }
+}
+
+function batchDefaults(): Record<string, number | string | boolean> {
+  const opt = strategyOptions.value.find((s) => s.name === batchStrategy.value)
+  const out: Record<string, number | string | boolean> = {}
+  for (const p of opt?.params ?? []) {
+    if (p.default !== undefined) out[p.name] = p.default
+  }
+  return out
+}
+
+async function runBatchVerify() {
+  if (qualifiedStocks.value.length === 0) return
+  batchLoading.value = true
+  batchResults.value = []
+  const defaultParams = batchDefaults()
+  try {
+    const rows: BatchRow[] = []
+    const stocks = qualifiedStocks.value.slice(0, 12) // 限制 12 只避免过慢
+    for (const st of stocks) {
+      try {
+        const bars = await fetchBars(st.market, st.code, 'DAY', undefined, undefined, 500)
+        if (bars.length < 30) continue
+        const resp = await fetch('/api/v1/backtest/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            strategy: batchStrategy.value,
+            params: defaultParams,
+            cash: 1000000,
+            ohlcv: bars,
+          }),
+        })
+        if (!resp.ok) continue
+        const result = await resp.json()
+        const perf = result.performance
+        const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+        rows.push({
+          symbol: st.symbol,
+          total_return: perf.total_return ?? null,
+          win_rate: perf.win_rate ?? null,
+          hit_rate: h5 && h5.count > 0 ? h5.hit_rate : null,
+          excess_hit_rate: h5 && h5.count > 0 ? h5.excess_hit_rate : null,
+          trust_score: result.model_trust?.score ?? null,
+          trust_grade: result.model_trust?.grade ?? null,
+          trades: perf.total_trades ?? null,
+        })
+      } catch { /* 单只失败跳过 */ }
+    }
+    // 按可信度降序（缺可信度排最后）
+    rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
+    batchResults.value = rows
+  } catch (e) {
+    error.value = '批量验证失败: ' + formatError(e)
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+function batchPct(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(0) + '%'
+}
+function batchTrust(r: BatchRow): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
+function batchTrustClass(r: BatchRow): string {
+  if (r.trust_grade === '高') return 'pos'
+  if (r.trust_grade === '低') return 'neg'
+  return ''
+}
+
 // ── 选择股票 ────────────────────────────────────────────────────────────
 async function selectStock(stock: StockResult) {
   selectedStock.value = stock
@@ -387,6 +488,7 @@ onMounted(() => {
   const d = new Date()
   d.setDate(d.getDate() - 30)
   selectDate.value = d.toISOString().slice(0, 10)
+  loadBatchStrategies()
 })
 </script>
 
@@ -486,6 +588,42 @@ onMounted(() => {
         方法：以选股日收盘价为基准，回看其后 5/10/20/60 个交易日的收益；
         对比模型选中的股票 vs 整个扫描池（含未选中）。超额为正且命中率更高说明选股模型具备择股能力。
       </p>
+    </div>
+
+    <!-- V114: 批量策略验证（对筛选出的股票跑同一策略，按可信度排名） -->
+    <div v-if="!scanning && qualifiedStocks.length > 0" class="batch-verify-bar">
+      <select v-model="batchStrategy" class="strategy-select" @change="batchStrategyLabel = strategyOptions.find(s => s.name === batchStrategy)?.label ?? batchStrategy">
+        <option v-for="s in strategyOptions" :key="s.name" :value="s.name">{{ s.label }}</option>
+      </select>
+      <button class="ghost verify-btn" :disabled="batchLoading || strategyOptions.length === 0" @click="runBatchVerify">
+        {{ batchLoading ? '批量验证中…' : '🧪 批量策略验证（对选中的股票逐个回测，按可信度排名）' }}
+      </button>
+    </div>
+    <div v-if="batchResults.length > 0" class="batch-panel">
+      <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）</h3>
+      <table class="batch-table">
+        <thead>
+          <tr>
+            <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
+            <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
+            <th class="num">交易数</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in batchResults" :key="r.symbol">
+            <td class="dim">{{ i + 1 }}</td>
+            <td>{{ r.symbol }}</td>
+            <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPct(r.total_return) }}</td>
+            <td class="num">{{ batchPct(r.win_rate) }}</td>
+            <td class="num">{{ batchPct(r.hit_rate) }}</td>
+            <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPct(r.excess_hit_rate) }}</td>
+            <td class="num" :class="batchTrustClass(r)">{{ batchTrust(r) }}</td>
+            <td class="num">{{ r.trades }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="batch-legend">对筛选出的每只股票用所选策略做一次独立回测（最近 500 根日线，最新 K 线区间），
+        汇总总收益/胜率/5根命中率/模型可信度并降序排名——可信度越高说明该策略在这只标的上「验证过的准确度」越好，可直接用于选股。</p>
     </div>
 
     <!-- 主内容区 -->
@@ -807,6 +945,65 @@ onMounted(() => {
   line-height: 1.6;
   margin: 10px 0 0;
 }
+
+/* V114: 批量策略验证 */
+.batch-verify-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.batch-verify-bar .strategy-select {
+  max-width: 260px;
+}
+.batch-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+.batch-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.batch-table th {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.batch-table th:first-child, .batch-table td:first-child {
+  text-align: left;
+}
+.batch-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.batch-table td.num-row {
+  text-align: right;
+}
+.batch-legend {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.pos { color: var(--up); }
+.neg { color: var(--down); }
+.dim { color: var(--text-dim); }
 .main-content {
   display: grid;
   grid-template-columns: 320px 1fr;
