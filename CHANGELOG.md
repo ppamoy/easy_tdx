@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**监控页批量验证「样本外」列（V180）—— 监控批量选股时直接看每只监控股的泛化/衰减结论** —— 回测页批量验证已加「样本外」列（V178），监控页批量验证（V143）的每只监控股样本外结论（V105）此前只能单点看。本次给监控批量验证逐只开启 out_of_sample，表格新增「样本外」列——✅泛化 / ⚠衰减（悬停显示完整判定），与回测页 V178 对齐。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— MonBatchRow 追加 oos_degraded/oos_verdict；监控批量验证请求开启 out_of_sample:true、oos_train_ratio:0.7 并提取结论；表格新增「样本外」列（monOosLabel/monOosCls/monOosTitle 辅助，悬停显示完整 verdict）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：监控页批量验证 →「样本外」列可见、首行 ⚠衰减、2 行结果、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V178（V179）—— 文档覆盖批量验证样本外列与指南自身迭代** —— V177 仅把指南更新到 V176，V178 新增的回测页批量验证「样本外」列入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V178：标题、全景表补 V177/V178 两行、3.1 回测页第 5 步补充样本外列说明。
 
 ### 新增
