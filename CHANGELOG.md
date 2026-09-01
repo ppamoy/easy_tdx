@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**策略库「全部重验」（V249）—— 一键刷新当前可见全部策略的验证结论** —— Web 端策略库逐卡片「↻ 重验」（V209/V211/V227）只能单条处理，批量刷新要逐点。本次在页头加「↻ 全部重验」按钮：对当前可见（single/portfolio/multi）策略逐个重验（progress 提示「正在重验 i/n」），完成后汇总「成功 x、失败 y」，与 CLI reverify 默认全量（V213）对齐。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— 新增 onReverifyAll（遍历 sortedVisible 逐个 onReverify，带进度与汇总提示）+ 页头「↻ 全部重验」按钮（reverifyAll 状态防重入）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：策略库「全部重验」→ 完成提示「成功 7、失败 0（共 7）」、清理成功、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V247（V248）—— 文档覆盖寻优查看该股与指南自身迭代** —— V246 仅把指南更新到 V245，V247 新增的寻优页批量验证「查看该股」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V247：标题、全景表补 V246/V247 两行、3.7 参数寻优页批量验证后补「查看该股」说明。
 
 ### 新增

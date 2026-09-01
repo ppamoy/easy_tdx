@@ -463,6 +463,33 @@ async function onReverify(s: SavedStrategy) {
     reverifyId.value = null
   }
 }
+// V249: 全部重验——对当前可见策略逐个重验，刷新全部验证结论
+const reverifyAll = ref(false)
+const reverifyAllMsg = ref('')
+async function onReverifyAll() {
+  const targets = [...sortedVisible.value].filter((s) => s.kind === 'single' || s.kind === 'portfolio' || s.kind === 'multi')
+  if (targets.length === 0 || reverifyAll.value) return
+  reverifyAll.value = true
+  reverifyAllMsg.value = ''
+  try {
+    let ok = 0
+    let fail = 0
+    for (let i = 0; i < targets.length; i++) {
+      const s = targets[i]
+      reverifyAllMsg.value = `正在重验 ${i + 1}/${targets.length}：${s.name}…`
+      try {
+        await onReverify(s)
+        ok++
+      } catch {
+        fail++
+      }
+    }
+    reverifyAllMsg.value = `✓ 全部重验完成：成功 ${ok}、失败 ${fail}（共 ${targets.length}）`
+    setTimeout(() => { reverifyAllMsg.value = '' }, 5000)
+  } finally {
+    reverifyAll.value = false
+  }
+}
 /** 载入：把保存的策略 + 标的上下文塞进 URL query，跳转对应回测页（页面 onMounted 时回填）。 */
 function onLoad(s: SavedStrategy) {
   const ctx = s.context
@@ -740,6 +767,15 @@ const comboGrade = computed(() =>
         <button class="ghost" :disabled="loading" @click="load">
           {{ loading ? '刷新中…' : '↻ 刷新' }}
         </button>
+        <button
+          class="ghost sm"
+          :disabled="reverifyAll || loading || sortedVisible.length === 0"
+          title="对当前可见的全部策略重新回测并刷新验证结论"
+          @click="onReverifyAll"
+        >
+          {{ reverifyAll ? '全部重验中…' : '↻ 全部重验' }}
+        </button>
+        <span v-if="reverifyAllMsg" class="reverify-msg all">{{ reverifyAllMsg }}</span>
         <label class="trust-sort">
           <input type="checkbox" v-model="sortByTrust" />
           按验证可信度排序
