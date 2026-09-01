@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**动态选股页批量验证支持「查看该股」（V118）—— 从验证排名直接跳到单标回测/缠论分析** —— V114 的批量策略验证给出按可信度排名，但用户要手动去左边列表点股票才能看单标详情。本次给批量验证表每行加「查看该股」按钮，点击直接加载该股的单标缠论回测视图，形成「批量验证 → 深挖个股」的闭环。
+
+### 新增
+
+- **web-ui/src/views/ScreeningView.vue** —— BatchRow 记录 market/code；批量验证表新增「查看该股」操作列，点击调用 viewBatchStock（构造 StockResult 后 selectStock 复用现有单标回测/缠论分析）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：批量验证表「查看该股」按钮可见，点击后主区加载该股单标回测、console 零错误。
+
+## [Unreleased]
+
 **CLI 模型验证报告命令（V117）—— 命令行一条命令跑完「通过历史回测检查模型是否准确」** —— Web 端有完整验证面板，但命令行用户（Agent/脚本）要自己串 BacktestEngine + 各验证函数。本次新增 `easy-tdx verify MARKET CODE` 命令：单标的跑完整验证套件（回测绩效 + 信号准确度 V95 + 可选分段稳健性 V97 + 模型可信度 V101 + 可选样本外 V105），输出 JSON 报告并在 `verdict` 汇总全部结论。
 
 ### 新增

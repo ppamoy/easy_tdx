@@ -260,6 +260,8 @@ async function verifyScreening() {
 // ── 批量策略验证（V114）：对筛选出的股票跑同一策略，按模型可信度排名选股 ──
 interface BatchRow {
   symbol: string
+  market: string
+  code: string
   total_return: number | null
   win_rate: number | null
   hit_rate: number | null
@@ -324,6 +326,8 @@ async function runBatchVerify() {
         const h5 = result.signal_accuracy?.buy?.horizons?.['5']
         rows.push({
           symbol: st.symbol,
+          market: st.market,
+          code: st.code,
           total_return: perf.total_return ?? null,
           win_rate: perf.win_rate ?? null,
           hit_rate: h5 && h5.count > 0 ? h5.hit_rate : null,
@@ -355,6 +359,24 @@ function batchTrustClass(r: BatchRow): string {
   if (r.trust_grade === '高') return 'pos'
   if (r.trust_grade === '低') return 'neg'
   return ''
+}
+
+// V118: 从批量验证排名直接查看该股（单标缠论回测）
+function viewBatchStock(r: BatchRow) {
+  const st: StockResult = {
+    code: r.code,
+    market: r.market,
+    symbol: r.symbol,
+    quality_score: 0,
+    kline_count: 0,
+    bi_count: 0,
+    zs_count: 0,
+    buy_1_count: 0,
+    sell_1_count: 0,
+    latest_mmd: null,
+    classification: 'vegetable',
+  }
+  selectStock(st)
 }
 
 // ── 选择股票 ────────────────────────────────────────────────────────────
@@ -606,7 +628,7 @@ onMounted(() => {
           <tr>
             <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
             <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-            <th class="num">交易数</th>
+            <th class="num">交易数</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -619,6 +641,7 @@ onMounted(() => {
             <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPct(r.excess_hit_rate) }}</td>
             <td class="num" :class="batchTrustClass(r)">{{ batchTrust(r) }}</td>
             <td class="num">{{ r.trades }}</td>
+            <td><button class="ghost small" @click="viewBatchStock(r)">查看该股</button></td>
           </tr>
         </tbody>
       </table>
