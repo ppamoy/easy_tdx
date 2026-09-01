@@ -64,6 +64,19 @@ class TestAggregatePortfolioAccuracy:
         assert rep["symbols"] == []
         assert "无标的" in rep["verdict"]
 
+    def test_rows_carry_trust_fields(self) -> None:
+        """V110: 每只标的的聚合行应带 trust_score/trust_grade。"""
+        results = {
+            "SZ000001": _result_dict(0.12, 0.6, 1.2, 8, 0.67),
+            "SZ000002": _result_dict(0.05, 0.5, 0.8, 6, 0.55),
+        }
+        rep = aggregate_portfolio_accuracy(results, None)
+        for row in rep["symbols"]:
+            assert "trust_score" in row
+            assert "trust_grade" in row
+            assert row["trust_score"] is not None
+            assert row["trust_grade"] in ("高", "中", "低")
+
     def test_aggregates_weighted(self) -> None:
         results = {
             "SZ000001": _result_dict(0.12, 0.6, 1.2, 8, 0.67),

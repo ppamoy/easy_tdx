@@ -295,6 +295,9 @@ export interface PortfolioSymbolAccuracy {
   hit_rate: number | null
   baseline_hit_rate: number | null
   excess_hit_rate: number | null
+  // V110: 单标的模型可信度（V101 机制）
+  trust_score?: number | null
+  trust_grade?: string | null
 }
 
 export interface PortfolioAccuracyReport {

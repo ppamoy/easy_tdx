@@ -36,6 +36,17 @@ const trustBarColor = computed(() => {
   if (props.trust.score >= 50) return 'var(--warn, #f59e0b)'
   return 'var(--down)'
 })
+
+// V110: 单标的可信度展示辅助
+function trustText(r: { trust_score?: number | null; trust_grade?: string | null }): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
+function trustClass(r: { trust_grade?: string | null }): string {
+  if (r.trust_grade === '高') return 'pos'
+  if (r.trust_grade === '低') return 'neg'
+  return ''
+}
 </script>
 
 <template>
@@ -102,6 +113,7 @@ const trustBarColor = computed(() => {
           <th>5根命中率</th>
           <th>随机基准</th>
           <th>超额命中率</th>
+          <th>可信度</th>
           <th>夏普</th>
           <th>交易数</th>
         </tr>
@@ -117,6 +129,7 @@ const trustBarColor = computed(() => {
           </td>
           <td class="dim">{{ fmtPct(r.baseline_hit_rate) }}</td>
           <td :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(r.excess_hit_rate) }}</td>
+          <td :class="trustClass(r)">{{ trustText(r) }}</td>
           <td>{{ (r.sharpe ?? 0).toFixed(2) }}</td>
           <td>{{ r.trades }}</td>
         </tr>

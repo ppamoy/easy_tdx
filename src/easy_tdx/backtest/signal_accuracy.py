@@ -479,7 +479,7 @@ def _symbol_accuracy_row(
                     return default
         return default
 
-    return {
+    row: dict[str, Any] = {
         "symbol": str(key),
         "allocation": allocation,
         "total_return": _g("total_return"),
@@ -493,6 +493,25 @@ def _symbol_accuracy_row(
         if hit_rate is not None and baseline_hit is not None
         else None,
     }
+    # V110: 单标的模型可信度（V101 机制，无分段稳健性时中性参与）
+    try:
+        from easy_tdx.backtest.model_trust import compute_model_trust
+
+        mt = getattr(result, "model_trust", None)
+        if mt is None and isinstance(result, dict):
+            mt = result.get("model_trust")
+        if mt is None:
+            mt = compute_model_trust(perf, sa, None)
+        if mt:
+            row["trust_score"] = float(mt.get("score", 0.0))
+            row["trust_grade"] = str(mt.get("grade", ""))
+        else:
+            row["trust_score"] = None
+            row["trust_grade"] = None
+    except Exception:  # noqa: BLE001
+        row["trust_score"] = None
+        row["trust_grade"] = None
+    return row
 
 
 def aggregate_portfolio_accuracy(

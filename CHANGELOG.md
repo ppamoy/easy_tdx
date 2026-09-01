@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+**组合回测逐标的「可信度」列（V110）—— 同一策略在哪些标的上验证最可信，一目了然** —— V99 组合聚合只给每股命中率，用户仍需自己脑补「哪只标的最可信」。本次给组合 accuracy_summary 的每股聚合行补上 V101 模型可信度分与等级，组合回测页逐标表新增「可信度」列，帮助按验证可信度比较标的选择。
+
+### 新增
+
+- **每股模型可信度（backtest/signal_accuracy.py）** —— `_symbol_accuracy_row` 为每股计算 trust_score/trust_grade（V101 compute_model_trust，无分段稳健性时中性参与）；aggregate_portfolio_accuracy 的 symbols 行透出。
+- **组合回测页逐标表新增「可信度」列（web-ui/src/components/PortfolioAccuracyPanel.vue + types.ts）** —— 在超额命中率后展示每股可信度（分数+等级，高/低着色），列序为 标的/占比/收益/胜率/命中率/随机基准/超额/可信度/夏普/交易数。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_portfolio_accuracy.py）：聚合行带 trust_score/trust_grade。
+- 端到端：组合回测 accuracy_summary 每股返回 trust_score/grade（如 SZ000001 49.1低 / SZ000002 51.2中）；Playwright 浏览器回归：组合页逐标表「可信度」列可见（55中/31低）、console 零错误。
+- ruff / mypy 零告警；全量单测 **2453 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **参数寻优结果附信号准确度与模型可信度（V109）—— 按「验证过的准确度」选参数，而非只看收益** —— 用户在寻优页挑参数时默认按总收益排序，最容易陷入过拟合（最高收益参数往往是过拟合到这段行情的）。本次给每个网格点附上该参数组合的信号命中率与模型可信度，让用户综合「收益 + 准确度 + 可信度」决策。
 
 ### 新增
