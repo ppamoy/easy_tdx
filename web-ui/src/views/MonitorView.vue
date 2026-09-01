@@ -2,7 +2,7 @@
 // 信号监控视图：订阅一批股票，实时检查高置信度缠论买卖点信号。
 
 import { onMounted, onUnmounted, ref } from 'vue'
-import { formatError } from '../api'
+import { fetchBars, formatError } from '../api'
 
 interface MonitoredStock {
   market: string
@@ -319,10 +319,97 @@ const MMD_COLORS: Record<string, string> = {
   '1buy': '#22c55e', '2buy': '#4ade80', '3buy': '#86efac',
   '1sell': '#ef4444', '2sell': '#f87171', '3sell': '#fca5a5',
 }
+// V143: 批量验证监控股（对已选监控标的跑所选策略，按可信度排名）
+const batchStrategy = ref('ma_cross')
+const batchStrategyLabel = ref('双均线交叉')
+const strategyOptions = ref<Array<{ name: string; label: string; params: Array<{ name: string; default?: number | string | boolean }> }>>([])
+const monBatchRows = ref<Array<{ symbol: string; market: string; code: string; total_return: number | null; win_rate: number | null; hit_rate: number | null; excess_hit_rate: number | null; trust_score: number | null; trust_grade: string | null; trades: number | null }>>([])
+const monBatchLoading = ref(false)
+const monBatchMsg = ref('')
+
+async function loadMonitorStrategies() {
+  if (strategyOptions.value.length) return
+  try {
+    const resp = await fetch('/api/v1/backtest/strategies')
+    if (!resp.ok) return
+    const data = await resp.json()
+    strategyOptions.value = (data.strategies ?? []).map((s: any) => ({
+      name: s.name, label: s.label, params: s.params ?? [],
+    }))
+    if (strategyOptions.value.length) batchStrategy.value = strategyOptions.value[0].name
+  } catch { /* ignore */ }
+}
+
+function monBatchDefaults(): Record<string, number | string | boolean> {
+  const opt = strategyOptions.value.find((s) => s.name === batchStrategy.value)
+  const out: Record<string, number | string | boolean> = {}
+  for (const p of opt?.params ?? []) {
+    if (p.default !== undefined) out[p.name] = p.default
+  }
+  return out
+}
+
+async function runMonitorBatchVerify() {
+  if (stocks.value.length === 0 || monBatchLoading.value) return
+  monBatchLoading.value = true
+  monBatchMsg.value = ''
+  monBatchRows.value = []
+  const defaultParams = monBatchDefaults()
+  try {
+    const rows: typeof monBatchRows.value = []
+    for (const s of stocks.value.slice(0, 12)) {
+      try {
+        const bars = await fetchBars(s.market, s.code, 'DAY', undefined, undefined, 500)
+        if (bars.length < 30) continue
+        const resp = await fetch('/api/v1/backtest/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            strategy: batchStrategy.value,
+            params: defaultParams,
+            cash: 1000000,
+            ohlcv: bars,
+          }),
+        })
+        if (!resp.ok) continue
+        const result = await resp.json()
+        const perf = result.performance
+        const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+        rows.push({
+          symbol: s.market + s.code,
+          market: s.market,
+          code: s.code,
+          total_return: perf.total_return ?? null,
+          win_rate: perf.win_rate ?? null,
+          hit_rate: h5 && h5.count > 0 ? h5.hit_rate : null,
+          excess_hit_rate: h5 && h5.count > 0 ? h5.excess_hit_rate : null,
+          trust_score: result.model_trust?.score ?? null,
+          trust_grade: result.model_trust?.grade ?? null,
+          trades: perf.total_trades ?? null,
+        })
+      } catch { /* 单只失败跳过 */ }
+    }
+    rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
+    monBatchRows.value = rows
+    if (rows.length === 0) monBatchMsg.value = '批量验证无结果（行情取数失败或数据不足）'
+  } catch (e) {
+    monBatchMsg.value = '批量验证失败：' + formatError(e)
+  } finally {
+    monBatchLoading.value = false
+  }
+}
+function monPct(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(1) + '%'
+}
+function monTrust(r: typeof monBatchRows.value[number]): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
 
 onMounted(async () => {
   loadWatchList()
   await loadTasks()
+  await loadMonitorStrategies()
   // 请求通知权限
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission()
@@ -413,6 +500,45 @@ onUnmounted(() => {
           </template>
         </div>
       </template>
+    </div>
+
+
+    <!-- V143: 批量验证监控股（对已选标的跑所选策略，按可信度排名） -->
+    <div v-if="stocks.length > 0" class="mon-batch-bar">
+      <select v-model="batchStrategy" class="strategy-select"
+              @change="batchStrategyLabel = strategyOptions.find(s => s.name === batchStrategy)?.label ?? batchStrategy">
+        <option v-for="s in strategyOptions" :key="s.name" :value="s.name">{{ s.label }}</option>
+      </select>
+      <button class="ghost small" :disabled="monBatchLoading || strategyOptions.length === 0" @click="runMonitorBatchVerify">
+        {{ monBatchLoading ? '批量验证中…' : '🧪 批量验证监控股（按可信度排名）' }}
+      </button>
+      <span v-if="monBatchMsg" class="mon-batch-msg">{{ monBatchMsg }}</span>
+    </div>
+    <div v-if="monBatchRows.length > 0" class="mon-batch-panel">
+      <div class="mon-batch-head">
+        <h4>🧪 批量验证监控股：{{ batchStrategyLabel }}（按模型可信度降序）</h4>
+      </div>
+      <table class="mon-batch-table">
+        <thead>
+          <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
+              <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
+              <th class="num">交易数</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="(r, i) in monBatchRows" :key="r.symbol">
+            <td class="dim">{{ i + 1 }}</td>
+            <td>{{ r.symbol }}</td>
+            <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ monPct(r.total_return) }}</td>
+            <td class="num">{{ monPct(r.win_rate) }}</td>
+            <td class="num">{{ monPct(r.hit_rate) }}</td>
+            <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ monPct(r.excess_hit_rate) }}</td>
+            <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ monTrust(r) }}</td>
+            <td class="num">{{ r.trades ?? '-' }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="mon-batch-legend">对已选监控标的（最多 12 只）用所选策略独立回测（最近 500 根日线），按 V101 模型可信度降序排名——
+        可信度 = 择时准确度 + 稳健性 + 绩效对比，用于挑「策略验证最可信」的监控标的。</p>
     </div>
 
     <!-- 快速加入的 watchlist -->
@@ -873,5 +999,63 @@ onUnmounted(() => {
 .stock-acc {
   margin-top: 6px;
   margin-bottom: 2px;
+}
+
+/* V143: 批量验证监控股 */
+.mon-batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+.mon-batch-bar .strategy-select {
+  max-width: 240px;
+}
+.mon-batch-msg {
+  font-size: 12px;
+  color: var(--warn, #f59e0b);
+}
+.mon-batch-panel {
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.mon-batch-head h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0;
+}
+.mon-batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.mon-batch-table th {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.mon-batch-table th:first-child, .mon-batch-table td:first-child { text-align: left; }
+.mon-batch-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  text-align: right;
+  font-family: var(--font-mono);
+}
+.mon-batch-legend {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0;
 }
 </style>
