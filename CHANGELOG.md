@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**批量验证结果「保存为组合策略」（V131）—— 验证选出的股票一键入策略库** —— V114 批量验证给出按可信度排名，V130 可复制排名，但结果仍无法长期保存/载入复跑。本次给批量验证面板加「💾 保存为组合策略」：把按模型可信度排名选出的股票整理为 kind=portfolio 的策略库条目（context.stocks + 验证来源快照），用户可在「策略库 → 组合」tab 载入后在组合回测页复跑。
+
+### 新增
+
+- **web-ui/src/views/ScreeningView.vue** —— 批量验证面板新增「💾 保存为组合策略」按钮（saveBatchAsPortfolio）：取全部批量验证结果按 symbol 组装 stocks 列表，saveStrategy 写入 kind=portfolio（context.stocks/category/start_date + snapshot 含 total_stocks/avg_trust_score/source=batch-verify + tags/notes），成功后提示可在策略库载入复跑。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：动态选股页批量验证 →「保存为组合策略」→ 策略库「组合」tab 出现批量验证卡（source=batch-verify）、console 零错误。
+
+## [Unreleased]
+
 **动态选股页批量验证排名导出（V130）—— 验证结论可留存/分享** —— V114 的批量策略验证给出按可信度排名，但结果只存在于页面，无法留存或对比不同策略。本次给批量验证面板加「📋 复制排名」：把按模型可信度降序的标的排名导出为 Markdown 表格，便于粘贴进笔记/报告存档。
 
 ### 新增

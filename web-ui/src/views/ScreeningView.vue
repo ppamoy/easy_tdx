@@ -7,7 +7,7 @@ import { useRouter } from 'vue-router'
 
 import ChanlunChart from '../components/ChanlunChart.vue'
 import EquityChart from '../components/EquityChart.vue'
-import { fetchBars, formatError } from '../api'
+import { fetchBars, formatError, saveStrategy } from '../api'
 import { fmtPct } from '../format'
 import type { Bar } from '../types'
 
@@ -381,6 +381,49 @@ function viewBatchStock(r: BatchRow) {
 
 // V130: 批量验证排名导出（Markdown 复制）
 const batchCopyMsg = ref('')
+// V131: 把批量验证选出的股票保存为组合策略（kind=portfolio，可载入组合页复跑）
+const batchSaveMsg = ref('')
+const batchSaving = ref(false)
+async function saveBatchAsPortfolio() {
+  if (batchResults.value.length === 0 || batchSaving.value) return
+  batchSaving.value = true
+  batchSaveMsg.value = ''
+  try {
+    // 取全部批量验证结果（已按可信度降序），整理为组合标的列表
+    const stocks = batchResults.value.map((r) => r.symbol)
+    const avgTrust = batchResults.value.length
+      ? batchResults.value.reduce((s, r) => s + (r.trust_score ?? 0), 0) / batchResults.value.length
+      : 0
+    await saveStrategy({
+      name: batchStrategyLabel.value + ' · 批量验证' + stocks.length + '只',
+      kind: 'portfolio',
+      strategy: batchStrategy.value,
+      strategy_label: batchStrategyLabel.value,
+      params: batchDefaults(),
+      context: {
+        stocks,
+        category: 'DAY',
+        start_date: selectDate.value || undefined,
+        end_date: undefined,
+      },
+      trade_config: { cash: 1_000_000, execution: 'next_open' },
+      snapshot: {
+        total_stocks: stocks.length,
+        avg_trust_score: avgTrust,
+        source: 'batch-verify',
+        saved_at: new Date().toISOString().slice(0, 10),
+      },
+      tags: ['批量验证'],
+      notes: '由动态选股页批量策略验证（按模型可信度排名）生成，可在组合回测页载入复跑。',
+    })
+    batchSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
+    setTimeout(() => { batchSaveMsg.value = '' }, 4000)
+  } catch (e) {
+    batchSaveMsg.value = '保存失败：' + formatError(e)
+  } finally {
+    batchSaving.value = false
+  }
+}
 function copyBatchRanking() {
   if (batchResults.value.length === 0) return
   const lines: string[] = []
@@ -663,7 +706,11 @@ onMounted(() => {
         <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）</h3>
         <div class="batch-actions">
           <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
+          <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
+            {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
+          </button>
           <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
+          <span v-if="batchSaveMsg" class="save-msg" :class="{ err: batchSaveMsg.includes('失败') }">{{ batchSaveMsg }}</span>
         </div>
       </div>
       <table class="batch-table">
@@ -1051,6 +1098,9 @@ onMounted(() => {
 .batch-actions .save-msg {
   font-size: 12px;
   color: var(--up);
+}
+.batch-actions .save-msg.err {
+  color: var(--down);
 }
 .batch-table {
   width: 100%;
