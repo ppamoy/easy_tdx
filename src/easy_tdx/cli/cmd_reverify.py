@@ -54,7 +54,7 @@ def reverify(
     results: list[dict[str, Any]] = []
     failures: list[str] = []
     for rec in all_records:
-        if rec.kind not in ("single", "portfolio"):
+        if rec.kind not in ("single", "portfolio", "multi"):
             failures.append(rec.id + "(" + rec.kind + " 类型暂不支持)")
             continue
         try:
@@ -101,18 +101,26 @@ def _reverify_one(
     """对单条策略重新回测并构造新快照。"""
     from ..backtest.strategies import get_registry
 
-    try:
-        entry = get_registry().get(rec.strategy)
-    except KeyError as exc:
-        raise ValueError("策略未注册: " + rec.strategy) from exc
-    strategy = entry.build(rec.params or {})
+    # multi 类型：策略在 items 里各自解析，rec.strategy 只是占位（"multi"）
     ctx = rec.context or {}
     cfg = rec.trade_config or {}
     exec_mode = str(cfg.get("execution") or "next_open")
     today = __import__("datetime").date.today().isoformat()
 
+    strategy: Any = None
+    if rec.kind != "multi":
+        try:
+            entry = get_registry().get(rec.strategy)
+        except KeyError as exc:
+            raise ValueError("策略未注册: " + rec.strategy) from exc
+        strategy = entry.build(rec.params or {})
+
     if rec.kind == "single":
         return _reverify_single(
+            strategy, ctx, count, period, adjust, cash, commission, slippage, exec_mode, today
+        )
+    if rec.kind == "multi":
+        return _reverify_multi(
             strategy, ctx, count, period, adjust, cash, commission, slippage, exec_mode, today
         )
     return _reverify_portfolio(
@@ -307,6 +315,145 @@ def _reverify_portfolio(strategy: Any, ctx: dict[str, Any], count: int, period: 
                     degraded += 1
             except Exception:  # noqa: BLE001
                 per_symbol[sd.market + sd.code] = {"degraded": True, "verdict": "失败"}
+        _tr = [(v.get("train_return") or 0.0) for v in per_symbol.values()]
+        _te = [(v.get("test_return") or 0.0) for v in per_symbol.values()]
+        avg_train = sum(_tr) / max(len(_tr), 1)
+        avg_test = sum(_te) / max(len(_te), 1)
+        report["out_of_sample"] = {
+            "degraded": degraded >= len(per_symbol) * 0.5 or avg_test < avg_train * 0.5,
+            "verdict": (
+                f"{len(per_symbol) - degraded}/{len(per_symbol)} 只样本外稳健；"
+                f"平均训练段 {avg_train:+.1%} → 样本外 {avg_test:+.1%}"
+            ),
+            "avg_train_return": avg_train,
+            "avg_test_return": avg_test,
+        }
+    except Exception:  # noqa: BLE001
+        pass
+    report["source"] = "reverify"
+    report["reverified_at"] = today
+    return report
+
+
+
+
+def _reverify_multi(
+    strategy: Any, ctx: dict[str, Any], count: int, period: str, adjust: str,
+    cash: float, commission: float, slippage: float, exec_mode: str, today: str,
+) -> dict[str, Any]:
+    """多策略组合重验（V229）：对 context.items 各策略在其原标的上重跑，刷新组合快照。"""
+    from ..backtest.multi_strategy_engine import MultiStrategyEngine, StrategySlot
+    from ..backtest.strategies import get_registry
+    from ..cli.conn import get_mac_client
+    from ..cli.parsers import parse_adjust, parse_period
+
+    items = [it for it in (ctx.get("items") or []) if isinstance(it, dict)]
+    items = [
+        it for it in items
+        if it.get("strategy") and it.get("symbol") and ":" in str(it.get("symbol", ""))
+    ]
+    if not items:
+        raise ValueError("缺少 context.items")
+
+    slots: list[StrategySlot] = []
+    failures: list[str] = []
+    with get_mac_client() as client:
+        for it in items:
+            sym = str(it["symbol"])
+            sep = sym.find(":")
+            market = sym[:sep]
+            code = sym[sep + 1 :]
+            market_int = {"SZ": 0, "SH": 1, "BJ": 2}.get(market)
+            if market_int is None:
+                failures.append(sym + "(未知市场)")
+                continue
+            try:
+                entry = get_registry().get(str(it["strategy"]))
+            except KeyError:
+                failures.append(sym + "(策略未注册)")
+                continue
+            s_params = it.get("params") or {}
+            df = client.get_stock_kline(
+                market_int, code, period=parse_period(period), start=0, count=count,
+                adjust=parse_adjust(adjust),
+            )
+            if df is None or len(df) < 30:
+                failures.append(sym + "(行情不足)")
+                continue
+            strategy_obj = entry.build(dict(s_params))
+            slots.append(
+                StrategySlot(
+                    label=str(it.get("strategy_label") or it["strategy"]),
+                    symbol=sym,
+                    strategy=strategy_obj,
+                    df=df.reset_index(drop=True),
+                )
+            )
+    if not slots:
+        raise ValueError("所有策略槽位行情/注册失败")
+
+    engine = MultiStrategyEngine(
+        strategies=slots,
+        total_cash=cash,
+        commission=commission,
+        slippage=slippage,
+        execution=exec_mode,
+    )
+    result = engine.run()
+    tp = result.total_performance
+    report: dict[str, Any] = {
+        "total_return": tp.get("total_return"),
+        "annual_return": tp.get("annual_return"),
+        "total_stocks": tp.get("total_stocks"),
+        "total_cash": tp.get("total_cash"),
+    }
+    try:
+        from ..backtest.signal_accuracy import aggregate_portfolio_accuracy
+
+        individual = getattr(result, "individual_results", None)
+        if individual:
+            allocations = {str(k): float(v) for k, v in (result.equity_allocation or {}).items()}
+            acc = aggregate_portfolio_accuracy(individual, allocations)
+            report["accuracy"] = {
+                "hit_rate": (acc.get("portfolio") or {}).get("avg_hit_rate"),
+                "excess_hit_rate": (acc.get("portfolio") or {}).get("avg_excess_hit_rate"),
+                "verdict": acc.get("verdict", ""),
+            }
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from ..backtest.model_trust import compute_portfolio_trust
+
+        pt = compute_portfolio_trust(report.get("accuracy"))
+        report["trust"] = {
+            "score": pt.get("score"),
+            "grade": pt.get("grade", ""),
+            "verdict": pt.get("verdict", ""),
+        }
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from ..backtest.out_of_sample import compute_out_of_sample
+
+        per_symbol: dict[str, Any] = {}
+        degraded = 0
+        n = len(slots)
+        for sd in slots:
+            try:
+                o = compute_out_of_sample(
+                    sd.df, lambda: sd.strategy, cash=cash / max(n, 1),
+                    commission=commission, slippage=slippage,
+                )
+                per_symbol[sd.symbol] = {
+                    "degraded": o.get("degraded", False),
+                    "verdict": o.get("verdict", ""),
+                    "train_return": (o.get("train") or {}).get("total_return"),
+                    "test_return": (o.get("test") or {}).get("total_return"),
+                }
+                if o.get("degraded"):
+                    degraded += 1
+            except Exception:  # noqa: BLE001
+                per_symbol[sd.symbol] = {"degraded": True, "verdict": "失败"}
         _tr = [(v.get("train_return") or 0.0) for v in per_symbol.values()]
         _te = [(v.get("test_return") or 0.0) for v in per_symbol.values()]
         avg_train = sum(_tr) / max(len(_tr), 1)
