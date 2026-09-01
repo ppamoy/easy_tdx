@@ -571,6 +571,37 @@ async function copyCardSummary(s: SavedStrategy) {
   cardCopyMsg.value = '✓ 已复制验证摘要'
   setTimeout(() => { cardCopyMsg.value = '' }, 2500)
 }
+// V251: 复制验证 JSON——把单条策略的完整验证档案（快照+配置）以 JSON 导出，机器可读
+const cardJsonMsg = ref('')
+async function copyCardJson(s: SavedStrategy) {
+  const payload = {
+    name: s.name,
+    kind: s.kind,
+    strategy: s.strategy,
+    strategy_label: s.strategy_label || s.strategy,
+    params: s.params,
+    context: s.context,
+    trade_config: s.trade_config,
+    snapshot: s.snapshot,
+    tags: s.tags,
+    notes: s.notes,
+    created_at: s.created_at,
+    updated_at: s.updated_at,
+  }
+  const json = JSON.stringify(payload, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = json
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  cardJsonMsg.value = '✓ 已复制验证 JSON'
+  setTimeout(() => { cardJsonMsg.value = '' }, 2500)
+}
 
 // ── 展示辅助 ────────────────────────────────────────────────────────────────
 
@@ -972,6 +1003,14 @@ const comboGrade = computed(() =>
               📋 验证摘要
             </button>
             <button
+              v-if="Object.keys(s.snapshot || {}).length"
+              class="copy-summary-btn sm"
+              title="把本卡片的完整验证档案复制为 JSON（机器可读）"
+              @click="copyCardJson(s)"
+            >
+              ⚙ 验证 JSON
+            </button>
+            <button
               class="danger sm"
               :disabled="deletingId === s.id"
               @click="onDelete(s)"
@@ -982,6 +1021,7 @@ const comboGrade = computed(() =>
         </div>
         <p v-if="reverifyMsg" class="reverify-msg">{{ reverifyMsg }}</p>
         <p v-if="cardCopyMsg" class="reverify-msg">{{ cardCopyMsg }}</p>
+        <p v-if="cardJsonMsg" class="reverify-msg">{{ cardJsonMsg }}</p>
       </article>
     </div>
 

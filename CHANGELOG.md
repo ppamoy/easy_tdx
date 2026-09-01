@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**策略库卡片「验证 JSON」（V251）—— 单条策略完整验证档案机器可读导出** —— 策略库卡片已有 Markdown 验证摘要（V235），但脚本/存档需要结构化 JSON。本次在卡片加「⚙ 验证 JSON」：把单条策略的完整档案（name/kind/strategy/params/context/trade_config/snapshot/tags/notes/时间戳）以缩进 JSON 复制到剪贴板，与「📋 验证摘要」互补、对齐全站 JSON 导出系列（V153/V157/V158/V162/V166/V168）。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— 新增 copyCardJson（把 SavedStrategy 完整字段序列化为 JSON）+ 卡片「⚙ 验证 JSON」按钮 + 复制提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：策略库卡片「验证 JSON」→ 剪贴板为合法 JSON（含 name/snapshot/trust/source）、清理成功、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V249（V250）—— 文档覆盖策略库全部重验与指南自身迭代** —— V248 仅把指南更新到 V247，V249 新增的策略库「全部重验」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V249：标题、全景表补 V248/V249 两行、3.6 策略库节补充全部重验说明。
 
 ### 新增
