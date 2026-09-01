@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**回测页批量验证「复制 JSON」（V157）—— 批量验证结果机器可读导出，与单标报告 V153 对齐** —— V139 已给批量验证加 Markdown 复制排名，但脚本消费/存档更需要结构化 JSON。本次在批量验证操作区新增「⚙ 复制 JSON」：把当前批量验证结果（策略/参数/生成时间/按可信度排序的 rows）以缩进 JSON 复制到剪贴板，方便 Agent 消费与程序化对比。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 批量验证操作区「📋 复制排名」旁新增「⚙ 复制 JSON」（copyBatchJson）：JSON.stringify({strategy, strategy_label, params, generated_at, rows:[{rank, ...}]}, null, 2) 写入剪贴板 + 「✓ 已复制批量验证 JSON」提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页批量验证 →「复制 JSON」→ 剪贴板为合法 JSON（含 strategy/rows 数组）、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V155（V156）—— 文档覆盖 run-all 稳健性/样本外列与指南自身迭代** —— V154 仅把指南更新到 V153，V155 新增的 run-all 排名表「稳健性/样本外」列入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V155：标题、全景表补 V154/V155 两行、3.9 命令行节更新 run-all 说明。
 
 ### 新增
