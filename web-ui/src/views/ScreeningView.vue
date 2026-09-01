@@ -380,6 +380,11 @@ function batchOosCls(r: BatchRow): string {
 function batchOosTitle(r: BatchRow): string {
   return r.oos_verdict || ''
 }
+// V194: 仅看样本外稳健（过滤掉 oos_degraded=true 的候选股）
+const batchOnlyRobust = ref(false)
+const filteredBatchResults = computed(() =>
+  batchOnlyRobust.value ? batchResults.value.filter((r) => r.oos_degraded === false) : batchResults.value,
+)
 
 // V118: 从批量验证排名直接查看该股（单标缠论回测）
 function viewBatchStock(r: BatchRow) {
@@ -744,6 +749,9 @@ onMounted(() => {
       <div class="batch-panel-head">
         <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）</h3>
         <div class="batch-actions">
+          <button class="ghost small" :class="{ active: batchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + batchResults.filter((r: BatchRow) => r.oos_degraded === false).length + ' 只）'" @click="batchOnlyRobust = !batchOnlyRobust">
+            ✅ 仅看样本外稳健
+          </button>
           <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
           <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
           <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
@@ -763,7 +771,7 @@ onMounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(r, i) in batchResults" :key="r.symbol">
+          <tr v-for="(r, i) in filteredBatchResults" :key="r.symbol">
             <td class="dim">{{ i + 1 }}</td>
             <td>{{ r.symbol }}</td>
             <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPct(r.total_return) }}</td>
