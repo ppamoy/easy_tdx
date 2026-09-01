@@ -50,6 +50,19 @@ function switchTab(tab: TabKey) {
 const visibleStrategies = computed(() =>
   activeTab.value === 'single' ? singleStrategies.value : comboStrategies.value,
 )
+// V147: 策略库按「验证可信度」排序（分数 = 快照 trust.score；没有则回退 0）
+const sortByTrust = ref(true)
+function strategyTrustScore(s: SavedStrategy): number {
+  const t = (s.snapshot?.trust as { score?: number } | undefined)?.score
+  return typeof t === 'number' && Number.isFinite(t) ? t : 0
+}
+const sortedVisible = computed(() => {
+  const rows = [...visibleStrategies.value]
+  if (sortByTrust.value) {
+    rows.sort((a, b) => strategyTrustScore(b) - strategyTrustScore(a))
+  }
+  return rows
+})
 
 // ── 保存组合弹窗 ─────────────────────────────────────────────────────────────
 const saveComboOpen = ref(false)
@@ -473,6 +486,10 @@ const comboGrade = computed(() =>
         <button class="ghost" :disabled="loading" @click="load">
           {{ loading ? '刷新中…' : '↻ 刷新' }}
         </button>
+        <label class="trust-sort">
+          <input type="checkbox" v-model="sortByTrust" />
+          按验证可信度排序
+        </label>
       </div>
     </header>
 
@@ -518,7 +535,7 @@ const comboGrade = computed(() =>
 
     <div v-if="visibleStrategies.length" class="card-grid">
       <article
-        v-for="s in visibleStrategies"
+        v-for="s in sortedVisible"
         :key="s.id"
         class="card"
         :class="{ selected: selectedIds.has(s.id), 'card-multi': s.kind === 'multi' }"
@@ -840,6 +857,15 @@ const comboGrade = computed(() =>
 }
 .header-actions .primary {
   border-radius: var(--radius);
+}
+.trust-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  white-space: nowrap;
 }
 
 /* Tab 切换条 */
