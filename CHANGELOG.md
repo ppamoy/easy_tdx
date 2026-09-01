@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**批量验证「复制排名」Markdown 补「样本外」列（V186）—— 四处批量验证导出统一含 OOS 结论** —— V178/V180/V182/V184 已给四处批量验证表加「样本外」列，但「复制排名」Markdown 导出（回测 V139/监控 V145/选股 V130/组合候选 V170）仍是旧表头。本次四处导出表头与行均补「样本外」列，让复制的结论文档也带泛化/衰减标记。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue / MonitorView.vue / ScreeningView.vue / PortfolioView.vue** —— 四处 copyBatchRanking/copyMonBatchRanking/copyBatchRanking/copyCandRanking 的 Markdown 表头加「样本外」列，行内补 batchOosLabel/monOosLabel/batchOosLabel/candOosLabel。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页批量验证 →「复制排名」Markdown 含「样本外」列、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V184（V185）—— 文档覆盖组合候选样本外列与指南自身迭代** —— V183 仅把指南更新到 V182，V184 新增的组合候选批量验证「样本外」列入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V184：标题、全景表补 V183/V184 两行、3.4 组合回测页候选验证补充样本外列说明。
 
 ### 新增

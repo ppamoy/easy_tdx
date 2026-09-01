@@ -213,13 +213,13 @@ function copyCandRanking() {
   const lines: string[] = []
   lines.push('# easy-tdx 组合候选批量验证（' + (strategyLabel.value || strategy.value) + '）')
   lines.push('')
-  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
-  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 样本外 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   sortedCandRows.value.forEach((r, i) => {
     lines.push(
       '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + candPct(r.total_return) +
       ' | ' + candPct(r.win_rate) + ' | ' + candPct(r.hit_rate) + ' | ' + candPct(r.excess_hit_rate) +
-      ' | ' + candTrust(r) + ' | ' + (r.trades ?? '-') + ' |',
+      ' | ' + candTrust(r) + ' | ' + candOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
     )
   })
   lines.push('')

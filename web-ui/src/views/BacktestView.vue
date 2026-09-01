@@ -534,13 +534,13 @@ function copyBatchRanking() {
   const lines: string[] = []
   lines.push('# easy-tdx 批量验证自选股（' + (strategyLabel.value || strategy.value) + '）')
   lines.push('')
-  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
-  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 样本外 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   batchRows.value.forEach((r, i) => {
     lines.push(
       '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + batchPctV137(r.total_return) +
       ' | ' + batchPctV137(r.win_rate) + ' | ' + batchPctV137(r.hit_rate) + ' | ' + batchPctV137(r.excess_hit_rate) +
-      ' | ' + batchTrustV137(r) + ' | ' + (r.trades ?? '-') + ' |',
+      ' | ' + batchTrustV137(r) + ' | ' + batchOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
     )
   })
   lines.push('')

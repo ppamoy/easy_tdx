@@ -449,14 +449,14 @@ function copyBatchRanking() {
   const lines: string[] = []
   lines.push('# easy-tdx 批量策略验证（' + (batchStrategyLabel.value || batchStrategy.value) + '）')
   lines.push('')
-  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
-  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 样本外 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   for (const r of batchResults.value) {
     const trust = batchTrust(r)
     lines.push(
       '| ' + (batchResults.value.indexOf(r) + 1) + ' | ' + r.symbol + ' | ' + batchPct(r.total_return) +
       ' | ' + batchPct(r.win_rate) + ' | ' + batchPct(r.hit_rate) + ' | ' + batchPct(r.excess_hit_rate) +
-      ' | ' + trust + ' | ' + (r.trades ?? '-') + ' |',
+      ' | ' + trust + ' | ' + batchOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
     )
   }
   lines.push('')

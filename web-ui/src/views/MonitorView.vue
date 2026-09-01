@@ -446,13 +446,13 @@ function copyMonBatchRanking() {
   const lines: string[] = []
   lines.push('# easy-tdx 监控批量验证（' + (batchStrategyLabel.value || batchStrategy.value) + '）')
   lines.push('')
-  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
-  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 样本外 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   monBatchRows.value.forEach((r, i) => {
     lines.push(
       '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + monPct(r.total_return) +
       ' | ' + monPct(r.win_rate) + ' | ' + monPct(r.hit_rate) + ' | ' + monPct(r.excess_hit_rate) +
-      ' | ' + monTrust(r) + ' | ' + (r.trades ?? '-') + ' |',
+      ' | ' + monTrust(r) + ' | ' + monOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
     )
   })
   lines.push('')
