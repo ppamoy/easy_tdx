@@ -29,6 +29,21 @@
 
 ## [Unreleased]
 
+**CLI 策略库一键重验 reverify（V213）—— 命令行/脚本批量刷新已保存策略的验证结论** —— Web 端策略库已有「一键重验」（V209 单标 / V211 组合），但 CLI 无法调用。本次新增 `easy-tdx reverify`：读取策略库（SQLite），逐条对单标/组合策略用原标的重新回测（含样本外与分段稳健性），刷新快照 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at；支持 `--ids` 指定部分、`--count/--period/--cash` 等覆盖。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_reverify.py** —— reverify 命令：读取 get_store().list_all()，单标走 BacktestEngine + compute_segment_robustness（V97）+ compute_model_trust（V101）+ compute_out_of_sample（V105），组合走 PortfolioBacktestEngine + aggregate_portfolio_accuracy（V99）+ compute_portfolio_trust（V103）+ 组合样本外（V126）；store.update_snapshot 刷新快照。
+- **src/easy_tdx/cli/__init__.py** —— 注册 reverify。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：reverify --help 含 --ids。
+- 端到端：种入单标策略 → reverify → 快照刷新为 source=reverify/reverified_at/新 total_return/trust.verdict/robustness.verdict，清理成功。
+- ruff / mypy 零告警；全量单测 **2470 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V211（V212）—— 文档覆盖组合重验与指南自身迭代** —— V210 仅把指南更新到 V209，V211 新增的策略库组合卡片「一键重验」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V211：标题、全景表补 V210/V211 两行、3.6 策略库节一键重验说明补组合策略分支。
 
 ### 新增

@@ -242,3 +242,12 @@ class TestBacktestCLI:
         result = runner.invoke(cli, ["run-all", "--help"])
         assert result.exit_code == 0
         assert "--only-robust" in result.output
+    def test_reverify_help(self):
+        """V213: reverify 命令应注册且 --help 正常。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["reverify", "--help"])
+        assert result.exit_code == 0
+        assert "一键重验" in result.output or "重验" in result.output
+        assert "--ids" in result.output

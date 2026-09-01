@@ -30,6 +30,7 @@ from .cmd_monitor import market_stat, unusual
 from .cmd_offline import offline
 from .cmd_pfactor import pfactor
 from .cmd_quote import quote, quote_list
+from .cmd_reverify import reverify as reverify
 from .cmd_run_all import run_all
 from .cmd_tick import tick
 from .cmd_transaction import transaction
@@ -101,5 +102,6 @@ cli.add_command(run_all)
 cli.add_command(verify)
 cli.add_command(verify_multi)
 cli.add_command(verify_portfolio)
+cli.add_command(reverify)
 cli.add_command(screen)
 cli.add_command(serve)
