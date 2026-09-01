@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V213（V214）—— 文档覆盖 CLI reverify 与指南自身迭代** —— V212 仅把指南更新到 V211，V213 新增的 CLI reverify 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V213：标题、全景表补 V212/V213 两行、3.9 命令行节新增 reverify 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V213；全景表补 V212/V213；3.9 命令行节 verify-portfolio 后新增 reverify（V213）条目。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI 策略库一键重验 reverify（V213）—— 命令行/脚本批量刷新已保存策略的验证结论** —— Web 端策略库已有「一键重验」（V209 单标 / V211 组合），但 CLI 无法调用。本次新增 `easy-tdx reverify`：读取策略库（SQLite），逐条对单标/组合策略用原标的重新回测（含样本外与分段稳健性），刷新快照 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at；支持 `--ids` 指定部分、`--count/--period/--cash` 等覆盖。
 
 ### 新增
