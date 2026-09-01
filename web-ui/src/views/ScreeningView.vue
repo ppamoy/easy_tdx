@@ -278,6 +278,32 @@ const batchStrategyLabel = ref('双均线交叉')
 const strategyOptions = ref<Array<{ name: string; label: string; params: Array<{ name: string; default?: number | string | boolean }> }>>([])
 const batchResults = ref<BatchRow[]>([])
 const batchLoading = ref(false)
+// V221: 选股批量验证结果持久化（与回测页 V217 / 监控页 V219 对齐）
+const SCREEN_BATCH_KEY = 'easy_tdx_screen_batch_verify_last'
+const lastScreenBatchAt = ref('')
+function saveScreenBatchPersist() {
+  if (!batchResults.value.length) return
+  try {
+    localStorage.setItem(SCREEN_BATCH_KEY, JSON.stringify({
+      rows: batchResults.value,
+      strategy: batchStrategy.value,
+      strategy_label: batchStrategyLabel.value || batchStrategy.value,
+      at: new Date().toISOString(),
+    }))
+  } catch { /* localStorage 不可用忽略 */ }
+}
+function restoreScreenBatchPersist() {
+  try {
+    const raw = localStorage.getItem(SCREEN_BATCH_KEY)
+    if (!raw) return
+    const data = JSON.parse(raw)
+    if (Array.isArray(data.rows) && data.rows.length) {
+      batchResults.value = data.rows
+      lastScreenBatchAt.value = data.at || ''
+      error.value = '已恢复上次批量验证（' + (data.strategy_label || '') + '）'
+    }
+  } catch { /* 解析失败忽略 */ }
+}
 
 async function loadBatchStrategies() {
   if (strategyOptions.value.length) return
@@ -349,6 +375,8 @@ async function runBatchVerify() {
     // 按可信度降序（缺可信度排最后）
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     batchResults.value = rows
+    lastScreenBatchAt.value = new Date().toISOString()
+    saveScreenBatchPersist()
   } catch (e) {
     error.value = '批量验证失败: ' + formatError(e)
   } finally {
@@ -653,6 +681,8 @@ onMounted(() => {
   d.setDate(d.getDate() - 30)
   selectDate.value = d.toISOString().slice(0, 10)
   loadBatchStrategies()
+  // V221: 恢复上次批量验证结果（如有）
+  restoreScreenBatchPersist()
 })
 </script>
 
@@ -765,7 +795,9 @@ onMounted(() => {
     </div>
     <div v-if="batchResults.length > 0" class="batch-panel">
       <div class="batch-panel-head">
-        <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）</h3>
+        <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）
+          <span v-if="lastScreenBatchAt" class="screen-batch-at" :title="'上次验证时间'">🕒 {{ new Date(lastScreenBatchAt).toLocaleString() }}</span>
+        </h3>
         <div class="batch-actions">
           <button class="ghost small" :class="{ active: batchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + batchResults.filter((r: BatchRow) => r.oos_degraded === false).length + ' 只）'" @click="batchOnlyRobust = !batchOnlyRobust">
             ✅ 仅看样本外稳健
@@ -1153,6 +1185,13 @@ onMounted(() => {
   margin-bottom: 10px;
 }
 .batch-panel-head h3 {
+/* V221: 上次选股批量验证时间 */
+.screen-batch-at {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+  margin-left: 8px;
+}
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);

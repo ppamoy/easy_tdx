@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**动态选股页批量验证结果持久化（V221）—— 与回测页 V217 / 监控页 V219 对齐** —— 回测页（V217）与监控页（V219）批量验证已支持持久化，选股页批量验证同样是慢操作、刷新即丢。本次给选股批量验证加 localStorage 持久化：rows + 策略 + 时间存入 easy_tdx_screen_batch_verify_last，onMounted 自动恢复，面板标题显示「🕒 上次验证时间」。
+
+### 新增
+
+- **web-ui/src/views/ScreeningView.vue** —— 新增 SCREEN_BATCH_KEY / lastScreenBatchAt / saveScreenBatchPersist / restoreScreenBatchPersist；选股批量验证完成后持久化，onMounted 恢复；面板标题新增时间标签。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：选股批量验证 →「上次验证时间」标签可见；刷新 → 批量验证表自动恢复 12 行、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V219（V220）—— 文档覆盖监控批量持久化与指南自身迭代** —— V218 仅把指南更新到 V217，V219 新增的监控页批量验证结果持久化入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V219：标题、全景表补 V218/V219 两行、3.5 信号监控页批量验证后补持久化说明。
 
 ### 新增
