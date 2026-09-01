@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**策略库「验证来源」徽章补齐新来源（V207）—— 组合候选/寻优批量验证保存的策略也能溯源** —— V164 的来源徽章只覆盖 batch-verify / batch-verify-backtest / batch-verify-monitor 三种来源，V188 组合候选（batch-verify-cand）与 V205 寻优批量验证（batch-verify-optimize）保存的组合策略卡片不会显示来源徽章。本次在 SOURCE_LABELS 补「🧪 组合候选验证」「🧪 寻优批量验证」两种徽章。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— SOURCE_LABELS 补 batch-verify-cand →「🧪 组合候选验证」、batch-verify-optimize →「🧪 寻优批量验证」。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：种入 batch-verify-cand / batch-verify-optimize 策略 → 策略库「组合」tab 卡片显示两个新徽章、清理成功、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V205（V206）—— 文档覆盖寻优批量验证与指南自身迭代** —— V204 仅把指南更新到 V203，V205 新增的寻优页「批量验证自选股」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V205：标题、全景表补 V204/V205 两行、3.7 参数寻优页补充批量验证说明。
 
 ### 新增

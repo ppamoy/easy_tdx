@@ -346,6 +346,8 @@ const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
   'batch-verify': { label: '🧪 选股批量验证', cls: 'src-batch' },
   'batch-verify-backtest': { label: '🧪 回测批量验证', cls: 'src-batch' },
   'batch-verify-monitor': { label: '🧪 监控批量验证', cls: 'src-batch' },
+  'batch-verify-cand': { label: '🧪 组合候选验证', cls: 'src-batch' },
+  'batch-verify-optimize': { label: '🧪 寻优批量验证', cls: 'src-batch' },
 }
 function sourceBadge(s: SavedStrategy): { label: string; cls: string } | null {
   const src = (s.snapshot?.source as string | undefined)
