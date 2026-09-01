@@ -283,6 +283,16 @@ class TestBacktestCLI:
         assert result.exit_code == 0
         assert "一键重验" in result.output or "重验" in result.output
         assert "--ids" in result.output
+
+    def test_reverify_walk_forward_option(self):
+        """V245: reverify 应暴露 --walk-forward 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["reverify", "--help"])
+        assert result.exit_code == 0
+        assert "--walk-forward" in result.output
+        assert "--step-ratio" in result.output
     def test_run_all_walk_forward_option(self):
         """V233: run-all 应暴露 --walk-forward/--step-ratio 选项，且 helper 能产出报告。"""
         from easy_tdx.cli import cli

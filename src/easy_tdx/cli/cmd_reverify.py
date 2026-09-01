@@ -19,6 +19,13 @@ import click
 @click.option("--cash", default=1_000_000.0, type=float, help="单标资金/组合总资金")
 @click.option("--commission", default=0.0003, type=float, help="佣金率")
 @click.option("--slippage", default=0.0, type=float, help="滑点")
+@click.option(
+    "--walk-forward",
+    "use_wf",
+    is_flag=True,
+    help="单标重验时输出 Walk-Forward 滚动验证判定（V245）",
+)
+@click.option("--step-ratio", "wf_step", default=0.1, type=float, help="Walk-Forward 滚动步长比例")
 def reverify(
     only_ids: str | None,
     count: int,
@@ -27,6 +34,8 @@ def reverify(
     cash: float,
     commission: float,
     slippage: float,
+    use_wf: bool,
+    wf_step: float,
 ) -> None:
     """策略库一键重验：逐条读取保存的策略，用原标的重新回测并刷新快照。
 
@@ -58,7 +67,9 @@ def reverify(
             failures.append(rec.id + "(" + rec.kind + " 类型暂不支持)")
             continue
         try:
-            snapshot = _reverify_one(store, rec, count, period, adjust, cash, commission, slippage)
+            snapshot = _reverify_one(
+                store, rec, count, period, adjust, cash, commission, slippage, use_wf, wf_step
+            )
             store.update_snapshot(rec.id, snapshot)
             results.append(
                 {
@@ -97,6 +108,8 @@ def _reverify_one(
     cash: float,
     commission: float,
     slippage: float,
+    use_wf: bool = False,
+    wf_step: float = 0.1,
 ) -> dict[str, Any]:
     """对单条策略重新回测并构造新快照。"""
     from ..backtest.strategies import get_registry
@@ -117,7 +130,8 @@ def _reverify_one(
 
     if rec.kind == "single":
         return _reverify_single(
-            strategy, ctx, count, period, adjust, cash, commission, slippage, exec_mode, today
+            strategy, ctx, count, period, adjust, cash, commission, slippage, exec_mode, today,
+            use_wf, wf_step,
         )
     if rec.kind == "multi":
         return _reverify_multi(
@@ -128,8 +142,10 @@ def _reverify_one(
     )
 
 
-def _reverify_single(strategy: Any, ctx: dict[str, Any], count: int, period: str, adjust: str,
+def _reverify_single(
+    strategy: Any, ctx: dict[str, Any], count: int, period: str, adjust: str,
     cash: float, commission: float, slippage: float, exec_mode: str, today: str,
+    use_wf: bool = False, wf_step: float = 0.1,
 ) -> dict[str, Any]:
     """单标重验：对 context.symbol 重新回测（含样本外）。"""
     from ..backtest import BacktestEngine
@@ -192,6 +208,21 @@ def _reverify_single(strategy: Any, ctx: dict[str, Any], count: int, period: str
             )
         except Exception:  # noqa: BLE001
             robust = {}
+        # V245: 可选 Walk-Forward 滚动验证判定（与 verify V225 / run-all V233 对齐）
+        wf: dict[str, Any] | None = None
+        if use_wf:
+            try:
+                from .cmd_run_all import _compute_walk_forward_single
+
+                wf = _compute_walk_forward_single(
+                    df.reset_index(drop=True),
+                    type(strategy),
+                    cash=cash,
+                    commission=commission,
+                    step_ratio=wf_step,
+                )
+            except Exception:  # noqa: BLE001
+                wf = None
         return {
             "total_return": bp.get("total_return"),
             "annual_return": bp.get("annual_return"),
@@ -219,6 +250,7 @@ def _reverify_single(strategy: Any, ctx: dict[str, Any], count: int, period: str
                 "train_return": (oos.get("train") or {}).get("total_return"),
                 "test_return": (oos.get("test") or {}).get("total_return"),
             },
+            "walk_forward": wf,
             "source": "reverify",
             "reverified_at": today,
         }

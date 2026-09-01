@@ -29,6 +29,20 @@
 
 ## [Unreleased]
 
+**CLI reverify 支持 --walk-forward（V245）—— 重验快照也含滚动窗口防过拟合判定** —— verify（V225）/verify-multi（V243）/run-all（V233）已有 --walk-forward，reverify（V213）此前重验快照只有稳健性/样本外，缺滚动验证维度。本次给 reverify 加 `--walk-forward [--step-ratio 0.1]`：单标重验时复用 _compute_walk_forward_single（run-all V233 helper）计算滚动窗口判定，快照写入 walk_forward 字段。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_reverify.py** —— reverify 新增 --walk-forward/--step-ratio 选项；_reverify_one → _reverify_single 贯通 use_wf/wf_step，快照追加 walk_forward（含 windows/train_mean/test_mean/positive/degraded/verdict）。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：reverify --help 含 --walk-forward/--step-ratio。
+- 端到端：种入单标策略 → reverify --walk-forward → 快照含 walk_forward（2 窗口+判定），清理成功。
+- ruff / mypy 零告警；全量单测 **2475 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V243（V244）—— 文档覆盖 verify-multi walk-forward 与指南自身迭代** —— V242 仅把指南更新到 V241，V243 新增的 verify-multi `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V243：标题、全景表补 V242/V243 两行、3.9 命令行节 verify-multi 条目补 walk-forward 说明。
 
 ### 新增
