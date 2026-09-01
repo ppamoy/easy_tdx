@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+**批量验证「保存为组合策略」快照补样本外聚合结论（V190）—— 策略库卡片直接看到保存的组合里多少只样本外稳健** —— V141/V145/V188 三处批量验证保存组合策略时快照只含 avg_trust_score，样本外聚合结论（V178/V180/V182/V184 逐只已算）未入库。本次三处统一把 avg_oos_degraded（衰减比例）与 oos_verdict（如「✅ 2/3 只样本外稳健」/「⚠ 2/2 只样本外衰减」）写入快照，策略库「组合」tab 卡片新增「🧪 批量验证样本外」展示项。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue / MonitorView.vue / PortfolioView.vue** —— saveBatchAsPortfolio/saveMonBatchAsPortfolio/saveCandAsPortfolio 保存快照补 avg_oos_degraded + oos_verdict（统计逐只样本外衰减比例）。
+- **web-ui/src/views/StrategiesView.vue** —— 策略卡片新增「🧪 批量验证样本外」展示项（oos_verdict，按衰减比例染色）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合页候选批量验证 →保存 → 策略库「组合」tab 卡片展示「批量验证样本外」标签与衰减结论、console 零错误（保存后 API 快照含 avg_oos_degraded/oos_verdict）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V188（V189）—— 文档覆盖组合候选入库与指南自身迭代** —— V187 仅把指南更新到 V186，V188 新增的组合候选「保存为组合策略」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V188：标题、全景表补 V187/V188 两行、3.4 组合回测页候选验证补入库说明。
 
 ### 新增

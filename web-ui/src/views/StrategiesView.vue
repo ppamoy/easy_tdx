@@ -622,6 +622,13 @@ const comboGrade = computed(() =>
               {{ s.snapshot.out_of_sample.verdict }}
             </span>
           </div>
+          <!-- V190: 批量验证保存的组合策略样本外聚合结论 -->
+          <div v-if="s.snapshot.oos_verdict" class="snap-item wide">
+            <span class="k">🧪 批量验证样本外</span>
+            <span class="v acc" :class="Number(s.snapshot.avg_oos_degraded) >= 0.5 ? 'neg' : 'pos'">
+              {{ s.snapshot.oos_verdict }}
+            </span>
+          </div>
         </div>
 
         <div v-if="s.tags.length" class="card-tags">

@@ -218,6 +218,13 @@ async function saveCandAsPortfolio() {
     const avgTrust = candRows.value.length
       ? candRows.value.reduce((s, c) => s + (c.trust_score ?? 0), 0) / candRows.value.length
       : 0
+    // V190: 样本外聚合（逐只开启 out_of_sample 后统计衰减比例）
+    const oosKnown = candRows.value.filter((c) => c.oos_degraded !== null && c.oos_degraded !== undefined)
+    const oosDegradedN = oosKnown.filter((c) => c.oos_degraded === true).length
+    const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
+    const oosVerdict = oosKnown.length
+      ? (oosRatio! < 0.5 ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健' : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减')
+      : ''
     await saveStrategy({
       name: (strategyLabel.value || strategy.value) + ' · 候选验证' + stocks.length + '只',
       kind: 'portfolio',
@@ -234,6 +241,8 @@ async function saveCandAsPortfolio() {
       snapshot: {
         total_stocks: stocks.length,
         avg_trust_score: avgTrust,
+        avg_oos_degraded: oosRatio,
+        oos_verdict: oosVerdict,
         source: 'batch-verify-cand',
         saved_at: new Date().toISOString().slice(0, 10),
       },

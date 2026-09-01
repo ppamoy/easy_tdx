@@ -594,6 +594,13 @@ async function saveBatchAsPortfolio() {
     const avgTrust = batchRows.value.length
       ? batchRows.value.reduce((s, r) => s + (r.trust_score ?? 0), 0) / batchRows.value.length
       : 0
+    // V190: 样本外聚合（批量验证逐只开启 out_of_sample 后统计衰减比例）
+    const oosKnown = batchRows.value.filter((r) => r.oos_degraded !== null && r.oos_degraded !== undefined)
+    const oosDegradedN = oosKnown.filter((r) => r.oos_degraded === true).length
+    const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
+    const oosVerdict = oosKnown.length
+      ? (oosRatio! < 0.5 ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健' : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减')
+      : ''
     await saveStrategy({
       name: (strategyLabel.value || strategy.value) + ' · 批量验证' + stocks.length + '只',
       kind: 'portfolio',
@@ -610,6 +617,8 @@ async function saveBatchAsPortfolio() {
       snapshot: {
         total_stocks: stocks.length,
         avg_trust_score: avgTrust,
+        avg_oos_degraded: oosRatio,
+        oos_verdict: oosVerdict,
         source: 'batch-verify-backtest',
         saved_at: new Date().toISOString().slice(0, 10),
       },
