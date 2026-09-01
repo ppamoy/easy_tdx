@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**run-all CLI 排名表补稳健性/样本外列（V155）—— 命令行批量比策略时也看泛化能力** —— `easy-tdx run-all` 排名表已有准确度/可信度列（V115），但缺稳健性（V97）与样本外（V105）维度。本次给每策略结果补 overfit_likely/robust_verdict/oos_degraded/oos_verdict 字段，排名表按需追加「稳健性」「样本外」列（⚠过拟合/✅稳健、⚠衰减/✅泛化），与 Web 端 V123/V126 对齐。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_run_all.py** —— 每策略回测后用策略类重建工厂，调用 compute_segment_robustness（V97）与 compute_out_of_sample（V105）；结果行追加 overfit_likely/robust_verdict/oos_degraded/oos_verdict；`_print_ranking` 按需追加「稳健性」「样本外」列。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：排名表含稳健性/样本外列（✅稳健/⚠过拟合/✅泛化/⚠衰减）。
+- ruff / mypy 零告警；全量单测 **2462 passed**（新增 1 项；优化 optimize-all 测试轮询预算消除并发超时 flaky；其余失败为工作区未提交的缠论重构所致）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V153（V154）—— 文档覆盖 JSON 报告导出与指南自身迭代** —— V152 仅把指南更新到 V151，V153 新增的回测页「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V153：标题、全景表补 V152/V153 两行、3.1 回测页第 4 步补充 JSON 导出说明。
 
 ### 新增

@@ -114,9 +114,11 @@ def _print_ranking(
     click.echo("[*] 策略绩效排名 (按总收益率降序)")
     click.echo("=" * 80)
 
-    # V115: 排名表加准确度/可信度列（有数据时展示）
+    # V115/V155: 排名表加准确度/可信度/稳健性/样本外列（有数据时展示）
     has_acc = any(r.get("hit_rate") is not None for r in valid)
     has_trust = any(r.get("trust_score") is not None for r in valid)
+    has_robust = any(r.get("overfit_likely") is not None for r in valid)
+    has_oos = any(r.get("oos_degraded") is not None for r in valid)
 
     header = (
         f"{'排名':>4}  {'策略':<22} {'总收益率':>10} {'年化收益':>10} "
@@ -126,6 +128,10 @@ def _print_ranking(
         header += f" {'5根命中':>8} {'超额命中':>8}"
     if has_trust:
         header += f" {'可信度':>8}"
+    if has_robust:
+        header += f" {'稳健性':>8}"
+    if has_oos:
+        header += f" {'样本外':>8}"
     click.echo(header)
     click.echo("-" * (len(header) + 8))
 
@@ -152,6 +158,14 @@ def _print_ranking(
             tg = r.get("trust_grade")
             trust_cell = "-" if ts is None else f"{ts:>5.0f} {tg or ''}"
             line += f"{trust_cell[:8]:>8}"
+        if has_robust:
+            ol = r.get("overfit_likely")
+            robust_cell = "-" if ol is None else ("⚠过拟合" if ol else "✅稳健")
+            line += f"{robust_cell:>8}"
+        if has_oos:
+            od = r.get("oos_degraded")
+            oos_cell = "-" if od is None else ("⚠衰减" if od else "✅泛化")
+            line += f"{oos_cell:>8}"
         click.echo(line)
 
     # ── 最佳策略详细报告 ──────────────────────────────────────────────────────
@@ -547,6 +561,29 @@ def run_all(
                 trust_score = float(mt.get("score", 0.0))
                 trust_grade = str(mt.get("grade", ""))
 
+            # V155: 可选分段稳健性（V97）与样本外（V105）——用策略类重建工厂
+            overfit_likely: bool | None = None
+            robust_verdict: str | None = None
+            oos_degraded: bool | None = None
+            oos_verdict: str | None = None
+            try:
+                from ..backtest.robustness import compute_segment_robustness  # noqa: I001
+                from ..backtest.out_of_sample import compute_out_of_sample
+
+                factory = lambda: strategy_cls()  # noqa: E731
+                robust = compute_segment_robustness(
+                    df, factory, segments=3, cash=cash, commission=commission
+                )
+                overfit_likely = bool(robust.get("overfit_likely"))
+                robust_verdict = str(robust.get("verdict", ""))
+                oos = compute_out_of_sample(
+                    df, factory, cash=cash, commission=commission
+                )
+                oos_degraded = bool(oos.get("degraded"))
+                oos_verdict = str(oos.get("verdict", ""))
+            except Exception:
+                pass
+
             results.append(
                 {
                     "strategy": strategy_name,
@@ -564,6 +601,10 @@ def run_all(
                     "excess_hit_rate": excess_hit_rate,
                     "trust_score": trust_score,
                     "trust_grade": trust_grade,
+                    "overfit_likely": overfit_likely,
+                    "robust_verdict": robust_verdict,
+                    "oos_degraded": oos_degraded,
+                    "oos_verdict": oos_verdict,
                 }
             )
             backtest_results[strategy_name] = result

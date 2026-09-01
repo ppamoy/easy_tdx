@@ -931,7 +931,9 @@ def test_optimize_all_endpoint(client, sample_ohlcv):
     task_id = resp.json()["task_id"]
 
     final = None
-    for _ in range(400):
+    # 轮询预算放宽到 120s（400→2400 次 × 0.05s）：optimize-all 逐策略寻优 + 各网格点
+    # 计算准确度/可信度（V109+）后负载明显增大，20s 上限在并发跑全量套件时偶发超时。
+    for _ in range(2400):
         poll = client.get(f"/api/v1/backtest/tasks/{task_id}")
         final = poll.json()
         if final["status"] in ("done", "failed"):

@@ -146,3 +146,41 @@ class TestBacktestCLI:
             # 两行策略都应出现在输出中
             assert "ma_cross" in echoed
             assert "macd" in echoed
+    def test_print_ranking_with_robust_oos_columns(self):
+        """V155: 排名表应显示稳健性/样本外列且不崩溃。"""
+        from unittest.mock import patch
+
+        import pandas as pd
+
+        from easy_tdx.cli.cmd_run_all import _print_ranking
+
+        class _FakeBT:
+            performance = {"total_return": 0.2}
+            config = {"cash": 100000, "commission": 0.0003, "execution": "next_open"}
+            trades = pd.DataFrame(
+                columns=["datetime", "direction", "size", "price", "pnl", "rejected"]
+            )
+            equity_curve = pd.DataFrame()
+
+        base = {
+            "strategy": "ma_cross",
+            "total_return": 0.2, "annual_return": 0.2, "max_drawdown": 0.1,
+            "sharpe": 1.2, "sortino": 1.1, "calmar": 2.0, "win_rate": 0.6,
+            "total_trades": 10, "profit_factor": 1.5, "volatility": 0.2,
+        }
+        results = [
+            {**base, "strategy": "a", "overfit_likely": False, "oos_degraded": False},
+            {**base, "strategy": "b", "overfit_likely": True, "oos_degraded": True},
+        ]
+        backtest_results = {"a": _FakeBT()}
+
+        with patch("easy_tdx.cli.cmd_run_all.click.echo") as echo:
+            ok = _print_ranking(results, backtest_results)  # type: ignore[arg-type]
+            assert ok is True
+            echoed = "".join(c[0][0] if c and c[0] else "" for c in echo.call_args_list)
+            assert "稳健性" in echoed
+            assert "样本外" in echoed
+            assert "✅稳健" in echoed
+            assert "⚠过拟合" in echoed
+            assert "✅泛化" in echoed
+            assert "⚠衰减" in echoed
