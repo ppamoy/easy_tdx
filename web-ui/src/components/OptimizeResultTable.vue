@@ -11,10 +11,23 @@ defineProps<{
 defineEmits<{ select: [params: Record<string, number | string>] }>()
 
 function pct(v: number | null): string {
-  return v !== null && Number.isFinite(v) ? `${(v * 100).toFixed(2)}%` : '-'
+  return v !== null && Number.isFinite(v) ? (v * 100).toFixed(2) + '%' : '-'
 }
 function num(v: number | null, d = 2): string {
   return v !== null && Number.isFinite(v) ? v.toFixed(d) : '-'
+}
+// V109: 准确度/可信度列
+function hitPct(v: number | null | undefined): string {
+  return v !== null && v !== undefined && Number.isFinite(v) ? (v * 100).toFixed(0) + '%' : '-'
+}
+function trustLabel(r: { trust_score?: number | null; trust_grade?: string | null }): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return (Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')).trim()
+}
+function trustClass(r: { trust_grade?: string | null }): string {
+  if (r.trust_grade === '高') return 'pos'
+  if (r.trust_grade === '低') return 'neg'
+  return ''
 }
 </script>
 
@@ -29,6 +42,8 @@ function num(v: number | null, d = 2): string {
         <th class="num">最大回撤</th>
         <th class="num">交易数</th>
         <th class="num">胜率</th>
+        <th class="num" title="5根前瞻命中率 vs 随机基准">5根命中</th>
+        <th class="num" title="模型可信度综合评分（V101）">可信度</th>
         <th></th>
       </tr>
     </thead>
@@ -43,6 +58,8 @@ function num(v: number | null, d = 2): string {
         <td class="num neg">{{ pct(r.max_drawdown) }}</td>
         <td class="num">{{ r.total_trades }}</td>
         <td class="num">{{ pct(r.win_rate) }}</td>
+        <td class="num">{{ hitPct(r.hit_rate) }}</td>
+        <td class="num" :class="trustClass(r)">{{ trustLabel(r) }}</td>
         <td><button class="view-btn" @click="$emit('select', r.params)">查看</button></td>
       </tr>
     </tbody>

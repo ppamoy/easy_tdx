@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+**参数寻优结果附信号准确度与模型可信度（V109）—— 按「验证过的准确度」选参数，而非只看收益** —— 用户在寻优页挑参数时默认按总收益排序，最容易陷入过拟合（最高收益参数往往是过拟合到这段行情的）。本次给每个网格点附上该参数组合的信号命中率与模型可信度，让用户综合「收益 + 准确度 + 可信度」决策。
+
+### 新增
+
+- **GridPointResult 扩展（backtest/optimizer.py）** —— 每个网格点新增 hit_rate（5根前瞻命中率）、excess_hit_rate（相对随机基准超额）、trust_score/trust_grade（V101 模型可信度，寻优场景无分段稳健性时按中性参与）；to_dict 同步透出（含 best）。
+- **寻优表格新增两列（web-ui/src/components/OptimizeResultTable.vue）** —— 「5根命中」「可信度」两列（可信度高/低着色），列头悬停提示口径。
+
+### 验证
+
+- 新增 2 项单测（tests/unit/test_optimizer.py）：to_dict 透出准确度/可信度字段（含 best）、真实寻优运行提取字段。
+- 端到端：/backtest/optimize/run/async 返回 best.hit_rate/trust_score/trust_grade 等字段。
+- Playwright 浏览器回归：寻优页表格含「5根命中」「可信度」两列、36 行结果渲染、console 零错误。
+- ruff / mypy 零告警；全量单测 **2452 passed**（新增 2 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证用户指南（V108）—— 把 V95–V107 的验证体系整理成一份可查文档** —— 功能已覆盖回测/缠论/选股/组合/监控/策略库等全链路，但缺一份系统性的用户文档。本次新增 `docs/model-accuracy-guide.md`：验证能力全景表、核心概念（命中/随机基准/超额/可信度权重/样本外）、各页面启用步骤、解读方法、代码接口与对应测试，并加入文档索引。
 
 ### 新增

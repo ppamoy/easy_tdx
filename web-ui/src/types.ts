@@ -232,6 +232,7 @@ export interface BacktestResult {
   signal_accuracy?: SignalAccuracyReport | null
   segment_robustness?: SegmentRobustnessReport | null
   model_trust?: ModelTrustReport | null
+  out_of_sample?: OutOfSampleReport | null
   diagnostic?: string | null
 }
 
@@ -356,6 +357,11 @@ export interface GridPointResult {
   total_trades: number
   win_rate: number | null
   profit_factor: number | null
+  // V109: 该参数组合回测的信号准确度与模型可信度
+  hit_rate?: number | null
+  excess_hit_rate?: number | null
+  trust_score?: number | null
+  trust_grade?: string | null
 }
 
 export interface OptimizeHeatmap {
@@ -570,6 +576,11 @@ export interface DiagnosisChanlunMmd {
   v82_breakout_retest?: { retest_detected: boolean; retest_quality: string; confidence_adjust: number; msg: string } | null
   v82_macd_resonance?: { short_acceleration: number; mid_trend: string; resonance: string; confidence_adjust: number; msg: string } | null
   v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
+  // V102 缠论决策支持增强（条件264-267）
+  v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
+  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; msg: string } | null
+  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
+  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
 }
 
 export interface DiagnosisChanlunRecentSignal {
@@ -596,6 +607,11 @@ export interface DiagnosisChanlunRecentSignal {
   v82_breakout_retest?: { retest_detected: boolean; retest_quality: string; confidence_adjust: number; msg: string } | null
   v82_macd_resonance?: { short_acceleration: number; mid_trend: string; resonance: string; confidence_adjust: number; msg: string } | null
   v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
+  // V102 缠论决策支持增强（条件264-267）
+  v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
+  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; msg: string } | null
+  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
+  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
 }
 
 export interface DiagnosisSignalReport {

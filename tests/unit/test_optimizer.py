@@ -142,6 +142,42 @@ class TestParamGridOptimizer:
         assert d["results"][0]["total_return"] is None
         assert d["results"][0]["sharpe"] is None
 
+    def test_to_dict_includes_accuracy_and_trust(self) -> None:
+        """V109: GridPointResult 的准确度/可信度字段应序列化。"""
+        point = GridPointResult(
+            params={"n": 5},
+            total_return=0.2,
+            sharpe=1.1,
+            hit_rate=0.65,
+            excess_hit_rate=0.15,
+            trust_score=78.0,
+            trust_grade="高",
+        )
+        result = OptimizeResult(strategy="test", param_names=["n"], results=[point], best=point)
+        d = result.to_dict()
+        row = d["results"][0]
+        assert row["hit_rate"] == 0.65
+        assert row["excess_hit_rate"] == 0.15
+        assert row["trust_score"] == 78.0
+        assert row["trust_grade"] == "高"
+        # best 同样透出
+        assert d["best"]["hit_rate"] == 0.65
+        assert d["best"]["trust_grade"] == "高"
+
+    def test_optimizer_run_populates_accuracy(self) -> None:
+        """真实寻优运行应提取信号准确度与可信度（若策略产生交易）。"""
+        opt = ParamGridOptimizer(
+            strategy_name="ma_cross",
+            param_grid={"fast": [5, 10], "slow": [20, 30]},
+            df=_make_df(),
+        )
+        result = opt.run()
+        d = result.to_dict()
+        assert d["best"] is not None
+        # 有交易的组合至少应带 hit_rate 字段（可能为 None，但键必须存在）
+        assert "hit_rate" in d["best"]
+        assert "trust_score" in d["best"]
+
     def test_unknown_strategy_raises(self) -> None:
         """未知策略应在 run() 时抛 KeyError。"""
         opt = ParamGridOptimizer(

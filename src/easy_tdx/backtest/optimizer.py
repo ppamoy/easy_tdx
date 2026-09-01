@@ -59,6 +59,11 @@ class GridPointResult:
     total_trades: int = 0
     win_rate: float = 0.0
     profit_factor: float = 0.0
+    # V109: 该网格点回测的信号准确度与模型可信度（从 BacktestResult 提取）
+    hit_rate: float | None = None
+    excess_hit_rate: float | None = None
+    trust_score: float | None = None
+    trust_grade: str | None = None
 
 
 @dataclass
@@ -100,6 +105,12 @@ class OptimizeResult:
                     "total_trades": r.total_trades,
                     "win_rate": clean(r.win_rate),
                     "profit_factor": clean(r.profit_factor),
+                    "hit_rate": clean(r.hit_rate) if r.hit_rate is not None else None,
+                    "excess_hit_rate": (
+                        clean(r.excess_hit_rate) if r.excess_hit_rate is not None else None
+                    ),
+                    "trust_score": clean(r.trust_score) if r.trust_score is not None else None,
+                    "trust_grade": r.trust_grade,
                 }
                 for r in self.results
             ],
@@ -112,6 +123,18 @@ class OptimizeResult:
                     "total_trades": self.best.total_trades,
                     "win_rate": clean(self.best.win_rate),
                     "profit_factor": clean(self.best.profit_factor),
+                    "hit_rate": (
+                        clean(self.best.hit_rate) if self.best.hit_rate is not None else None
+                    ),
+                    "excess_hit_rate": (
+                        clean(self.best.excess_hit_rate)
+                        if self.best.excess_hit_rate is not None
+                        else None
+                    ),
+                    "trust_score": (
+                        clean(self.best.trust_score) if self.best.trust_score is not None else None
+                    ),
+                    "trust_grade": self.best.trust_grade,
                 }
                 if self.best
                 else None
@@ -194,6 +217,36 @@ class ParamGridOptimizer:
                 )
                 bt_result: BacktestResult = engine.run(self._df)
                 perf = bt_result.performance
+                # V109: 提取信号准确度（5根前瞻命中率/超额）与模型可信度
+                hit_rate: float | None = None
+                excess_hit_rate: float | None = None
+                sa = getattr(bt_result, "signal_accuracy", None)
+                if sa:
+                    buy = sa.get("buy") or {}
+                    horizons = buy.get("horizons") or {}
+                    h5 = horizons.get("5") or horizons.get("3")
+                    if h5 and h5.get("count", 0) > 0:
+                        hit_rate = float(h5["hit_rate"])
+                        excess_hit_rate = float(h5.get("excess_hit_rate", 0.0))
+                trust_score: float | None = None
+                trust_grade: str | None = None
+                # V101 的 model_trust 在路由层计算，BacktestResult 上可能没有；
+                # 寻优场景无分段稳健性，直接在 optimizer 内用 signal_accuracy 计算。
+                try:
+                    from easy_tdx.backtest.model_trust import compute_model_trust
+
+                    mt = getattr(bt_result, "model_trust", None)
+                    if mt is None:
+                        mt = compute_model_trust(
+                            bt_result.performance,
+                            sa,
+                            None,  # 无 segment_robustness → 中性 0.5
+                        )
+                    if mt:
+                        trust_score = float(mt.get("score", 0.0))
+                        trust_grade = str(mt.get("grade", ""))
+                except Exception:  # noqa: BLE001
+                    pass
                 results.append(
                     GridPointResult(
                         params=params,
@@ -203,6 +256,10 @@ class ParamGridOptimizer:
                         total_trades=int(perf.get("total_trades", 0)),
                         win_rate=perf.get("win_rate", 0.0),
                         profit_factor=perf.get("profit_factor", 0.0),
+                        hit_rate=hit_rate,
+                        excess_hit_rate=excess_hit_rate,
+                        trust_score=trust_score,
+                        trust_grade=trust_grade,
                     )
                 )
             except Exception:  # noqa: BLE001 — 单点失败不中断整个网格
