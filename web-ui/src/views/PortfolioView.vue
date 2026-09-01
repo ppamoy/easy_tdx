@@ -218,12 +218,22 @@ async function saveCandAsPortfolio() {
   candSaving.value = true
   candSaveMsg.value = ''
   try {
-    const stocks = candRows.value.map((c) => c.market + ':' + c.code)
-    const avgTrust = candRows.value.length
-      ? candRows.value.reduce((s, c) => s + (c.trust_score ?? 0), 0) / candRows.value.length
+    // V203: 保存遵循「仅看样本外稳健」过滤——开启时只把筛选视图里的 ✅泛化 标的入库
+    const visible = candOnlyRobust.value
+      ? candRows.value.filter((c) => c.oos_degraded === false)
+      : candRows.value
+    if (visible.length === 0) {
+      candSaveMsg.value = '没有样本外稳健的候选股可保存（请关闭「仅看样本外稳健」再试）'
+      candSaving.value = false
+      setTimeout(() => { candSaveMsg.value = '' }, 4000)
+      return
+    }
+    const stocks = visible.map((c) => c.market + ':' + c.code)
+    const avgTrust = visible.length
+      ? visible.reduce((s, c) => s + (c.trust_score ?? 0), 0) / visible.length
       : 0
     // V190: 样本外聚合（逐只开启 out_of_sample 后统计衰减比例）
-    const oosKnown = candRows.value.filter((c) => c.oos_degraded !== null && c.oos_degraded !== undefined)
+    const oosKnown = visible.filter((c) => c.oos_degraded !== null && c.oos_degraded !== undefined)
     const oosDegradedN = oosKnown.filter((c) => c.oos_degraded === true).length
     const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
     const oosVerdict = oosKnown.length

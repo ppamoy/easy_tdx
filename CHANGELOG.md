@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**批量验证「保存为组合策略」遵循「仅看样本外稳健」过滤（V203）—— 保存动作与筛选视图一致** —— V192–V195 的「仅看样本外稳健」过滤只是展示层，保存组合策略时仍把所有标的入库，用户开着过滤保存会得到包含 ⚠衰减 标的的组合。本次四处保存函数（回测 V141/监控 V145/选股 V131/组合候选 V188）都改为：过滤开启时只把筛选视图里的 ✅泛化 标的入库；无稳健标的可保存时给出明确提示。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue / MonitorView.vue / ScreeningView.vue / PortfolioView.vue** —— 四处 save*AsPortfolio 先计算 visible（开启仅看样本外稳健时过滤 oos_degraded===false），据此计算 stocks/avgTrust/OOS 聚合；visible 为空时提示并中止。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页开启「仅看样本外稳健」→保存提示「无稳健可保存」；关闭→正常保存快照含 avg_oos_degraded/oos_verdict、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V201（V202）—— 文档覆盖 run-all --only-robust 与指南自身迭代** —— V200 仅把指南更新到 V199，V201 新增的 run-all `--only-robust` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V201：标题、全景表补 V200/V201 两行、3.9 命令行节 run-all 条目补 only-robust 说明。
 
 ### 新增

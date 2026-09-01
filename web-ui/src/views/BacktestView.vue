@@ -594,12 +594,22 @@ async function saveBatchAsPortfolio() {
   batchSaving.value = true
   batchSaveMsg.value = ''
   try {
-    const stocks = batchRows.value.map((r) => r.symbol)
-    const avgTrust = batchRows.value.length
-      ? batchRows.value.reduce((s, r) => s + (r.trust_score ?? 0), 0) / batchRows.value.length
+    // V203: 保存遵循「仅看样本外稳健」过滤——开启时只把筛选视图里的 ✅泛化 标的入库
+    const visible = batchOnlyRobust.value
+      ? batchRows.value.filter((r) => r.oos_degraded === false)
+      : batchRows.value
+    if (visible.length === 0) {
+      batchSaveMsg.value = '没有样本外稳健的候选股可保存（请关闭「仅看样本外稳健」再试）'
+      batchSaving.value = false
+      setTimeout(() => { batchSaveMsg.value = '' }, 4000)
+      return
+    }
+    const stocks = visible.map((r) => r.symbol)
+    const avgTrust = visible.length
+      ? visible.reduce((s, r) => s + (r.trust_score ?? 0), 0) / visible.length
       : 0
-    // V190: 样本外聚合（批量验证逐只开启 out_of_sample 后统计衰减比例）
-    const oosKnown = batchRows.value.filter((r) => r.oos_degraded !== null && r.oos_degraded !== undefined)
+    // V190: 样本外聚合（逐只开启 out_of_sample 后统计衰减比例）
+    const oosKnown = visible.filter((r) => r.oos_degraded !== null && r.oos_degraded !== undefined)
     const oosDegradedN = oosKnown.filter((r) => r.oos_degraded === true).length
     const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
     const oosVerdict = oosKnown.length
