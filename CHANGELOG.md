@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V233（V234）—— 文档覆盖 run-all walk-forward 与指南自身迭代** —— V232 仅把指南更新到 V231，V233 新增的 run-all `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V233：标题、全景表补 V232/V233 两行、3.9 命令行节 run-all 条目补 walk-forward 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V233；全景表补 V232/V233；3.9 命令行节 run-all 条目补「--walk-forward（V233）输出滚动窗口防过拟合判定」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **run-all CLI 支持 --walk-forward（V233）—— 命令行批量比策略时也能看滚动窗口防过拟合判定** —— verify 已有 --walk-forward（V225），但 run-all 排名表（V115/V155/V201）缺滚动验证维度。本次给 run-all 加 `--walk-forward [--step-ratio 0.1]`：对每个策略逐窗口回测聚合（镜像 optimizer.run_walk_forward 的窗口逻辑，直接用策略类默认参数、不依赖注册表），排名表按需追加「滚动验证」列（✅稳定 / ⚠不稳）。
 
 ### 新增
