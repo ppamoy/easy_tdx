@@ -1,4 +1,4 @@
-# 模型准确度验证指南（V95–V197）
+# 模型准确度验证指南（V95–V199）
 
 > 本文档汇总 easy-tdx 自 V95 起新增的「通过历史回测验证模型/策略准确度」能力。
 > 目标：让用户不只是看账户盈亏，而是能回答三件事——**信号准不准、稳健不稳健、过不过拟合**。
@@ -105,6 +105,8 @@
 | V195 | 组合候选批量验证「仅看样本外稳健」过滤 | 四处批量验证入口体验对齐 | 组合页候选批量验证「✅ 仅看样本外稳健」 |
 | V196 | 模型准确度验证指南扩展到 V195 | 文档覆盖四处样本外稳健过滤入口 | docs/model-accuracy-guide.md |
 | V197 | 选股页保存组合策略快照补样本外聚合 | 与 V190 对齐，四处保存入口快照统一含 OOS 结论 | 选股页「💾 保存为组合策略」 |
+| V198 | 模型准确度验证指南扩展到 V197 | 文档覆盖选股保存快照聚合入口 | docs/model-accuracy-guide.md |
+| V199 | CLI verify-multi 支持 --only-robust | 命令行选股同样只挑样本外稳健的标的 | easy-tdx verify-multi --only-robust |
 
 ## 二、核心概念
 
@@ -173,7 +175,7 @@
 ### 3.9 命令行（CLI）
 
 - `easy-tdx verify SZ 000001 --strategy ma_cross --segments 3 --out-of-sample`（V117）：单标的完整验证报告 JSON，verdict 汇总全部结论；加 `--output-file 路径`（V172）把报告写入文件。
-- `easy-tdx verify-multi "SZ 000001,SH 600519" --strategy ma_cross`（V119）：多标的批量验证，按可信度降序排名选股，适合脚本/Agent；加 `--segments 3 --out-of-sample`（V132）可让每只标的额外输出 overfit_likely/oos_degraded/train_return/test_return。
+- `easy-tdx verify-multi "SZ 000001,SH 600519" --strategy ma_cross`（V119）：多标的批量验证，按可信度降序排名选股，适合脚本/Agent；加 `--segments 3 --out-of-sample`（V132）可让每只标的额外输出 overfit_likely/oos_degraded/train_return/test_return；加 `--only-robust`（V199，需同时 --out-of-sample）可只输出样本外 ✅泛化 的标的。
 - `easy-tdx verify-portfolio "SZ 000001,SZ 000002" --strategy ma_cross --out-of-sample`（V176）：组合模型验证，输出组合绩效 + accuracy_summary（V99）+ portfolio_trust（V103）+ 组合样本外（V126）+ verdict，补齐 CLI 验证系列。
 - `easy-tdx run-all SZ 300308`（V115/V155）：run-all 排名表补「5根命中」「超额命中」「可信度」列（V115），并按需追加「稳健性」「样本外」列（V155）——每策略额外计算分段稳健性（V97）与样本外（V105）结论；加 `--output-file`（V174）把排名结果 JSON 写入文件。
 

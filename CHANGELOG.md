@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V199（V200）—— 文档覆盖 CLI --only-robust 与指南自身迭代** —— V198 仅把指南更新到 V197，V199 新增的 verify-multi `--only-robust` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V199：标题、全景表补 V198/V199 两行、3.9 命令行节 verify-multi 条目补 only-robust 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V199；全景表补 V198/V199；3.9 命令行节 verify-multi 补「--only-robust（V199）只输出样本外 ✅泛化 的标的」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI verify-multi 支持 --only-robust（V199）—— 命令行选股同样只挑样本外稳健的标的** —— Web 四处批量验证已支持「仅看样本外稳健」过滤（V192–V195），CLI verify-multi 此前只能输出全部并人工筛选。本次给 verify-multi 新增 `--only-robust`：仅输出 oos_degraded=false（✅泛化）的标的（必须与 `--out-of-sample` 同时使用，否则报错），与 Web 端过滤对齐。
 
 ### 新增
