@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**策略库卡片「复制验证摘要」（V235）—— 一条 Markdown 带走全部验证结论** —— 策略库卡片已展示验证结论，但想归档/分享需手动抄录。本次在卡片操作区加「📋 验证摘要」：把该策略的类型/标的/绩效/准确度/稳健性/可信度/样本外/来源（含重验时间）拼成一段 Markdown 复制到剪贴板，与批量验证「复制排名」（V186）体验对齐。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— 新增 copyCardSummary（把 s.snapshot 各维度验证结论拼为 Markdown）+ 卡片操作区「📋 验证摘要」按钮 + 复制成功提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：种入带验证快照策略 →「验证摘要」→ 剪贴板 Markdown 含标题/可信度/样本外/来源、清理成功、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V233（V234）—— 文档覆盖 run-all walk-forward 与指南自身迭代** —— V232 仅把指南更新到 V231，V233 新增的 run-all `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V233：标题、全景表补 V232/V233 两行、3.9 命令行节 run-all 条目补 walk-forward 说明。
 
 ### 新增

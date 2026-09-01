@@ -512,6 +512,39 @@ async function onDelete(s: SavedStrategy) {
   }
 }
 
+// V235: 复制验证摘要（把卡片的验证结论导出为 Markdown，便于归档/分享）
+const cardCopyMsg = ref('')
+async function copyCardSummary(s: SavedStrategy) {
+  const snap = s.snapshot || {}
+  const lines: string[] = []
+  lines.push('# easy-tdx 策略验证摘要：' + s.name)
+  lines.push('')
+  lines.push('- 类型：' + (s.kind === 'multi' ? '多策略组合' : s.kind === 'portfolio' ? '组合' : '单标的'))
+  lines.push('- 策略：' + (s.strategy_label || s.strategy) + ' · 参数 ' + JSON.stringify(s.params))
+  lines.push('- 标的：' + (s.kind === 'single' ? String(s.context?.symbol ?? '-') : (Array.isArray(s.context?.stocks) ? s.context!.stocks.join(', ') : (Array.isArray(s.context?.items) ? String(s.context!.items.length) + ' 个策略' : '-'))))
+  lines.push('- 总收益：' + pct(snap.total_return) + ' · 夏普：' + num(snap.sharpe) + ' · 回撤：' + pct(snap.max_drawdown))
+  if (snap.accuracy?.verdict) lines.push('- 🎯 准确度验证：' + snap.accuracy.verdict)
+  if (snap.robustness?.verdict) lines.push('- 🧱 稳健性：' + snap.robustness.verdict)
+  if (snap.trust?.verdict) lines.push('- 📊 可信度：' + snap.trust.verdict)
+  if (snap.out_of_sample?.verdict) lines.push('- 🔬 样本外：' + snap.out_of_sample.verdict)
+  if (snap.oos_verdict) lines.push('- 🧪 批量验证样本外：' + snap.oos_verdict)
+  const src = String(snap.source ?? '')
+  lines.push('- 来源：' + (src || '手动保存') + (snap.reverified_at ? ' · 重验于 ' + snap.reverified_at : ''))
+  const text = lines.join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  cardCopyMsg.value = '✓ 已复制验证摘要'
+  setTimeout(() => { cardCopyMsg.value = '' }, 2500)
+}
+
 // ── 展示辅助 ────────────────────────────────────────────────────────────────
 
 function pct(v: unknown): string {
@@ -895,6 +928,14 @@ const comboGrade = computed(() =>
               {{ reverifyId === s.id ? '重验中…' : '↻ 重验' }}
             </button>
             <button
+              v-if="Object.keys(s.snapshot || {}).length"
+              class="copy-summary-btn sm"
+              title="把本卡片的验证结论复制为 Markdown"
+              @click="copyCardSummary(s)"
+            >
+              📋 验证摘要
+            </button>
+            <button
               class="danger sm"
               :disabled="deletingId === s.id"
               @click="onDelete(s)"
@@ -904,6 +945,7 @@ const comboGrade = computed(() =>
           </span>
         </div>
         <p v-if="reverifyMsg" class="reverify-msg">{{ reverifyMsg }}</p>
+        <p v-if="cardCopyMsg" class="reverify-msg">{{ cardCopyMsg }}</p>
       </article>
     </div>
 
@@ -1409,10 +1451,17 @@ const comboGrade = computed(() =>
 .sm {
   font-size: 12px;
   padding: 4px 12px;
+}
 /* V209: 一键重验按钮与提示 */
 .reverify-btn.sm {
   background: rgba(96, 165, 250, 0.12);
   border: 1px solid rgba(96, 165, 250, 0.35);
+  color: var(--accent);
+}
+/* V235: 复制验证摘要按钮 */
+.copy-summary-btn.sm {
+  background: rgba(96, 165, 250, 0.10);
+  border: 1px solid rgba(96, 165, 250, 0.30);
   color: var(--accent);
 }
 .reverify-msg {
@@ -1420,7 +1469,6 @@ const comboGrade = computed(() =>
   color: var(--up);
   margin-top: 4px;
   text-align: right;
-}
 }
 .danger {
   border: 1px solid var(--border);
