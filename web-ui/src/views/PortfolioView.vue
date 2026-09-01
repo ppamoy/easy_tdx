@@ -103,6 +103,69 @@ const saveName = ref('')
 const saveTags = ref('')
 const saveNotes = ref('')
 const saveMsg = ref('')
+// V127: 组合报告导出（Markdown 复制）
+const copyMsg = ref('')
+function buildPortfolioReportText(): string {
+  const r = store.portfolioResult
+  if (!r) return ''
+  const pct = (v: number | null | undefined) =>
+    v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%'
+  const lines: string[] = []
+  lines.push('# easy-tdx 组合回测报告')
+  lines.push('')
+  lines.push('- 策略：' + (strategyLabel.value || strategy.value))
+  lines.push('- 标的：' + stocks.value.join(' '))
+  lines.push('- 初始资金：' + cash.value.toLocaleString())
+  lines.push('')
+  const p = r.total_performance
+  lines.push('## 组合绩效')
+  lines.push('- 总收益：' + pct(p.total_return) + ' · 年化：' + pct(p.annual_return))
+  lines.push('- 标的总数：' + p.total_stocks + ' · 总资金：' + p.total_cash.toLocaleString())
+  lines.push('')
+  if (r.portfolio_trust) {
+    lines.push('## 组合可信度（V103）')
+    lines.push('- 综合评分：' + Math.round(r.portfolio_trust.score) + '/100 · ' + r.portfolio_trust.grade + '可信')
+    lines.push('- 结论：' + (r.portfolio_trust.verdict || ''))
+    lines.push('')
+  }
+  if (r.accuracy_summary) {
+    lines.push('## 组合准确度（V99）')
+    lines.push('- ' + (r.accuracy_summary.verdict || ''))
+    const pf = r.accuracy_summary.portfolio
+    if (pf) {
+      lines.push(
+        '- 加权5根命中率：' + pct(pf.avg_hit_rate) + ' · 超额：' + pct(pf.avg_excess_hit_rate) +
+        ' · 正收益标的：' + pf.positive_symbols + '/' + pf.symbols,
+      )
+    }
+    lines.push('')
+  }
+  if (r.out_of_sample) {
+    lines.push('## 组合样本外验证（V126）')
+    lines.push('- ' + (r.out_of_sample.verdict || ''))
+    lines.push('- 平均训练段：' + pct(r.out_of_sample.avg_train_return) + ' · 平均样本外：' + pct(r.out_of_sample.avg_test_return))
+    lines.push('')
+  }
+  lines.push('---')
+  lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
+  return lines.join('\n')
+}
+async function copyReport() {
+  const text = buildPortfolioReportText()
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    // 降级：document.execCommand
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  copyMsg.value = '✓ 已复制组合报告'
+  setTimeout(() => { copyMsg.value = '' }, 2500)
+}
 
 const strategyLabel = computed(
   () => store.strategies.find((s) => s.name === strategy.value)?.label ?? strategy.value,
@@ -275,6 +338,8 @@ async function onSave() {
       <div v-if="store.portfolioResult" class="report-content">
         <div class="result-toolbar">
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
+          <button class="ghost" @click="copyReport">📋 复制报告</button>
+          <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
         </div>
 
