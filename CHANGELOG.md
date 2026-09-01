@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V158（V159）—— 文档覆盖 JSON 导出系列与指南自身迭代** —— V156 仅把指南更新到 V155，V157（回测页批量验证复制 JSON）、V158（寻优页复制 JSON）入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V158：标题、全景表补 V156/V157/V158 三行、3.7 寻优页补 JSON 导出说明、3.1 回测页第 5 步补批量验证 JSON 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V158；全景表补 V156/V157/V158；3.7 寻优页补「⚙ 复制 JSON」；3.1 回测页第 5 步补批量验证「⚙ 复制 JSON」。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **寻优页「复制 JSON」（V158）—— 寻优报告机器可读导出，与回测/批量验证对齐** —— 寻优页有 Markdown 复制报告（V135），但脚本消费/存档需要结构化 JSON。本次在寻优工具栏「📋 复制报告」旁新增「⚙ 复制 JSON」：把当前寻优结果（strategy/param_names/results/best/heatmap/walk_forward 等）以缩进 JSON 复制到剪贴板，与单标报告 V153、批量验证 V157 对齐。
 
 ### 新增
