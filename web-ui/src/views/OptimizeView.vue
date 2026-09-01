@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import GradeBadge from '../components/GradeBadge.vue'
 import OptimizeHeatmap from '../components/OptimizeHeatmap.vue'
 import OptimizeResultTable from '../components/OptimizeResultTable.vue'
+import OptimizeValidationSummary from '../components/OptimizeValidationSummary.vue'
 import WalkForwardPanel from '../components/WalkForwardPanel.vue'
 import ParamGridPicker from '../components/ParamGridPicker.vue'
 import QuoteCarousel from '../components/QuoteCarousel.vue'
@@ -362,6 +363,11 @@ const sortedRanking = computed(() => {
               {{ (store.optimizeResult.best.max_drawdown! * 100).toFixed(2) }}%
             </span>
           </div>
+        </section>
+
+        <!-- V124: 验证总结（最优点可信度 + 5根命中 + Walk-Forward） -->
+        <section v-if="store.optimizeResult" class="report-section">
+          <OptimizeValidationSummary :result="store.optimizeResult" />
         </section>
 
         <section v-if="store.optimizeResult.heatmap" class="report-section">

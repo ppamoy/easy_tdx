@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**寻优页「验证总结」聚合卡片（V124）—— 按验证过的准确度选参数的最终一览** —— 回测页有 V106 总结卡片、组合页有 V112 总结卡片，但寻优页只有分散的网格排名/热力图/Walk-Forward 面板，用户要自己拼「这组最优参数到底可不可信」。本次在单策略寻优结果顶部新增「验证总结」卡片，把最优点可信度（V101）+ 5根命中率（V95）+ Walk-Forward 判定（V123）聚合成一张可一览的卡片。
+
+### 新增
+
+- **web-ui/src/components/OptimizeValidationSummary.vue + OptimizeView.vue** —— 单策略寻优「最优结果」下方新增「✅ 验证总结（最优点）」卡片：📊 最佳参数可信度（分数+等级着色）、🎯 5根命中率+超额命中率、🔁 Walk-Forward 判定（启用时显示）；头部展示综合可信度。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优（勾选 Walk-Forward）→ 验证总结卡片可见、含 Walk-Forward 行、console 零错误。
+
+## [Unreleased]
+
 **参数寻优 Walk-Forward 滚动验证报告（V123）—— 勾选后能看到每个滚动窗口的训练/测试表现与防过拟合判定** —— Walk-Forward 验证此前只有复选框（后端 run_walk_forward 返回普通排名、前端勾选后看不到任何滚动验证详情）。本次给寻优结果补「🔁 Walk-Forward 滚动验证报告」面板：后端在 run_walk_forward 收集逐窗口训练/测试绩效并汇总判定，前端展示窗口表 + 结论。
 
 ### 新增
