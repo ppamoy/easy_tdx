@@ -287,6 +287,20 @@ async function copyOptimizeReport() {
   copyMsg.value = '✓ 已复制寻优报告'
   setTimeout(() => { copyMsg.value = '' }, 2500)
 }
+// V158: 寻优报告 JSON 导出（机器可读，Agent/脚本友好，与 V153/V157 对齐）
+const jsonCopyMsg = ref('')
+async function copyOptimizeJson() {
+  const r = store.optimizeResult
+  if (!r) return
+  const json = JSON.stringify(r, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    jsonCopyMsg.value = '✓ 已复制寻优报告 JSON'
+  } catch {
+    jsonCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
@@ -410,7 +424,9 @@ async function copyOptimizeReport() {
       <div v-if="store.optimizeResult" class="report-content">
         <div class="result-toolbar">
           <button class="ghost" @click="copyOptimizeReport">📋 复制报告</button>
+          <button class="ghost" @click="copyOptimizeJson">⚙ 复制 JSON</button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
+          <span v-if="jsonCopyMsg" class="save-msg">{{ jsonCopyMsg }}</span>
         </div>
         <section class="report-section">
           <h3>最优结果</h3>

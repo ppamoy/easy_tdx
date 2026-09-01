@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**寻优页「复制 JSON」（V158）—— 寻优报告机器可读导出，与回测/批量验证对齐** —— 寻优页有 Markdown 复制报告（V135），但脚本消费/存档需要结构化 JSON。本次在寻优工具栏「📋 复制报告」旁新增「⚙ 复制 JSON」：把当前寻优结果（strategy/param_names/results/best/heatmap/walk_forward 等）以缩进 JSON 复制到剪贴板，与单标报告 V153、批量验证 V157 对齐。
+
+### 新增
+
+- **web-ui/src/views/OptimizeView.vue** —— 工具栏新增「⚙ 复制 JSON」（copyOptimizeJson）：JSON.stringify(store.optimizeResult, null, 2) 写入剪贴板 + 「✓ 已复制寻优报告 JSON」提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优页「复制 JSON」→ 剪贴板为合法 JSON（含 strategy/results）、console 零错误。
+
+## [Unreleased]
+
 **回测页批量验证「复制 JSON」（V157）—— 批量验证结果机器可读导出，与单标报告 V153 对齐** —— V139 已给批量验证加 Markdown 复制排名，但脚本消费/存档更需要结构化 JSON。本次在批量验证操作区新增「⚙ 复制 JSON」：把当前批量验证结果（策略/参数/生成时间/按可信度排序的 rows）以缩进 JSON 复制到剪贴板，方便 Agent 消费与程序化对比。
 
 ### 新增
