@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V243（V244）—— 文档覆盖 verify-multi walk-forward 与指南自身迭代** —— V242 仅把指南更新到 V241，V243 新增的 verify-multi `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V243：标题、全景表补 V242/V243 两行、3.9 命令行节 verify-multi 条目补 walk-forward 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V243；全景表补 V242/V243；3.9 命令行节 verify-multi 条目补「--walk-forward（V243）对每只标的输出滚动窗口防过拟合判定」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI verify-multi 支持 --walk-forward（V243）—— 批量验证每只标的也输出滚动窗口防过拟合判定** —— verify（V225）与 run-all（V233）已有 --walk-forward，批量验证（V119）此前只有每标的样本外/稳健性，缺滚动验证维度。本次给 verify-multi 加 `--walk-forward [--step-ratio 0.1]`：对每只标的逐窗口回测聚合（复用 run-all 的 _compute_walk_forward_single），行内输出 wf_degraded / wf_verdict。
 
 ### 新增
