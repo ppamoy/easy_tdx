@@ -455,6 +455,13 @@ function optBatchOosCls(r: OptBatchRow): string {
 function optBatchOosTitle(r: OptBatchRow): string {
   return r.oos_verdict || ''
 }
+// V247: 从寻优批量验证直达该股单标回测（与选股 V118 / 回测 V137 / 组合候选 V237 / 监控 V239 对齐）
+function viewOptBatchStock(r: OptBatchRow) {
+  router.push({
+    path: '/',
+    query: { symbol: r.market + r.code, category: 'DAY' },
+  })
+}
 const optBatchCopyMsg = ref('')
 function copyOptBatchRanking() {
   if (optBatchRows.value.length === 0) return
@@ -848,7 +855,7 @@ async function saveOptBatchAsPortfolio() {
             <tr>
               <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
               <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th>
+              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -862,6 +869,7 @@ async function saveOptBatchAsPortfolio() {
               <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ optBatchTrust(r) }}</td>
               <td class="num" :class="optBatchOosCls(r)" :title="optBatchOosTitle(r)">{{ optBatchOosLabel(r) }}</td>
               <td class="num">{{ r.trades ?? '-' }}</td>
+              <td><button class="ghost small" @click="viewOptBatchStock(r)">查看该股</button></td>
             </tr>
           </tbody>
         </table>

@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**寻优页批量验证「查看该股」（V247）—— 从寻优批量验证直达该股单标回测** —— 选股（V118）/回测（V137）/组合候选（V237）/监控（V239）批量验证表都有「查看该股」跳转，寻优批量验证（V205）此前没有。本次给寻优批量验证表每行加「查看该股」按钮：router 跳转到回测页并带 symbol/category 参数，回测页 onMounted 自动回填重新取行情回测。
+
+### 新增
+
+- **web-ui/src/views/OptimizeView.vue** —— 新增 viewOptBatchStock（router.push 到回测页带 symbol/category 参数）；寻优批量验证表新增「查看该股」按钮列。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优页批量验证 →「查看该股」→ 跳转 URL 含 symbol/category、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V245（V246）—— 文档覆盖 reverify walk-forward 与指南自身迭代** —— V244 仅把指南更新到 V243，V245 新增的 CLI reverify `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V245：标题、全景表补 V244/V245 两行、3.9 命令行节 reverify 条目补 walk-forward 说明。
 
 ### 新增
