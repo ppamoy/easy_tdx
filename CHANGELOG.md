@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V251（V252）—— 文档覆盖策略库验证 JSON 与指南自身迭代** —— V250 仅把指南更新到 V249，V251 新增的策略库卡片「验证 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V251：标题、全景表补 V250/V251 两行、3.6 策略库节验证摘要补「⚙ 验证 JSON」说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V251；全景表补 V250/V251；3.6 策略库节「📋 验证摘要」补「⚙ 验证 JSON（V251）」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **策略库卡片「验证 JSON」（V251）—— 单条策略完整验证档案机器可读导出** —— 策略库卡片已有 Markdown 验证摘要（V235），但脚本/存档需要结构化 JSON。本次在卡片加「⚙ 验证 JSON」：把单条策略的完整档案（name/kind/strategy/params/context/trade_config/snapshot/tags/notes/时间戳）以缩进 JSON 复制到剪贴板，与「📋 验证摘要」互补、对齐全站 JSON 导出系列（V153/V157/V158/V162/V166/V168）。
 
 ### 新增
