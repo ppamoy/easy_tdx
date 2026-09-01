@@ -432,10 +432,14 @@ function monOosTitle(r: typeof monBatchRows.value[number]): string {
 }
 // V151: 监控批量验证排序方式（收益 / 可信度）
 const monBatchSort = ref<'return' | 'trust'>('trust')
+// V193: 仅看样本外稳健（过滤掉 oos_degraded=true 的监控股）
+const monBatchOnlyRobust = ref(false)
 const sortedMonBatchRows = computed(() => {
-  const rows = monBatchRows.value
-  if (!rows.length || monBatchSort.value === 'trust') return rows
-  return [...rows].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+  const base = monBatchOnlyRobust.value
+    ? monBatchRows.value.filter((r) => r.oos_degraded === false)
+    : monBatchRows.value
+  if (!base.length || monBatchSort.value === 'trust') return base
+  return [...base].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
 })
 // V145: 监控批量验证导出（复制排名）与入库（保存为组合策略）
 const monBatchCopyMsg = ref('')
@@ -654,6 +658,9 @@ onUnmounted(() => {
         <div class="mon-batch-actions">
           <button class="ghost small" :class="{ active: monBatchSort === 'return' }" @click="monBatchSort = 'return'">按收益</button>
           <button class="ghost small" :class="{ active: monBatchSort === 'trust' }" @click="monBatchSort = 'trust'">按可信度</button>
+          <button class="ghost small" :class="{ active: monBatchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的监控股（当前 ' + monBatchRows.filter((r: MonBatchRow) => r.oos_degraded === false).length + ' 只）'" @click="monBatchOnlyRobust = !monBatchOnlyRobust">
+            ✅ 仅看样本外稳健
+          </button>
           <button class="ghost small" @click="copyMonBatchRanking">📋 复制排名</button>
           <button class="ghost small" @click="copyMonBatchJson">⚙ 复制 JSON</button>
           <button class="ghost small" :disabled="monBatchSaving" @click="saveMonBatchAsPortfolio">
