@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**寻优页「复制报告」（V135）—— 参数寻优结果也能导出 Markdown 存档** —— 单标回测页（V104/V116）与组合页（V127）都有「复制报告」，但寻优页没有，寻优结论（最优参数、Walk-Forward、网格排名）只能截图。本次给单策略寻优结果页加「📋 复制报告」：导出最优参数（含收益/夏普/5根命中/可信度）、Walk-Forward 滚动验证结论（如有）、网格点排名前 10 的 Markdown。
+
+### 新增
+
+- **web-ui/src/views/OptimizeView.vue** —— 新增 buildOptimizeReportText（最优参数/Walk-Forward/网格排名前10 Markdown 表）与 copyOptimizeReport（clipboard + 降级）；单策略寻优结果顶部新增「📋 复制报告」工具栏按钮与提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优页「复制报告」→ 内容含最优参数/网格点排名段（846 字符）、提示「已复制寻优报告」、console 零错误。
+
+## [Unreleased]
+
 **组合回测保存策略时把验证结论写入快照（V134）—— 组合策略同样以「验证档案」入库** —— 单标快照（V100/V122）已含准确度/可信度/样本外，但组合快照只有绩效。本次给组合保存策略补上 accuracy（组合准确度聚合结论）、trust（组合可信度）、out_of_sample（组合样本外结论）三组字段，策略库卡片对组合也能展示「📊 可信度」「🔬 样本外」，与单标的 V122 完全对齐。
 
 ### 新增

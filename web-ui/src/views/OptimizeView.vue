@@ -229,6 +229,64 @@ const sortedRanking = computed(() => {
   if (!rows.length || rankSort.value === 'return') return rows
   return [...rows].sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
 })
+
+// V135: 寻优报告导出（Markdown 复制）
+const copyMsg = ref('')
+function pct2(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%'
+}
+function buildOptimizeReportText(): string {
+  const r = store.optimizeResult
+  if (!r) return ''
+  const lines: string[] = []
+  lines.push('# easy-tdx 参数寻优报告')
+  lines.push('')
+  lines.push('- 策略：' + strategy.value)
+  lines.push('- 标的：' + (code.value || '-'))
+  lines.push('')
+  if (r.best) {
+    lines.push('## 最优参数')
+    lines.push('- 参数：' + JSON.stringify(r.best.params))
+    lines.push('- 总收益：' + pct2(r.best.total_return) + ' · 夏普：' + (r.best.sharpe?.toFixed(2) ?? '-'))
+    lines.push('- 5根命中率：' + (r.best.hit_rate != null ? (r.best.hit_rate * 100).toFixed(0) + '%' : '-') + ' · 可信度：' + (r.best.trust_score != null ? Math.round(r.best.trust_score) + '/100 ' + (r.best.trust_grade ?? '') : '-'))
+    lines.push('')
+  }
+  if (r.walk_forward) {
+    lines.push('## Walk-Forward 滚动验证')
+    lines.push('- ' + r.walk_forward.verdict)
+    lines.push('- 窗口数：' + r.walk_forward.windows + ' · 平均训练段：' + pct2(r.walk_forward.train_mean) + ' · 平均样本外：' + pct2(r.walk_forward.test_mean))
+    lines.push('')
+  }
+  lines.push('## 网格点排名（前 10）')
+  lines.push('| 排名 | 参数 | 总收益 | 夏普 | 5根命中率 | 可信度 |')
+  lines.push('| --- | --- | --- | --- | --- | --- |')
+  for (const [i, row] of r.results.slice(0, 10).entries()) {
+    lines.push(
+      '| ' + (i + 1) + ' | ' + JSON.stringify(row.params) + ' | ' + pct2(row.total_return) +
+      ' | ' + (row.sharpe?.toFixed(2) ?? '-') + ' | ' + (row.hit_rate != null ? (row.hit_rate * 100).toFixed(0) + '%' : '-') +
+      ' | ' + (row.trust_score != null ? Math.round(row.trust_score) + ' ' + (row.trust_grade ?? '') : '-') + ' |',
+    )
+  }
+  lines.push('')
+  lines.push('---')
+  lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
+  return lines.join('\n')
+}
+async function copyOptimizeReport() {
+  const text = buildOptimizeReportText()
+  try {
+    await navigator.clipboard.writeText(text)
+  } catch {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+  copyMsg.value = '✓ 已复制寻优报告'
+  setTimeout(() => { copyMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
@@ -350,6 +408,10 @@ const sortedRanking = computed(() => {
 
       <!-- 单策略寻优结果 -->
       <div v-if="store.optimizeResult" class="report-content">
+        <div class="result-toolbar">
+          <button class="ghost" @click="copyOptimizeReport">📋 复制报告</button>
+          <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
+        </div>
         <section class="report-section">
           <h3>最优结果</h3>
           <div v-if="store.optimizeResult.best" class="best-summary">
@@ -580,6 +642,29 @@ const sortedRanking = computed(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px 20px;
+}
+.result-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.result-toolbar .ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.result-toolbar .ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.save-msg {
+  font-size: 12px;
+  color: var(--up);
 }
 .placeholder {
   display: flex;
