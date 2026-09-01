@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**回测页批量验证结果持久化（V217）—— 刷新/切页后上次批量验证结论不丢失** —— 批量验证逐只取数+回测较慢，刷新或切页后结果清空，用户要重跑。本次把上次批量验证的 rows + 策略 + 时间存 localStorage，回测页 onMounted 自动恢复，面板标题显示「🕒 上次验证时间」；批量验证面板移出 `v-if=store.result` 守卫，无回测结果时也能独立展示已恢复的验证结论。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 新增 BATCH_VERIFY_KEY / lastBatchVerifyAt / saveBatchVerifyPersist / restoreBatchVerifyPersist；批量验证完成后持久化，onMounted 恢复；批量验证面板移出 report-content 守卫并显示时间标签。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：批量验证 →「上次验证时间」标签可见；刷新（无回测结果）→ 批量验证表自动恢复 2 行、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V215（V216）—— 文档覆盖策略库筛选与指南自身迭代** —— V214 仅把指南更新到 V213，V215 新增的策略库「按验证结论筛选」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V215：标题、全景表补 V214/V215 两行、3.6 策略库节补充三组筛选说明。
 
 ### 新增

@@ -149,6 +149,9 @@ onMounted(async () => {
   if (qStartDate) startDate.value = qStartDate
   if (qEndDate) endDate.value = qEndDate
   if (qCategory) category.value = qCategory
+
+  // V217: 恢复上次批量验证结果（如有）
+  restoreBatchVerifyPersist()
 })
 
 // 取行情 + 回测 串联（点击「开始回测」触发）
@@ -439,6 +442,32 @@ interface BatchVerifyRow {
 const batchRows = ref<BatchVerifyRow[]>([])
 const batchLoading = ref(false)
 const batchMsg = ref('')
+// V217: 批量验证结果持久化（localStorage 记住上次结果，重进页面自动恢复）
+const BATCH_VERIFY_KEY = 'easy_tdx_batch_verify_last'
+const lastBatchVerifyAt = ref('')
+function saveBatchVerifyPersist() {
+  if (!batchRows.value.length) return
+  try {
+    localStorage.setItem(BATCH_VERIFY_KEY, JSON.stringify({
+      rows: batchRows.value,
+      strategy: strategy.value,
+      strategy_label: strategyLabel.value || strategy.value,
+      at: new Date().toISOString(),
+    }))
+  } catch { /* localStorage 不可用忽略 */ }
+}
+function restoreBatchVerifyPersist() {
+  try {
+    const raw = localStorage.getItem(BATCH_VERIFY_KEY)
+    if (!raw) return
+    const data = JSON.parse(raw)
+    if (Array.isArray(data.rows) && data.rows.length) {
+      batchRows.value = data.rows
+      lastBatchVerifyAt.value = data.at || ''
+      batchMsg.value = '已恢复上次批量验证（' + (data.strategy_label || '') + '）'
+    }
+  } catch { /* 解析失败忽略 */ }
+}
 // V149: 批量验证结果排序方式（收益 / 可信度）
 const batchSort = ref<'return' | 'trust'>('trust')
 // V192: 仅看样本外稳健（过滤掉 oos_degraded=true 的候选股）
@@ -500,6 +529,8 @@ async function runBatchVerifyWatchlist() {
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     batchRows.value = rows
+    lastBatchVerifyAt.value = new Date().toISOString()
+    saveBatchVerifyPersist()
   } catch (e) {
     batchMsg.value = '批量验证失败：' + formatError(e)
   } finally {
@@ -849,51 +880,6 @@ async function onSave() {
           <span v-if="batchMsg" class="save-msg">{{ batchMsg }}</span>
         </div>
 
-        <!-- V137 批量验证自选股（对全局自选股跑当前策略，按可信度排名） -->
-        <section v-if="batchRows.length" class="report-section">
-          <div class="batch-panel-head">
-            <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}）</h3>
-            <div class="batch-actions">
-              <button class="ghost small" :class="{ active: batchSort === 'return' }" @click="batchSort = 'return'">按收益</button>
-              <button class="ghost small" :class="{ active: batchSort === 'trust' }" @click="batchSort = 'trust'">按可信度</button>
-              <button class="ghost small" :class="{ active: batchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + batchRows.filter((r: BatchVerifyRow) => r.oos_degraded === false).length + ' 只）'" @click="batchOnlyRobust = !batchOnlyRobust">
-                ✅ 仅看样本外稳健
-              </button>
-              <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
-              <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
-              <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
-                {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
-              </button>
-              <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
-              <span v-if="batchJsonCopyMsg" class="save-msg">{{ batchJsonCopyMsg }}</span>
-              <span v-if="batchSaveMsg" class="save-msg" :class="{ err: batchSaveMsg.includes('失败') }">{{ batchSaveMsg }}</span>
-            </div>
-          </div>
-          <table class="batch-table">
-            <thead>
-              <tr>
-                <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
-                <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-                <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(r, i) in sortedBatchRows" :key="r.symbol">
-                <td class="dim">{{ i + 1 }}</td>
-                <td>{{ r.symbol }}</td>
-                <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.total_return) }}</td>
-                <td class="num">{{ batchPctV137(r.win_rate) }}</td>
-                <td class="num">{{ batchPctV137(r.hit_rate) }}</td>
-                <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.excess_hit_rate) }}</td>
-                <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ batchTrustV137(r) }}</td>
-                <td class="num" :class="batchOosCls(r)" :title="batchOosTitle(r)">{{ batchOosLabel(r) }}</td>
-                <td class="num">{{ r.trades ?? '-' }}</td>
-                <td><button class="ghost small" @click="viewBatchStockV137(r)">查看该股</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="legend">对全局自选股（最多 12 只）用当前策略与参数各做一次独立回测（最近 500 根日线），按 V101 模型可信度降序排名；点「查看该股」直接切换目标重新回测。</p>
-        </section>
 
         <!-- V106 验证总结（可信度 + 准确度 + 稳健性 + 样本外 一览） -->
         <section v-if="store.result" class="report-section">
@@ -994,6 +980,53 @@ async function onSave() {
           <TradeTable :trades="store.result.trades" :initial-cash="cash" />
         </section>
       </div>
+        <!-- V137 批量验证自选股（对全局自选股跑当前策略，按可信度排名） -->
+        <section v-if="batchRows.length" class="report-section">
+          <div class="batch-panel-head">
+            <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}）
+              <span v-if="lastBatchVerifyAt" class="batch-verify-at" :title="'上次验证时间'">🕒 {{ new Date(lastBatchVerifyAt).toLocaleString() }}</span>
+            </h3>
+            <div class="batch-actions">
+              <button class="ghost small" :class="{ active: batchSort === 'return' }" @click="batchSort = 'return'">按收益</button>
+              <button class="ghost small" :class="{ active: batchSort === 'trust' }" @click="batchSort = 'trust'">按可信度</button>
+              <button class="ghost small" :class="{ active: batchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + batchRows.filter((r: BatchVerifyRow) => r.oos_degraded === false).length + ' 只）'" @click="batchOnlyRobust = !batchOnlyRobust">
+                ✅ 仅看样本外稳健
+              </button>
+              <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
+              <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
+              <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
+                {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
+              </button>
+              <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
+              <span v-if="batchJsonCopyMsg" class="save-msg">{{ batchJsonCopyMsg }}</span>
+              <span v-if="batchSaveMsg" class="save-msg" :class="{ err: batchSaveMsg.includes('失败') }">{{ batchSaveMsg }}</span>
+            </div>
+          </div>
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
+                <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
+                <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(r, i) in sortedBatchRows" :key="r.symbol">
+                <td class="dim">{{ i + 1 }}</td>
+                <td>{{ r.symbol }}</td>
+                <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.total_return) }}</td>
+                <td class="num">{{ batchPctV137(r.win_rate) }}</td>
+                <td class="num">{{ batchPctV137(r.hit_rate) }}</td>
+                <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.excess_hit_rate) }}</td>
+                <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ batchTrustV137(r) }}</td>
+                <td class="num" :class="batchOosCls(r)" :title="batchOosTitle(r)">{{ batchOosLabel(r) }}</td>
+                <td class="num">{{ r.trades ?? '-' }}</td>
+                <td><button class="ghost small" @click="viewBatchStockV137(r)">查看该股</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="legend">对全局自选股（最多 12 只）用当前策略与参数各做一次独立回测（最近 500 根日线），按 V101 模型可信度降序排名；点「查看该股」直接切换目标重新回测。</p>
+        </section>
     </main>
 
     <!-- 保存策略对话框 -->
@@ -1140,6 +1173,13 @@ async function onSave() {
   margin-bottom: 10px;
 }
 .batch-panel-head h3 {
+/* V217: 上次批量验证时间 */
+.batch-verify-at {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+  margin-left: 8px;
+}
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
