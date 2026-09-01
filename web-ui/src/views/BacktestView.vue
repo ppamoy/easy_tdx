@@ -457,6 +457,18 @@ async function onSave() {
           overfit_likely: store.result.segment_robustness?.overfit_likely ?? false,
           verdict: store.result.segment_robustness?.verdict ?? '',
         },
+        // V122: 模型可信度（V101）与样本外验证（V105）结论一并入快照
+        trust: {
+          score: store.result.model_trust?.score ?? null,
+          grade: store.result.model_trust?.grade ?? '',
+          verdict: store.result.model_trust?.verdict ?? '',
+        },
+        out_of_sample: {
+          degraded: store.result.out_of_sample?.degraded ?? false,
+          verdict: store.result.out_of_sample?.verdict ?? '',
+          train_return: store.result.out_of_sample?.train?.total_return ?? null,
+          test_return: store.result.out_of_sample?.test?.total_return ?? null,
+        },
       },
       tags: saveTags.value
         .split(/[,，]/)

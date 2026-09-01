@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+**策略库快照补全「模型可信度 + 样本外验证」结论（V122）—— 保存的策略就是完整验证档案** —— V100 保存策略时只写准确度/稳健性；V101 可信度与 V105 样本外结论未入快照，策略库卡片看不到这两个维度。本次把可信度分/等级/结论与样本外判定/结论一并写入快照，策略库卡片新增「📊 可信度」「🔬 样本外」条目。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 保存策略时 snapshot 追加 `trust`（score/grade/verdict）与 `out_of_sample`（degraded/verdict/train_return/test_return）。
+- **web-ui/src/views/StrategiesView.vue + types.ts** —— SavedStrategySnapshot 类型补 StrategyTrustSnapshot/StrategyOutOfSampleSnapshot；策略库卡片在稳健性下方展示「📊 可信度」「🔬 样本外」两条（按等级/退化着色）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测（勾选稳健性+样本外）→ 保存策略 → API 快照含 trust/out_of_sample（如 综合可信度 低 42/100、样本外 degraded=true 训练-46%→样本外-11%）、console 零错误。
+
+## [Unreleased]
+
 **信号监控页主监控列表每股「历史信号准确度」（V121）—— 盯实时信号前先核对该股历史命中率** —— V107 只在「快速加入的信号」watchlist 提供准确度，主监控列表的股票没有。本次给主监控每股标签加「🎯」按钮，点击展开该股最近 300 根日线的历史信号准确度面板（复用 V96 signal_accuracy），与 watchlist 保持一致的验证体验。
 
 ### 新增

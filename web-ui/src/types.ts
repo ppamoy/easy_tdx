@@ -447,6 +447,21 @@ export interface StrategyRobustnessSnapshot {
   verdict: string
 }
 
+/** V122: 保存策略时持久化的模型可信度快照（V101 关键结论）。 */
+export interface StrategyTrustSnapshot {
+  score: number | null
+  grade: string
+  verdict: string
+}
+
+/** V122: 保存策略时持久化的样本外验证快照（V105 关键结论）。 */
+export interface StrategyOutOfSampleSnapshot {
+  degraded: boolean
+  verdict: string
+  train_return: number | null
+  test_return: number | null
+}
+
 /** 策略成绩快照：绩效指标 + V100 新增的准确度/稳健性验证结论。 */
 export interface SavedStrategySnapshot extends Record<string, unknown> {
   total_return?: number
@@ -457,6 +472,8 @@ export interface SavedStrategySnapshot extends Record<string, unknown> {
   trades_count?: number
   accuracy?: StrategyAccuracySnapshot
   robustness?: StrategyRobustnessSnapshot
+  trust?: StrategyTrustSnapshot
+  out_of_sample?: StrategyOutOfSampleSnapshot
 }
 
 export interface SavedStrategyCreate {

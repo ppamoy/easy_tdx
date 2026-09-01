@@ -565,6 +565,19 @@ const comboGrade = computed(() =>
               {{ s.snapshot.robustness.verdict }}
             </span>
           </div>
+          <!-- V122: 模型可信度 + 样本外验证结论 -->
+          <div v-if="s.snapshot.trust?.verdict" class="snap-item wide">
+            <span class="k">📊 可信度</span>
+            <span class="v acc" :class="s.snapshot.trust.grade === '高' ? 'pos' : s.snapshot.trust.grade === '低' ? 'neg' : 'warn'">
+              {{ s.snapshot.trust.verdict }}
+            </span>
+          </div>
+          <div v-if="s.snapshot.out_of_sample?.verdict" class="snap-item wide">
+            <span class="k">🔬 样本外</span>
+            <span class="v acc" :class="s.snapshot.out_of_sample.degraded ? 'neg' : 'pos'">
+              {{ s.snapshot.out_of_sample.verdict }}
+            </span>
+          </div>
         </div>
 
         <div v-if="s.tags.length" class="card-tags">
