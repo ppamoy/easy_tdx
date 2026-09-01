@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V155（V156）—— 文档覆盖 run-all 稳健性/样本外列与指南自身迭代** —— V154 仅把指南更新到 V153，V155 新增的 run-all 排名表「稳健性/样本外」列入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V155：标题、全景表补 V154/V155 两行、3.9 命令行节更新 run-all 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V155；全景表补 V154/V155；3.9 命令行节 run-all 条目更新为含 V155 稳健性/样本外列。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **run-all CLI 排名表补稳健性/样本外列（V155）—— 命令行批量比策略时也看泛化能力** —— `easy-tdx run-all` 排名表已有准确度/可信度列（V115），但缺稳健性（V97）与样本外（V105）维度。本次给每策略结果补 overfit_likely/robust_verdict/oos_degraded/oos_verdict 字段，排名表按需追加「稳健性」「样本外」列（⚠过拟合/✅稳健、⚠衰减/✅泛化），与 Web 端 V123/V126 对齐。
 
 ### 新增
