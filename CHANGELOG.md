@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**策略库卡片「验证来源」徽章（V164）—— 一眼看出策略从哪个验证流程入库** —— 动态选股页（V131）、回测页（V141）、监控页（V145）保存批量验证组合时都写了 snapshot.source（batch-verify / batch-verify-backtest / batch-verify-monitor），但策略库卡片没展示，用户看不出策略是手动保存还是批量验证入库的。本次在卡片「单标的/多标的」类型徽章旁新增「验证来源」徽章。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— 新增 sourceBadge helper（SOURCE_LABELS 映射 source→徽章文案/样式）+ 卡片头部「验证来源」徽章（🧪 选股批量验证 / 🧪 回测批量验证 / 🧪 监控批量验证）；无 source 不显示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：种入 source=batch-verify 的策略 → 卡片显示「🧪 选股批量验证」徽章、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V162（V163）—— 文档覆盖组合 JSON 导出与指南自身迭代** —— V161 仅把指南更新到 V160，V162 新增的组合回测页「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V162：标题、全景表补 V161/V162 两行、3.4 组合回测页第 3 步补充 JSON 导出说明。
 
 ### 新增

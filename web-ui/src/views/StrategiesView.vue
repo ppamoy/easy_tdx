@@ -339,7 +339,18 @@ function dateRange(s: SavedStrategy): string {
   const s0 = (ctx.start_date as string) || ''
   const s1 = (ctx.end_date as string) || ''
   if (!s0 && !s1) return '-'
-  return `${s0 || '?'} ~ ${s1 || '?'}`
+  return (s0 || '?') + ' ~ ' + (s1 || '?')
+}
+// V164: 验证来源徽章（快照 source 记录策略从哪个验证流程入库）
+const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
+  'batch-verify': { label: '🧪 选股批量验证', cls: 'src-batch' },
+  'batch-verify-backtest': { label: '🧪 回测批量验证', cls: 'src-batch' },
+  'batch-verify-monitor': { label: '🧪 监控批量验证', cls: 'src-batch' },
+}
+function sourceBadge(s: SavedStrategy): { label: string; cls: string } | null {
+  const src = (s.snapshot?.source as string | undefined)
+  if (src && SOURCE_LABELS[src]) return SOURCE_LABELS[src]
+  return null
 }
 function createdShort(s: SavedStrategy): string {
   // created_at 形如 "2026-07-04T15:30:22Z"，截到分钟
@@ -556,6 +567,9 @@ const comboGrade = computed(() =>
           <span v-else class="multi-icon" title="多策略组合">🗂</span>
           <span class="kind-badge" :class="s.kind">
             {{ s.kind === 'multi' ? '多策略' : s.kind === 'portfolio' ? '多标的' : '单标的' }}
+          </span>
+          <span v-if="sourceBadge(s)" class="source-badge" :class="sourceBadge(s)!.cls">
+            {{ sourceBadge(s)!.label }}
           </span>
           <h3 class="card-title">{{ s.name }}</h3>
         </div>
@@ -999,6 +1013,18 @@ const comboGrade = computed(() =>
 .kind-badge.portfolio {
   background: rgba(140, 110, 220, 0.18);
   color: #b39ddb;
+}
+
+/* V164: 验证来源徽章 */
+.source-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  color: var(--accent);
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  flex-shrink: 0;
 }
 .card-title {
   font-size: 14px;
