@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**策略库「按验证结论筛选」（V215）—— 只看验证过、可信且稳健的策略** —— 策略库已有「按验证可信度排序」（V147），但筛选只能肉眼扫。本次在工具栏加三组筛选：验证来源（全部/已验证 batch-verify*/reverify/仅重验）、可信度等级（高/中/低）、样本外结论（稳健/衰减），叠加排序即可快速定位「验证过且可信、样本外稳健」的策略。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— 新增 filterSource/filterGrade/filterRobust 状态与 strategySource/strategyGrade/strategyOos 辅助；sortedVisible 在排序前按三组筛选过滤；工具栏「按验证可信度排序」旁新增三个 `.filter-select` 下拉。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：种入 reverify 来源+高可信 vs 手动保存+低可信 → 来源筛选保留前者隐藏后者、等级=高 保留重验来源、清理成功、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V213（V214）—— 文档覆盖 CLI reverify 与指南自身迭代** —— V212 仅把指南更新到 V211，V213 新增的 CLI reverify 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V213：标题、全景表补 V212/V213 两行、3.9 命令行节新增 reverify 说明。
 
 ### 新增

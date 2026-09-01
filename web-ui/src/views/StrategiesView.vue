@@ -57,12 +57,40 @@ const visibleStrategies = computed(() =>
 )
 // V147: 策略库按「验证可信度」排序（分数 = 快照 trust.score；没有则回退 0）
 const sortByTrust = ref(true)
+// V215: 按验证结论筛选（来源 / 可信度等级 / 样本外稳健）
+const filterSource = ref<'all' | 'verified' | 'reverify'>('all')
+const filterGrade = ref<'all' | '高' | '中' | '低'>('all')
+const filterRobust = ref<'all' | 'robust' | 'degraded'>('all')
+function strategySource(s: SavedStrategy): string {
+  return String(s.snapshot?.source ?? '')
+}
+function strategyGrade(s: SavedStrategy): string {
+  return String((s.snapshot?.trust as { grade?: string } | undefined)?.grade ?? '')
+}
+function strategyOos(s: SavedStrategy): boolean | null {
+  const d = (s.snapshot?.out_of_sample as { degraded?: boolean } | undefined)?.degraded
+  return typeof d === 'boolean' ? d : null
+}
 function strategyTrustScore(s: SavedStrategy): number {
   const t = (s.snapshot?.trust as { score?: number } | undefined)?.score
   return typeof t === 'number' && Number.isFinite(t) ? t : 0
 }
 const sortedVisible = computed(() => {
-  const rows = [...visibleStrategies.value]
+  let rows = [...visibleStrategies.value]
+  // V215: 来源筛选（已验证 = 批量验证/重验，非手动保存）
+  if (filterSource.value === 'verified') {
+    rows = rows.filter((s) => /^batch-verify|reverify/.test(strategySource(s)))
+  } else if (filterSource.value === 'reverify') {
+    rows = rows.filter((s) => strategySource(s) === 'reverify')
+  }
+  if (filterGrade.value !== 'all') {
+    rows = rows.filter((s) => strategyGrade(s) === filterGrade.value)
+  }
+  if (filterRobust.value === 'robust') {
+    rows = rows.filter((s) => strategyOos(s) === false)
+  } else if (filterRobust.value === 'degraded') {
+    rows = rows.filter((s) => strategyOos(s) === true)
+  }
   if (sortByTrust.value) {
     rows.sort((a, b) => strategyTrustScore(b) - strategyTrustScore(a))
   }
@@ -638,6 +666,23 @@ const comboGrade = computed(() =>
           <input type="checkbox" v-model="sortByTrust" />
           按验证可信度排序
         </label>
+        <!-- V215: 按验证结论筛选 -->
+        <select class="filter-select" v-model="filterSource" title="按验证来源筛选">
+          <option value="all">全部来源</option>
+          <option value="verified">✅ 已验证（批量/重验）</option>
+          <option value="reverify">↻ 重验过</option>
+        </select>
+        <select class="filter-select" v-model="filterGrade" title="按验证可信度等级筛选">
+          <option value="all">全部等级</option>
+          <option value="高">高</option>
+          <option value="中">中</option>
+          <option value="低">低</option>
+        </select>
+        <select class="filter-select" v-model="filterRobust" title="按样本外验证结论筛选">
+          <option value="all">全部样本外</option>
+          <option value="robust">✅ 样本外稳健</option>
+          <option value="degraded">⚠ 样本外衰减</option>
+        </select>
       </div>
     </header>
 
@@ -1027,6 +1072,16 @@ const comboGrade = computed(() =>
   border-radius: var(--radius);
 }
 .trust-sort {
+/* V215: 验证结论筛选下拉 */
+.filter-select {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
   display: inline-flex;
   align-items: center;
   gap: 4px;
