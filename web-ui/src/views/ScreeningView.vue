@@ -379,6 +379,43 @@ function viewBatchStock(r: BatchRow) {
   selectStock(st)
 }
 
+// V130: 批量验证排名导出（Markdown 复制）
+const batchCopyMsg = ref('')
+function copyBatchRanking() {
+  if (batchResults.value.length === 0) return
+  const lines: string[] = []
+  lines.push('# easy-tdx 批量策略验证（' + (batchStrategyLabel.value || batchStrategy.value) + '）')
+  lines.push('')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  for (const r of batchResults.value) {
+    const trust = batchTrust(r)
+    lines.push(
+      '| ' + (batchResults.value.indexOf(r) + 1) + ' | ' + r.symbol + ' | ' + batchPct(r.total_return) +
+      ' | ' + batchPct(r.win_rate) + ' | ' + batchPct(r.hit_rate) + ' | ' + batchPct(r.excess_hit_rate) +
+      ' | ' + trust + ' | ' + (r.trades ?? '-') + ' |',
+    )
+  }
+  lines.push('')
+  lines.push('方法：对筛选出的每只股票独立回测（最近 500 根日线），按模型可信度（V101）降序排名；可信度 = 择时准确度 + 稳健性 + 绩效对比。')
+  const text = lines.join('\n')
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    batchCopyMsg.value = '✓ 已复制验证排名'
+    setTimeout(() => { batchCopyMsg.value = '' }, 2500)
+  }
+  void doCopy()
+}
+
 // ── 选择股票 ────────────────────────────────────────────────────────────
 async function selectStock(stock: StockResult) {
   selectedStock.value = stock
@@ -622,7 +659,13 @@ onMounted(() => {
       </button>
     </div>
     <div v-if="batchResults.length > 0" class="batch-panel">
-      <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）</h3>
+      <div class="batch-panel-head">
+        <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）</h3>
+        <div class="batch-actions">
+          <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
+          <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
+        </div>
+      </div>
       <table class="batch-table">
         <thead>
           <tr>
@@ -987,11 +1030,27 @@ onMounted(() => {
   padding: 14px 16px;
   margin-bottom: 12px;
 }
-.batch-panel h3 {
+.batch-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.batch-panel-head h3 {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
-  margin-bottom: 10px;
+  margin: 0;
+}
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-actions .save-msg {
+  font-size: 12px;
+  color: var(--up);
 }
 .batch-table {
   width: 100%;
