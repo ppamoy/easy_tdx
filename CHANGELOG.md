@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**单标的回测页「批量验证自选股」（V137）—— 当前策略对自选股逐个回测，按可信度排名选股** —— 用户在某只股票上把策略参数调好后，想快速看同一参数在自选股上是否也准，需要去动态选股页重跑批量验证。本次给回测页加「🗳️ 批量验证自选股」：读取全局自选股（最多 12 只），用当前策略+参数逐只独立回测，按 V101 可信度降序排名，每行「查看该股」直接切换目标重新回测，形成「单标调参 → 自选批量验证 → 深挖个股」闭环。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 工具栏新增「🗳️ 批量验证自选股」按钮（runBatchVerifyWatchlist）：读 localstorage 全局自选股 → 逐只 fetchBars（500 根日线）→ /backtest/run 同步回测 → 收集 performance/signal_accuracy/model_trust → 按可信度降序展示 BatchVerifyRow 表；每行「查看该股」（viewBatchStockV137）把 code 切到该股后重新 onRun。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页种入 2 只全局自选股 →「批量验证自选股」→ 2 行结果（第一名 SZ000001）、「查看该股」按钮可见、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V135（V136）—— 文档覆盖组合快照验证结论与寻优报告导出** —— V133 的指南只到 V132，V134（组合保存策略快照含验证结论）、V135（寻优页复制报告）未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V135：标题、全景表补 3 行、3.4 组合回测页补保存快照验证结论说明、3.7 参数寻优页补复制报告说明。
 
 ### 新增

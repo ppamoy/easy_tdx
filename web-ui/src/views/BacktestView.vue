@@ -21,7 +21,7 @@ import MetricTable from '../components/MetricTable.vue'
 import StrategyPicker from '../components/StrategyPicker.vue'
 import SymbolPicker from '../components/SymbolPicker.vue'
 import TradeTable from '../components/TradeTable.vue'
-import { formatError, saveStrategy } from '../api'
+import { fetchBars, formatError, runBacktest, saveStrategy } from '../api'
 import { detectMarket } from '../market'
 import { gradePerformance } from '../grading'
 import type { Category, ExecutionMode } from '../types'
@@ -407,6 +407,86 @@ async function copyReport() {
   setTimeout(() => { copyMsg.value = '' }, 2500)
 }
 
+// V137: 批量验证自选股（对全局自选股用当前策略各跑一次回测，按可信度排名）
+interface BatchVerifyRow {
+  symbol: string
+  market: string
+  code: string
+  total_return: number | null
+  win_rate: number | null
+  hit_rate: number | null
+  excess_hit_rate: number | null
+  trust_score: number | null
+  trust_grade: string | null
+  trades: number | null
+}
+const batchRows = ref<BatchVerifyRow[]>([])
+const batchLoading = ref(false)
+const batchMsg = ref('')
+
+async function runBatchVerifyWatchlist() {
+  if (batchLoading.value) return
+  let raw: any[] = []
+  try { raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]') } catch { raw = [] }
+  const watch = raw.filter((w) => w && w.code && w.market).slice(0, 12)
+  if (watch.length === 0) {
+    batchMsg.value = '自选股为空：请先在缠论分析页「加入自选股」'
+    setTimeout(() => { batchMsg.value = '' }, 3500)
+    return
+  }
+  batchLoading.value = true
+  batchMsg.value = ''
+  const rows: BatchVerifyRow[] = []
+  try {
+    for (const w of watch) {
+      try {
+        const bars = await fetchBars(w.market, w.code, category.value as Category, undefined, undefined, 500)
+        if (bars.length < 30) continue
+        const result = await runBacktest({
+          strategy: strategy.value,
+          params: params.value,
+          cash: cash.value,
+          commission: commission.value,
+          slippage: slippage.value,
+          execution: execution.value,
+          ohlcv: bars,
+        })
+        const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+        rows.push({
+          symbol: w.symbol || w.market + w.code,
+          market: w.market,
+          code: w.code,
+          total_return: result.performance.total_return ?? null,
+          win_rate: result.performance.win_rate ?? null,
+          hit_rate: h5 && h5.count > 0 ? h5.hit_rate : null,
+          excess_hit_rate: h5 && h5.count > 0 ? h5.excess_hit_rate : null,
+          trust_score: result.model_trust?.score ?? null,
+          trust_grade: result.model_trust?.grade ?? null,
+          trades: result.performance.total_trades ?? null,
+        })
+      } catch { /* 单只失败跳过 */ }
+    }
+    rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
+    batchRows.value = rows
+  } catch (e) {
+    batchMsg.value = '批量验证失败：' + formatError(e)
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+function viewBatchStockV137(r: BatchVerifyRow) {
+  code.value = r.code
+  category.value = 'DAY'
+  void onRun()
+}
+function batchPctV137(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(1) + '%'
+}
+function batchTrustV137(r: BatchVerifyRow): string {
+  if (r.trust_score === null || r.trust_score === undefined) return '-'
+  return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
 function openSaveForm() {
   saveName.value = `${strategyLabel.value} · ${code.value}`
   saveTags.value = ''
@@ -599,9 +679,41 @@ async function onSave() {
         <div class="result-toolbar">
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
           <button class="ghost" @click="copyReport">📋 复制报告</button>
+          <button class="ghost" :disabled="batchLoading" @click="runBatchVerifyWatchlist">
+            {{ batchLoading ? '批量验证自选股中…' : '🗳️ 批量验证自选股' }}
+          </button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
+          <span v-if="batchMsg" class="save-msg">{{ batchMsg }}</span>
         </div>
+
+        <!-- V137 批量验证自选股（对全局自选股跑当前策略，按可信度排名） -->
+        <section v-if="batchRows.length" class="report-section">
+          <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}，按模型可信度降序）</h3>
+          <table class="batch-table">
+            <thead>
+              <tr>
+                <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
+                <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
+                <th class="num">交易数</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(r, i) in batchRows" :key="r.symbol">
+                <td class="dim">{{ i + 1 }}</td>
+                <td>{{ r.symbol }}</td>
+                <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.total_return) }}</td>
+                <td class="num">{{ batchPctV137(r.win_rate) }}</td>
+                <td class="num">{{ batchPctV137(r.hit_rate) }}</td>
+                <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.excess_hit_rate) }}</td>
+                <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ batchTrustV137(r) }}</td>
+                <td class="num">{{ r.trades ?? '-' }}</td>
+                <td><button class="ghost small" @click="viewBatchStockV137(r)">查看该股</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="legend">对全局自选股（最多 12 只）用当前策略与参数各做一次独立回测（最近 500 根日线），按 V101 模型可信度降序排名；点「查看该股」直接切换目标重新回测。</p>
+        </section>
 
         <!-- V106 验证总结（可信度 + 准确度 + 稳健性 + 样本外 一览） -->
         <section v-if="store.result" class="report-section">
