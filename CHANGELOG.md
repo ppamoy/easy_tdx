@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V201（V202）—— 文档覆盖 run-all --only-robust 与指南自身迭代** —— V200 仅把指南更新到 V199，V201 新增的 run-all `--only-robust` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V201：标题、全景表补 V200/V201 两行、3.9 命令行节 run-all 条目补 only-robust 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V201；全景表补 V200/V201；3.9 命令行节 run-all 条目补「--only-robust（V201）只显示样本外 ✅泛化 的策略」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **run-all CLI 支持 --only-robust（V201）—— 命令行批量比策略时只显示样本外稳健的策略** —— verify-multi 已支持 --only-robust（V199），run-all 排名表此前只能输出全部策略并人工筛选。本次给 run-all 新增 `--only-robust`：只显示 oos_degraded=false（✅泛化）的策略；若没有符合的策略则提示并退出，与 V199 对齐。
 
 ### 新增
