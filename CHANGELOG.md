@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**回测页批量验证「样本外」列（V178）—— 批量选股时直接看每只股票的泛化/衰减结论** —— 回测页批量验证（V137）展示收益/命中率/可信度，但每只候选股的样本外验证（V105）结论要单独勾选该股跑回测才能看。本次给批量验证逐只开启 `out_of_sample`，表格新增「样本外」列——✅泛化 / ⚠衰减（悬停显示完整判定），让批量选股时一眼看到哪些股票在没见过的数据上仍稳健。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— BatchVerifyRow 追加 oos_degraded/oos_verdict；批量验证请求开启 out_of_sample:true、oos_train_ratio:0.7 并提取结论；批量验证表新增「样本外」列（batchOosLabel/batchOosCls/batchOosTitle 辅助，悬停显示完整 verdict）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页批量验证 →「样本外」列可见、首行 ⚠衰减、2 行结果、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V176（V177）—— 文档覆盖 CLI 组合验证与指南自身迭代** —— V175 仅把指南更新到 V174，V176 新增的 `verify-portfolio` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V176：标题、全景表补 V175/V176 两行、3.9 命令行节新增 verify-portfolio 说明。
 
 ### 新增

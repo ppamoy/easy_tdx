@@ -432,6 +432,9 @@ interface BatchVerifyRow {
   trust_score: number | null
   trust_grade: string | null
   trades: number | null
+  // V178: 该股样本外验证结论（训练/持有切分）
+  oos_degraded: boolean | null
+  oos_verdict: string
 }
 const batchRows = ref<BatchVerifyRow[]>([])
 const batchLoading = ref(false)
@@ -469,9 +472,12 @@ async function runBatchVerifyWatchlist() {
           commission: commission.value,
           slippage: slippage.value,
           execution: execution.value,
+          out_of_sample: true,
+          oos_train_ratio: 0.7,
           ohlcv: bars,
         })
         const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+        const oos = result.out_of_sample
         rows.push({
           symbol: w.symbol || w.market + w.code,
           market: w.market,
@@ -483,6 +489,8 @@ async function runBatchVerifyWatchlist() {
           trust_score: result.model_trust?.score ?? null,
           trust_grade: result.model_trust?.grade ?? null,
           trades: result.performance.total_trades ?? null,
+          oos_degraded: oos?.degraded ?? null,
+          oos_verdict: oos?.verdict ?? '',
         })
       } catch { /* 单只失败跳过 */ }
     }
@@ -506,6 +514,18 @@ function batchPctV137(v: number | null | undefined): string {
 function batchTrustV137(r: BatchVerifyRow): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
+}
+// V178: 样本外列辅助——显示泛化/衰减结论
+function batchOosLabel(r: BatchVerifyRow): string {
+  if (r.oos_degraded === null || r.oos_degraded === undefined) return '-'
+  return r.oos_degraded ? '⚠衰减' : '✅泛化'
+}
+function batchOosCls(r: BatchVerifyRow): string {
+  if (r.oos_degraded === null || r.oos_degraded === undefined) return ''
+  return r.oos_degraded ? 'neg' : 'pos'
+}
+function batchOosTitle(r: BatchVerifyRow): string {
+  return r.oos_verdict || (r.oos_degraded === null || r.oos_degraded === undefined ? '' : '样本外验证')
 }
 // V139: 批量验证排名导出（Markdown 复制）
 const batchCopyMsg = ref('')
@@ -828,7 +848,7 @@ async function onSave() {
               <tr>
                 <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
                 <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-                <th class="num">交易数</th><th></th>
+                <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -840,6 +860,7 @@ async function onSave() {
                 <td class="num">{{ batchPctV137(r.hit_rate) }}</td>
                 <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.excess_hit_rate) }}</td>
                 <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ batchTrustV137(r) }}</td>
+                <td class="num" :class="batchOosCls(r)" :title="batchOosTitle(r)">{{ batchOosLabel(r) }}</td>
                 <td class="num">{{ r.trades ?? '-' }}</td>
                 <td><button class="ghost small" @click="viewBatchStockV137(r)">查看该股</button></td>
               </tr>
