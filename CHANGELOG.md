@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**策略库「一键重验」扩展到组合策略（V211）—— 组合验证结论也可一键刷新** —— V209 的重验只支持单标策略，组合策略（V134 保存的组合快照）行情变化后结论过时只能删除重存。本次给组合策略同样加「↻ 重验」：用保存的 context.stocks 重跑组合回测（含 V126 组合样本外聚合），刷新快照中的 performance/accuracy/trust/out_of_sample 并标记 source=reverify。组合任务取行情慢时可能超 120s，重验改用 submitPortfolioTask + 360s 轮询预算。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— onReverify 重构为 single / portfolio 双分支：组合分支用保存的 stocks 提交组合回测任务并轮询（360s 预算，绕过 store 120s 上限），刷新组合快照（accuracy_summary/portfolio_trust/out_of_sample）；「↻ 重验」按钮对 single + portfolio 均显示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：种入组合策略（2 只标的）→「组合」tab →「重验」→ API 快照刷新为 source=reverify/新 total_return/trust.verdict、清理成功、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V209（V210）—— 文档覆盖一键重验与指南自身迭代** —— V208 仅把指南更新到 V207，V209 新增的策略库「一键重验」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V209：标题、全景表补 V208/V209 两行、3.6 策略库节补充「↻ 重验」说明。
 
 ### 新增

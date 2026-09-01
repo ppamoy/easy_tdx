@@ -16,14 +16,16 @@ import {
   deleteSavedStrategy,
   fetchBars,
   fetchSavedStrategies,
+  fetchTask,
   formatError,
   runBacktest,
   saveStrategy,
+  submitPortfolioTask,
   updateStrategySnapshot,
 } from '../api'
 import { gradePortfolio } from '../grading'
 import { detectMarket } from '../market'
-import type { MultiStrategyItem, Performance, SavedStrategy } from '../types'
+import type { MultiStrategyItem, Performance, PortfolioResult, SavedStrategy } from '../types'
 import { useBacktestStore } from '../stores/backtest'
 
 const router = useRouter()
@@ -262,68 +264,122 @@ async function load() {
 const reverifyId = ref<string | null>(null)
 const reverifyMsg = ref('')
 async function onReverify(s: SavedStrategy) {
-  if (s.kind !== 'single' || reverifyId.value) return
+  if (reverifyId.value) return
   const ctx = s.context || {}
-  const sym = String(ctx.symbol || '')
-  const sep = sym.indexOf(':')
-  if (sep < 1) {
-    reverifyMsg.value = '策略缺少标的上下文（symbol），无法重验'
-    setTimeout(() => { reverifyMsg.value = '' }, 3500)
-    return
-  }
-  const market = sym.slice(0, sep)
-  const code = sym.slice(sep + 1)
   const category = (ctx.category as string) || 'DAY'
+  const cashN = (s.trade_config?.cash as number) ?? 1000000
+  const execN = ((s.trade_config?.execution as string) ?? 'next_open') as any
   reverifyId.value = s.id
   reverifyMsg.value = ''
   try {
-    const bars = await fetchBars(market, code, category as any, undefined, undefined, 500)
-    if (bars.length < 30) throw new Error('行情数据不足')
-    const result = await runBacktest({
-      strategy: s.strategy,
-      params: s.params,
-      cash: (s.trade_config?.cash as number) ?? 1000000,
-      commission: (s.trade_config?.commission as number) ?? 0.0003,
-      slippage: (s.trade_config?.slippage as number) ?? 0,
-      execution: ((s.trade_config?.execution as string) ?? 'next_open') as any,
-      out_of_sample: true,
-      oos_train_ratio: 0.7,
-      ohlcv: bars,
-    })
-    const perf = result.performance
-    const h5 = result.signal_accuracy?.buy?.horizons?.['5']
-    const freshSnapshot = {
-      ...(s.snapshot ?? {}),
-      total_return: perf.total_return ?? null,
-      annual_return: perf.annual_return ?? null,
-      max_drawdown: perf.max_drawdown ?? null,
-      sharpe: perf.sharpe ?? null,
-      win_rate: perf.win_rate ?? null,
-      trades_count: perf.total_trades ?? null,
-      accuracy: {
-        hit_rate: h5?.hit_rate ?? null,
-        excess_hit_rate: h5?.excess_hit_rate ?? null,
-        verdict: result.signal_accuracy?.verdict ?? '',
-      },
-      robustness: {
-        overfit_likely: result.segment_robustness?.overfit_likely ?? false,
-        verdict: result.segment_robustness?.verdict ?? '',
-      },
-      trust: {
-        score: result.model_trust?.score ?? null,
-        grade: result.model_trust?.grade ?? '',
-        verdict: result.model_trust?.verdict ?? '',
-      },
-      out_of_sample: {
-        degraded: result.out_of_sample?.degraded ?? false,
-        verdict: result.out_of_sample?.verdict ?? '',
-        train_return: result.out_of_sample?.train?.total_return ?? null,
-        test_return: result.out_of_sample?.test?.total_return ?? null,
-      },
-      source: 'reverify',
-      reverified_at: new Date().toISOString().slice(0, 10),
+    if (s.kind === 'single') {
+      // 单标：取行情 → 回测（含样本外）
+      const sym = String(ctx.symbol || '')
+      const sep = sym.indexOf(':')
+      if (sep < 1) throw new Error('策略缺少标的上下文（symbol），无法重验')
+      const market = sym.slice(0, sep)
+      const code = sym.slice(sep + 1)
+      const bars = await fetchBars(market, code, category as any, undefined, undefined, 500)
+      if (bars.length < 30) throw new Error('行情数据不足')
+      const result = await runBacktest({
+        strategy: s.strategy,
+        params: s.params,
+        cash: cashN,
+        commission: (s.trade_config?.commission as number) ?? 0.0003,
+        slippage: (s.trade_config?.slippage as number) ?? 0,
+        execution: execN,
+        out_of_sample: true,
+        oos_train_ratio: 0.7,
+        ohlcv: bars,
+      })
+      const perf = result.performance
+      const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+      const freshSnapshot = {
+        ...(s.snapshot ?? {}),
+        total_return: perf.total_return ?? null,
+        annual_return: perf.annual_return ?? null,
+        max_drawdown: perf.max_drawdown ?? null,
+        sharpe: perf.sharpe ?? null,
+        win_rate: perf.win_rate ?? null,
+        trades_count: perf.total_trades ?? null,
+        accuracy: {
+          hit_rate: h5?.hit_rate ?? null,
+          excess_hit_rate: h5?.excess_hit_rate ?? null,
+          verdict: result.signal_accuracy?.verdict ?? '',
+        },
+        robustness: {
+          overfit_likely: result.segment_robustness?.overfit_likely ?? false,
+          verdict: result.segment_robustness?.verdict ?? '',
+        },
+        trust: {
+          score: result.model_trust?.score ?? null,
+          grade: result.model_trust?.grade ?? '',
+          verdict: result.model_trust?.verdict ?? '',
+        },
+        out_of_sample: {
+          degraded: result.out_of_sample?.degraded ?? false,
+          verdict: result.out_of_sample?.verdict ?? '',
+          train_return: result.out_of_sample?.train?.total_return ?? null,
+          test_return: result.out_of_sample?.test?.total_return ?? null,
+        },
+        source: 'reverify',
+        reverified_at: new Date().toISOString().slice(0, 10),
+      }
+      await updateStrategySnapshot(s.id, freshSnapshot)
+    } else if (s.kind === 'portfolio') {
+      // V211: 组合策略——用保存的 stocks 重跑组合回测（含 V126 组合样本外）
+      const stocks: string[] = Array.isArray(ctx.stocks) ? ctx.stocks.filter((x) => typeof x === 'string') : []
+      if (stocks.length === 0) throw new Error('策略缺少组合标的（context.stocks），无法重验')
+      const { task_id } = await submitPortfolioTask({
+        strategy: s.strategy,
+        params: s.params,
+        cash: cashN,
+        execution: execN,
+        stocks,
+        category: category as any,
+        out_of_sample: true,
+        oos_train_ratio: 0.7,
+      })
+      // 组合任务在 TDX 取行情慢时可能超过 120s，这里给 360s 轮询预算
+      const start = Date.now()
+      let result: any = null
+      for (;;) {
+        const state = await fetchTask(task_id)
+        if (state.status === 'done' && state.result) { result = state.result; break }
+        if (state.status === 'failed') throw new Error(state.error || '组合重验失败')
+        if (Date.now() - start > 360_000) throw new Error('组合重验超时（360s）')
+        await new Promise((r2) => setTimeout(r2, 500))
+      }
+      const pr = result as PortfolioResult
+      const pperf = pr.total_performance
+      const freshSnapshot = {
+        ...(s.snapshot ?? {}),
+        total_return: pperf?.total_return ?? null,
+        annual_return: pperf?.annual_return ?? null,
+        total_stocks: pperf?.total_stocks ?? null,
+        accuracy: {
+          hit_rate: pr.accuracy_summary?.portfolio?.avg_hit_rate ?? null,
+          excess_hit_rate: pr.accuracy_summary?.portfolio?.avg_excess_hit_rate ?? null,
+          verdict: pr.accuracy_summary?.verdict ?? '',
+        },
+        trust: {
+          score: pr.portfolio_trust?.score ?? null,
+          grade: pr.portfolio_trust?.grade ?? '',
+          verdict: pr.portfolio_trust?.verdict ?? '',
+        },
+        out_of_sample: {
+          degraded: pr.out_of_sample?.degraded ?? false,
+          verdict: pr.out_of_sample?.verdict ?? '',
+          train_return: pr.out_of_sample?.avg_train_return ?? null,
+          test_return: pr.out_of_sample?.avg_test_return ?? null,
+        },
+        source: 'reverify',
+        reverified_at: new Date().toISOString().slice(0, 10),
+      }
+      await updateStrategySnapshot(s.id, freshSnapshot)
+    } else {
+      throw new Error('该策略类型暂不支持重验（仅单标/组合）')
     }
-    await updateStrategySnapshot(s.id, freshSnapshot)
     await load()
     reverifyMsg.value = '✓ 已重验「' + s.name + '」并刷新验证结论'
     setTimeout(() => { reverifyMsg.value = '' }, 4000)
@@ -731,10 +787,10 @@ const comboGrade = computed(() =>
             </button>
             <button v-else class="primary sm" @click="onLoad(s)">载入</button>
             <button
-              v-if="s.kind === 'single'"
+              v-if="s.kind === 'single' || s.kind === 'portfolio'"
               class="reverify-btn sm"
               :disabled="reverifyId !== null"
-              :title="'用保存的策略+参数对 ' + String(s.context?.symbol ?? '') + ' 重新回测并刷新验证结论'"
+              :title="s.kind === 'single' ? '用保存的策略+参数对原标的重新回测并刷新验证结论' : '用保存的组合标的重新跑组合回测并刷新验证结论'"
               @click="onReverify(s)"
             >
               {{ reverifyId === s.id ? '重验中…' : '↻ 重验' }}
