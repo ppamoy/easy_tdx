@@ -47,6 +47,17 @@ class TestVerifyCLI:
         assert result.exit_code == 1
         assert "不是合法 JSON" in result.output
 
+    def test_verify_multi_validation_options(self):
+        """V132: verify-multi 应暴露 --segments / --out-of-sample / --train-ratio。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-multi", "--help"])
+        assert result.exit_code == 0
+        assert "--segments" in result.output
+        assert "--out-of-sample" in result.output
+        assert "--train-ratio" in result.output
+
 
 class TestBacktestCLI:
     """测试回测 CLI 命令。"""

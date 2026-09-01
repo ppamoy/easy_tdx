@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+**CLI verify-multi 补分段稳健性/样本外验证（V132）—— 批量验证每只标的也给出过拟合与泛化结论** —— V119 的 verify-multi 只输出收益/命中率/可信度，缺少稳健性（V97）与样本外（V105）结论；V117 的单标 verify 有这两项。本次给 verify-multi 补 `--segments`（分段稳健性段数）与 `--out-of-sample`/`--train-ratio`，逐标计算后把 overfit_likely/robust_verdict 与 oos_degraded/oos_verdict/train_return/test_return 写入每行 JSON。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify-multi 新增 --segments/--out-of-sample/--train-ratio 选项与对应签名；逐标在回测后调用 compute_segment_robustness（V97）与 compute_out_of_sample（V105），把结论合并进 symbols 每行；失败时置 None + 错误文案。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify-multi --help 暴露三个新选项。
+- 端到端：verify-multi 加 --segments 3 --out-of-sample 返回每行 overfit_likely/oos_degraded/train_return/test_return（如 SZ000001 trust56.2中 overfit=True oos_degraded=True test+6.2%）。
+- ruff / mypy 零告警；全量单测 **2460 passed + 1 新增**（其余失败为工作区未提交的缠论重构与一个全量并发下的偶发超时 test_optimize_all_endpoint——单独重跑通过，与本次改动无关）。
+
+## [Unreleased]
+
 **批量验证结果「保存为组合策略」（V131）—— 验证选出的股票一键入策略库** —— V114 批量验证给出按可信度排名，V130 可复制排名，但结果仍无法长期保存/载入复跑。本次给批量验证面板加「💾 保存为组合策略」：把按模型可信度排名选出的股票整理为 kind=portfolio 的策略库条目（context.stocks + 验证来源快照），用户可在「策略库 → 组合」tab 载入后在组合回测页复跑。
 
 ### 新增

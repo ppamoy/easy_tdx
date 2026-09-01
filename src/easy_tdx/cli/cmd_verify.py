@@ -193,6 +193,9 @@ def verify(
 @click.option("--commission", default=0.0003, type=float, help="佣金率")
 @click.option("--slippage", default=0.0, type=float, help="滑点")
 @click.option("--max-stocks", "max_stocks", default=20, type=int, help="最多验证多少只标的")
+@click.option("--segments", default=None, type=int, help="分段稳健性段数（2~6，不填则跳过）")
+@click.option("--out-of-sample", "run_oos", is_flag=True, help="样本外验证（训练/持有切分）")
+@click.option("--train-ratio", "train_ratio", default=0.7, type=float, help="样本外训练段占比")
 def verify_multi(
     stocks: str,
     strategy_name: str,
@@ -204,6 +207,9 @@ def verify_multi(
     commission: float,
     slippage: float,
     max_stocks: int,
+    segments: int | None,
+    run_oos: bool,
+    train_ratio: float,
 ) -> None:
     """批量模型验证：对多只标的跑同一策略，按模型可信度排名选股。
 
@@ -212,9 +218,11 @@ def verify_multi(
     示例::
 
       easy-tdx verify-multi "SZ 000001,SZ 000002,SH 600519" \
-          --strategy ma_cross --params '{"fast": 5, "slow": 20}'
+          --strategy ma_cross --params '{"fast": 5, "slow": 20}' \
+          --segments 3 --out-of-sample
 
-    输出 JSON：symbols 数组（含 total_return/win_rate/hit_rate/trust），按可信度降序。
+    输出 JSON：symbols 数组（含 total_return/win_rate/hit_rate/trust，可选
+    overfit_likely/oos_degraded 等验证结论），按可信度降序。
     """
     from ..cli.conn import get_mac_client
     from ..cli.parsers import parse_adjust, parse_period, parse_stocks
@@ -282,18 +290,54 @@ def verify_multi(
                 if h5 and h5.get("count", 0) > 0:
                     hit_rate = float(h5["hit_rate"])
                     excess_hit_rate = float(h5.get("excess_hit_rate", 0.0))
-                rows.append(
-                    {
-                        "symbol": symbol,
-                        "total_return": bp.get("total_return", 0.0),
-                        "win_rate": bp.get("win_rate", 0.0),
-                        "trades": int(bp.get("total_trades", 0)),
-                        "hit_rate": hit_rate,
-                        "excess_hit_rate": excess_hit_rate,
-                        "trust_score": mt.get("score"),
-                        "trust_grade": mt.get("grade"),
-                    }
-                )
+                row: dict[str, Any] = {
+                    "symbol": symbol,
+                    "total_return": bp.get("total_return", 0.0),
+                    "win_rate": bp.get("win_rate", 0.0),
+                    "trades": int(bp.get("total_trades", 0)),
+                    "hit_rate": hit_rate,
+                    "excess_hit_rate": excess_hit_rate,
+                    "trust_score": mt.get("score"),
+                    "trust_grade": mt.get("grade"),
+                }
+                # V132: 可选的分段稳健性（V97）与样本外验证（V105）
+                if segments is not None:
+                    try:
+                        from ..backtest.robustness import compute_segment_robustness
+
+                        robust = compute_segment_robustness(
+                            df,
+                            lambda: entry.build(params),
+                            segments=segments,
+                            cash=cash,
+                            commission=commission,
+                            slippage=slippage,
+                        )
+                        row["overfit_likely"] = robust.get("overfit_likely", False)
+                        row["robust_verdict"] = robust.get("verdict", "")
+                    except Exception:  # noqa: BLE001
+                        row["overfit_likely"] = None
+                        row["robust_verdict"] = "分段稳健性计算失败"
+                if run_oos:
+                    try:
+                        from ..backtest.out_of_sample import compute_out_of_sample
+
+                        oos = compute_out_of_sample(
+                            df,
+                            lambda: entry.build(params),
+                            train_ratio=train_ratio,
+                            cash=cash,
+                            commission=commission,
+                            slippage=slippage,
+                        )
+                        row["oos_degraded"] = oos.get("degraded", False)
+                        row["oos_verdict"] = oos.get("verdict", "")
+                        row["train_return"] = (oos.get("train") or {}).get("total_return")
+                        row["test_return"] = (oos.get("test") or {}).get("total_return")
+                    except Exception:  # noqa: BLE001
+                        row["oos_degraded"] = None
+                        row["oos_verdict"] = "样本外验证计算失败"
+                rows.append(row)
             except Exception as exc:  # noqa: BLE001 — 单只失败跳出循环前记录
                 failures.append(symbol + "(" + str(exc) + ")")
 
