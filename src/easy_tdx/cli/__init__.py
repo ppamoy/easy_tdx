@@ -35,6 +35,7 @@ from .cmd_tick import tick
 from .cmd_transaction import transaction
 from .cmd_verify import verify as verify
 from .cmd_verify import verify_multi as verify_multi
+from .cmd_verify import verify_portfolio as verify_portfolio
 from .cmd_web import serve
 
 
@@ -99,5 +100,6 @@ cli.add_command(portfolio)
 cli.add_command(run_all)
 cli.add_command(verify)
 cli.add_command(verify_multi)
+cli.add_command(verify_portfolio)
 cli.add_command(screen)
 cli.add_command(serve)

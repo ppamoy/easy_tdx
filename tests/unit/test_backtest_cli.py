@@ -203,3 +203,22 @@ class TestBacktestCLI:
         result = runner.invoke(cli, ["run-all", "--help"])
         assert result.exit_code == 0
         assert "--output-file" in result.output
+
+    def test_verify_portfolio_help(self):
+        """V176: verify-portfolio --help。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-portfolio", "--help"])
+        assert result.exit_code == 0
+        assert "组合模型验证" in result.output
+        assert "--out-of-sample" in result.output
+
+    def test_verify_portfolio_bad_params(self):
+        """V176: verify-portfolio 非 JSON params 报错。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-portfolio", "SZ 000001", "--params", "{oops"])
+        assert result.exit_code == 1
+        assert "不是合法 JSON" in result.output

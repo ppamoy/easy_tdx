@@ -379,3 +379,211 @@ def verify_multi(
         click.echo("已写入 " + output_file)
     else:
         click.echo(text)
+
+
+@click.command("verify-portfolio")
+@click.argument("stocks")
+@click.option("--strategy", "strategy_name", default="ma_cross", help="注册表中的策略名")
+@click.option("--params", "params_json", default="{}", help="策略参数 JSON")
+@click.option("--count", default=500, type=int, help="每只标的 K线数量")
+@click.option(
+    "--period",
+    default="DAILY",
+    help="K线周期: DAILY/5MIN/15MIN/30MIN/60MIN/1MIN/WEEKLY/MONTHLY",
+)
+@click.option("--adjust", default="NONE", help="复权: NONE/QFQ/HFQ")
+@click.option("--cash", default=1_000_000.0, type=float, help="组合总资金（均分）")
+@click.option("--commission", default=0.0003, type=float, help="佣金率")
+@click.option("--slippage", default=0.0, type=float, help="滑点")
+@click.option("--out-of-sample", "run_oos", is_flag=True, help="组合级样本外验证（V126）")
+@click.option(
+    "--output-file",
+    "output_file",
+    default=None,
+    type=str,
+    help="把 JSON 报告写入文件（默认打印到 stdout）",
+)
+def verify_portfolio(
+    stocks: str,
+    strategy_name: str,
+    params_json: str,
+    count: int,
+    period: str,
+    adjust: str,
+    cash: float,
+    commission: float,
+    slippage: float,
+    run_oos: bool,
+    output_file: str | None,
+) -> None:
+    """组合模型验证：多标的跑同一策略，输出组合绩效 + 组合准确度聚合 + 组合可信度。
+
+    STOCKS 格式: "SZ 000001,SZ 000002,SH 600519"，资金按数量均分。
+
+    示例::
+
+      easy-tdx verify-portfolio "SZ 000001,SZ 000002,SH 600519" \
+          --strategy ma_cross --params '{"fast": 5, "slow": 20}' --out-of-sample
+
+    输出 JSON：total_performance + accuracy_summary（V99）+ portfolio_trust（V103）
+    + out_of_sample（V126，--out-of-sample 时）+ verdict 汇总。
+    """
+    import json
+
+    from ..backtest.portfolio_engine import PortfolioBacktestEngine, StockData
+    from ..backtest.strategies import get_registry
+    from ..cli.conn import get_mac_client
+    from ..cli.parsers import parse_adjust, parse_period, parse_stocks
+
+    try:
+        params: dict[str, Any] = json.loads(params_json) if params_json.strip() else {}
+    except json.JSONDecodeError as exc:
+        click.echo("错误: --params 不是合法 JSON: " + str(exc), err=True)
+        raise SystemExit(1)
+
+    try:
+        entry = get_registry().get(strategy_name)
+    except KeyError as exc:
+        click.echo("错误: " + str(exc), err=True)
+        raise SystemExit(1)
+    strategy = entry.build(params)
+
+    market_codes = parse_stocks(stocks)
+    if not market_codes:
+        click.echo('错误: 未解析到任何标的（格式如 "SZ 000001,SH 600519"）', err=True)
+        raise SystemExit(1)
+
+    # 取每只标的 K 线并组装 StockData
+    stock_data_list: list[StockData] = []
+    failures: list[str] = []
+    with get_mac_client() as client:
+        for market_int, code in market_codes:
+            symbol = ("SZ" if market_int == 0 else ("SH" if market_int == 1 else "BJ")) + code
+            try:
+                df = client.get_stock_kline(
+                    market_int,
+                    code,
+                    period=parse_period(period),
+                    start=0,
+                    count=count,
+                    adjust=parse_adjust(adjust),
+                )
+                if df is None or len(df) < 30:
+                    failures.append(symbol + "(行情不足)")
+                    continue
+                stock_data_list.append(
+                    StockData(code=code, market=symbol[:2], df=df.reset_index(drop=True))
+                )
+            except Exception as exc:  # noqa: BLE001 — 单只失败跳过
+                failures.append(symbol + "(" + str(exc) + ")")
+
+    if not stock_data_list:
+        click.echo("错误: 所有标的均未取到有效行情数据", err=True)
+        raise SystemExit(1)
+
+    engine = PortfolioBacktestEngine(
+        strategy=strategy,
+        stocks=stock_data_list,
+        total_cash=cash,
+        commission=commission,
+        slippage=slippage,
+    )
+    result = engine.run()
+    report = result.to_dict()
+    report["failures"] = failures
+
+    # V99: 组合级准确度聚合
+    try:
+        from ..backtest.signal_accuracy import aggregate_portfolio_accuracy
+
+        individual = getattr(result, "individual_results", None)
+        if individual:
+            allocations = {str(k): float(v) for k, v in (result.equity_allocation or {}).items()}
+            report["accuracy_summary"] = aggregate_portfolio_accuracy(individual, allocations)
+    except Exception:
+        pass
+
+    # V103: 组合可信度
+    try:
+        from ..backtest.model_trust import compute_portfolio_trust
+
+        report["portfolio_trust"] = compute_portfolio_trust(report.get("accuracy_summary"))
+    except Exception:
+        pass
+
+    # V126: 组合级样本外验证
+    if run_oos:
+        try:
+            from ..backtest.out_of_sample import compute_out_of_sample
+
+            per_symbol: dict[str, Any] = {}
+            degraded_symbols = 0
+            n = len(stock_data_list)
+            for sd in stock_data_list:
+                symbol = sd.market + sd.code
+                try:
+                    oos = compute_out_of_sample(
+                        sd.df,
+                        lambda: entry.build(params),
+                        cash=cash / max(n, 1),
+                        commission=commission,
+                        slippage=slippage,
+                    )
+                    per_symbol[symbol] = {
+                        "degraded": oos.get("degraded", False),
+                        "verdict": oos.get("verdict", ""),
+                        "train_return": (oos.get("train") or {}).get("total_return"),
+                        "test_return": (oos.get("test") or {}).get("total_return"),
+                    }
+                    if oos.get("degraded"):
+                        degraded_symbols += 1
+                except Exception:
+                    per_symbol[symbol] = {"degraded": True, "verdict": "样本外验证失败"}
+            if per_symbol:
+                _trs = [(v.get("train_return") or 0.0) for v in per_symbol.values()]
+                _tes = [(v.get("test_return") or 0.0) for v in per_symbol.values()]
+                avg_train = sum(_trs) / len(_trs)
+                avg_test = sum(_tes) / len(_tes)
+                degraded = degraded_symbols >= len(per_symbol) * 0.5 or avg_test < avg_train * 0.5
+                verdict = (
+                    f"{len(per_symbol) - degraded_symbols}/{len(per_symbol)} 只样本外稳健；"
+                    f"平均训练段 {avg_train:+.1%} → 样本外 {avg_test:+.1%}"
+                )
+                if degraded:
+                    verdict += "。⚠ 组合样本外表现衰减，历史成绩需谨慎对待"
+                report["out_of_sample"] = {
+                    "symbols": len(per_symbol),
+                    "degraded_symbols": degraded_symbols,
+                    "avg_train_return": avg_train,
+                    "avg_test_return": avg_test,
+                    "degraded": degraded,
+                    "verdict": verdict,
+                    "per_symbol": per_symbol,
+                }
+        except Exception:
+            pass
+
+    # 汇总结论
+    verdict_parts: list[str] = []
+    mt = report.get("portfolio_trust") or {}
+    if mt.get("grade"):
+        trust_str = (
+            "组合可信度 " + str(mt.get("grade")) + "（"
+            + str(int(mt.get("score", 0))) + "/100）"
+        )
+        verdict_parts.append(trust_str)
+    acc = report.get("accuracy_summary") or {}
+    if acc.get("verdict"):
+        verdict_parts.append(str(acc["verdict"]))
+    oos = report.get("out_of_sample") or {}
+    if oos.get("verdict"):
+        verdict_parts.append(str(oos["verdict"]))
+    report["verdict"] = "；".join(verdict_parts) if verdict_parts else "无验证结论"
+
+    text = json.dumps(report, ensure_ascii=False, indent=2, default=str)
+    if output_file:
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        click.echo("已写入 " + output_file)
+    else:
+        click.echo(text)

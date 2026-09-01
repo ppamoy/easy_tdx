@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+**CLI 组合模型验证命令（V176）—— verify-portfolio 补齐 CLI 验证系列** —— CLI 已有 verify（单标 V117）与 verify-multi（多标 V119），但组合回测（多标的同策略、资金均分）只能跑 Web 组合页，CLI 无法输出组合级验证结论（V99 准确度聚合 / V103 组合可信度 / V126 样本外）。本次新增 `verify-portfolio`：多标的跑同一策略，输出组合绩效 + accuracy_summary + portfolio_trust + out_of_sample + verdict，支持 `--output-file`。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py + __init__.py** —— `verify-portfolio` 命令：STOCKS（"SZ 000001,SZ 000002"）+ --strategy/--params/--count/--cash/--commission/--out-of-sample/--output-file；用 PortfolioBacktestEngine 跑组合，调用 aggregate_portfolio_accuracy（V99）、compute_portfolio_trust（V103）、compute_out_of_sample 逐标聚合（V126），输出 JSON + verdict 汇总。
+
+### 验证
+
+- 新增 2 项单测（tests/unit/test_backtest_cli.py）：verify-portfolio --help；非法 params JSON 报错。
+- 端到端：verify-portfolio 2 只标的 + --out-of-sample 返回 accuracy_summary/portfolio_trust(46.7 低)/out_of_sample(0/2 稳健)/verdict。
+- ruff / mypy 零告警；全量单测 **2466 passed**（新增 2 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V174（V175）—— 文档覆盖 run-all 落盘与指南自身迭代** —— V173 仅把指南更新到 V172，V174 新增的 run-all `--output-file` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V174：标题、全景表补 V173/V174 两行、3.9 命令行节 run-all 条目补充 output-file 说明。
 
 ### 新增
