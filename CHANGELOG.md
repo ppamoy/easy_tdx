@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V176（V177）—— 文档覆盖 CLI 组合验证与指南自身迭代** —— V175 仅把指南更新到 V174，V176 新增的 `verify-portfolio` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V176：标题、全景表补 V175/V176 两行、3.9 命令行节新增 verify-portfolio 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V176；全景表补 V175/V176；3.9 命令行节 verify-multi 后新增 verify-portfolio 条目（组合绩效 + accuracy_summary + portfolio_trust + 组合样本外 + verdict）。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI 组合模型验证命令（V176）—— verify-portfolio 补齐 CLI 验证系列** —— CLI 已有 verify（单标 V117）与 verify-multi（多标 V119），但组合回测（多标的同策略、资金均分）只能跑 Web 组合页，CLI 无法输出组合级验证结论（V99 准确度聚合 / V103 组合可信度 / V126 样本外）。本次新增 `verify-portfolio`：多标的跑同一策略，输出组合绩效 + accuracy_summary + portfolio_trust + out_of_sample + verdict，支持 `--output-file`。
 
 ### 新增
