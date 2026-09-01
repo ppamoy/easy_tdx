@@ -349,7 +349,7 @@ const copyMsg = ref('')
 function buildReportText(): string {
   const r = store.result
   if (!r) return ''
-  const pct = (v: number | undefined) => (v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%')
+  const pct = (v: number | null | undefined) => (v === undefined || v === null || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%')
   const lines: string[] = []
   lines.push('# easy-tdx 回测报告')
   lines.push('')
@@ -382,6 +382,13 @@ function buildReportText(): string {
   if (r.segment_robustness) {
     lines.push('## 分段稳健性（过拟合检查）')
     lines.push('- ' + (r.segment_robustness.verdict || ''))
+    lines.push('')
+  }
+  if (r.out_of_sample) {
+    lines.push('## 样本外验证（训练段 vs 未见过数据）')
+    lines.push('- ' + (r.out_of_sample.verdict || ''))
+    lines.push('- 训练段收益：' + pct(r.out_of_sample.train?.total_return) + ' · 样本外收益：' + pct(r.out_of_sample.test?.total_return))
+    lines.push('- 样本外5根命中率：' + pct(r.out_of_sample.test?.hit_rate) + ' · 超额：' + (r.out_of_sample.test?.excess_hit_rate != null ? (r.out_of_sample.test.excess_hit_rate >= 0 ? '+' : '') + pct(r.out_of_sample.test.excess_hit_rate) : '-'))
     lines.push('')
   }
   lines.push('---')

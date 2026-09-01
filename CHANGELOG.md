@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**报告导出补「样本外验证」段（V116）—— 复制的回测报告覆盖全部验证维度** —— V104 的报告导出早于 V105 样本外验证，导出的 Markdown 只有绩效/准确度/稳健性/可信度，缺样本外结论。本次给 `buildReportText` 补上「样本外验证（训练段 vs 未见过数据）」段：判定结论、训练段/样本外收益、样本外 5 根命中率与超额。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 报告导出追加样本外验证段（若有 out_of_sample 数据）；`pct` 格式化签名放宽兼容 null（样本外字段可空）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：勾选样本外验证回测 → 复制报告含「样本外验证」与「模型可信度」段、console 零错误。
+
+## [Unreleased]
+
 **run-all CLI 排名表补准确度/可信度列（V115）—— 命令行批量比策略时也按验证过的准确度比较** —— `easy-tdx run-all` 输出策略绩效排名，此前只有收益/回撤/胜率等指标。本次给排名表追加「5根命中」「超额命中」「可信度」列（从 BacktestResult.signal_accuracy / model_trust 提取），与 Web 端 V109/V111 对齐，CLI 用户同样能按验证结论挑策略。
 
 ### 新增
