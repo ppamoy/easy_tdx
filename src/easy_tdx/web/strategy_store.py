@@ -215,6 +215,17 @@ class StrategyStore:
             cur = conn.execute("DELETE FROM strategies WHERE id = ?", (strategy_id,))
             return cur.rowcount > 0
 
+    # V209: 刷新指定字段（快照/成绩/标签/备注等），主要供策略库「一键重验」更新验证结论
+    def update_snapshot(self, strategy_id: str, snapshot: dict[str, Any] | None) -> bool:
+        """按 id 更新 snapshot 字段；不存在返回 False。"""
+        with _write_lock, self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE strategies SET snapshot = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(snapshot or {}, ensure_ascii=False), _now_iso(), strategy_id),
+            )
+            return cur.rowcount > 0
+
+
 
 # ── 单例 ───────────────────────────────────────────────────────────────────
 

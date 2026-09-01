@@ -276,6 +276,17 @@ export async function deleteSavedStrategy(id: string): Promise<void> {
   if (!resp.ok) await throwError(resp)
 }
 
+/** V209: 更新一条已保存策略的快照（策略库「一键重验」后刷新验证结论）。 */
+export async function updateStrategySnapshot(id: string, snapshot: Record<string, unknown>): Promise<SavedStrategy> {
+  const resp = await fetch(`${BASE}/strategies/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ snapshot }),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as SavedStrategy
+}
+
 // ── 服务器设置 ──────────────────────────────────────────────────────────────
 
 /** 列出所有候选通达信服务器 + 当前使用的 host（不含延迟，需点测速）。 */

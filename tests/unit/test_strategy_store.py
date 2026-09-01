@@ -232,6 +232,26 @@ def test_router_get_missing_returns_400(client: TestClient):
 def test_router_delete_missing_returns_400(client: TestClient):
     resp = client.delete("/api/v1/strategies/nonexistent")
     assert resp.status_code == 400
+def test_router_patch_snapshot_updates(client: TestClient):
+    """V209: PATCH /strategies/{id} 应更新快照并返回更新后的记录。"""
+    resp = client.post("/api/v1/strategies", json=_create_payload())
+    assert resp.status_code == 201
+    sid = resp.json()["id"]
+
+    new_snapshot = {"total_return": 0.5, "sharpe": 1.9, "source": "reverify"}
+    resp = client.patch(f"/api/v1/strategies/{sid}", json={"snapshot": new_snapshot})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["snapshot"]["total_return"] == pytest.approx(0.5)
+    assert body["snapshot"]["source"] == "reverify"
+
+    # 详情应反映更新
+    got = client.get(f"/api/v1/strategies/{sid}").json()
+    assert got["snapshot"]["total_return"] == pytest.approx(0.5)
+
+    # 不存在的 id → 400
+    resp = client.patch("/api/v1/strategies/nonexistent", json={"snapshot": new_snapshot})
+    assert resp.status_code == 400
 
 
 def test_router_rejects_empty_name(client: TestClient):

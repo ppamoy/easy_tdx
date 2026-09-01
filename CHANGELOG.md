@@ -29,6 +29,23 @@
 
 ## [Unreleased]
 
+**策略库「一键重验」（V209）—— 保存策略后用原标的重新回测，刷新验证结论** —— 策略保存时快照固化当时的准确度/可信度/样本外结论，行情变化后结论过时，用户只能删除重存。本次在策略库单标卡片加「↻ 重验」：用保存的策略+参数对原标的重新回测（逐只开启 out_of_sample），刷新快照中的 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at——打通「保存策略 → 复验 → 更新结论」闭环。
+
+### 新增
+
+- **src/easy_tdx/web/strategy_store.py** —— 新增 update_snapshot（按 id 更新快照字段）。
+- **src/easy_tdx/web/routers/strategies.py** —— 新增 PATCH /strategies/{id}（更新快照并返回更新后记录）。
+- **web-ui/src/api.ts** —— 新增 updateStrategySnapshot。
+- **web-ui/src/views/StrategiesView.vue** —— 单标策略卡片新增「↻ 重验」按钮（onReverify：fetchBars+runBacktest+刷新快照+重新加载列表）与提示。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_strategy_store.py）：PATCH 更新快照、详情反映、不存在 id 400。
+- Playwright 浏览器回归：策略库「重验」→ API 快照刷新为 source=reverify/reverified_at/新 total_return/trust.verdict、清理成功、console 零错误。
+- ruff / mypy 零告警；全量单测 **2469 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V207（V208）—— 文档覆盖来源徽章新来源与指南自身迭代** —— V206 仅把指南更新到 V205，V207 新增的策略库来源徽章（组合候选/寻优批量验证）入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V207：标题、全景表补 V206/V207 两行、3.6 策略库节来源徽章说明更新为五种来源全覆盖。
 
 ### 新增

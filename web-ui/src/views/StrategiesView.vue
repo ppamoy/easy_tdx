@@ -14,9 +14,12 @@ import PortfolioOutOfSamplePanel from '../components/PortfolioOutOfSamplePanel.v
 import PortfolioSummaryTable from '../components/PortfolioSummaryTable.vue'
 import {
   deleteSavedStrategy,
+  fetchBars,
   fetchSavedStrategies,
   formatError,
+  runBacktest,
   saveStrategy,
+  updateStrategySnapshot,
 } from '../api'
 import { gradePortfolio } from '../grading'
 import { detectMarket } from '../market'
@@ -255,6 +258,82 @@ async function load() {
   }
 }
 
+// V209: 一键重验——用保存的策略+参数对原标的重新回测，刷新快照中的验证结论
+const reverifyId = ref<string | null>(null)
+const reverifyMsg = ref('')
+async function onReverify(s: SavedStrategy) {
+  if (s.kind !== 'single' || reverifyId.value) return
+  const ctx = s.context || {}
+  const sym = String(ctx.symbol || '')
+  const sep = sym.indexOf(':')
+  if (sep < 1) {
+    reverifyMsg.value = '策略缺少标的上下文（symbol），无法重验'
+    setTimeout(() => { reverifyMsg.value = '' }, 3500)
+    return
+  }
+  const market = sym.slice(0, sep)
+  const code = sym.slice(sep + 1)
+  const category = (ctx.category as string) || 'DAY'
+  reverifyId.value = s.id
+  reverifyMsg.value = ''
+  try {
+    const bars = await fetchBars(market, code, category as any, undefined, undefined, 500)
+    if (bars.length < 30) throw new Error('行情数据不足')
+    const result = await runBacktest({
+      strategy: s.strategy,
+      params: s.params,
+      cash: (s.trade_config?.cash as number) ?? 1000000,
+      commission: (s.trade_config?.commission as number) ?? 0.0003,
+      slippage: (s.trade_config?.slippage as number) ?? 0,
+      execution: ((s.trade_config?.execution as string) ?? 'next_open') as any,
+      out_of_sample: true,
+      oos_train_ratio: 0.7,
+      ohlcv: bars,
+    })
+    const perf = result.performance
+    const h5 = result.signal_accuracy?.buy?.horizons?.['5']
+    const freshSnapshot = {
+      ...(s.snapshot ?? {}),
+      total_return: perf.total_return ?? null,
+      annual_return: perf.annual_return ?? null,
+      max_drawdown: perf.max_drawdown ?? null,
+      sharpe: perf.sharpe ?? null,
+      win_rate: perf.win_rate ?? null,
+      trades_count: perf.total_trades ?? null,
+      accuracy: {
+        hit_rate: h5?.hit_rate ?? null,
+        excess_hit_rate: h5?.excess_hit_rate ?? null,
+        verdict: result.signal_accuracy?.verdict ?? '',
+      },
+      robustness: {
+        overfit_likely: result.segment_robustness?.overfit_likely ?? false,
+        verdict: result.segment_robustness?.verdict ?? '',
+      },
+      trust: {
+        score: result.model_trust?.score ?? null,
+        grade: result.model_trust?.grade ?? '',
+        verdict: result.model_trust?.verdict ?? '',
+      },
+      out_of_sample: {
+        degraded: result.out_of_sample?.degraded ?? false,
+        verdict: result.out_of_sample?.verdict ?? '',
+        train_return: result.out_of_sample?.train?.total_return ?? null,
+        test_return: result.out_of_sample?.test?.total_return ?? null,
+      },
+      source: 'reverify',
+      reverified_at: new Date().toISOString().slice(0, 10),
+    }
+    await updateStrategySnapshot(s.id, freshSnapshot)
+    await load()
+    reverifyMsg.value = '✓ 已重验「' + s.name + '」并刷新验证结论'
+    setTimeout(() => { reverifyMsg.value = '' }, 4000)
+  } catch (e) {
+    reverifyMsg.value = '重验失败：' + formatError(e)
+    setTimeout(() => { reverifyMsg.value = '' }, 4000)
+  } finally {
+    reverifyId.value = null
+  }
+}
 /** 载入：把保存的策略 + 标的上下文塞进 URL query，跳转对应回测页（页面 onMounted 时回填）。 */
 function onLoad(s: SavedStrategy) {
   const ctx = s.context
@@ -652,6 +731,15 @@ const comboGrade = computed(() =>
             </button>
             <button v-else class="primary sm" @click="onLoad(s)">载入</button>
             <button
+              v-if="s.kind === 'single'"
+              class="reverify-btn sm"
+              :disabled="reverifyId !== null"
+              :title="'用保存的策略+参数对 ' + String(s.context?.symbol ?? '') + ' 重新回测并刷新验证结论'"
+              @click="onReverify(s)"
+            >
+              {{ reverifyId === s.id ? '重验中…' : '↻ 重验' }}
+            </button>
+            <button
               class="danger sm"
               :disabled="deletingId === s.id"
               @click="onDelete(s)"
@@ -660,6 +748,7 @@ const comboGrade = computed(() =>
             </button>
           </span>
         </div>
+        <p v-if="reverifyMsg" class="reverify-msg">{{ reverifyMsg }}</p>
       </article>
     </div>
 
@@ -1155,6 +1244,18 @@ const comboGrade = computed(() =>
 .sm {
   font-size: 12px;
   padding: 4px 12px;
+/* V209: 一键重验按钮与提示 */
+.reverify-btn.sm {
+  background: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  color: var(--accent);
+}
+.reverify-msg {
+  font-size: 11px;
+  color: var(--up);
+  margin-top: 4px;
+  text-align: right;
+}
 }
 .danger {
   border: 1px solid var(--border);

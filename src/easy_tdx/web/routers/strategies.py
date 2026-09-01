@@ -80,6 +80,21 @@ async def create_saved_strategy(req: SavedStrategyCreate) -> SavedStrategy:
     return _to_response(saved)
 
 
+@router.patch("/strategies/{strategy_id}")
+async def patch_strategy_snapshot(strategy_id: str, payload: dict) -> SavedStrategy:
+    """V209: 更新单条策略的快照（如策略库「一键重验」后刷新验证结论）。"""
+    store = get_store()
+    rec = store.get(strategy_id)
+    if rec is None:
+        raise ValueError(f"策略 '{strategy_id}' 不存在")
+    new_snapshot = payload.get("snapshot")
+    if not isinstance(new_snapshot, dict):
+        raise ValueError("snapshot 必须为对象")
+    if not store.update_snapshot(strategy_id, new_snapshot):
+        raise ValueError(f"策略 '{strategy_id}' 不存在")
+    return _to_response(store.get(strategy_id) or rec)
+
+
 @router.delete("/strategies/{strategy_id}")
 async def delete_saved_strategy(strategy_id: str) -> dict[str, str]:
     """按 id 删除一条已保存策略。不存在则 400。
