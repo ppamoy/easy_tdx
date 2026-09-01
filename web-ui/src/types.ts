@@ -584,6 +584,9 @@ export interface MultiStrategyBacktestRequest {
   stamp_tax?: number
   slippage?: number
   execution?: ExecutionMode
+  // V128: 多策略组合级样本外验证
+  out_of_sample?: boolean
+  oos_train_ratio?: number
 }
 
 // ── 服务器设置（GET /api/v1/server/hosts 等） ────────────────────────────────

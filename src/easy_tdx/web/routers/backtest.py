@@ -701,6 +701,83 @@ def _run_multi_strategy_backtest(
     except Exception:
         pass
 
+    # V128: 多策略组合级样本外验证（逐槽位训练/持有切分，验证组合在没见过的数据上是否仍准确）
+    if getattr(req, "out_of_sample", False):
+        try:
+            from easy_tdx.backtest.out_of_sample import compute_out_of_sample
+            from easy_tdx.backtest.strategies import get_registry
+
+            registry = get_registry()
+            # symbol → item 的映射（用于按槽位重建策略工厂）
+            item_by_symbol = {item.symbol: item for item in req.items}
+            per_slot: dict[str, Any] = {}
+            degraded_slots = 0
+            n_slots = len(slots)
+            for slot in slots:
+                item = item_by_symbol.get(slot.symbol)
+                if item is None:
+                    continue
+                try:
+                    entry = registry.get(item.strategy)
+                except KeyError:
+                    per_slot[slot.label or slot.symbol] = {
+                        "degraded": True,
+                        "verdict": "未知策略",
+                    }
+                    degraded_slots += 1
+                    continue
+                try:
+                    oos = compute_out_of_sample(
+                        slot.df,
+                        lambda: entry.build(item.params),
+                        train_ratio=getattr(req, "oos_train_ratio", 0.7),
+                        cash=getattr(req, "cash", 1_000_000) / max(n_slots, 1),
+                        commission=req.commission,
+                        stamp_tax=req.stamp_tax,
+                        slippage=req.slippage,
+                        execution=req.execution,
+                    )
+                    per_slot[slot.label or slot.symbol] = {
+                        "degraded": oos.get("degraded", False),
+                        "verdict": oos.get("verdict", ""),
+                        "train_return": (oos.get("train") or {}).get("total_return"),
+                        "test_return": (oos.get("test") or {}).get("total_return"),
+                    }
+                    if oos.get("degraded"):
+                        degraded_slots += 1
+                except Exception:
+                    per_slot[slot.label or slot.symbol] = {
+                        "degraded": True,
+                        "verdict": "样本外验证失败",
+                    }
+                    degraded_slots += 1
+            n = len(per_slot)
+            if n:
+                avg_train = sum(
+                    (v.get("train_return") or 0.0) for v in per_slot.values()
+                ) / n
+                avg_test = sum(
+                    (v.get("test_return") or 0.0) for v in per_slot.values()
+                ) / n
+                degraded = degraded_slots >= n * 0.5 or avg_test < avg_train * 0.5
+                verdict = (
+                    f"{n - degraded_slots}/{n} 个槽位样本外稳健；"
+                    f"平均训练段 {avg_train:+.1%} → 样本外 {avg_test:+.1%}"
+                )
+                if degraded:
+                    verdict += "。⚠ 多策略组合样本外表现衰减，历史成绩需谨慎对待"
+                result_dict["out_of_sample"] = {
+                    "symbols": n,
+                    "degraded_symbols": degraded_slots,
+                    "avg_train_return": avg_train,
+                    "avg_test_return": avg_test,
+                    "degraded": degraded,
+                    "verdict": verdict,
+                    "per_symbol": per_slot,
+                }
+        except Exception:
+            pass
+
     return result_dict
 
 

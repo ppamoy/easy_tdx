@@ -10,6 +10,7 @@ import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
 import MetricTable from '../components/MetricTable.vue'
 import PortfolioCompareChart from '../components/PortfolioCompareChart.vue'
+import PortfolioOutOfSamplePanel from '../components/PortfolioOutOfSamplePanel.vue'
 import PortfolioSummaryTable from '../components/PortfolioSummaryTable.vue'
 import {
   deleteSavedStrategy,
@@ -58,6 +59,9 @@ const saveComboLoading = ref(false)
 // 最近一次组合回测使用的 items（保存时复用），由 onComboBacktest 写入
 const lastComboItems = ref<MultiStrategyItem[]>([])
 const lastComboCash = ref<number>(1_000_000)
+// V128: 组合回测是否开启样本外验证
+const comboOos = ref(false)
+const comboOosRatio = ref(0.7)
 // 结果区引用：跑完后滚动定位
 const comboResultRef = ref<HTMLElement | null>(null)
 // 保存弹窗里名称输入框：打开时自动聚焦
@@ -114,7 +118,12 @@ async function onComboBacktest() {
   }))
   lastComboItems.value = items
   lastComboCash.value = 1_000_000
-  await store.runMultiStrategy({ items, cash: 1_000_000 })
+  await store.runMultiStrategy({
+    items,
+    cash: 1_000_000,
+    out_of_sample: comboOos.value,
+    oos_train_ratio: comboOosRatio.value,
+  })
   if (skipped > 0) {
     store.error = `已跳过 ${skipped} 个缺少单一标的的策略（组合策略无 symbol）。`
   }
@@ -442,6 +451,10 @@ const comboGrade = computed(() =>
         </p>
       </div>
       <div class="header-actions">
+        <label v-if="activeTab === 'single'" class="combo-oos">
+          <input type="checkbox" v-model="comboOos" />
+          样本外验证
+        </label>
         <button
           v-if="activeTab === 'single'"
           class="primary sm"
@@ -715,6 +728,12 @@ const comboGrade = computed(() =>
         <div v-if="comboPerf" class="combo-chart-block">
           <h4>绩效指标</h4>
           <MetricTable :perf="comboPerf" />
+        </div>
+
+        <!-- V128: 多策略组合级样本外验证 -->
+        <div v-if="store.multiStrategyResult.out_of_sample" class="combo-chart-block">
+          <h4>🔬 组合样本外验证（训练段 vs 未见过数据）</h4>
+          <PortfolioOutOfSamplePanel :report="store.multiStrategyResult.out_of_sample" />
         </div>
 
         <div class="combo-chart-block">

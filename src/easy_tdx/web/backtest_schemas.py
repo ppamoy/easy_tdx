@@ -405,6 +405,11 @@ class MultiStrategyBacktestRequest(BaseModel):
     stamp_tax: float = Field(default=0.001, ge=0, le=0.01)
     slippage: float = Field(default=0.0, ge=0, le=0.05)
     execution: Literal["next_open", "next_close"] = Field(default="next_open")
+    # V128: 多策略组合级样本外验证（逐槽位训练/持有切分）
+    out_of_sample: bool = Field(default=False, description="是否启用样本外验证")
+    oos_train_ratio: float = Field(
+        default=0.7, ge=0.5, le=0.9, description="训练段占比（样本外验证用）"
+    )
 
 
 # ── 结果序列化 ─────────────────────────────────────────────────────────────────

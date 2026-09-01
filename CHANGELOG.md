@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+**多策略组合样本外验证（V128）—— 补上多策略路径的泛化检验** —— 单标的（V105）与组合回测（V126）已有样本外验证，但「多策略组合回测」（策略库页勾选多策略）路径未覆盖，多策略组合也看不到「在没见过的数据上是否仍准确」。本次给多策略路径补齐同款能力。
+
+### 新增
+
+- **web/routers/backtest.py + backtest_schemas.py** —— MultiStrategyBacktestRequest 新增 out_of_sample(bool)+oos_train_ratio；`_run_multi_strategy_backtest` 逐槽位调用 compute_out_of_sample（按 symbol 匹配 registry 重建工厂），聚合 per_symbol（degraded/verdict/train_return/test_return）与组合级 avg_train/avg_test/degraded/verdict，写入 result.out_of_sample（字段与 V126 组合版对齐，复用同一前端面板）。
+- **web-ui** —— types.ts MultiStrategyBacktestRequest 补字段；StrategiesView 组合回测按钮旁新增「样本外验证」勾选+训练占比；组合结果区新增「🔬 组合样本外验证」面板（复用 PortfolioOutOfSamplePanel）。
+
+### 验证
+
+- 端到端：multi-strategy 开启 out_of_sample 返回逐槽位与组合级样本外结论（如 双均线 train+44% → test-27% 衰减；组合 0/2 稳健）。
+- Playwright 浏览器回归：策略库种 2 个单标的策略 → 勾选 + 组合回测（样本外验证）→ 结果区「组合样本外验证」面板出现（20s 完成），console 零错误。
+- ruff / mypy 零告警；全量单测 **2460 passed**（其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **组合回测报告一键导出（V127）—— 组合页也能复制验证档案** —— V104 的单标的回测报告早就有「📋 复制报告」，但组合回测页没有导出，组合准确度/可信度/样本外结论只能截图留存。本次给组合报告工具栏加「📋 复制报告」，把组合绩效 + 组合可信度（V103）+ 组合准确度（V99）+ 组合样本外（V126）汇总为 Markdown 一键复制。
 
 ### 新增
