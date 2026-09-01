@@ -257,6 +257,19 @@ async function copyReport() {
   copyMsg.value = '✓ 已复制组合报告'
   setTimeout(() => { copyMsg.value = '' }, 2500)
 }
+// V162: 组合回测报告 JSON 导出（机器可读，Agent/脚本友好，与 V153/V157/V158 对齐）
+const jsonCopyMsg = ref('')
+async function copyPortfolioJson() {
+  if (!store.portfolioResult) return
+  const json = JSON.stringify(store.portfolioResult, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    jsonCopyMsg.value = '✓ 已复制组合报告 JSON'
+  } catch {
+    jsonCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
+}
 
 const strategyLabel = computed(
   () => store.strategies.find((s) => s.name === strategy.value)?.label ?? strategy.value,
@@ -482,7 +495,9 @@ async function onSave() {
         <div class="result-toolbar">
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
           <button class="ghost" @click="copyReport">📋 复制报告</button>
+          <button class="ghost" @click="copyPortfolioJson">⚙ 复制 JSON</button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
+          <span v-if="jsonCopyMsg" class="save-msg">{{ jsonCopyMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
         </div>
 

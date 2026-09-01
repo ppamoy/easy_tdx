@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**组合回测报告「复制 JSON」（V162）—— 组合验证档案机器可读导出，补齐 JSON 系列** —— 组合回测页有 Markdown 复制报告（V127），但脚本消费/存档需要结构化 JSON；单标（V153）/批量（V157）/寻优（V158）都已有 JSON 导出，组合页是最后一处缺口。本次在组合工具栏新增「⚙ 复制 JSON」：把当前组合回测结果（total_performance/individual_results/accuracy_summary/portfolio_trust/out_of_sample 等）以缩进 JSON 复制到剪贴板。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— 组合工具栏「📋 复制报告」旁新增「⚙ 复制 JSON」（copyPortfolioJson）：JSON.stringify(store.portfolioResult, null, 2) 写入剪贴板 + 「✓ 已复制组合报告 JSON」提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合回测后「复制 JSON」→ 剪贴板为合法 JSON（含 total_performance/individual_results）、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V160（V161）—— 文档覆盖组合候选验证与指南自身迭代** —— V160 新增的组合回测页「批量验证候选股」入口未收录，且 V159 指南自身迭代也未在文档中体现。本次把 docs/model-accuracy-guide.md 更新为 V95–V160：标题、全景表补 V159/V160 两行、3.4 组合回测页新增批量验证候选股说明。
 
 ### 新增
