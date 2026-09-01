@@ -20,6 +20,7 @@ import {
   formatError,
   runBacktest,
   saveStrategy,
+  submitMultiStrategyTask,
   submitPortfolioTask,
   updateStrategySnapshot,
 } from '../api'
@@ -405,8 +406,52 @@ async function onReverify(s: SavedStrategy) {
         reverified_at: new Date().toISOString().slice(0, 10),
       }
       await updateStrategySnapshot(s.id, freshSnapshot)
+    } else if (s.kind === 'multi') {
+      // V227: 多策略组合——用保存的 items 重跑多策略组合回测（含 V128 样本外）
+      const rawItems = Array.isArray(ctx.items) ? (ctx.items as MultiStrategyItem[]) : []
+      const items = rawItems.filter(
+        (it) => it && typeof it.strategy === 'string' && typeof it.symbol === 'string',
+      )
+      if (items.length === 0) throw new Error('组合缺少策略明细（context.items），无法重验')
+      const { task_id } = await submitMultiStrategyTask({
+        items: items.map((it) => ({
+          ...it,
+          end_date: new Date().toISOString().slice(0, 10),
+        })),
+        cash: cashN,
+        execution: execN,
+        out_of_sample: true,
+        oos_train_ratio: 0.7,
+      })
+      const start = Date.now()
+      let result: any = null
+      for (;;) {
+        const state = await fetchTask(task_id)
+        if (state.status === 'done' && state.result) { result = state.result; break }
+        if (state.status === 'failed') throw new Error(state.error || '多策略重验失败')
+        if (Date.now() - start > 360_000) throw new Error('多策略重验超时（360s）')
+        await new Promise((r2) => setTimeout(r2, 500))
+      }
+      const mr = result as PortfolioResult
+      const mperf = mr.total_performance
+      const freshSnapshot = {
+        ...(s.snapshot ?? {}),
+        total_return: mperf?.total_return ?? null,
+        annual_return: mperf?.annual_return ?? null,
+        total_stocks: mperf?.total_stocks ?? null,
+        total_cash: mperf?.total_cash ?? null,
+        out_of_sample: {
+          degraded: mr.out_of_sample?.degraded ?? false,
+          verdict: mr.out_of_sample?.verdict ?? '',
+          train_return: mr.out_of_sample?.avg_train_return ?? null,
+          test_return: mr.out_of_sample?.avg_test_return ?? null,
+        },
+        source: 'reverify',
+        reverified_at: new Date().toISOString().slice(0, 10),
+      }
+      await updateStrategySnapshot(s.id, freshSnapshot)
     } else {
-      throw new Error('该策略类型暂不支持重验（仅单标/组合）')
+      throw new Error('该策略类型暂不支持重验')
     }
     await load()
     reverifyMsg.value = '✓ 已重验「' + s.name + '」并刷新验证结论'
@@ -832,10 +877,19 @@ const comboGrade = computed(() =>
             </button>
             <button v-else class="primary sm" @click="onLoad(s)">载入</button>
             <button
-              v-if="s.kind === 'single' || s.kind === 'portfolio'"
+              v-if="s.kind !== 'multi'"
               class="reverify-btn sm"
               :disabled="reverifyId !== null"
               :title="s.kind === 'single' ? '用保存的策略+参数对原标的重新回测并刷新验证结论' : '用保存的组合标的重新跑组合回测并刷新验证结论'"
+              @click="onReverify(s)"
+            >
+              {{ reverifyId === s.id ? '重验中…' : '↻ 重验' }}
+            </button>
+            <button
+              v-if="s.kind === 'multi'"
+              class="reverify-btn sm"
+              :disabled="reverifyId !== null"
+              title="用保存的策略明细重跑多策略组合回测并刷新验证结论"
               @click="onReverify(s)"
             >
               {{ reverifyId === s.id ? '重验中…' : '↻ 重验' }}

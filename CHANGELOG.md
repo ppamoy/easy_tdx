@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**策略库「一键重验」扩展到多策略组合（V227）—— 三类策略全部可一键刷新验证结论** —— 单标（V209）与组合（V211）已支持重验，多策略组合（kind='multi'）此前在 onReverify 抛「暂不支持」，只能手动重跑。本次给多策略组合加「↻ 重验」：用保存的 context.items 重跑多策略组合回测（含 V128 样本外），刷新快照 performance/out_of_sample 并标记 source=reverify，与 single/portfolio 对齐。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— onReverify 新增 kind='multi' 分支：用 context.items 提交 submitMultiStrategyTask（out_of_sample:true）+ 360s 轮询，刷新快照 total_return/annual_return/total_stocks/total_cash/out_of_sample；多策略卡片新增「↻ 重验」按钮。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：种入多策略组合（2 策略）→「组合」tab →「重验」→ API 快照刷新为 source=reverify/新 total_return、清理成功、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V225（V226）—— 文档覆盖 CLI walk-forward 与指南自身迭代** —— V224 仅把指南更新到 V223，V225 新增的 CLI verify `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V225：标题、全景表补 V224/V225 两行、3.9 命令行节 verify 条目补 walk-forward 说明。
 
 ### 新增
