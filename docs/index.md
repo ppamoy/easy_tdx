@@ -8,6 +8,7 @@ readme
 api_reference
 field_mapping
 backtest_usage
+model-accuracy-guide
 quantitative-guide
 protocol-reverse-engineering
 protocol-unknown-fields
