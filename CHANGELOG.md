@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**run-all CLI 支持 --walk-forward（V233）—— 命令行批量比策略时也能看滚动窗口防过拟合判定** —— verify 已有 --walk-forward（V225），但 run-all 排名表（V115/V155/V201）缺滚动验证维度。本次给 run-all 加 `--walk-forward [--step-ratio 0.1]`：对每个策略逐窗口回测聚合（镜像 optimizer.run_walk_forward 的窗口逻辑，直接用策略类默认参数、不依赖注册表），排名表按需追加「滚动验证」列（✅稳定 / ⚠不稳）。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_run_all.py** —— 新增 _compute_walk_forward_single helper；run-all 新增 --walk-forward/--step-ratio 选项，per-strategy 结果追加 wf_degraded/wf_verdict，_print_ranking 按需追加「滚动验证」列。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：run-all --help 含 --walk-forward/--step-ratio；helper 150 根合成数据产出 walk-forward 报告结构。
+- ruff / mypy 零告警；全量单测 **2472 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V231（V232）—— 文档覆盖寻优批量持久化与指南自身迭代** —— V230 仅把指南更新到 V229，V231 新增的寻优页批量验证结果持久化入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V231：标题、全景表补 V230/V231 两行、3.7 参数寻优页批量验证后补持久化说明（五处批量验证入口持久化全部对齐）。
 
 ### 新增

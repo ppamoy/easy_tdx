@@ -120,6 +120,7 @@ def _print_ranking(
     has_trust = any(r.get("trust_score") is not None for r in valid)
     has_robust = any(r.get("overfit_likely") is not None for r in valid)
     has_oos = any(r.get("oos_degraded") is not None for r in valid)
+    has_wf = any(r.get("wf_degraded") is not None for r in valid)
 
     header = (
         f"{'排名':>4}  {'策略':<22} {'总收益率':>10} {'年化收益':>10} "
@@ -133,6 +134,8 @@ def _print_ranking(
         header += f" {'稳健性':>8}"
     if has_oos:
         header += f" {'样本外':>8}"
+    if has_wf:
+        header += f" {'滚动验证':>8}"
     click.echo(header)
     click.echo("-" * (len(header) + 8))
 
@@ -167,6 +170,10 @@ def _print_ranking(
             od = r.get("oos_degraded")
             oos_cell = "-" if od is None else ("⚠衰减" if od else "✅泛化")
             line += f"{oos_cell:>8}"
+        if has_wf:
+            wd = r.get("wf_degraded")
+            wf_cell = "-" if wd is None else ("⚠不稳" if wd else "✅稳定")
+            line += f"{wf_cell:>8}"
         click.echo(line)
 
     # ── 最佳策略详细报告 ──────────────────────────────────────────────────────
@@ -466,6 +473,13 @@ def _show_best_chart(
     is_flag=True,
     help="仅显示样本外 ✅泛化（未衰减）的策略",
 )
+@click.option(
+    "--walk-forward",
+    "use_wf",
+    is_flag=True,
+    help="对每个策略输出 Walk-Forward 滚动验证判定（V233）",
+)
+@click.option("--step-ratio", "wf_step", default=0.1, type=float, help="Walk-Forward 滚动步长比例")
 def run_all(
     market: str,
     code: str,
@@ -480,6 +494,8 @@ def run_all(
     strategies_dir: str,
     output_file: str | None,
     only_robust: bool,
+    use_wf: bool,
+    wf_step: float,
 ) -> None:
     """批量运行 strategies/ 目录下所有策略并比较结果。
 
@@ -600,6 +616,24 @@ def run_all(
             except Exception:
                 pass
 
+            # V233: 可选 Walk-Forward 滚动验证（逐窗口回测聚合防过拟合判定）
+            wf_degraded: bool | None = None
+            wf_verdict: str | None = None
+            if use_wf:
+                try:
+                    wf = _compute_walk_forward_single(
+                        df,
+                        strategy_cls,
+                        cash=cash,
+                        commission=commission,
+                        step_ratio=wf_step,
+                    )
+                    if wf:
+                        wf_degraded = bool(wf.get("degraded"))
+                        wf_verdict = str(wf.get("verdict", ""))
+                except Exception:
+                    pass
+
             results.append(
                 {
                     "strategy": strategy_name,
@@ -621,6 +655,8 @@ def run_all(
                     "robust_verdict": robust_verdict,
                     "oos_degraded": oos_degraded,
                     "oos_verdict": oos_verdict,
+                    "wf_degraded": wf_degraded,
+                    "wf_verdict": wf_verdict,
                 }
             )
             backtest_results[strategy_name] = result
@@ -681,3 +717,96 @@ def run_all(
                     stock_name=stock_name,
                     initial_cash=cash,
                 )
+
+
+
+
+def _compute_walk_forward_single(
+    df: Any,
+    strategy_cls: type,
+    cash: float,
+    commission: float,
+    train_ratio: float = 0.7,
+    step_ratio: float = 0.1,
+) -> dict[str, Any] | None:
+    """V233: 单策略 Walk-Forward 滚动验证（镜像 optimizer.run_walk_forward 的窗口逻辑，
+    直接用策略类默认参数逐窗口回测，不依赖注册表，供 run-all 使用）。
+
+    返回 walk_forward 报告（windows/train_mean/test_mean/positive windows/degraded/verdict），
+    数据不足时返回 None。
+    """
+    from ..backtest.engine import BacktestEngine
+
+    n = len(df)
+    train_size = int(n * train_ratio)
+    step_size = max(int(n * step_ratio), 1)
+    if train_size < 100:
+        return None
+
+    windows: list[tuple[Any, Any]] = []
+    train_start = 0
+    while train_start + train_size <= n:
+        test_start = train_start + train_size
+        test_end = min(test_start + step_size * 2, n)
+        windows.append((slice(train_start, test_start), slice(test_start, test_end)))
+        train_start += step_size
+        if test_end >= n:
+            break
+    if not windows:
+        return None
+
+    window_reports: list[dict[str, Any]] = []
+    for _wi, (train_slice, test_slice) in enumerate(windows):
+        train_df = df.iloc[train_slice].reset_index(drop=True)
+        test_df = df.iloc[test_slice].reset_index(drop=True)
+        if len(train_df) < 50 or len(test_df) < 10:
+            continue
+        try:
+            train_bt = BacktestEngine(
+                strategy=strategy_cls, cash=cash, commission=commission
+            ).run(train_df)
+            test_bt = BacktestEngine(
+                strategy=strategy_cls, cash=cash, commission=commission
+            ).run(test_df)
+        except Exception:  # noqa: BLE001 — 单个窗口失败跳过
+            continue
+        window_reports.append(
+            {
+                "train_return": float(train_bt.performance.get("total_return", 0.0)),
+                "test_return": float(test_bt.performance.get("total_return", 0.0)),
+            }
+        )
+
+    if not window_reports:
+        return None
+    n_win = len(window_reports)
+    train_returns = [w["train_return"] for w in window_reports]
+    test_returns = [w["test_return"] for w in window_reports]
+    train_mean = sum(train_returns) / n_win
+    test_mean = sum(test_returns) / n_win
+    pos_test = sum(1 for v in test_returns if v > 0)
+    pos_train = sum(1 for v in train_returns if v > 0)
+    verdict_parts: list[str] = []
+    degraded = False
+    if pos_test >= max(1, n_win * 0.5):
+        verdict_parts.append(f"{pos_test}/{n_win} 个测试窗口正收益")
+    else:
+        verdict_parts.append(f"仅 {pos_test}/{n_win} 个测试窗口正收益")
+        degraded = True
+    if test_mean < train_mean * 0.5:
+        verdict_parts.append("测试段收益较训练段明显衰减")
+        degraded = True
+    if degraded:
+        verdict_parts.append("⚠ 滚动验证表现不稳，选参需谨慎（可能过拟合）")
+    else:
+        verdict_parts.append("滚动验证表现较稳定，参数可信度较高")
+    return {
+        "windows": n_win,
+        "train_mean": train_mean,
+        "test_mean": test_mean,
+        "positive_train_windows": pos_train,
+        "positive_test_windows": pos_test,
+        "degraded": degraded,
+        "verdict": "；".join(verdict_parts),
+        "windows_detail": window_reports,
+    }

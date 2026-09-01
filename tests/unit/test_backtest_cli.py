@@ -260,3 +260,51 @@ class TestBacktestCLI:
         assert result.exit_code == 0
         assert "一键重验" in result.output or "重验" in result.output
         assert "--ids" in result.output
+    def test_run_all_walk_forward_option(self):
+        """V233: run-all 应暴露 --walk-forward/--step-ratio 选项，且 helper 能产出报告。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run-all", "--help"])
+        assert result.exit_code == 0
+        assert "--walk-forward" in result.output
+        assert "--step-ratio" in result.output
+
+        # helper：150 根合成数据 → 返回 walk-forward 报告结构
+        from datetime import datetime, timedelta
+
+        import numpy as np
+        import pandas as pd
+
+        from easy_tdx.backtest import Strategy, crossover
+        from easy_tdx.cli.cmd_run_all import _compute_walk_forward_single
+
+        def _ma(x, n):
+            return pd.Series(x).rolling(n).mean().to_numpy()
+
+        class _WfStrat(Strategy):
+            def init(self) -> None:
+                self.ma5 = self.I(lambda x: _ma(x, 5), self.data.close)
+                self.ma20 = self.I(lambda x: _ma(x, 20), self.data.close)
+                self.cross = crossover(self.ma5, self.ma20)
+
+            def next(self) -> None:
+                if self.cross[self._bar_index] and self.position["size"] == 0:
+                    self.buy(size=0)
+                elif self.position["size"] > 0:
+                    self.sell(size=0)
+
+        n = 150
+        base = datetime(2023, 1, 1)
+        close = np.linspace(100.0, 120.0, n)
+        df = pd.DataFrame({
+            "datetime": [base + timedelta(days=i) for i in range(n)],
+            "open": close - 0.1, "high": close + 0.2, "low": close - 0.2,
+            "close": close, "vol": np.full(n, 1_000_000.0),
+        })
+        report = _compute_walk_forward_single(df, _WfStrat, cash=1000000, commission=0.0003)
+        assert report is not None
+        assert report["windows"] >= 1
+        assert "train_mean" in report and "test_mean" in report
+        assert "positive_test_windows" in report and "verdict" in report
+        assert "degraded" in report
