@@ -92,6 +92,38 @@ class TestParamGridOptimizer:
         assert result.heatmap is None
         assert len(result.results) == 3
 
+    def test_walk_forward_report(self) -> None:
+        """V123: 启用 walk-forward 后应生成滚动验证报告。"""
+        opt = ParamGridOptimizer(
+            strategy_name="ma_cross",
+            param_grid={"fast": [5, 10], "slow": [20, 30]},
+            df=_make_df(n=400),
+        )
+        result = opt.run_walk_forward(train_ratio=0.6, step_ratio=0.2)
+        d = result.to_dict()
+        wf = d.get("walk_forward")
+        assert wf is not None
+        assert wf["windows"] >= 1
+        assert "verdict" in wf and len(wf["verdict"]) > 0
+        assert isinstance(wf["degraded"], bool)
+        assert "train_mean" in wf and "test_mean" in wf
+        assert isinstance(wf["windows_detail"], list)
+        first = wf["windows_detail"][0]
+        keys = ("window", "params", "train_return", "test_return", "test_sharpe", "test_trades")
+        for key in keys:
+            assert key in first
+
+    def test_normal_run_has_no_walk_forward(self) -> None:
+        """V123: 普通寻优 walk_forward 应为 None。"""
+        opt = ParamGridOptimizer(
+            strategy_name="ma_cross",
+            param_grid={"fast": [5], "slow": [20]},
+            df=_make_df(),
+        )
+        result = opt.run()
+        d = result.to_dict()
+        assert d.get("walk_forward") is None
+
     def test_grid_size_limit_exceeded(self) -> None:
         """超过 MAX_GRID_POINTS 应抛 ValueError。"""
         big_grid = {f"p{i}": list(range(5)) for i in range(6)}  # 5^6 = 15625

@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+**参数寻优 Walk-Forward 滚动验证报告（V123）—— 勾选后能看到每个滚动窗口的训练/测试表现与防过拟合判定** —— Walk-Forward 验证此前只有复选框（后端 run_walk_forward 返回普通排名、前端勾选后看不到任何滚动验证详情）。本次给寻优结果补「🔁 Walk-Forward 滚动验证报告」面板：后端在 run_walk_forward 收集逐窗口训练/测试绩效并汇总判定，前端展示窗口表 + 结论。
+
+### 新增
+
+- **backtest/optimizer.py** —— run_walk_forward 收集 window_reports（每窗口 train_bars/test_bars/params/train_return/train_sharpe/test_return/test_sharpe/test_win_rate/test_trades）并生成 walk_forward 报告（窗口数/训练均值/测试均值/正收益窗口数/degraded/verdict）；OptimizeResult 加 walk_forward 字段，to_dict 透出。
+- **web-ui** —— types.ts 补 WalkForwardReport/WalkForwardWindow；新增 WalkForwardPanel.vue；OptimizeView 在热力图下方展示面板（勾选 Walk-Forward 验证时出现）：判定行 + 窗口明细表 + 方法说明。
+
+### 验证
+
+- 新增 2 项单测（tests/unit/test_optimizer.py）：walk-forward 生成报告（字段齐全）、普通寻优 walk_forward 为 None。
+- Playwright 浏览器回归：寻优页勾选 Walk-Forward → 面板可见、判定（如 仅1/3 测试窗口正收益+衰减+可能过拟合）+ 3 行窗口明细、console 零错误。
+- ruff / mypy 零告警；全量单测 **2460 passed**（新增 2 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **策略库快照补全「模型可信度 + 样本外验证」结论（V122）—— 保存的策略就是完整验证档案** —— V100 保存策略时只写准确度/稳健性；V101 可信度与 V105 样本外结论未入快照，策略库卡片看不到这两个维度。本次把可信度分/等级/结论与样本外判定/结论一并写入快照，策略库卡片新增「📊 可信度」「🔬 样本外」条目。
 
 ### 新增

@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import GradeBadge from '../components/GradeBadge.vue'
 import OptimizeHeatmap from '../components/OptimizeHeatmap.vue'
 import OptimizeResultTable from '../components/OptimizeResultTable.vue'
+import WalkForwardPanel from '../components/WalkForwardPanel.vue'
 import ParamGridPicker from '../components/ParamGridPicker.vue'
 import QuoteCarousel from '../components/QuoteCarousel.vue'
 import SymbolPicker from '../components/SymbolPicker.vue'
@@ -366,6 +367,12 @@ const sortedRanking = computed(() => {
         <section v-if="store.optimizeResult.heatmap" class="report-section">
           <h3>参数热力图（{{ store.optimizeResult.heatmap.x_name }} × {{ store.optimizeResult.heatmap.y_name }}）</h3>
           <OptimizeHeatmap :heatmap="store.optimizeResult.heatmap" />
+        </section>
+
+        <!-- V123: Walk-Forward 滚动验证报告（勾选 Walk-Forward 验证时显示） -->
+        <section v-if="store.optimizeResult.walk_forward" class="report-section">
+          <h3>🔁 Walk-Forward 滚动验证报告（防过拟合）</h3>
+          <WalkForwardPanel :report="store.optimizeResult.walk_forward" />
         </section>
 
         <section class="report-section">

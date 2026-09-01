@@ -83,6 +83,8 @@ class OptimizeResult:
     results: list[GridPointResult]
     best: GridPointResult | None = None
     heatmap: dict[str, Any] | None = None
+    # V123: Walk-Forward 滚动验证报告（启用时填充，普通寻优为 None）
+    walk_forward: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """序列化为 JSON 兼容字典。"""
@@ -140,6 +142,7 @@ class OptimizeResult:
                 else None
             ),
             "heatmap": self.heatmap,
+            "walk_forward": self.walk_forward,
         }
 
 
@@ -318,6 +321,7 @@ class ParamGridOptimizer:
 
         # 对每个窗口做寻优，收集结果
         all_results: list[tuple[int, dict[str, Any], GridPointResult]] = []
+        window_reports: list[dict[str, Any]] = []
         for win_idx, (train_slice, test_slice) in enumerate(windows):
             train_df = self._df.iloc[train_slice].reset_index(drop=True)
             test_df = self._df.iloc[test_slice].reset_index(drop=True)
@@ -368,6 +372,21 @@ class ParamGridOptimizer:
                         ),
                     )
                 )
+                # V123: 记录该窗口的训练/测试绩效，用于滚动验证报告
+                window_reports.append(
+                    {
+                        "window": win_idx,
+                        "train_bars": len(train_df),
+                        "test_bars": len(test_df),
+                        "params": best_params,
+                        "train_return": float(train_result.best.total_return),
+                        "train_sharpe": float(train_result.best.sharpe),
+                        "test_return": float(perf.get("total_return", 0.0)),
+                        "test_sharpe": float(perf.get("sharpe", 0.0)),
+                        "test_win_rate": float(perf.get("win_rate", 0.0)),
+                        "test_trades": int(perf.get("total_trades", 0)),
+                    }
+                )
             except Exception:
                 continue
 
@@ -379,12 +398,49 @@ class ParamGridOptimizer:
         ranked = [r[2] for r in all_results]
         best = ranked[0] if ranked else None
 
+        # V123: 汇总滚动验证结论
+        walk_forward: dict[str, Any] | None = None
+        if window_reports:
+            n_win = len(window_reports)
+            train_returns = [w["train_return"] for w in window_reports]
+            test_returns = [w["test_return"] for w in window_reports]
+            train_mean = sum(train_returns) / n_win
+            test_mean = sum(test_returns) / n_win
+            pos_test = sum(1 for v in test_returns if v > 0)
+            pos_train = sum(1 for v in train_returns if v > 0)
+            # 判定：测试窗口正收益占比 + 训练/测试差距
+            verdict_parts: list[str] = []
+            degraded = False
+            if pos_test >= max(1, n_win * 0.5):
+                verdict_parts.append(f"{pos_test}/{n_win} 个测试窗口正收益")
+            else:
+                verdict_parts.append(f"仅 {pos_test}/{n_win} 个测试窗口正收益")
+                degraded = True
+            if test_mean < train_mean * 0.5:
+                verdict_parts.append("测试段收益较训练段明显衰减")
+                degraded = True
+            if degraded:
+                verdict_parts.append("⚠ 滚动验证表现不稳，选参需谨慎（可能过拟合）")
+            else:
+                verdict_parts.append("滚动验证表现较稳定，参数可信度较高")
+            walk_forward = {
+                "windows": n_win,
+                "train_mean": train_mean,
+                "test_mean": test_mean,
+                "positive_train_windows": pos_train,
+                "positive_test_windows": pos_test,
+                "degraded": degraded,
+                "verdict": "；".join(verdict_parts),
+                "windows_detail": window_reports,
+            }
+
         return OptimizeResult(
             strategy=self._strategy_name,
             param_names=param_names,
             results=ranked,
             best=best,
             heatmap=None,
+            walk_forward=walk_forward,
         )
 
     def _build_heatmap(

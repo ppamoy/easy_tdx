@@ -375,12 +375,37 @@ export interface OptimizeHeatmap {
   data: Array<[number, number, number | null]>
 }
 
+export interface WalkForwardWindow {
+  window: number
+  train_bars: number
+  test_bars: number
+  params: Record<string, number | string>
+  train_return: number
+  train_sharpe: number
+  test_return: number
+  test_sharpe: number
+  test_win_rate: number
+  test_trades: number
+}
+
+export interface WalkForwardReport {
+  windows: number
+  train_mean: number
+  test_mean: number
+  positive_train_windows: number
+  positive_test_windows: number
+  degraded: boolean
+  verdict: string
+  windows_detail: WalkForwardWindow[]
+}
+
 export interface OptimizeResult {
   strategy: string
   param_names: string[]
   results: GridPointResult[]
   best: GridPointResult | null
   heatmap: OptimizeHeatmap | null
+  walk_forward?: WalkForwardReport | null
 }
 
 // ── 一键寻优所有策略（Phase 6） ──────────────────────────────────────────────
