@@ -15,6 +15,7 @@ import SignalAccuracyPanel from '../components/SignalAccuracyPanel.vue'
 import ChanlunAccuracyPanel from '../components/ChanlunAccuracyPanel.vue'
 import OutOfSamplePanel from '../components/OutOfSamplePanel.vue'
 import SegmentRobustnessPanel from '../components/SegmentRobustnessPanel.vue'
+import ValidationSummaryPanel from '../components/ValidationSummaryPanel.vue'
 import KlineChart from '../components/KlineChart.vue'
 import MetricTable from '../components/MetricTable.vue'
 import StrategyPicker from '../components/StrategyPicker.vue'
@@ -582,6 +583,11 @@ async function onSave() {
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
         </div>
+
+        <!-- V106 验证总结（可信度 + 准确度 + 稳健性 + 样本外 一览） -->
+        <section v-if="store.result" class="report-section">
+          <ValidationSummaryPanel :result="store.result" />
+        </section>
 
         <section class="report-section">
           <h3>
