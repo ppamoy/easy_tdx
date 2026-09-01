@@ -8,6 +8,7 @@ import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
 import PortfolioAccuracyPanel from '../components/PortfolioAccuracyPanel.vue'
 import PortfolioCompareChart from '../components/PortfolioCompareChart.vue'
+import PortfolioValidationSummary from '../components/PortfolioValidationSummary.vue'
 import PortfolioSummaryTable from '../components/PortfolioSummaryTable.vue'
 import StocksPicker from '../components/StocksPicker.vue'
 import StrategyPicker from '../components/StrategyPicker.vue'
@@ -259,6 +260,11 @@ async function onSave() {
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
         </div>
+
+        <!-- V112 组合验证总结 -->
+        <section v-if="store.portfolioResult" class="report-section">
+          <PortfolioValidationSummary :result="store.portfolioResult" />
+        </section>
 
         <section v-if="grade" class="report-section">
           <h3>组合评级</h3>
