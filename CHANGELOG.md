@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V207（V208）—— 文档覆盖来源徽章新来源与指南自身迭代** —— V206 仅把指南更新到 V205，V207 新增的策略库来源徽章（组合候选/寻优批量验证）入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V207：标题、全景表补 V206/V207 两行、3.6 策略库节来源徽章说明更新为五种来源全覆盖。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V207；全景表补 V206/V207；3.6 策略库节来源徽章更新为选股/回测/监控/组合候选（V188）/寻优批量验证（V205）五种来源。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **策略库「验证来源」徽章补齐新来源（V207）—— 组合候选/寻优批量验证保存的策略也能溯源** —— V164 的来源徽章只覆盖 batch-verify / batch-verify-backtest / batch-verify-monitor 三种来源，V188 组合候选（batch-verify-cand）与 V205 寻优批量验证（batch-verify-optimize）保存的组合策略卡片不会显示来源徽章。本次在 SOURCE_LABELS 补「🧪 组合候选验证」「🧪 寻优批量验证」两种徽章。
 
 ### 新增
