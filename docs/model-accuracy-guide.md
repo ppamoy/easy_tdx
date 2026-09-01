@@ -1,4 +1,4 @@
-# 模型准确度验证指南（V95–V172）
+# 模型准确度验证指南（V95–V174）
 
 > 本文档汇总 easy-tdx 自 V95 起新增的「通过历史回测验证模型/策略准确度」能力。
 > 目标：让用户不只是看账户盈亏，而是能回答三件事——**信号准不准、稳健不稳健、过不过拟合**。
@@ -80,6 +80,8 @@
 | V170 | 组合候选批量验证补「复制排名+复制 JSON」 | 组合候选验证结论可导出/留存 | 组合页候选面板「📋/⚙」 |
 | V171 | 模型准确度验证指南扩展到 V170 | 文档覆盖组合候选导出入口 | docs/model-accuracy-guide.md |
 | V172 | CLI verify/verify-multi 支持 --output-file | 命令行验证结论可直接落盘存档 | easy-tdx verify --output-file |
+| V173 | 模型准确度验证指南扩展到 V172 | 文档覆盖 CLI 落盘入口 | docs/model-accuracy-guide.md |
+| V174 | run-all CLI 支持 --output-file | 命令行批量验证结论可落盘存档 | easy-tdx run-all --output-file |
 
 ## 二、核心概念
 
@@ -147,7 +149,7 @@
 
 - `easy-tdx verify SZ 000001 --strategy ma_cross --segments 3 --out-of-sample`（V117）：单标的完整验证报告 JSON，verdict 汇总全部结论；加 `--output-file 路径`（V172）把报告写入文件。
 - `easy-tdx verify-multi "SZ 000001,SH 600519" --strategy ma_cross`（V119）：多标的批量验证，按可信度降序排名选股，适合脚本/Agent；加 `--segments 3 --out-of-sample`（V132）可让每只标的额外输出 overfit_likely/oos_degraded/train_return/test_return。
-- `easy-tdx run-all SZ 300308`（V115/V155）：run-all 排名表补「5根命中」「超额命中」「可信度」列（V115），并按需追加「稳健性」「样本外」列（V155）——每策略额外计算分段稳健性（V97）与样本外（V105）结论。
+- `easy-tdx run-all SZ 300308`（V115/V155）：run-all 排名表补「5根命中」「超额命中」「可信度」列（V115），并按需追加「稳健性」「样本外」列（V155）——每策略额外计算分段稳健性（V97）与样本外（V105）结论；加 `--output-file`（V174）把排名结果 JSON 写入文件。
 
 ## 四、如何解读
 

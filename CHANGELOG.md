@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V174（V175）—— 文档覆盖 run-all 落盘与指南自身迭代** —— V173 仅把指南更新到 V172，V174 新增的 run-all `--output-file` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V174：标题、全景表补 V173/V174 两行、3.9 命令行节 run-all 条目补充 output-file 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V174；全景表补 V173/V174；3.9 命令行节 run-all 条目补「--output-file 把排名结果 JSON 写入文件」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **run-all CLI 支持 --output-file 写排名 JSON（V174）—— 命令行批量验证结论可落盘存档** —— verify/verify-multi 已有 --output-file（V172），run-all 一直是纯文本输出。本次给 run-all 新增 `--output-file`：把排名结果（symbol + 各策略绩效/准确度/稳健性/样本外字段）序列化为 JSON 写入文件（`-` 表示 stdout），方便脚本消费与存档。
 
 ### 新增
