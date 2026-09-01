@@ -461,6 +461,63 @@ def _run_portfolio_backtest(
     except Exception:
         pass
 
+    # V126: 组合级样本外验证（逐标训练/持有切分后聚合，验证组合在没见过的数据上是否仍准确）
+    if getattr(req, "out_of_sample", False):
+        try:
+            from easy_tdx.backtest.out_of_sample import compute_out_of_sample
+
+            per_symbol: dict[str, Any] = {}
+            degraded_symbols = 0
+            for stock in stock_data_list:
+                symbol = f"{stock.market}{stock.code}"
+                try:
+                    oos = compute_out_of_sample(
+                        stock.df,
+                        lambda: entry.build(req.params),
+                        train_ratio=getattr(req, "oos_train_ratio", 0.7),
+                        cash=req.cash / len(stock_data_list),
+                        commission=req.commission,
+                        stamp_tax=req.stamp_tax,
+                        slippage=req.slippage,
+                        execution=req.execution,
+                    )
+                    per_symbol[symbol] = {
+                        "degraded": oos.get("degraded", False),
+                        "verdict": oos.get("verdict", ""),
+                        "train_return": (oos.get("train") or {}).get("total_return"),
+                        "test_return": (oos.get("test") or {}).get("total_return"),
+                    }
+                    if oos.get("degraded"):
+                        degraded_symbols += 1
+                except Exception:
+                    per_symbol[symbol] = {"degraded": True, "verdict": "样本外验证失败"}
+            n = len(per_symbol)
+            if n:
+                avg_train = sum(
+                    (v.get("train_return") or 0.0) for v in per_symbol.values()
+                ) / n
+                avg_test = sum(
+                    (v.get("test_return") or 0.0) for v in per_symbol.values()
+                ) / n
+                degraded = degraded_symbols >= n * 0.5 or avg_test < avg_train * 0.5
+                verdict = (
+                    f"{n - degraded_symbols}/{n} 只样本外稳健；"
+                    f"平均训练段 {avg_train:+.1%} → 样本外 {avg_test:+.1%}"
+                )
+                if degraded:
+                    verdict += "。⚠ 组合样本外表现衰减，历史成绩需谨慎对待"
+                result_dict["out_of_sample"] = {
+                    "symbols": n,
+                    "degraded_symbols": degraded_symbols,
+                    "avg_train_return": avg_train,
+                    "avg_test_return": avg_test,
+                    "degraded": degraded,
+                    "verdict": verdict,
+                    "per_symbol": per_symbol,
+                }
+        except Exception:
+            pass
+
     return result_dict
 
 

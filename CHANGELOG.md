@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+**组合回测补样本外验证（V126）—— 组合层同样回答「在没见过的数据上是否仍准确」** —— 单标的回测有 V105 样本外验证，但组合回测只有准确度聚合（V99）与可信度（V103），缺组合层的样本外检验。本次给组合回测加「🔬 组合样本外验证」：对组合内每只标的按时间切训练段/样本外持有段、策略参数固定分别回测，聚合判定组合整体是否泛化。
+
+### 新增
+
+- **web/routers/backtest.py + backtest_schemas.py** —— PortfolioBacktestRequest 新增 out_of_sample(bool)+oos_train_ratio；`_run_portfolio_backtest` 逐标调用 compute_out_of_sample，聚合 per_symbol（degraded/verdict/train_return/test_return）与组合级 avg_train/avg_test/degraded/verdict，写入 result.out_of_sample。
+- **web-ui** —— types.ts 补 PortfolioOutOfSampleReport/PortfolioOutOfSampleSymbol（请求+结果）；PortfolioView 资金区新增「样本外验证」勾选+训练占比选择；报告区新增 PortfolioOutOfSamplePanel（判定行 + 组合汇总 + 逐标表）。
+
+### 验证
+
+- 端到端：组合回测开启 out_of_sample 返回逐标与组合级样本外结论（如 SZ000001 train+44% → test-27% 衰减；组合 0/2 稳健）。
+- Playwright 浏览器回归：组合页勾选样本外验证 → 面板可见、判定+2 行逐标渲染、console 零错误。
+- ruff / mypy 零告警；全量单测 **2460 passed**（其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **结果对比页补「样本外/稳健性」对比行（V125）—— 跨任务比策略时也看是否过拟合** —— V102 对比页只比收益/可信度/命中率，看不出候选任务的过拟合风险。本次在对比表新增「🔬 样本外验证」「🧱 稳健性」两行：从任务的 out_of_sample/segment_robustness 提取结论（样本外稳健 vs 衰减、分段稳健 vs 疑似过拟合），让用户对比多策略时覆盖全部验证维度。
 
 ### 新增

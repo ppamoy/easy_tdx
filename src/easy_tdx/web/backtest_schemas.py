@@ -118,6 +118,11 @@ class PortfolioBacktestRequest(BaseModel):
     )
     start_date: str | None = Field(default=None, description="开始日期 YYYY-MM-DD（可选过滤）")
     end_date: str | None = Field(default=None, description="结束日期 YYYY-MM-DD（可选过滤）")
+    # V126: 组合级样本外验证（逐标训练/持有切分，验证组合在没见过的数据上是否仍准确）
+    out_of_sample: bool = Field(default=False, description="是否启用样本外验证")
+    oos_train_ratio: float = Field(
+        default=0.7, ge=0.5, le=0.9, description="训练段占比（样本外验证用）"
+    )
 
     @model_validator(mode="after")
     def _check_stocks_format(self) -> PortfolioBacktestRequest:

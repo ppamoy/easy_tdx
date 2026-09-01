@@ -282,6 +282,9 @@ export interface PortfolioBacktestRequest {
   category?: Category
   start_date?: string
   end_date?: string
+  // V126: 组合级样本外验证
+  out_of_sample?: boolean
+  oos_train_ratio?: number
 }
 
 export interface PortfolioSymbolAccuracy {
@@ -317,6 +320,23 @@ export interface PortfolioAccuracyReport {
   verdict: string
 }
 
+export interface PortfolioOutOfSampleSymbol {
+  degraded: boolean
+  verdict: string
+  train_return: number | null
+  test_return: number | null
+}
+
+export interface PortfolioOutOfSampleReport {
+  symbols: number
+  degraded_symbols: number
+  avg_train_return: number
+  avg_test_return: number
+  degraded: boolean
+  verdict: string
+  per_symbol: Record<string, PortfolioOutOfSampleSymbol>
+}
+
 export interface PortfolioResult {
   total_performance: {
     total_return: number
@@ -329,6 +349,8 @@ export interface PortfolioResult {
   combined_equity: EquityPoint[]
   accuracy_summary?: PortfolioAccuracyReport | null
   portfolio_trust?: ModelTrustReport | null
+  // V126: 组合级样本外验证
+  out_of_sample?: PortfolioOutOfSampleReport | null
 }
 
 // ── 参数网格寻优（Phase 4） ──────────────────────────────────────────────────

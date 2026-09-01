@@ -8,6 +8,7 @@ import EquityChart from '../components/EquityChart.vue'
 import GradeDetails from '../components/GradeDetails.vue'
 import PortfolioAccuracyPanel from '../components/PortfolioAccuracyPanel.vue'
 import PortfolioCompareChart from '../components/PortfolioCompareChart.vue'
+import PortfolioOutOfSamplePanel from '../components/PortfolioOutOfSamplePanel.vue'
 import PortfolioValidationSummary from '../components/PortfolioValidationSummary.vue'
 import PortfolioSummaryTable from '../components/PortfolioSummaryTable.vue'
 import StocksPicker from '../components/StocksPicker.vue'
@@ -32,6 +33,9 @@ const EXECUTIONS: { value: ExecutionMode; label: string }[] = [
   { value: 'next_open', label: '开盘价' },
   { value: 'next_close', label: '收盘价' },
 ]
+// V126: 组合级样本外验证（逐标训练/持有切分）
+const checkOutOfSample = ref(false)
+const oosTrainRatio = ref(0.7)
 const CATEGORIES: Category[] = ['DAY', 'WEEK', 'MONTH', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60']
 
 // 日期默认（复用单标的逻辑）
@@ -87,6 +91,8 @@ async function onRun() {
     category: category.value,
     start_date: startDate.value,
     end_date: endDate.value,
+    out_of_sample: checkOutOfSample.value,
+    oos_train_ratio: oosTrainRatio.value,
   })
 }
 
@@ -234,6 +240,17 @@ async function onSave() {
             <option v-for="e in EXECUTIONS" :key="e.value" :value="e.value">{{ e.label }}</option>
           </select>
         </div>
+        <div class="field">
+          <label>
+            <input type="checkbox" v-model="checkOutOfSample" />
+            样本外验证（训练/持有切分）
+          </label>
+          <select v-if="checkOutOfSample" v-model.number="oosTrainRatio" class="seg-count">
+            <option :value="0.6">训练 60%</option>
+            <option :value="0.7">训练 70%</option>
+            <option :value="0.8">训练 80%</option>
+          </select>
+        </div>
       </section>
 
       <button
@@ -305,6 +322,12 @@ async function onSave() {
             :results="store.portfolioResult.individual_results"
             :allocation="store.portfolioResult.equity_allocation"
           />
+        </section>
+
+        <!-- V126: 组合级样本外验证（训练/持有切分） -->
+        <section v-if="store.portfolioResult.out_of_sample" class="report-section">
+          <h3>🔬 组合样本外验证（训练段 vs 未见过数据）</h3>
+          <PortfolioOutOfSamplePanel :report="store.portfolioResult.out_of_sample" />
         </section>
 
         <section v-if="store.portfolioResult.accuracy_summary" class="report-section">
