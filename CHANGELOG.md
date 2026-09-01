@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V245（V246）—— 文档覆盖 reverify walk-forward 与指南自身迭代** —— V244 仅把指南更新到 V243，V245 新增的 CLI reverify `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V245：标题、全景表补 V244/V245 两行、3.9 命令行节 reverify 条目补 walk-forward 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V245；全景表补 V244/V245；3.9 命令行节 reverify 条目补「--walk-forward（V245）单标重验快照也含滚动窗口防过拟合判定」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI reverify 支持 --walk-forward（V245）—— 重验快照也含滚动窗口防过拟合判定** —— verify（V225）/verify-multi（V243）/run-all（V233）已有 --walk-forward，reverify（V213）此前重验快照只有稳健性/样本外，缺滚动验证维度。本次给 reverify 加 `--walk-forward [--step-ratio 0.1]`：单标重验时复用 _compute_walk_forward_single（run-all V233 helper）计算滚动窗口判定，快照写入 walk_forward 字段。
 
 ### 新增
