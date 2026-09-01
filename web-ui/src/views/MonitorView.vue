@@ -75,6 +75,76 @@ function removeWatchlist(index: number) {
   } catch { /* ignore */ }
 }
 
+// ── 自选股历史信号准确度（V107：复用 /chanlun/analyze 的 signal_accuracy） ──
+interface WatchAccuracy {
+  loading: boolean
+  error: string
+  summary: string
+  ranking: Array<{
+    type: string
+    direction: string
+    signals: number
+    hit_rate: number
+    excess_hit_rate: number
+    avg_return: number
+    verdict: string
+  }>
+}
+const watchAccuracy = ref<Record<string, WatchAccuracy>>({})
+
+async function toggleWatchAccuracy(item: WatchListItem) {
+  const key = item.market + item.code
+  const cur = watchAccuracy.value[key]
+  if (cur && !cur.loading) {
+    // 已有结果则再次点击收起
+    delete watchAccuracy.value[key]
+    watchAccuracy.value = { ...watchAccuracy.value }
+    return
+  }
+  watchAccuracy.value[key] = { loading: true, error: '', summary: '', ranking: [] }
+  try {
+    const resp = await fetch('/api/v1/chanlun/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        market: item.market,
+        code: item.code,
+        category: 'DAY',
+        count: 300,
+      }),
+    })
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}))
+      throw new Error((err as { detail?: string }).detail ?? ('HTTP ' + resp.status))
+    }
+    const data = await resp.json()
+    const sa = data.signal_accuracy
+    watchAccuracy.value[key] = {
+      loading: false,
+      error: sa?.ranking?.length ? '' : '该股无足够历史信号，无法评估',
+      summary: sa?.summary ?? '',
+      ranking: sa?.ranking ?? [],
+    }
+  } catch (e) {
+    watchAccuracy.value[key] = {
+      loading: false,
+      error: formatError(e),
+      summary: '',
+      ranking: [],
+    }
+  }
+}
+
+function accPct(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  return (v * 100).toFixed(0) + '%'
+}
+function accSigned(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  const sign = v >= 0 ? '+' : ''
+  return sign + (v * 100).toFixed(1) + '%'
+}
+
 function saveStocks() {
   localStorage.setItem('easy_tdx_monitor_stocks', JSON.stringify(stocks.value))
 }
@@ -275,14 +345,52 @@ onUnmounted(() => {
         <span class="watchlist-count">{{ watchList.length }} 条</span>
       </div>
       <div class="watchlist-items">
-        <div v-for="(item, i) in watchList" :key="i" class="watchlist-item">
-          <span class="wl-symbol">{{ item.market }}{{ item.code }}</span>
-          <span class="wl-type" :style="{ color: item.direction === 'buy' ? '#22c55e' : '#ef4444' }">
-            {{ item.signal_type }}
-          </span>
-          <button class="ghost small" @click="addFromWatchlist(item)">+ 加入监控</button>
-          <button class="ghost small danger" @click="removeWatchlist(i)">删除</button>
-        </div>
+        <template v-for="(item, i) in watchList" :key="'wl-' + i">
+          <div class="watchlist-item">
+            <span class="wl-symbol">{{ item.market }}{{ item.code }}</span>
+            <span class="wl-type" :style="{ color: item.direction === 'buy' ? '#22c55e' : '#ef4444' }">
+              {{ item.signal_type }}
+            </span>
+            <button class="ghost small" @click="addFromWatchlist(item)">+ 加入监控</button>
+            <button class="ghost small" @click="toggleWatchAccuracy(item)">🎯 准确度</button>
+            <button class="ghost small danger" @click="removeWatchlist(i)">删除</button>
+          </div>
+          <!-- V107: 自选股历史信号准确度面板 -->
+          <div v-if="watchAccuracy[item.market + item.code]" class="watch-acc-panel">
+            <template v-if="watchAccuracy[item.market + item.code].loading">
+              <span class="dim">分析 {{ item.market }}{{ item.code }} 历史信号命中率…</span>
+            </template>
+            <template v-else-if="watchAccuracy[item.market + item.code].error">
+              <span class="neg">⚠ {{ watchAccuracy[item.market + item.code].error }}</span>
+            </template>
+            <template v-else>
+              <div v-if="watchAccuracy[item.market + item.code].summary" class="acc-summary">
+                {{ watchAccuracy[item.market + item.code].summary }}
+              </div>
+              <table class="acc-table">
+                <thead>
+                  <tr>
+                    <th>信号类型</th><th>信号数</th><th>5根命中率</th>
+                    <th>超额命中率</th><th>5根均值</th><th>结论</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="rank in watchAccuracy[item.market + item.code].ranking" :key="rank.type"
+                      :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }">
+                    <td><strong>{{ rank.type }}</strong></td>
+                    <td>{{ rank.signals }}</td>
+                    <td>{{ accPct(rank.hit_rate) }}</td>
+                    <td :class="rank.excess_hit_rate >= 0 ? 'pos' : 'neg'">{{ accSigned(rank.excess_hit_rate) }}</td>
+                    <td :class="rank.avg_return >= 0 ? 'pos' : 'neg'">{{ accPct(rank.avg_return) }}</td>
+                    <td class="dim verdict-cell">{{ rank.verdict }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <p class="acc-legend">命中 = 买点后 5 根上涨 / 卖点后 5 根下跌；超额命中率 &gt; 0 说明该类型信号比随机择时更准。
+                数据来自缠论分析接口对最近 300 根日线的历史回看。</p>
+            </template>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -618,5 +726,56 @@ onUnmounted(() => {
 .wl-type {
   font-weight: 600;
   min-width: 50px;
+}
+
+/* V107: 自选股历史信号准确度面板 */
+.watch-acc-panel {
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.acc-summary {
+  font-size: 12px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.acc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.acc-table th {
+  text-align: left;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.acc-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text);
+}
+.acc-legend {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0;
+}
+.pos {
+  color: var(--up);
+}
+.neg {
+  color: var(--down);
+}
+.dim {
+  color: var(--text-dim);
+}
+.verdict-cell {
+  color: var(--text-muted) !important;
 }
 </style>
