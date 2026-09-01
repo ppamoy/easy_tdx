@@ -423,6 +423,13 @@ interface BatchVerifyRow {
 const batchRows = ref<BatchVerifyRow[]>([])
 const batchLoading = ref(false)
 const batchMsg = ref('')
+// V149: 批量验证结果排序方式（收益 / 可信度）
+const batchSort = ref<'return' | 'trust'>('trust')
+const sortedBatchRows = computed(() => {
+  const rows = batchRows.value
+  if (!rows.length || batchSort.value === 'trust') return rows
+  return [...rows].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+})
 
 async function runBatchVerifyWatchlist() {
   if (batchLoading.value) return
@@ -767,8 +774,10 @@ async function onSave() {
         <!-- V137 批量验证自选股（对全局自选股跑当前策略，按可信度排名） -->
         <section v-if="batchRows.length" class="report-section">
           <div class="batch-panel-head">
-            <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}，按模型可信度降序）</h3>
+            <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}）</h3>
             <div class="batch-actions">
+              <button class="ghost small" :class="{ active: batchSort === 'return' }" @click="batchSort = 'return'">按收益</button>
+              <button class="ghost small" :class="{ active: batchSort === 'trust' }" @click="batchSort = 'trust'">按可信度</button>
               <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
               <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
                 {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
@@ -786,7 +795,7 @@ async function onSave() {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(r, i) in batchRows" :key="r.symbol">
+              <tr v-for="(r, i) in sortedBatchRows" :key="r.symbol">
                 <td class="dim">{{ i + 1 }}</td>
                 <td>{{ r.symbol }}</td>
                 <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.total_return) }}</td>
@@ -1060,6 +1069,11 @@ async function onSave() {
 .batch-actions .save-msg {
   font-size: 12px;
   color: var(--up);
+}
+.batch-actions .ghost.active {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .batch-actions .save-msg.err {
   color: var(--down);
