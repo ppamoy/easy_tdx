@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+**结果对比页补「样本外/稳健性」对比行（V125）—— 跨任务比策略时也看是否过拟合** —— V102 对比页只比收益/可信度/命中率，看不出候选任务的过拟合风险。本次在对比表新增「🔬 样本外验证」「🧱 稳健性」两行：从任务的 out_of_sample/segment_robustness 提取结论（样本外稳健 vs 衰减、分段稳健 vs 疑似过拟合），让用户对比多策略时覆盖全部验证维度。
+
+### 新增
+
+- **web-ui/src/views/CompareView.vue** —— CompareItem/extractComparable/compareItems 透传 segment_robustness 与 out_of_sample 字段。
+- **web-ui/src/components/CompareTable.vue** —— 新增 oosText/oosClass/robustText/robustClass 辅助 + 「🔬 样本外验证」「🧱 稳健性」两行（无数据显示 `-` 且不着色）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：提交 2 个异步回测（稳健性+样本外）→ 对比页勾选 → 表含「样本外验证」「稳健性」行、单元格「⚠ 样本外衰减」、console 零错误。
+
+## [Unreleased]
+
 **寻优页「验证总结」聚合卡片（V124）—— 按验证过的准确度选参数的最终一览** —— 回测页有 V106 总结卡片、组合页有 V112 总结卡片，但寻优页只有分散的网格排名/热力图/Walk-Forward 面板，用户要自己拼「这组最优参数到底可不可信」。本次在单策略寻优结果顶部新增「验证总结」卡片，把最优点可信度（V101）+ 5根命中率（V95）+ Walk-Forward 判定（V123）聚合成一张可一览的卡片。
 
 ### 新增

@@ -59,6 +59,28 @@ function excessHit(item: { result: BacktestResult }): string {
   const sign = h.excess_hit_rate >= 0 ? '+' : ''
   return sign + (h.excess_hit_rate * 100).toFixed(1) + '%'
 }
+
+// V125: 样本外 / 稳健性 横向对比
+function oosText(item: { result: BacktestResult }): string {
+  const o = item.result.out_of_sample
+  if (!o || !o.verdict) return '-'
+  return o.degraded ? '⚠ 样本外衰减' : '✅ 样本外稳健'
+}
+function oosClass(item: { result: BacktestResult }): string {
+  const o = item.result.out_of_sample
+  if (!o || !o.verdict) return ''
+  return o.degraded ? 'neg' : 'pos'
+}
+function robustText(item: { result: BacktestResult }): string {
+  const r = item.result.segment_robustness
+  if (!r || !r.verdict) return '-'
+  return r.overfit_likely ? '⚠ 疑似过拟合' : '✅ 分段稳健'
+}
+function robustClass(item: { result: BacktestResult }): string {
+  const r = item.result.segment_robustness
+  if (!r || !r.verdict) return ''
+  return r.overfit_likely ? 'neg' : 'pos'
+}
 </script>
 
 <template>
@@ -93,6 +115,19 @@ function excessHit(item: { result: BacktestResult }): string {
         <td class="metric-label">🎯 超额命中率</td>
         <td v-for="item in props.items" :key="item.label" class="num">
           {{ excessHit(item) }}
+        </td>
+      </tr>
+      <!-- V125: 过拟合风险行 -->
+      <tr>
+        <td class="metric-label">🔬 样本外验证</td>
+        <td v-for="item in props.items" :key="item.label" class="num" :class="oosClass(item)">
+          {{ oosText(item) }}
+        </td>
+      </tr>
+      <tr>
+        <td class="metric-label">🧱 稳健性</td>
+        <td v-for="item in props.items" :key="item.label" class="num" :class="robustClass(item)">
+          {{ robustText(item) }}
         </td>
       </tr>
     </tbody>

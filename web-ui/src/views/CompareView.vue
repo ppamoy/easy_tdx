@@ -17,6 +17,9 @@ interface CompareItem {
   // V102: 透传准确度/可信度字段，让对比表展示「验证过的准确度」而非只比收益
   model_trust?: BacktestResult['model_trust']
   signal_accuracy?: BacktestResult['signal_accuracy']
+  // V125: 透传稳健性/样本外字段，对比「过不过拟合」
+  segment_robustness?: BacktestResult['segment_robustness']
+  out_of_sample?: BacktestResult['out_of_sample']
 }
 
 const taskList = ref<TaskSummary[]>([])
@@ -49,6 +52,8 @@ function extractComparable(
   performance: Record<string, number>
   model_trust?: BacktestResult['model_trust']
   signal_accuracy?: BacktestResult['signal_accuracy']
+  segment_robustness?: BacktestResult['segment_robustness']
+  out_of_sample?: BacktestResult['out_of_sample']
 } | null {
   if (!result) return null
   // 单标的回测
@@ -58,6 +63,8 @@ function extractComparable(
       performance: result.performance as Record<string, number>,
       model_trust: result.model_trust as BacktestResult['model_trust'],
       signal_accuracy: result.signal_accuracy as BacktestResult['signal_accuracy'],
+      segment_robustness: result.segment_robustness as BacktestResult['segment_robustness'],
+      out_of_sample: result.out_of_sample as BacktestResult['out_of_sample'],
     }
   }
   // 组合回测
@@ -67,6 +74,8 @@ function extractComparable(
       performance: result.total_performance as Record<string, number>,
       model_trust: result.model_trust as BacktestResult['model_trust'],
       signal_accuracy: result.signal_accuracy as BacktestResult['signal_accuracy'],
+      segment_robustness: result.segment_robustness as BacktestResult['segment_robustness'],
+      out_of_sample: result.out_of_sample as BacktestResult['out_of_sample'],
     }
   }
   return null
@@ -106,6 +115,8 @@ function refreshItems() {
       performance: item.performance,
       model_trust: item.model_trust,
       signal_accuracy: item.signal_accuracy,
+      segment_robustness: item.segment_robustness,
+      out_of_sample: item.out_of_sample,
     } as unknown as BacktestResult,
   }))
 }
