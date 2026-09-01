@@ -28,6 +28,25 @@ class TestVerifyCLI:
         assert result.exit_code == 1
         assert "不是合法 JSON" in result.output
 
+    def test_verify_multi_help(self):
+        """V119: verify-multi --help。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-multi", "--help"])
+        assert result.exit_code == 0
+        assert "批量模型验证" in result.output
+        assert "--strategy" in result.output
+
+    def test_verify_multi_bad_params(self):
+        """V119: verify-multi 非 JSON params 报错。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-multi", "SZ 000001", "--params", "{oops"])
+        assert result.exit_code == 1
+        assert "不是合法 JSON" in result.output
+
 
 class TestBacktestCLI:
     """测试回测 CLI 命令。"""

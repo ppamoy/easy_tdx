@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+**CLI 批量模型验证命令（V119）—— verify-multi 多标的按可信度排名选股** —— V117 的 `verify` 只覆盖单标的。本次新增 `verify-multi`：一次对多只股票跑同一策略，逐标回测 + 信号准确度（V95）+ 模型可信度（V101），按可信度降序输出 JSON，适合 Agent/脚本在「候选股票池」上批量验证挑标的。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— `verify-multi` 命令：`STOCKS`（"SZ 000001,SH 600519"）+ --strategy/--params/--count/--period/--adjust/--cash/--commission/--slippage/--max-stocks；逐标取行情→BacktestEngine→compute_model_trust，输出 symbols（含 total_return/win_rate/trades/hit_rate/excess_hit_rate/trust_score/trust_grade）按可信度降序 + failures 列表。
+- **src/easy_tdx/cli/__init__.py** —— 注册 verify_multi 命令。
+
+### 验证
+
+- 新增 2 项单测（tests/unit/test_backtest_cli.py）：verify-multi --help；非法 params JSON 报错。
+- 端到端：`verify-multi "SZ 000001,SZ 000002,SH 600519" --strategy ma_cross` 3 只均验证成功，按可信度降序（56 中 / 45.5 低 / 25.6 低）。
+- ruff / mypy 零告警；全量单测 **2458 passed**（新增 2 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **动态选股页批量验证支持「查看该股」（V118）—— 从验证排名直接跳到单标回测/缠论分析** —— V114 的批量策略验证给出按可信度排名，但用户要手动去左边列表点股票才能看单标详情。本次给批量验证表每行加「查看该股」按钮，点击直接加载该股的单标缠论回测视图，形成「批量验证 → 深挖个股」的闭环。
 
 ### 新增

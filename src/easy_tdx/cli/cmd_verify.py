@@ -176,3 +176,134 @@ def verify(
     result_dict["verdict"] = "；".join(verdict_parts) if verdict_parts else "无验证结论（数据不足）"
 
     click.echo(json.dumps(result_dict, ensure_ascii=False, indent=2, default=str))
+
+
+@click.command("verify-multi")
+@click.argument("stocks")
+@click.option("--strategy", "strategy_name", default="ma_cross", help="注册表中的策略名")
+@click.option("--params", "params_json", default="{}", help="策略参数 JSON")
+@click.option("--count", default=500, type=int, help="每只标的 K线数量")
+@click.option(
+    "--period",
+    default="DAILY",
+    help="K线周期: DAILY/5MIN/15MIN/30MIN/60MIN/1MIN/WEEKLY/MONTHLY",
+)
+@click.option("--adjust", default="NONE", help="复权: NONE/QFQ/HFQ")
+@click.option("--cash", default=1_000_000.0, type=float, help="初始资金")
+@click.option("--commission", default=0.0003, type=float, help="佣金率")
+@click.option("--slippage", default=0.0, type=float, help="滑点")
+@click.option("--max-stocks", "max_stocks", default=20, type=int, help="最多验证多少只标的")
+def verify_multi(
+    stocks: str,
+    strategy_name: str,
+    params_json: str,
+    count: int,
+    period: str,
+    adjust: str,
+    cash: float,
+    commission: float,
+    slippage: float,
+    max_stocks: int,
+) -> None:
+    """批量模型验证：对多只标的跑同一策略，按模型可信度排名选股。
+
+    STOCKS 格式: "SZ 000001,SH 600519"
+
+    示例::
+
+      easy-tdx verify-multi "SZ 000001,SZ 000002,SH 600519" \
+          --strategy ma_cross --params '{"fast": 5, "slow": 20}'
+
+    输出 JSON：symbols 数组（含 total_return/win_rate/hit_rate/trust），按可信度降序。
+    """
+    from ..cli.conn import get_mac_client
+    from ..cli.parsers import parse_adjust, parse_period, parse_stocks
+
+    try:
+        params: dict[str, Any] = json.loads(params_json) if params_json.strip() else {}
+    except json.JSONDecodeError as exc:
+        click.echo("错误: --params 不是合法 JSON: " + str(exc), err=True)
+        raise SystemExit(1)
+
+    from ..backtest import BacktestEngine
+    from ..backtest.strategies import get_registry
+
+    try:
+        entry = get_registry().get(strategy_name)
+    except KeyError as exc:
+        click.echo("错误: " + str(exc), err=True)
+        raise SystemExit(1)
+
+    market_codes = parse_stocks(stocks)[:max_stocks]
+    if not market_codes:
+        click.echo('错误: 未解析到任何标的（格式如 "SZ 000001,SH 600519"）', err=True)
+        raise SystemExit(1)
+
+    rows: list[dict[str, Any]] = []
+    failures: list[str] = []
+    with get_mac_client() as client:
+        for market_int, code in market_codes:
+            symbol = ("SZ" if market_int == 0 else ("SH" if market_int == 1 else "BJ")) + code
+            try:
+                df = client.get_stock_kline(
+                    market_int,
+                    code,
+                    period=parse_period(period),
+                    start=0,
+                    count=count,
+                    adjust=parse_adjust(adjust),
+                )
+                if df is None or len(df) < 30:
+                    failures.append(symbol + "(行情不足)")
+                    continue
+                strategy = entry.build(params)
+                engine = BacktestEngine(
+                    strategy=strategy,
+                    cash=cash,
+                    commission=commission,
+                    slippage=slippage,
+                )
+                bt_result = engine.run(df)  # 引擎内置 signal_accuracy(V95)
+                bp = bt_result.performance
+                # 模型可信度（V101）
+                mt: dict[str, Any] = {}
+                try:
+                    from ..backtest.model_trust import compute_model_trust
+
+                    mt = compute_model_trust(bp, bt_result.signal_accuracy, None)
+                except Exception:
+                    mt = {}
+                hit_rate: float | None = None
+                excess_hit_rate: float | None = None
+                sa = bt_result.signal_accuracy or {}
+                buy = sa.get("buy") or {}
+                horizons = buy.get("horizons") or {}
+                h5 = horizons.get("5") or horizons.get("3")
+                if h5 and h5.get("count", 0) > 0:
+                    hit_rate = float(h5["hit_rate"])
+                    excess_hit_rate = float(h5.get("excess_hit_rate", 0.0))
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "total_return": bp.get("total_return", 0.0),
+                        "win_rate": bp.get("win_rate", 0.0),
+                        "trades": int(bp.get("total_trades", 0)),
+                        "hit_rate": hit_rate,
+                        "excess_hit_rate": excess_hit_rate,
+                        "trust_score": mt.get("score"),
+                        "trust_grade": mt.get("grade"),
+                    }
+                )
+            except Exception as exc:  # noqa: BLE001 — 单只失败跳出循环前记录
+                failures.append(symbol + "(" + str(exc) + ")")
+
+    # 按可信度降序（缺可信度排最后）
+    rows.sort(key=lambda r: (r["trust_score"] is not None, r["trust_score"]), reverse=True)
+    out = {
+        "strategy": strategy_name,
+        "total": len(market_codes),
+        "verified": len(rows),
+        "symbols": rows,
+        "failures": failures,
+    }
+    click.echo(json.dumps(out, ensure_ascii=False, indent=2, default=str))
