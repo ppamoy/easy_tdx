@@ -186,6 +186,60 @@ function candTrust(r: CandRow): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
+// V170: 候选批量验证导出（复制排名 / 复制 JSON，与其它批量验证入口对齐）
+const candCopyMsg = ref('')
+function copyCandRanking() {
+  if (candRows.value.length === 0) return
+  const lines: string[] = []
+  lines.push('# easy-tdx 组合候选批量验证（' + (strategyLabel.value || strategy.value) + '）')
+  lines.push('')
+  lines.push('| 排名 | 标的 | 总收益 | 胜率 | 5根命中率 | 超额命中率 | 可信度 | 交易数 |')
+  lines.push('| --- | --- | --- | --- | --- | --- | --- | --- |')
+  sortedCandRows.value.forEach((r, i) => {
+    lines.push(
+      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + candPct(r.total_return) +
+      ' | ' + candPct(r.win_rate) + ' | ' + candPct(r.hit_rate) + ' | ' + candPct(r.excess_hit_rate) +
+      ' | ' + candTrust(r) + ' | ' + (r.trades ?? '-') + ' |',
+    )
+  })
+  lines.push('')
+  lines.push('方法：读全局自选股（最多 12 只），用当前策略独立回测（最近 500 根日线），按模型可信度（V101）降序排名。')
+  const text = lines.join('\n')
+  const doCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
+    candCopyMsg.value = '✓ 已复制候选排名'
+    setTimeout(() => { candCopyMsg.value = '' }, 2500)
+  }
+  void doCopy()
+}
+const candJsonMsg = ref('')
+async function copyCandJson() {
+  if (candRows.value.length === 0) return
+  const payload = {
+    strategy: strategy.value,
+    strategy_label: strategyLabel.value,
+    params: params.value,
+    generated_at: new Date().toISOString(),
+    rows: sortedCandRows.value.map((r, i) => ({ rank: i + 1, ...r })),
+  }
+  const json = JSON.stringify(payload, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    candJsonMsg.value = '✓ 已复制候选 JSON'
+  } catch {
+    candJsonMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { candJsonMsg.value = '' }, 2500)
+}
 
 // ── 保存策略（把当前组合结果 + 配置 + 上下文存进策略库）──────────────────────
 const showSaveForm = ref(false)
@@ -395,6 +449,8 @@ async function onSave() {
             <span class="cand-sort">
               <button class="ghost small" :class="{ active: candSort === 'return' }" @click="candSort = 'return'">按收益</button>
               <button class="ghost small" :class="{ active: candSort === 'trust' }" @click="candSort = 'trust'">按可信度</button>
+              <button class="ghost small" @click="copyCandRanking">📋 复制排名</button>
+              <button class="ghost small" @click="copyCandJson">⚙ 复制 JSON</button>
               <button class="ghost small" @click="addAllCands">全部加入组合</button>
             </span>
           </div>
@@ -854,6 +910,10 @@ async function onSave() {
   background: rgba(96, 165, 250, 0.18);
   color: var(--accent);
   border-color: var(--accent);
+}
+.cand-msg {
+  font-size: 11px;
+  color: var(--up);
 }
 .cand-table {
   width: 100%;

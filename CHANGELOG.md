@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**组合候选批量验证补「复制排名 + 复制 JSON」（V170）—— 组合候选验证结论可导出/留存** —— V160 的组合页候选批量验证只能看/加入组合，无法导出；其它批量验证入口（选股 V130/V168、回测 V139/V157、监控 V145/V166）都有复制能力。本次给组合候选面板加「📋 复制排名」（Markdown 表）与「⚙ 复制 JSON」（strategy/params/rows），让组合候选验证结论也能留存分享。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— 候选面板头部新增「📋 复制排名」（copyCandRanking）与「⚙ 复制 JSON」（copyCandJson，strategy/strategy_label/params/generated_at/rows）两个按钮与对应提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合页候选批量验证 →「复制排名」「复制 JSON」按钮可见、JSON 合法含 strategy/rows、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V168（V169）—— 文档覆盖选股批量 JSON 导出与指南自身迭代** —— V167 仅把指南更新到 V166，V168 新增的动态选股页批量验证「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V168：标题、全景表补 V167/V168 两行、3.3 动态选股页补充 JSON 导出说明。
 
 ### 新增
