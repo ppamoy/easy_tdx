@@ -97,6 +97,8 @@ onMounted(() => {
   store.loadStrategies().catch((e) => {
     store.error = `加载策略列表失败：${e instanceof Error ? e.message : e}`
   })
+  // V231: 恢复上次批量验证结果（如有）
+  restoreOptBatchPersist()
 })
 
 // 网格点数（前端预校验，提示用户）
@@ -321,6 +323,33 @@ interface OptBatchRow {
 const optBatchRows = ref<OptBatchRow[]>([])
 const optBatchLoading = ref(false)
 const optBatchMsg = ref('')
+// V231: 寻优批量验证结果持久化（与回测 V217 / 监控 V219 / 选股 V221 / 组合候选 V223 对齐）
+const OPT_BATCH_KEY = 'easy_tdx_opt_batch_verify_last'
+const lastOptBatchAt = ref('')
+function saveOptBatchPersist() {
+  if (!optBatchRows.value.length) return
+  try {
+    const best = optBestStrategy()
+    localStorage.setItem(OPT_BATCH_KEY, JSON.stringify({
+      rows: optBatchRows.value,
+      strategy: best?.name ?? strategy.value,
+      strategy_label: best?.label ?? strategy.value,
+      at: new Date().toISOString(),
+    }))
+  } catch { /* localStorage 不可用忽略 */ }
+}
+function restoreOptBatchPersist() {
+  try {
+    const raw = localStorage.getItem(OPT_BATCH_KEY)
+    if (!raw) return
+    const data = JSON.parse(raw)
+    if (Array.isArray(data.rows) && data.rows.length) {
+      optBatchRows.value = data.rows
+      lastOptBatchAt.value = data.at || ''
+      optBatchMsg.value = '已恢复上次批量验证（' + (data.strategy_label || '') + '）'
+    }
+  } catch { /* 解析失败忽略 */ }
+}
 const optBatchOnlyRobust = ref(false)
 const optBatchSort = ref<'return' | 'trust'>('trust')
 const sortedOptBatchRows = computed(() => {
@@ -399,6 +428,8 @@ async function runOptBatchVerify() {
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     optBatchRows.value = rows
+    lastOptBatchAt.value = new Date().toISOString()
+    saveOptBatchPersist()
     if (rows.length === 0) optBatchMsg.value = '批量验证无结果（行情取数失败或数据不足）'
   } catch (e) {
     optBatchMsg.value = '批量验证失败：' + formatError(e)
@@ -793,7 +824,9 @@ async function saveOptBatchAsPortfolio() {
       <!-- V205: 批量验证自选股（用最优策略+参数对自选股逐只回测，按可信度排名） -->
       <section v-if="optBatchRows.length" class="report-content opt-batch-panel">
         <div class="opt-batch-head">
-          <h3>🗳️ 批量验证自选股（最优参数）</h3>
+          <h3>🗳️ 批量验证自选股（最优参数）
+            <span v-if="lastOptBatchAt" class="opt-batch-at" :title="'上次验证时间'">🕒 {{ new Date(lastOptBatchAt).toLocaleString() }}</span>
+          </h3>
           <div class="opt-batch-actions">
             <button class="ghost small" :class="{ active: optBatchSort === 'return' }" @click="optBatchSort = 'return'">按收益</button>
             <button class="ghost small" :class="{ active: optBatchSort === 'trust' }" @click="optBatchSort = 'trust'">按可信度</button>
@@ -1093,7 +1126,14 @@ async function saveOptBatchAsPortfolio() {
   display: flex; align-items: center; justify-content: space-between;
   gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
 }
-.opt-batch-head h3 { margin: 0; font-size: 14px; }
+.opt-batch-head h3 {
+/* V231: 上次寻优批量验证时间 */
+.opt-batch-at {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 400;
+  margin-left: 8px;
+} margin: 0; font-size: 14px; }
 .opt-batch-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .opt-batch-actions .ghost.active {
   background: rgba(96, 165, 250, 0.18); color: var(--accent); border-color: var(--accent);

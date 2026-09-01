@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**寻优页批量验证结果持久化（V231）—— 补齐五处批量验证入口持久化** —— 回测（V217）/监控（V219）/选股（V221）/组合候选（V223）批量验证已支持持久化，寻优页批量验证（V205）是最后一处。本次给寻优批量验证加 localStorage 持久化：rows + 策略 + 时间存入 easy_tdx_opt_batch_verify_last，onMounted 自动恢复，面板标题显示「🕒 上次验证时间」。
+
+### 新增
+
+- **web-ui/src/views/OptimizeView.vue** —— 新增 OPT_BATCH_KEY / lastOptBatchAt / saveOptBatchPersist / restoreOptBatchPersist；寻优批量验证完成后持久化，onMounted 恢复；面板标题新增时间标签。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优页批量验证 →「上次验证时间」标签可见；刷新（无寻优结果）→ 批量验证表自动恢复 2 行、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V229（V230）—— 文档覆盖 CLI 多策略重验与指南自身迭代** —— V228 仅把指南更新到 V227，V229 新增的 CLI reverify 多策略组合入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V229：标题、全景表补 V228/V229 两行、3.9 命令行节 reverify 条目补多策略说明。
 
 ### 新增
