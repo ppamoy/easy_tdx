@@ -449,6 +449,25 @@ function copyMonBatchRanking() {
   }
   void doCopy()
 }
+// V166: 监控批量验证 JSON 导出（机器可读，Agent/脚本友好，与 V153/V157/V158/V162 对齐）
+const monBatchJsonCopyMsg = ref('')
+async function copyMonBatchJson() {
+  if (monBatchRows.value.length === 0) return
+  const payload = {
+    strategy: batchStrategy.value,
+    strategy_label: batchStrategyLabel.value,
+    generated_at: new Date().toISOString(),
+    rows: monBatchRows.value.map((r, i) => ({ rank: i + 1, ...r })),
+  }
+  const json = JSON.stringify(payload, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    monBatchJsonCopyMsg.value = '✓ 已复制批量验证 JSON'
+  } catch {
+    monBatchJsonCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { monBatchJsonCopyMsg.value = '' }, 2500)
+}
 async function saveMonBatchAsPortfolio() {
   if (monBatchRows.value.length === 0 || monBatchSaving.value) return
   monBatchSaving.value = true
@@ -602,10 +621,12 @@ onUnmounted(() => {
           <button class="ghost small" :class="{ active: monBatchSort === 'return' }" @click="monBatchSort = 'return'">按收益</button>
           <button class="ghost small" :class="{ active: monBatchSort === 'trust' }" @click="monBatchSort = 'trust'">按可信度</button>
           <button class="ghost small" @click="copyMonBatchRanking">📋 复制排名</button>
+          <button class="ghost small" @click="copyMonBatchJson">⚙ 复制 JSON</button>
           <button class="ghost small" :disabled="monBatchSaving" @click="saveMonBatchAsPortfolio">
             {{ monBatchSaving ? '保存中…' : '💾 保存为组合策略' }}
           </button>
           <span v-if="monBatchCopyMsg" class="save-msg">{{ monBatchCopyMsg }}</span>
+          <span v-if="monBatchJsonCopyMsg" class="save-msg">{{ monBatchJsonCopyMsg }}</span>
           <span v-if="monBatchSaveMsg" class="save-msg" :class="{ err: monBatchSaveMsg.includes('失败') }">{{ monBatchSaveMsg }}</span>
         </div>
       </div>

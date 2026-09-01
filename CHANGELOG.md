@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**监控页批量验证「复制 JSON」（V166）—— 补齐 JSON 导出系列最后一处** —— 监控页批量验证有 Markdown 复制排名（V145），但脚本消费/存档需要结构化 JSON；单标（V153）/批量（V157）/寻优（V158）/组合（V162）都已有 JSON 导出，监控批量验证是最后缺口。本次在监控批量验证操作区新增「⚙ 复制 JSON」：把当前监控批量验证结果（策略/生成时间/按可信度排序的 rows）以缩进 JSON 复制到剪贴板。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— 监控批量验证操作区「📋 复制排名」旁新增「⚙ 复制 JSON」（copyMonBatchJson）：JSON.stringify({strategy, strategy_label, generated_at, rows:[{rank, ...}]}, null, 2) 写入剪贴板 + 「✓ 已复制批量验证 JSON」提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：监控页批量验证 →「复制 JSON」→ 剪贴板为合法 JSON（含 strategy/rows 数组）、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V164（V165）—— 文档覆盖策略库来源徽章与指南自身迭代** —— V163 仅把指南更新到 V162，V164 新增的策略库「验证来源」徽章入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V164：标题、全景表补 V163/V164 两行、3.6 策略库与对比页补充来源徽章说明。
 
 ### 新增
