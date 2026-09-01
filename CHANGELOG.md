@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V172（V173）—— 文档覆盖 CLI 落盘与指南自身迭代** —— V171 仅把指南更新到 V170，V172 新增的 CLI `--output-file` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V172：标题、全景表补 V171/V172 两行、3.9 命令行节补充 output-file 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V172；全景表补 V171/V172；3.9 命令行节 verify 条目补「--output-file 把报告写入文件」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI verify/verify-multi 支持 --output-file 写 JSON 报告（V172）—— 命令行验证结论可直接落盘存档** —— Web 端各页已有 JSON 导出（V153 起），CLI verify/verify-multi 一直只把 JSON 打印到 stdout。本次新增 `--output-file <路径>`：把验证报告写入文件（默认仍打印 stdout），方便脚本落盘、存档与程序化消费。
 
 ### 新增
