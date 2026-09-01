@@ -5,6 +5,30 @@ from __future__ import annotations
 from click.testing import CliRunner
 
 
+class TestVerifyCLI:
+    """V117: 模型验证报告命令。"""
+
+    def test_help(self):
+        """测试 verify --help。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify", "--help"])
+        assert result.exit_code == 0
+        assert "模型验证" in result.output
+        assert "--strategy" in result.output
+        assert "--out-of-sample" in result.output
+
+    def test_bad_params_json(self):
+        """非法的 --params JSON 应报错退出。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify", "SZ", "000001", "--params", "{oops"])
+        assert result.exit_code == 1
+        assert "不是合法 JSON" in result.output
+
+
 class TestBacktestCLI:
     """测试回测 CLI 命令。"""
 

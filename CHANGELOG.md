@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+**CLI 模型验证报告命令（V117）—— 命令行一条命令跑完「通过历史回测检查模型是否准确」** —— Web 端有完整验证面板，但命令行用户（Agent/脚本）要自己串 BacktestEngine + 各验证函数。本次新增 `easy-tdx verify MARKET CODE` 命令：单标的跑完整验证套件（回测绩效 + 信号准确度 V95 + 可选分段稳健性 V97 + 模型可信度 V101 + 可选样本外 V105），输出 JSON 报告并在 `verdict` 汇总全部结论。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— `verify` 命令：`--strategy/--params/--count/--period/--adjust/--cash/--commission/--slippage/--execution/--segments(2~6)/--out-of-sample/--train-ratio`；复用引擎内置 signal_accuracy，调用 compute_segment_robustness/compute_model_trust/compute_out_of_sample；输出 performance/signal_accuracy/segment_robustness/model_trust/out_of_sample/verdict。
+- **src/easy_tdx/cli/__init__.py** —— 注册 verify 命令（explicit re-export + add_command）。
+
+### 验证
+
+- 新增 2 项单测（tests/unit/test_backtest_cli.py）：verify --help；非法 params JSON 报错。
+- 端到端：`verify SZ 000001 --strategy ma_cross --segments 3` 返回完整报告（model_trust 58.6 中、segment_robustness overfit_likely、verdict 汇总可信度/准确度/稳健性三段结论）。
+- ruff / mypy 零告警；全量单测 **2456 passed**（新增 2 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **报告导出补「样本外验证」段（V116）—— 复制的回测报告覆盖全部验证维度** —— V104 的报告导出早于 V105 样本外验证，导出的 Markdown 只有绩效/准确度/稳健性/可信度，缺样本外结论。本次给 `buildReportText` 补上「样本外验证（训练段 vs 未见过数据）」段：判定结论、训练段/样本外收益、样本外 5 根命中率与超额。
 
 ### 新增
