@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V209（V210）—— 文档覆盖一键重验与指南自身迭代** —— V208 仅把指南更新到 V207，V209 新增的策略库「一键重验」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V209：标题、全景表补 V208/V209 两行、3.6 策略库节补充「↻ 重验」说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V209；全景表补 V208/V209；3.6 策略库节新增「↻ 重验」（V209）说明（重新回测刷新快照验证结论，source=reverify/reverified_at）。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **策略库「一键重验」（V209）—— 保存策略后用原标的重新回测，刷新验证结论** —— 策略保存时快照固化当时的准确度/可信度/样本外结论，行情变化后结论过时，用户只能删除重存。本次在策略库单标卡片加「↻ 重验」：用保存的策略+参数对原标的重新回测（逐只开启 out_of_sample），刷新快照中的 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at——打通「保存策略 → 复验 → 更新结论」闭环。
 
 ### 新增
