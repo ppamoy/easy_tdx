@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V225（V226）—— 文档覆盖 CLI walk-forward 与指南自身迭代** —— V224 仅把指南更新到 V223，V225 新增的 CLI verify `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V225：标题、全景表补 V224/V225 两行、3.9 命令行节 verify 条目补 walk-forward 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V225；全景表补 V224/V225；3.9 命令行节 verify 条目补「--walk-forward（V225）输出滚动窗口防过拟合判定」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI verify 支持 --walk-forward（V225）—— 命令行单标的验证报告补滚动窗口防过拟合维度** —— Web 端寻优页已有 Walk-Forward 滚动验证（V123），但 CLI verify 的完整验证报告（V117）缺这一维，命令行用户看不到防过拟合判定。本次给 `easy-tdx verify` 加 `--walk-forward [--step-ratio 0.1]`：用单参数点跑 ParamGridOptimizer.run_walk_forward，输出 walk_forward（windows/train_mean/test_mean/positive windows/degraded/verdict），与 Web 端 V123 对齐。
 
 ### 新增
