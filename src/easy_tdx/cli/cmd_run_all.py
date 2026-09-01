@@ -460,6 +460,12 @@ def _show_best_chart(
     type=str,
     help="把排名结果 JSON 写入文件（默认打印到 stdout）",
 )
+@click.option(
+    "--only-robust",
+    "only_robust",
+    is_flag=True,
+    help="仅显示样本外 ✅泛化（未衰减）的策略",
+)
 def run_all(
     market: str,
     code: str,
@@ -473,6 +479,7 @@ def run_all(
     show_chart: bool,
     strategies_dir: str,
     output_file: str | None,
+    only_robust: bool,
 ) -> None:
     """批量运行 strategies/ 目录下所有策略并比较结果。
 
@@ -623,6 +630,12 @@ def run_all(
             results.append({"strategy": strategy_name, "error": str(e)})
 
     # 4. 输出排名
+    # V201: 仅显示样本外稳健（oos_degraded is False）的策略，与 verify-multi V199 对齐
+    if only_robust:
+        results = [r for r in results if "error" not in r and r.get("oos_degraded") is False]
+        if not results:
+            click.echo("没有样本外稳健（未衰减）的策略")
+            raise SystemExit(1)
     has_valid = _print_ranking(results, backtest_results)
     if not has_valid:
         raise SystemExit(1)

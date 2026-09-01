@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**run-all CLI 支持 --only-robust（V201）—— 命令行批量比策略时只显示样本外稳健的策略** —— verify-multi 已支持 --only-robust（V199），run-all 排名表此前只能输出全部策略并人工筛选。本次给 run-all 新增 `--only-robust`：只显示 oos_degraded=false（✅泛化）的策略；若没有符合的策略则提示并退出，与 V199 对齐。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_run_all.py** —— run-all 新增 `--only-robust` 选项：排名前过滤 oos_degraded is False 的策略，无符合项提示退出。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：run-all --help 含 --only-robust。
+- ruff / mypy 零告警；全量单测 **2468 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V199（V200）—— 文档覆盖 CLI --only-robust 与指南自身迭代** —— V198 仅把指南更新到 V197，V199 新增的 verify-multi `--only-robust` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V199：标题、全景表补 V198/V199 两行、3.9 命令行节 verify-multi 条目补 only-robust 说明。
 
 ### 新增

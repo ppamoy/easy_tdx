@@ -234,3 +234,11 @@ class TestBacktestCLI:
         bad = runner.invoke(cli, ["verify-multi", "SZ 000001", "--only-robust"])
         assert bad.exit_code == 1
         assert "需要同时使用 --out-of-sample" in bad.output
+    def test_run_all_only_robust_option(self):
+        """V201: run-all 应暴露 --only-robust 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["run-all", "--help"])
+        assert result.exit_code == 0
+        assert "--only-robust" in result.output
