@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V241（V242）—— 文档覆盖组合 only-robust 与指南自身迭代** —— V240 仅把指南更新到 V239，V241 新增的 CLI verify-portfolio `--only-robust` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V241：标题、全景表补 V240/V241 两行、3.9 命令行节 verify-portfolio 条目补 only-robust 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V241；全景表补 V240/V241；3.9 命令行节 verify-portfolio 条目补「--only-robust（V241）只输出组合中样本外 ✅泛化 的标的」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **CLI verify-portfolio 支持 --only-robust（V241）—— 组合验证只输出样本外稳健的标的** —— verify-multi（V199）与 run-all（V201）已有 --only-robust，组合验证（V176）此前只能输出全部并人工筛选。本次给 verify-portfolio 新增 `--only-robust`：过滤到样本外 ✅泛化 的标的（individual_results/equity_allocation 收敛到稳健子集，report.only_robust 记录 kept/total/symbols），必须与 `--out-of-sample` 同时使用。
 
 ### 新增
