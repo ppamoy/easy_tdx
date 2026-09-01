@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 信号监控视图：订阅一批股票，实时检查高置信度缠论买卖点信号。
 
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { fetchBars, formatError, saveStrategy } from '../api'
 
 interface MonitoredStock {
@@ -405,6 +405,13 @@ function monTrust(r: typeof monBatchRows.value[number]): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
+// V151: 监控批量验证排序方式（收益 / 可信度）
+const monBatchSort = ref<'return' | 'trust'>('trust')
+const sortedMonBatchRows = computed(() => {
+  const rows = monBatchRows.value
+  if (!rows.length || monBatchSort.value === 'trust') return rows
+  return [...rows].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+})
 // V145: 监控批量验证导出（复制排名）与入库（保存为组合策略）
 const monBatchCopyMsg = ref('')
 const monBatchSaving = ref(false)
@@ -590,8 +597,10 @@ onUnmounted(() => {
     </div>
     <div v-if="monBatchRows.length > 0" class="mon-batch-panel">
       <div class="mon-batch-head">
-        <h4>🧪 批量验证监控股：{{ batchStrategyLabel }}（按模型可信度降序）</h4>
+        <h4>🧪 批量验证监控股：{{ batchStrategyLabel }}</h4>
         <div class="mon-batch-actions">
+          <button class="ghost small" :class="{ active: monBatchSort === 'return' }" @click="monBatchSort = 'return'">按收益</button>
+          <button class="ghost small" :class="{ active: monBatchSort === 'trust' }" @click="monBatchSort = 'trust'">按可信度</button>
           <button class="ghost small" @click="copyMonBatchRanking">📋 复制排名</button>
           <button class="ghost small" :disabled="monBatchSaving" @click="saveMonBatchAsPortfolio">
             {{ monBatchSaving ? '保存中…' : '💾 保存为组合策略' }}
@@ -607,7 +616,7 @@ onUnmounted(() => {
               <th class="num">交易数</th></tr>
         </thead>
         <tbody>
-          <tr v-for="(r, i) in monBatchRows" :key="r.symbol">
+          <tr v-for="(r, i) in sortedMonBatchRows" :key="r.symbol">
             <td class="dim">{{ i + 1 }}</td>
             <td>{{ r.symbol }}</td>
             <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ monPct(r.total_return) }}</td>
@@ -1133,6 +1142,11 @@ onUnmounted(() => {
 }
 .mon-batch-actions .save-msg.err {
   color: var(--down);
+}
+.mon-batch-actions .ghost.active {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .mon-batch-table {
   width: 100%;
