@@ -43,6 +43,8 @@ import click
 @click.option("--execution", default="next_open", help="成交规则: next_open/next_close")
 @click.option("--segments", default=None, type=int, help="分段稳健性段数（2~6，不填则跳过）")
 @click.option("--out-of-sample", "run_oos", is_flag=True, help="样本外验证（训练/持有切分）")
+@click.option("--walk-forward", "use_wf", is_flag=True, help="Walk-Forward 滚动验证（V123）")
+@click.option("--step-ratio", "wf_step", default=0.1, type=float, help="Walk-Forward 滚动步长比例")
 @click.option("--train-ratio", "train_ratio", default=0.7, type=float, help="样本外训练段占比")
 @click.option("--output", "output_fmt", type=click.Choice(["json"]), default="json")
 @click.option(
@@ -67,6 +69,8 @@ def verify(
     segments: int | None,
     run_oos: bool,
     train_ratio: float,
+    use_wf: bool,
+    wf_step: float,
     output_fmt: str,
     output_file: str | None,
 ) -> None:
@@ -145,6 +149,35 @@ def verify(
         )
     except Exception:
         result_dict["model_trust"] = None
+
+    # 6b. Walk-Forward 滚动验证（V123，可选）——单参数点跑滚动窗口，输出防过拟合判定
+    if use_wf:
+        try:
+            from ..backtest.optimizer import ParamGridOptimizer
+
+            param_grid: dict[str, list[Any]] = {
+                k: [v] for k, v in params.items()
+            }
+            optimizer = ParamGridOptimizer(
+                strategy_name=strategy_name,
+                param_grid=param_grid,
+                df=df,
+                cash=cash,
+                commission=commission,
+                slippage=slippage,
+                execution=execution,
+            )
+            wf_result = optimizer.run_walk_forward(
+                train_ratio=train_ratio,
+                step_ratio=wf_step,
+            )
+            result_dict["walk_forward"] = wf_result.walk_forward
+        except Exception as exc:  # noqa: BLE001 — 数据不足等场景给出提示但不中断
+            result_dict["walk_forward"] = {
+                "windows": 0,
+                "verdict": "Walk-Forward 计算失败: " + str(exc),
+                "degraded": True,
+            }
 
     # 6. 样本外验证（V105，可选）
     if run_oos:

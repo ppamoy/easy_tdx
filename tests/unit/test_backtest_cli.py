@@ -195,6 +195,15 @@ class TestBacktestCLI:
         r2 = runner.invoke(cli, ["verify-multi", "--help"])
         assert r2.exit_code == 0
         assert "--output-file" in r2.output
+    def test_verify_walk_forward_option(self):
+        """V225: verify 应暴露 --walk-forward 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify", "--help"])
+        assert result.exit_code == 0
+        assert "--walk-forward" in result.output
+        assert "--step-ratio" in result.output
     def test_run_all_output_file_option(self):
         """V174: run-all 应暴露 --output-file 选项。"""
         from easy_tdx.cli import cli

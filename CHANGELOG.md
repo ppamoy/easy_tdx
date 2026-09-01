@@ -29,6 +29,19 @@
 
 ## [Unreleased]
 
+**CLI verify 支持 --walk-forward（V225）—— 命令行单标的验证报告补滚动窗口防过拟合维度** —— Web 端寻优页已有 Walk-Forward 滚动验证（V123），但 CLI verify 的完整验证报告（V117）缺这一维，命令行用户看不到防过拟合判定。本次给 `easy-tdx verify` 加 `--walk-forward [--step-ratio 0.1]`：用单参数点跑 ParamGridOptimizer.run_walk_forward，输出 walk_forward（windows/train_mean/test_mean/positive windows/degraded/verdict），与 Web 端 V123 对齐。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify 新增 `--walk-forward` 与 `--step-ratio` 选项；主体在样本外验证前计算 run_walk_forward（单参数点，复用 V123 模块），结果写入 result_dict['walk_forward']，失败时给 degraded 提示。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify --help 含 --walk-forward/--step-ratio。
+- ruff / mypy 零告警；全量单测 **2471 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V223（V224）—— 文档覆盖组合候选持久化与指南自身迭代** —— V222 仅把指南更新到 V221，V223 新增的组合候选批量验证结果持久化入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V223：标题、全景表补 V222/V223 两行、3.4 组合回测页候选验证后补持久化说明（四处批量验证入口持久化全部对齐）。
 
 ### 新增
