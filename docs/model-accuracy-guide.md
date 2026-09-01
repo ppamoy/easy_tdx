@@ -1,4 +1,4 @@
-# 模型准确度验证指南（V95–V225）
+# 模型准确度验证指南（V95–V227）
 
 > 本文档汇总 easy-tdx 自 V95 起新增的「通过历史回测验证模型/策略准确度」能力。
 > 目标：让用户不只是看账户盈亏，而是能回答三件事——**信号准不准、稳健不稳健、过不过拟合**。
@@ -133,6 +133,8 @@
 | V223 | 组合候选批量验证结果持久化 | 补齐四处批量验证入口持久化 | 组合页候选批量验证「🕒 上次验证时间」 |
 | V224 | 模型准确度验证指南扩展到 V223 | 文档覆盖组合候选持久化入口 | docs/model-accuracy-guide.md |
 | V225 | CLI verify 支持 --walk-forward | 命令行单标的验证报告补滚动窗口防过拟合维度 | easy-tdx verify --walk-forward |
+| V226 | 模型准确度验证指南扩展到 V225 | 文档覆盖 CLI walk-forward 入口 | docs/model-accuracy-guide.md |
+| V227 | 策略库「一键重验」扩展到多策略组合 | 三类策略全部可一键刷新验证结论 | 策略库多策略卡片「↻ 重验」 |
 
 ## 二、核心概念
 
@@ -183,7 +185,7 @@
 - 页头「按验证可信度排序」（V147）：开启后按快照 trust.score 降序展示，优先看到经过历史回测验证、可信度最高的策略。
 - 页头三组「按验证结论筛选」（V215）：验证来源（全部/已验证 batch-verify*/reverify/仅重验）、可信度等级（高/中/低）、样本外结论（稳健/衰减）——叠加排序即可快速定位「验证过且可信、样本外稳健」的策略。
 - 卡片头部「验证来源」徽章（V164/V207）：批量验证入库的策略（source=batch-verify*）会显示对应徽章——选股/回测/监控/组合候选（V188）/寻优批量验证（V205）五种来源全覆盖，一眼看出策略从哪个验证流程入库。
-- 单标卡片「↻ 重验」（V209）：用保存的策略+参数对原标的重新回测（含样本外），刷新快照中的 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at——行情变化后一键更新验证结论，不必删除重存；组合策略卡片同样支持「↻ 重验」（V211）：用保存的 context.stocks 重跑组合回测（含 V126 组合样本外），刷新组合快照（accuracy_summary/portfolio_trust/out_of_sample）。
+- 单标卡片「↻ 重验」（V209）：用保存的策略+参数对原标的重新回测（含样本外），刷新快照中的 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at——行情变化后一键更新验证结论，不必删除重存；组合策略卡片同样支持「↻ 重验」（V211）：用保存的 context.stocks 重跑组合回测（含 V126 组合样本外），刷新组合快照（accuracy_summary/portfolio_trust/out_of_sample）；多策略组合卡片也支持「↻ 重验」（V227）：用保存的 context.items 重跑多策略组合回测（含 V128 样本外），三类策略全部可一键刷新验证结论。
 - 卡片快照「🧪 批量验证样本外」（V190）：批量验证保存的组合策略（source=batch-verify-backtest/monitor/cand）快照含 avg_oos_degraded 与 oos_verdict（如「✅ 2/3 只样本外稳健」/「⚠ 2/2 只样本外衰减」），卡片直接展示。
 - 结果对比页（V102）横向展示多个 task 的 📊 可信度 / 🎯 5根命中率 / 🎯 超额命中率；V125 起补「🔬 样本外验证」「🧱 稳健性」两行，跨任务比策略时也看是否过拟合。
 

@@ -29,6 +29,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V227（V228）—— 文档覆盖多策略重验与指南自身迭代** —— V226 仅把指南更新到 V225，V227 新增的策略库多策略组合「一键重验」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V227：标题、全景表补 V226/V227 两行、3.6 策略库节一键重验说明补多策略分支。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V227；全景表补 V226/V227；3.6 策略库节一键重验补「多策略组合卡片（V227）：context.items 重跑多策略组合回测（含 V128 样本外），三类策略全部可重验」。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **策略库「一键重验」扩展到多策略组合（V227）—— 三类策略全部可一键刷新验证结论** —— 单标（V209）与组合（V211）已支持重验，多策略组合（kind='multi'）此前在 onReverify 抛「暂不支持」，只能手动重跑。本次给多策略组合加「↻ 重验」：用保存的 context.items 重跑多策略组合回测（含 V128 样本外），刷新快照 performance/out_of_sample 并标记 source=reverify，与 single/portfolio 对齐。
 
 ### 新增
