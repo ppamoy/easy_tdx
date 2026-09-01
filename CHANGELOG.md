@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**组合候选批量验证「保存为组合策略」（V188）—— 组合候选验证选出的股票一键入库复跑** —— 选股（V131）、回测（V141）、监控（V145）批量验证都支持把验证选出的股票保存为组合策略，组合候选批量验证（V160）此前只能「加入组合」当前会话。本次补「💾 保存为组合策略」（source=batch-verify-cand），候选验证结论可一键入策略库，之后在策略库「组合」tab 载入即复跑。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— 候选面板头部新增「💾 保存为组合策略」（saveCandAsPortfolio）：把候选验证标的（market:code 列表）与策略/参数/上下文保存为 kind=portfolio 策略，snapshot 带 source=batch-verify-cand 与 avg_trust_score。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合页候选批量验证 →「保存为组合策略」→ 提示成功、策略库新增条目（source=batch-verify-cand）、console 零错误。
+
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V186（V187）—— 文档覆盖复制排名样本外列与指南自身迭代** —— V185 仅把指南更新到 V184，V186 新增的批量验证「复制排名」样本外列入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V186：标题、全景表补 V185/V186 两行、3.1/3.3/3.4/3.5 四处复制排名说明补「样本外」列标注。
 
 ### 新增

@@ -206,6 +206,48 @@ function candOosCls(r: CandRow): string {
 function candOosTitle(r: CandRow): string {
   return r.oos_verdict || ''
 }
+// V188: 把候选批量验证选出的股票保存为组合策略（kind=portfolio，与 V131/V141/V145 对齐）
+const candSaveMsg = ref('')
+const candSaving = ref(false)
+async function saveCandAsPortfolio() {
+  if (candRows.value.length === 0 || candSaving.value) return
+  candSaving.value = true
+  candSaveMsg.value = ''
+  try {
+    const stocks = candRows.value.map((c) => c.market + ':' + c.code)
+    const avgTrust = candRows.value.length
+      ? candRows.value.reduce((s, c) => s + (c.trust_score ?? 0), 0) / candRows.value.length
+      : 0
+    await saveStrategy({
+      name: (strategyLabel.value || strategy.value) + ' · 候选验证' + stocks.length + '只',
+      kind: 'portfolio',
+      strategy: strategy.value,
+      strategy_label: strategyLabel.value,
+      params: params.value,
+      context: {
+        stocks,
+        category: category.value,
+        start_date: startDate.value || undefined,
+        end_date: endDate.value || undefined,
+      },
+      trade_config: { cash: cash.value, execution: execution.value },
+      snapshot: {
+        total_stocks: stocks.length,
+        avg_trust_score: avgTrust,
+        source: 'batch-verify-cand',
+        saved_at: new Date().toISOString().slice(0, 10),
+      },
+      tags: ['候选验证'],
+      notes: '由组合回测页候选批量验证生成，可在策略库载入后组合页复跑。',
+    })
+    candSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
+    setTimeout(() => { candSaveMsg.value = '' }, 4000)
+  } catch (e) {
+    candSaveMsg.value = '保存失败：' + formatError(e)
+  } finally {
+    candSaving.value = false
+  }
+}
 // V170: 候选批量验证导出（复制排名 / 复制 JSON，与其它批量验证入口对齐）
 const candCopyMsg = ref('')
 function copyCandRanking() {
@@ -471,7 +513,11 @@ async function onSave() {
               <button class="ghost small" :class="{ active: candSort === 'trust' }" @click="candSort = 'trust'">按可信度</button>
               <button class="ghost small" @click="copyCandRanking">📋 复制排名</button>
               <button class="ghost small" @click="copyCandJson">⚙ 复制 JSON</button>
+              <button class="ghost small" :disabled="candSaving" @click="saveCandAsPortfolio">
+                {{ candSaving ? '保存中…' : '💾 保存为组合策略' }}
+              </button>
               <button class="ghost small" @click="addAllCands">全部加入组合</button>
+              <span v-if="candSaveMsg" class="cand-msg">{{ candSaveMsg }}</span>
             </span>
           </div>
           <table class="cand-table">
