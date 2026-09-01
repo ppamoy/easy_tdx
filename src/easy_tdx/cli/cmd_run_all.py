@@ -114,15 +114,27 @@ def _print_ranking(
     click.echo("[*] 策略绩效排名 (按总收益率降序)")
     click.echo("=" * 80)
 
-    click.echo(
+    # V115: 排名表加准确度/可信度列（有数据时展示）
+    has_acc = any(r.get("hit_rate") is not None for r in valid)
+    has_trust = any(r.get("trust_score") is not None for r in valid)
+
+    header = (
         f"{'排名':>4}  {'策略':<22} {'总收益率':>10} {'年化收益':>10} "
         f"{'最大回撤':>10} {'夏普':>8} {'胜率':>8} {'交易次数':>8} {'盈亏比':>8}"
     )
-    click.echo("-" * 100)
+    if has_acc:
+        header += f" {'5根命中':>8} {'超额命中':>8}"
+    if has_trust:
+        header += f" {'可信度':>8}"
+    click.echo(header)
+    click.echo("-" * (len(header) + 8))
+
+    def _fmt_opt(v: float | None, fmt: str) -> str:
+        return "-" if v is None else fmt.format(v)
 
     for i, r in enumerate(valid, 1):
         medal = " *1*" if i == 1 else " *2*" if i == 2 else " *3*" if i == 3 else "    "
-        click.echo(
+        line = (
             f"{medal}{i:>2}  {r['strategy']:<22} "
             f"{r['total_return']:>9.2%} "
             f"{r['annual_return']:>9.2%} "
@@ -132,6 +144,15 @@ def _print_ranking(
             f"{r['total_trades']:>8} "
             f"{r['profit_factor']:>8.2f}"
         )
+        if has_acc:
+            line += f" {_fmt_opt(r.get('hit_rate'), '{:>7.0%}')} "
+            line += f" {_fmt_opt(r.get('excess_hit_rate'), '{:>+7.0%}')}"
+        if has_trust:
+            ts = r.get("trust_score")
+            tg = r.get("trust_grade")
+            trust_cell = "-" if ts is None else f"{ts:>5.0f} {tg or ''}"
+            line += f"{trust_cell[:8]:>8}"
+        click.echo(line)
 
     # ── 最佳策略详细报告 ──────────────────────────────────────────────────────
     best = valid[0]
@@ -508,6 +529,24 @@ def run_all(
             perf = result.performance
             click.echo(f" 完成 ({elapsed:.1f}s)")
 
+            # V115: 提取信号准确度（5根命中率/超额）与模型可信度
+            hit_rate: float | None = None
+            excess_hit_rate: float | None = None
+            sa = getattr(result, "signal_accuracy", None)
+            if sa:
+                buy = sa.get("buy") or {}
+                horizons = buy.get("horizons") or {}
+                h5 = horizons.get("5") or horizons.get("3")
+                if h5 and h5.get("count", 0) > 0:
+                    hit_rate = float(h5["hit_rate"])
+                    excess_hit_rate = float(h5.get("excess_hit_rate", 0.0))
+            trust_score: float | None = None
+            trust_grade: str | None = None
+            mt = getattr(result, "model_trust", None)
+            if mt:
+                trust_score = float(mt.get("score", 0.0))
+                trust_grade = str(mt.get("grade", ""))
+
             results.append(
                 {
                     "strategy": strategy_name,
@@ -521,6 +560,10 @@ def run_all(
                     "total_trades": perf.get("total_trades", 0),
                     "profit_factor": perf.get("profit_factor", 0),
                     "volatility": perf.get("volatility", 0),
+                    "hit_rate": hit_rate,
+                    "excess_hit_rate": excess_hit_rate,
+                    "trust_score": trust_score,
+                    "trust_grade": trust_grade,
                 }
             )
             backtest_results[strategy_name] = result
