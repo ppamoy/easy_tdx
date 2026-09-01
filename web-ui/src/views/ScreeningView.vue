@@ -458,6 +458,25 @@ function copyBatchRanking() {
   }
   void doCopy()
 }
+// V168: 批量验证 JSON 导出（机器可读，Agent/脚本友好，与 V157/V166 对齐）
+const batchJsonCopyMsg = ref('')
+async function copyBatchJson() {
+  if (batchResults.value.length === 0) return
+  const payload = {
+    strategy: batchStrategy.value,
+    strategy_label: batchStrategyLabel.value,
+    generated_at: new Date().toISOString(),
+    rows: batchResults.value.map((r, i) => ({ rank: i + 1, ...r })),
+  }
+  const json = JSON.stringify(payload, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    batchJsonCopyMsg.value = '✓ 已复制验证 JSON'
+  } catch {
+    batchJsonCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { batchJsonCopyMsg.value = '' }, 2500)
+}
 
 // ── 选择股票 ────────────────────────────────────────────────────────────
 async function selectStock(stock: StockResult) {
@@ -706,10 +725,12 @@ onMounted(() => {
         <h3>🧪 批量策略验证：{{ batchStrategyLabel }}（按模型可信度降序）</h3>
         <div class="batch-actions">
           <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
+          <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
           <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
             {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
           </button>
           <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
+          <span v-if="batchJsonCopyMsg" class="save-msg">{{ batchJsonCopyMsg }}</span>
           <span v-if="batchSaveMsg" class="save-msg" :class="{ err: batchSaveMsg.includes('失败') }">{{ batchSaveMsg }}</span>
         </div>
       </div>
