@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V153（V154）—— 文档覆盖 JSON 报告导出与指南自身迭代** —— V152 仅把指南更新到 V151，V153 新增的回测页「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V153：标题、全景表补 V152/V153 两行、3.1 回测页第 4 步补充 JSON 导出说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V153；全景表补 V152/V153；3.1 回测页第 4 步「复制报告」后补「⚙ 复制 JSON」说明（完整结构化验证档案）。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
 **回测报告「复制 JSON」（V153）—— 机器可读验证档案，Agent/脚本友好** —— 单标回测页已有 Markdown 复制报告（V104/V116），但写脚本/存档时更需要结构化 JSON。本次在工具栏新增「⚙ 复制 JSON」：把当前回测结果（performance/signal_accuracy/segment_robustness/model_trust/out_of_sample/equity_curve/trades 等）以缩进 JSON 复制到剪贴板，方便 Agent 消费、长期存档与程序化对比。
 
 ### 新增
