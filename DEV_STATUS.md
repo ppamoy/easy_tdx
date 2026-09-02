@@ -23,6 +23,17 @@
 - **V325** 批量实证：summarize_batch + scripts/advice_batch_validate.py（多标的汇总 vs 买入持有）
 - **质量门禁**：全量 pytest tests/unit/ 2534 通过（V320-V325 新增 33 个用例）；ruff/mypy/format 归零；vue-tsc + vite build 通过
 
+## V102 决策支持全面落地（V323-V330）✅ 已全部完成
+
+- **V323** easy-tdx advice MARKET CODE CLI（json/table）；**V329** 补 --output csv
+- **V324** 缠论回测策略 use_v102_advice：3买 首仓按 V102 建议的止损/第一止盈动态出场
+- **V325** 批量实证：summarize_batch + scripts/advice_batch_validate.py（vs 买入持有）
+- **V327** 缠论分析页 /chanlun 接入 V102 决策卡片（analyser 序列化补 v102 字段）
+- **V328** 监控页实时信号带 V102 质量评级徽章 + 操作建议摘要
+- **V330** 诊断页「回放实证」结果「📊 导出 CSV」
+- **文档**：QUICKSTART「V102 决策支持如何用」指南 + CHANGELOG/DEV_STATUS 里程碑
+- **质量门禁**：相关单测 100+ 全绿；ruff/mypy/format 归零；vue-tsc + vite build 通过
+
 ## 上次会话状态
 - **无活跃后台任务** - 上一个 session 未留下进行中的工作
 - **项目已完成大部分核心功能** - 缠论算法(V48-V84)、回测引擎、前端可视化均已实现

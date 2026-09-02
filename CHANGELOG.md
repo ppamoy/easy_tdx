@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+**V102 决策支持全面落地（V323-V330）—— CLI/策略/缠论分析页/监控页/导出全链路** —— 延续 V320-V322，把 V102 决策支持贯穿命令行、回测策略与全站页面：
+- **V323** easy-tdx advice MARKET CODE CLI 命令（json/table 输出，collect_signal_advices 供 Web/CLI 共用）。
+- **V324** 缠论回测策略 use_v102_advice 参数：3买 首仓按 V102 建议的止损/第一止盈动态出场（盘中 high/low 触发，优先于固定百分比，交易日志记录 v102_stop_loss/v102_take_profit）。
+- **V325** 批量实证：summarize_batch + scripts/advice_batch_validate.py（多标的建议回放汇总 vs 买入持有）。
+- **V326** QUICKSTART 补「V102 决策支持如何用」指南；DEV_STATUS 记录里程碑。
+- **V327** 缠论分析页 /chanlun 接入 V102 决策支持（analyser to_dict 序列化补 v102 字段 + ChanlunView 最新信号卡片展示）。
+- **V328** 监控页实时信号带 V102 质量评级徽章（A/B/C/D）+ 操作建议摘要。
+- **V329** advice CLI 支持 --output csv（建议回放明细 Excel 友好导出）。
+- **V330** 诊断页「回放实证」结果「📊 导出 CSV」按钮（Web/CLI 导出统一）。
+
+### 验证
+
+- 相关单测 100+ 全绿；ruff/mypy/format 归零；vue-tsc + vite build 通过；全量 pytest tests/unit/ 通过。
+
+---
+
 **诊断页「回放实证」（V322）—— V102 建议在历史行情上一键回放** —— 新增 POST /api/v1/diagnosis/advice-simulate：拉取标的日线 → 缠论分析 → 对 3买/3卖 信号用信号日窗口生成入场/止损/止盈建议 → 逐笔回放（先触止损→亏损单、先触止盈→盈利单、到期→收盘结算）→ 返回胜率/平均收益/出场分布；诊断页缠论卡片新增「▶ 回放实证」按钮与结果表。模拟器同步支持做空方向（3卖 建议可回放）。
 
 ### 新增
