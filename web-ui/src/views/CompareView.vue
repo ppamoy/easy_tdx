@@ -28,7 +28,11 @@ const error = ref('')
 const selectedIds = ref<Set<string>>(new Set())
 const details = ref<Map<string, CompareItem>>(new Map())
 
-onMounted(loadTasks)
+onMounted(async () => {
+  await loadTasks()
+  // V295: 恢复上次勾选的对比任务（如有）
+  await restoreComparePersist()
+})
 
 async function loadTasks() {
   loading.value = true
@@ -102,6 +106,33 @@ async function toggle(taskId: string) {
   }
   selectedIds.value = new Set(selectedIds.value)
   details.value = new Map(details.value)
+  saveComparePersist()
+}
+
+// V295: 对比页所选任务持久化（记住上次勾选的 2-4 个任务，刷新/切页自动恢复）
+const COMPARE_SELECT_KEY = 'easy_tdx_compare_selected'
+function saveComparePersist() {
+  try {
+    localStorage.setItem(COMPARE_SELECT_KEY, JSON.stringify(Array.from(selectedIds.value)))
+  } catch {
+    // localStorage 不可用忽略
+  }
+}
+async function restoreComparePersist() {
+  let saved: string[] = []
+  try {
+    const raw = localStorage.getItem(COMPARE_SELECT_KEY)
+    if (raw) saved = JSON.parse(raw)
+  } catch {
+    return
+  }
+  if (!Array.isArray(saved) || saved.length === 0) return
+  // 只恢复（最多 4 个）仍存在的已完成任务
+  for (const tid of saved.slice(0, 4)) {
+    if (selectedIds.value.has(tid)) continue
+    if (selectedIds.value.size >= 4) break
+    await toggle(tid).catch(() => {})
+  }
 }
 
 const compareItems = ref<Array<{ label: string; result: BacktestResult }>>([])

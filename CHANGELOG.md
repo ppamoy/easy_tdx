@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**对比页所选任务持久化（V295）—— 刷新/切页自动恢复勾选与对比** —— 批量验证五处（V217/V219/V221/V223/V231）与策略库筛选已有持久化，对比页（V102）刷新后勾选的任务会丢失。本次加 localStorage 持久化：勾选变化时把所选 task_id 存入 easy_tdx_compare_selected，onMounted 加载任务列表后自动恢复勾选并重新拉取对比——与全站持久化系列对齐。
+
+### 新增
+
+- **web-ui/src/views/CompareView.vue** —— 新增 saveComparePersist/restoreComparePersist（所选任务持久化）+ onMounted 恢复勾选。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：对比页勾选 2 任务 → 刷新 → 自动恢复勾选 2 个并加载指标对比、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V293（V294）—— 文档覆盖 verify-multi 表格与指南自身迭代** —— V292 仅把指南更新到 V291，V293 新增的 verify-multi `--table` 输出未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V293：标题、全景表补 V292/V293 两行、3.9 命令行节 verify-multi 条目补 --table 说明。
 
 ### 新增
