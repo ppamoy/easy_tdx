@@ -459,6 +459,19 @@ function buildPortfolioReportText(): string {
     lines.push('- 平均训练段：' + pct(r.out_of_sample.avg_train_return) + ' · 平均样本外：' + pct(r.out_of_sample.avg_test_return))
     lines.push('')
   }
+  // V303: 组合级 Walk-Forward 滚动验证段
+  const wfr = (r as any).walk_forward
+  if (wfr) {
+    lines.push('## 组合 Walk-Forward 滚动验证（防过拟合）')
+    lines.push('- ' + (wfr.verdict || ''))
+    if (wfr.per_symbol) {
+      const per = Object.entries(wfr.per_symbol as Record<string, { degraded?: boolean }>)
+        .map(([sym, v]) => sym + (v.degraded ? ' ⚠' : ' ✅'))
+        .join(' · ')
+      lines.push('- ' + per)
+    }
+    lines.push('')
+  }
   lines.push('---')
   lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
   return lines.join('\n')

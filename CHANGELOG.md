@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**组合页「复制报告」补组合级 Walk-Forward 段（V303）—— 组合报告 Markdown 覆盖防过拟合维度** —— 回测页复制报告已补 Walk-Forward 段（V287），组合页报告 Markdown（V127）有组合 WF 面板（V299）但复制报告未包含。本次在 buildPortfolioReportText 的样本外段后补「组合 Walk-Forward 滚动验证」段：verdict + 逐标 ✅/⚠ 汇总——与回测页 V287 对齐，组合报告导出也覆盖过拟合维度。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— buildPortfolioReportText 样本外段后补组合级 Walk-Forward 段（verdict + 逐标 ✅/⚠ 汇总）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合页勾选 Walk-Forward → 组合回测 →「复制报告」→ Markdown 含「组合 Walk-Forward 滚动验证」段、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V301（V302）—— 文档覆盖验证总结复制与指南自身迭代** —— V300 仅把指南更新到 V299，V301 新增的验证总结卡片「复制验证摘要」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V301：标题、全景表补 V300/V301 两行、3.1 回测页第 3 步补复制验证总结说明。
 
 ### 新增
