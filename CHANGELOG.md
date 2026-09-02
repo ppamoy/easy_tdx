@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**CLI verify-portfolio 支持 --walk-forward（V297）—— 组合验证也输出滚动窗口防过拟合判定** —— CLI 验证系列中 verify（V225）/verify-multi（V243）/run-all（V233）/reverify（V245）都有 --walk-forward，组合验证（V176）此前只有样本外。本次给 verify-portfolio 加 `--walk-forward [--step-ratio]`：对组合内每只标的复用 _compute_walk_forward_single（run-all V233 helper）逐槽计算，聚合为 report.walk_forward（symbols/degraded_symbols/verdict/per_symbol）——命令行组合验证也覆盖过拟合维度，与 CLI 系列对齐。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify-portfolio 新增 --walk-forward/--step-ratio 选项；主体在样本外段后对每个槽位计算 walk_forward 并聚合写入 report.walk_forward。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify-portfolio --help 含 --walk-forward/--step-ratio。
+- ruff / mypy 零告警；全量单测 **2479 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V295（V296）—— 文档覆盖对比页持久化与指南自身迭代** —— V294 仅把指南更新到 V293，V295 新增的对比页所选任务持久化入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V295：标题、全景表补 V294/V295 两行、3.6 策略库与对比页对比条目补持久化说明。
 
 ### 新增

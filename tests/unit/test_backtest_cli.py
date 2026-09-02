@@ -419,3 +419,13 @@ class TestBacktestCLI:
         result = runner.invoke(cli, ["verify-multi", "--help"])
         assert result.exit_code == 0
         assert "--table" in result.output
+
+    def test_verify_portfolio_walk_forward_option(self):
+        """V297: verify-portfolio 应暴露 --walk-forward/--step-ratio 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-portfolio", "--help"])
+        assert result.exit_code == 0
+        assert "--walk-forward" in result.output
+        assert "--step-ratio" in result.output

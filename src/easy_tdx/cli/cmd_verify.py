@@ -484,6 +484,13 @@ def verify_multi(
     help="仅输出组合中样本外 ✅泛化 的标的（需同时 --out-of-sample）",
 )
 @click.option(
+    "--walk-forward",
+    "use_wf",
+    is_flag=True,
+    help="对组合输出 Walk-Forward 滚动窗口判定（V297）",
+)
+@click.option("--step-ratio", "wf_step", default=0.1, type=float, help="Walk-Forward 滚动步长比例")
+@click.option(
     "--output-file",
     "output_file",
     default=None,
@@ -502,6 +509,8 @@ def verify_portfolio(
     slippage: float,
     run_oos: bool,
     only_robust: bool,
+    use_wf: bool,
+    wf_step: float,
     output_file: str | None,
 ) -> None:
     """组合模型验证：多标的跑同一策略，输出组合绩效 + 组合准确度聚合 + 组合可信度。
@@ -650,6 +659,52 @@ def verify_portfolio(
                 }
         except Exception:
             pass
+
+    # V297: 组合级 Walk-Forward 滚动窗口判定（逐槽复用 _compute_walk_forward_single，聚合）
+    if use_wf:
+        try:
+            from .cmd_run_all import _compute_walk_forward_single
+
+            per_symbol_wf: dict[str, Any] = {}
+            degraded_symbols_wf = 0
+            n = len(stock_data_list)
+            for sd in stock_data_list:
+                symbol = sd.market + sd.code
+                try:
+                    wf = _compute_walk_forward_single(
+                        sd.df,
+                        type(entry.build(params)),
+                        cash=cash / max(n, 1),
+                        commission=commission,
+                        step_ratio=wf_step,
+                    )
+                    if wf:
+                        per_symbol_wf[symbol] = {
+                            "windows": wf.get("windows"),
+                            "degraded": bool(wf.get("degraded")),
+                            "verdict": wf.get("verdict", ""),
+                        }
+                        if wf.get("degraded"):
+                            degraded_symbols_wf += 1
+                except Exception:  # noqa: BLE001
+                    per_symbol_wf[symbol] = {"degraded": True, "verdict": "Walk-Forward 失败"}
+            if per_symbol_wf:
+                report["walk_forward"] = {
+                    "symbols": len(per_symbol_wf),
+                    "degraded_symbols": degraded_symbols_wf,
+                    "verdict": (
+                        f"{len(per_symbol_wf) - degraded_symbols_wf}/{len(per_symbol_wf)} "
+                        f"只滚动窗口稳健；若多数标的表现衰减，组合历史成绩需谨慎对待"
+                    ),
+                    "per_symbol": per_symbol_wf,
+                }
+        except Exception:  # noqa: BLE001
+            report["walk_forward"] = {
+                "symbols": 0,
+                "degraded_symbols": 0,
+                "verdict": "Walk-Forward 计算失败",
+                "per_symbol": {},
+            }
 
     # V241: 仅输出样本外稳健标的（与 verify-multi V199 / run-all V201 对齐）
     if only_robust:
