@@ -112,5 +112,6 @@ easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv # 只报告新
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --interval 60 # 连续轮询守护（每 60 秒扫描，Ctrl+C 退出）
 easy-tdx offline watch --state /tmp/watch.json --info   # 查看监控基线状态（V360）
 easy-tdx offline watch --state /tmp/watch.json --reset  # 清空监控基线（V360）
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --out /tmp/signals.jsonl   # 新信号 JSONL 落盘（V365）
 ```
 完整用法见 [docs/v102-decision-support.md](docs/v102-decision-support.md)。
