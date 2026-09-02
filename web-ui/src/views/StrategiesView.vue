@@ -510,6 +510,37 @@ function exportStrategiesCsv() {
   }
   setTimeout(() => { libraryCsvMsg.value = '' }, 2500)
 }
+// V291: 导出策略清单 JSON（全库验证档案机器可读，与 CSV V269 / 单条 JSON V251 互补）
+const libraryJsonMsg = ref('')
+async function exportStrategiesJson() {
+  if (!sortedVisible.value.length) return
+  const payload = {
+    generated_at: new Date().toISOString(),
+    total: sortedVisible.value.length,
+    strategies: sortedVisible.value.map((s) => ({
+      id: s.id,
+      name: s.name,
+      kind: s.kind,
+      strategy: s.strategy,
+      strategy_label: s.strategy_label || s.strategy,
+      params: s.params,
+      context: s.context,
+      trade_config: s.trade_config,
+      snapshot: s.snapshot,
+      tags: s.tags,
+      notes: s.notes,
+      created_at: s.created_at,
+      updated_at: s.updated_at,
+    })),
+  }
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+    libraryJsonMsg.value = '✓ 已复制策略清单 JSON'
+  } catch {
+    libraryJsonMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { libraryJsonMsg.value = '' }, 2500)
+}
 
 async function onReverifyAll() {
   const targets = [...sortedVisible.value].filter((s) => s.kind === 'single' || s.kind === 'portfolio' || s.kind === 'multi')
@@ -854,13 +885,22 @@ const comboGrade = computed(() =>
         <button
           class="ghost sm"
           :disabled="loading || sortedVisible.length === 0"
-          title="把当前可见策略的验证结论导出为 CSV"
+          title="把当前可见策略的验证结论文档导出为 CSV"
           @click="exportStrategiesCsv"
         >
           📊 导出策略清单
         </button>
+        <button
+          class="ghost sm"
+          :disabled="loading || sortedVisible.length === 0"
+          title="把当前可见策略的完整验证档案复制为 JSON（机器可读）"
+          @click="exportStrategiesJson"
+        >
+          ⚙ 复制清单 JSON
+        </button>
         <span v-if="reverifyAllMsg" class="reverify-msg all">{{ reverifyAllMsg }}</span>
         <span v-if="libraryCsvMsg" class="reverify-msg all">{{ libraryCsvMsg }}</span>
+        <span v-if="libraryJsonMsg" class="reverify-msg all">{{ libraryJsonMsg }}</span>
         <label class="trust-sort">
           <input type="checkbox" v-model="sortByTrust" />
           按验证可信度排序

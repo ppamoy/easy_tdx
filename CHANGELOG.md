@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**策略库「复制清单 JSON」（V291）—— 全库验证档案机器可读导出** —— 策略库已有整库 CSV（V269）与单条 JSON（V251），但缺整库清单 JSON。本次在页头加「⚙ 复制清单 JSON」：把当前可见策略的完整档案（id/name/kind/strategy/params/context/trade_config/snapshot/tags/notes/时间戳）打包为结构化 JSON 复制到剪贴板，Agent/脚本友好，与 CSV V269 互补。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— 新增 exportStrategiesJson（sortedVisible 完整档案打包）+ 页头「⚙ 复制清单 JSON」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：策略库 →「复制清单 JSON」→ 剪贴板为合法 JSON（strategies 数组含种入策略）、清理成功、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V289（V290）—— 文档覆盖 WF 面板 CSV 与指南自身迭代** —— V288 仅把指南更新到 V287，V289 新增的 WalkForwardPanel「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V289：标题、全景表补 V288/V289 两行、3.1 回测页第 3 步与 3.7 寻优页 Walk-Forward 条目补导出 CSV 说明。
 
 ### 新增
