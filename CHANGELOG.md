@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V303（V304）—— 文档覆盖组合报告 WF 段与指南自身迭代** —— V302 仅把指南更新到 V301，V303 新增的组合页「复制报告」组合级 Walk-Forward 段未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V303：标题、全景表补 V302/V303 两行、3.4 组合回测页报告导出补 WF 段说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V303；全景表补 V302/V303；3.4 组合回测页「复制报告（V127）」条目补「组合级 Walk-Forward 段（V303）」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **组合页「复制报告」补组合级 Walk-Forward 段（V303）—— 组合报告 Markdown 覆盖防过拟合维度** —— 回测页复制报告已补 Walk-Forward 段（V287），组合页报告 Markdown（V127）有组合 WF 面板（V299）但复制报告未包含。本次在 buildPortfolioReportText 的样本外段后补「组合 Walk-Forward 滚动验证」段：verdict + 逐标 ✅/⚠ 汇总——与回测页 V287 对齐，组合报告导出也覆盖过拟合维度。
 
 ### 新增
