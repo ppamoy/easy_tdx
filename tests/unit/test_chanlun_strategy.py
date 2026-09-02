@@ -136,3 +136,147 @@ class TestChanlunStrategyEdgeCases:
         result = engine.run(df)
         # 应该有交易产生（趋势明显时缠论会识别出笔和中枢）
         assert result.performance["total_trades"] >= 0  # 至少不崩溃
+
+
+class TestV102Advice:
+    """V324：3买 按 V102 建议止损止盈。"""
+
+    def _make_strategy(self) -> ChanlunStrategy:
+        """构造绕过 init 的策略实例，直接测 next() 出场逻辑。"""
+        from unittest.mock import MagicMock
+
+        s = ChanlunStrategy.__new__(ChanlunStrategy)
+        s.p = {
+            "use_v102_advice": True,
+            "use_3buy": True,
+            "use_3sell": True,
+            "use_2s_signals": False,
+            "min_confidence": 0.0,
+            "high_conf_only": False,
+            "stop_loss_pct": 0.0,
+            "take_profit_pct": 0.0,
+            "bi_type": "new",
+            "zs_min_lines": 3,
+            "macd_fast": 12,
+            "macd_slow": 26,
+            "macd_signal": 9,
+        }
+        s._position_count = 1
+        s._entry_price = 100.0
+        s._bar_index = 1
+        s._trade_log = []
+        s._signal_ptr = 99  # 无信号
+        s._chanlun_signals = []
+        s._signal_traces = {}
+        s._last_signal_conf = 0.0
+        s._last_signal_type = ""
+        s.sell = MagicMock()
+        s._data_proxy = MagicMock()
+        return s
+
+    def test_v102_stop_loss_triggered(self) -> None:
+        """盘中跌破 V102 建议止损价 → 立即平仓（记录 v102_stop_loss）。"""
+        s = self._make_strategy()
+        s._v102_active = True
+        s._v102_sl = 95.0
+        s._v102_tp = 110.0
+        s.data.low = [94.0]
+        s.data.high = [101.0]
+        s.data.close = [94.0]
+
+        s.next()
+
+        assert s._position_count == 0
+        assert s._trade_log[-1]["signal_type"] == "v102_stop_loss"
+        assert s.sell.called
+
+    def test_v102_take_profit_triggered(self) -> None:
+        """盘中触及 V102 建议止盈价 → 立即平仓（记录 v102_take_profit）。"""
+        s = self._make_strategy()
+        s._v102_active = True
+        s._v102_sl = 95.0
+        s._v102_tp = 110.0
+        s.data.low = [99.0]
+        s.data.high = [111.0]
+        s.data.close = [111.0]
+
+        s.next()
+
+        assert s._position_count == 0
+        assert s._trade_log[-1]["signal_type"] == "v102_take_profit"
+        assert s.sell.called
+
+    def test_v102_inactive_falls_back_to_pct(self) -> None:
+        """V102 未激活时走百分比止损。"""
+        s = self._make_strategy()
+        s._v102_active = False
+        s.p["stop_loss_pct"] = 0.05  # 止损 5% → 95
+        s.data.low = [94.0]
+        s.data.high = [100.0]
+        s.data.close = [94.0]
+
+        s.next()
+
+        assert s._position_count == 0
+        assert s._trade_log[-1]["signal_type"] == "stop_loss"
+
+    def test_v102_advice_carried_in_signals(self) -> None:
+        """init 把 3buy 信号的 V102 建议带进信号队列。"""
+        from datetime import datetime, timedelta
+        from unittest.mock import MagicMock, patch
+
+        s = ChanlunStrategy.__new__(ChanlunStrategy)
+        s.p = {
+            "bi_type": "new",
+            "zs_min_lines": 3,
+            "macd_fast": 12,
+            "macd_slow": 26,
+            "macd_signal": 9,
+            "min_confidence": 0.0,
+            "high_conf_only": False,
+            "use_2s_signals": False,
+            "use_3buy": True,
+            "use_3sell": True,
+        }
+        import numpy as np
+
+        # 模拟 60 根 K 线数据（供 init 构建 DataFrame）
+        s._data_proxy = MagicMock()
+        n = 60
+        opens = np.ones(n) * 100.0
+        s.data.open.raw = opens
+        s.data.close.raw = opens
+        s.data.high.raw = opens + 1.0
+        s.data.low.raw = opens - 1.0
+        s.data.vol.raw = np.ones(n) * 1e6
+        s.data.amount.raw = np.ones(n) * 1e8
+        dates = [(datetime(2024, 1, 1) + timedelta(days=i)).strftime("%Y%m%d") for i in range(n)]
+        s._datetime_array = np.array(dates)
+
+        # 构造带 BUY_3 + V102 建议的缠论结果
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        bi = MagicMock()
+        bi.index = 0
+        bi.end = MagicMock()
+        bi.end.k = MagicMock()
+        bi.end.k.date = datetime(2024, 1, 2)
+        bi.is_done.return_value = True
+        mmd = MMD(mmd_type=MMDType.BUY_3, msg="3buy", confidence=0.7)
+        mmd.bi = bi
+        mmd._decision_support = {"entry_price": 100.0, "stop_loss": 95.0, "take_profit_1": 110.0}
+
+        fake_result = MagicMock()
+        fake_result.bis = [bi]
+        fake_result.mmds = [mmd]
+
+        with patch("easy_tdx.chanlun.ChanlunAnalyser") as mock_analyser:
+            mock_analyser.return_value.process_klines.return_value = fake_result
+            s.init()
+
+        assert len(s._chanlun_signals) == 1
+        bar_idx, mmd_type, conf, advice = s._chanlun_signals[0]
+        assert mmd_type == "3buy"
+        assert advice is not None
+        assert advice["stop_loss"] == 95.0
+        assert advice["take_profit_1"] == 110.0

@@ -63,6 +63,12 @@ class ChanlunStrategy(ParametrizedStrategy):
             default=False,
             label="仅交易高置信度(>=70%)",
         ),
+        Param(
+            "use_v102_advice",
+            bool,
+            default=False,
+            label="3买按V102建议止损止盈",
+        ),
     ]
 
     def init(self) -> None:
@@ -117,8 +123,8 @@ class ChanlunStrategy(ParametrizedStrategy):
         # 已完成的笔（用于判断信号是否可见）
         self._done_bis = [b for b in result.bis if b.is_done()]
 
-        # 构建信号队列：(bar_idx, mmd_type_str, confidence)
-        self._chanlun_signals: list[tuple[int, str, float]] = []
+        # 构建信号队列：(bar_idx, mmd_type_str, confidence, v102_advice|None)
+        self._chanlun_signals: list[tuple[int, str, float, dict[str, Any] | None]] = []
         seen_bi: set[int] = set()
         min_conf = self.p["min_confidence"]
         use_2s = self.p["use_2s_signals"]
@@ -152,7 +158,9 @@ class ChanlunStrategy(ParametrizedStrategy):
             if bar_idx < 0:
                 continue
 
-            self._chanlun_signals.append((bar_idx, mmd.mmd_type.value, conf))
+            # V324: 3买 信号附带 V102 决策支持建议（入场/止损/止盈），供按建议执行
+            advice = getattr(mmd, "_decision_support", None) or None
+            self._chanlun_signals.append((bar_idx, mmd.mmd_type.value, conf, advice))
 
         # v9: 信号类型追踪（供回测准确度分析使用）
         self._signal_traces: dict[str, list[dict[str, Any]]] = {}
@@ -173,6 +181,10 @@ class ChanlunStrategy(ParametrizedStrategy):
         self._last_signal_conf: float = 0.0
         self._last_signal_type: str = ""
         self._trade_log: list[dict[str, Any]] = []
+        # V324: 当前仓位是否按 V102 建议止损止盈（3买 建议的 stop/take_profit_1）
+        self._v102_active: bool = False
+        self._v102_sl: float = 0.0
+        self._v102_tp: float = 0.0
 
     def _bi_end_bar_idx(self, bi: Any) -> int:
         """获取笔结束分型的日期对应的 bar index。"""
@@ -185,7 +197,18 @@ class ChanlunStrategy(ParametrizedStrategy):
         """每根 bar 调用：消费到达的信号。"""
         current_price = float(self.data.close[0])
 
-        # 止损/止盈
+        # V324: V102 建议止损/止盈优先（用盘中 high/low 判断触发）
+        if self._v102_active and self._position_count > 0:
+            if self._v102_sl > 0 and float(self.data.low[0]) <= self._v102_sl:
+                self._record_trade("SELL", self._v102_sl, "v102_stop_loss", 0.0)
+                self._close_position()
+                return
+            if self._v102_tp > 0 and float(self.data.high[0]) >= self._v102_tp:
+                self._record_trade("SELL", self._v102_tp, "v102_take_profit", 0.0)
+                self._close_position()
+                return
+
+        # 止损/止盈（百分比，V102 建议未激活时生效）
         if self._position_count > 0 and (
             self.p["stop_loss_pct"] > 0 or self.p["take_profit_pct"] > 0
         ):
@@ -204,7 +227,7 @@ class ChanlunStrategy(ParametrizedStrategy):
 
         # 消费信号队列
         while self._signal_ptr < len(self._chanlun_signals):
-            bar_idx, mmd_type, confidence = self._chanlun_signals[self._signal_ptr]
+            bar_idx, mmd_type, confidence, advice = self._chanlun_signals[self._signal_ptr]
             if bar_idx > self._bar_index:
                 break
             self._signal_ptr += 1
@@ -233,6 +256,13 @@ class ChanlunStrategy(ParametrizedStrategy):
                 elif self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
+                    # V324: 首仓按 V102 建议设定动态止损/止盈位
+                    if self.p["use_v102_advice"] and advice:
+                        self._v102_active = True
+                        self._v102_sl = float(advice.get("stop_loss") or 0.0)
+                        self._v102_tp = float(advice.get("take_profit_1") or 0.0)
+                    else:
+                        self._v102_active = False
                     self._record_trade("BUY", current_price, mmd_type, confidence)
                     self.buy()
 
@@ -273,6 +303,9 @@ class ChanlunStrategy(ParametrizedStrategy):
         """平仓。"""
         self._position_count = 0
         self._entry_price = 0.0
+        self._v102_active = False
+        self._v102_sl = 0.0
+        self._v102_tp = 0.0
         self.sell()
 
     @property
