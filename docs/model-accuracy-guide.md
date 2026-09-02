@@ -1,4 +1,4 @@
-# 模型准确度验证指南（V95–V303）
+# 模型准确度验证指南（V95–V305）
 
 > 本文档汇总 easy-tdx 自 V95 起新增的「通过历史回测验证模型/策略准确度」能力。
 > 目标：让用户不只是看账户盈亏，而是能回答三件事——**信号准不准、稳健不稳健、过不过拟合**。
@@ -211,6 +211,8 @@
 | V301 | 验证总结卡片「复制验证摘要」 | 一条 Markdown 带走全部验证结论 | 回测页验证总结卡「📋 复制验证总结」 |
 | V302 | 模型准确度验证指南扩展到 V301 | 文档覆盖验证总结复制入口 | docs/model-accuracy-guide.md |
 | V303 | 组合页「复制报告」补组合级 Walk-Forward 段 | 组合报告 Markdown 覆盖防过拟合维度 | 组合页「复制报告」 |
+| V304 | 模型准确度验证指南扩展到 V303 | 文档覆盖组合报告 WF 段入口 | docs/model-accuracy-guide.md |
+| V305 | 寻优/组合验证总结卡片补「复制验证摘要」 | 验证结论一条 Markdown 带走 | 寻优/组合验证总结卡「📋 复制验证总结」 |
 
 ## 二、核心概念
 
@@ -245,7 +247,7 @@
 
 ### 3.4 组合回测页
 
-- 报告展示「组合准确度验证」（V99）与「组合可信度」横幅（V103）。
+- 报告展示「组合准确度验证」（V99）与「组合可信度」横幅（V103）；「✅ 组合验证总结」卡片「📋 复制验证总结」（V305）把组合可信度/准确度/最强最弱标的拼成 Markdown，与回测 V301 / 寻优 V305 对齐。
 - 资金与成本区可勾选「样本外验证」（V126）与「训练占比」，报告区展示「🔬 组合样本外验证」面板（逐标训练/持有切分聚合）；「Walk-Forward 滚动验证」勾选（V299）请求带 use_walk_forward，后端对组合内每只标的逐槽复用 _compute_walk_forward_single 计算并聚合（walk_forward: symbols/degraded_symbols/verdict/per_symbol），报告区渲染「🔁 组合 Walk-Forward 滚动验证」面板——与单标 V287 / 寻优 V123 / CLI verify-portfolio V297 对齐。
 - 工具栏「📋 复制报告」（V127）导出组合绩效 + 可信度 + 准确度 + 样本外的 Markdown 摘要；「⚙ 复制 JSON」（V162）导出完整结构化的组合结果（total_performance/individual_results/accuracy_summary/portfolio_trust/out_of_sample 等），供 Agent/脚本消费；「📊 导出 CSV」（V259）把组合绩效块 + 各标的对比表导出为 Excel 友好的 CSV；「📊 交易明细 CSV」（V285）把各标的成交记录（标的/时间/方向/数量/价格/手续费/已实现盈亏等）聚合为一张表，逐笔核对组合级买卖点；「复制报告」含组合级 Walk-Forward 段（V303，勾选 Walk-Forward 时）——verdict + 逐标 ✅/⚠ 汇总，与回测页 V287 对齐。
 - 保存为组合策略（V134）时快照包含 accuracy/trust/out_of_sample 三组验证结论，策略库「组合」tab 卡片可直接展示。
