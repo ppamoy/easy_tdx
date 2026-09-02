@@ -134,11 +134,7 @@ def compute_model_trust(
     rob_score, rob_comp = _robustness_score(segment_robustness)
     perf_score, perf_comp = _performance_score(performance, signal_accuracy)
 
-    score01 = (
-        W_ACCURACY * acc_score
-        + W_ROBUSTNESS * rob_score
-        + W_PERFORMANCE * perf_score
-    )
+    score01 = W_ACCURACY * acc_score + W_ROBUSTNESS * rob_score + W_PERFORMANCE * perf_score
     score100 = round(_clamp(score01) * 100, 1)
 
     if score100 >= 70:
@@ -216,9 +212,11 @@ def compute_portfolio_trust(accuracy_summary: dict[str, Any] | None) -> dict[str
         return {
             "score": 37.0,
             "grade": "低",
-            "components": {"accuracy": {"note": "无组合准确度数据", "score": 0.3},
-                           "robustness": {"note": "无组合稳健性数据", "score": 0.5},
-                           "performance": {"note": "无组合绩效数据", "score": 0.3}},
+            "components": {
+                "accuracy": {"note": "无组合准确度数据", "score": 0.3},
+                "robustness": {"note": "无组合稳健性数据", "score": 0.5},
+                "performance": {"note": "无组合绩效数据", "score": 0.3},
+            },
             "verdict": "综合可信度 低（37/100）；无组合准确度数据。",
         }
 
@@ -228,9 +226,11 @@ def compute_portfolio_trust(accuracy_summary: dict[str, Any] | None) -> dict[str
         return {
             "score": 37.0,
             "grade": "低",
-            "components": {"accuracy": {"note": "无标的", "score": 0.3},
-                           "robustness": {"note": "无标的", "score": 0.3},
-                           "performance": {"note": "无标的", "score": 0.3}},
+            "components": {
+                "accuracy": {"note": "无标的", "score": 0.3},
+                "robustness": {"note": "无标的", "score": 0.3},
+                "performance": {"note": "无标的", "score": 0.3},
+            },
             "verdict": "综合可信度 低（37/100）；组合无标的。",
         }
 
@@ -323,4 +323,3 @@ def _build_portfolio_verdict(
     avg_ret = float(perf.get("avg_total_return", 0.0) or 0.0)
     parts.append(f"加权平均收益 {avg_ret:+.1%}")
     return "；".join(parts) + "。"
-

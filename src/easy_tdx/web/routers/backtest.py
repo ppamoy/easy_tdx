@@ -373,13 +373,11 @@ def _run_backtest(df: pd.DataFrame, req: BacktestRequest) -> dict[str, Any]:
     # V287: Walk-Forward 滚动窗口验证（与 CLI verify --walk-forward V225 对齐）
     if getattr(req, "use_walk_forward", False):
         try:
-
             from easy_tdx.cli.cmd_run_all import _compute_walk_forward_single
 
             # 仅保留 datetime + 数值列（去掉 date 等字符串列，StrategyDataProxy 逐列转 float）
             num_cols = [
-                c for c in df.columns
-                if c == "datetime" or pd.api.types.is_numeric_dtype(df[c])
+                c for c in df.columns if c == "datetime" or pd.api.types.is_numeric_dtype(df[c])
             ]
             wf_df = df[num_cols].copy()
             wf = _compute_walk_forward_single(
@@ -393,7 +391,6 @@ def _run_backtest(df: pd.DataFrame, req: BacktestRequest) -> dict[str, Any]:
                 result_dict["walk_forward"] = wf
         except Exception:
             pass
-
 
     return result_dict
 
@@ -466,12 +463,8 @@ def _run_portfolio_backtest(
 
         individual = getattr(result, "individual_results", None)
         if individual:
-            allocations = {
-                str(k): float(v) for k, v in (result.equity_allocation or {}).items()
-            }
-            result_dict["accuracy_summary"] = aggregate_portfolio_accuracy(
-                individual, allocations
-            )
+            allocations = {str(k): float(v) for k, v in (result.equity_allocation or {}).items()}
+            result_dict["accuracy_summary"] = aggregate_portfolio_accuracy(individual, allocations)
     except Exception:
         # 附加信息失败不阻断主结果
         pass
@@ -518,12 +511,8 @@ def _run_portfolio_backtest(
                     per_symbol[symbol] = {"degraded": True, "verdict": "样本外验证失败"}
             n = len(per_symbol)
             if n:
-                avg_train = sum(
-                    (v.get("train_return") or 0.0) for v in per_symbol.values()
-                ) / n
-                avg_test = sum(
-                    (v.get("test_return") or 0.0) for v in per_symbol.values()
-                ) / n
+                avg_train = sum((v.get("train_return") or 0.0) for v in per_symbol.values()) / n
+                avg_test = sum((v.get("test_return") or 0.0) for v in per_symbol.values()) / n
                 degraded = degraded_symbols >= n * 0.5 or avg_test < avg_train * 0.5
                 verdict = (
                     f"{n - degraded_symbols}/{n} 只样本外稳健；"
@@ -554,7 +543,8 @@ def _run_portfolio_backtest(
                 symbol = f"{stock.market}{stock.code}"
                 try:
                     num_cols = [
-                        c for c in stock.df.columns
+                        c
+                        for c in stock.df.columns
                         if c == "datetime" or pd.api.types.is_numeric_dtype(stock.df[c])
                     ]
                     wf = _compute_walk_forward_single(
@@ -757,12 +747,8 @@ def _run_multi_strategy_backtest(
 
         individual = getattr(result, "individual_results", None)
         if individual:
-            allocations = {
-                str(k): float(v) for k, v in (result.equity_allocation or {}).items()
-            }
-            result_dict["accuracy_summary"] = aggregate_portfolio_accuracy(
-                individual, allocations
-            )
+            allocations = {str(k): float(v) for k, v in (result.equity_allocation or {}).items()}
+            result_dict["accuracy_summary"] = aggregate_portfolio_accuracy(individual, allocations)
     except Exception:
         pass
 
@@ -828,12 +814,8 @@ def _run_multi_strategy_backtest(
                     degraded_slots += 1
             n = len(per_slot)
             if n:
-                avg_train = sum(
-                    (v.get("train_return") or 0.0) for v in per_slot.values()
-                ) / n
-                avg_test = sum(
-                    (v.get("test_return") or 0.0) for v in per_slot.values()
-                ) / n
+                avg_train = sum((v.get("train_return") or 0.0) for v in per_slot.values()) / n
+                avg_test = sum((v.get("test_return") or 0.0) for v in per_slot.values()) / n
                 degraded = degraded_slots >= n * 0.5 or avg_test < avg_train * 0.5
                 verdict = (
                     f"{n - degraded_slots}/{n} 个槽位样本外稳健；"

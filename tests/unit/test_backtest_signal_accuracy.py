@@ -144,9 +144,7 @@ class TestComputeSignalAccuracy:
         closes = [100 + i for i in range(50)]
         df = _make_df(closes)
         trades = _trades([20240106, 20240120])
-        report = compute_signal_accuracy(
-            df, trades, strategy_total_return=0.80
-        )
+        report = compute_signal_accuracy(df, trades, strategy_total_return=0.80)
         bench = report["benchmark"]
         # 买入持有 = 149/100 - 1 = 0.49
         assert bench["buy_hold_return"] == pytest.approx(0.49, abs=1e-9)
@@ -262,4 +260,3 @@ class TestSignalAccuracyByType:
         signals = [{"type": "3sell", "bar_index": 10}]
         rep = compute_signal_accuracy_by_type(closes, signals)
         assert "显著优于随机" in rep["by_type"]["3sell"]["verdict"]
-

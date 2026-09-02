@@ -518,9 +518,7 @@ async def chanlun_recommend(
     _ = frequency_map.get(req.category.upper(), "daily")
 
     # ── 1. 获取日线 K 线（缠论 + 诊断共用，QFQ 前复权）────────────
-    df = await fetch_qfq_klines(
-        mac_client, client, req.market, req.code, "DAY", 0, 500
-    )
+    df = await fetch_qfq_klines(mac_client, client, req.market, req.code, "DAY", 0, 500)
     if df is None or len(df) < 100:
         return {"error": "数据不足", "symbol": symbol}
 

@@ -88,9 +88,7 @@ class TestComputeScreeningVerify:
             "SZ:000003": _bars([100, 101, 103, 106, 110, 115]),
             "SZ:000004": _bars([100, 102, 105, 109, 114, 120]),
         }
-        report = compute_screening_verify(
-            bars, ["SZ:000001"], "2024-01-01", horizons=(5,)
-        )
+        report = compute_screening_verify(bars, ["SZ:000001"], "2024-01-01", horizons=(5,))
         h5 = report["horizons"]["5"]
         assert h5["excess_return"] < 0
         assert "跑输" in report["verdict"]

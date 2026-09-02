@@ -226,7 +226,6 @@ class StrategyStore:
             return cur.rowcount > 0
 
 
-
 # ── 单例 ───────────────────────────────────────────────────────────────────
 
 _store: StrategyStore | None = None

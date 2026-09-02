@@ -18,7 +18,6 @@ import pandas as pd
 sys.path.insert(0, "src")
 
 from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy
-from easy_tdx.backtest.strategy import StrategyDataProxy
 
 
 def _make_df(n: int, base: float = 50.0, trend: float = 0.05, noise: float = 1.0):
@@ -30,14 +29,16 @@ def _make_df(n: int, base: float = 50.0, trend: float = 0.05, noise: float = 1.0
         open_ = close + (math.sin(i / 7) * noise * 0.3)
         high = max(open_, close) + abs(noise * 0.2)
         low = min(open_, close) - abs(noise * 0.2)
-        rows.append({
-            "datetime": dt,
-            "open": round(open_, 2),
-            "close": round(close, 2),
-            "high": round(high, 2),
-            "low": round(low, 2),
-            "vol": int(1000000 + i * 1000),
-        })
+        rows.append(
+            {
+                "datetime": dt,
+                "open": round(open_, 2),
+                "close": round(close, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "vol": int(1000000 + i * 1000),
+            }
+        )
         dt += timedelta(days=1)
     return pd.DataFrame(rows)
 
@@ -67,30 +68,66 @@ def test_chanlun_strategy_init():
     class MockData:
         def __init__(self, df):
             self._df = df
-            self.open = type('obj', (object,), {
-                'raw': df['open'].values,
-                '__getitem__': lambda s, k: df['open'].values[k] if isinstance(k, int) else df['open'].values
-            })()
-            self.close = type('obj', (object,), {
-                'raw': df['close'].values,
-                '__getitem__': lambda s, k: df['close'].values[k] if isinstance(k, int) else df['close'].values
-            })()
-            self.high = type('obj', (object,), {
-                'raw': df['high'].values,
-                '__getitem__': lambda s, k: df['high'].values[k] if isinstance(k, int) else df['high'].values
-            })()
-            self.low = type('obj', (object,), {
-                'raw': df['low'].values,
-                '__getitem__': lambda s, k: df['low'].values[k] if isinstance(k, int) else df['low'].values
-            })()
-            self.vol = type('obj', (object,), {
-                'raw': df['vol'].values,
-                '__getitem__': lambda s, k: df['vol'].values[k] if isinstance(k, int) else df['vol'].values
-            })()
-            self.amount = type('obj', (object,), {
-                'raw': df['vol'].values,
-                '__getitem__': lambda s, k: df['vol'].values[k] if isinstance(k, int) else df['vol'].values
-            })()
+            self.open = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["open"].values,
+                    "__getitem__": lambda s, k: (
+                        df["open"].values[k] if isinstance(k, int) else df["open"].values
+                    ),
+                },
+            )()
+            self.close = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["close"].values,
+                    "__getitem__": lambda s, k: (
+                        df["close"].values[k] if isinstance(k, int) else df["close"].values
+                    ),
+                },
+            )()
+            self.high = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["high"].values,
+                    "__getitem__": lambda s, k: (
+                        df["high"].values[k] if isinstance(k, int) else df["high"].values
+                    ),
+                },
+            )()
+            self.low = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["low"].values,
+                    "__getitem__": lambda s, k: (
+                        df["low"].values[k] if isinstance(k, int) else df["low"].values
+                    ),
+                },
+            )()
+            self.vol = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["vol"].values,
+                    "__getitem__": lambda s, k: (
+                        df["vol"].values[k] if isinstance(k, int) else df["vol"].values
+                    ),
+                },
+            )()
+            self.amount = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["vol"].values,
+                    "__getitem__": lambda s, k: (
+                        df["vol"].values[k] if isinstance(k, int) else df["vol"].values
+                    ),
+                },
+            )()
 
     strategy.data = MockData(df)
 
@@ -101,7 +138,7 @@ def test_chanlun_strategy_init():
     assert len(strategy._chanlun_signals) >= 0, "信号队列应为非负数"
     print(f"  信号队列长度: {len(strategy._chanlun_signals)}")
     print(f"  完成笔数: {len(strategy._done_bis)}")
-    print(f"  ✓ 策略初始化成功")
+    print("  ✓ 策略初始化成功")
 
 
 def test_chanlun_strategy_with_high_conf():
@@ -128,37 +165,73 @@ def test_chanlun_strategy_with_high_conf():
     class MockData:
         def __init__(self, df):
             self._df = df
-            self.open = type('obj', (object,), {
-                'raw': df['open'].values,
-                '__getitem__': lambda s, k: df['open'].values[k] if isinstance(k, int) else df['open'].values
-            })()
-            self.close = type('obj', (object,), {
-                'raw': df['close'].values,
-                '__getitem__': lambda s, k: df['close'].values[k] if isinstance(k, int) else df['close'].values
-            })()
-            self.high = type('obj', (object,), {
-                'raw': df['high'].values,
-                '__getitem__': lambda s, k: df['high'].values[k] if isinstance(k, int) else df['high'].values
-            })()
-            self.low = type('obj', (object,), {
-                'raw': df['low'].values,
-                '__getitem__': lambda s, k: df['low'].values[k] if isinstance(k, int) else df['low'].values
-            })()
-            self.vol = type('obj', (object,), {
-                'raw': df['vol'].values,
-                '__getitem__': lambda s, k: df['vol'].values[k] if isinstance(k, int) else df['vol'].values
-            })()
-            self.amount = type('obj', (object,), {
-                'raw': df['vol'].values,
-                '__getitem__': lambda s, k: df['vol'].values[k] if isinstance(k, int) else df['vol'].values
-            })()
+            self.open = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["open"].values,
+                    "__getitem__": lambda s, k: (
+                        df["open"].values[k] if isinstance(k, int) else df["open"].values
+                    ),
+                },
+            )()
+            self.close = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["close"].values,
+                    "__getitem__": lambda s, k: (
+                        df["close"].values[k] if isinstance(k, int) else df["close"].values
+                    ),
+                },
+            )()
+            self.high = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["high"].values,
+                    "__getitem__": lambda s, k: (
+                        df["high"].values[k] if isinstance(k, int) else df["high"].values
+                    ),
+                },
+            )()
+            self.low = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["low"].values,
+                    "__getitem__": lambda s, k: (
+                        df["low"].values[k] if isinstance(k, int) else df["low"].values
+                    ),
+                },
+            )()
+            self.vol = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["vol"].values,
+                    "__getitem__": lambda s, k: (
+                        df["vol"].values[k] if isinstance(k, int) else df["vol"].values
+                    ),
+                },
+            )()
+            self.amount = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["vol"].values,
+                    "__getitem__": lambda s, k: (
+                        df["vol"].values[k] if isinstance(k, int) else df["vol"].values
+                    ),
+                },
+            )()
 
     strategy.data = MockData(df)
     strategy.init()
 
     # 高置信度过滤后信号数应 <= 不过滤的情况
     print(f"  高置信度过滤后信号数: {len(strategy._chanlun_signals)}")
-    print(f"  ✓ 高置信度过滤生效")
+    print("  ✓ 高置信度过滤生效")
 
 
 def test_signal_traces_structure():
@@ -166,10 +239,18 @@ def test_signal_traces_structure():
     df = _make_df(300, base=30.0, trend=0.03, noise=0.8)
     strategy = ChanlunStrategy()
     strategy.p = {
-        "bi_type": "new", "zs_min_lines": 3, "macd_fast": 12,
-        "macd_slow": 26, "macd_signal": 9, "use_3buy": True,
-        "use_3sell": True, "use_2s_signals": False, "min_confidence": 0.0,
-        "stop_loss_pct": 0.08, "take_profit_pct": 0.25, "high_conf_only": False,
+        "bi_type": "new",
+        "zs_min_lines": 3,
+        "macd_fast": 12,
+        "macd_slow": 26,
+        "macd_signal": 9,
+        "use_3buy": True,
+        "use_3sell": True,
+        "use_2s_signals": False,
+        "min_confidence": 0.0,
+        "stop_loss_pct": 0.08,
+        "take_profit_pct": 0.25,
+        "high_conf_only": False,
     }
     strategy._bar_index = len(df) - 1
     strategy._datetime_array = df["datetime"].apply(lambda x: int(x.strftime("%Y%m%d"))).values
@@ -177,30 +258,66 @@ def test_signal_traces_structure():
     class MockData:
         def __init__(self, df):
             self._df = df
-            self.open = type('obj', (object,), {
-                'raw': df['open'].values,
-                '__getitem__': lambda s, k: df['open'].values[k] if isinstance(k, int) else df['open'].values
-            })()
-            self.close = type('obj', (object,), {
-                'raw': df['close'].values,
-                '__getitem__': lambda s, k: df['close'].values[k] if isinstance(k, int) else df['close'].values
-            })()
-            self.high = type('obj', (object,), {
-                'raw': df['high'].values,
-                '__getitem__': lambda s, k: df['high'].values[k] if isinstance(k, int) else df['high'].values
-            })()
-            self.low = type('obj', (object,), {
-                'raw': df['low'].values,
-                '__getitem__': lambda s, k: df['low'].values[k] if isinstance(k, int) else df['low'].values
-            })()
-            self.vol = type('obj', (object,), {
-                'raw': df['vol'].values,
-                '__getitem__': lambda s, k: df['vol'].values[k] if isinstance(k, int) else df['vol'].values
-            })()
-            self.amount = type('obj', (object,), {
-                'raw': df['vol'].values,
-                '__getitem__': lambda s, k: df['vol'].values[k] if isinstance(k, int) else df['vol'].values
-            })()
+            self.open = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["open"].values,
+                    "__getitem__": lambda s, k: (
+                        df["open"].values[k] if isinstance(k, int) else df["open"].values
+                    ),
+                },
+            )()
+            self.close = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["close"].values,
+                    "__getitem__": lambda s, k: (
+                        df["close"].values[k] if isinstance(k, int) else df["close"].values
+                    ),
+                },
+            )()
+            self.high = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["high"].values,
+                    "__getitem__": lambda s, k: (
+                        df["high"].values[k] if isinstance(k, int) else df["high"].values
+                    ),
+                },
+            )()
+            self.low = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["low"].values,
+                    "__getitem__": lambda s, k: (
+                        df["low"].values[k] if isinstance(k, int) else df["low"].values
+                    ),
+                },
+            )()
+            self.vol = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["vol"].values,
+                    "__getitem__": lambda s, k: (
+                        df["vol"].values[k] if isinstance(k, int) else df["vol"].values
+                    ),
+                },
+            )()
+            self.amount = type(
+                "obj",
+                (object,),
+                {
+                    "raw": df["vol"].values,
+                    "__getitem__": lambda s, k: (
+                        df["vol"].values[k] if isinstance(k, int) else df["vol"].values
+                    ),
+                },
+            )()
 
     strategy.data = MockData(df)
     strategy.init()
@@ -212,7 +329,7 @@ def test_signal_traces_structure():
         for t in trace_list[:3]:
             assert "bar_index" in t, "信号追踪缺少 bar_index"
             assert "confidence" in t, "信号追踪缺少 confidence"
-    print(f"  ✓ 信号追踪结构正确")
+    print("  ✓ 信号追踪结构正确")
 
 
 def main():
@@ -237,5 +354,6 @@ def main():
 
 if __name__ == "__main__":
     import random
+
     math.random = random.random
     sys.exit(main())

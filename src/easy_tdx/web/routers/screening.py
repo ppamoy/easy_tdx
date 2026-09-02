@@ -415,9 +415,7 @@ async def verify_screening(
     symbols_canon = [_norm(s) for s in symbols]
     selected_codes = {_norm(s).split(":", 1)[1] for s in selected}
     # 池内被选中的集合（按代码匹配，兼容前缀差异）
-    selected_in_pool = [
-        s for s in symbols_canon if s.split(":", 1)[1] in selected_codes
-    ]
+    selected_in_pool = [s for s in symbols_canon if s.split(":", 1)[1] in selected_codes]
 
     bars_by_symbol: dict[str, dict[str, Any]] = {}
     for sym in symbols_canon:

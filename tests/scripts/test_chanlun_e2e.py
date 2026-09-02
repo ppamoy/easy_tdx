@@ -32,14 +32,16 @@ def make_trend_data(n: int, base: float, trend_slope: float, noise: float) -> pd
         open_ = close + (math.random() - 0.5) * noise * 0.3
         high = max(open_, close) + abs(noise_val) * 0.2
         low = min(open_, close) - abs(noise_val) * 0.2
-        rows.append({
-            "date": dt,
-            "open": round(open_, 2),
-            "close": round(close, 2),
-            "high": round(high, 2),
-            "low": round(low, 2),
-            "vol": int(1000000 + i * 1000),
-        })
+        rows.append(
+            {
+                "date": dt,
+                "open": round(open_, 2),
+                "close": round(close, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "vol": int(1000000 + i * 1000),
+            }
+        )
         dt += timedelta(days=1)
     return pd.DataFrame(rows)
 
@@ -53,14 +55,16 @@ def make_consolidation(n: int, base: float, amplitude: float) -> pd.DataFrame:
         open_ = close + (math.random() - 0.5) * amplitude * 0.3
         high = max(open_, close) + amplitude * 0.15
         low = min(open_, close) - amplitude * 0.15
-        rows.append({
-            "date": dt,
-            "open": round(open_, 2),
-            "close": round(close, 2),
-            "high": round(high, 2),
-            "low": round(low, 2),
-            "vol": int(800000 + i * 500),
-        })
+        rows.append(
+            {
+                "date": dt,
+                "open": round(open_, 2),
+                "close": round(close, 2),
+                "high": round(high, 2),
+                "low": round(low, 2),
+                "vol": int(800000 + i * 500),
+            }
+        )
         dt += timedelta(days=1)
     return pd.DataFrame(rows)
 
@@ -75,14 +79,19 @@ def main():
     df1 = make_trend_data(200, 50.0, 0.08, 1.5)
     a1 = ChanlunAnalyser(code="TEST1", frequency="daily")
     r1 = a1.process_klines(df1)
-    print(f"  K线: {len(r1.klines)}, 笔: {len(r1.bis)}, 中枢: {len(r1.zss)}, 买卖点: {len(r1.mmds)}")
+    print(
+        f"  K线: {len(r1.klines)}, 笔: {len(r1.bis)}, 中枢: {len(r1.zss)}, 买卖点: {len(r1.mmds)}"
+    )
 
     # 验证笔方向交替
     alt_ok = True
     for i in range(1, len(r1.bis)):
         if r1.bis[i - 1].direction == r1.bis[i].direction:
             alt_ok = False
-            print(f"  ❌ 笔方向未交替: [{i-1}]={r1.bis[i-1].direction} vs [{i}]={r1.bis[i].direction}")
+            print(
+                f"  ❌ 笔方向未交替: [{i - 1}]={r1.bis[i - 1].direction} vs "
+                f"[{i}]={r1.bis[i].direction}"
+            )
             break
     print(f"  笔方向交替: {'✓' if alt_ok else '❌'}")
 
@@ -156,7 +165,7 @@ def main():
     r_min = a_min.process_klines(df_min)
     print(f"  日线: {len(r_day.bis)} 笔, {len(r_day.zss)} 中枢")
     print(f"  5分钟: {len(r_min.bis)} 笔, {len(r_min.zss)} 中枢")
-    print(f"  多周期兼容: ✓ (无崩溃)")
+    print("  多周期兼容: ✓ (无崩溃)")
 
     # 总结
     print("\n" + "=" * 60)
@@ -170,5 +179,6 @@ def main():
 if __name__ == "__main__":
     # 修复 random 调用
     import random
+
     math.random = random.random
     sys.exit(main())

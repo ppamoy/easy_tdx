@@ -101,7 +101,7 @@ def _build_df(shape: str, minute: bool = False) -> pd.DataFrame:
             (10.4, 11.2, 11.5, 10.3),
             (10.8, 10.6, 11.0, 10.2),
         ]
-        for (o, c, h, low) in rows:
+        for o, c, h, low in rows:
             opens.append(o)
             closes.append(c)
             highs.append(h)
@@ -177,12 +177,8 @@ def _assert_bi_geometry(bars: list[dict], bis: list[dict], tag: str) -> None:
             assert eb["low"] == bi["end_val"], f"{tag} bi{bi['index']} 终点价不在K线极值 {bi}"
     for i in range(len(bis) - 1):
         prev, nxt = bis[i], bis[i + 1]
-        assert prev["end_index"] == nxt["start_index"], (
-            f"{tag} bi{i} 终点与 bi{i+1} 起点索引不同"
-        )
-        assert prev["end_val"] == nxt["start_val"], (
-            f"{tag} bi{i} 终点与 bi{i+1} 起点价格不同"
-        )
+        assert prev["end_index"] == nxt["start_index"], f"{tag} bi{i} 终点与 bi{i + 1} 起点索引不同"
+        assert prev["end_val"] == nxt["start_val"], f"{tag} bi{i} 终点与 bi{i + 1} 起点价格不同"
 
 
 def _assert_xd_geometry(bars: list[dict], xds: list[dict], tag: str) -> None:

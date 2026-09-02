@@ -146,6 +146,7 @@ class TestBacktestCLI:
             # 两行策略都应出现在输出中
             assert "ma_cross" in echoed
             assert "macd" in echoed
+
     def test_print_ranking_with_robust_oos_columns(self):
         """V155: 排名表应显示稳健性/样本外列且不崩溃。"""
         from unittest.mock import patch
@@ -164,9 +165,16 @@ class TestBacktestCLI:
 
         base = {
             "strategy": "ma_cross",
-            "total_return": 0.2, "annual_return": 0.2, "max_drawdown": 0.1,
-            "sharpe": 1.2, "sortino": 1.1, "calmar": 2.0, "win_rate": 0.6,
-            "total_trades": 10, "profit_factor": 1.5, "volatility": 0.2,
+            "total_return": 0.2,
+            "annual_return": 0.2,
+            "max_drawdown": 0.1,
+            "sharpe": 1.2,
+            "sortino": 1.1,
+            "calmar": 2.0,
+            "win_rate": 0.6,
+            "total_trades": 10,
+            "profit_factor": 1.5,
+            "volatility": 0.2,
         }
         results = [
             {**base, "strategy": "a", "overfit_likely": False, "oos_degraded": False},
@@ -184,6 +192,7 @@ class TestBacktestCLI:
             assert "⚠过拟合" in echoed
             assert "✅泛化" in echoed
             assert "⚠衰减" in echoed
+
     def test_verify_output_file_option(self):
         """V172: verify / verify-multi 应暴露 --output-file 选项。"""
         from easy_tdx.cli import cli
@@ -195,6 +204,7 @@ class TestBacktestCLI:
         r2 = runner.invoke(cli, ["verify-multi", "--help"])
         assert r2.exit_code == 0
         assert "--output-file" in r2.output
+
     def test_verify_walk_forward_option(self):
         """V225: verify 应暴露 --walk-forward 选项。"""
         from easy_tdx.cli import cli
@@ -204,6 +214,7 @@ class TestBacktestCLI:
         assert result.exit_code == 0
         assert "--walk-forward" in result.output
         assert "--step-ratio" in result.output
+
     def test_run_all_output_file_option(self):
         """V174: run-all 应暴露 --output-file 选项。"""
         from easy_tdx.cli import cli
@@ -244,6 +255,7 @@ class TestBacktestCLI:
         bad = runner.invoke(cli, ["verify-portfolio", "SZ 000001", "--only-robust"])
         assert bad.exit_code == 1
         assert "需要同时使用 --out-of-sample" in bad.output
+
     def test_verify_multi_only_robust(self):
         """V199: verify-multi 应暴露 --only-robust；未开 --out-of-sample 时报错。"""
         from easy_tdx.cli import cli
@@ -256,6 +268,7 @@ class TestBacktestCLI:
         bad = runner.invoke(cli, ["verify-multi", "SZ 000001", "--only-robust"])
         assert bad.exit_code == 1
         assert "需要同时使用 --out-of-sample" in bad.output
+
     def test_run_all_only_robust_option(self):
         """V201: run-all 应暴露 --only-robust 选项。"""
         from easy_tdx.cli import cli
@@ -274,6 +287,7 @@ class TestBacktestCLI:
         assert result.exit_code == 0
         assert "--walk-forward" in result.output
         assert "--step-ratio" in result.output
+
     def test_reverify_help(self):
         """V213: reverify 命令应注册且 --help 正常。"""
         from easy_tdx.cli import cli
@@ -293,6 +307,7 @@ class TestBacktestCLI:
         assert result.exit_code == 0
         assert "--walk-forward" in result.output
         assert "--step-ratio" in result.output
+
     def test_run_all_walk_forward_option(self):
         """V233: run-all 应暴露 --walk-forward/--step-ratio 选项，且 helper 能产出报告。"""
         from easy_tdx.cli import cli
@@ -330,11 +345,16 @@ class TestBacktestCLI:
         n = 150
         base = datetime(2023, 1, 1)
         close = np.linspace(100.0, 120.0, n)
-        df = pd.DataFrame({
-            "datetime": [base + timedelta(days=i) for i in range(n)],
-            "open": close - 0.1, "high": close + 0.2, "low": close - 0.2,
-            "close": close, "vol": np.full(n, 1_000_000.0),
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": [base + timedelta(days=i) for i in range(n)],
+                "open": close - 0.1,
+                "high": close + 0.2,
+                "low": close - 0.2,
+                "close": close,
+                "vol": np.full(n, 1_000_000.0),
+            }
+        )
         report = _compute_walk_forward_single(df, _WfStrat, cash=1000000, commission=0.0003)
         assert report is not None
         assert report["windows"] >= 1
@@ -354,8 +374,12 @@ class TestBacktestCLI:
         from easy_tdx.screen.ranker import RankEntry, SignalRanker
 
         entry = RankEntry(
-            rank=1, code="000001", market="SZ", name="平安银行",
-            signal_date=20240101, last_close=10.0,
+            rank=1,
+            code="000001",
+            market="SZ",
+            name="平安银行",
+            signal_date=20240101,
+            last_close=10.0,
             performance={"total_return": 0.1, "sharpe": 1.2},
             accuracy={"hit_rate": 0.65, "excess_hit_rate": 0.1},
             trust={"score": 80, "grade": "高", "verdict": "高可信度"},
@@ -385,16 +409,25 @@ class TestBacktestCLI:
         n = 220
         base = datetime(2023, 1, 1)
         close = np.linspace(100.0, 120.0, n)
-        df = pd.DataFrame({
-            "datetime": [base + timedelta(days=i) for i in range(n)],
-            "open": close - 0.1, "high": close + 0.2, "low": close - 0.2,
-            "close": close, "vol": np.full(n, 1_000_000.0),
-            "amount": np.full(n, 1_000_000_000.0),
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": [base + timedelta(days=i) for i in range(n)],
+                "open": close - 0.1,
+                "high": close + 0.2,
+                "low": close - 0.2,
+                "close": close,
+                "vol": np.full(n, 1_000_000.0),
+                "amount": np.full(n, 1_000_000_000.0),
+            }
+        )
         ohlcv = df.to_dict(orient="records")
         req = BacktestRequest(
-            strategy="ma_cross", params={"fast": 5, "slow": 20},
-            cash=500000, use_walk_forward=True, step_ratio=0.1, ohlcv=ohlcv,
+            strategy="ma_cross",
+            params={"fast": 5, "slow": 20},
+            cash=500000,
+            use_walk_forward=True,
+            step_ratio=0.1,
+            ohlcv=ohlcv,
         )
         assert req.use_walk_forward is True
         assert req.step_ratio == 0.1
@@ -405,8 +438,10 @@ class TestBacktestCLI:
         assert "verdict" in wf
         # 不开启时不计算
         req2 = BacktestRequest(
-            strategy="ma_cross", params={"fast": 5, "slow": 20},
-            cash=500000, ohlcv=ohlcv,
+            strategy="ma_cross",
+            params={"fast": 5, "slow": 20},
+            cash=500000,
+            ohlcv=ohlcv,
         )
         result2 = _run_backtest(df, req2)
         assert result2.get("walk_forward") is None

@@ -17,16 +17,24 @@ import pandas as pd
 # 确保源码在 path 中
 sys.path.insert(0, "src")
 
+from easy_tdx.chanlun.types import Kline
 
-def _make_kline(idx: int, date: str, o: float, c: float, h: float, l: float) -> "Kline":
-    from easy_tdx.chanlun.types import Kline
+
+def _make_kline(
+    idx: int,
+    date: str,
+    o: float,
+    c: float,
+    h: float,
+    lo: float,
+) -> Kline:
     return Kline(
         index=idx,
         date=datetime.strptime(date, "%Y-%m-%d"),
         open=o,
         close=c,
         high=h,
-        low=l,
+        low=lo,
         amount=1000.0,
     )
 
@@ -60,17 +68,21 @@ def test_full_pipeline():
     ]
 
     analyser = ChanlunAnalyser(code="TEST", frequency="DAILY")
-    result = analyser.process_klines(pd.DataFrame([
-        {
-            "datetime": k.date,
-            "open": k.open,
-            "close": k.close,
-            "high": k.high,
-            "low": k.low,
-            "vol": k.amount,
-        }
-        for k in klines
-    ]))
+    result = analyser.process_klines(
+        pd.DataFrame(
+            [
+                {
+                    "datetime": k.date,
+                    "open": k.open,
+                    "close": k.close,
+                    "high": k.high,
+                    "low": k.low,
+                    "vol": k.amount,
+                }
+                for k in klines
+            ]
+        )
+    )
 
     print(f"K线数量: {len(result.klines)}")
     print(f"缠论K线数量: {len(result.cklines)}")
@@ -88,9 +100,7 @@ def test_full_pipeline():
 
     # 验证笔的方向交替
     for i in range(1, len(result.bis)):
-        assert result.bis[i].direction != result.bis[i - 1].direction, (
-            f"笔{i}和笔{i-1}方向相同"
-        )
+        assert result.bis[i].direction != result.bis[i - 1].direction, f"笔{i}和笔{i - 1}方向相同"
 
     # 验证中枢属性
     for zs in result.zss:
@@ -155,21 +165,35 @@ def test_bi_direction_alternation():
     base = 100.0
     for i in range(30):
         if i % 2 == 0:
-            o, c, h, l = base, base + 3, base + 4, base - 1
+            o, c, h, lo = base, base + 3, base + 4, base - 1
         else:
-            o, c, h, l = base, base - 3, base + 1, base - 4
-        klines.append(Kline(
-            index=i,
-            date=datetime(2024, 1, 2) + timedelta(days=i),
-            open=o, close=c, high=h, low=l, amount=1000
-        ))
+            o, c, h, lo = base, base - 3, base + 1, base - 4
+        klines.append(
+            Kline(
+                index=i,
+                date=datetime(2024, 1, 2) + timedelta(days=i),
+                open=o,
+                close=c,
+                high=h,
+                low=lo,
+                amount=1000,
+            )
+        )
         base += 1
 
-    df = pd.DataFrame([{
-        "datetime": k.date,
-        "open": k.open, "close": k.close,
-        "high": k.high, "low": k.low, "vol": k.amount,
-    } for k in klines])
+    df = pd.DataFrame(
+        [
+            {
+                "datetime": k.date,
+                "open": k.open,
+                "close": k.close,
+                "high": k.high,
+                "low": k.low,
+                "vol": k.amount,
+            }
+            for k in klines
+        ]
+    )
 
     analyser = ChanlunAnalyser(code="TEST", frequency="DAILY")
     result = analyser.process_klines(df)
@@ -180,7 +204,8 @@ def test_bi_direction_alternation():
 
     for i in range(1, len(result.bis)):
         assert result.bis[i].direction != result.bis[i - 1].direction, (
-            f"笔{i}({result.bis[i].direction.value})与笔{i-1}({result.bis[i-1].direction.value})方向相同"
+            f"笔{i}({result.bis[i].direction.value})与笔{i - 1}"
+            f"({result.bis[i - 1].direction.value})方向相同"
         )
 
     print("✓ 笔方向交替测试通过")
@@ -189,12 +214,7 @@ def test_bi_direction_alternation():
 
 def test_zs_overlap_logic():
     """测试中枢重叠逻辑。"""
-    from easy_tdx.chanlun.bi import find_bis
-    from easy_tdx.chanlun.config import ChanlunConfig
-    from easy_tdx.chanlun.fractal import find_fractals
-    from easy_tdx.chanlun.kline_merge import merge_klines
-    from easy_tdx.chanlun.types import Kline
-    from easy_tdx.chanlun.zs import find_zss, _overlap_ratio, _is_valid_zs_range
+    from easy_tdx.chanlun.zs import _is_valid_zs_range, _overlap_ratio
 
     # 测试重叠率计算
     assert _overlap_ratio(10, 5, 3, 1) == 0.0  # 无重叠
@@ -224,19 +244,33 @@ def test_confidence_bounds():
         o = base + trend
         c = base + trend + 1
         h = c + 0.5
-        l = o - 0.5
-        klines.append(Kline(
-            index=i,
-            date=datetime(2024, 1, 2) + timedelta(days=i),
-            open=o, close=c, high=h, low=l, amount=1000
-        ))
+        lo = o - 0.5
+        klines.append(
+            Kline(
+                index=i,
+                date=datetime(2024, 1, 2) + timedelta(days=i),
+                open=o,
+                close=c,
+                high=h,
+                low=lo,
+                amount=1000,
+            )
+        )
         base += 0.3
 
-    df = pd.DataFrame([{
-        "datetime": k.date,
-        "open": k.open, "close": k.close,
-        "high": k.high, "low": k.low, "vol": k.amount,
-    } for k in klines])
+    df = pd.DataFrame(
+        [
+            {
+                "datetime": k.date,
+                "open": k.open,
+                "close": k.close,
+                "high": k.high,
+                "low": k.low,
+                "vol": k.amount,
+            }
+            for k in klines
+        ]
+    )
 
     analyser = ChanlunAnalyser(code="TEST", frequency="DAILY")
     result = analyser.process_klines(df)
@@ -256,6 +290,7 @@ def test_confidence_bounds():
 def test_signal_accuracy_computation():
     """测试信号准确度计算。"""
     import numpy as np
+
     from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type
 
     n = 200
@@ -338,13 +373,13 @@ def main():
             errors.append(f"{name}: {e}")
             print(f"  ✗ {name} 异常: {e}\n")
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"测试结果: {passed} 通过, {failed} 失败")
     if errors:
         print("失败详情:")
         for err in errors:
             print(f"  - {err}")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
 
     return failed == 0
 

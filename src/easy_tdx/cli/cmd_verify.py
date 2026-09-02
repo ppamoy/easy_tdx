@@ -157,9 +157,7 @@ def verify(
         try:
             from ..backtest.optimizer import ParamGridOptimizer
 
-            param_grid: dict[str, list[Any]] = {
-                k: [v] for k, v in params.items()
-            }
+            param_grid: dict[str, list[Any]] = {k: [v] for k, v in params.items()}
             optimizer = ParamGridOptimizer(
                 strategy_name=strategy_name,
                 param_grid=param_grid,
@@ -203,8 +201,7 @@ def verify(
     mt = result_dict.get("model_trust") or {}
     if mt.get("grade"):
         trust_str = (
-            "模型可信度 " + str(mt.get("grade")) + "（"
-            + str(int(mt.get("score", 0))) + "/100）"
+            "模型可信度 " + str(mt.get("grade")) + "（" + str(int(mt.get("score", 0))) + "/100）"
         )
         verdict_parts.append(trust_str)
     sa = result_dict.get("signal_accuracy") or {}
@@ -753,8 +750,7 @@ def verify_portfolio(
     mt = report.get("portfolio_trust") or {}
     if mt.get("grade"):
         trust_str = (
-            "组合可信度 " + str(mt.get("grade")) + "（"
-            + str(int(mt.get("score", 0))) + "/100）"
+            "组合可信度 " + str(mt.get("grade")) + "（" + str(int(mt.get("score", 0))) + "/100）"
         )
         verdict_parts.append(trust_str)
     acc = report.get("accuracy_summary") or {}
@@ -785,12 +781,14 @@ def _print_verify_multi_table(rows: list[dict[str, Any]]) -> None:
     has_oos = any(r.get("oos_degraded") is not None for r in rows)
     has_robust = any(r.get("overfit_likely") is not None for r in rows)
     has_wf = any(r.get("wf_degraded") is not None for r in rows)
-    header = "".join([
-        f"{'排名':>4}  ",
-        f"{'标的':<12} ",
-        f"{'总收益':>9} {'胜率':>7} ",
-        f"{'5根命中':>7} {'超额':>7} {'可信度':>7}",
-    ])
+    header = "".join(
+        [
+            f"{'排名':>4}  ",
+            f"{'标的':<12} ",
+            f"{'总收益':>9} {'胜率':>7} ",
+            f"{'5根命中':>7} {'超额':>7} {'可信度':>7}",
+        ]
+    )
     if has_robust:
         header += f" {'稳健':>6}"
     if has_oos:
@@ -827,8 +825,8 @@ def _print_verify_multi_table(rows: list[dict[str, Any]]) -> None:
 def _print_verify_table(report: dict[str, Any]) -> None:
     """V307: verify（单标）表格输出（替代 JSON），行 = 指标/结论。"""
     lines: list[str] = []
-    lines.append('easy-tdx verify 单标验证')
-    lines.append('═' * 70)
+    lines.append("easy-tdx verify 单标验证")
+    lines.append("═" * 70)
     perf = report.get("performance") or {}
     rows: list[tuple[str, str]] = [
         ("总收益", f"{perf.get('total_return', 0):+.2%}"),
@@ -836,7 +834,7 @@ def _print_verify_table(report: dict[str, Any]) -> None:
         ("夏普", f"{perf.get('sharpe', 0):.2f}"),
         ("最大回撤", f"{perf.get('max_drawdown', 0):.2%}"),
         ("胜率", f"{perf.get('win_rate', 0):.1%}"),
-        ("交易数", str(perf.get('total_trades', 0))),
+        ("交易数", str(perf.get("total_trades", 0))),
     ]
     acc = report.get("accuracy") or {}
     if acc.get("verdict"):
@@ -855,7 +853,7 @@ def _print_verify_table(report: dict[str, Any]) -> None:
         rows.append(("滚动验证", str(wf["verdict"])))
     for label, value in rows:
         lines.append(f"{label:<8} {value}")
-    lines.append('═' * 70)
+    lines.append("═" * 70)
     if report.get("verdict"):
-        lines.append('汇总: ' + str(report["verdict"]))
+        lines.append("汇总: " + str(report["verdict"]))
     click.echo(chr(10).join(lines))

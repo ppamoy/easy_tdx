@@ -58,7 +58,8 @@ class TestChanlunStrategy:
 
         # 高阈值过滤（策略参数通过构造实例传入，引擎不直接收 params）
         engine2 = BacktestEngine(
-            ChanlunStrategy(min_confidence=0.9), cash=100000,
+            ChanlunStrategy(min_confidence=0.9),
+            cash=100000,
         )
         result2 = engine2.run(df)
         trades2 = len(result2.trades)
@@ -78,7 +79,8 @@ class TestChanlunStrategy:
         """high_conf_only 参数应生效。"""
         df = _make_trending_df(300, "up")
         engine = BacktestEngine(
-            ChanlunStrategy(high_conf_only=True), cash=100000,
+            ChanlunStrategy(high_conf_only=True),
+            cash=100000,
         )
         result = engine.run(df)
         assert result is not None
@@ -100,15 +102,17 @@ class TestChanlunStrategyEdgeCases:
 
     def test_very_short_data(self) -> None:
         """数据不足时不应崩溃。"""
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2020-01-01", periods=10, freq="D"),
-            "open": [10.0] * 10,
-            "close": [10.0] * 10,
-            "high": [10.1] * 10,
-            "low": [9.9] * 10,
-            "vol": [1_000_000.0] * 10,
-            "amount": [10_000_000.0] * 10,
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2020-01-01", periods=10, freq="D"),
+                "open": [10.0] * 10,
+                "close": [10.0] * 10,
+                "high": [10.1] * 10,
+                "low": [9.9] * 10,
+                "vol": [1_000_000.0] * 10,
+                "amount": [10_000_000.0] * 10,
+            }
+        )
         engine = BacktestEngine(ChanlunStrategy, cash=100000)
         result = engine.run(df)
         assert result is not None
@@ -116,15 +120,17 @@ class TestChanlunStrategyEdgeCases:
 
     def test_no_signals_generated(self) -> None:
         """无缠论结构数据时（如全部水平）应不产生交易。"""
-        df = pd.DataFrame({
-            "datetime": pd.date_range("2020-01-01", periods=50, freq="D"),
-            "open": [10.0] * 50,
-            "close": [10.0] * 50,
-            "high": [10.0] * 50,
-            "low": [10.0] * 50,
-            "vol": [1_000_000.0] * 50,
-            "amount": [10_000_000.0] * 50,
-        })
+        df = pd.DataFrame(
+            {
+                "datetime": pd.date_range("2020-01-01", periods=50, freq="D"),
+                "open": [10.0] * 50,
+                "close": [10.0] * 50,
+                "high": [10.0] * 50,
+                "low": [10.0] * 50,
+                "vol": [1_000_000.0] * 50,
+                "amount": [10_000_000.0] * 50,
+            }
+        )
         engine = BacktestEngine(ChanlunStrategy, cash=100000)
         result = engine.run(df)
         assert result.performance["total_trades"] == 0

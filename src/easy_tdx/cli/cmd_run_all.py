@@ -608,9 +608,7 @@ def run_all(
                 )
                 overfit_likely = bool(robust.get("overfit_likely"))
                 robust_verdict = str(robust.get("verdict", ""))
-                oos = compute_out_of_sample(
-                    df, factory, cash=cash, commission=commission
-                )
+                oos = compute_out_of_sample(df, factory, cash=cash, commission=commission)
                 oos_degraded = bool(oos.get("degraded"))
                 oos_verdict = str(oos.get("verdict", ""))
             except Exception:
@@ -719,8 +717,6 @@ def run_all(
                 )
 
 
-
-
 def _compute_walk_forward_single(
     df: Any,
     strategy_cls: type,
@@ -762,12 +758,12 @@ def _compute_walk_forward_single(
         if len(train_df) < 50 or len(test_df) < 10:
             continue
         try:
-            train_bt = BacktestEngine(
-                strategy=strategy_cls, cash=cash, commission=commission
-            ).run(train_df)
-            test_bt = BacktestEngine(
-                strategy=strategy_cls, cash=cash, commission=commission
-            ).run(test_df)
+            train_bt = BacktestEngine(strategy=strategy_cls, cash=cash, commission=commission).run(
+                train_df
+            )
+            test_bt = BacktestEngine(strategy=strategy_cls, cash=cash, commission=commission).run(
+                test_df
+            )
         except Exception:  # noqa: BLE001 — 单个窗口失败跳过
             continue
         window_reports.append(

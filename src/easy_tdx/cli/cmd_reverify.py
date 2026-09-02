@@ -85,13 +85,22 @@ def reverify(
         except Exception as exc:  # noqa: BLE001 — 单条失败不中断整体
             failures.append(rec.id + "(" + str(exc) + ")")
             results.append(
-                {"id": rec.id, "name": rec.name, "kind": rec.kind,
-                 "status": "error", "error": str(exc)}
+                {
+                    "id": rec.id,
+                    "name": rec.name,
+                    "kind": rec.kind,
+                    "status": "error",
+                    "error": str(exc),
+                }
             )
 
     text = json.dumps(
-        {"total": len(all_records), "ok": sum(1 for r in results if r.get("status") == "ok"),
-         "results": results, "failures": failures},
+        {
+            "total": len(all_records),
+            "ok": sum(1 for r in results if r.get("status") == "ok"),
+            "results": results,
+            "failures": failures,
+        },
         ensure_ascii=False,
         indent=2,
         default=str,
@@ -130,8 +139,18 @@ def _reverify_one(
 
     if rec.kind == "single":
         return _reverify_single(
-            strategy, ctx, count, period, adjust, cash, commission, slippage, exec_mode, today,
-            use_wf, wf_step,
+            strategy,
+            ctx,
+            count,
+            period,
+            adjust,
+            cash,
+            commission,
+            slippage,
+            exec_mode,
+            today,
+            use_wf,
+            wf_step,
         )
     if rec.kind == "multi":
         return _reverify_multi(
@@ -143,9 +162,18 @@ def _reverify_one(
 
 
 def _reverify_single(
-    strategy: Any, ctx: dict[str, Any], count: int, period: str, adjust: str,
-    cash: float, commission: float, slippage: float, exec_mode: str, today: str,
-    use_wf: bool = False, wf_step: float = 0.1,
+    strategy: Any,
+    ctx: dict[str, Any],
+    count: int,
+    period: str,
+    adjust: str,
+    cash: float,
+    commission: float,
+    slippage: float,
+    exec_mode: str,
+    today: str,
+    use_wf: bool = False,
+    wf_step: float = 0.1,
 ) -> dict[str, Any]:
     """单标重验：对 context.symbol 重新回测（含样本外）。"""
     from ..backtest import BacktestEngine
@@ -164,13 +192,20 @@ def _reverify_single(
 
     with get_mac_client() as client:
         df = client.get_stock_kline(
-            market_int, code, period=parse_period(period), start=0, count=count,
+            market_int,
+            code,
+            period=parse_period(period),
+            start=0,
+            count=count,
             adjust=parse_adjust(adjust),
         )
         if df is None or len(df) < 30:
             raise ValueError("行情不足")
         engine = BacktestEngine(
-            strategy=strategy, cash=cash, commission=commission, slippage=slippage,
+            strategy=strategy,
+            cash=cash,
+            commission=commission,
+            slippage=slippage,
             execution=exec_mode,
         )
         result = engine.run(df.reset_index(drop=True))
@@ -188,8 +223,11 @@ def _reverify_single(
             from ..backtest.out_of_sample import compute_out_of_sample
 
             oos = compute_out_of_sample(
-                df.reset_index(drop=True), lambda: strategy, cash=cash,
-                commission=commission, slippage=slippage,
+                df.reset_index(drop=True),
+                lambda: strategy,
+                cash=cash,
+                commission=commission,
+                slippage=slippage,
             )
         except Exception:  # noqa: BLE001
             oos = {}
@@ -256,8 +294,17 @@ def _reverify_single(
         }
 
 
-def _reverify_portfolio(strategy: Any, ctx: dict[str, Any], count: int, period: str, adjust: str,
-       cash: float, commission: float, slippage: float, exec_mode: str, today: str,
+def _reverify_portfolio(
+    strategy: Any,
+    ctx: dict[str, Any],
+    count: int,
+    period: str,
+    adjust: str,
+    cash: float,
+    commission: float,
+    slippage: float,
+    exec_mode: str,
+    today: str,
 ) -> dict[str, Any]:
     """组合重验：对 context.stocks 重跑组合回测（含 V126 组合样本外）。"""
     from ..backtest.portfolio_engine import PortfolioBacktestEngine, StockData
@@ -279,7 +326,11 @@ def _reverify_portfolio(strategy: Any, ctx: dict[str, Any], count: int, period: 
             if market_int is None:
                 continue
             df = client.get_stock_kline(
-                market_int, code, period=parse_period(period), start=0, count=count,
+                market_int,
+                code,
+                period=parse_period(period),
+                start=0,
+                count=count,
                 adjust=parse_adjust(adjust),
             )
             if df is not None and len(df) >= 30:
@@ -290,8 +341,12 @@ def _reverify_portfolio(strategy: Any, ctx: dict[str, Any], count: int, period: 
         raise ValueError("所有组合标的行情获取失败")
 
     engine = PortfolioBacktestEngine(
-        strategy=strategy, stocks=stock_data_list, total_cash=cash,
-        commission=commission, slippage=slippage, execution=exec_mode,
+        strategy=strategy,
+        stocks=stock_data_list,
+        total_cash=cash,
+        commission=commission,
+        slippage=slippage,
+        execution=exec_mode,
     )
     result = engine.run()
     tp = result.total_performance
@@ -334,8 +389,11 @@ def _reverify_portfolio(strategy: Any, ctx: dict[str, Any], count: int, period: 
         for sd in stock_data_list:
             try:
                 o = compute_out_of_sample(
-                    sd.df, lambda: strategy, cash=cash / max(n, 1),
-                    commission=commission, slippage=slippage,
+                    sd.df,
+                    lambda: strategy,
+                    cash=cash / max(n, 1),
+                    commission=commission,
+                    slippage=slippage,
                 )
                 per_symbol[sd.market + sd.code] = {
                     "degraded": o.get("degraded", False),
@@ -367,11 +425,17 @@ def _reverify_portfolio(strategy: Any, ctx: dict[str, Any], count: int, period: 
     return report
 
 
-
-
 def _reverify_multi(
-    strategy: Any, ctx: dict[str, Any], count: int, period: str, adjust: str,
-    cash: float, commission: float, slippage: float, exec_mode: str, today: str,
+    strategy: Any,
+    ctx: dict[str, Any],
+    count: int,
+    period: str,
+    adjust: str,
+    cash: float,
+    commission: float,
+    slippage: float,
+    exec_mode: str,
+    today: str,
 ) -> dict[str, Any]:
     """多策略组合重验（V229）：对 context.items 各策略在其原标的上重跑，刷新组合快照。"""
     from ..backtest.multi_strategy_engine import MultiStrategyEngine, StrategySlot
@@ -381,7 +445,8 @@ def _reverify_multi(
 
     items = [it for it in (ctx.get("items") or []) if isinstance(it, dict)]
     items = [
-        it for it in items
+        it
+        for it in items
         if it.get("strategy") and it.get("symbol") and ":" in str(it.get("symbol", ""))
     ]
     if not items:
@@ -406,7 +471,11 @@ def _reverify_multi(
                 continue
             s_params = it.get("params") or {}
             df = client.get_stock_kline(
-                market_int, code, period=parse_period(period), start=0, count=count,
+                market_int,
+                code,
+                period=parse_period(period),
+                start=0,
+                count=count,
                 adjust=parse_adjust(adjust),
             )
             if df is None or len(df) < 30:
@@ -473,8 +542,11 @@ def _reverify_multi(
         for sd in slots:
             try:
                 o = compute_out_of_sample(
-                    sd.df, lambda: sd.strategy, cash=cash / max(n, 1),
-                    commission=commission, slippage=slippage,
+                    sd.df,
+                    lambda: sd.strategy,
+                    cash=cash / max(n, 1),
+                    commission=commission,
+                    slippage=slippage,
                 )
                 per_symbol[sd.symbol] = {
                     "degraded": o.get("degraded", False),

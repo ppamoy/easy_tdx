@@ -256,14 +256,14 @@ def _best_segment_label(valid: list[dict[str, Any]], rets: np.ndarray) -> str:
     if len(valid) == 0 or len(rets) == 0:
         return ""
     idx = int(np.argmax(rets))
-    return valid[idx]["label"]
+    return str(valid[idx]["label"])
 
 
 def _worst_segment_label(valid: list[dict[str, Any]], rets: np.ndarray) -> str:
     if len(valid) == 0 or len(rets) == 0:
         return ""
     idx = int(np.argmin(rets))
-    return valid[idx]["label"]
+    return str(valid[idx]["label"])
 
 
 def _build_verdict(

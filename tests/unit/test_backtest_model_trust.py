@@ -111,18 +111,14 @@ class TestPerformanceScore:
 
 class TestComputeModelTrust:
     def test_good_model_high(self) -> None:
-        rep = compute_model_trust(
-            {"total_return": 0.35, "win_rate": 0.62}, _good_sa(), _good_rob()
-        )
+        rep = compute_model_trust({"total_return": 0.35, "win_rate": 0.62}, _good_sa(), _good_rob())
         assert rep["score"] >= 70
         assert rep["grade"] == "高"
         assert set(rep["components"].keys()) == {"accuracy", "robustness", "performance"}
         assert "综合可信度" in rep["verdict"]
 
     def test_bad_model_low(self) -> None:
-        rep = compute_model_trust(
-            {"total_return": -0.1, "win_rate": 0.3}, _bad_sa(), _bad_rob()
-        )
+        rep = compute_model_trust({"total_return": -0.1, "win_rate": 0.3}, _bad_sa(), _bad_rob())
         assert rep["score"] <= 40
         assert rep["grade"] == "低"
 

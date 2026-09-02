@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter
 
 from easy_tdx.web.backtest_schemas import (
@@ -81,7 +83,7 @@ async def create_saved_strategy(req: SavedStrategyCreate) -> SavedStrategy:
 
 
 @router.patch("/strategies/{strategy_id}")
-async def patch_strategy_snapshot(strategy_id: str, payload: dict) -> SavedStrategy:
+async def patch_strategy_snapshot(strategy_id: str, payload: dict[str, Any]) -> SavedStrategy:
     """V209: 更新单条策略的快照（如策略库「一键重验」后刷新验证结论）。"""
     store = get_store()
     rec = store.get(strategy_id)

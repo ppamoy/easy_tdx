@@ -232,6 +232,8 @@ def test_router_get_missing_returns_400(client: TestClient):
 def test_router_delete_missing_returns_400(client: TestClient):
     resp = client.delete("/api/v1/strategies/nonexistent")
     assert resp.status_code == 400
+
+
 def test_router_patch_snapshot_updates(client: TestClient):
     """V209: PATCH /strategies/{id} 应更新快照并返回更新后的记录。"""
     resp = client.post("/api/v1/strategies", json=_create_payload())

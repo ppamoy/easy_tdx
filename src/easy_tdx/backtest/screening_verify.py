@@ -108,11 +108,7 @@ def compute_screening_verify(
             for p in per_symbol
             if p["selected"] and p["forward"][str(h)] is not None
         ]
-        pool_rets = [
-            p["forward"][str(h)]
-            for p in per_symbol
-            if p["forward"][str(h)] is not None
-        ]
+        pool_rets = [p["forward"][str(h)] for p in per_symbol if p["forward"][str(h)] is not None]
         sel_arr = np.asarray(sel_rets, dtype=float) if sel_rets else np.asarray([], dtype=float)
         pool_arr = np.asarray(pool_rets, dtype=float) if pool_rets else np.asarray([], dtype=float)
         entry: dict[str, Any] = {
