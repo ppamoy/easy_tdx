@@ -109,5 +109,7 @@ easy-tdx offline advice SZ 000001 --output csv                    # 单只（--f
 easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md   # 批量
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv # 只报告新发现的 3买/3卖 + V102 建议摘要
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --interval 60 # 连续轮询守护（每 60 秒扫描，Ctrl+C 退出）
+easy-tdx offline watch --state /tmp/watch.json --info   # 查看监控基线状态（V360）
+easy-tdx offline watch --state /tmp/watch.json --reset  # 清空监控基线（V360）
 ```
 完整用法见 [docs/v102-decision-support.md](docs/v102-decision-support.md)。
