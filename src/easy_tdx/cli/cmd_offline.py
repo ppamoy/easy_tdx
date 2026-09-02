@@ -948,3 +948,153 @@ def advice_batch(
     out_df["summary_avg_return"] = round(summary["avg_return"], 2)
     out_df["summary_positive_symbols"] = summary["positive_symbols"]
     print_output(out_df, output_fmt)
+
+
+@offline.command("watch")
+@click.option("--dir", "day_dir", default=None, help=".day 文件目录（缺省自动检测通达信 vipdoc）")
+@click.option("--limit", default=0, type=int, help="最多扫描的股票数（0=全部）")
+@click.option("--count", default=0, type=int, help="每只读取K线条数（0=全部）")
+@click.option(
+    "--state",
+    "state_file",
+    default=None,
+    help="已见信号状态文件路径（缺省 ~/.easy_tdx/offline_watch_state.json）",
+)
+@click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
+def watch(
+    day_dir: str | None,
+    limit: int,
+    count: int,
+    state_file: str | None,
+    output_fmt: str,
+) -> None:
+    """离线信号监控：扫描本地 .day 目录，报告「新」发现的 3买/3卖 信号 + V102 建议摘要。
+
+    用状态文件记录上次已见过的信号（symbol+type+date），本次只报告新增，
+    实现无网络轮询监控（类比 Web 监控页「新信号」面板）。首次运行将当前全部
+    信号记为基线并输出。
+
+    示例：
+
+      easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv
+      easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --state /tmp/watch.json --limit 5
+    """
+    import json
+    import os
+
+    from .output import print_error, print_output
+
+    try:
+        from ..offline import read_daily_bars
+        from ..offline.paths import resolve_vipdoc
+    except Exception as e:
+        print_error(f"离线模块不可用: {e}")
+        raise SystemExit(1)
+
+    # 1. 定位 .day 目录
+    try:
+        if day_dir is not None:
+            lday_dir = Path(day_dir)
+        else:
+            lday_dir = resolve_vipdoc(None) / "sz" / "lday"
+        if not lday_dir.is_dir():
+            print_error(f".day 目录不存在: {lday_dir}")
+            raise SystemExit(1)
+        files = sorted(lday_dir.glob("*.day"))
+    except Exception as e:
+        print_error(str(e))
+        raise SystemExit(1)
+
+    if not files:
+        click.echo(f"目录 {lday_dir} 中没有 .day 文件")
+        raise SystemExit(0)
+    if limit > 0:
+        files = files[:limit]
+
+    # 2. 加载已见信号状态
+    if state_file is None:
+        state_file = str(Path.home() / ".easy_tdx" / "offline_watch_state.json")
+    state_path = Path(state_file)
+    seen: set[str] = set()
+    if state_path.is_file():
+        try:
+            seen = set(json.loads(state_path.read_text(encoding="utf-8")).get("seen", []))
+        except Exception:  # noqa: BLE001
+            seen = set()  # 状态文件损坏则视为首次运行
+
+    # 3. 逐只扫描，报告新信号 + V102 建议摘要
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    rows: list[dict[str, object]] = []
+    for filepath in files:
+        name = filepath.name.lower()
+        if not (name.startswith(("sh", "sz")) and name.endswith(".day")):
+            continue
+        mkt = name[:2].upper()
+        code = name[2:8]
+        symbol = f"{mkt}{code}"
+        try:
+            bars = read_daily_bars(filepath)
+            if not bars:
+                continue
+            if count > 0:
+                bars = bars[-count:]
+            if len(bars) < 30:
+                continue
+            df = pd.DataFrame(
+                [
+                    {
+                        "datetime": f"{b.year}-{b.month:02d}-{b.day:02d}",
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "vol": b.vol,
+                        "amount": b.amount,
+                    }
+                    for b in bars
+                ]
+            )
+            analyser = ChanlunAnalyser(code=code, frequency="daily")
+            result = analyser.process_klines(df)
+            for mmd in result.mmds:
+                if mmd.mmd_type.value not in ("3buy", "3sell"):
+                    continue  # 只监控 3买/3卖（有 V102 建议）
+                if not mmd.bi or not mmd.bi.end:
+                    continue
+                date_str = result._fmt_dt(result._fx_anchor_datetime(mmd.bi.end))
+                key = f"{symbol}:{mmd.mmd_type.value}:{date_str}"
+                if key in seen:
+                    continue
+                scorecard = getattr(mmd, "_signal_quality_scorecard", None) or {}
+                decision = getattr(mmd, "_decision_support", None) or {}
+                rows.append(
+                    {
+                        "symbol": symbol,
+                        "type": mmd.mmd_type.value,
+                        "date": date_str,
+                        "confidence": round(mmd.confidence, 2),
+                        "v102_grade": scorecard.get("overall_grade") or None,
+                        "advice": decision.get("action_recommendation") or None,
+                    }
+                )
+                seen.add(key)
+        except Exception as e:  # noqa: BLE001
+            click.echo(f"⚠ {symbol}: {e}", err=True)
+            continue
+
+    # 4. 写回状态（本次全部信号记为已见基线）
+    try:
+        os.makedirs(state_path.parent, exist_ok=True)
+        state_path.write_text(
+            json.dumps({"seen": sorted(seen)}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception as e:  # noqa: BLE001
+        click.echo(f"⚠ 状态文件写入失败: {e}", err=True)
+
+    if not rows:
+        click.echo("无新信号（状态已是最新）。")
+        return
+    print_output(pd.DataFrame(rows), output_fmt)
+    click.echo(f"新信号 {len(rows)} 条（基线已更新，下次仅报告新增）。", err=True)

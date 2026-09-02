@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline watch 子命令（V354）—— 离线信号监控 + V102 建议摘要** —— easy-tdx offline watch --dir <lday目录> [--state PATH]：扫描本地 .day 目录，用状态文件（缺省 ~/.easy_tdx/offline_watch_state.json）记录已见信号（symbol+type+date），只报告**新发现**的 3买/3卖 信号 + V102 质量评级与操作建议摘要（json/table/csv）——无网络轮询监控（类比 Web 监控页「新信号」面板），首次运行建立基线。
+
+---
+
 **offline advice-batch 子命令（V353）—— 离线批量 V102 建议实证** —— easy-tdx offline advice-batch --dir <lday目录> [--limit N]：扫描本地 .day 目录，从文件名推断市场/代码（sh600000.day → SH/600000），逐只跑 V102 建议回放并汇总（summarize_batch 聚合：总建议/胜率/平均/正收益标的），输出 json/table/csv/md——离线用户一键批量实证自选股票池（vs 买入持有对照）。
 
 ---

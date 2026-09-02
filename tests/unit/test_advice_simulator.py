@@ -411,6 +411,18 @@ class TestAdviceCli:
         assert "--limit" in res.output
         assert "md" in res.output  # V353: --output 支持 md 报告
 
+    def test_offline_watch_help(self):
+        """V354: offline watch（离线信号监控 + V102 建议摘要）注册可见。"""
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_offline import offline
+
+        runner = CliRunner()
+        res = runner.invoke(offline, ["watch", "--help"])
+        assert res.exit_code == 0
+        assert "--dir" in res.output
+        assert "--state" in res.output  # V354: 已见信号状态文件
+
 
 class TestSummarizeBatch:
     """多标的批量汇总（summarize_batch）。"""
