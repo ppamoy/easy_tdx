@@ -165,6 +165,54 @@ const latestMmd = computed(() =>
   mmds.value.length > 0 ? mmds.value[mmds.value.length - 1] : null,
 )
 
+// V341: 信号历史回溯 —— 每个 3买/3卖 信号的 V102 建议 + 事后 5/10/20 日表现
+interface SignalHistoryRow {
+  type: string
+  date: string | null
+  grade: string | null
+  advice: string | null
+  entry: number | null
+  stop: number | null
+  tp1: number | null
+  ret5: number | null
+  ret10: number | null
+  ret20: number | null
+  hit20: boolean
+}
+const signalHistory = computed<SignalHistoryRow[]>(() => {
+  const bs = bars.value
+  if (bs.length === 0) return []
+  const closes = bs.map((b) => b.close)
+  const rows: SignalHistoryRow[] = []
+  for (const m of mmds.value) {
+    const idx = m.bar_index
+    if (idx == null || idx < 0 || idx >= closes.length) continue
+    const fwd = (h: number): number | null => {
+      const j = idx + h
+      if (j >= closes.length || closes[idx] <= 0) return null
+      return Math.round((closes[j] / closes[idx] - 1) * 1000) / 10
+    }
+    const ret5 = fwd(5)
+    const ret10 = fwd(10)
+    const ret20 = fwd(20)
+    rows.push({
+      type: m.type,
+      date: m.date,
+      grade: m.v102_signal_quality?.overall_grade ?? null,
+      advice: m.v102_decision_support?.action_recommendation ?? null,
+      entry: m.v102_decision_support?.entry_price ?? null,
+      stop: m.v102_decision_support?.stop_loss ?? null,
+      tp1: m.v102_decision_support?.take_profit_1 ?? null,
+      ret5,
+      ret10,
+      ret20,
+      hit20: ret20 != null && (m.type.includes('buy') ? ret20 > 0 : ret20 < 0),
+    })
+  }
+  // 按信号时间倒序（最新在前）
+  return rows.reverse()
+})
+
 // 判断最新信号类型
 const latestSignalType = computed(() => {
   if (!latestMmd.value) return null
@@ -1118,6 +1166,48 @@ onUnmounted(() => {
       </table>
     </div>
 
+    <!-- V341: 信号历史回溯（V102 建议 + 事后 N 日表现） -->
+    <div v-if="!loading && signalHistory.length > 0" class="mmd-history">
+      <h3>🕰 信号历史回溯（V102 建议 + 事后表现）</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>类型</th>
+            <th>日期</th>
+            <th>V102质量</th>
+            <th>建议（入场/止损/止盈）</th>
+            <th>5日后</th>
+            <th>10日后</th>
+            <th>20日后</th>
+            <th>20日命中</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(s, i) in signalHistory" :key="i" :style="{ color: MMD_COLORS[s.type] ?? '#fff' }">
+            <td><strong>{{ s.type }}</strong></td>
+            <td>{{ s.date ?? '-' }}</td>
+            <td>
+              <span v-if="s.grade" class="v102-grade-badge" :class="'g' + s.grade">V102·{{ s.grade }}</span>
+              <span v-else class="dim">-</span>
+            </td>
+            <td class="hist-advice">
+              <span v-if="s.entry != null">{{ s.entry.toFixed(2) }} / {{ s.stop != null ? s.stop.toFixed(2) : '-' }} / {{ s.tp1 != null ? s.tp1.toFixed(2) : '-' }}</span>
+              <span v-if="s.advice" class="hist-advice-text" :class="{ 'adv-buy': s.advice.includes('买入'), 'adv-sell': s.advice.includes('卖出') }">{{ s.advice }}</span>
+              <span v-if="s.entry == null" class="dim">非3买/3卖，无建议</span>
+            </td>
+            <td :class="s.ret5 != null ? (s.ret5 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">{{ s.ret5 != null ? (s.ret5 >= 0 ? '+' : '') + s.ret5 + '%' : '-' }}</td>
+            <td :class="s.ret10 != null ? (s.ret10 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">{{ s.ret10 != null ? (s.ret10 >= 0 ? '+' : '') + s.ret10 + '%' : '-' }}</td>
+            <td :class="s.ret20 != null ? (s.ret20 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">{{ s.ret20 != null ? (s.ret20 >= 0 ? '+' : '') + s.ret20 + '%' : '-' }}</td>
+            <td><span :class="['verdict', s.hit20 ? 'ok' : 'miss']">{{ s.hit20 ? '✓' : '✗' }}</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="acc-legend">
+        逐笔买卖点信号：显示 V102 建议（入场/止损/止盈，仅 3买/3卖 有）与信号后 5/10/20 根K线的实际表现；
+        20日命中 = 买点后 20 根收涨 / 卖点后 20 根收跌。用历史逐笔验证模型建议是否可靠。
+      </p>
+    </div>
+
     <!-- 买卖点分类准确度验证 -->
     <div v-if="!loading && signalAccuracy && signalAccuracy.ranking?.length" class="mmd-accuracy">
       <h3>🎯 买卖点准确度验证（命中率 vs 随机基准）</h3>
@@ -1412,6 +1502,59 @@ onUnmounted(() => {
   color: var(--text-dim);
   gap: 8px;
 }
+/* V341: 信号历史回溯面板 */
+.mmd-history {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.mmd-history h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+.mmd-history table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.mmd-history th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.mmd-history td {
+  padding: 5px 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  color: var(--text);
+}
+.mmd-history tr:last-child td {
+  border-bottom: none;
+}
+.mmd-history .dim {
+  color: var(--text-dim);
+}
+.hist-advice {
+  font-family: var(--font-mono);
+}
+.hist-advice-text {
+  display: block;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  max-width: 260px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hist-advice-text.adv-buy { color: #22c55e; }
+.hist-advice-text.adv-sell { color: #ef4444; }
+.mmd-history .verdict.ok { color: var(--up); }
+.mmd-history .verdict.miss { color: var(--down); }
 .mmd-accuracy {
   background: var(--bg-panel);
   border: 1px solid var(--border);
