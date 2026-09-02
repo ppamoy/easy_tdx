@@ -123,6 +123,45 @@ function getRecommendation(stock: StockResult): { action: string; label: string 
   }
   return { action: 'wait', label: ACTION_LABELS.wait }
 }
+// V277: 选股清单导出 CSV（筛选结果明细，Excel 友好）
+const screenListCsvMsg = ref('')
+function screenCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportScreenListCsv() {
+  if (!qualifiedStocks.value.length) return
+  const header = ['代码', '分类', '质量分', '1买数', '1卖数', '最新信号', '信号日期', '距今天数', '操作建议']
+  const rows = qualifiedStocks.value.map((s) => {
+    const rec = getRecommendation(s)
+    return [
+      screenCsvEscape(s.symbol),
+      screenCsvEscape(CLASSIFICATION_LABELS[s.classification] ?? s.classification),
+      String(s.quality_score ?? ''),
+      String(s.buy_1_count ?? ''),
+      String(s.sell_1_count ?? ''),
+      screenCsvEscape(s.latest_mmd?.type ?? ''),
+      screenCsvEscape(s.latest_mmd?.date ?? ''),
+      s.days_since_signal !== undefined && s.days_since_signal < 999 ? String(s.days_since_signal) : '-',
+      screenCsvEscape(rec.label),
+    ].join(',')
+  })
+  const csv = '\uFEFF' + [header.join(','), ...rows].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_screen_list_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    screenListCsvMsg.value = '✓ 已导出选股清单 CSV'
+  } catch {
+    screenListCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { screenListCsvMsg.value = '' }, 2500)
+}
 
 /** 获取操作建议的详细解释 */
 function getActionExplanation(stock: StockResult): string {
@@ -886,7 +925,10 @@ onMounted(() => {
       <!-- 左侧：股票列表 -->
       <div class="stock-panel">
         <div class="panel-header">
-          <h3>筛选结果 ({{ qualifiedStocks.length }})</h3>
+          <h3>筛选结果 ({{ qualifiedStocks.length }})
+            <button class="ghost small" :disabled="qualifiedStocks.length === 0" @click="exportScreenListCsv">📊 导出 CSV</button>
+            <span v-if="screenListCsvMsg" class="save-msg">{{ screenListCsvMsg }}</span>
+          </h3>
         </div>
         <div class="stock-list">
           <div

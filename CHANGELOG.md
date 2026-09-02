@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**选股页「导出选股清单 CSV」（V277）—— 筛选结果明细 Excel 友好导出** —— 选股页筛选结果列表（代码/分类/质量分/1买/1卖/最新信号/操作建议）只能看不能存，批量验证面板已有 CSV 但主筛选清单没有。本次在「筛选结果」面板头加「📊 导出 CSV」：把 qualifiedStocks 明细导出为 Excel 友好的 CSV，下载 easy_tdx_screen_list_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/ScreeningView.vue** —— 新增 exportScreenListCsv（qualifiedStocks 明细: 代码/分类/质量分/1买/1卖/最新信号/信号日期/距今天数/操作建议, BOM+CSV+Blob 下载）+「筛选结果」面板头「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：选股页开始选股 → 筛选结果 →「导出 CSV」→ 下载文件含表头与 16 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V275（V276）—— 文档覆盖对比 JSON 与指南自身迭代** —— V274 仅把指南更新到 V273，V275 新增的对比页「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V275：标题、全景表补 V274/V275 两行、3.6 策略库与对比页对比条目补 JSON 说明。
 
 ### 新增
