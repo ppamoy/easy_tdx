@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**离线链路端到端联调（V366）—— 合成 .day 六命令全衔接 + 修复 3 个隐藏运行时 bug** —— 新增 scripts/offline_chain_demo.py：合成 .day → offline advice --file → advice-batch --dir → watch --dir --out 一气呵成，**无网络环境完整验证六级链路**。联调抓出并修复 V351-V365 期间「help 单测通过但数据路径未跑通」的 3 个真实 bug：
+1. offline advice/advice-batch/watch 在函数体内使用 pd.DataFrame 但缺 pandas 局部导入（NameError）
+2. offline advice 把 dict 报告传入只接受 DataFrame 的 print_output（AttributeError）
+3. advice-batch 对空建议报告读取缺失的 stop_rate/tp_rate/expire_rate（KeyError）
+
+---
+
 **offline watch 支持 --out（V365）—— 新信号 JSONL 落盘供脚本消费** —— easy-tdx offline watch --out /path/to/signals.jsonl：本轮新发现的 3买/3卖 信号以 JSONL 逐行追加写入文件（自动建目录），stdout 仍输出表格/json——配合 --interval 连续轮询可作**可被脚本/定时任务消费的离线信号管道**。
 
 ---

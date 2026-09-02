@@ -93,6 +93,16 @@ easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --output csv
 逐只跑 V102 建议回放并用 summarize_batch 聚合（总建议/胜率/平均收益/正收益标的），
 输出 json/table/csv/md（含每只 vs 买入持有对照）。
 
+### 离线链路端到端联调（V366）
+
+合成数据验证六级链路在无网络环境可完整衔接（无需真实 .day 行情）：
+
+```bash
+python scripts/offline_chain_demo.py
+```
+合成 .day → offline advice --file → offline advice-batch --dir → offline watch --dir --out，
+输出每级退出码与结果；同时作为六命令的运行时回归（曾抓出并修复 3 个隐藏运行时 bug）。
+
 ### 离线信号监控（V354）
 
 无网络轮询监控本地股票池的新信号（类比 Web 监控页「新信号」面板）：

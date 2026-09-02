@@ -732,6 +732,8 @@ def advice(
       easy-tdx offline advice SZ 000001 --output csv
       easy-tdx offline advice SZ 000001 --file /path/to/sh600000.day --output csv
     """
+    import pandas as pd
+
     from .output import print_error, print_output
     from .parsers import parse_market
 
@@ -789,10 +791,17 @@ def advice(
     report["signals"] = len(result.mmds)
     report["advices"] = advices
 
+    import json as _json
+
     if output_fmt == "md":
         _print_advice_md(report)
         return
-    print_output(report, output_fmt)
+    if output_fmt == "json":
+        click.echo(_json.dumps(report, ensure_ascii=False, indent=2))
+        return
+    # table/csv：只输出标量列（嵌套的 advices/trades 不展开）
+    scalar = {k: v for k, v in report.items() if not isinstance(v, (list, dict))}
+    print_output(pd.DataFrame([scalar]), output_fmt)
 
 
 def _print_advice_md(report: dict[str, object]) -> None:
@@ -860,6 +869,8 @@ def advice_batch(
 
       easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md
     """
+    import pandas as pd
+
     from .output import print_error, print_output
 
     try:
@@ -949,13 +960,13 @@ def advice_batch(
                     "bars": len(closes),
                     "signals": len(result.mmds),
                     "advice_count": report["count"],
-                    "win_rate": round(report["win_rate"] * 100, 1),
-                    "avg_return": round(report["avg_return"], 2),
-                    "total_return": round(report["total_return"], 2),
+                    "win_rate": round(float(report.get("win_rate", 0.0)) * 100, 1),
+                    "avg_return": round(float(report.get("avg_return", 0.0)), 2),
+                    "total_return": round(float(report.get("total_return", 0.0)), 2),
                     "buy_hold": round(buy_hold, 2),
-                    "stop_rate": round(report["stop_rate"] * 100, 1),
-                    "tp_rate": round(report["tp_rate"] * 100, 1),
-                    "expire_rate": round(report["expire_rate"] * 100, 1),
+                    "stop_rate": round(float(report.get("stop_rate", 0.0)) * 100, 1),
+                    "tp_rate": round(float(report.get("tp_rate", 0.0)) * 100, 1),
+                    "expire_rate": round(float(report.get("expire_rate", 0.0)) * 100, 1),
                 }
             )
         except Exception as e:  # noqa: BLE001
@@ -1048,6 +1059,8 @@ def watch(
     import json
     import os
     import time
+
+    import pandas as pd
 
     from .output import print_error, print_output
 
