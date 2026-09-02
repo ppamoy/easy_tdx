@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**组合回测报告「导出 CSV」（V259）—— 组合绩效 + 各标的对比表 Excel 友好导出** —— 组合报告已有「📋 复制报告」与「⚙ 复制 JSON」，批量验证五处（V253/V255）与寻优网格（V257）已有 CSV 导出而组合报告没有。本次加「📊 导出 CSV」：BOM 前缀 + 组合绩效块（总收益/年化/标的数/总资金/可信度/准确度/样本外）+ 各标的对比块（总收益/年化/回撤/夏普/胜率/交易数/盈亏比），下载 easy_tdx_portfolio_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— 新增 exportPortfolioCsv（组合绩效块+各标的对比块，BOM+CSV+Blob 下载）+ 报告工具栏「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合页从自选股加载标的 → 组合回测 →「导出 CSV」→ 下载文件含组合绩效/各标的对比块与 14 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V257（V258）—— 文档覆盖网格排名 CSV 与指南自身迭代** —— V256 仅把指南更新到 V255，V257 新增的寻优网格排名「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V257：标题、全景表补 V256/V257 两行、3.7 参数寻优页补充导出 CSV 说明。
 
 ### 新增

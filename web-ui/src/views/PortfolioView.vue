@@ -488,6 +488,72 @@ async function copyPortfolioJson() {
   }
   setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
 }
+// V259: 组合报告导出 CSV（组合绩效 + 各标的对比表，Excel 友好）
+const portCsvMsg = ref('')
+function portPctV(v: number | null | undefined): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%'
+}
+function portCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportPortfolioCsv() {
+  const r = store.portfolioResult
+  if (!r) return
+  const lines: string[] = []
+  // 组合绩效块
+  const p = r.total_performance
+  lines.push('# 组合绩效')
+  lines.push(['指标', '值'].join(','))
+  lines.push(['总收益', portPctV(p.total_return)].join(','))
+  lines.push(['年化收益', portPctV(p.annual_return)].join(','))
+  lines.push(['标的总数', String(p.total_stocks ?? '')].join(','))
+  lines.push(['总资金', String(p.total_cash ?? '')].join(','))
+  if (r.portfolio_trust) {
+    lines.push(['组合可信度', String(r.portfolio_trust.grade ?? '') + '（' + Math.round(r.portfolio_trust.score) + '/100）'].join(','))
+  }
+  if (r.accuracy_summary) {
+    const pf = r.accuracy_summary.portfolio
+    lines.push(['加权5根命中率', pf ? portPctV(pf.avg_hit_rate) : '-'].join(','))
+    lines.push(['超额命中率', pf ? portPctV(pf.avg_excess_hit_rate) : '-'].join(','))
+  }
+  if (r.out_of_sample) {
+    lines.push(['样本外结论', portCsvEscape(r.out_of_sample.verdict || '')].join(','))
+    lines.push(['样本外稳健数', String(r.out_of_sample.symbols - (r.out_of_sample.degraded_symbols || 0)) + '/' + String(r.out_of_sample.symbols)].join(','))
+  }
+  lines.push('')
+  // 各标的对比块
+  lines.push('# 各标的对比')
+  lines.push(['标的', '总收益', '年化收益', '最大回撤', '夏普', '胜率', '交易次数', '盈亏比'].join(','))
+  Object.entries(r.individual_results || {}).forEach(([key, res]) => {
+    const perf = res.performance || {}
+    lines.push([
+      portCsvEscape(key),
+      portPctV(perf.total_return),
+      portPctV(perf.annual_return),
+      portPctV(perf.max_drawdown),
+      perf.sharpe != null ? perf.sharpe.toFixed(2) : '',
+      portPctV(perf.win_rate),
+      String(perf.total_trades ?? ''),
+      perf.profit_factor != null ? perf.profit_factor.toFixed(2) : '',
+    ].join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_portfolio_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    portCsvMsg.value = '✓ 已导出组合报告 CSV'
+  } catch {
+    portCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { portCsvMsg.value = '' }, 2500)
+}
 
 const strategyLabel = computed(
   () => store.strategies.find((s) => s.name === strategy.value)?.label ?? strategy.value,
@@ -731,8 +797,10 @@ async function onSave() {
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
           <button class="ghost" @click="copyReport">📋 复制报告</button>
           <button class="ghost" @click="copyPortfolioJson">⚙ 复制 JSON</button>
+          <button class="ghost" @click="exportPortfolioCsv">📊 导出 CSV</button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="jsonCopyMsg" class="save-msg">{{ jsonCopyMsg }}</span>
+          <span v-if="portCsvMsg" class="save-msg">{{ portCsvMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
         </div>
 
