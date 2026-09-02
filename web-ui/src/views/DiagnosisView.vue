@@ -26,6 +26,18 @@ const adviceError = ref('')
 
 const reasonText = (r: string): string => ({ stop: '止损', tp1: '止盈', expire: '到期', invalid: '无效' }[r] ?? r)
 
+// V333: 最新信号是否带 V102 决策支持数据（仅 3买/3卖 有）
+const hasV102Data = computed(() => {
+  const m = diagnosis.value?.chanlun.latest_mmd
+  return !!(
+    m &&
+    (m.v102_decision_support ||
+      m.v102_signal_quality ||
+      m.v102_pattern_match ||
+      m.v102_multi_signal_correlation)
+  )
+})
+
 async function runAdviceSimulate() {
   const c = code.value.trim()
   if (!c.match(/^\d{6}$/)) return
@@ -424,6 +436,9 @@ onMounted(() => {
             </div>
             <!-- V102: 决策支持卡片（条件264-267） -->
             <V102DecisionCard :mmd="diagnosis.chanlun.latest_mmd" />
+            <div v-if="diagnosis.chanlun.latest_mmd && !hasV102Data" class="advice-msg">
+              ℹ️ 该信号非 3买/3卖，V102 决策支持暂无可执行建议（仅 3买/3卖 生成入场/止损/止盈）。
+            </div>
             <!-- V322: 建议回放实证 -->
             <div class="advice-sim-block">
               <button class="advice-sim-btn" :disabled="adviceLoading || !diagnosis" @click="runAdviceSimulate">

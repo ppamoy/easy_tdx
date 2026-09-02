@@ -73,6 +73,11 @@ function updateParam(p: ParamSchema, raw: string | boolean) {
 
     <p v-if="selectedSchema" class="desc">{{ selectedSchema.description }}</p>
 
+    <!-- V102: 缠论策略按建议止损止盈提示 -->
+    <div v-if="selectedSchema?.name === 'chanlun'" class="v102-tip">
+      💡 勾选「3买按V102建议止损止盈」：3买 首仓将按 V102 决策支持的止损价/第一止盈价动态出场（优先于固定百分比止损）。
+    </div>
+
     <!-- 动态参数表单：按 schema 渲染 -->
     <div v-if="selectedSchema?.params.length" class="params">
       <div v-for="p in selectedSchema.params" :key="p.name" class="field">
@@ -120,5 +125,15 @@ function updateParam(p: ParamSchema, raw: string | boolean) {
 }
 input[type='checkbox'] {
   width: auto;
+}
+.v102-tip {
+  margin: -2px 0 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px dashed var(--accent, #4a9eff);
+  background: rgba(74, 158, 255, 0.06);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>
