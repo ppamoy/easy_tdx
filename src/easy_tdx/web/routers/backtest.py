@@ -543,6 +543,56 @@ def _run_portfolio_backtest(
         except Exception:
             pass
 
+    # V299: 组合级 Walk-Forward 滚动窗口验证（逐槽复用 _compute_walk_forward_single，聚合）
+    if getattr(req, "use_walk_forward", False):
+        try:
+            from easy_tdx.cli.cmd_run_all import _compute_walk_forward_single
+
+            per_symbol_wf: dict[str, Any] = {}
+            degraded_symbols_wf = 0
+            for stock in stock_data_list:
+                symbol = f"{stock.market}{stock.code}"
+                try:
+                    num_cols = [
+                        c for c in stock.df.columns
+                        if c == "datetime" or pd.api.types.is_numeric_dtype(stock.df[c])
+                    ]
+                    wf = _compute_walk_forward_single(
+                        stock.df[num_cols].copy(),
+                        type(entry.build(req.params)),
+                        cash=req.cash / len(stock_data_list),
+                        commission=req.commission,
+                        step_ratio=getattr(req, "step_ratio", 0.1),
+                    )
+                    if wf:
+                        per_symbol_wf[symbol] = {
+                            "windows": wf.get("windows"),
+                            "degraded": bool(wf.get("degraded")),
+                            "verdict": wf.get("verdict", ""),
+                        }
+                        if wf.get("degraded"):
+                            degraded_symbols_wf += 1
+                except Exception:  # noqa: BLE001
+                    per_symbol_wf[symbol] = {"degraded": True, "verdict": "Walk-Forward 失败"}
+            n_wf = len(per_symbol_wf)
+            if n_wf:
+                result_dict["walk_forward"] = {
+                    "symbols": n_wf,
+                    "degraded_symbols": degraded_symbols_wf,
+                    "verdict": (
+                        f"{n_wf - degraded_symbols_wf}/{n_wf} 只滚动窗口稳健；"
+                        "若多数标的表现衰减，组合历史成绩需谨慎对待"
+                    ),
+                    "per_symbol": per_symbol_wf,
+                }
+        except Exception:  # noqa: BLE001
+            result_dict["walk_forward"] = {
+                "symbols": 0,
+                "degraded_symbols": 0,
+                "verdict": "Walk-Forward 计算失败",
+                "per_symbol": {},
+            }
+
     return result_dict
 
 

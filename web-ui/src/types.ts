@@ -288,6 +288,9 @@ export interface PortfolioBacktestRequest {
   // V126: 组合级样本外验证
   out_of_sample?: boolean
   oos_train_ratio?: number
+  // V299: 组合级 Walk-Forward 滚动窗口验证
+  use_walk_forward?: boolean
+  step_ratio?: number
 }
 
 export interface PortfolioSymbolAccuracy {

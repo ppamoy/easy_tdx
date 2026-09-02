@@ -131,6 +131,15 @@ class PortfolioBacktestRequest(BaseModel):
     oos_train_ratio: float = Field(
         default=0.7, ge=0.5, le=0.9, description="训练段占比（样本外验证用）"
     )
+    # V299: 组合级 Walk-Forward 滚动窗口验证（逐槽回测聚合防过拟合判定）
+    use_walk_forward: bool = Field(
+        default=False,
+        description="Walk-Forward 滚动窗口验证：对组合内每只标的逐窗口回测聚合，"
+        "评估组合参数在未见数据上的稳定性/过拟合风险。默认 False 不做。",
+    )
+    step_ratio: float = Field(
+        default=0.1, gt=0, le=0.5, description="Walk-Forward 滚动步长比例"
+    )
 
     @model_validator(mode="after")
     def _check_stocks_format(self) -> PortfolioBacktestRequest:

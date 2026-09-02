@@ -36,6 +36,8 @@ const EXECUTIONS: { value: ExecutionMode; label: string }[] = [
 ]
 // V126: 组合级样本外验证（逐标训练/持有切分）
 const checkOutOfSample = ref(false)
+// V299: 组合级 Walk-Forward 滚动窗口验证（逐槽回测聚合防过拟合判定）
+const checkWalkForward = ref(false)
 const oosTrainRatio = ref(0.7)
 const CATEGORIES: Category[] = ['DAY', 'WEEK', 'MONTH', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60']
 
@@ -97,6 +99,8 @@ async function onRun() {
     end_date: endDate.value,
     out_of_sample: checkOutOfSample.value,
     oos_train_ratio: oosTrainRatio.value,
+    use_walk_forward: checkWalkForward.value,
+    step_ratio: 0.1,
   })
 }
 
@@ -821,6 +825,12 @@ async function onSave() {
             <option :value="0.8">训练 80%</option>
           </select>
         </div>
+        <div class="field">
+          <label title="V299: 对组合内每只标的逐窗口回测聚合，评估组合参数防过拟合风险">
+            <input type="checkbox" v-model="checkWalkForward" />
+            Walk-Forward 滚动验证（防过拟合）
+          </label>
+        </div>
       </section>
 
       <button
@@ -900,6 +910,26 @@ async function onSave() {
             :results="store.portfolioResult.individual_results"
             :allocation="store.portfolioResult.equity_allocation"
           />
+        </section>
+
+        <!-- V299: 组合级 Walk-Forward 滚动窗口验证 -->
+        <section v-if="(store.portfolioResult as any)?.walk_forward" class="report-section">
+          <h3>🔁 组合 Walk-Forward 滚动验证（防过拟合）</h3>
+          <div class="verdict-cell" :class="(store.portfolioResult as any).walk_forward.degraded_symbols >= Math.max(1, (store.portfolioResult as any).walk_forward.symbols * 0.5) ? 'neg' : 'pos'">
+            {{ (store.portfolioResult as any).walk_forward.verdict }}
+          </div>
+          <table class="cand-table wf-table">
+            <thead>
+              <tr><th>标的</th><th>窗口数</th><th class="num">结论</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(v, sym, i) in (store.portfolioResult as any).walk_forward.per_symbol" :key="i">
+                <td>{{ sym }}</td>
+                <td class="num">{{ v.windows ?? '-' }}</td>
+                <td :class="v.degraded ? 'neg' : 'pos'" class="dim">{{ v.verdict }}</td>
+              </tr>
+            </tbody>
+          </table>
         </section>
 
         <!-- V126: 组合级样本外验证（训练/持有切分） -->

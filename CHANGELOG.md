@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+**组合回测页 Walk-Forward 滚动验证（V299）—— 组合级防过拟合维度补齐** —— 回测页（V287）与寻优页（V123）已有 Walk-Forward，组合回测页此前只有样本外（V126）。本次给组合页加「Walk-Forward 滚动验证」勾选：请求带 use_walk_forward/step_ratio，后端组合回测对每只标的复用 _compute_walk_forward_single 逐槽计算并聚合（walk_forward: symbols/degraded_symbols/verdict/per_symbol），报告区渲染「🔁 组合 Walk-Forward 滚动验证」面板——与单标 V287 / 寻优 V123 / CLI verify-portfolio V297 对齐。
+
+### 新增
+
+- **src/easy_tdx/web/backtest_schemas.py** —— PortfolioBacktestRequest 增加 use_walk_forward/step_ratio。
+- **src/easy_tdx/web/routers/backtest.py** —— 组合回测支持 use_walk_forward：逐槽计算并聚合写入 walk_forward。
+- **web-ui/src/views/PortfolioView.vue** —— 新增 checkWalkForward 勾选 + 请求字段 + 组合 WF 报告区面板。
+- **web-ui/src/types.ts** —— PortfolioBacktestRequest 增加 use_walk_forward/step_ratio 字段。
+
+### 验证
+
+- ruff / mypy 零告警；vue-tsc + vite build 通过。
+- Playwright 浏览器回归：组合页勾选 Walk-Forward → 组合回测 →「组合 Walk-Forward 滚动验证」报告区可见、console 零错误。
+- 全量单测 **2479 passed**（其余失败为工作区未提交的缠论重构所致，与本次无关）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V297（V298）—— 文档覆盖组合 walk-forward 与指南自身迭代** —— V296 仅把指南更新到 V295，V297 新增的 verify-portfolio `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V297：标题、全景表补 V296/V297 两行、3.9 命令行节 verify-portfolio 条目补 walk-forward 说明。
 
 ### 新增
