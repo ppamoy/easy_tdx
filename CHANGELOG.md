@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**寻优/组合验证总结卡片补「复制验证摘要」（V305）—— 验证结论一条 Markdown 带走** —— 回测页验证总结（V106/V301）已支持复制，寻优（V124）与组合（V112）验证总结卡片缺。本次给两个组件加「📋 复制验证总结」：寻优卡片输出最佳参数+可信度/5根命中/Walk-Forward，组合卡片输出组合可信度/准确度/最强最弱标的——与回测 V301 对齐，各使用页面一并受益。
+
+### 新增
+
+- **web-ui/src/components/OptimizeValidationSummary.vue** —— 新增 copyOptimizeSummary（最佳参数+各维度结论拼 Markdown）+ 卡片头「📋 复制验证总结」。
+- **web-ui/src/components/PortfolioValidationSummary.vue** —— 新增 copyPortfolioSummary（组合可信度/准确度/最强最弱标的拼 Markdown）+ 卡片头「📋 复制验证总结」。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归（寻优代表）：寻优 → 验证总结卡「复制验证总结」→ 剪贴板 Markdown 含标题与最佳参数、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V303（V304）—— 文档覆盖组合报告 WF 段与指南自身迭代** —— V302 仅把指南更新到 V301，V303 新增的组合页「复制报告」组合级 Walk-Forward 段未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V303：标题、全景表补 V302/V303 两行、3.4 组合回测页报告导出补 WF 段说明。
 
 ### 新增

@@ -2,7 +2,7 @@
 // 参数寻优「验证总结」卡片（V124）：把最优点可信度（V101）+ 5根命中率（V95）
 // + Walk-Forward 判定（V123）聚合成一览，回答「按验证过的准确度该选哪组参数」。
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { OptimizeResult } from '../types'
 
@@ -50,12 +50,36 @@ const rows = computed<Array<{ label: string; text: string; cls: string }>>(() =>
   }
   return out
 })
+
+// V305: 寻优验证总结复制 Markdown（与回测 V301 对齐）
+const ovCopyMsg = ref('')
+async function copyOptimizeSummary() {
+  if (!rows.value.length) return
+  const lines = ['# easy-tdx 寻优验证总结']
+  lines.push('')
+  lines.push('- 最佳参数：' + (best.value ? JSON.stringify(best.value.params ?? {}) : '-'))
+  rows.value.forEach((r) => {
+    lines.push('- ' + r.label + '：' + r.text)
+  })
+  lines.push('')
+  lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
+  const text = lines.join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    ovCopyMsg.value = '✓ 已复制验证总结'
+  } catch {
+    ovCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { ovCopyMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
   <div v-if="best && rows.length" class="ov-summary">
     <div class="ov-head">
       <span class="ov-title">✅ 验证总结（最优点）</span>
+      <button class="ghost small ov-copy-btn" @click="copyOptimizeSummary">📋 复制验证总结</button>
+      <span v-if="ovCopyMsg" class="save-msg">{{ ovCopyMsg }}</span>
       <span v-if="trustText !== '未评估'" class="ov-overall" :class="overallClass">{{ trustText }}</span>
     </div>
     <div class="ov-rows">

@@ -2,7 +2,7 @@
 // 组合「验证总结」卡片（V112）：把组合可信度（V103）+ 组合准确度聚合（V99）
 // + 逐标可信度 Top/Bottom（V110）浓缩成一张可一览的卡片，与单标的 V106 对齐。
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { PortfolioResult } from '../types'
 
@@ -41,12 +41,42 @@ function trustText(r: { trust_score?: number | null; trust_grade?: string | null
   if (!r || r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
+
+// V305: 组合验证总结复制 Markdown（与回测 V301 对齐）
+const pvCopyMsg = ref('')
+async function copyPortfolioSummary() {
+  if (!hasData.value) return
+  const lines = ['# easy-tdx 组合验证总结']
+  lines.push('')
+  if (trust.value) {
+    lines.push('- 组合可信度：' + Math.round(trust.value.score) + '/100 · ' + trust.value.grade + '可信')
+    if (trust.value.verdict) lines.push('- ' + trust.value.verdict)
+  }
+  if (accuracy.value?.verdict) {
+    lines.push('- 组合准确度：' + accuracy.value.verdict)
+  }
+  const tb = topBottom.value
+  if (tb.top) lines.push('- 最强标的：' + tb.top.symbol + '（可信度 ' + trustText(tb.top) + '）')
+  if (tb.bottom) lines.push('- 最弱标的：' + tb.bottom.symbol + '（可信度 ' + trustText(tb.bottom) + '）')
+  lines.push('')
+  lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
+  const text = lines.join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    pvCopyMsg.value = '✓ 已复制验证总结'
+  } catch {
+    pvCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { pvCopyMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
   <div v-if="hasData" class="pv-summary">
     <div class="pv-head">
       <span class="pv-title">✅ 组合验证总结</span>
+      <button class="ghost small pv-copy-btn" @click="copyPortfolioSummary">📋 复制验证总结</button>
+      <span v-if="pvCopyMsg" class="save-msg">{{ pvCopyMsg }}</span>
       <span v-if="trust" class="pv-overall" :class="overallClass">
         组合可信度 {{ Math.round(trust.score) }}/100 · {{ trust.grade }}可信
       </span>
