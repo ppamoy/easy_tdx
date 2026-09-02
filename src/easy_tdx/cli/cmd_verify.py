@@ -47,6 +47,7 @@ import click
 @click.option("--step-ratio", "wf_step", default=0.1, type=float, help="Walk-Forward 滚动步长比例")
 @click.option("--train-ratio", "train_ratio", default=0.7, type=float, help="样本外训练段占比")
 @click.option("--output", "output_fmt", type=click.Choice(["json"]), default="json")
+@click.option("--table", "use_table", is_flag=True, help="表格输出（替代 JSON）")
 @click.option(
     "--output-file",
     "output_file",
@@ -72,6 +73,7 @@ def verify(
     use_wf: bool,
     wf_step: float,
     output_fmt: str,
+    use_table: bool,
     output_file: str | None,
 ) -> None:
     """模型验证：单标的完整准确度报告。"""
@@ -216,6 +218,9 @@ def verify(
         verdict_parts.append(str(oos["verdict"]))
     result_dict["verdict"] = "；".join(verdict_parts) if verdict_parts else "无验证结论（数据不足）"
 
+    if use_table:
+        _print_verify_table(result_dict)
+        return
     text = json.dumps(result_dict, ensure_ascii=False, indent=2, default=str)
     if output_file:
         with open(output_file, "w", encoding="utf-8") as f:
@@ -817,3 +822,40 @@ def _print_verify_multi_table(rows: list[dict[str, Any]]) -> None:
             if wd is not None:
                 line += f"{'⚠不稳' if wd else '✅稳':>6}"
         click.echo(line)
+
+
+def _print_verify_table(report: dict[str, Any]) -> None:
+    """V307: verify（单标）表格输出（替代 JSON），行 = 指标/结论。"""
+    lines: list[str] = []
+    lines.append('easy-tdx verify 单标验证')
+    lines.append('═' * 70)
+    perf = report.get("performance") or {}
+    rows: list[tuple[str, str]] = [
+        ("总收益", f"{perf.get('total_return', 0):+.2%}"),
+        ("年化收益", f"{perf.get('annual_return', 0):+.2%}"),
+        ("夏普", f"{perf.get('sharpe', 0):.2f}"),
+        ("最大回撤", f"{perf.get('max_drawdown', 0):.2%}"),
+        ("胜率", f"{perf.get('win_rate', 0):.1%}"),
+        ("交易数", str(perf.get('total_trades', 0))),
+    ]
+    acc = report.get("accuracy") or {}
+    if acc.get("verdict"):
+        rows.append(("准确度", str(acc["verdict"])))
+    rob = report.get("robustness") or {}
+    if rob.get("verdict"):
+        rows.append(("稳健性", str(rob["verdict"])))
+    mt = report.get("model_trust") or {}
+    if mt.get("verdict"):
+        rows.append(("可信度", str(mt["verdict"])))
+    oos = report.get("out_of_sample") or {}
+    if oos.get("verdict"):
+        rows.append(("样本外", str(oos["verdict"])))
+    wf = report.get("walk_forward") or {}
+    if wf.get("verdict"):
+        rows.append(("滚动验证", str(wf["verdict"])))
+    for label, value in rows:
+        lines.append(f"{label:<8} {value}")
+    lines.append('═' * 70)
+    if report.get("verdict"):
+        lines.append('汇总: ' + str(report["verdict"]))
+    click.echo(chr(10).join(lines))

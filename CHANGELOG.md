@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**CLI verify 支持 --table（V307）—— 单标验证报告表格化输出** —— verify-multi（V293）与 run-all 已有表格输出，单标 verify（V117）此前只有 JSON。本次给 verify 加 `--table`：输出绩效（总收益/年化/夏普/回撤/胜率/交易数）+ 准确度/稳健性/可信度/样本外/滚动验证各结论 + 汇总——命令行单标验证一眼看结论，与 verify-multi --table 体验一致。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify 新增 --table 选项与 _print_verify_table（绩效+各验证维度结论表格）。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify --help 含 --table。
+- 端到端：verify SZ 000001 --table 输出表格（总收益/年化/夏普/回撤/胜率/交易数/可信度/汇总）。
+- ruff / mypy 零告警；全量单测 **2480 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V305（V306）—— 文档覆盖寻优/组合总结复制与指南自身迭代** —— V304 仅把指南更新到 V303，V305 新增的寻优/组合验证总结卡片「复制验证摘要」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V305：标题、全景表补 V304/V305 两行、3.4 组合回测页补验证总结复制说明。
 
 ### 新增

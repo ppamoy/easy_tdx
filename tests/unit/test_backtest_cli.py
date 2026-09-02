@@ -420,6 +420,15 @@ class TestBacktestCLI:
         assert result.exit_code == 0
         assert "--table" in result.output
 
+    def test_verify_table_option(self):
+        """V307: verify（单标）应暴露 --table 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify", "--help"])
+        assert result.exit_code == 0
+        assert "--table" in result.output
+
     def test_verify_portfolio_walk_forward_option(self):
         """V297: verify-portfolio 应暴露 --walk-forward/--step-ratio 选项。"""
         from easy_tdx.cli import cli
