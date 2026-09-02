@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V261（V262）—— 文档覆盖交易明细 CSV 与指南自身迭代** —— V260 仅把指南更新到 V259，V261 新增的回测页「交易明细 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V261：标题、全景表补 V260/V261 两行、3.1 回测页第 4 步导出补交易明细 CSV 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V261；全景表补 V260/V261；3.1 回测页第 4 步导出后补「📊 交易明细 CSV」（V261）说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **回测页「交易明细 CSV」（V261）—— 成交记录导出，逐笔核对模型触发的买卖点** —— 回测报告已有 Markdown/JSON/CSV 导出（V116/V153/V253 等），但成交明细（trade list）只能看表。本次在结果工具栏加「📊 交易明细 CSV」：把 store.result.trades（时间/方向/数量/价格/手续费/滑点/已实现盈亏/成本基数）导出为 Excel 友好的 CSV（跳过被拒单），下载 easy_tdx_trades_日期.csv——用户可用 Excel 逐笔核对模型买入/卖出触发点。
 
 ### 新增
