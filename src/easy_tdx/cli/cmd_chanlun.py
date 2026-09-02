@@ -177,7 +177,12 @@ def _print_table(result: dict[str, Any]) -> None:
 @click.option("--period", default="DAILY", help="K线周期: DAILY/5MIN/15MIN/30MIN/60MIN")
 @click.option("--count", default=500, type=int, help="K线数量")
 @click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
-@click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
+@click.option(
+    "--output",
+    "output_fmt",
+    type=click.Choice(["json", "table", "csv", "md"]),
+    default="json",
+)
 def advice_simulate(
     market: str,
     code: str,
@@ -301,6 +306,34 @@ def advice_simulate(
                 f"{adv['take_profit_1']:>9.2f} {t['exit_price']:>9.2f} {reason:>4} "
                 f"{t['return_pct']:>+8.2f}%"
             )
+    elif output_fmt == "md":
+        # V370: Markdown 报告（与 offline advice --output md / advice-batch --md 对齐）
+        reason_cn = {"stop": "止损", "tp1": "止盈", "expire": "到期", "invalid": "无效"}
+        click.echo(f"# 在线 V102 建议回放报告（{market}{code}）")
+        click.echo()
+        click.echo(
+            f"K线 **{len(closes)}** 根 | 缠论信号 **{len(result.mmds)}** | "
+            f"建议 **{report['count']}** 笔"
+        )
+        click.echo()
+        click.echo("| # | 入场 | 止损 | 止盈1 | 出场价 | 原因 | 收益% |")
+        click.echo("|---|-----|-----|------|-------|------|-------|")
+        for i, (adv, t) in enumerate(zip(advices, report["trades"])):
+            reason = reason_cn.get(t["exit_reason"], t["exit_reason"])
+            click.echo(
+                f"| {i + 1} | {adv['entry_price']:.2f} | {adv['stop_loss']:.2f} | "
+                f"{adv['take_profit_1']:.2f} | {t['exit_price']:.2f} | {reason} | "
+                f"{t['return_pct']:+.2f} |"
+            )
+        click.echo()
+        click.echo(
+            f"**汇总**：胜率 {report['win_rate'] * 100:.0f}% | "
+            f"平均收益 {report['avg_return']:+.2f}% | 累计 {report['total_return']:+.2f}%"
+        )
+        click.echo(
+            f"**出场分布**：止损 {report['stop_rate'] * 100:.0f}% / "
+            f"止盈 {report['tp_rate'] * 100:.0f}% / 到期 {report['expire_rate'] * 100:.0f}%"
+        )
     else:
         click.echo(
             json.dumps(

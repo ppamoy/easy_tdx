@@ -53,6 +53,7 @@ easy-tdx 的 V102 决策支持在缠论买卖点（3买/3卖）之上额外给�
 easy-tdx advice SZ 000001                # JSON
 easy-tdx advice SZ 000001 --table        # 表格
 easy-tdx advice SZ 000001 --output csv   # CSV 导出
+easy-tdx advice SZ 000001 --output md    # Markdown 报告（V370，与离线版对齐）
 ```
 
 ### 回测自动止损止盈

@@ -372,6 +372,7 @@ class TestAdviceCli:
         assert "MARKET" in res.output
         assert "--max-hold" in res.output
         assert "csv" in res.output  # V329: --output 支持 csv
+        assert "md" in res.output  # V370: --output 支持 md（与离线版对齐）
         assert "回放" in res.output
 
     def test_offline_advice_help(self):

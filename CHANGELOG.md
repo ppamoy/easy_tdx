@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**在线 advice 支持 --output md（V370）—— 在线/离线建议回放报告能力对齐** —— easy-tdx advice（在线）补 Markdown 报告输出（K线/信号/建议数 + 逐笔明细表 + 胜率/平均/累计/出场分布），与 offline advice --output md（V364）/ advice-batch --md 对齐——在线/离线/批量三级建议回放报告能力统一。
+
+---
+
 **watch 新信号自动生成建议报告（V368）—— JSONL 行直接携带入场/止损/止盈** —— offline watch 的 --out 输出行新增 entry_price/stop_loss/take_profit_1（取自 V102 _decision_support），信号管道（V365 JSONL）直接产出可执行建议，脚本/定时任务无需二次计算；新增 _watch_signal_row 纯函数 + 2 个单测（含无决策数据返回 None 的边界）。
 
 ---
