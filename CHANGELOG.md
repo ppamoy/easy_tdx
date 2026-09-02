@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V299（V300）—— 文档覆盖组合 WF 与指南自身迭代** —— V298 仅把指南更新到 V297，V299 新增的组合回测页 Walk-Forward 滚动验证入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V299：标题、全景表补 V298/V299 两行、3.4 组合回测页补 Walk-Forward 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V299；全景表补 V298/V299；3.4 组合回测页「样本外验证」后补「Walk-Forward 滚动验证」（V299）说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **组合回测页 Walk-Forward 滚动验证（V299）—— 组合级防过拟合维度补齐** —— 回测页（V287）与寻优页（V123）已有 Walk-Forward，组合回测页此前只有样本外（V126）。本次给组合页加「Walk-Forward 滚动验证」勾选：请求带 use_walk_forward/step_ratio，后端组合回测对每只标的复用 _compute_walk_forward_single 逐槽计算并聚合（walk_forward: symbols/degraded_symbols/verdict/per_symbol），报告区渲染「🔁 组合 Walk-Forward 滚动验证」面板——与单标 V287 / 寻优 V123 / CLI verify-portfolio V297 对齐。
 
 ### 新增
