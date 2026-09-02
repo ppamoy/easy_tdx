@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**回测页批量验证补「滚验」列（V313）—— 批量验证每股也看滚动窗口防过拟合判定** —— CLI verify-multi（V243）、Web 单标（V287）/组合（V299）已有 Walk-Forward，回测页批量验证（V137）每股只有 OOS。本次给批量验证逐只请求 use_walk_forward，行内填充 wf_degraded/wf_verdict，表格新增「滚验」列（✅稳 / ⚠递减，悬停显示判定）——与 CLI V243 / Web 单标 V287 对齐。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— BatchVerifyRow 增加 wf_degraded/wf_verdict；批量验证请求带 use_walk_forward/step_ratio；表格新增「滚验」列。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页批量验证自选股 →「滚验」列可见、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V311（V312）—— 文档覆盖信号列表持久化与指南自身迭代** —— V310 仅把指南更新到 V309，V311 新增的监控页信号列表持久化入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V311：标题、全景表补 V310/V311 两行、3.5 信号监控页「新信号」面板补持久化说明。
 
 ### 新增
