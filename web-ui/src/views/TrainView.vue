@@ -20,7 +20,16 @@ interface ChanlunZs {
   index: number; zg: number; zd: number; gg: number; dd: number
   line_count: number; start_date: string; end_date: string; done: boolean
 }
-interface ChanlunMmd { type: string; date: string | null; msg: string; confidence: number }
+interface ChanlunMmd {
+  type: string
+  date: string | null
+  msg: string
+  confidence: number
+  // V102 缠论决策支持（条件264-267）
+  v102_signal_quality?: { overall_grade: string; overall_score: number; strength: string; confidence_adjust: number } | null
+  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string } | null
+  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number } | null
+}
 interface ChanlunFx { type: 'ding' | 'di'; date: string; val: number }
 interface ChanlunBc { type: 'bi' | 'pz' | 'qs'; bc: boolean; date: string | null; msg: string }
 interface Candidate {
@@ -104,7 +113,16 @@ async function startTraining() {
     bis.value = (d.bis ?? []).map((b: any) => ({ ...b }))
     xds.value = (d.xds ?? []).map((x: any) => ({ ...x }))
     zss.value = (d.zss ?? []).map((z: any) => ({ ...z }))
-    mmds.value = (d.mmds ?? []).map((m: any) => ({ type: m.type, date: m.date, msg: m.msg, confidence: m.confidence ?? 0 }))
+    mmds.value = (d.mmds ?? []).map((m: any) => ({
+      type: m.type,
+      date: m.date,
+      msg: m.msg,
+      confidence: m.confidence ?? 0,
+      // V102 缠论决策支持（条件264-267）
+      v102_signal_quality: m.v102_signal_quality ?? null,
+      v102_decision_support: m.v102_decision_support ?? null,
+      v102_pattern_match: m.v102_pattern_match ?? null,
+    }))
     fxs.value = (d.fractals ?? []).map((f: any) => ({ type: f.fx_type, date: f.date, val: f.val }))
     bcs.value = (d.bcs ?? []).map((bc: any) => ({ type: bc.type, bc: bc.bc, date: bc.date ?? bc.curr_date, msg: bc.msg }))
     macd.value = d.macd && d.macd.dif?.length ? d.macd : null
@@ -504,7 +522,17 @@ onMounted(() => {
               <td>
                 <span :class="['verdict', isOutcomeMiss(o) ? 'miss' : 'ok']">{{ isOutcomeMiss(o) ? '✗' : '✓' }}</span>
               </td>
-              <td class="msg-cell">{{ mmds[i]?.msg ?? '' }}</td>
+              <td class="msg-cell">
+                {{ mmds[i]?.msg ?? '' }}
+                <!-- V102: 信号质量评分卡评级 + 操作建议摘要 -->
+                <span v-if="mmds[i]?.v102_signal_quality?.overall_grade" class="train-v102-grade" :class="'g' + mmds[i]!.v102_signal_quality!.overall_grade">
+                  V102·{{ mmds[i]!.v102_signal_quality!.overall_grade }}
+                </span>
+                <span v-if="mmds[i]?.v102_decision_support?.action_recommendation" class="train-v102-advice"
+                      :class="{ 'adv-buy': mmds[i]!.v102_decision_support!.action_recommendation.includes('买入'), 'adv-sell': mmds[i]!.v102_decision_support!.action_recommendation.includes('卖出') }">
+                  {{ mmds[i]!.v102_decision_support!.action_recommendation }}
+                </span>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -618,6 +646,33 @@ onMounted(() => {
 .verdict.ok { color: #22c55e; }
 .verdict.miss { color: #ef4444; }
 .msg-cell { color: var(--text-dim); font-size: 11px; max-width: 420px; }
+
+/* V102: 信号质量评级 + 操作建议摘要（复盘讲解） */
+.train-v102-grade {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+}
+.train-v102-grade.gA { background: #22c55e; }
+.train-v102-grade.gB { background: #3b82f6; }
+.train-v102-grade.gC { background: #f59e0b; }
+.train-v102-grade.gD { background: #ef4444; }
+.train-v102-advice {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+}
+.train-v102-advice.adv-buy { color: #22c55e; }
+.train-v102-advice.adv-sell { color: #ef4444; }
 .done-save { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 10px 0; }
 .save-label { font-size: 12px; color: var(--text-dim); }
 .name-input {
