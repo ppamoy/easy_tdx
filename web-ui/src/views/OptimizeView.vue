@@ -304,6 +304,48 @@ async function copyOptimizeJson() {
   }
   setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
 }
+// V257: 网格点排名导出 CSV（Excel 友好，与批量验证 CSV 导出系列对齐）
+const gridCsvMsg = ref('')
+function gridCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportGridCsv() {
+  const r = store.optimizeResult
+  if (!r || !r.results || r.results.length === 0) return
+  const header = ['排名', '参数', '总收益', '夏普', '最大回撤', '交易数', '胜率', '5根命中', '可信度']
+  const lines = [header.join(',')]
+  r.results.forEach((row, i) => {
+    const p = row.params as Record<string, unknown> | undefined
+    const paramsStr = p ? JSON.stringify(p) : ''
+    lines.push([
+      i + 1,
+      gridCsvEscape(paramsStr),
+      ((row.total_return ?? 0) * 100).toFixed(2) + '%',
+      (row.sharpe ?? 0).toFixed(2),
+      ((row.max_drawdown ?? 0) * 100).toFixed(2) + '%',
+      row.total_trades ?? '',
+      ((row.win_rate ?? 0) * 100).toFixed(1) + '%',
+      row.hit_rate != null ? (row.hit_rate * 100).toFixed(1) + '%' : '',
+      row.trust_score != null ? Math.round(row.trust_score) : '',
+    ].join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_optimize_grid_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    gridCsvMsg.value = '✓ 已导出网格排名 CSV'
+  } catch {
+    gridCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { gridCsvMsg.value = '' }, 2500)
+}
 
 // V205: 批量验证自选股（用寻优得到的最优策略+参数对全局自选股逐只回测，按可信度排名）
 interface OptBatchRow {
@@ -736,11 +778,13 @@ async function saveOptBatchAsPortfolio() {
         <div class="result-toolbar">
           <button class="ghost" @click="copyOptimizeReport">📋 复制报告</button>
           <button class="ghost" @click="copyOptimizeJson">⚙ 复制 JSON</button>
+          <button class="ghost" @click="exportGridCsv">📊 导出 CSV</button>
           <button class="ghost" :disabled="optBatchLoading" @click="runOptBatchVerify">
             {{ optBatchLoading ? '批量验证自选股中…' : '🗳️ 批量验证自选股' }}
           </button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="jsonCopyMsg" class="save-msg">{{ jsonCopyMsg }}</span>
+          <span v-if="gridCsvMsg" class="save-msg">{{ gridCsvMsg }}</span>
           <span v-if="optBatchMsg" class="save-msg">{{ optBatchMsg }}</span>
         </div>
         <section class="report-section">

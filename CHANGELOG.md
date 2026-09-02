@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**寻优页网格排名「导出 CSV」（V257）—— 网格点排名 Excel 友好导出** —— 寻优结果工具栏只有「📋 复制报告」与「⚙ 复制 JSON」，批量验证五处已有 CSV 导出（V253/V255）而网格排名没有。本次加「📊 导出 CSV」：BOM + 表头（排名/参数/总收益/夏普/最大回撤/交易数/胜率/5根命中/可信度）+ 全部网格点数据，下载 easy_tdx_optimize_grid_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/OptimizeView.vue** —— 新增 exportGridCsv（BOM+CSV+Blob 下载）+ 结果工具栏「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优页网格排名 →「导出 CSV」→ 下载文件含 BOM 表头与行数据、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V255（V256）—— 文档覆盖五处 CSV 导出与指南自身迭代** —— V254 仅把指南更新到 V253，V255 新增的四处批量验证「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V255：标题、全景表补 V254/V255 两行、3.1 回测页第 5 步批量验证补「📊 导出 CSV（V255）扩展到五处」说明。
 
 ### 新增
