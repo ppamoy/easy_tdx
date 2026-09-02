@@ -67,7 +67,7 @@ python scripts/advice_batch_validate.py SZ 000001 SH 600519 --md
 ```
 输出多标的批量实证 Markdown 报告（vs 买入持有）。
 
-### 离线建议回放（本地 .day，无需网络，V351）
+### 离线建议回放（本地 .day，无需网络，V351/V352）
 
 前置条件：本地已安装通达信并下载过日线（或已用 `sync-all` 同步）：
 
@@ -75,9 +75,22 @@ python scripts/advice_batch_validate.py SZ 000001 SH 600519 --md
 easy-tdx offline advice SZ 000001            # JSON
 easy-tdx offline advice SZ 000001 --output csv   # CSV 导出
 easy-tdx offline advice SZ 000001 --count 300 --max-hold 15
+easy-tdx offline advice SZ 000001 --file /path/to/sh600000.day --output csv  # 指定任意 .day 路径（V352）
 ```
 读取本地 .day 日线 → 缠论分析 → 对 3买/3卖 信号生成 V102 建议 → 逐笔回放
 （止损/止盈/到期）→ 输出汇总与每笔明细（含 symbol/bars/signals 上下文）。
+
+### 离线批量建议实证（V353）
+
+对自选股票池（本地 .day 目录）一键批量实证：
+
+```bash
+easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md
+easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --output csv
+```
+扫描目录内 .day 文件（文件名推断市场/代码，如 sh600000.day → SH/600000），
+逐只跑 V102 建议回放并用 summarize_batch 聚合（总建议/胜率/平均收益/正收益标的），
+输出 json/table/csv/md（含每只 vs 买入持有对照）。
 
 ## 4. 实证结果示例（合成行情回放）
 
