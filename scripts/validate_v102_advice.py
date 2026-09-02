@@ -70,10 +70,49 @@ def _buy3_advice(entry_idx: int, ref_close: float) -> dict:
 
 
 def main() -> int:
+    md = "--md" in sys.argv  # 输出 markdown 报告（供文档引用/无行情环境验证）
     closes, highs, lows = _synthetic_klines(120)
 
     advices = [_buy3_advice(i, closes[i]) for i in (15, 35, 55, 75, 95)]
     report = simulate_advice_batch(highs, lows, closes, advices)
+
+    reason_cn = {"stop": "止损", "tp1": "止盈", "expire": "到期"}
+    rows: list[tuple[float, float, float, float, str, float]] = []
+    for i, t in enumerate(report["trades"]):
+        a = advices[i]
+        rows.append(
+            (
+                a["entry_price"],
+                a["stop_loss"],
+                a["take_profit_1"],
+                t["exit_price"],
+                reason_cn.get(t["exit_reason"], t["exit_reason"]),
+                t["return_pct"],
+            )
+        )
+
+    if md:
+        print("# V102 建议执行实证报告（合成行情回放）")
+        print()
+        print(f"行情长度 **{len(closes)}** 根 | 建议笔数 **{len(advices)}**")
+        print()
+        print("| # | 入场 | 止损 | 止盈1 | 出场价 | 原因 | 收益% |")
+        print("|---|-----|-----|------|-------|------|-------|")
+        for i, (entry, sl, tp1, exit_price, reason, ret) in enumerate(rows):
+            print(
+                f"| {i + 1} | {entry:.2f} | {sl:.2f} | {tp1:.2f} | "
+                f"{exit_price:.2f} | {reason} | {ret:+.2f} |"
+            )
+        print()
+        print(
+            f"**汇总**：胜率 {report['win_rate'] * 100:.0f}% | "
+            f"平均收益 {report['avg_return']:+.2f}% | 累计 {report['total_return']:+.2f}%"
+        )
+        print(
+            f"**出场分布**：止损 {report['stop_rate'] * 100:.0f}% / "
+            f"止盈 {report['tp_rate'] * 100:.0f}% / 到期 {report['expire_rate'] * 100:.0f}%"
+        )
+        return 0
 
     print("=" * 64)
     print("V102 决策支持建议执行实证（合成行情回放）")
@@ -81,15 +120,10 @@ def main() -> int:
     print(f"行情长度: {len(closes)} 根 | 建议笔数: {len(advices)}")
     print("-" * 64)
     print(f"{'#':>2} {'入场':>8} {'止损':>8} {'止盈1':>8} {'出场价':>8} {'原因':>6} {'收益%':>8}")
-    for i, t in enumerate(report["trades"]):
-        a = advices[i]
-        reason = {"stop": "止损", "tp1": "止盈", "expire": "到期"}.get(
-            t["exit_reason"], t["exit_reason"]
-        )
+    for i, (entry, sl, tp1, exit_price, reason, ret) in enumerate(rows):
         print(
-            f"{i + 1:>2} {a['entry_price']:>8.2f} {a['stop_loss']:>8.2f} "
-            f"{a['take_profit_1']:>8.2f} {t['exit_price']:>8.2f} {reason:>6} "
-            f"{t['return_pct']:>+8.2f}"
+            f"{i + 1:>2} {entry:>8.2f} {sl:>8.2f} "
+            f"{tp1:>8.2f} {exit_price:>8.2f} {reason:>6} {ret:>+8.2f}"
         )
     print("-" * 64)
     print(
@@ -102,6 +136,7 @@ def main() -> int:
     )
     print("=" * 64)
     print("提示: 把 closes/highs/lows 换成真实行情、advices 换成真实信号的 V102 建议即可复现。")
+    print("      --md 输出 Markdown 报告，供文档引用。")
     return 0
 
 

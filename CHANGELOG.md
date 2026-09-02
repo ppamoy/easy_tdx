@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**V102 决策支持体验打磨（V331-V334）—— 回测提示/空态说明/Markdown 实证报告** —— 收尾阶段的用户体验与文档闭环：
+- **V331** CHANGELOG/DEV_STATUS 补 V323-V330 里程碑。
+- **V332** 选股页筛出的股票附 V102 质量评级徽章 + 操作建议摘要。
+- **V333** 回测页缠论策略显示 V102 提示（说明 use_v102_advice 用途）；诊断页决策卡片在非 3买/3卖 时显示空态说明。
+- **V334** scripts/validate_v102_advice.py 支持 --md：输出 Markdown 格式的 V102 建议执行实证报告（供文档引用/无行情环境验证）。
+
+### 验证
+
+- 相关单测全绿；ruff/mypy/format 归零；vue-tsc + vite build 通过；脚本双模式可运行。
+
+---
+
 **V102 决策支持全面落地（V323-V330）—— CLI/策略/缠论分析页/监控页/导出全链路** —— 延续 V320-V322，把 V102 决策支持贯穿命令行、回测策略与全站页面：
 - **V323** easy-tdx advice MARKET CODE CLI 命令（json/table 输出，collect_signal_advices 供 Web/CLI 共用）。
 - **V324** 缠论回测策略 use_v102_advice 参数：3买 首仓按 V102 建议的止损/第一止盈动态出场（盘中 high/low 触发，优先于固定百分比，交易日志记录 v102_stop_loss/v102_take_profit）。
