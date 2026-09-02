@@ -534,12 +534,15 @@ function restoreBatchVerifyPersist() {
 const batchSort = ref<'return' | 'trust'>('trust')
 // V192: 仅看样本外稳健（过滤掉 oos_degraded=true 的候选股）
 const batchOnlyRobust = ref(false)
+// V318: 仅看滚验稳健（过滤掉 wf_degraded=true 的候选股）
+const batchOnlyWfRobust = ref(false)
 const sortedBatchRows = computed(() => {
-  const base = batchOnlyRobust.value
-    ? batchRows.value.filter((r) => r.oos_degraded === false)
-    : batchRows.value
-  if (!base.length || batchSort.value === 'trust') return base
-  return [...base].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+  let base = batchRows.value
+  if (batchOnlyRobust.value) base = base.filter((r) => r.oos_degraded === false)
+  if (batchOnlyWfRobust.value) base = base.filter((r) => r.wf_degraded === false)
+  const filtered = base
+  if (!filtered.length || batchSort.value === 'trust') return filtered
+  return [...filtered].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
 })
 
 async function runBatchVerifyWatchlist() {
@@ -1110,6 +1113,9 @@ async function onSave() {
               <button class="ghost small" :class="{ active: batchSort === 'trust' }" @click="batchSort = 'trust'">按可信度</button>
               <button class="ghost small" :class="{ active: batchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + batchRows.filter((r: BatchVerifyRow) => r.oos_degraded === false).length + ' 只）'" @click="batchOnlyRobust = !batchOnlyRobust">
                 ✅ 仅看样本外稳健
+              </button>
+              <button class="ghost small" :class="{ active: batchOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的候选股（当前 ' + batchRows.filter((r: BatchVerifyRow) => r.wf_degraded === false).length + ' 只）'" @click="batchOnlyWfRobust = !batchOnlyWfRobust">
+                ✅ 仅看滚验稳健
               </button>
               <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
               <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
