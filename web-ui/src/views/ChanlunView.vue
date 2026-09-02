@@ -1102,12 +1102,16 @@ onUnmounted(() => {
                 {{ (m.confidence * 100).toFixed(0) }}%
               </span>
             </td>
-            <td v-if="m.quality">
-              <span class="quality-badge" :style="{ background: qualityColor(m.quality.grade) + '22', color: qualityColor(m.quality.grade), borderColor: qualityColor(m.quality.grade) }">
+            <td>
+              <span v-if="m.quality" class="quality-badge" :style="{ background: qualityColor(m.quality.grade) + '22', color: qualityColor(m.quality.grade), borderColor: qualityColor(m.quality.grade) }">
                 {{ m.quality.grade }} · {{ m.quality.score }}分
               </span>
+              <span v-else class="quality-badge" style="background:#33415522;color:#94a3b8;border:1px solid #475569">-</span>
+              <!-- V102: 信号质量评分卡评级 -->
+              <span v-if="m.v102_signal_quality?.overall_grade" class="v102-grade-badge" :class="'g' + m.v102_signal_quality.overall_grade">
+                V102·{{ m.v102_signal_quality.overall_grade }}
+              </span>
             </td>
-            <td v-else><span class="quality-badge" style="background:#33415522;color:#94a3b8;border:1px solid #475569">-</span></td>
             <td>{{ m.msg }}</td>
           </tr>
         </tbody>
@@ -1595,6 +1599,22 @@ onUnmounted(() => {
   border: 1px solid;
   letter-spacing: 0.5px;
 }
+
+/* V102: 信号质量评分卡评级徽章 */
+.v102-grade-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.3px;
+}
+.v102-grade-badge.gA { background: #22c55e; }
+.v102-grade-badge.gB { background: #3b82f6; }
+.v102-grade-badge.gC { background: #f59e0b; }
+.v102-grade-badge.gD { background: #ef4444; }
 
 /* 操作建议面板 */
 .advice-panel {
