@@ -488,6 +488,7 @@ function buildPortfolioReportText(): string {
     lines.push('')
   }
   lines.push('---')
+  lines.push('> 💡 各标的的 V102 缠论决策支持（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行 easy-tdx advice MARKET CODE 一键回放。')
   lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
   return lines.join('\n')
 }
