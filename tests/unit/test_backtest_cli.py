@@ -374,9 +374,10 @@ class TestBacktestCLI:
 
     def test_backtest_walk_forward_request(self):
         """V287: BacktestRequest 应支持 use_walk_forward，且 _run_backtest 返回 walk_forward。"""
+        from datetime import datetime, timedelta
+
         import numpy as np
         import pandas as pd
-        from datetime import datetime, timedelta
 
         from easy_tdx.web.backtest_schemas import BacktestRequest
         from easy_tdx.web.routers.backtest import _run_backtest
@@ -409,3 +410,12 @@ class TestBacktestCLI:
         )
         result2 = _run_backtest(df, req2)
         assert result2.get("walk_forward") is None
+
+    def test_verify_multi_table_option(self):
+        """V293: verify-multi 应暴露 --table 选项。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        result = runner.invoke(cli, ["verify-multi", "--help"])
+        assert result.exit_code == 0
+        assert "--table" in result.output

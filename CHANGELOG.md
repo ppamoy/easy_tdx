@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**CLI verify-multi 支持 --table（V293）—— 命令行批量验证选股表格化输出** —— verify-multi（V119）此前只输出 JSON，命令行选股比验证结论要读缩进 JSON。本次新增 `--table`：表格输出（排名/标的/总收益/胜率/5根命中/超额/可信度，按需追加「稳健/样本外/滚验」列），与 run-all 排名表（V115/V155）体验一致，脚本与人工都友好。
+
+### 新增
+
+- **src/easy_tdx/cli/cmd_verify.py** —— verify-multi 新增 --table 选项与 _print_verify_multi_table（验证列按需追加）。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：verify-multi --help 含 --table。
+- 端到端：verify-multi SZ 000001 --table 输出表格（排名/标的/总收益/命中率/超额/可信度）。
+- ruff / mypy 零告警；全量单测 **2478 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V291（V292）—— 文档覆盖策略库清单 JSON 与指南自身迭代** —— V290 仅把指南更新到 V289，V291 新增的策略库「复制清单 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V291：标题、全景表补 V290/V291 两行、3.6 策略库节补「⚙ 复制清单 JSON」说明。
 
 ### 新增

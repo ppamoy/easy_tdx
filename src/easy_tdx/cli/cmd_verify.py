@@ -256,6 +256,7 @@ def verify(
     help="对每只标的输出 Walk-Forward 滚动验证判定（V243）",
 )
 @click.option("--step-ratio", "wf_step", default=0.1, type=float, help="Walk-Forward 滚动步长比例")
+@click.option("--table", "use_table", is_flag=True, help="表格输出（替代 JSON）")
 @click.option(
     "--output-file",
     "output_file",
@@ -280,6 +281,7 @@ def verify_multi(
     only_robust: bool,
     use_wf: bool,
     wf_step: float,
+    use_table: bool,
     output_file: str | None,
 ) -> None:
     """批量模型验证：对多只标的跑同一策略，按模型可信度排名选股。
@@ -448,6 +450,9 @@ def verify_multi(
         "symbols": rows,
         "failures": failures,
     }
+    if use_table:
+        _print_verify_multi_table(rows)
+        return
     text = json.dumps(out, ensure_ascii=False, indent=2, default=str)
     if output_file:
         with open(output_file, "w", encoding="utf-8") as f:
@@ -710,3 +715,50 @@ def verify_portfolio(
         click.echo("已写入 " + output_file)
     else:
         click.echo(text)
+
+
+def _print_verify_multi_table(rows: list[dict[str, Any]]) -> None:
+    """V293: verify-multi 表格输出（含验证列，替代 JSON）。"""
+    if not rows:
+        click.echo("无验证结果")
+        return
+    has_oos = any(r.get("oos_degraded") is not None for r in rows)
+    has_robust = any(r.get("overfit_likely") is not None for r in rows)
+    has_wf = any(r.get("wf_degraded") is not None for r in rows)
+    header = "".join([
+        f"{'排名':>4}  ",
+        f"{'标的':<12} ",
+        f"{'总收益':>9} {'胜率':>7} ",
+        f"{'5根命中':>7} {'超额':>7} {'可信度':>7}",
+    ])
+    if has_robust:
+        header += f" {'稳健':>6}"
+    if has_oos:
+        header += f" {'样本外':>6}"
+    if has_wf:
+        header += f" {'滚验':>6}"
+    click.echo(header)
+    click.echo("-" * len(header))
+    for i, r in enumerate(rows, 1):
+        hit = r.get("hit_rate")
+        exc = r.get("excess_hit_rate")
+        ts = r.get("trust_score")
+        line = f"{i:>4}  {str(r['symbol']):<12} "
+        line += f"{r.get('total_return', 0):>8.2%} "
+        line += f"{r.get('win_rate', 0):>6.1%} "
+        line += f"{hit if hit is None else hit:>6.0%} "
+        line += f"{exc if exc is None else exc:>+6.0%} "
+        line += f"{ts if ts is None else (ts or 0):>5.0f} "
+        if has_robust:
+            ol = r.get("overfit_likely")
+            if ol is not None:
+                line += f"{'⚠过拟' if ol else '✅稳':>6}"
+        if has_oos:
+            od = r.get("oos_degraded")
+            if od is not None:
+                line += f"{'⚠衰减' if od else '✅泛':>6}"
+        if has_wf:
+            wd = r.get("wf_degraded")
+            if wd is not None:
+                line += f"{'⚠不稳' if wd else '✅稳':>6}"
+        click.echo(line)
