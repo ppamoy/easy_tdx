@@ -18,7 +18,7 @@ from .cmd_board import (
     board_summary,
 )
 from .cmd_capital import capital_flow
-from .cmd_chanlun import chanlun
+from .cmd_chanlun import advice_simulate, chanlun
 from .cmd_company import company_info, company_info_content, finance_info
 from .cmd_ex import ex
 from .cmd_factor import factor
@@ -94,6 +94,7 @@ cli.add_command(indicator)
 cli.add_command(indicator_list)
 cli.add_command(offline)
 cli.add_command(chanlun)
+cli.add_command(advice_simulate)
 cli.add_command(factor)
 cli.add_command(pfactor)
 cli.add_command(backtest)

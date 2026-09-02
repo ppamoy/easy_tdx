@@ -307,3 +307,68 @@ class TestV102AdviceEndToEnd:
         result = simulate_advice_batch(closes, highs, lows, advices)
         assert result["count"] == 3
         assert result["avg_return"] != 0.0 or result["expire_rate"] > 0
+
+
+class TestCollectSignalAdvices:
+    """从缠论结果提取可回放建议（collect_signal_advices）。"""
+
+    def _fake_mmd(self, mmd_type: str, idx: int):
+        from easy_tdx.chanlun.types import MMD, MMDType
+
+        t = {"buy3": MMDType.BUY_3, "sell3": MMDType.SELL_3}[mmd_type]
+        mmd = MMD(mmd_type=t, msg="测试")
+        mmd.bi = MagicMock()
+        mmd.bi.end = MagicMock()
+        mmd.bi.end.k = MagicMock()
+        mmd.bi.end.k.k_index = idx
+        mmd.bi.low = 98.0
+        mmd.bi.high = 102.0
+        mmd.zs = MagicMock()
+        mmd.zs.zg = 105.0
+        mmd.zs.zd = 95.0
+        return mmd
+
+    def test_extract_long_and_short(self):
+        """3买→long、3卖→short，且信号日窗口生成建议。"""
+        from easy_tdx.backtest.advice_simulator import collect_signal_advices
+
+        closes = [100.0] * 60
+        highs = [101.0] * 60
+        lows = [99.0] * 60
+        result = MagicMock()
+        result.mmds = [self._fake_mmd("buy3", 10), self._fake_mmd("sell3", 30)]
+
+        advices = collect_signal_advices(result, closes, highs, lows, max_hold=8)
+
+        assert len(advices) == 2
+        long_adv = next(a for a in advices if a["direction"] == "long")
+        short_adv = next(a for a in advices if a["direction"] == "short")
+        assert long_adv["entry_idx"] == 10
+        assert long_adv["stop_loss"] < long_adv["entry_price"] < long_adv["take_profit_1"]
+        assert short_adv["entry_idx"] == 30
+        assert short_adv["stop_loss"] > short_adv["entry_price"] > short_adv["take_profit_1"]
+
+    def test_empty_mmds(self):
+        """无 3买/3卖 信号返回空列表。"""
+        from easy_tdx.backtest.advice_simulator import collect_signal_advices
+
+        result = MagicMock()
+        result.mmds = []
+        assert collect_signal_advices(result, [100.0] * 40, [101.0] * 40, [99.0] * 40, 8) == []
+
+
+class TestAdviceCli:
+    """easy-tdx advice CLI 命令。"""
+
+    def test_advice_help(self):
+        """advice --help 输出参数说明。"""
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["--help"])
+        assert res.exit_code == 0
+        assert "MARKET" in res.output
+        assert "--max-hold" in res.output
+        assert "回放" in res.output

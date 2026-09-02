@@ -171,6 +171,115 @@ def _print_table(result: dict[str, Any]) -> None:
         click.echo()
 
 
+@click.command("advice")
+@click.argument("market")
+@click.argument("code")
+@click.option("--period", default="DAILY", help="K线周期: DAILY/5MIN/15MIN/30MIN/60MIN")
+@click.option("--count", default=500, type=int, help="K线数量")
+@click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
+@click.option("--output", "output_fmt", type=click.Choice(["json", "table"]), default="json")
+def advice_simulate(
+    market: str,
+    code: str,
+    period: str,
+    count: int,
+    max_hold: int,
+    output_fmt: str,
+) -> None:
+    """V102 建议回放实证：对 3买/3卖 信号生成入场/止损/止盈建议并在历史行情回放。
+
+    回答「本标的最近出现的 3买/3卖 信号，按模型给的建议执行，历史结果如何」——
+    每笔的出场原因（止损/止盈/到期）与收益，以及批量胜率/平均收益汇总。
+
+    示例：
+
+      easy-tdx advice SZ 000001
+
+      easy-tdx advice SZ 000001 --max-hold 15 --table
+    """
+    from ..backtest.advice_simulator import collect_signal_advices, simulate_advice_batch
+    from ..chanlun.analyser import ChanlunAnalyser
+    from .conn import get_mac_client
+    from .parsers import parse_market, parse_period
+
+    mkt = parse_market(market)
+    with get_mac_client() as client:
+        df = client.get_stock_kline(
+            mkt,
+            code,
+            period=parse_period(period),
+            start=0,
+            count=count,
+        )
+        if df is None or len(df) < 30:
+            click.echo(
+                json.dumps(
+                    {"symbol": f"{market}{code}", "error": "行情数据不足（<30 根），无法回放建议"},
+                    ensure_ascii=False,
+                )
+            )
+            return
+
+        analyser = ChanlunAnalyser(code=code, frequency=period)
+        result = analyser.process_klines(df)
+        closes = [float(k.close) for k in result.klines]
+        highs = [float(k.high) for k in result.klines]
+        lows = [float(k.low) for k in result.klines]
+        advices = collect_signal_advices(result, closes, highs, lows, max_hold)
+
+        if not advices:
+            click.echo(
+                json.dumps(
+                    {
+                        "symbol": f"{market}{code}",
+                        "signal_count": len(result.mmds),
+                        "advice_count": 0,
+                        "message": f"近 {len(closes)} 根K线未发现 3买/3卖 信号，无法生成可回放建议",
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
+
+        report = simulate_advice_batch(highs, lows, closes, advices)
+
+    if output_fmt == "table":
+        click.echo(
+            f"标的 {market}{code} | 建议 {report['count']} 笔 | "
+            f"胜率 {report['win_rate'] * 100:.0f}% | "
+            f"平均 {report['avg_return']:+.2f}% | 累计 {report['total_return']:+.2f}%"
+        )
+        click.echo(
+            f"出场分布: 止损 {report['stop_rate'] * 100:.0f}% / "
+            f"止盈 {report['tp_rate'] * 100:.0f}% / 到期 {report['expire_rate'] * 100:.0f}%"
+        )
+        click.echo(
+            f"{'#':>3} {'入场':>9} {'止损':>9} {'止盈1':>9} {'出场价':>9} {'原因':>4} {'收益%':>8}"
+        )
+        for i, (adv, t) in enumerate(zip(advices, report["trades"])):
+            reason = {"stop": "止损", "tp1": "止盈", "expire": "到期"}.get(
+                t["exit_reason"], t["exit_reason"]
+            )
+            click.echo(
+                f"{i + 1:>3} {adv['entry_price']:>9.2f} {adv['stop_loss']:>9.2f} "
+                f"{adv['take_profit_1']:>9.2f} {t['exit_price']:>9.2f} {reason:>4} "
+                f"{t['return_pct']:>+8.2f}%"
+            )
+    else:
+        click.echo(
+            json.dumps(
+                {
+                    "symbol": f"{market}{code}",
+                    "signal_count": len(result.mmds),
+                    "advice_count": len(advices),
+                    "report": report,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+
+
 def _run_multi_level(
     client: Any,
     mkt: Any,

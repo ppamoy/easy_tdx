@@ -2687,44 +2687,11 @@ def _collect_v102_advices(
 ) -> list[dict[str, Any]]:
     """从缠论结果中提取 3买/3卖 信号的可回放建议（V102 条件266）。
 
-    对每个 3买/3卖 信号，用截至信号日的行情窗口生成 入场/止损/止盈 建议，
-    输出供 advice_simulator 回放的建议条目（含方向 long/short）。
+    兼容包装：委托给 advice_simulator.collect_signal_advices（CLI/Web 共用）。
     """
-    from easy_tdx.chanlun.mmd import _calc_decision_support_enhanced  # noqa: PLC0415
-    from easy_tdx.chanlun.types import MMDType  # noqa: PLC0415
+    from easy_tdx.backtest.advice_simulator import collect_signal_advices  # noqa: PLC0415
 
-    advices: list[dict[str, Any]] = []
-    for mmd in result.mmds:
-        if mmd.mmd_type not in (MMDType.BUY_3, MMDType.SELL_3) or mmd.bi is None:
-            continue
-        end_k = getattr(mmd.bi.end, "k", None)
-        idx = getattr(end_k, "k_index", None)
-        if idx is None:
-            idx = getattr(mmd.bi.end, "index", None)
-        if idx is None or idx < 0 or idx >= len(closes):
-            continue
-        window_end = min(idx + 1, len(closes))
-        decision = _calc_decision_support_enhanced(
-            mmd,
-            closes[:window_end],
-            highs[:window_end],
-            lows[:window_end],
-            None,
-            None,
-        )
-        if not decision or not decision.get("entry_price") or decision["entry_price"] <= 0:
-            continue
-        advices.append(
-            {
-                "entry_idx": idx,
-                "entry_price": decision["entry_price"],
-                "stop_loss": decision["stop_loss"],
-                "take_profit_1": decision["take_profit_1"],
-                "max_hold": max_hold,
-                "direction": "long" if mmd.mmd_type == MMDType.BUY_3 else "short",
-            }
-        )
-    return advices
+    return collect_signal_advices(result, closes, highs, lows, max_hold)
 
 
 @router.post("/diagnosis/advice-simulate")

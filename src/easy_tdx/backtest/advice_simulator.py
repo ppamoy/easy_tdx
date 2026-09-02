@@ -175,3 +175,60 @@ def simulate_advice_batch(
         "tp_rate": round(kinds["tp1"] / len(trades), 4),
         "expire_rate": round(kinds["expire"] / len(trades), 4),
     }
+
+
+def collect_signal_advices(
+    result: Any,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    max_hold: int,
+) -> list[dict[str, Any]]:
+    """从缠论结果中提取 3买/3卖 信号的可回放建议（V102 条件266）。
+
+    对每个 3买/3卖 信号，用截至信号日的行情窗口生成 入场/止损/止盈 建议，
+    输出供 simulate_advice_batch 回放的建议条目（含方向 long/short）。
+
+    Args:
+        result: ChanlunAnalyser 的分析结果（含 mmds）
+        closes / highs / lows: 与 K 线一一对应的价格序列
+        max_hold: 建议最大持有根数
+
+    Returns:
+        list[dict]：每条含 entry_idx/entry_price/stop_loss/take_profit_1/max_hold/direction
+    """
+    from easy_tdx.chanlun.mmd import _calc_decision_support_enhanced
+    from easy_tdx.chanlun.types import MMDType
+
+    advices: list[dict[str, Any]] = []
+    for mmd in result.mmds:
+        if mmd.mmd_type not in (MMDType.BUY_3, MMDType.SELL_3) or mmd.bi is None:
+            continue
+        end_k = getattr(mmd.bi.end, "k", None)
+        idx = getattr(end_k, "k_index", None)
+        if idx is None:
+            idx = getattr(mmd.bi.end, "index", None)
+        if idx is None or idx < 0 or idx >= len(closes):
+            continue
+        window_end = min(idx + 1, len(closes))
+        decision = _calc_decision_support_enhanced(
+            mmd,
+            closes[:window_end],
+            highs[:window_end],
+            lows[:window_end],
+            None,
+            None,
+        )
+        if not decision or not decision.get("entry_price") or decision["entry_price"] <= 0:
+            continue
+        advices.append(
+            {
+                "entry_idx": idx,
+                "entry_price": decision["entry_price"],
+                "stop_loss": decision["stop_loss"],
+                "take_profit_1": decision["take_profit_1"],
+                "max_hold": max_hold,
+                "direction": "long" if mmd.mmd_type == MMDType.BUY_3 else "short",
+            }
+        )
+    return advices
