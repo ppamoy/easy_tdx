@@ -430,6 +430,142 @@ class TestAdviceCli:
         assert "--out" in res.output  # V365: JSONL 落盘
 
 
+class TestOnlineAdviceOutput:
+    """V370/V371: 在线 advice 的 md/json 输出分支运行时回归（mock 网络与分析）。"""
+
+    @staticmethod
+    def _patch_env(monkeypatch) -> None:
+        import numpy as np
+        import pandas as pd
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate  # noqa: F401 触发模块就绪
+
+        class FakeK:
+            def __init__(self, v: float) -> None:
+                self.close = v
+                self.high = v + 1.0
+                self.low = v - 1.0
+
+        class FakeResult:
+            klines = [FakeK(100.0 + i) for i in range(40)]
+            mmds: list = []
+
+        class FakeAnalyser:
+            def process_klines(self, df):
+                return FakeResult()
+
+        class FakeClient:
+            def get_stock_kline(self, *a, **k):
+                dates = pd.date_range("2024-01-01", periods=40, freq="D")
+                return pd.DataFrame(
+                    {
+                        "datetime": dates,
+                        "open": np.arange(100, 140),
+                        "close": np.arange(100, 140),
+                        "high": np.arange(101, 141),
+                        "low": np.arange(99, 139),
+                        "vol": [1e6] * 40,
+                        "amount": [1e8] * 40,
+                    }
+                )
+
+        class FakeCtx:
+            def __enter__(self):
+                return FakeClient()
+
+            def __exit__(self, *a):
+                return False
+
+        monkeypatch.setattr("easy_tdx.cli.conn.get_mac_client", lambda: FakeCtx())
+        monkeypatch.setattr(
+            "easy_tdx.chanlun.analyser.ChanlunAnalyser",
+            lambda code=None, frequency=None: FakeAnalyser(),
+        )
+
+    @staticmethod
+    def _fake_advices() -> list[dict]:
+        return [
+            {
+                "entry_price": 100.0,
+                "stop_loss": 97.0,
+                "take_profit_1": 106.0,
+                "max_hold": 5,
+                "direction": "long",
+            },
+            {
+                "entry_price": 110.0,
+                "stop_loss": 107.0,
+                "take_profit_1": 116.0,
+                "max_hold": 5,
+                "direction": "long",
+            },
+        ]
+
+    @staticmethod
+    def _fake_report() -> dict:
+        return {
+            "count": 2,
+            "win_rate": 0.5,
+            "avg_return": 1.0,
+            "total_return": 2.0,
+            "stop_rate": 0.5,
+            "tp_rate": 0.5,
+            "expire_rate": 0.0,
+            "trades": [
+                {"exit_price": 100.0, "exit_reason": "expire", "return_pct": 0.0},
+                {"exit_price": 112.0, "exit_reason": "tp1", "return_pct": 2.0},
+            ],
+        }
+
+    def test_advice_md_runs(self, monkeypatch):
+        """V370: 在线 advice --output md 运行时输出 Markdown 表格与汇总。"""
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        self._patch_env(monkeypatch)
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.collect_signal_advices",
+            lambda *a, **k: self._fake_advices(),
+        )
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.simulate_advice_batch",
+            lambda *a, **k: self._fake_report(),
+        )
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["SZ", "000001", "--output", "md"])
+        assert res.exit_code == 0, res.output
+        assert "在线 V102 建议回放报告" in res.output
+        assert "| 1 |" in res.output  # 逐笔表格行
+        assert "| 2 |" in res.output
+        assert "**汇总**" in res.output  # 汇总行
+        assert "**出场分布**" in res.output
+
+    def test_advice_json_runs(self, monkeypatch):
+        """V370: 在线 advice --output json 运行时结构含 report。"""
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        self._patch_env(monkeypatch)
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.collect_signal_advices",
+            lambda *a, **k: self._fake_advices(),
+        )
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.simulate_advice_batch",
+            lambda *a, **k: self._fake_report(),
+        )
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["SZ", "000001", "--output", "json"])
+        assert res.exit_code == 0, res.output
+        assert '"symbol": "SZ000001"' in res.output
+        assert '"advice_count": 2' in res.output
+        assert '"report"' in res.output
+
+
 class TestSummarizeBatch:
     """多标的批量汇总（summarize_batch）。"""
 

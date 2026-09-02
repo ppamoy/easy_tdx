@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**在线 advice 输出分支运行时加固（V371）—— md/json 输出路径纳入 pytest 回归** —— 新增 TestOnlineAdviceOutput：mock MAC 客户端（合成日线 DataFrame）与分析器/建议生成/模拟器，用 CliRunner 真实调用在线 advice --output md / --output json，断言 Markdown 表格行（入场/止损/止盈/收益%）与汇总行、JSON 结构含 report——防止 V370 新增的 md 路径「help 通过但运行崩溃」（与 V366-V368 离线加固同款）。
+
+---
+
 **在线 advice 支持 --output md（V370）—— 在线/离线建议回放报告能力对齐** —— easy-tdx advice（在线）补 Markdown 报告输出（K线/信号/建议数 + 逐笔明细表 + 胜率/平均/累计/出场分布），与 offline advice --output md（V364）/ advice-batch --md 对齐——在线/离线/批量三级建议回放报告能力统一。
 
 ---
