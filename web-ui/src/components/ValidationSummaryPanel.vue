@@ -3,7 +3,7 @@
 // V101 模型可信度、V105 样本外验证的结论浓缩成一张可一览的卡片，
 // 让用户快速判断「这个模型经过历史回测验证后到底可不可信」。
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { BacktestResult } from '../types'
 
@@ -63,11 +63,34 @@ const overall = computed(() => {
   if (!r?.model_trust) return { text: '', state: 'neutral' as const }
   return { text: '综合可信度 ' + Math.round(r.model_trust.score) + '/100', state: r.model_trust.grade === '高' ? 'pos' as const : r.model_trust.grade === '低' ? 'neg' as const : 'warn' as const }
 })
+// V301: 验证总结复制 Markdown（组件级，回测页 V106 等使用处一并受益）
+const vsCopyMsg = ref('')
+async function copyValidationSummary() {
+  if (!rows.value.length) return
+  const lines = ['# easy-tdx 验证总结']
+  if (overall.value.text) lines.push('', '- ' + overall.value.text)
+  lines.push('')
+  rows.value.forEach((r) => {
+    lines.push('- ' + r.label + '：' + r.text)
+  })
+  lines.push('')
+  lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
+  const text = lines.join('\n')
+  try {
+    await navigator.clipboard.writeText(text)
+    vsCopyMsg.value = '✓ 已复制验证总结'
+  } catch {
+    vsCopyMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { vsCopyMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
   <div v-if="rows.length" class="validation-summary">
     <div class="vs-head">
+      <button class="ghost small vs-copy-btn" @click="copyValidationSummary">📋 复制验证总结</button>
+      <span v-if="vsCopyMsg" class="save-msg">{{ vsCopyMsg }}</span>
       <span class="vs-title">✅ 验证总结</span>
       <span v-if="overall.text" class="vs-overall" :class="overall.state">{{ overall.text }}</span>
     </div>

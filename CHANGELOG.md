@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**验证总结卡片「复制验证摘要」（V301）—— 一条 Markdown 带走全部验证结论** —— 回测页「✅ 验证总结」卡片（V106）把模型可信度/信号准确度/分段稳健性/样本外结论浓缩展示，但只能看不能存。本次组件级加「📋 复制验证总结」：把 overall 与各维度结论拼成 Markdown 复制到剪贴板，供归档/分享——所有使用该组件的页面（回测页等）一并受益。
+
+### 新增
+
+- **web-ui/src/components/ValidationSummaryPanel.vue** —— 新增 copyValidationSummary（overall + 各维度结论拼 Markdown）+ 卡片头「📋 复制验证总结」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页 → 验证总结卡「复制验证总结」→ 剪贴板 Markdown 含标题与可信度、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V299（V300）—— 文档覆盖组合 WF 与指南自身迭代** —— V298 仅把指南更新到 V297，V299 新增的组合回测页 Walk-Forward 滚动验证入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V299：标题、全景表补 V298/V299 两行、3.4 组合回测页补 Walk-Forward 说明。
 
 ### 新增
