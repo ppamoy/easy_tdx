@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**组合交易明细「导出 CSV」（V285）—— 聚合各标的成交记录逐笔核对买卖点** —— 组合报告已有「📊 导出 CSV」（V259）但只含绩效聚合，成交明细只能在回测页（V261）导出。本次组合页加「📊 交易明细 CSV」：把 individual_results 各标的 trades 聚合成一张表（标的/时间/方向/数量/价格/手续费/滑点/已实现盈亏/成本基数，跳过被拒单），下载 easy_tdx_portfolio_trades_日期.csv——多标的组合也能逐笔核对模型触发的买卖点。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue** —— 新增 exportPortfolioTradesCsv（individual_results trades 聚合，BOM+CSV+Blob 下载）+ 报告工具栏「📊 交易明细 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：组合页从自选股加载 → 组合回测 →「交易明细 CSV」→ 下载文件含表头与 200 行、console 零错误。
+- clean HEAD 全量回归 **2401 passed / 0 failed**（V94–V284 全链认证）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V283（V284）—— 文档覆盖三处 JSON 配对与指南自身迭代** —— V282 仅把指南更新到 V281，V283 新增的信号列表/选股清单/效果验证「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V283：标题、全景表补 V282/V283 两行、3.3 选股页两处与 3.5 信号面板补 JSON 说明。
 
 ### 新增

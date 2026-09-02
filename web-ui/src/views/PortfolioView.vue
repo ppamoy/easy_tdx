@@ -554,6 +554,56 @@ function exportPortfolioCsv() {
   }
   setTimeout(() => { portCsvMsg.value = '' }, 2500)
 }
+// V285: 组合交易明细导出 CSV（聚合各标的成交记录，带标的列，与回测页 V261 对齐）
+const portTradesCsvMsg = ref('')
+function portTradesEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportPortfolioTradesCsv() {
+  const r = store.portfolioResult
+  if (!r) return
+  const ind = r.individual_results as unknown as Record<string, { trades?: Array<Record<string, unknown>> }> | undefined
+  if (!ind || Object.keys(ind).length === 0) {
+    portTradesCsvMsg.value = '没有可导出的成交记录'
+    setTimeout(() => { portTradesCsvMsg.value = '' }, 2500)
+    return
+  }
+  const header = ['标的', '时间', '方向', '数量', '价格', '手续费', '滑点', '已实现盈亏', '成本基数']
+  const rows: string[] = []
+  Object.entries(ind).forEach(([key, res]) => {
+    const trades = res.trades || []
+    trades.forEach((t) => {
+      if (t.rejected) return
+      rows.push([
+        portTradesEscape(key),
+        String(t.datetime ?? ''),
+        portTradesEscape(String(t.direction ?? '')),
+        String(t.size ?? ''),
+        String(t.price ?? ''),
+        String(t.commission ?? ''),
+        String(t.slippage ?? ''),
+        String(t.pnl ?? ''),
+        String(t.cost_basis ?? ''),
+      ].join(','))
+    })
+  })
+  const csv = '\uFEFF' + [header.join(','), ...rows].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_portfolio_trades_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    portTradesCsvMsg.value = '✓ 已导出组合交易明细 CSV'
+  } catch {
+    portTradesCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { portTradesCsvMsg.value = '' }, 2500)
+}
 
 const strategyLabel = computed(
   () => store.strategies.find((s) => s.name === strategy.value)?.label ?? strategy.value,
@@ -798,9 +848,11 @@ async function onSave() {
           <button class="ghost" @click="copyReport">📋 复制报告</button>
           <button class="ghost" @click="copyPortfolioJson">⚙ 复制 JSON</button>
           <button class="ghost" @click="exportPortfolioCsv">📊 导出 CSV</button>
+          <button class="ghost" @click="exportPortfolioTradesCsv">📊 交易明细 CSV</button>
           <span v-if="copyMsg" class="save-msg">{{ copyMsg }}</span>
           <span v-if="jsonCopyMsg" class="save-msg">{{ jsonCopyMsg }}</span>
           <span v-if="portCsvMsg" class="save-msg">{{ portCsvMsg }}</span>
+          <span v-if="portTradesCsvMsg" class="save-msg">{{ portTradesCsvMsg }}</span>
           <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
         </div>
 
