@@ -100,3 +100,12 @@ python scripts/advice_batch_validate.py SZ 000001 SH 600519
 python scripts/advice_batch_validate.py --file symbols.txt --max-hold 15
 ```
 输出每只标的的建议回放结果 + 该标的「买入持有」收益对照，最后全局汇总（总建议数 / 胜率 / 平均收益 / 正收益标的占比 / 出场分布）。
+
+### 5) 离线实证（本地 .day 行情，无需网络，V351-V353）
+前置条件：本地已安装通达信并下载过日线（或已用 `easy-tdx offline sync-all` 同步）。单标与批量均可离线：
+
+```bash
+easy-tdx offline advice SZ 000001 --output csv                    # 单只（--file 可指定任意 .day 路径）
+easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md   # 批量
+```
+完整用法见 [docs/v102-decision-support.md](docs/v102-decision-support.md)。
