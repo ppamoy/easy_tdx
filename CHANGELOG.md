@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline watch 支持 --since-days（V372）—— 只看最近 N 天的新信号** —— easy-tdx offline watch --since-days N：只报告最近 N 天内出现的 3买/3卖 信号（按信号日期过滤），首次运行即可聚焦近期信号、无需手动 --reset 清空陈旧基线；0=不按时间过滤（默认，行为不变）。
+
+---
+
 **在线 advice 输出分支运行时加固（V371）—— md/json 输出路径纳入 pytest 回归** —— 新增 TestOnlineAdviceOutput：mock MAC 客户端（合成日线 DataFrame）与分析器/建议生成/模拟器，用 CliRunner 真实调用在线 advice --output md / --output json，断言 Markdown 表格行（入场/止损/止盈/收益%）与汇总行、JSON 结构含 report——防止 V370 新增的 md 路径「help 通过但运行崩溃」（与 V366-V368 离线加固同款）。
 
 ---

@@ -1038,6 +1038,13 @@ def advice_batch(
     help="已见信号状态文件路径（缺省 ~/.easy_tdx/offline_watch_state.json）",
 )
 @click.option("--interval", default=0, type=int, help="连续轮询间隔秒数（0=单次扫描；Ctrl+C 退出）")
+@click.option(
+    "--since-days",
+    "since_days",
+    default=0,
+    type=int,
+    help="只看最近 N 天的新信号（0=不按时间过滤）",
+)
 @click.option("--reset", "do_reset", is_flag=True, help="清空已见信号状态，重新建立基线")
 @click.option(
     "--info", "do_info", is_flag=True, help="显示状态文件信息（路径 + 已记录信号数）后退出"
@@ -1055,6 +1062,7 @@ def watch(
     count: int,
     state_file: str | None,
     interval: int,
+    since_days: int,
     do_reset: bool,
     do_info: bool,
     output_fmt: str,
@@ -1201,6 +1209,16 @@ def watch(
                     if not mmd.bi or not mmd.bi.end:
                         continue
                     date_str = result._fmt_dt(result._fx_anchor_datetime(mmd.bi.end))
+                    if since_days > 0:
+                        # V372: 只看最近 N 天的新信号（避免首次运行报告陈旧基线）
+                        from datetime import date, datetime, timedelta
+
+                        try:
+                            sig_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+                            if sig_date < date.today() - timedelta(days=since_days):
+                                continue
+                        except ValueError:
+                            continue  # 日期解析失败则保守跳过
                     key = f"{symbol}:{mmd.mmd_type.value}:{date_str}"
                     if key in seen:
                         continue
