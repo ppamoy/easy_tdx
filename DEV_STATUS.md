@@ -31,7 +31,7 @@
 - **V327** 缠论分析页 /chanlun 接入 V102 决策卡片（analyser 序列化补 v102 字段）
 - **V328** 监控页实时信号带 V102 质量评级徽章 + 操作建议摘要
 - **V330** 诊断页「回放实证」结果「📊 导出 CSV」
-- **文档**：QUICKSTART「V102 决策支持如何用」指南 + CHANGELOG/DEV_STATUS 里程碑
+- **文档**：QUICKSTART「V102 决策支持如何用」指南 + CHANGELOG/DEV_STATUS 里程碑 + [V102 决策支持完整文档](docs/v102-decision-support.md)
 - **质量门禁**：相关单测 100+ 全绿；ruff/mypy/format 归零；vue-tsc + vite build 通过
 
 ## 上次会话状态
