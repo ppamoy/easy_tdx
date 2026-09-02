@@ -83,6 +83,9 @@ def main() -> int:
     ap.add_argument("--period", default="DAILY", help="K线周期")
     ap.add_argument("--count", type=int, default=500, help="K线数量")
     ap.add_argument("--max-hold", type=int, default=10, help="建议最大持有根数")
+    ap.add_argument(
+        "--md", action="store_true", help="输出 Markdown 报告（供文档引用/无行情环境生成实证文档）"
+    )
     args = ap.parse_args()
 
     symbols: list[tuple[str, str]] = []
@@ -107,6 +110,40 @@ def main() -> int:
             rows.append(_run_symbol(client, market, code, args.period, args.count, args.max_hold))
 
     summary = summarize_batch([r.get("report", {}) for r in rows])
+
+    if args.md:
+        ok_rows = [r for r in rows if "error" not in r and r.get("report")]
+        print("# V102 批量建议实证报告")
+        print()
+        print(
+            f"扫描标的 **{len(rows)}** | 有建议 **{summary['symbols']}** | "
+            f"总建议 **{summary['advice_count']}** | 胜率 **{summary['win_rate'] * 100:.0f}%** | "
+            f"平均 **{summary['avg_return']:+.2f}%** | 累计 **{summary['total_return']:+.2f}%** | "
+            f"正收益标的 **{summary['positive_symbols']}/{summary['symbols']}**"
+        )
+        print()
+        if ok_rows:
+            print("| 标的 | 建议数 | 胜率 | 平均收益% | 累计收益% | 买入持有% | 出场分布 |")
+            print("|------|--------|------|-----------|-----------|-----------|----------|")
+            for r in ok_rows:
+                rep = r["report"]
+                print(
+                    f"| {r['symbol']} | {rep['count']} | {rep['win_rate'] * 100:.0f}% | "
+                    f"{rep['avg_return']:+.2f} | {rep['total_return']:+.2f} | "
+                    f"{r['buy_hold_return']:+.2f} | "
+                    f"损{rep['stop_rate'] * 100:.0f}%/"
+                    f"盈{rep['tp_rate'] * 100:.0f}%/期{rep['expire_rate'] * 100:.0f}% |"
+                )
+            print()
+            print(
+                f"**汇总**：胜率 {summary['win_rate'] * 100:.0f}% | "
+                f"平均收益 {summary['avg_return']:+.2f}% | 累计 {summary['total_return']:+.2f}% | "
+                f"正收益标的 {summary['positive_symbols']}/{summary['symbols']}"
+            )
+        else:
+            print("（当前环境无行情数据，无标的产出可回放建议）")
+        return 0
+
     print(json.dumps({"rows": rows, "summary": summary}, ensure_ascii=False, indent=2))
     return 0
 
