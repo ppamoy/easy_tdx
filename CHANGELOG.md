@@ -4,6 +4,29 @@
 
 ## [Unreleased]
 
+**诊断页「回放实证」（V322）—— V102 建议在历史行情上一键回放** —— 新增 POST /api/v1/diagnosis/advice-simulate：拉取标的日线 → 缠论分析 → 对 3买/3卖 信号用信号日窗口生成入场/止损/止盈建议 → 逐笔回放（先触止损→亏损单、先触止盈→盈利单、到期→收盘结算）→ 返回胜率/平均收益/出场分布；诊断页缠论卡片新增「▶ 回放实证」按钮与结果表。模拟器同步支持做空方向（3卖 建议可回放）。
+
+### 新增
+
+- **src/easy_tdx/backtest/advice_simulator.py** —— simulate_advice_trade/batch 支持 direction（long/short）。
+- **src/easy_tdx/web/routers/diagnosis.py** —— advice_simulate 端点 + _collect_v102_advices（按信号日窗口生成建议）。
+- **src/easy_tdx/web/schemas.py** —— AdviceSimulateRequest（category/count/max_hold 可选）。
+- **web-ui/src** —— api.ts fetchAdviceSimulate、types.ts AdviceSimulateResult/Report/Trade、DiagnosisView 回放实证按钮 + 汇总/逐笔明细表。
+
+### 验证
+
+- 60 个相关单测全绿；ruff/mypy/format 归零；vue-tsc + vite build 通过。
+
+---
+
+**V102 建议执行模拟器（V321）—— 把入场/止损/止盈建议放到历史行情回放实证** —— 新增 src/easy_tdx/backtest/advice_simulator.py：逐根回放「按建议执行」（止损优先保守假设、到期按收盘结算），批量输出胜率/平均收益/出场分布；新增 scripts/validate_v102_advice.py 一键实证脚本；10 个单测覆盖止损/止盈/到期/同根双触/非法建议/与 V102 条件266 建议端到端回放。
+
+---
+
+**V102 决策支持真实生效（V320）—— 置信度并入 + 诊断页可执行卡片** —— mmd.py 新增 _apply_v102_decision_confidence：条件265（质量评分卡等级 A/B/D）与条件266（风险收益比 RRR）的 confidence_adjust 真实并入 mmd.confidence 并钳制 [0,1]（此前只存字段不生效）；前端新增 V102DecisionCard.vue（操作建议/入场/止损/止盈/仓位/RRR + 质量评分卡条形图 + 历史模式匹配），接入诊断页 latest_mmd 区块；types.ts 的 v102_signal_quality 补 confidence_adjust；新增 5 个并入/钳制单测。
+
+---
+
 **V102 缠论模型决策支持增强（条件264-267）+ v85-v90 算法配套收尾 —— 全链路测试全绿** —— 缠论买卖点新增四个决策支持维度：多信号相关性分析（避免过度交易）、信号质量评分卡（四维评分 A/B/C/D）、决策支持输出（入场/止损/止盈/仓位/风险收益比）、历史模式匹配（相似形态胜率统计）；诊断 API latest_mmd 与 recent_signals 均暴露 V102 字段；修复 v85-v90 收尾（删除重复 find_mmds_v44 别名、端点一致性/分型稳定性/中枢质量评分配套测试、信号准确度空报告 note 字段与除零保护）。
 
 ### 新增
