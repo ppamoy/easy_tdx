@@ -5,6 +5,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
+import V102DecisionCard from '../components/V102DecisionCard.vue'
 import { formatError } from '../api'
 import type { Bar } from '../types'
 import { fetchBars } from '../api'
@@ -72,6 +73,11 @@ interface ChanlunMmd {
   confidence: number
   bar_index?: number
   quality: ChanlunMmdQuality | null
+  // V102 缠论决策支持（条件264-267）
+  v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
+  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; confidence_adjust: number; msg: string } | null
+  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
+  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
 }
 
 interface ChanlunFx {
@@ -531,6 +537,11 @@ async function analyze() {
           score: m.quality.score ?? null,
           reasons: m.quality.reasons ?? null,
         } : null,
+        // V102 缠论决策支持（条件264-267）
+        v102_multi_signal_correlation: m.v102_multi_signal_correlation ?? null,
+        v102_signal_quality: m.v102_signal_quality ?? null,
+        v102_decision_support: m.v102_decision_support ?? null,
+        v102_pattern_match: m.v102_pattern_match ?? null,
       }))
       // BOLL数据
       if (hr.boll) {
@@ -629,6 +640,11 @@ async function analyze() {
           score: m.quality.score ?? null,
           reasons: m.quality.reasons ?? null,
         } : null,
+        // V102 缠论决策支持（条件264-267）
+        v102_multi_signal_correlation: m.v102_multi_signal_correlation ?? null,
+        v102_signal_quality: m.v102_signal_quality ?? null,
+        v102_decision_support: m.v102_decision_support ?? null,
+        v102_pattern_match: m.v102_pattern_match ?? null,
       }))
       fxs.value = (data.fractals ?? []).map((f: any) => ({
         type: f.fx_type,
@@ -892,6 +908,8 @@ onUnmounted(() => {
         <span class="signal-card-date">{{ latestMmd.date ?? '—' }}</span>
       </div>
       <div class="signal-card-body">{{ latestMmd.msg }}</div>
+      <!-- V102: 决策支持卡片（条件264-267） -->
+      <V102DecisionCard :mmd="latestMmd" />
       <div class="signal-card-actions">
         <button v-if="latestSignalType === 'buy'" class="ghost small" @click="quickWatch('buy')">👁 加入监控</button>
         <button v-if="latestSignalType === 'sell'" class="ghost small" @click="quickWatch('sell')">⏰ 设置提醒</button>

@@ -104,6 +104,22 @@ def test_pipeline_completes_without_error():
     # 可能有中枢也可能没有（取决于数据），但不应该崩溃
 
 
+def test_to_dict_mmds_include_v102_fields():
+    """序列化的 mmds 每项都带 V102 决策支持字段（条件264-267）。"""
+    df = _synthetic_trending_df(400)
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    result = analyser.process_klines(df)
+    d = result.to_dict()
+
+    mmds = d.get("mmds", [])
+    assert len(mmds) > 0, "合成数据应产生买卖点"
+    for m in mmds:
+        assert "v102_multi_signal_correlation" in m
+        assert "v102_signal_quality" in m
+        assert "v102_decision_support" in m
+        assert "v102_pattern_match" in m
+
+
 def test_fractal_bar_index_anchor_matches_date():
     """分型的 bar_index 与 date 必须指向同一根原始K线。"""
     df = _synthetic_trending_df(400)

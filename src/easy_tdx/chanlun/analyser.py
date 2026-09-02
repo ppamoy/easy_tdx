@@ -221,6 +221,13 @@ class ChanlunResult:
                     "v82_volatility_compression": getattr(
                         mmd, "_volatility_compression_breakout_v82", None
                     ),
+                    # V102 缠论决策支持（条件264-267）
+                    "v102_multi_signal_correlation": getattr(
+                        mmd, "_multi_signal_correlation", None
+                    ),
+                    "v102_signal_quality": getattr(mmd, "_signal_quality_scorecard", None),
+                    "v102_decision_support": getattr(mmd, "_decision_support", None),
+                    "v102_pattern_match": getattr(mmd, "_historical_pattern_match", None),
                 }
                 for mmd in self.mmds
             ],
