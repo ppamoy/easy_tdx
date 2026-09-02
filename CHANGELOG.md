@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**选股效果验证「导出 CSV」（V281）—— 前瞻收益对比明细 Excel 友好导出** —— 选股页「📈 验证选股效果」（V98）展示选中 vs 池的 5/10/20/60 日前瞻收益对比，但只能看不能存。本次在验证面板头加「📊 导出 CSV」：把各持有周期行（持有交易日/选中平均收益/池平均收益/超额收益/选中命中率/池命中率/超额命中率/样本）导出为 Excel 友好的 CSV，下载 easy_tdx_screen_verify_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/ScreeningView.vue** —— 新增 exportVerifyCsv（verifyResult.horizons 各周期明细，BOM+CSV+Blob 下载）+「选股效果验证」面板头「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：选股页开始选股 → 验证选股效果 →「导出 CSV」→ 下载文件含表头与 5 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V279（V280）—— 文档覆盖 screen rank 验证列与指南自身迭代** —— V278 仅把指南更新到 V277，V279 新增的 CLI screen rank 验证维度未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V279：标题、全景表补 V278/V279 两行、3.9 命令行节新增 screen rank 条目。
 
 ### 新增

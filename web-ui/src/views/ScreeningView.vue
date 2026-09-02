@@ -294,6 +294,45 @@ async function verifyScreening() {
     verifyLoading.value = false
   }
 }
+// V281: 选股效果验证导出 CSV（前瞻收益对比明细，Excel 友好）
+const verifyCsvMsg = ref('')
+function exportVerifyCsv() {
+  const r = verifyResult.value
+  if (!r || !r.horizons) return
+  const header = ['持有交易日', '选中平均收益', '池平均收益', '超额收益', '选中命中率', '池命中率', '超额命中率', '样本(选/池)']
+  const rows: string[] = []
+  for (const h of ['5', '10', '20', '60']) {
+    const hd = r.horizons[h]
+    if (!hd) continue
+    const row: string[] = [
+      h + ' 日',
+      fmtPct(hd.selected_avg_return),
+      fmtPct(hd.pool_avg_return),
+      fmtPct(hd.excess_return),
+      fmtPct(hd.selected_hit_rate),
+      fmtPct(hd.pool_hit_rate),
+      fmtPct(hd.excess_hit_rate),
+      String(hd.selected_n ?? '') + ' / ' + String(hd.pool_n ?? ''),
+    ]
+    rows.push(row.join(","))
+  }
+  const csv = '\uFEFF' + [header.join(','), ...rows].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_screen_verify_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    verifyCsvMsg.value = '✓ 已导出选股效果验证 CSV'
+  } catch {
+    verifyCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { verifyCsvMsg.value = '' }, 2500)
+}
 
 
 // ── 批量策略验证（V114）：对筛选出的股票跑同一策略，按模型可信度排名选股 ──
@@ -827,7 +866,10 @@ onMounted(() => {
       </button>
     </div>
     <div v-if="verifyResult" class="verify-panel">
-      <h3>📈 选股效果验证（选股日 {{ verifyResult.date }} · 池 {{ verifyResult.pool_size }} 只 · 选中 {{ verifyResult.selected_size }} 只）</h3>
+      <h3>📈 选股效果验证（选股日 {{ verifyResult.date }} · 池 {{ verifyResult.pool_size }} 只 · 选中 {{ verifyResult.selected_size }} 只）
+        <button class="ghost small" @click="exportVerifyCsv">📊 导出 CSV</button>
+        <span v-if="verifyCsvMsg" class="save-msg">{{ verifyCsvMsg }}</span>
+      </h3>
       <div class="verify-verdict">{{ verifyResult.verdict }}</div>
       <table class="verify-table">
         <thead>
