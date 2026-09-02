@@ -524,6 +524,29 @@ function exportSignalsCsv() {
   }
   setTimeout(() => { signalsCsvMsg.value = '' }, 2500)
 }
+// V283: 信号列表复制 JSON（机器可读，Agent/脚本友好）
+const signalsJsonMsg = ref('')
+async function copySignalsJson() {
+  if (!newSignals.value.length) return
+  const payload = {
+    generated_at: new Date().toISOString(),
+    count: newSignals.value.length,
+    signals: newSignals.value.map((s) => ({
+      type: s.type,
+      stock: s.stock,
+      date: s.date,
+      confidence: s.confidence,
+      msg: s.msg,
+    })),
+  }
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+    signalsJsonMsg.value = '✓ 已复制信号列表 JSON'
+  } catch {
+    signalsJsonMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { signalsJsonMsg.value = '' }, 2500)
+}
 // V255: 监控批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
 const monBatchCsvMsg = ref('')
 function monCsvEscape(v: string): string {
@@ -924,8 +947,10 @@ onUnmounted(() => {
       <div class="panel-header">
         <span class="panel-title">🔔 新信号（{{ newSignals.length }} 条）</span>
         <button class="ghost small" @click="exportSignalsCsv">📊 导出 CSV</button>
+        <button class="ghost small" @click="copySignalsJson">⚙ 复制 JSON</button>
         <button class="ghost small" @click="newSignals = []">清除</button>
         <span v-if="signalsCsvMsg" class="save-msg">{{ signalsCsvMsg }}</span>
+        <span v-if="signalsJsonMsg" class="save-msg">{{ signalsJsonMsg }}</span>
       </div>
       <div class="signal-items">
         <div v-for="(s, i) in newSignals" :key="i" class="signal-item"

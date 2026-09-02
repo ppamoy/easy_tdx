@@ -162,6 +162,32 @@ function exportScreenListCsv() {
   }
   setTimeout(() => { screenListCsvMsg.value = '' }, 2500)
 }
+// V283: 选股清单复制 JSON（机器可读，Agent/脚本友好）
+const screenListJsonMsg = ref('')
+async function copyScreenListJson() {
+  if (!qualifiedStocks.value.length) return
+  const payload = {
+    generated_at: new Date().toISOString(),
+    total: qualifiedStocks.value.length,
+    stocks: qualifiedStocks.value.map((s) => ({
+      symbol: s.symbol,
+      classification: s.classification,
+      quality_score: s.quality_score,
+      buy_1_count: s.buy_1_count,
+      sell_1_count: s.sell_1_count,
+      latest_mmd: s.latest_mmd,
+      days_since_signal: s.days_since_signal,
+      recommendation: getRecommendation(s).label,
+    })),
+  }
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+    screenListJsonMsg.value = '✓ 已复制选股清单 JSON'
+  } catch {
+    screenListJsonMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { screenListJsonMsg.value = '' }, 2500)
+}
 
 /** 获取操作建议的详细解释 */
 function getActionExplanation(stock: StockResult): string {
@@ -332,6 +358,26 @@ function exportVerifyCsv() {
     verifyCsvMsg.value = '导出失败（浏览器权限）'
   }
   setTimeout(() => { verifyCsvMsg.value = '' }, 2500)
+}
+// V283: 选股效果验证复制 JSON（机器可读，Agent/脚本友好）
+const verifyJsonMsg = ref('')
+async function copyVerifyJson() {
+  const r = verifyResult.value
+  if (!r || !r.horizons) return
+  const payload = {
+    date: r.date,
+    pool_size: r.pool_size,
+    selected_size: r.selected_size,
+    verdict: r.verdict,
+    horizons: r.horizons,
+  }
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2))
+    verifyJsonMsg.value = '✓ 已复制选股效果验证 JSON'
+  } catch {
+    verifyJsonMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { verifyJsonMsg.value = '' }, 2500)
 }
 
 
@@ -868,7 +914,9 @@ onMounted(() => {
     <div v-if="verifyResult" class="verify-panel">
       <h3>📈 选股效果验证（选股日 {{ verifyResult.date }} · 池 {{ verifyResult.pool_size }} 只 · 选中 {{ verifyResult.selected_size }} 只）
         <button class="ghost small" @click="exportVerifyCsv">📊 导出 CSV</button>
+        <button class="ghost small" @click="copyVerifyJson">⚙ 复制 JSON</button>
         <span v-if="verifyCsvMsg" class="save-msg">{{ verifyCsvMsg }}</span>
+        <span v-if="verifyJsonMsg" class="save-msg">{{ verifyJsonMsg }}</span>
       </h3>
       <div class="verify-verdict">{{ verifyResult.verdict }}</div>
       <table class="verify-table">
@@ -969,7 +1017,9 @@ onMounted(() => {
         <div class="panel-header">
           <h3>筛选结果 ({{ qualifiedStocks.length }})
             <button class="ghost small" :disabled="qualifiedStocks.length === 0" @click="exportScreenListCsv">📊 导出 CSV</button>
+            <button class="ghost small" :disabled="qualifiedStocks.length === 0" @click="copyScreenListJson">⚙ 复制 JSON</button>
             <span v-if="screenListCsvMsg" class="save-msg">{{ screenListCsvMsg }}</span>
+            <span v-if="screenListJsonMsg" class="save-msg">{{ screenListJsonMsg }}</span>
           </h3>
         </div>
         <div class="stock-list">

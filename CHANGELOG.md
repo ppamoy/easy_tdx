@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**信号列表/选股清单/效果验证补「复制 JSON」（V283）—— 三处 CSV 导出入口补齐 JSON 配对** —— 信号列表（V263）、选股清单（V277）、选股效果验证（V281）此前只有 CSV 导出，缺机器可读的 JSON，与全站 JSON 导出系列（V153/V157/V158/V162/V166 等）不一致。本次三处补「⚙ 复制 JSON」：结构化打包（信号列表 signals / 选股清单 stocks / 效果验证 horizons+verdict）复制到剪贴板，Agent/脚本友好。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— 新增 copySignalsJson（信号列表结构化打包）。
+- **web-ui/src/views/ScreeningView.vue** —— 新增 copyScreenListJson（选股清单）与 copyVerifyJson（效果验证）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：选股页验证效果 →「复制 JSON」含 horizons/verdict；筛选结果 →「复制 JSON」含 stocks；console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V281（V282）—— 文档覆盖选股效果 CSV 与指南自身迭代** —— V280 仅把指南更新到 V279，V281 新增的选股效果验证「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V281：标题、全景表补 V280/V281 两行、3.3 动态选股页「验证选股效果」条目补 CSV 说明。
 
 ### 新增
