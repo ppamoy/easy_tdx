@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V289（V290）—— 文档覆盖 WF 面板 CSV 与指南自身迭代** —— V288 仅把指南更新到 V287，V289 新增的 WalkForwardPanel「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V289：标题、全景表补 V288/V289 两行、3.1 回测页第 3 步与 3.7 寻优页 Walk-Forward 条目补导出 CSV 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V289；全景表补 V288/V289；3.1 回测页第 3 步「🔁 Walk-Forward」后补「📊 导出 CSV」（V289）；3.7 寻优页 Walk-Forward 条目补导出 CSV。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **WalkForwardPanel「导出 CSV」（V289）—— 滚动窗口明细 Excel 友好导出** —— Walk-Forward 面板（寻优 V123 / 回测 V287）展示滚动窗口训练/测试表现，但只能看不能存。本次组件级加「📊 导出 CSV」：先输出判定/窗口数/训练段均值/测试段均值/正收益窗口摘要，再输出各窗口明细（窗口/参数/训练收益/测试收益/测试夏普/测试胜率/交易数），下载 easy_tdx_walk_forward_日期.csv——两处使用页面一并受益。
 
 ### 新增
