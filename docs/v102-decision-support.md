@@ -67,6 +67,18 @@ python scripts/advice_batch_validate.py SZ 000001 SH 600519 --md
 ```
 输出多标的批量实证 Markdown 报告（vs 买入持有）。
 
+### 离线建议回放（本地 .day，无需网络，V351）
+
+前置条件：本地已安装通达信并下载过日线（或已用 `sync-all` 同步）：
+
+```bash
+easy-tdx offline advice SZ 000001            # JSON
+easy-tdx offline advice SZ 000001 --output csv   # CSV 导出
+easy-tdx offline advice SZ 000001 --count 300 --max-hold 15
+```
+读取本地 .day 日线 → 缠论分析 → 对 3买/3卖 信号生成 V102 建议 → 逐笔回放
+（止损/止盈/到期）→ 输出汇总与每笔明细（含 symbol/bars/signals 上下文）。
+
 ## 4. 实证结果示例（合成行情回放）
 
 `python scripts/validate_v102_advice.py --md` 输出示例：
