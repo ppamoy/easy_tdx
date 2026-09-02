@@ -145,6 +145,46 @@ function accSigned(v: number | null | undefined): string {
   const sign = v >= 0 ? '+' : ''
   return sign + (v * 100).toFixed(1) + '%'
 }
+// V271: 每股历史信号准确度明细导出 CSV（信号类型/方向/信号数/命中率/超额/均值/结论）
+const stockAccCsvMsg = ref('')
+function accCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportStockAccCsv(market: string, code: string) {
+  const key = market + code
+  const acc = stockAcc.value[key]
+  if (!acc || acc.ranking.length === 0) {
+    stockAccCsvMsg.value = '没有可导出的准确度明细'
+    setTimeout(() => { stockAccCsvMsg.value = '' }, 2500)
+    return
+  }
+  const header = ['信号类型', '方向', '信号数', '5根命中率', '超额命中率', '5根均值', '结论']
+  const rows = acc.ranking.map((r) => [
+    accCsvEscape(r.type),
+    accCsvEscape(r.direction || ''),
+    String(r.signals ?? ''),
+    accPct(r.hit_rate),
+    accSigned(r.excess_hit_rate),
+    accPct(r.avg_return),
+    accCsvEscape(r.verdict || ''),
+  ])
+  const csv = '\uFEFF' + [header.join(','), ...rows.map((r) => r.join(','))].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_stock_acc_' + key + '_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    stockAccCsvMsg.value = '✓ 已导出 ' + key + ' 准确度 CSV'
+  } catch {
+    stockAccCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { stockAccCsvMsg.value = '' }, 2500)
+}
 
 
 // ── 主监控列表每股历史信号准确度（V121：复用 /chanlun/analyze signal_accuracy） ──
@@ -738,6 +778,8 @@ onUnmounted(() => {
           <template v-else>
             <div v-if="stockAcc[s.market + s.code].summary" class="acc-summary">
               <b>{{ s.market }}{{ s.code }}</b>：{{ stockAcc[s.market + s.code].summary }}
+              <button class="ghost small" @click="exportStockAccCsv(s.market, s.code)">📊 导出 CSV</button>
+              <span v-if="stockAccCsvMsg" class="save-msg">{{ stockAccCsvMsg }}</span>
             </div>
             <table class="acc-table">
               <thead><tr><th>信号类型</th><th>信号数</th><th>5根命中率</th><th>超额命中率</th><th>5根均值</th><th>结论</th></tr></thead>

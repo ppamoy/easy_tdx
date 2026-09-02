@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**监控页每股信号准确度明细「导出 CSV」（V271）—— 信号类型命中率明细可导出核对** —— 监控页「🎯」每股历史信号准确度面板（V121）展示信号类型/方向/信号数/5根命中率/超额命中率/均值/结论，但只能看不能存。本次在面板加「📊 导出 CSV」：把该股 ranking 明细导出为 Excel 友好的 CSV，下载 easy_tdx_stock_acc_{code}_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— 新增 exportStockAccCsv（stockAcc[key].ranking 明细，BOM+CSV+Blob 下载）+ 每股准确度面板「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：监控页「🎯」展开每股准确度 →「导出 CSV」→ 下载文件含表头与 3 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V269（V270）—— 文档覆盖策略清单 CSV 与指南自身迭代** —— V268 仅把指南更新到 V267，V269 新增的策略库「导出策略清单 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V269：标题、全景表补 V268/V269 两行、3.6 策略库节补导出策略清单说明。
 
 ### 新增
