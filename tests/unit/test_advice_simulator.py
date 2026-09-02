@@ -372,3 +372,41 @@ class TestAdviceCli:
         assert "MARKET" in res.output
         assert "--max-hold" in res.output
         assert "回放" in res.output
+
+
+class TestSummarizeBatch:
+    """多标的批量汇总（summarize_batch）。"""
+
+    def test_aggregates_multiple_symbols(self):
+        """多标的回放报告聚合为全局统计。"""
+        from easy_tdx.backtest.advice_simulator import summarize_batch
+
+        reports = [
+            {
+                "trades": [
+                    {"return_pct": 3.0, "exit_reason": "tp1"},
+                    {"return_pct": -2.0, "exit_reason": "stop"},
+                ]
+            },
+            {"trades": [{"return_pct": 1.0, "exit_reason": "expire"}]},
+            {"trades": []},  # 无交易标的跳过
+        ]
+        s = summarize_batch(reports)
+
+        assert s["symbols"] == 2
+        assert s["advice_count"] == 3
+        assert s["win_rate"] == round(2 / 3, 4)
+        assert s["avg_return"] == round((3 - 2 + 1) / 3, 2)
+        assert s["positive_symbols"] == 2
+        assert s["stop_rate"] == round(1 / 3, 4)
+        assert s["tp_rate"] == round(1 / 3, 4)
+        assert s["expire_rate"] == round(1 / 3, 4)
+
+    def test_empty_reports(self):
+        """无交易时返回零汇总。"""
+        from easy_tdx.backtest.advice_simulator import summarize_batch
+
+        s = summarize_batch([{"trades": []}, {"trades": []}])
+        assert s["symbols"] == 0
+        assert s["advice_count"] == 0
+        assert s["win_rate"] == 0.0

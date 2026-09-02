@@ -232,3 +232,59 @@ def collect_signal_advices(
             }
         )
     return advices
+
+
+def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
+    """聚合多只标的的回放报告（批量实证汇总）。
+
+    Args:
+        reports: 每只标的的 simulate_advice_batch 结果（无交易则跳过该标的）
+
+    Returns:
+        dict：{symbols, advice_count, win_rate, avg_return, total_return,
+               stop_rate, tp_rate, expire_rate, positive_symbols}
+    """
+    merged: list[dict[str, Any]] = []
+    symbol_count = 0
+    positive_symbols = 0
+    for r in reports:
+        trades = r.get("trades") or []
+        if not trades:
+            continue
+        symbol_count += 1
+        merged.extend(trades)
+        if sum(t["return_pct"] for t in trades) > 0:
+            positive_symbols += 1
+
+    if not merged:
+        return {
+            "symbols": 0,
+            "advice_count": 0,
+            "win_rate": 0.0,
+            "avg_return": 0.0,
+            "total_return": 0.0,
+            "stop_rate": 0.0,
+            "tp_rate": 0.0,
+            "expire_rate": 0.0,
+            "positive_symbols": 0,
+        }
+
+    wins = [t for t in merged if t["return_pct"] > 0]
+    avg = sum(t["return_pct"] for t in merged) / len(merged)
+    total = sum(t["return_pct"] for t in merged)
+    n = len(merged)
+    kinds = {"stop": 0, "tp1": 0, "expire": 0}
+    for t in merged:
+        kinds[t["exit_reason"]] = kinds.get(t["exit_reason"], 0) + 1
+
+    return {
+        "symbols": symbol_count,
+        "advice_count": n,
+        "win_rate": round(len(wins) / n, 4),
+        "avg_return": round(avg, 2),
+        "total_return": round(total, 2),
+        "stop_rate": round(kinds["stop"] / n, 4),
+        "tp_rate": round(kinds["tp1"] / n, 4),
+        "expire_rate": round(kinds["expire"] / n, 4),
+        "positive_symbols": positive_symbols,
+    }
