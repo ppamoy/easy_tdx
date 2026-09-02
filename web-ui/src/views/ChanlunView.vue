@@ -213,6 +213,49 @@ const signalHistory = computed<SignalHistoryRow[]>(() => {
   return rows.reverse()
 })
 
+// V343: 信号历史回溯导出 CSV
+const historyCsvMsg = ref('')
+function exportHistoryCsv() {
+  const rows = signalHistory.value
+  if (rows.length === 0) return
+  const esc = (v: string): string => (/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v)
+  const lines: string[] = []
+  lines.push('type,date,v102_grade,advice,entry,stop,tp1,ret5,ret10,ret20,hit20')
+  for (const s of rows) {
+    lines.push(
+      [
+        esc(s.type),
+        esc(s.date ?? ''),
+        esc(s.grade ?? ''),
+        esc(s.advice ?? ''),
+        s.entry != null ? String(s.entry) : '',
+        s.stop != null ? String(s.stop) : '',
+        s.tp1 != null ? String(s.tp1) : '',
+        s.ret5 != null ? String(s.ret5) : '',
+        s.ret10 != null ? String(s.ret10) : '',
+        s.ret20 != null ? String(s.ret20) : '',
+        s.hit20 ? '1' : '0',
+      ].join(','),
+    )
+  }
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_signal_history_' + code.value + '_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    historyCsvMsg.value = '✓ 已导出信号历史 CSV'
+  } catch {
+    historyCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { historyCsvMsg.value = '' }, 2500)
+}
+
 // 判断最新信号类型
 const latestSignalType = computed(() => {
   if (!latestMmd.value) return null
@@ -1168,7 +1211,10 @@ onUnmounted(() => {
 
     <!-- V341: 信号历史回溯（V102 建议 + 事后 N 日表现） -->
     <div v-if="!loading && signalHistory.length > 0" class="mmd-history">
-      <h3>🕰 信号历史回溯（V102 建议 + 事后表现）</h3>
+      <h3>
+        🕰 信号历史回溯（V102 建议 + 事后表现）
+        <button class="ghost small" @click="exportHistoryCsv">📊 导出 CSV</button>
+      </h3>
       <table>
         <thead>
           <tr>
