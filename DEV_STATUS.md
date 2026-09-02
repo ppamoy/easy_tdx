@@ -3,6 +3,16 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 续会话收尾（2026-09）✅ 已全部完成
+
+- **V102 缠论模型决策支持增强（条件264-267）**：多信号相关性分析 / 信号质量评分卡 / 决策支持输出（入场·止损·止盈·仓位·RRR）/ 历史模式匹配——总条件数 243→267
+- **诊断 API 暴露 V102 字段**：diagnosis.py latest_mmd 与 recent_signals 均补 v102_multi_signal_correlation / v102_signal_quality / v102_decision_support / v102_pattern_match；types.py 补 MMD 字段声明（mypy strict 兼容）
+- **算法配套收尾**：删除重复 find_mmds_v44 别名；清理 ruff 告警（重复定义/未使用变量/歧义命名/Any 导入/长行）
+- **信号准确度健壮性**：空报告恒带 note 字段；前瞻收益除零保护
+- **测试修复**：V102 单测 12 个全绿；修复 9 处既往失效测试；修复管道脚本 2 处 bug
+- **质量门禁**：ruff check/format + mypy src/ 归零；全量 pytest tests/unit/ 2501 通过；管道脚本 7/7；web-ui vue-tsc + vite build 通过
+- **提交**：3129a16 feat(chanlun): V102 缠论模型决策支持增强 + v85-v90 算法配套收尾
+
 ## 上次会话状态
 - **无活跃后台任务** - 上一个 session 未留下进行中的工作
 - **项目已完成大部分核心功能** - 缠论算法(V48-V84)、回测引擎、前端可视化均已实现

@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+**V102 缠论模型决策支持增强（条件264-267）+ v85-v90 算法配套收尾 —— 全链路测试全绿** —— 缠论买卖点新增四个决策支持维度：多信号相关性分析（避免过度交易）、信号质量评分卡（四维评分 A/B/C/D）、决策支持输出（入场/止损/止盈/仓位/风险收益比）、历史模式匹配（相似形态胜率统计）；诊断 API latest_mmd 与 recent_signals 均暴露 V102 字段；修复 v85-v90 收尾（删除重复 find_mmds_v44 别名、端点一致性/分型稳定性/中枢质量评分配套测试、信号准确度空报告 note 字段与除零保护）。
+
+### 新增
+
+- **src/easy_tdx/chanlun/mmd.py** —— 新增条件264-267：多信号相关性分析/信号质量评分卡/决策支持输出/历史模式匹配，总条件数 243→267。
+- **src/easy_tdx/web/routers/diagnosis.py** —— latest_mmd 与 recent_signals 补 v102_multi_signal_correlation / v102_signal_quality / v102_decision_support / v102_pattern_match 字段。
+- **src/easy_tdx/chanlun/types.py** —— MMD 补 V102 四个字段声明（mypy strict 兼容）。
+- **src/easy_tdx/backtest/signal_accuracy.py** —— 空报告恒带 note 字段；前瞻收益新增除零保护（零价格按 -100%）。
+- **tests/** —— 新增 V102 决策支持、v85 核心验证、v86 笔增强、v87 中枢/线段增强、全链路集成、管道脚本测试。
+
+### 修复
+
+- 删除 mmd.py 重复的 find_mmds_v44 别名定义（保留完整 V44 实现）。
+- 修复 9 处既往失效测试（中枢区间阈值边界、线段特征序列数据、策略注册表 API、V 形/趋势合成数据与算法行为对齐）。
+- 修复 tests/scripts/test_chanlun_pipeline.py 日期越界与分型测试数据 2 处 bug。
+
+### 验证
+
+- ruff check/format + mypy src/ 归零；全量 pytest tests/unit/ 2501 通过；管道脚本 7/7；web-ui vue-tsc + vite build 通过。
+
 **四处批量验证补「仅看滚验稳健」过滤（V319）—— 五处批量验证入口过滤维度对齐** —— 回测页已加「仅看滚验稳健」（V318），监控/选股/组合候选/寻优四处此前只有「仅看样本外稳健」。本次四处加「✅ 仅看滚验稳健」过滤：与样本外过滤并列、双重过滤（oos_degraded=false 且 wf_degraded=false），与「滚验」列（V315/V316）配套——五处批量验证入口过滤能力全部对齐。
 
 ### 新增
