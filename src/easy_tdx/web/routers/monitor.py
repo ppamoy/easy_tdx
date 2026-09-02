@@ -144,6 +144,16 @@ class SignalMonitor:
                                     "confidence": round(mmd.confidence, 2),
                                     "msg": mmd.msg,
                                     "key": signal_key,
+                                    # V102 决策支持（条件264-267）
+                                    "v102_signal_quality": getattr(
+                                        mmd, "_signal_quality_scorecard", None
+                                    ),
+                                    "v102_decision_support": getattr(
+                                        mmd, "_decision_support", None
+                                    ),
+                                    "v102_pattern_match": getattr(
+                                        mmd, "_historical_pattern_match", None
+                                    ),
                                 }
                             )
                             # 标记为已记录

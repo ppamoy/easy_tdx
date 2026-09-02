@@ -25,6 +25,10 @@ interface Signal {
   date: string | null
   confidence: number
   msg: string
+  // V102 决策支持（条件264-267）
+  v102_signal_quality?: { overall_grade: string; overall_score: number; strength: string; confidence_adjust: number } | null
+  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string } | null
+  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number } | null
 }
 
 const stocks = ref<MonitoredStock[]>([
@@ -993,6 +997,14 @@ onUnmounted(() => {
           <span class="signal-date">{{ s.date ?? '-' }}</span>
           <span class="signal-conf">{{ (s.confidence * 100).toFixed(0) }}%</span>
           <span class="signal-msg">{{ s.msg }}</span>
+          <!-- V102: 质量评级 + 操作建议摘要 -->
+          <span v-if="s.v102_signal_quality?.overall_grade" class="signal-v102-grade" :class="'g' + s.v102_signal_quality.overall_grade">
+            质量{{ s.v102_signal_quality.overall_grade }}
+          </span>
+          <span v-if="s.v102_decision_support?.action_recommendation" class="signal-v102-advice"
+                :class="{ 'adv-buy': s.v102_decision_support.action_recommendation.includes('买入'), 'adv-sell': s.v102_decision_support.action_recommendation.includes('卖出') }">
+            {{ s.v102_decision_support.action_recommendation }}
+          </span>
         </div>
       </div>
     </div>
@@ -1469,4 +1481,27 @@ onUnmounted(() => {
   line-height: 1.6;
   margin: 0;
 }
+
+/* V102: 信号质量评级 + 操作建议摘要 */
+.signal-v102-grade {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: #fff;
+}
+.signal-v102-grade.gA { background: #22c55e; }
+.signal-v102-grade.gB { background: #4a9eff; }
+.signal-v102-grade.gC { background: #f59e0b; }
+.signal-v102-grade.gD { background: #ef4444; }
+.signal-v102-advice {
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
+}
+.signal-v102-advice.adv-buy { color: #22c55e; }
+.signal-v102-advice.adv-sell { color: #ef4444; }
 </style>
