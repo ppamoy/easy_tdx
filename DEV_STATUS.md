@@ -32,7 +32,13 @@
 - **V328** 监控页实时信号带 V102 质量评级徽章 + 操作建议摘要
 - **V330** 诊断页「回放实证」结果「📊 导出 CSV」
 - **文档**：QUICKSTART「V102 决策支持如何用」指南 + CHANGELOG/DEV_STATUS 里程碑 + [V102 决策支持完整文档](docs/v102-decision-support.md)
-- **质量门禁**：相关单测 100+ 全绿；ruff/mypy/format 归零；vue-tsc + vite build 通过
+
+## V102 全站收尾（V336-V342）✅ 已全部完成
+
+- **V336** 缠论页买卖点列表 V102 质量徽章；**V339** 训练页复盘 V102 徽章
+- **V337** docs/v102-decision-support.md 完整文档；**V338/V340/V342** 组合/对比/寻优页 V102 引导提示——全站每个页面都有 V102 入口
+- **V341** 缠论页「信号历史回溯」面板：逐笔买卖点 V102 建议 + 5/10/20 日后表现（DEV_STATUS 中期优化方向落地）
+- **质量门禁**：全量 pytest tests/unit/ 2535 passed / 0 failed；ruff/mypy/format 归零；vue-tsc + vite build 通过
 
 ## 上次会话状态
 - **无活跃后台任务** - 上一个 session 未留下进行中的工作

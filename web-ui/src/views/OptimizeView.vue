@@ -855,6 +855,11 @@ async function saveOptBatchAsPortfolio() {
           </div>
         </section>
 
+        <!-- V342: V102 决策支持引导 -->
+        <section class="report-section">
+          <p class="v102-tip">💡 各标的的 <b>V102 缠论决策支持</b>（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行 <code>easy-tdx advice MARKET CODE</code> 一键回放；缠论策略回测可勾选「3买按V102建议止损止盈」自动执行。</p>
+        </section>
+
         <!-- V124: 验证总结（最优点可信度 + 5根命中 + Walk-Forward） -->
         <section v-if="store.optimizeResult" class="report-section">
           <OptimizeValidationSummary :result="store.optimizeResult" />
@@ -1306,4 +1311,20 @@ async function saveOptBatchAsPortfolio() {
 .dim { color: var(--text-dim); }
 .save-msg { font-size: 12px; color: var(--up); }
 .save-msg.err { color: var(--down); }
+.v102-tip {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px dashed var(--accent, #4a9eff);
+  background: rgba(74, 158, 255, 0.06);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.v102-tip code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+}
 </style>
