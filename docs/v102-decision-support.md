@@ -92,6 +92,18 @@ easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --output csv
 逐只跑 V102 建议回放并用 summarize_batch 聚合（总建议/胜率/平均收益/正收益标的），
 输出 json/table/csv/md（含每只 vs 买入持有对照）。
 
+### 离线信号监控（V354）
+
+无网络轮询监控本地股票池的新信号（类比 Web 监控页「新信号」面板）：
+
+```bash
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --state /tmp/watch.json --limit 5
+```
+状态文件（缺省 ~/.easy_tdx/offline_watch_state.json）记录已见信号
+（symbol+type+date），每次只报告**新发现**的 3买/3卖 信号 + V102 质量评级
+与操作建议摘要；首次运行建立基线（当前全部信号记为已见并输出）。
+
 ## 4. 实证结果示例（合成行情回放）
 
 `python scripts/validate_v102_advice.py --md` 输出示例：

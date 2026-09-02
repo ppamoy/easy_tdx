@@ -107,5 +107,6 @@ python scripts/advice_batch_validate.py --file symbols.txt --max-hold 15
 ```bash
 easy-tdx offline advice SZ 000001 --output csv                    # 单只（--file 可指定任意 .day 路径）
 easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md   # 批量
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv # 只报告新发现的 3买/3卖 + V102 建议摘要
 ```
 完整用法见 [docs/v102-decision-support.md](docs/v102-decision-support.md)。
