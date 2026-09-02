@@ -433,13 +433,16 @@ function restoreOptBatchPersist() {
   } catch { /* 解析失败忽略 */ }
 }
 const optBatchOnlyRobust = ref(false)
+// V319: 仅看滚验稳健（过滤掉 wf_degraded=true 的候选股）
+const optBatchOnlyWfRobust = ref(false)
 const optBatchSort = ref<'return' | 'trust'>('trust')
 const sortedOptBatchRows = computed(() => {
-  const base = optBatchOnlyRobust.value
-    ? optBatchRows.value.filter((r) => r.oos_degraded === false)
-    : optBatchRows.value
-  if (!base.length || optBatchSort.value === 'trust') return base
-  return [...base].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+  let base = optBatchRows.value
+  if (optBatchOnlyRobust.value) base = base.filter((r) => r.oos_degraded === false)
+  if (optBatchOnlyWfRobust.value) base = base.filter((r) => r.wf_degraded === false)
+  const filtered = base
+  if (!filtered.length || optBatchSort.value === 'trust') return filtered
+  return [...filtered].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
 })
 function optBestStrategy(): { name: string; label: string; params: Record<string, number | string> } | null {
   if (store.optimizeResult?.best) {
@@ -975,6 +978,9 @@ async function saveOptBatchAsPortfolio() {
             <button class="ghost small" :class="{ active: optBatchSort === 'trust' }" @click="optBatchSort = 'trust'">按可信度</button>
             <button class="ghost small" :class="{ active: optBatchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + optBatchRows.filter((r: OptBatchRow) => r.oos_degraded === false).length + ' 只）'" @click="optBatchOnlyRobust = !optBatchOnlyRobust">
               ✅ 仅看样本外稳健
+            </button>
+            <button class="ghost small" :class="{ active: optBatchOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的候选股（当前 ' + optBatchRows.filter((r: OptBatchRow) => r.wf_degraded === false).length + ' 只）'" @click="optBatchOnlyWfRobust = !optBatchOnlyWfRobust">
+              ✅ 仅看滚验稳健
             </button>
             <button class="ghost small" @click="copyOptBatchRanking">📋 复制排名</button>
             <button class="ghost small" @click="copyOptBatchJson">⚙ 复制 JSON</button>

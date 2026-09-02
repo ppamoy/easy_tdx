@@ -155,12 +155,15 @@ function restoreCandBatchPersist() {
 const candSort = ref<'return' | 'trust'>('trust')
 // V195: 仅看样本外稳健（过滤掉 oos_degraded=true 的候选股）
 const candOnlyRobust = ref(false)
+// V319: 仅看滚验稳健（过滤掉 wf_degraded=true 的候选股）
+const candOnlyWfRobust = ref(false)
 const sortedCandRows = computed(() => {
-  const base = candOnlyRobust.value
-    ? candRows.value.filter((r) => r.oos_degraded === false)
-    : candRows.value
-  if (!base.length || candSort.value === 'trust') return base
-  return [...base].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+  let base = candRows.value
+  if (candOnlyRobust.value) base = base.filter((r) => r.oos_degraded === false)
+  if (candOnlyWfRobust.value) base = base.filter((r) => r.wf_degraded === false)
+  const filtered = base
+  if (!filtered.length || candSort.value === 'trust') return filtered
+  return [...filtered].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
 })
 async function runCandVerify() {
   if (candLoading.value) return
@@ -762,6 +765,9 @@ async function onSave() {
               <button class="ghost small" :class="{ active: candSort === 'trust' }" @click="candSort = 'trust'">按可信度</button>
               <button class="ghost small" :class="{ active: candOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + candRows.filter((r: CandRow) => r.oos_degraded === false).length + ' 只）'" @click="candOnlyRobust = !candOnlyRobust">
                 ✅ 仅看样本外稳健
+              </button>
+              <button class="ghost small" :class="{ active: candOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的候选股（当前 ' + candRows.filter((r: CandRow) => r.wf_degraded === false).length + ' 只）'" @click="candOnlyWfRobust = !candOnlyWfRobust">
+                ✅ 仅看滚验稳健
               </button>
               <button class="ghost small" @click="copyCandRanking">📋 复制排名</button>
               <button class="ghost small" @click="copyCandJson">⚙ 复制 JSON</button>

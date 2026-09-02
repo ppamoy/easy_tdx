@@ -541,8 +541,14 @@ function batchOosTitle(r: BatchRow): string {
 }
 // V194: 仅看样本外稳健（过滤掉 oos_degraded=true 的候选股）
 const batchOnlyRobust = ref(false)
-const filteredBatchResults = computed(() =>
-  batchOnlyRobust.value ? batchResults.value.filter((r) => r.oos_degraded === false) : batchResults.value,
+// V319: 仅看滚验稳健（过滤掉 wf_degraded=true 的候选股）
+const batchOnlyWfRobust = ref(false)
+const filteredBatchResults = computed(() => {
+  let base = batchResults.value
+  if (batchOnlyRobust.value) base = base.filter((r) => r.oos_degraded === false)
+  if (batchOnlyWfRobust.value) base = base.filter((r) => r.wf_degraded === false)
+  return base
+},
 )
 
 // V118: 从批量验证排名直接查看该股（单标缠论回测）
@@ -977,6 +983,9 @@ onMounted(() => {
         <div class="batch-actions">
           <button class="ghost small" :class="{ active: batchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + batchResults.filter((r: BatchRow) => r.oos_degraded === false).length + ' 只）'" @click="batchOnlyRobust = !batchOnlyRobust">
             ✅ 仅看样本外稳健
+          </button>
+          <button class="ghost small" :class="{ active: batchOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的候选股（当前 ' + batchResults.filter((r: BatchRow) => r.wf_degraded === false).length + ' 只）'" @click="batchOnlyWfRobust = !batchOnlyWfRobust">
+            ✅ 仅看滚验稳健
           </button>
           <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
           <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>

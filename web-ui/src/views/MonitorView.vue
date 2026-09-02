@@ -615,12 +615,15 @@ function monOosTitle(r: typeof monBatchRows.value[number]): string {
 const monBatchSort = ref<'return' | 'trust'>('trust')
 // V193: 仅看样本外稳健（过滤掉 oos_degraded=true 的监控股）
 const monBatchOnlyRobust = ref(false)
+// V319: 仅看滚验稳健（过滤掉 wf_degraded=true 的监控股）
+const monBatchOnlyWfRobust = ref(false)
 const sortedMonBatchRows = computed(() => {
-  const base = monBatchOnlyRobust.value
-    ? monBatchRows.value.filter((r) => r.oos_degraded === false)
-    : monBatchRows.value
-  if (!base.length || monBatchSort.value === 'trust') return base
-  return [...base].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
+  let base = monBatchRows.value
+  if (monBatchOnlyRobust.value) base = base.filter((r) => r.oos_degraded === false)
+  if (monBatchOnlyWfRobust.value) base = base.filter((r) => r.wf_degraded === false)
+  const filtered = base
+  if (!filtered.length || monBatchSort.value === 'trust') return filtered
+  return [...filtered].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
 })
 // V145: 监控批量验证导出（复制排名）与入库（保存为组合策略）
 const monBatchCopyMsg = ref('')
@@ -871,6 +874,9 @@ onUnmounted(() => {
           <button class="ghost small" :class="{ active: monBatchSort === 'trust' }" @click="monBatchSort = 'trust'">按可信度</button>
           <button class="ghost small" :class="{ active: monBatchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的监控股（当前 ' + monBatchRows.filter((r: MonBatchRow) => r.oos_degraded === false).length + ' 只）'" @click="monBatchOnlyRobust = !monBatchOnlyRobust">
             ✅ 仅看样本外稳健
+          </button>
+          <button class="ghost small" :class="{ active: monBatchOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的监控股（当前 ' + monBatchRows.filter((r: MonBatchRow) => r.wf_degraded === false).length + ' 只）'" @click="monBatchOnlyWfRobust = !monBatchOnlyWfRobust">
+            ✅ 仅看滚验稳健
           </button>
           <button class="ghost small" @click="copyMonBatchRanking">📋 复制排名</button>
           <button class="ghost small" @click="copyMonBatchJson">⚙ 复制 JSON</button>
