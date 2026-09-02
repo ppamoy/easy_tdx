@@ -236,6 +236,8 @@ export interface BacktestResult {
   segment_robustness?: SegmentRobustnessReport | null
   model_trust?: ModelTrustReport | null
   out_of_sample?: OutOfSampleReport | null
+  // V287/V313: Walk-Forward 滚动窗口验证（windows/train_mean/test_mean/degraded/verdict）
+  walk_forward?: WalkForwardReport | null
   diagnostic?: string | null
 }
 

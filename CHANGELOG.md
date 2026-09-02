@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**选股/组合候选/寻优批量验证补「滚验」列（V316）—— 四处批量验证统一看滚动窗口防过拟合判定** —— 回测（V313）/监控（V315）批量验证已加「滚验」列，选股（V114）/组合候选（V160）/寻优（V205）此前每股只有样本外。本次三处批量验证逐只请求 use_walk_forward，行内填充 wf_degraded/wf_verdict，表格新增「滚验」列（✅稳 / ⚠递减，悬停显示判定）——五处批量验证入口全部覆盖 Walk-Forward 维度，与 CLI V243 对齐。
+
+### 新增
+
+- **web-ui/src/views/ScreeningView.vue / PortfolioView.vue / OptimizeView.vue** —— 三处批量验证类型/请求/行填充/表格加「滚验」列。
+- **web-ui/src/types.ts** —— BacktestResult 增加 walk_forward 字段（V287/V313）。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归（选股代表）：选股页批量策略验证 →「滚验」列可见、console 零错误。
+## [Unreleased]
+
 **监控页批量验证补「滚验」列（V315）—— 监控批量验证也看滚动窗口防过拟合判定** —— 回测页批量验证已加「滚验」列（V313），监控页批量验证（V143）此前每股只有样本外。本次给监控批量验证逐只请求 use_walk_forward，行内填充 wf_degraded/wf_verdict，表格新增「滚验」列（✅稳 / ⚠递减，悬停显示判定）——与回测页 V313 / CLI V243 对齐。
 
 ### 新增
