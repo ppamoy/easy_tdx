@@ -177,7 +177,7 @@ def _print_table(result: dict[str, Any]) -> None:
 @click.option("--period", default="DAILY", help="K线周期: DAILY/5MIN/15MIN/30MIN/60MIN")
 @click.option("--count", default=500, type=int, help="K线数量")
 @click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
-@click.option("--output", "output_fmt", type=click.Choice(["json", "table"]), default="json")
+@click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
 def advice_simulate(
     market: str,
     code: str,
@@ -243,7 +243,43 @@ def advice_simulate(
 
         report = simulate_advice_batch(highs, lows, closes, advices)
 
-    if output_fmt == "table":
+    if output_fmt == "csv":
+        rows = []
+        rows.append(
+            "symbol,advice_count,win_rate,avg_return,total_return,stop_rate,tp_rate,expire_rate"
+        )
+        rows.append(
+            ",".join(
+                [
+                    f"{market}{code}",
+                    str(report["count"]),
+                    f"{report['win_rate'] * 100:.1f}%",
+                    f"{report['avg_return']:+.2f}%",
+                    f"{report['total_return']:+.2f}%",
+                    f"{report['stop_rate'] * 100:.1f}%",
+                    f"{report['tp_rate'] * 100:.1f}%",
+                    f"{report['expire_rate'] * 100:.1f}%",
+                ]
+            )
+        )
+        rows.append("")
+        rows.append("no,entry_price,stop_loss,take_profit_1,exit_price,exit_reason,return_pct")
+        for i, (adv, t) in enumerate(zip(advices, report["trades"])):
+            rows.append(
+                ",".join(
+                    [
+                        str(i + 1),
+                        f"{adv['entry_price']:.2f}",
+                        f"{adv['stop_loss']:.2f}",
+                        f"{adv['take_profit_1']:.2f}",
+                        f"{t['exit_price']:.2f}",
+                        t["exit_reason"],
+                        f"{t['return_pct']:+.2f}",
+                    ]
+                )
+            )
+        click.echo("\n".join(rows))
+    elif output_fmt == "table":
         click.echo(
             f"标的 {market}{code} | 建议 {report['count']} 笔 | "
             f"胜率 {report['win_rate'] * 100:.0f}% | "

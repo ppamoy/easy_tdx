@@ -371,6 +371,7 @@ class TestAdviceCli:
         assert res.exit_code == 0
         assert "MARKET" in res.output
         assert "--max-hold" in res.output
+        assert "csv" in res.output  # V329: --output 支持 csv
         assert "回放" in res.output
 
 
