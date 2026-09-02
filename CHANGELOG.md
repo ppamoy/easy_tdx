@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**离线链路端到端回归制度化（V367）—— 合成 .day 三命令 pytest 回归** —— 新增 tests/unit/test_offline_chain.py：用 append_daily_bars 生成合成 .day，通过 CliRunner 依次调用 offline advice --file / advice-batch --dir / watch --dir --out，断言三者 exit 0 且 batch 无 error 行——把 V366 抓出的 3 类运行时 bug（pandas 导入/输出契约/空建议字段）固化为 pytest 回归，防止复发。
+
+---
+
 **离线链路端到端联调（V366）—— 合成 .day 六命令全衔接 + 修复 3 个隐藏运行时 bug** —— 新增 scripts/offline_chain_demo.py：合成 .day → offline advice --file → advice-batch --dir → watch --dir --out 一气呵成，**无网络环境完整验证六级链路**。联调抓出并修复 V351-V365 期间「help 单测通过但数据路径未跑通」的 3 个真实 bug：
 1. offline advice/advice-batch/watch 在函数体内使用 pd.DataFrame 但缺 pandas 局部导入（NameError）
 2. offline advice 把 dict 报告传入只接受 DataFrame 的 print_output（AttributeError）
