@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline watch 支持 --out（V365）—— 新信号 JSONL 落盘供脚本消费** —— easy-tdx offline watch --out /path/to/signals.jsonl：本轮新发现的 3买/3卖 信号以 JSONL 逐行追加写入文件（自动建目录），stdout 仍输出表格/json——配合 --interval 连续轮询可作**可被脚本/定时任务消费的离线信号管道**。
+
+---
+
 **offline advice 支持 --output md（V364）—— 单标 Markdown 建议回放报告** —— easy-tdx offline advice MARKET CODE --output md：输出单标 Markdown 报告（K线/信号/建议数 + 逐笔明细表（入场/止损/止盈/出场/原因/收益）+ 胜率/平均收益/累计/出场分布），与 advice-batch --md / validate_v102_advice --md 对齐——离线建议回放三级报告能力统一（单标 md + 批量 md + 脚本 md）。
 
 ---

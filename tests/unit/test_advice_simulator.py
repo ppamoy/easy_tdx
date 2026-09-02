@@ -426,6 +426,7 @@ class TestAdviceCli:
         assert "--interval" in res.output  # V358: 连续轮询间隔秒数（0=单次）
         assert "--reset" in res.output  # V360: 清空基线
         assert "--info" in res.output  # V360: 显示状态信息
+        assert "--out" in res.output  # V365: JSONL 落盘
 
 
 class TestSummarizeBatch:

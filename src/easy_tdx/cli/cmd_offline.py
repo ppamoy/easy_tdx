@@ -1012,6 +1012,12 @@ def advice_batch(
     "--info", "do_info", is_flag=True, help="显示状态文件信息（路径 + 已记录信号数）后退出"
 )
 @click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
+@click.option(
+    "--out",
+    "out_file",
+    default=None,
+    help="将本轮新信号以 JSONL 追加写入文件（供脚本/定时任务消费）",
+)
 def watch(
     day_dir: str | None,
     limit: int,
@@ -1021,6 +1027,7 @@ def watch(
     do_reset: bool,
     do_info: bool,
     output_fmt: str,
+    out_file: str | None,
 ) -> None:
     """离线信号监控：扫描本地 .day 目录，报告「新」发现的 3买/3卖 信号 + V102 建议摘要。
 
@@ -1036,6 +1043,7 @@ def watch(
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --interval 60 --output csv
       easy-tdx offline watch --state /tmp/watch.json --info
       easy-tdx offline watch --state /tmp/watch.json --reset
+      easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --out /tmp/signals.jsonl
     """
     import json
     import os
@@ -1192,6 +1200,15 @@ def watch(
 
         if rows:
             print_output(pd.DataFrame(rows), output_fmt)
+            # V365: --out 以 JSONL 追加落盘（供脚本/定时任务消费）
+            if out_file:
+                try:
+                    os.makedirs(Path(out_file).parent, exist_ok=True)
+                    with open(out_file, "a", encoding="utf-8") as fh:
+                        for r in rows:
+                            fh.write(json.dumps(r, ensure_ascii=False) + "\n")
+                except Exception as e:  # noqa: BLE001
+                    click.echo(f"⚠ JSONL 落盘失败: {e}", err=True)
             if interval > 0:
                 click.echo(f"[第{pass_no}轮] 新信号 {len(rows)} 条（基线已更新）。", err=True)
             else:

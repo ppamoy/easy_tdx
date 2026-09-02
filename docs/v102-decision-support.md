@@ -103,6 +103,7 @@ easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --state /tmp/watch.json --l
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --interval 60 --output csv   # 连续轮询守护（V358）
 easy-tdx offline watch --state /tmp/watch.json --info    # 查看状态（路径 + 已记录信号数，V360）
 easy-tdx offline watch --state /tmp/watch.json --reset   # 清空基线重新开始（V360）
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --out /tmp/signals.jsonl   # 新信号 JSONL 落盘（V365）
 ```
 状态文件（缺省 ~/.easy_tdx/offline_watch_state.json）记录已见信号
 （symbol+type+date），每次只报告**新发现**的 3买/3卖 信号 + V102 质量评级
