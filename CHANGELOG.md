@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**V102 决策支持完整落地（V320-V346，27 个版本）—— 缠论买卖点「可执行建议」全链路** —— 七大维度的顶层总结（详见各版本条目）：
+- **核心算法**：条件264-267（多信号相关性/信号质量评分卡/决策支持输出/历史模式匹配）→ V320 置信度真实并入
+- **Web 全站入口**：诊断页决策卡片+回放实证+CSV（V320/V322/V330）、缠论页卡片+买卖点徽章+信号历史回溯+CSV（V327/V336/V341/V343）、监控页信号摘要（V328）、选股页摘要（V332）、训练页复盘/教学徽章（V339/V344）、组合/对比/寻优页引导（V338/V340/V342）
+- **CLI**：easy-tdx advice（json/table/csv，V323/V329）
+- **策略执行**：缠论策略 use_v102_advice 自动止损止盈（V324）
+- **实证**：validate_v102_advice（V321/V334 --md / V346 多空双向）、advice_batch_validate（V325/V335 --md）
+- **文档**：QUICKSTART 指南（V326）、docs/v102-decision-support.md（V337）、DEV_STATUS 落地清单
+- **质量**：全量 pytest tests/unit/ 2535+ 通过；ruff/mypy/format 归零；vue-tsc + vite build 通过
+
+---
+
 **实证脚本补 3卖 做空演示（V346）—— validate_v102_advice 多空双向覆盖** —— scripts/validate_v102_advice.py 新增 _sell3_advice（MMDType.SELL_3 + direction=short，止损在上方/止盈在下方）；main 改为 3 笔 3买（做多）+ 2 笔 3卖（做空）混合回放，合成行情演示覆盖多空双向；markdown 报告同步反映做空收益特征（上行行情中做空亏损，教育意义明确）。
 
 ---
