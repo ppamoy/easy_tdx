@@ -3,6 +3,13 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 离线 V102 建议链路（V351-V360，10 个版本）✅ 全部完成
+
+- **V351** offline advice（本地 .day 单标建议回放）→ **V352** --file 任意路径 → **V353** advice-batch 批量实证（json/table/csv/md）→ **V354** watch 离线信号监控（新 3买/3卖 + V102 摘要）→ **V358** watch --interval 连续轮询守护 → **V360** watch --reset/--info 基线管理
+- **文档**：docs/v102-decision-support.md（离线三小节）、QUICKSTART 第 5 项离线实证、DEV_STATUS 落地清单全收录
+- **使用流程**：sync-all 同步 → watch 监控新信号 → advice/advice-batch 单标/批量实证 → csv/md 导出 → use_v102_advice 落地策略（完全断网可用）
+- **质量**：全量 pytest tests/unit/ 2539 passed / 0 failed；ruff/mypy/format 归零；vue-tsc + vite build 通过
+
 ## V102 决策支持落地清单（V320-V346，27 个版本）✅ 全部完成
 
 **核心算法**：条件264-267（多信号相关性/质量评分卡/决策支持输出/历史模式匹配）→ V320 置信度真实并入
