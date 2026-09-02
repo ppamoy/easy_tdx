@@ -189,6 +189,30 @@ function exportCompareCsv() {
   }
   setTimeout(() => { compareCsvMsg.value = '' }, 2500)
 }
+// V275: 对比结果复制 JSON（机器可读，Agent/脚本友好，与全站 JSON 系列对齐）
+const compareJsonMsg = ref('')
+async function copyCompareJson() {
+  if (compareItems.value.length < 2) return
+  const payload = {
+    generated_at: new Date().toISOString(),
+    items: compareItems.value.map((i) => ({
+      label: i.label,
+      performance: i.result.performance,
+      model_trust: i.result.model_trust ?? null,
+      signal_accuracy: i.result.signal_accuracy ?? null,
+      segment_robustness: i.result.segment_robustness ?? null,
+      out_of_sample: i.result.out_of_sample ?? null,
+    })),
+  }
+  const json = JSON.stringify(payload, null, 2)
+  try {
+    await navigator.clipboard.writeText(json)
+    compareJsonMsg.value = '✓ 已复制对比 JSON'
+  } catch {
+    compareJsonMsg.value = '复制失败（浏览器权限）'
+  }
+  setTimeout(() => { compareJsonMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
@@ -232,7 +256,9 @@ function exportCompareCsv() {
         <section class="report-section">
           <h3>指标对比
             <button class="ghost small" @click="exportCompareCsv">📊 导出 CSV</button>
+            <button class="ghost small" @click="copyCompareJson">⚙ 复制 JSON</button>
             <span v-if="compareCsvMsg" class="save-msg">{{ compareCsvMsg }}</span>
+            <span v-if="compareJsonMsg" class="save-msg">{{ compareJsonMsg }}</span>
           </h3>
           <CompareTable :items="compareItems" />
         </section>

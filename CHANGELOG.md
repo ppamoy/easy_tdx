@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**对比页「复制 JSON」（V275）—— 跨任务对比结果机器可读导出** —— 对比页「指标对比」已有「📊 导出 CSV」（V267）但缺 JSON，与其它页面 JSON 导出系列（V153/V157/V158/V162/V166 等）不一致。本次加「⚙ 复制 JSON」：把所选任务的 label/performance/model_trust/signal_accuracy/segment_robustness/out_of_sample 打包为结构化 JSON 复制到剪贴板，Agent/脚本友好。
+
+### 新增
+
+- **web-ui/src/views/CompareView.vue** —— 新增 copyCompareJson（compareItems 结构化打包）+「指标对比」区「⚙ 复制 JSON」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：对比页勾选 2 个已完成任务 →「复制 JSON」→ 剪贴板为合法 JSON（含 items 数组）、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V273（V274）—— 文档覆盖信号准确度 CSV 与指南自身迭代** —— V272 仅把指南更新到 V271，V273 新增的信号准确度面板「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V273：标题、全景表补 V272/V273 两行、3.1 回测页第 3 步补信号准确度面板 CSV 说明。
 
 ### 新增
