@@ -466,6 +466,51 @@ async function onReverify(s: SavedStrategy) {
 // V249: 全部重验——对当前可见策略逐个重验，刷新全部验证结论
 const reverifyAll = ref(false)
 const reverifyAllMsg = ref('')
+// V269: 导出策略清单 CSV（全库验证档案归档，与全站 CSV 系列对齐）
+const libraryCsvMsg = ref('')
+function libCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportStrategiesCsv() {
+  if (!sortedVisible.value.length) return
+  const header = ['名称', '类型', '策略', '参数', '总收益', '夏普', '可信度', '可信等级', '样本外', '来源', '标签']
+  const rows = sortedVisible.value.map((s) => {
+    const snap = (s.snapshot || {}) as Record<string, any>
+    const oos = (snap.out_of_sample || {}) as { degraded?: boolean }
+    const oosCell = oos.degraded === true ? '⚠ 衰减' : oos.degraded === false ? '✅ 泛化' : (snap.oos_degraded === false ? '✅ 泛化' : snap.oos_degraded === true ? '⚠ 衰减' : '-')
+    const trust = (snap.trust || {}) as { score?: number; grade?: string }
+    return [
+      libCsvEscape(s.name),
+      s.kind === 'single' ? '单标' : s.kind === 'portfolio' ? '组合' : '多策略组合',
+      libCsvEscape(s.strategy_label || s.strategy),
+      libCsvEscape(JSON.stringify(s.params ?? {})),
+      snap.total_return != null ? (snap.total_return * 100).toFixed(2) + '%' : '-',
+      snap.sharpe != null ? snap.sharpe.toFixed(2) : '-',
+      trust.score != null ? String(Math.round(trust.score)) : '-',
+      libCsvEscape(String(trust.grade ?? '')),
+      oosCell,
+      libCsvEscape(String(snap.source ?? '')),
+      libCsvEscape((s.tags || []).join(' ')),
+    ].join(',')
+  })
+  const csv = '\uFEFF' + [header.join(','), ...rows].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_strategies_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    libraryCsvMsg.value = '✓ 已导出策略清单 CSV'
+  } catch {
+    libraryCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { libraryCsvMsg.value = '' }, 2500)
+}
+
 async function onReverifyAll() {
   const targets = [...sortedVisible.value].filter((s) => s.kind === 'single' || s.kind === 'portfolio' || s.kind === 'multi')
   if (targets.length === 0 || reverifyAll.value) return
@@ -806,7 +851,16 @@ const comboGrade = computed(() =>
         >
           {{ reverifyAll ? '全部重验中…' : '↻ 全部重验' }}
         </button>
+        <button
+          class="ghost sm"
+          :disabled="loading || sortedVisible.length === 0"
+          title="把当前可见策略的验证结论导出为 CSV"
+          @click="exportStrategiesCsv"
+        >
+          📊 导出策略清单
+        </button>
         <span v-if="reverifyAllMsg" class="reverify-msg all">{{ reverifyAllMsg }}</span>
+        <span v-if="libraryCsvMsg" class="reverify-msg all">{{ libraryCsvMsg }}</span>
         <label class="trust-sort">
           <input type="checkbox" v-model="sortByTrust" />
           按验证可信度排序

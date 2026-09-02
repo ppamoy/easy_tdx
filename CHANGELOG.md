@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**策略库「导出策略清单 CSV」（V269）—— 全库验证档案 Excel 友好归档** —— 策略库已有单条验证摘要/JSON（V235/V251）与一键重验（V249），但缺整库清单导出。本次在页头加「📊 导出策略清单」：把当前可见策略的 name/kind/strategy/params/总收益/夏普/可信度/可信等级/样本外/来源/标签导出为 Excel 友好的 CSV，下载 easy_tdx_strategies_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/StrategiesView.vue** —— 新增 exportStrategiesCsv（sortedVisible 验证档案，BOM+CSV+Blob 下载）+ 页头「📊 导出策略清单」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：策略库 →「导出策略清单」→ 下载文件含表头/测试策略名与多行、清理成功、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V267（V268）—— 文档覆盖对比页 CSV 与指南自身迭代** —— V266 仅把指南更新到 V265，V267 新增的对比页「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V267：标题、全景表补 V266/V267 两行、3.6 策略库与对比页对比条目补导出 CSV 说明。
 
 ### 新增
