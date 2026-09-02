@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline watch 支持 --interval 连续轮询（V358）—— 轻量离线监控守护** —— easy-tdx offline watch --interval N：每 N 秒自动重新扫描 .day 目录并只报告**新增**的 3买/3卖 信号 + V102 建议摘要（状态文件持续累积基线；Ctrl+C 退出），离线用户可作常驻无网络信号监控守护（默认 0=单次扫描，行为不变）。
+
+---
+
 **offline watch 子命令（V354）—— 离线信号监控 + V102 建议摘要** —— easy-tdx offline watch --dir <lday目录> [--state PATH]：扫描本地 .day 目录，用状态文件（缺省 ~/.easy_tdx/offline_watch_state.json）记录已见信号（symbol+type+date），只报告**新发现**的 3买/3卖 信号 + V102 质量评级与操作建议摘要（json/table/csv）——无网络轮询监控（类比 Web 监控页「新信号」面板），首次运行建立基线。
 
 ---

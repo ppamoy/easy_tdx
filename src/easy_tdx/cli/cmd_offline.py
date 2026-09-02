@@ -960,27 +960,31 @@ def advice_batch(
     default=None,
     help="已见信号状态文件路径（缺省 ~/.easy_tdx/offline_watch_state.json）",
 )
+@click.option("--interval", default=0, type=int, help="连续轮询间隔秒数（0=单次扫描；Ctrl+C 退出）")
 @click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
 def watch(
     day_dir: str | None,
     limit: int,
     count: int,
     state_file: str | None,
+    interval: int,
     output_fmt: str,
 ) -> None:
     """离线信号监控：扫描本地 .day 目录，报告「新」发现的 3买/3卖 信号 + V102 建议摘要。
 
     用状态文件记录上次已见过的信号（symbol+type+date），本次只报告新增，
     实现无网络轮询监控（类比 Web 监控页「新信号」面板）。首次运行将当前全部
-    信号记为基线并输出。
+    信号记为基线并输出。--interval N 开启连续轮询（轻量离线监控守护，Ctrl+C 退出）。
 
     示例：
 
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --state /tmp/watch.json --limit 5
+      easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --interval 60 --output csv
     """
     import json
     import os
+    import time
 
     from .output import print_error, print_output
 
@@ -1008,8 +1012,6 @@ def watch(
     if not files:
         click.echo(f"目录 {lday_dir} 中没有 .day 文件")
         raise SystemExit(0)
-    if limit > 0:
-        files = files[:limit]
 
     # 2. 加载已见信号状态
     if state_file is None:
@@ -1022,79 +1024,100 @@ def watch(
         except Exception:  # noqa: BLE001
             seen = set()  # 状态文件损坏则视为首次运行
 
-    # 3. 逐只扫描，报告新信号 + V102 建议摘要
+    # 3. 轮询循环：每轮扫描目录，报告新信号 + V102 建议摘要（--interval 连续或单次）
     from easy_tdx.chanlun import ChanlunAnalyser
 
-    rows: list[dict[str, object]] = []
-    for filepath in files:
-        name = filepath.name.lower()
-        if not (name.startswith(("sh", "sz")) and name.endswith(".day")):
-            continue
-        mkt = name[:2].upper()
-        code = name[2:8]
-        symbol = f"{mkt}{code}"
-        try:
-            bars = read_daily_bars(filepath)
-            if not bars:
+    pass_no = 0
+    while True:
+        pass_no += 1
+        # 每轮重新扫描目录（可能新增 .day 文件）
+        files = sorted(lday_dir.glob("*.day"))
+        if limit > 0:
+            files = files[:limit]
+
+        rows: list[dict[str, object]] = []
+        for filepath in files:
+            name = filepath.name.lower()
+            if not (name.startswith(("sh", "sz")) and name.endswith(".day")):
                 continue
-            if count > 0:
-                bars = bars[-count:]
-            if len(bars) < 30:
-                continue
-            df = pd.DataFrame(
-                [
-                    {
-                        "datetime": f"{b.year}-{b.month:02d}-{b.day:02d}",
-                        "open": b.open,
-                        "high": b.high,
-                        "low": b.low,
-                        "close": b.close,
-                        "vol": b.vol,
-                        "amount": b.amount,
-                    }
-                    for b in bars
-                ]
-            )
-            analyser = ChanlunAnalyser(code=code, frequency="daily")
-            result = analyser.process_klines(df)
-            for mmd in result.mmds:
-                if mmd.mmd_type.value not in ("3buy", "3sell"):
-                    continue  # 只监控 3买/3卖（有 V102 建议）
-                if not mmd.bi or not mmd.bi.end:
+            mkt = name[:2].upper()
+            code = name[2:8]
+            symbol = f"{mkt}{code}"
+            try:
+                bars = read_daily_bars(filepath)
+                if not bars:
                     continue
-                date_str = result._fmt_dt(result._fx_anchor_datetime(mmd.bi.end))
-                key = f"{symbol}:{mmd.mmd_type.value}:{date_str}"
-                if key in seen:
+                if count > 0:
+                    bars = bars[-count:]
+                if len(bars) < 30:
                     continue
-                scorecard = getattr(mmd, "_signal_quality_scorecard", None) or {}
-                decision = getattr(mmd, "_decision_support", None) or {}
-                rows.append(
-                    {
-                        "symbol": symbol,
-                        "type": mmd.mmd_type.value,
-                        "date": date_str,
-                        "confidence": round(mmd.confidence, 2),
-                        "v102_grade": scorecard.get("overall_grade") or None,
-                        "advice": decision.get("action_recommendation") or None,
-                    }
+                df = pd.DataFrame(
+                    [
+                        {
+                            "datetime": f"{b.year}-{b.month:02d}-{b.day:02d}",
+                            "open": b.open,
+                            "high": b.high,
+                            "low": b.low,
+                            "close": b.close,
+                            "vol": b.vol,
+                            "amount": b.amount,
+                        }
+                        for b in bars
+                    ]
                 )
-                seen.add(key)
+                analyser = ChanlunAnalyser(code=code, frequency="daily")
+                result = analyser.process_klines(df)
+                for mmd in result.mmds:
+                    if mmd.mmd_type.value not in ("3buy", "3sell"):
+                        continue  # 只监控 3买/3卖（有 V102 建议）
+                    if not mmd.bi or not mmd.bi.end:
+                        continue
+                    date_str = result._fmt_dt(result._fx_anchor_datetime(mmd.bi.end))
+                    key = f"{symbol}:{mmd.mmd_type.value}:{date_str}"
+                    if key in seen:
+                        continue
+                    scorecard = getattr(mmd, "_signal_quality_scorecard", None) or {}
+                    decision = getattr(mmd, "_decision_support", None) or {}
+                    rows.append(
+                        {
+                            "symbol": symbol,
+                            "type": mmd.mmd_type.value,
+                            "date": date_str,
+                            "confidence": round(mmd.confidence, 2),
+                            "v102_grade": scorecard.get("overall_grade") or None,
+                            "advice": decision.get("action_recommendation") or None,
+                        }
+                    )
+                    seen.add(key)
+            except Exception as e:  # noqa: BLE001
+                click.echo(f"⚠ {symbol}: {e}", err=True)
+                continue
+
+        # 每轮结束写回状态（全部信号记为已见基线）
+        try:
+            os.makedirs(state_path.parent, exist_ok=True)
+            state_path.write_text(
+                json.dumps({"seen": sorted(seen)}, ensure_ascii=False),
+                encoding="utf-8",
+            )
         except Exception as e:  # noqa: BLE001
-            click.echo(f"⚠ {symbol}: {e}", err=True)
-            continue
+            click.echo(f"⚠ 状态文件写入失败: {e}", err=True)
 
-    # 4. 写回状态（本次全部信号记为已见基线）
-    try:
-        os.makedirs(state_path.parent, exist_ok=True)
-        state_path.write_text(
-            json.dumps({"seen": sorted(seen)}, ensure_ascii=False),
-            encoding="utf-8",
-        )
-    except Exception as e:  # noqa: BLE001
-        click.echo(f"⚠ 状态文件写入失败: {e}", err=True)
+        if rows:
+            print_output(pd.DataFrame(rows), output_fmt)
+            if interval > 0:
+                click.echo(f"[第{pass_no}轮] 新信号 {len(rows)} 条（基线已更新）。", err=True)
+            else:
+                click.echo(f"新信号 {len(rows)} 条（基线已更新，下次仅报告新增）。", err=True)
+        elif interval > 0:
+            click.echo(f"[第{pass_no}轮] 无新信号。", err=True)
+        else:
+            click.echo("无新信号（状态已是最新）。")
 
-    if not rows:
-        click.echo("无新信号（状态已是最新）。")
-        return
-    print_output(pd.DataFrame(rows), output_fmt)
-    click.echo(f"新信号 {len(rows)} 条（基线已更新，下次仅报告新增）。", err=True)
+        if interval <= 0:
+            break
+        try:
+            time.sleep(interval)
+        except KeyboardInterrupt:
+            click.echo("\n已停止监控（Ctrl+C）。", err=True)
+            break

@@ -422,6 +422,7 @@ class TestAdviceCli:
         assert res.exit_code == 0
         assert "--dir" in res.output
         assert "--state" in res.output  # V354: 已见信号状态文件
+        assert "--interval" in res.output  # V358: 连续轮询间隔秒数（0=单次）
 
 
 class TestSummarizeBatch:
