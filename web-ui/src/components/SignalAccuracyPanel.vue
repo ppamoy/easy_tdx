@@ -2,7 +2,7 @@
 // 模型准确度验证面板：信号前瞻命中率 + 随机入场基准 + 买入持有基准。
 // 让用户通过历史回测核对「模型的买卖点是否真的择时准确」，而不只是看账户盈亏。
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import { fmtPct } from '../format'
 import type { SignalAccuracyReport, SignalHorizonStat } from '../types'
@@ -53,6 +53,38 @@ function hitClass(rate: number | undefined, baseline: number | undefined): strin
 function cell(n: number | undefined): string {
   return n === undefined ? '-' : String(n)
 }
+// V273: 信号准确度明细导出 CSV（按持有根数分类的买卖信号命中率明细）
+const accCsvMsg = ref('')
+function exportAccCsv() {
+  const r = props.report
+  if (!r || !rows.value.length) return
+  const header = ['持有根数', '方向', '信号数', '命中率', '随机基准', '平均前瞻收益', '基准收益']
+  const data: string[] = []
+  rows.value.forEach((row) => {
+    if (r.buy && row.buy) {
+      data.push([row.horizon + ' 根', '买入', cell(row.buy.count), fmtPct(row.buy.hit_rate), fmtPct(row.buy.baseline_hit_rate), fmtPct(row.buy.avg_return), fmtPct(row.buy.baseline_avg_return)].join(','))
+    }
+    if (r.sell && row.sell) {
+      data.push([row.horizon + ' 根', '卖出', cell(row.sell.count), fmtPct(row.sell.hit_rate), fmtPct(row.sell.baseline_hit_rate), fmtPct(row.sell.avg_return), fmtPct(row.sell.baseline_avg_return)].join(','))
+    }
+  })
+  const csv = '\uFEFF' + [header.join(','), ...data].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_signal_accuracy_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    accCsvMsg.value = '✓ 已导出信号准确度 CSV'
+  } catch {
+    accCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { accCsvMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
@@ -61,6 +93,8 @@ function cell(n: number | undefined): string {
     <div class="verdict" :class="verdictClass">
       <span class="verdict-label">模型准确度判定：</span>
       <span>{{ report?.verdict }}</span>
+      <button class="ghost small acc-csv-btn" @click="exportAccCsv">📊 导出 CSV</button>
+      <span v-if="accCsvMsg" class="save-msg">{{ accCsvMsg }}</span>
     </div>
 
     <!-- 基准对比 -->

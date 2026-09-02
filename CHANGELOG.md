@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**信号准确度面板「导出 CSV」（V273）—— 按持有根数分类的买卖信号命中率明细可导出** —— 回测页「模型准确度判定」面板（V95/V104）展示按持有根数（1/3/5/10/20）分类的买/卖信号命中率/随机基准/前瞻收益明细，但只能看不能存。本次在面板结论行加「📊 导出 CSV」：把该明细导出为 Excel 友好的 CSV（SignalAccuracyPanel 组件级，各使用页面一并受益）。
+
+### 新增
+
+- **web-ui/src/components/SignalAccuracyPanel.vue** —— 新增 exportAccCsv（buy/sell horizons 明细转置为 CSV，BOM+Blob 下载）+ 面板结论行「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页 →「模型准确度判定」面板 →「导出 CSV」→ 下载文件含表头与 11 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V271（V272）—— 文档覆盖每股准确度 CSV 与指南自身迭代** —— V270 仅把指南更新到 V269，V271 新增的监控页每股信号准确度「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V271：标题、全景表补 V270/V271 两行、3.5 信号监控页主监控「🎯」条目补 CSV 说明。
 
 ### 新增
