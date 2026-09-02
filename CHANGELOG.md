@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V297（V298）—— 文档覆盖组合 walk-forward 与指南自身迭代** —— V296 仅把指南更新到 V295，V297 新增的 verify-portfolio `--walk-forward` 入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V297：标题、全景表补 V296/V297 两行、3.9 命令行节 verify-portfolio 条目补 walk-forward 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V297；全景表补 V296/V297；3.9 命令行节 verify-portfolio 条目补「--walk-forward（V297）逐槽滚动窗口判定并聚合」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **CLI verify-portfolio 支持 --walk-forward（V297）—— 组合验证也输出滚动窗口防过拟合判定** —— CLI 验证系列中 verify（V225）/verify-multi（V243）/run-all（V233）/reverify（V245）都有 --walk-forward，组合验证（V176）此前只有样本外。本次给 verify-portfolio 加 `--walk-forward [--step-ratio]`：对组合内每只标的复用 _compute_walk_forward_single（run-all V233 helper）逐槽计算，聚合为 report.walk_forward（symbols/degraded_symbols/verdict/per_symbol）——命令行组合验证也覆盖过拟合维度，与 CLI 系列对齐。
 
 ### 新增
