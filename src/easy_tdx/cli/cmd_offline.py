@@ -961,6 +961,10 @@ def advice_batch(
     help="已见信号状态文件路径（缺省 ~/.easy_tdx/offline_watch_state.json）",
 )
 @click.option("--interval", default=0, type=int, help="连续轮询间隔秒数（0=单次扫描；Ctrl+C 退出）")
+@click.option("--reset", "do_reset", is_flag=True, help="清空已见信号状态，重新建立基线")
+@click.option(
+    "--info", "do_info", is_flag=True, help="显示状态文件信息（路径 + 已记录信号数）后退出"
+)
 @click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
 def watch(
     day_dir: str | None,
@@ -968,19 +972,24 @@ def watch(
     count: int,
     state_file: str | None,
     interval: int,
+    do_reset: bool,
+    do_info: bool,
     output_fmt: str,
 ) -> None:
     """离线信号监控：扫描本地 .day 目录，报告「新」发现的 3买/3卖 信号 + V102 建议摘要。
 
     用状态文件记录上次已见过的信号（symbol+type+date），本次只报告新增，
     实现无网络轮询监控（类比 Web 监控页「新信号」面板）。首次运行将当前全部
-    信号记为基线并输出。--interval N 开启连续轮询（轻量离线监控守护，Ctrl+C 退出）。
+    信号记为基线并输出。--interval N 开启连续轮询（轻量离线监控守护，Ctrl+C 退出）；
+    --reset 清空基线重新开始；--info 查看状态文件信息。
 
     示例：
 
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --state /tmp/watch.json --limit 5
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --interval 60 --output csv
+      easy-tdx offline watch --state /tmp/watch.json --info
+      easy-tdx offline watch --state /tmp/watch.json --reset
     """
     import json
     import os
@@ -995,7 +1004,42 @@ def watch(
         print_error(f"离线模块不可用: {e}")
         raise SystemExit(1)
 
-    # 1. 定位 .day 目录
+    # 1. 状态文件路径（--info/--reset 不依赖 .day 目录）
+    if state_file is None:
+        state_file = str(Path.home() / ".easy_tdx" / "offline_watch_state.json")
+    state_path = Path(state_file)
+
+    # 1a. --reset 与 --info 互斥
+    if do_reset and do_info:
+        click.echo("--reset 与 --info 不能同时使用。")
+        raise SystemExit(1)
+
+    # 1b. --info：显示状态信息后退出（不需要 .day 目录）
+    if do_info:
+        count_seen = 0
+        if state_path.is_file():
+            try:
+                count_seen = len(json.loads(state_path.read_text(encoding="utf-8")).get("seen", []))
+            except Exception:  # noqa: BLE001
+                count_seen = 0
+        click.echo(f"状态文件: {state_path}")
+        click.echo(f"已记录信号数: {count_seen}")
+        return
+
+    # 1c. --reset：单独清空基线并退出（下次运行时重新建立基线）
+    if do_reset:
+        if state_path.is_file():
+            try:
+                state_path.unlink()
+                click.echo(f"已清空监控基线: {state_path}（下次 watch 将重新建立）")
+            except Exception as e:  # noqa: BLE001
+                click.echo(f"⚠ 清除状态文件失败: {e}", err=True)
+                raise SystemExit(1)
+        else:
+            click.echo("无现有基线可清除（状态文件不存在）。")
+        return
+
+    # 2. 定位 .day 目录（实际扫描才需要）
     try:
         if day_dir is not None:
             lday_dir = Path(day_dir)
@@ -1013,10 +1057,7 @@ def watch(
         click.echo(f"目录 {lday_dir} 中没有 .day 文件")
         raise SystemExit(0)
 
-    # 2. 加载已见信号状态
-    if state_file is None:
-        state_file = str(Path.home() / ".easy_tdx" / "offline_watch_state.json")
-    state_path = Path(state_file)
+    # 3. 加载已见信号状态
     seen: set[str] = set()
     if state_path.is_file():
         try:

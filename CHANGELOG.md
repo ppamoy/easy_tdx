@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline watch 状态管理（V360）—— --reset 清空基线 / --info 查看状态** —— easy-tdx offline watch --reset（清空已见信号状态文件，下次运行重新建立基线）与 --info（显示状态文件路径 + 已记录信号数后退出）；两个操作不依赖 TDX_HOME/.day 目录即可执行，方便管理监控基线。
+
+---
+
 **offline watch 支持 --interval 连续轮询（V358）—— 轻量离线监控守护** —— easy-tdx offline watch --interval N：每 N 秒自动重新扫描 .day 目录并只报告**新增**的 3买/3卖 信号 + V102 建议摘要（状态文件持续累积基线；Ctrl+C 退出），离线用户可作常驻无网络信号监控守护（默认 0=单次扫描，行为不变）。
 
 ---
