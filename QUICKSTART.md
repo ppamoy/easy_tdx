@@ -105,7 +105,8 @@ python scripts/advice_batch_validate.py --file symbols.txt --max-hold 15
 前置条件：本地已安装通达信并下载过日线（或已用 `easy-tdx offline sync-all` 同步）。单标与批量均可离线：
 
 ```bash
-easy-tdx offline advice SZ 000001 --output csv                    # 单只（--file 可指定任意 .day 路径）
+easy-tdx offline advice SZ 000001 --output csv                    # 单只 CSV（--file 可指定任意 .day 路径）
+easy-tdx offline advice SZ 000001 --output md                     # 单只 Markdown 报告（V364）
 easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md   # 批量
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output csv # 只报告新发现的 3买/3卖 + V102 建议摘要
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --interval 60 # 连续轮询守护（每 60 秒扫描，Ctrl+C 退出）
