@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // Walk-Forward 滚动验证报告面板（V123）：展示滚动窗口训练/测试表现与防过拟合结论。
+// V289: 组件级「导出 CSV」——寻优页 V123 与回测页 V287 一并受益。
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 import type { WalkForwardReport } from '../types'
 
@@ -17,6 +18,52 @@ const verdictClass = computed(() => {
 function pct(v: number | null | undefined): string {
   return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(1) + '%'
 }
+// V289: Walk-Forward 滚动窗口明细导出 CSV
+const wfCsvMsg = ref('')
+function wfCsvEscape(v: string): string {
+  return /[",\\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportWfCsv() {
+  const r = props.report
+  if (!r || !r.windows_detail || !r.windows_detail.length) {
+    wfCsvMsg.value = '没有可导出的窗口明细'
+    setTimeout(() => { wfCsvMsg.value = '' }, 2500)
+    return
+  }
+  const header = ['窗口', '参数', '训练收益', '测试收益', '测试夏普', '测试胜率', '交易数']
+  const rows = r.windows_detail.map((w) => [
+    String((w.window ?? 0) + 1),
+    wfCsvEscape(JSON.stringify(w.params ?? {})),
+    pct(w.train_return),
+    pct(w.test_return),
+    (w.test_sharpe ?? 0).toFixed(2),
+    pct(w.test_win_rate),
+    String(w.test_trades ?? ''),
+  ].join(','))
+  const summary = [
+    '判定', wfCsvEscape(r.verdict || ''),
+    '窗口数', String(r.windows ?? ''),
+    '训练段均值', pct(r.train_mean),
+    '测试段均值', pct(r.test_mean),
+    '正收益测试窗口', String(r.positive_test_windows ?? '') + '/' + String(r.windows ?? ''),
+  ]
+  const csv = '\uFEFF' + [summary.join(','), '', header.join(','), ...rows].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_walk_forward_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    wfCsvMsg.value = '✓ 已导出 Walk-Forward CSV'
+  } catch {
+    wfCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { wfCsvMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
@@ -24,6 +71,8 @@ function pct(v: number | null | undefined): string {
     <div class="verdict" :class="verdictClass">
       <span class="verdict-label">Walk-Forward 判定：</span>
       <span>{{ report.verdict }}</span>
+      <button class="ghost small wf-csv-btn" @click="exportWfCsv">📊 导出 CSV</button>
+      <span v-if="wfCsvMsg" class="save-msg">{{ wfCsvMsg }}</span>
     </div>
 
     <div class="wf-summary">

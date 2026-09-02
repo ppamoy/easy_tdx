@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**WalkForwardPanel「导出 CSV」（V289）—— 滚动窗口明细 Excel 友好导出** —— Walk-Forward 面板（寻优 V123 / 回测 V287）展示滚动窗口训练/测试表现，但只能看不能存。本次组件级加「📊 导出 CSV」：先输出判定/窗口数/训练段均值/测试段均值/正收益窗口摘要，再输出各窗口明细（窗口/参数/训练收益/测试收益/测试夏普/测试胜率/交易数），下载 easy_tdx_walk_forward_日期.csv——两处使用页面一并受益。
+
+### 新增
+
+- **web-ui/src/components/WalkForwardPanel.vue** —— 新增 exportWfCsv（摘要+窗口明细，BOM+CSV+Blob 下载）+ 判定行「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页勾选 Walk-Forward → 回测 → 面板「导出 CSV」→ 下载文件含判定/窗口/测试收益与 6 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V287（V288）—— 文档覆盖回测 Walk-Forward 与指南自身迭代** —— V286 仅把指南更新到 V285，V287 新增的回测页 Walk-Forward 滚动验证入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V287：标题、全景表补 V286/V287 两行、3.1 回测页第 3 步补 Walk-Forward 说明。
 
 ### 新增
