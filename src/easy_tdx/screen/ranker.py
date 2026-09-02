@@ -45,6 +45,10 @@ class RankEntry:
     signal_date: int
     last_close: float
     performance: dict[str, float]
+    # V279: 验证维度（accuracy=V99 命中率 / trust=V101 可信度 / oos=V105 样本外）
+    accuracy: dict[str, Any] | None = None
+    trust: dict[str, Any] | None = None
+    oos: dict[str, Any] | None = None
 
 
 class SignalRanker:
@@ -88,6 +92,7 @@ class SignalRanker:
         sort_reverse: bool = False,
         top_n: int = 0,
         progress_callback: Any = None,
+        run_oos: bool = False,
     ) -> list[RankEntry]:
         """对信号列表做回测排名。
 
@@ -115,19 +120,22 @@ class SignalRanker:
                 progress_callback(idx, total, f"{market}{code}")
 
             try:
-                perf = self._backtest_one(market, code)
-                if perf is not None:
-                    entries.append(
-                        RankEntry(
-                            rank=0,  # 排名在排序后赋值
-                            code=code,
-                            market=market,
-                            name="",
-                            signal_date=signal_date,
-                            last_close=last_close,
-                            performance=perf,
-                        )
-                    )
+                engine_result = self._backtest_result(market, code)
+                if engine_result is None:
+                    continue
+                result, df = engine_result
+                perf = result.performance
+                entry = RankEntry(
+                    rank=0,  # 排名在排序后赋值
+                    code=code,
+                    market=market,
+                    name="",
+                    signal_date=signal_date,
+                    last_close=last_close,
+                    performance=perf,
+                )
+                self._attach_verification(entry, result, df, run_oos)
+                entries.append(entry)
             except Exception:
                 continue
 
@@ -150,15 +158,15 @@ class SignalRanker:
 
         return entries
 
-    def _backtest_one(self, market: str, code: str) -> dict[str, float] | None:
-        """对单只股票做回测。
+    def _backtest_result(self, market: str, code: str) -> Any | None:
+        """对单只股票做回测（V279 起返回完整结果，供提取验证维度）。
 
         Args:
             market: 市场（SZ/SH）
             code: 6 位股票代码
 
         Returns:
-            绩效指标字典，数据不足时返回 None
+            BacktestResult，数据不足时返回 None
         """
         exchange = market.lower()
         filepath = self._vipdoc / exchange / "lday" / f"{exchange}{code}.day"
@@ -183,8 +191,63 @@ class SignalRanker:
             cash=self._cash,
             commission=self._commission,
         )
-        result = engine.run(df)
-        return result.performance
+        return engine.run(df), df
+
+    def _attach_verification(
+        self,
+        entry: RankEntry,
+        result: Any,
+        df: Any,
+        run_oos: bool = False,
+    ) -> None:
+        """V279: 从回测结果提取准确度（V99）/可信度（V101）/样本外（V105）维度。"""
+        # 信号准确度（引擎内置 V95）
+        try:
+            sa = getattr(result, "signal_accuracy", None) or {}
+            buy = sa.get("buy") or {}
+            horizons = buy.get("horizons") or {}
+            h5 = horizons.get("5") or horizons.get("3")
+            if h5 and h5.get("count", 0) > 0:
+                entry.accuracy = {
+                    "hit_rate": float(h5["hit_rate"]),
+                    "excess_hit_rate": float(h5.get("excess_hit_rate", 0.0)),
+                }
+        except Exception:  # noqa: BLE001
+            entry.accuracy = None
+        # 模型可信度（V101）
+        try:
+            from easy_tdx.backtest.model_trust import compute_model_trust
+
+            mt = compute_model_trust(
+                entry.performance,
+                getattr(result, "signal_accuracy", None),
+                None,
+            )
+            entry.trust = {
+                "score": float(mt.get("score", 0.0)),
+                "grade": str(mt.get("grade", "")),
+                "verdict": str(mt.get("verdict", "")),
+            }
+        except Exception:  # noqa: BLE001
+            entry.trust = None
+        # 样本外（V105，可选）
+        if run_oos:
+            try:
+                from easy_tdx.backtest.out_of_sample import compute_out_of_sample
+
+                strategy = self._strategy_cls
+                oos = compute_out_of_sample(
+                    df,
+                    lambda: strategy(),
+                    cash=self._cash,
+                    commission=self._commission,
+                )
+                entry.oos = {
+                    "degraded": bool(oos.get("degraded", False)),
+                    "verdict": str(oos.get("verdict", "")),
+                }
+            except Exception:  # noqa: BLE001
+                entry.oos = None
 
     def enrich_names(self, entries: list[RankEntry]) -> list[RankEntry]:
         """通过在线查询补齐股票名称。
@@ -276,6 +339,9 @@ class SignalRanker:
                     "signal_date": e.signal_date,
                     "last_close": e.last_close,
                     "performance": e.performance,
+                    "accuracy": e.accuracy,
+                    "trust": e.trust,
+                    "oos": e.oos,
                 }
                 for e in entries
             ],
@@ -304,6 +370,10 @@ class SignalRanker:
             f"{'最大回撤':>10} {'夏普':>8} {'胜率':>8} {'交易':>6}",
             "─" * 90,
         ]
+        if any(e.accuracy for e in entries):
+            lines[2] += f" {'5根命中':>8} {'可信度':>8}"
+        if any(e.oos for e in entries):
+            lines[2] += f" {'样本外':>8}"
 
         for e in entries:
             medal = (
@@ -327,6 +397,13 @@ class SignalRanker:
                 f"{perf.get('win_rate', 0):>7.1%} "
                 f"{perf.get('total_trades', 0):>6}"
             )
+            if e.accuracy:
+                hit = f" {e.accuracy.get('hit_rate', 0):>7.0%}"
+                if e.trust:
+                    hit += f" {e.trust.get('score', 0):>6.0f}"
+                lines[-1] += hit
+            if e.oos:
+                lines[-1] += f" {'⚠衰减' if e.oos.get('degraded') else '✅泛化':>8}"
 
         return "\n".join(lines)
 

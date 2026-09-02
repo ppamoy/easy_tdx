@@ -341,3 +341,33 @@ class TestBacktestCLI:
         assert "train_mean" in report and "test_mean" in report
         assert "positive_test_windows" in report and "verdict" in report
         assert "degraded" in report
+
+    def test_screen_rank_verification_columns(self):
+        """V279: screen rank 应暴露 --out-of-sample，且 RankEntry 验证字段可序列化。"""
+        from easy_tdx.cli import cli
+
+        runner = CliRunner()
+        help_result = runner.invoke(cli, ["screen", "rank", "--help"])
+        assert help_result.exit_code == 0
+        assert "--out-of-sample" in help_result.output
+
+        from easy_tdx.screen.ranker import RankEntry, SignalRanker
+
+        entry = RankEntry(
+            rank=1, code="000001", market="SZ", name="平安银行",
+            signal_date=20240101, last_close=10.0,
+            performance={"total_return": 0.1, "sharpe": 1.2},
+            accuracy={"hit_rate": 0.65, "excess_hit_rate": 0.1},
+            trust={"score": 80, "grade": "高", "verdict": "高可信度"},
+            oos={"degraded": False, "verdict": "✅ 样本外稳健"},
+        )
+        json_str = SignalRanker.to_json([entry], "TestStrategy", "sharpe")
+        assert '"accuracy"' in json_str
+        assert '"trust"' in json_str
+        assert '"oos"' in json_str
+        assert '"hit_rate"' in json_str and '"score"' in json_str
+
+        table = SignalRanker.to_table([entry], "sharpe")
+        assert "5根命中" in table
+        assert "可信度" in table
+        assert "样本外" in table

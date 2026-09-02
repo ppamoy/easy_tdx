@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**CLI screen rank 补验证维度列（V279）—— 命令行选股排名也能看准确度/可信度/样本外** —— screen rank 此前只按绩效指标（收益/夏普等）排名，缺验证结论，与 run-all（V155）/verify-multi（V119）不一致。本次给 `screen rank` 的每条结果补充 accuracy（V99 命中率）/trust（V101 可信度）/oos（V105 样本外）字段：JSON 输出直接带三组验证维度，表格输出按需追加「5根命中」「可信度」「样本外」列；新增 `--out-of-sample` 选项开启样本外计算。
+
+### 新增
+
+- **src/easy_tdx/screen/ranker.py** —— RankEntry 增加 accuracy/trust/oos 字段；_backtest_result 返回 (result, df)；_attach_verification 提取三组验证维度；to_json/to_table 输出对应字段/列。
+- **src/easy_tdx/screen/cli.py** —— rank_cmd 新增 `--out-of-sample` 选项并贯通 run_oos。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：screen rank --help 含 --out-of-sample；RankEntry 验证字段 JSON/表格序列化。
+- ruff / mypy 零告警；全量单测 **2476 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V277（V278）—— 文档覆盖选股清单 CSV 与指南自身迭代** —— V276 仅把指南更新到 V275，V277 新增的选股页「导出选股清单 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V277：标题、全景表补 V276/V277 两行、3.3 动态选股页补导出选股清单说明。
 
 ### 新增

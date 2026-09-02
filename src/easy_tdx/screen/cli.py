@@ -138,6 +138,12 @@ def scan(
 @click.option("--vipdoc", default=None, help="离线数据目录（默认自动检测）")
 @click.option("--names/--no-names", default=False, help="是否在线查询股票名称（默认关闭）")
 @click.option("--table", "use_table", is_flag=True, help="表格输出")
+@click.option(
+    "--out-of-sample",
+    "run_oos",
+    is_flag=True,
+    help="对每只股票输出样本外验证结论（V279）",
+)
 def rank_cmd(
     from_source: str,
     strategy_file: str | None,
@@ -150,6 +156,7 @@ def rank_cmd(
     vipdoc: str | None,
     names: bool,
     use_table: bool,
+    run_oos: bool,
 ) -> None:
     """对扫描结果做历史回测并按指标排名。
 
@@ -207,6 +214,7 @@ def rank_cmd(
         sort_reverse=sort_reverse,
         top_n=top_n,
         progress_callback=on_progress,
+        run_oos=run_oos,
     )
 
     # 补齐名称（可选，需要网络）
