@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router'
 import { fetchDiagnosis, fetchMultiStockComparison, formatError } from '../api'
 import type { DiagnosisResult, MultiStockResult } from '../types'
 import KlineChart from '../components/KlineChart.vue'
+import V102DecisionCard from '../components/V102DecisionCard.vue'
 import type { Bar } from '../types'
 import { fetchBars } from '../api'
 
@@ -360,6 +361,8 @@ onMounted(() => {
                 质量: {{ diagnosis.chanlun.latest_mmd.quality.grade }} ({{ diagnosis.chanlun.latest_mmd.quality.score }}分)
               </span>
             </div>
+            <!-- V102: 决策支持卡片（条件264-267） -->
+            <V102DecisionCard :mmd="diagnosis.chanlun.latest_mmd" />
             <div v-if="diagnosis.chanlun.recent_signals.length > 0" class="recent-signals">
               <div class="section-label">近3个高质量信号:</div>
               <div class="signal-list">

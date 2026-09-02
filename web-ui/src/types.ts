@@ -661,7 +661,7 @@ export interface DiagnosisChanlunMmd {
   v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
   // V102 缠论决策支持增强（条件264-267）
   v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
-  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; msg: string } | null
+  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; confidence_adjust: number; msg: string } | null
   v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
   v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
 }
@@ -692,7 +692,7 @@ export interface DiagnosisChanlunRecentSignal {
   v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
   // V102 缠论决策支持增强（条件264-267）
   v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
-  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; msg: string } | null
+  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; confidence_adjust: number; msg: string } | null
   v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
   v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
 }

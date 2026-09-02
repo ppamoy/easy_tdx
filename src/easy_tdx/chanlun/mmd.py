@@ -14187,6 +14187,7 @@ def find_mmds_v39(
 
         # 条件265：信号质量评分卡（Signal Quality Scorecard）
         # 提供全面的信号质量评估，包括各项指标得分
+        scorecard: dict[str, Any] | None = None
         try:
             scorecard = _calc_signal_quality_scorecard(mmd, closes, volumes, macd_data, volatility)
             mmd._signal_quality_scorecard = scorecard
@@ -14195,11 +14196,21 @@ def find_mmds_v39(
 
         # 条件266：决策支持输出（Decision Support Output）
         # 生成可操作的买卖建议，包括入场价、止损、止盈
+        v102_decision: dict[str, Any] | None = None
         try:
-            decision = _calc_decision_support_enhanced(mmd, closes, highs, lows, volumes, macd_data)
-            mmd._decision_support = decision
+            v102_decision = _calc_decision_support_enhanced(
+                mmd, closes, highs, lows, volumes, macd_data
+            )
+            mmd._decision_support = v102_decision
         except Exception:
             pass
+
+        # V102 条件265/266 置信度调整并入（质量等级 + 风险收益比）
+        if scorecard is not None and v102_decision is not None:
+            try:
+                _apply_v102_decision_confidence(mmd, scorecard, v102_decision)
+            except Exception:
+                pass
 
         # 条件267：历史模式匹配（Historical Pattern Matching）
         # 匹配历史相似模式，提供概率统计参考
@@ -29132,6 +29143,33 @@ def _calc_volatility_compression_breakout_v82(
 
 
 # ── V102: 条件264-267 缠论模型决策支持增强 ─────────────────────────────────────
+
+
+# 条件265：质量评分卡等级 → 置信度微调（A/B 加分、D 减分）
+_V102_GRADE_ADJ: dict[str, float] = {"A": 0.02, "B": 0.01, "C": 0.0, "D": -0.03}
+
+
+def _apply_v102_decision_confidence(
+    mmd: MMD,
+    scorecard: dict[str, Any],
+    decision: dict[str, Any],
+) -> tuple[float, float]:
+    """把 V102 条件265/266 的置信度调整并入买卖点置信度。
+
+    - 条件265（信号质量评分卡）：等级 A/B → +2%/+1%，D → -3%，C 不调整。
+    - 条件266（决策支持输出）：风险收益比 ≥3:1 → +3%，<1.5:1 → -3% 等。
+
+    同时把 grade_adj 写回 scorecard 的 confidence_adjust 字段（供 API 展示），
+    返回 (并入后的最终置信度, 总调整值)。
+    """
+    grade = str(scorecard.get("overall_grade") or "")
+    grade_adj = _V102_GRADE_ADJ.get(grade, 0.0)
+    scorecard["confidence_adjust"] = round(grade_adj, 3)
+    decision_adj = float(decision.get("confidence_adjust", 0.0) or 0.0)
+    total = round(grade_adj + decision_adj, 3)
+    if total:
+        mmd.confidence = max(0.0, min(1.0, mmd.confidence + total))
+    return mmd.confidence, total
 
 
 def _calc_multi_signal_correlation(

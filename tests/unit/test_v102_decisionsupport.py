@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from easy_tdx.chanlun.mmd import (
+    _apply_v102_decision_confidence,
     _calc_decision_support_enhanced,
     _calc_historical_pattern_matching,
     _calc_multi_signal_correlation,
@@ -208,6 +209,69 @@ class TestHistoricalPatternMatching:
         result = _calc_historical_pattern_matching(mmd, list(range(100)), None)
 
         assert "非3买/3卖信号" in result.get("msg", "")
+
+
+class TestApplyV102DecisionConfidence:
+    """测试条件265/266 置信度调整并入（_apply_v102_decision_confidence）。"""
+
+    def _mmd(self, confidence: float = 0.6) -> MMD:
+        return MMD(mmd_type=MMDType.BUY_3, msg="3买测试", confidence=confidence)
+
+    def test_good_grade_and_good_rrr_boost_confidence(self):
+        """A级质量 + RRR≥3:1 → 置信度上调 +5%。"""
+        mmd = self._mmd(0.6)
+        scorecard = {"overall_grade": "A"}
+        decision = {"confidence_adjust": 0.03}
+
+        final_conf, total = _apply_v102_decision_confidence(mmd, scorecard, decision)
+
+        assert total == 0.05
+        assert final_conf == 0.65
+        assert scorecard["confidence_adjust"] == 0.02
+
+    def test_bad_grade_and_bad_rrr_downgrade_confidence(self):
+        """D级质量 + RRR<1.5:1 → 置信度下调 -6%。"""
+        mmd = self._mmd(0.6)
+        scorecard = {"overall_grade": "D"}
+        decision = {"confidence_adjust": -0.03}
+
+        final_conf, total = _apply_v102_decision_confidence(mmd, scorecard, decision)
+
+        assert total == -0.06
+        assert final_conf == 0.54
+        assert scorecard["confidence_adjust"] == -0.03
+
+    def test_neutral_grade_no_change(self):
+        """C级质量 + 无 RRR 调整 → 置信度不变。"""
+        mmd = self._mmd(0.6)
+        scorecard = {"overall_grade": "C"}
+        decision = {"confidence_adjust": 0.0}
+
+        final_conf, total = _apply_v102_decision_confidence(mmd, scorecard, decision)
+
+        assert total == 0.0
+        assert final_conf == 0.6
+        assert scorecard["confidence_adjust"] == 0.0
+
+    def test_confidence_clamped_to_1(self):
+        """置信度接近上限时上调被钳制在 [0,1]。"""
+        mmd = self._mmd(0.98)
+        scorecard = {"overall_grade": "A"}
+        decision = {"confidence_adjust": 0.03}
+
+        final_conf, _ = _apply_v102_decision_confidence(mmd, scorecard, decision)
+
+        assert final_conf == 1.0
+
+    def test_confidence_clamped_to_0(self):
+        """置信度接近下限时下调被钳制在 [0,1]。"""
+        mmd = self._mmd(0.03)
+        scorecard = {"overall_grade": "D"}
+        decision = {"confidence_adjust": -0.03}
+
+        final_conf, _ = _apply_v102_decision_confidence(mmd, scorecard, decision)
+
+        assert final_conf == 0.0
 
 
 if __name__ == "__main__":
