@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**回测页「交易明细 CSV」（V261）—— 成交记录导出，逐笔核对模型触发的买卖点** —— 回测报告已有 Markdown/JSON/CSV 导出（V116/V153/V253 等），但成交明细（trade list）只能看表。本次在结果工具栏加「📊 交易明细 CSV」：把 store.result.trades（时间/方向/数量/价格/手续费/滑点/已实现盈亏/成本基数）导出为 Excel 友好的 CSV（跳过被拒单），下载 easy_tdx_trades_日期.csv——用户可用 Excel 逐笔核对模型买入/卖出触发点。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue** —— 新增 exportTradesCsv（trades 明细，BOM+CSV+Blob 下载）+ 结果工具栏「📊 交易明细 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页 →「交易明细 CSV」→ 下载文件含表头与 106 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V259（V260）—— 文档覆盖组合报告 CSV 与指南自身迭代** —— V258 仅把指南更新到 V257，V259 新增的组合回测报告「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V259：标题、全景表补 V258/V259 两行、3.4 组合回测页报告导出补导出 CSV 说明。
 
 ### 新增

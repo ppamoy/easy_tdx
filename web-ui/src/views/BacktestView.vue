@@ -422,6 +422,52 @@ async function copyJsonReport() {
   }
   setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
 }
+// V261: 交易明细导出 CSV（成交记录，帮助核对模型触发的买卖点）
+const tradesCsvMsg = ref('')
+function tradeCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportTradesCsv() {
+  const r = store.result
+  const trades = r?.trades as Array<Record<string, unknown>> | undefined
+  if (!r || !Array.isArray(trades) || trades.length === 0) {
+    tradesCsvMsg.value = '没有可导出的成交记录'
+    setTimeout(() => { tradesCsvMsg.value = '' }, 2500)
+    return
+  }
+  const header = ['时间', '方向', '数量', '价格', '手续费', '滑点', '已实现盈亏', '成本基数', '是否拒绝']
+  const lines = [header.join(',')]
+  trades.forEach((t) => {
+    if (t.rejected) return
+    lines.push([
+      String(t.datetime ?? ''),
+      tradeCsvEscape(String(t.direction ?? '')),
+      String(t.size ?? ''),
+      String(t.price ?? ''),
+      String(t.commission ?? ''),
+      String(t.slippage ?? ''),
+      String(t.pnl ?? ''),
+      String(t.cost_basis ?? ''),
+      String(t.rejected ?? false),
+    ].join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_trades_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    tradesCsvMsg.value = '✓ 已导出交易明细 CSV'
+  } catch {
+    tradesCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { tradesCsvMsg.value = '' }, 2500)
+}
 
 // V137: 批量验证自选股（对全局自选股用当前策略各跑一次回测，按可信度排名）
 interface BatchVerifyRow {
@@ -911,6 +957,7 @@ async function onSave() {
           <button class="ghost" @click="openSaveForm">💾 保存策略</button>
           <button class="ghost" @click="copyReport">📋 复制报告</button>
           <button class="ghost" @click="copyJsonReport">⚙ 复制 JSON</button>
+          <button class="ghost" @click="exportTradesCsv">📊 交易明细 CSV</button>
           <button class="ghost" :disabled="batchLoading" @click="runBatchVerifyWatchlist">
             {{ batchLoading ? '批量验证自选股中…' : '🗳️ 批量验证自选股' }}
           </button>
