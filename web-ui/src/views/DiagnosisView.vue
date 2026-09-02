@@ -41,6 +41,45 @@ async function runAdviceSimulate() {
   }
 }
 
+function exportAdviceCsv() {
+  const r = adviceResult.value?.report
+  if (!r || !adviceResult.value) return
+  const esc = (v: string): string => (/[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v)
+  const lines: string[] = []
+  lines.push('symbol,advice_count,win_rate,avg_return,total_return,stop_rate,tp_rate,expire_rate')
+  lines.push(
+    [
+      esc(adviceResult.value.symbol ?? ''),
+      String(r.count),
+      (r.win_rate * 100).toFixed(1) + '%',
+      (r.avg_return > 0 ? '+' : '') + r.avg_return + '%',
+      (r.total_return > 0 ? '+' : '') + r.total_return + '%',
+      (r.stop_rate * 100).toFixed(1) + '%',
+      (r.tp_rate * 100).toFixed(1) + '%',
+      (r.expire_rate * 100).toFixed(1) + '%',
+    ].join(','),
+  )
+  lines.push('')
+  lines.push('no,exit_price,exit_reason,return_pct')
+  r.trades.forEach((t, i) => {
+    lines.push([String(i + 1), t.exit_price.toFixed(2), t.exit_reason, (t.return_pct > 0 ? '+' : '') + t.return_pct].join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_v102_advice_' + (adviceResult.value.symbol ?? 'stock') + '_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  } catch {
+    // 导出失败静默
+  }
+}
+
 // V64: 多股票对比模式
 type MultiStockEntry = { market: 'SZ' | 'SH'; code: string }
 const multiMode = ref(false)
@@ -389,6 +428,9 @@ onMounted(() => {
             <div class="advice-sim-block">
               <button class="advice-sim-btn" :disabled="adviceLoading || !diagnosis" @click="runAdviceSimulate">
                 {{ adviceLoading ? '回放中…' : '▶ 回放实证（V102建议）' }}
+              </button>
+              <button v-if="adviceResult && adviceResult.report" class="advice-sim-btn" style="margin-left:6px" @click="exportAdviceCsv">
+                📊 导出 CSV
               </button>
               <div v-if="adviceError" class="advice-err">{{ adviceError }}</div>
               <div v-if="adviceResult && adviceResult.error" class="advice-err">{{ adviceResult.error }}</div>
