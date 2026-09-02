@@ -372,6 +372,8 @@ interface MonBatchRow {
   trades: number | null
   // V180: 该股样本外验证结论
   oos_degraded: boolean | null; oos_verdict: string
+  // V315: 该股 Walk-Forward 滚动验证结论
+  wf_degraded: boolean | null; wf_verdict: string
 }
 const monBatchRows = ref<MonBatchRow[]>([])
 const monBatchLoading = ref(false)
@@ -446,6 +448,8 @@ async function runMonitorBatchVerify() {
             cash: 1000000,
             out_of_sample: true,
             oos_train_ratio: 0.7,
+            use_walk_forward: true,
+            step_ratio: 0.1,
             ohlcv: bars,
           }),
         })
@@ -467,6 +471,8 @@ async function runMonitorBatchVerify() {
           trades: perf.total_trades ?? null,
           oos_degraded: oos?.degraded ?? null,
           oos_verdict: oos?.verdict ?? '',
+          wf_degraded: result.walk_forward?.degraded ?? null,
+          wf_verdict: result.walk_forward?.verdict ?? '',
         })
       } catch { /* 单只失败跳过 */ }
     }
@@ -882,7 +888,7 @@ onUnmounted(() => {
         <thead>
           <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
               <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num">交易数</th><th></th></tr>
+              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num" title="Walk-Forward 滚动验证">滚验</th><th class="num">交易数</th><th></th></tr>
         </thead>
         <tbody>
           <tr v-for="(r, i) in sortedMonBatchRows" :key="r.symbol">
@@ -894,6 +900,7 @@ onUnmounted(() => {
             <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ monPct(r.excess_hit_rate) }}</td>
             <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ monTrust(r) }}</td>
             <td class="num" :class="monOosCls(r)" :title="monOosTitle(r)">{{ monOosLabel(r) }}</td>
+            <td class="num" :title="r.wf_verdict || ''">{{ r.wf_degraded === null || r.wf_degraded === undefined ? '-' : (r.wf_degraded ? '⚠递减' : '✅稳') }}</td>
             <td class="num">{{ r.trades ?? '-' }}</td>
             <td><button class="ghost small" @click="viewMonBatchStock(r)">查看该股</button></td>
           </tr>

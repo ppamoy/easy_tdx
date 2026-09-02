@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**监控页批量验证补「滚验」列（V315）—— 监控批量验证也看滚动窗口防过拟合判定** —— 回测页批量验证已加「滚验」列（V313），监控页批量验证（V143）此前每股只有样本外。本次给监控批量验证逐只请求 use_walk_forward，行内填充 wf_degraded/wf_verdict，表格新增「滚验」列（✅稳 / ⚠递减，悬停显示判定）——与回测页 V313 / CLI V243 对齐。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— MonBatchRow 增加 wf_degraded/wf_verdict；批量验证请求带 use_walk_forward/step_ratio；表格新增「滚验」列。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：监控页批量验证监控股 →「滚验」列可见、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V313（V314）—— 文档覆盖批量验证滚验列与指南自身迭代** —— V312 仅把指南更新到 V311，V313 新增的回测页批量验证「滚验」列未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V313：标题、全景表补 V312/V313 两行、3.1 回测页批量验证条目补滚验列说明。
 
 ### 新增
