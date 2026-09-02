@@ -55,6 +55,20 @@ class StockIdentifier(BaseModel):
     code: str = Field(..., min_length=6, max_length=6, description="6位股票代码")
 
 
+class AdviceSimulateRequest(StockIdentifier):
+    """V102 建议回放实证请求（3买/3卖 建议在历史行情上回放）。
+
+    Attributes:
+        category: K线周期（DAY 等）
+        count: 拉取的 K 线数量（≥30）
+        max_hold: 建议最大持有根数（1-60）
+    """
+
+    category: str = Field("DAY", description="K线周期")
+    count: int = Field(500, ge=30, le=2000, description="K线数量")
+    max_hold: int = Field(10, ge=1, le=60, description="最大持有根数")
+
+
 class QuoteRequest(BaseModel):
     """Batch quote request."""
 

@@ -91,6 +91,61 @@ class TestSimulateAdviceTrade:
         )
         assert result["exit_reason"] == "stop"
 
+    def test_short_stop_triggered(self):
+        """卖出建议：价格上行突破止损（上方）→ 亏损单。"""
+        closes = [100, 100]
+        highs = [101, 104]  # 第二根突破上方止损 103
+        lows = [99, 99]
+        result = simulate_advice_trade(
+            highs,
+            lows,
+            closes,
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=103.0,
+            take_profit_1=96.0,
+            max_hold=5,
+            direction="short",
+        )
+        assert result["exit_reason"] == "stop"
+        assert result["exit_price"] == 103.0
+        assert result["return_pct"] == -3.0
+
+    def test_short_take_profit_triggered(self):
+        """卖出建议：价格下行达止盈（下方）→ 盈利单。"""
+        closes = [100, 100]
+        highs = [101, 101]
+        lows = [99, 95]  # 第二根跌破下方止盈 96
+        result = simulate_advice_trade(
+            highs,
+            lows,
+            closes,
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=103.0,
+            take_profit_1=96.0,
+            max_hold=5,
+            direction="short",
+        )
+        assert result["exit_reason"] == "tp1"
+        assert result["exit_price"] == 96.0
+        assert result["return_pct"] == 4.0
+
+    def test_short_invalid_shape(self):
+        """卖出建议止损低于止盈 → 无效。"""
+        result = simulate_advice_trade(
+            [101, 101],
+            [99, 99],
+            [100, 100],
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=96.0,
+            take_profit_1=103.0,
+            max_hold=5,
+            direction="short",
+        )
+        assert result["exit_reason"] == "invalid"
+
     def test_invalid_advice_shape(self):
         """止损不低于止盈的建议视为无效。"""
         result = simulate_advice_trade(

@@ -23,6 +23,7 @@ import type {
   TaskState,
   TaskSubmitResponse,
   MultiStockComparisonResponse,
+  AdviceSimulateResult,
 } from './types'
 
 const BASE = '/api/v1'
@@ -325,6 +326,23 @@ export async function fetchDiagnosis(market: string, code: string): Promise<Diag
   const resp = await fetch(`${BASE}/diagnosis/quick?market=${market}&code=${code}`)
   if (!resp.ok) await throwError(resp)
   return (await resp.json()) as DiagnosisResult
+}
+
+/** V102 建议回放实证：对 3买/3卖 信号生成建议并在历史行情回放。 */
+export async function fetchAdviceSimulate(
+  market: string,
+  code: string,
+  category = 'DAY',
+  count = 500,
+  maxHold = 10,
+): Promise<AdviceSimulateResult> {
+  const resp = await fetch(`${BASE}/diagnosis/advice-simulate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ market, code, category, count, max_hold: maxHold }),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as AdviceSimulateResult
 }
 
 // ── V64: 多股票对比分析 ──────────────────────────────────────────────────────

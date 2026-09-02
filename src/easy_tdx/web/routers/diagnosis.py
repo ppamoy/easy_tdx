@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends
 
 from easy_tdx.web.convert import category_from_str, market_from_str
 from easy_tdx.web.deps import get_client
-from easy_tdx.web.schemas import StockIdentifier
+from easy_tdx.web.schemas import AdviceSimulateRequest, StockIdentifier
 
 
 def _to_json_safe(obj: Any) -> Any:
@@ -2673,6 +2673,108 @@ async def quick_diagnosis(
         return {"error": "请提供股票代码"}
     req = StockIdentifier(market=market, code=code)
     return await diagnose_stock(req, client)
+
+
+# ── V102 建议回放实证 ───────────────────────────────────────────────────────
+
+
+def _collect_v102_advices(
+    result: Any,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+    max_hold: int,
+) -> list[dict[str, Any]]:
+    """从缠论结果中提取 3买/3卖 信号的可回放建议（V102 条件266）。
+
+    对每个 3买/3卖 信号，用截至信号日的行情窗口生成 入场/止损/止盈 建议，
+    输出供 advice_simulator 回放的建议条目（含方向 long/short）。
+    """
+    from easy_tdx.chanlun.mmd import _calc_decision_support_enhanced  # noqa: PLC0415
+    from easy_tdx.chanlun.types import MMDType  # noqa: PLC0415
+
+    advices: list[dict[str, Any]] = []
+    for mmd in result.mmds:
+        if mmd.mmd_type not in (MMDType.BUY_3, MMDType.SELL_3) or mmd.bi is None:
+            continue
+        end_k = getattr(mmd.bi.end, "k", None)
+        idx = getattr(end_k, "k_index", None)
+        if idx is None:
+            idx = getattr(mmd.bi.end, "index", None)
+        if idx is None or idx < 0 or idx >= len(closes):
+            continue
+        window_end = min(idx + 1, len(closes))
+        decision = _calc_decision_support_enhanced(
+            mmd,
+            closes[:window_end],
+            highs[:window_end],
+            lows[:window_end],
+            None,
+            None,
+        )
+        if not decision or not decision.get("entry_price") or decision["entry_price"] <= 0:
+            continue
+        advices.append(
+            {
+                "entry_idx": idx,
+                "entry_price": decision["entry_price"],
+                "stop_loss": decision["stop_loss"],
+                "take_profit_1": decision["take_profit_1"],
+                "max_hold": max_hold,
+                "direction": "long" if mmd.mmd_type == MMDType.BUY_3 else "short",
+            }
+        )
+    return advices
+
+
+@router.post("/diagnosis/advice-simulate")
+async def advice_simulate(
+    req: AdviceSimulateRequest,
+    client: Any = Depends(get_client),
+) -> dict[str, Any]:
+    """V102 建议回放实证：对 3买/3卖 信号生成建议并在历史行情上回放。
+
+    回答「本标的最近出现的 3买/3卖 信号，按模型给的入场/止损/止盈执行，
+    历史上的结果如何」——每笔的出场原因（止损/止盈/到期）与收益，
+    以及批量胜率/平均收益汇总。
+    """
+    from easy_tdx.backtest.advice_simulator import simulate_advice_batch  # noqa: PLC0415
+    from easy_tdx.chanlun import ChanlunAnalyser  # noqa: PLC0415
+
+    symbol = f"{req.market}{req.code}"
+    df = await client.get_security_bars(
+        market_from_str(req.market),
+        req.code,
+        category_from_str(req.category),
+        0,
+        req.count,
+    )
+    if df is None or len(df) < 30:
+        return {"symbol": symbol, "error": "行情数据不足（<30 根），无法回放建议"}
+
+    analyser = ChanlunAnalyser(code=symbol, frequency="daily")
+    result = analyser.process_klines(df)
+    closes = [k.close for k in result.klines]
+    highs = [k.high for k in result.klines]
+    lows = [k.low for k in result.klines]
+
+    advices = _collect_v102_advices(result, closes, highs, lows, req.max_hold)
+    if not advices:
+        return {
+            "symbol": symbol,
+            "signal_count": len(result.mmds),
+            "advice_count": 0,
+            "report": None,
+            "message": f"近 {len(closes)} 根K线未发现 3买/3卖 信号，无法生成可回放建议",
+        }
+
+    report = simulate_advice_batch(highs, lows, closes, advices)
+    return {
+        "symbol": symbol,
+        "signal_count": len(result.mmds),
+        "advice_count": len(advices),
+        "report": report,
+    }
 
 
 @router.post("/diagnosis/multi-stock")

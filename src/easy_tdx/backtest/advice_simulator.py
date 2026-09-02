@@ -4,9 +4,10 @@
 逐根回放，回答「按这条建议执行，这笔交易会以什么价格出场、赚还是亏」：
 
 - 入场后从下一根 K 线开始扫描（信号当日已收盘，次日执行）
-- 某根 low <= stop_loss（向下穿越止损）→ 以止损价出场（止损优先，保守假设）
-- 某根 high >= take_profit_1（向上穿越止盈）→ 以止盈价出场
+- 买入建议（direction="long"）：low <= 止损 → 亏损出场；high >= 止盈 → 盈利出场
+- 卖出建议（direction="short"）：high >= 止损 → 亏损出场；low <= 止盈 → 盈利出场
 - 超过 max_hold 根未触发 → 以最后一根收盘价结算
+- 同一根 K 线同时触发止损与止盈时，止损优先（保守假设）
 
 与回测引擎的区别：不模拟资金/仓位/滑点，只验证建议的价位可执行性与期望收益
 特征，供用户核对模型给出的「入场/止损/止盈」是否合理、经历史回放是否有效。
@@ -15,6 +16,16 @@
 from __future__ import annotations
 
 from typing import Any
+
+
+def _invalid(entry_idx: int, entry_price: float) -> dict[str, Any]:
+    return {
+        "exit_idx": entry_idx,
+        "exit_price": round(entry_price, 4),
+        "exit_reason": "invalid",
+        "return_pct": 0.0,
+        "profit": 0.0,
+    }
 
 
 def simulate_advice_trade(
@@ -27,6 +38,7 @@ def simulate_advice_trade(
     stop_loss: float,
     take_profit_1: float,
     max_hold: int = 10,
+    direction: str = "long",
 ) -> dict[str, Any]:
     """模拟单笔按建议执行的交易。
 
@@ -39,61 +51,66 @@ def simulate_advice_trade(
         stop_loss: 建议止损价
         take_profit_1: 第一止盈价
         max_hold: 最大持有根数（超出未触发按收盘结算）
+        direction: "long"（买入：止损<止盈）或 "short"（卖出：止损>止盈）
 
     Returns:
         dict：{exit_idx, exit_price, exit_reason, return_pct, profit}
     """
     n = len(closes)
-    if entry_idx < 0 or entry_idx + 1 >= n:
-        return {
-            "exit_idx": entry_idx,
-            "exit_price": entry_price,
-            "exit_reason": "invalid",
-            "return_pct": 0.0,
-            "profit": 0.0,
-        }
+    if entry_idx < 0 or entry_idx + 1 >= n or entry_price <= 0:
+        return _invalid(entry_idx, entry_price)
 
-    # 本模拟器面向买入类建议（止损在下方、止盈在上方）；
-    # 卖出类建议先由上层换算为等价的「做多模拟」或直接跳过。
-    if stop_loss <= 0 or take_profit_1 <= stop_loss:
-        return {
-            "exit_idx": entry_idx,
-            "exit_price": entry_price,
-            "exit_reason": "invalid",
-            "return_pct": 0.0,
-            "profit": 0.0,
-        }
+    direction = str(direction or "long").lower()
+    if direction not in ("long", "short"):
+        return _invalid(entry_idx, entry_price)
 
-    stop_price = stop_loss
-    tp_price = take_profit_1
+    if direction == "long":
+        if stop_loss <= 0 or take_profit_1 <= stop_loss:
+            return _invalid(entry_idx, entry_price)
+        stop_price = stop_loss
+        tp_price = take_profit_1
+    else:
+        if stop_loss <= 0 or take_profit_1 >= stop_loss:
+            return _invalid(entry_idx, entry_price)
+        stop_price = stop_loss
+        tp_price = take_profit_1
 
-    exit_idx = entry_idx + max_hold
+    exit_idx = min(entry_idx + max_hold, n - 1)
     exit_reason = "expire"
-    last_close = closes[min(exit_idx, n - 1)]
-    # 到期结算价：最后一根被判断 K 线的收盘（若越界取序列末尾）
-    for i in range(entry_idx + 1, min(entry_idx + 1 + max_hold, n)):
-        if lows[i] <= stop_price:
+    exit_price = closes[exit_idx]
+
+    last_check = min(entry_idx + 1 + max_hold, n)
+    for i in range(entry_idx + 1, last_check):
+        if direction == "long":
+            stop_hit = lows[i] <= stop_price
+            tp_hit = highs[i] >= tp_price
+        else:
+            stop_hit = highs[i] >= stop_price
+            tp_hit = lows[i] <= tp_price
+
+        if stop_hit:
             exit_idx = i
             exit_price = stop_price
             exit_reason = "stop"
             break
-        if highs[i] >= tp_price:
+        if tp_hit:
             exit_idx = i
             exit_price = tp_price
             exit_reason = "tp1"
             break
     else:
         exit_idx = min(entry_idx + max_hold, n - 1)
-        exit_price = last_close
+        exit_price = closes[exit_idx]
         exit_reason = "expire"
 
-    return_pct = round((exit_price - entry_price) / entry_price * 100.0, 2) if entry_price else 0.0
+    raw_return = (exit_price - entry_price) / entry_price * 100.0
+    return_pct = round(raw_return if direction == "long" else -raw_return, 2)
     return {
         "exit_idx": exit_idx,
         "exit_price": round(exit_price, 4),
         "exit_reason": exit_reason,
         "return_pct": return_pct,
-        "profit": round(exit_price - entry_price, 4),
+        "profit": round((exit_price - entry_price) * (1 if direction == "long" else -1), 4),
     }
 
 
@@ -107,7 +124,8 @@ def simulate_advice_batch(
 
     Args:
         highs / lows / closes: K 线序列
-        advices: 每条含 entry_idx/entry_price/stop_loss/take_profit_1/max_hold
+        advices: 每条含 entry_idx/entry_price/stop_loss/take_profit_1/max_hold，
+            可选 direction（long/short，默认 long）
 
     Returns:
         dict：{trades: [单笔结果], count, win_rate, avg_return, total_return,
@@ -120,6 +138,7 @@ def simulate_advice_batch(
         stop = float(adv.get("stop_loss", 0.0) or 0.0)
         tp1 = float(adv.get("take_profit_1", 0.0) or 0.0)
         hold = int(adv.get("max_hold", 10) or 10)
+        direction = str(adv.get("direction", "long") or "long")
         if idx < 0 or entry <= 0 or stop <= 0 or tp1 <= 0:
             continue
         trades.append(
@@ -132,6 +151,7 @@ def simulate_advice_batch(
                 stop_loss=stop,
                 take_profit_1=tp1,
                 max_hold=hold,
+                direction=direction,
             )
         )
 

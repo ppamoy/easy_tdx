@@ -2895,3 +2895,33 @@ export interface MultiStockComparisonResponse {
   stocks: MultiStockResult[]
   count: number
 }
+
+// ── V102 建议回放实证 ─────────────────────────────────────────────────────────
+
+export interface AdviceSimulateTrade {
+  exit_idx: number
+  exit_price: number
+  exit_reason: 'stop' | 'tp1' | 'expire' | 'invalid'
+  return_pct: number
+  profit: number
+}
+
+export interface AdviceSimulateReport {
+  trades: AdviceSimulateTrade[]
+  count: number
+  win_rate: number
+  avg_return: number
+  total_return: number
+  stop_rate: number
+  tp_rate: number
+  expire_rate: number
+}
+
+export interface AdviceSimulateResult {
+  symbol: string
+  signal_count?: number
+  advice_count: number
+  report: AdviceSimulateReport | null
+  message?: string
+  error?: string
+}

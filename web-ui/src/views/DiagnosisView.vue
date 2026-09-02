@@ -4,8 +4,8 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchDiagnosis, fetchMultiStockComparison, formatError } from '../api'
-import type { DiagnosisResult, MultiStockResult } from '../types'
+import { fetchDiagnosis, fetchMultiStockComparison, fetchAdviceSimulate, formatError } from '../api'
+import type { AdviceSimulateResult, DiagnosisResult, MultiStockResult } from '../types'
 import KlineChart from '../components/KlineChart.vue'
 import V102DecisionCard from '../components/V102DecisionCard.vue'
 import type { Bar } from '../types'
@@ -18,6 +18,28 @@ const code = ref('000001')
 const loading = ref(false)
 const error = ref('')
 const diagnosis = ref<DiagnosisResult | null>(null)
+
+// V322: V102 建议回放实证（3买/3卖 建议在历史行情回放）
+const adviceResult = ref<AdviceSimulateResult | null>(null)
+const adviceLoading = ref(false)
+const adviceError = ref('')
+
+const reasonText = (r: string): string => ({ stop: '止损', tp1: '止盈', expire: '到期', invalid: '无效' }[r] ?? r)
+
+async function runAdviceSimulate() {
+  const c = code.value.trim()
+  if (!c.match(/^\d{6}$/)) return
+  adviceLoading.value = true
+  adviceError.value = ''
+  adviceResult.value = null
+  try {
+    adviceResult.value = await fetchAdviceSimulate(market.value, c, 'DAY', 500, 10)
+  } catch (e) {
+    adviceError.value = formatError(e)
+  } finally {
+    adviceLoading.value = false
+  }
+}
 
 // V64: 多股票对比模式
 type MultiStockEntry = { market: 'SZ' | 'SH'; code: string }
@@ -363,6 +385,36 @@ onMounted(() => {
             </div>
             <!-- V102: 决策支持卡片（条件264-267） -->
             <V102DecisionCard :mmd="diagnosis.chanlun.latest_mmd" />
+            <!-- V322: 建议回放实证 -->
+            <div class="advice-sim-block">
+              <button class="advice-sim-btn" :disabled="adviceLoading || !diagnosis" @click="runAdviceSimulate">
+                {{ adviceLoading ? '回放中…' : '▶ 回放实证（V102建议）' }}
+              </button>
+              <div v-if="adviceError" class="advice-err">{{ adviceError }}</div>
+              <div v-if="adviceResult && adviceResult.error" class="advice-err">{{ adviceResult.error }}</div>
+              <div v-if="adviceResult && adviceResult.message" class="advice-msg">{{ adviceResult.message }}</div>
+              <div v-if="adviceResult && adviceResult.report" class="advice-report">
+                <div class="advice-summary">
+                  建议 {{ adviceResult.report.count }} 笔 · 胜率 {{ (adviceResult.report.win_rate * 100).toFixed(0) }}% ·
+                  平均 {{ adviceResult.report.avg_return > 0 ? '+' : '' }}{{ adviceResult.report.avg_return }}% ·
+                  累计 {{ adviceResult.report.total_return > 0 ? '+' : '' }}{{ adviceResult.report.total_return }}%
+                  <span class="advice-dist">止损 {{ (adviceResult.report.stop_rate * 100).toFixed(0) }}% / 止盈 {{ (adviceResult.report.tp_rate * 100).toFixed(0) }}% / 到期 {{ (adviceResult.report.expire_rate * 100).toFixed(0) }}%</span>
+                </div>
+                <table class="advice-table">
+                  <thead>
+                    <tr><th>#</th><th>出场价</th><th>原因</th><th>收益%</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(t, i) in adviceResult.report.trades" :key="i">
+                      <td>{{ i + 1 }}</td>
+                      <td>{{ t.exit_price.toFixed(2) }}</td>
+                      <td>{{ reasonText(t.exit_reason) }}</td>
+                      <td :class="t.return_pct >= 0 ? 'buy' : 'sell'">{{ t.return_pct > 0 ? '+' : '' }}{{ t.return_pct }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
             <div v-if="diagnosis.chanlun.recent_signals.length > 0" class="recent-signals">
               <div class="section-label">近3个高质量信号:</div>
               <div class="signal-list">
@@ -6199,4 +6251,72 @@ onMounted(() => {
 .v80-weak { background: rgba(245,158,11,0.15); color: #f59e0b; }
 .v80-mixed { background: rgba(107,114,128,0.15); color: #9ca3af; }
 .v79v80-detail { color: var(--text-secondary); font-size: 11px; }
+
+/* V322: 建议回放实证 */
+.advice-sim-block {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+.advice-sim-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: rgba(74, 158, 255, 0.1);
+  color: var(--accent);
+  cursor: pointer;
+  font-weight: 600;
+}
+.advice-sim-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.advice-err {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #ef4444;
+}
+.advice-msg {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.advice-report {
+  margin-top: 6px;
+  font-size: 11px;
+}
+.advice-summary {
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.advice-dist {
+  font-weight: 400;
+  color: var(--text-dim);
+  margin-left: 6px;
+}
+.advice-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.advice-table th,
+.advice-table td {
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  text-align: left;
+}
+.advice-table th {
+  background: rgba(128, 128, 128, 0.08);
+  font-weight: 600;
+}
+.advice-table td.buy {
+  color: #22c55e;
+  font-weight: 600;
+}
+.advice-table td.sell {
+  color: #ef4444;
+  font-weight: 600;
+}
 </style>
