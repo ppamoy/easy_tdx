@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**「查看该股」跳转携带策略参数（V309）—— 从批量验证直达同策略单标回测** —— 批量验证五处「查看该股」（V118/V137/V237/V239/V247）此前只带 symbol/category 跳转，回测页用默认策略，与批量验证所用策略不一致，需手动重新选择。本次给 router.push 跳转（组合候选 V237/监控 V239/寻优 V247）补 strategy + params query（回测页 onMounted 已支持 qStrategy/qParams 回填），回测/选股同页切换本就沿用当前策略无需改——从批量验证直达的同策略单标回测。
+
+### 新增
+
+- **web-ui/src/views/PortfolioView.vue / MonitorView.vue / OptimizeView.vue** —— viewCandStock/viewMonBatchStock/viewOptBatchStock 的 router.push query 补 strategy/params。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归（组合候选代表）：批量验证 →「查看该股」→ 跳转 URL 含 strategy/params、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V307（V308）—— 文档覆盖 verify 表格与指南自身迭代** —— V306 仅把指南更新到 V305，V307 新增的 verify `--table` 输出未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V307：标题、全景表补 V306/V307 两行、3.9 命令行节 verify 条目补 --table 说明。
 
 ### 新增

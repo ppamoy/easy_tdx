@@ -536,9 +536,15 @@ function optBatchOosTitle(r: OptBatchRow): string {
 }
 // V247: 从寻优批量验证直达该股单标回测（与选股 V118 / 回测 V137 / 组合候选 V237 / 监控 V239 对齐）
 function viewOptBatchStock(r: OptBatchRow) {
+  const best = optBestStrategy()
   router.push({
     path: '/',
-    query: { symbol: r.market + r.code, category: 'DAY' },
+    query: {
+      symbol: r.market + r.code,
+      category: 'DAY',
+      strategy: best?.name ?? '',
+      params: JSON.stringify(best?.params ?? {}),
+    },
   })
 }
 const optBatchCopyMsg = ref('')

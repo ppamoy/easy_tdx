@@ -492,7 +492,12 @@ function monTrust(r: typeof monBatchRows.value[number]): string {
 function viewMonBatchStock(r: typeof monBatchRows.value[number]) {
   monRouter.push({
     path: '/',
-    query: { symbol: r.market + r.code, category: 'DAY' },
+    query: {
+      symbol: r.market + r.code,
+      category: 'DAY',
+      strategy: batchStrategy.value,
+      params: '{}',
+    },
   })
 }
 // V263: 信号列表导出 CSV（模型发现的缠论买卖点信号）

@@ -225,7 +225,12 @@ function addCandToPortfolio(r: CandRow) {
 function viewCandStock(r: CandRow) {
   router.push({
     path: '/',
-    query: { symbol: r.market + r.code, category: 'DAY' },
+    query: {
+      symbol: r.market + r.code,
+      category: 'DAY',
+      strategy: strategy.value,
+      params: JSON.stringify(params.value ?? {}),
+    },
   })
 }
 function addAllCands() {
