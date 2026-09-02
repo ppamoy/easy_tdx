@@ -88,6 +88,7 @@ V102 在缠论买卖点（3买/3卖）上额外给出**可执行建议**（条�
 ```bash
 easy-tdx advice SZ 000001
 easy-tdx advice SZ 000001 --max-hold 15 --table
+easy-tdx advice SZ 000001 --output md   # Markdown 报告（V370，与离线版对齐）
 ```
 
 ### 3) 回测：缠论策略按 V102 建议自动止损止盈
