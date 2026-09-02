@@ -1,4 +1,4 @@
-# 模型准确度验证指南（V95–V277）
+# 模型准确度验证指南（V95–V279）
 
 > 本文档汇总 easy-tdx 自 V95 起新增的「通过历史回测验证模型/策略准确度」能力。
 > 目标：让用户不只是看账户盈亏，而是能回答三件事——**信号准不准、稳健不稳健、过不过拟合**。
@@ -185,6 +185,8 @@
 | V275 | 对比页「复制 JSON」 | 跨任务对比结果机器可读导出 | 对比页「指标对比」区「⚙ 复制 JSON」 |
 | V276 | 模型准确度验证指南扩展到 V275 | 文档覆盖对比 JSON 导出入口 | docs/model-accuracy-guide.md |
 | V277 | 选股页「导出选股清单 CSV」 | 筛选结果明细 Excel 友好导出 | 选股页「筛选结果」面板头「📊 导出 CSV」 |
+| V278 | 模型准确度验证指南扩展到 V277 | 文档覆盖选股清单 CSV 导出入口 | docs/model-accuracy-guide.md |
+| V279 | CLI screen rank 补验证维度列 | 命令行选股排名也能看准确度/可信度/样本外 | easy-tdx screen rank --out-of-sample |
 
 ## 二、核心概念
 
@@ -262,6 +264,7 @@
 ### 3.9 命令行（CLI）
 
 - `easy-tdx verify SZ 000001 --strategy ma_cross --segments 3 --out-of-sample`（V117）：单标的完整验证报告 JSON，verdict 汇总全部结论；加 `--output-file 路径`（V172）把报告写入文件；加 `--walk-forward`（V225）输出滚动窗口防过拟合判定（与 Web 寻优页 V123 对齐）。
+- `easy-tdx screen scan --strategy strategies/rsi_reversal.py | easy-tdx screen rank --from - --table`（V279）：策略选股扫描 + 回测排名；rank 每条结果带 accuracy（V99 命中率）/trust（V101 可信度）/oos（V105 样本外，加 `--out-of-sample` 开启）三组验证维度——命令行选股排名也能按验证结论比较。
 - `easy-tdx verify-multi "SZ 000001,SH 600519" --strategy ma_cross`（V119）：多标的批量验证，按可信度降序排名选股，适合脚本/Agent；加 `--segments 3 --out-of-sample`（V132）可让每只标的额外输出 overfit_likely/oos_degraded/train_return/test_return；加 `--only-robust`（V199，需同时 --out-of-sample）可只输出样本外 ✅泛化 的标的；加 `--walk-forward`（V243）对每只标的输出滚动窗口防过拟合判定（wf_degraded/wf_verdict）。
 - `easy-tdx verify-portfolio "SZ 000001,SZ 000002" --strategy ma_cross --out-of-sample`（V176）：组合模型验证，输出组合绩效 + accuracy_summary（V99）+ portfolio_trust（V103）+ 组合样本外（V126）+ verdict，补齐 CLI 验证系列；加 `--only-robust`（V241，需同时 --out-of-sample）只输出组合中样本外 ✅泛化 的标的（individual_results/equity_allocation 收敛到稳健子集）。
 - `easy-tdx reverify --ids <id,...>`（V213）：策略库一键重验——逐条对单标/组合策略用原标的重新回测（含样本外与分段稳健性），刷新快照 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at；支持多策略组合（V229）：对 context.items 各策略在原标的上重跑 MultiStrategyEngine 组合回测（含 V128 逐槽样本外），三类策略全部可一键刷新验证结论；加 `--walk-forward`（V245）单标重验时快照也含滚动窗口防过拟合判定。

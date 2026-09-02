@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V279（V280）—— 文档覆盖 screen rank 验证列与指南自身迭代** —— V278 仅把指南更新到 V277，V279 新增的 CLI screen rank 验证维度未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V279：标题、全景表补 V278/V279 两行、3.9 命令行节新增 screen rank 条目。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V279；全景表补 V278/V279；3.9 命令行节新增「screen scan | screen rank」（V279）条目。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **CLI screen rank 补验证维度列（V279）—— 命令行选股排名也能看准确度/可信度/样本外** —— screen rank 此前只按绩效指标（收益/夏普等）排名，缺验证结论，与 run-all（V155）/verify-multi（V119）不一致。本次给 `screen rank` 的每条结果补充 accuracy（V99 命中率）/trust（V101 可信度）/oos（V105 样本外）字段：JSON 输出直接带三组验证维度，表格输出按需追加「5根命中」「可信度」「样本外」列；新增 `--out-of-sample` 选项开启样本外计算。
 
 ### 新增
