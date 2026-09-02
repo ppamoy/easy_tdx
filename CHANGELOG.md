@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V287（V288）—— 文档覆盖回测 Walk-Forward 与指南自身迭代** —— V286 仅把指南更新到 V285，V287 新增的回测页 Walk-Forward 滚动验证入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V287：标题、全景表补 V286/V287 两行、3.1 回测页第 3 步补 Walk-Forward 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V287；全景表补 V286/V287；3.1 回测页第 3 步报告区补「🔁 Walk-Forward 滚动验证」（V287）说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **回测页 Walk-Forward 滚动验证（V287）—— Web 单标回测补齐防过拟合维度** —— CLI verify 已有 --walk-forward（V225），Web 回测页此前只有分段稳健性/样本外验证，缺滚动窗口维度。本次给回测页加「Walk-Forward 滚动验证」勾选：请求带 use_walk_forward/step_ratio，后端单标回测复用 _compute_walk_forward_single 计算 walk_forward（windows/train_mean/test_mean/degraded/verdict），报告区渲染「🔁 Walk-Forward 滚动窗口验证」面板，「📋 复制报告」同步补该段——与 CLI V225 / 寻优页 V123 对齐。
 
 ### 新增
