@@ -311,6 +311,7 @@ async function checkSignals(taskId: string) {
     const data = await resp.json()
     if (data.new_signals && data.new_signals.length > 0) {
       newSignals.value = [...data.new_signals, ...newSignals.value].slice(0, 20)
+      saveSignalsPersist()
       // 浏览器通知
       if (Notification.permission === 'granted') {
         new Notification('easy-tdx 信号提醒', {
@@ -728,10 +729,24 @@ async function saveMonBatchAsPortfolio() {
   }
 }
 
+// V311: 监控信号列表持久化（存 localStorage，刷新恢复）
+const SIGNALS_KEY = 'easy_tdx_mon_signals'
+function saveSignalsPersist() {
+  try { localStorage.setItem(SIGNALS_KEY, JSON.stringify(newSignals.value)) } catch { /* ignore */ }
+}
+function restoreSignalsPersist() {
+  try {
+    const raw = localStorage.getItem(SIGNALS_KEY)
+    if (raw) newSignals.value = JSON.parse(raw).slice(0, 20)
+  } catch { /* ignore */ }
+}
+
 onMounted(async () => {
   loadWatchList()
   await loadTasks()
   await loadMonitorStrategies()
+  // V311: 恢复上次监控信号列表（如有）
+  restoreSignalsPersist()
   // V219: 恢复上次监控批量验证结果（如有）
   restoreMonBatchPersist()
   // 请求通知权限

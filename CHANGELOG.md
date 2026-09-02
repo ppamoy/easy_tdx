@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**监控页信号列表持久化（V311）—— 刷新/切页自动恢复已发现的买卖点信号** —— 对比页（V295）与批量验证五处（V217/V219/V221/V223/V231）已持久化，监控页「🔔 新信号」面板此前只存内存、刷新即丢。本次加 localStorage 持久化：信号追加/清除时写入 easy_tdx_mon_signals，onMounted 自动恢复——最近发现的缠论买卖点信号刷新不丢，与全站持久化系列对齐。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— 新增 saveSignalsPersist/restoreSignalsPersist（信号列表持久化）+ onMounted 恢复。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归（真实信号流）：监控页阈值 0.5 → 信号面板 5 条 → 刷新 → 自动恢复 5 条、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V309（V310）—— 文档覆盖查看该股策略参数与指南自身迭代** —— V308 仅把指南更新到 V307，V309 新增的「查看该股」跳转携带策略参数未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V309：标题、全景表补 V308/V309 两行、3.4/3.5/3.7 三处批量验证「查看该股」条目补策略参数说明。
 
 ### 新增
