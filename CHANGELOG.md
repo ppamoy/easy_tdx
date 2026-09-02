@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V275（V276）—— 文档覆盖对比 JSON 与指南自身迭代** —— V274 仅把指南更新到 V273，V275 新增的对比页「复制 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V275：标题、全景表补 V274/V275 两行、3.6 策略库与对比页对比条目补 JSON 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V275；全景表补 V274/V275；3.6「结果对比页（V102）」条目补「⚙ 复制 JSON」（V275）说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **对比页「复制 JSON」（V275）—— 跨任务对比结果机器可读导出** —— 对比页「指标对比」已有「📊 导出 CSV」（V267）但缺 JSON，与其它页面 JSON 导出系列（V153/V157/V158/V162/V166 等）不一致。本次加「⚙ 复制 JSON」：把所选任务的 label/performance/model_trust/signal_accuracy/segment_robustness/out_of_sample 打包为结构化 JSON 复制到剪贴板，Agent/脚本友好。
 
 ### 新增
