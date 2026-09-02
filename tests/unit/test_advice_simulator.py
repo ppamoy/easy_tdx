@@ -374,6 +374,19 @@ class TestAdviceCli:
         assert "csv" in res.output  # V329: --output 支持 csv
         assert "回放" in res.output
 
+    def test_offline_advice_help(self):
+        """V351: offline advice 子命令（本地 .day 日线 → V102 建议回放）注册可见。"""
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_offline import offline
+
+        runner = CliRunner()
+        res = runner.invoke(offline, ["--help"])
+        assert res.exit_code == 0
+        assert "advice" in res.output
+        # 帮助文本说明其用途：无需网络跑 V102 建议回放
+        assert "V102" in res.output
+
 
 class TestSummarizeBatch:
     """多标的批量汇总（summarize_batch）。"""

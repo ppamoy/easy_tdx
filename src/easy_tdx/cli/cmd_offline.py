@@ -692,3 +692,86 @@ def sync_all(vipdoc: str | None) -> None:
         f"失败 {failed} | 共写入 {total_written} 条"
     )
     click.echo(summary)
+
+
+@offline.command()
+@click.argument("market")
+@click.argument("code")
+@click.option("--count", default=0, type=int, help="读取K线条数（0=全部）")
+@click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
+@click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
+def advice(
+    market: str,
+    code: str,
+    count: int,
+    max_hold: int,
+    output_fmt: str,
+) -> None:
+    """用本地 .day 日线跑 V102 建议回放（无需网络/通达信连接）。
+
+    MARKET: 市场代码（SZ/SH）
+    CODE: 6 位股票代码
+
+    读取本地日线 → 缠论分析 → 对 3买/3卖 信号生成 V102 建议
+    → 用 advice_simulator 逐笔回放（止损/止盈/到期）→ 输出汇总与每笔明细。
+
+    示例：
+
+      easy-tdx offline advice SZ 000001 --output csv
+    """
+    from .output import print_error, print_output
+    from .parsers import parse_market
+
+    try:
+        from ..offline import find_daily_bar_file, read_daily_bars
+    except Exception as e:
+        print_error(f"离线模块不可用: {e}")
+        raise SystemExit(1)
+
+    try:
+        filepath = find_daily_bar_file(parse_market(market), code)
+        bars = read_daily_bars(filepath)
+    except Exception as e:
+        print_error(str(e))
+        raise SystemExit(1)
+
+    if not bars:
+        click.echo("未读取到数据，请确认通达信已下载该股票的日线数据")
+        raise SystemExit(0)
+
+    if count > 0:
+        bars = bars[-count:]
+
+    # ── 组装 DataFrame → 缠论分析 → V102 建议回放 ──
+    from easy_tdx.backtest.advice_simulator import collect_signal_advices, simulate_advice_batch
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    df = pd.DataFrame(
+        [
+            {
+                "datetime": f"{b.year}-{b.month:02d}-{b.day:02d}",
+                "open": b.open,
+                "high": b.high,
+                "low": b.low,
+                "close": b.close,
+                "vol": b.vol,
+                "amount": b.amount,
+            }
+            for b in bars
+        ]
+    )
+    analyser = ChanlunAnalyser(code=code, frequency="daily")
+    result = analyser.process_klines(df)
+
+    closes = [float(k.close) for k in result.klines]
+    highs = [float(k.high) for k in result.klines]
+    lows = [float(k.low) for k in result.klines]
+
+    advices = collect_signal_advices(result, closes, highs, lows, max_hold)
+    report = simulate_advice_batch(highs, lows, closes, advices)
+    report["symbol"] = f"{market.upper()}{code}"
+    report["bars"] = len(closes)
+    report["signals"] = len(result.mmds)
+    report["advices"] = advices
+
+    print_output(report, output_fmt)
