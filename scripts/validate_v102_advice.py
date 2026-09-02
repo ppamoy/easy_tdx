@@ -66,6 +66,30 @@ def _buy3_advice(entry_idx: int, ref_close: float) -> dict:
         "stop_loss": a["stop_loss"],
         "take_profit_1": a["take_profit_1"],
         "max_hold": 10,
+        "direction": "long",
+    }
+
+
+def _sell3_advice(entry_idx: int, ref_close: float) -> dict:
+    """在指定入场点生成一笔 3卖（做空）决策支持建议（条件266），入场价贴近信号日收盘。"""
+    mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖测试")
+    mmd.bi = MagicMock()
+    mmd.bi.low = ref_close * 0.98
+    mmd.bi.high = ref_close * 1.02
+    mmd.zs = MagicMock()
+    mmd.zs.zg = ref_close * 1.06
+    mmd.zs.zd = ref_close * 0.94
+    closes = [ref_close] * 30
+    highs = [ref_close * 1.01] * 30
+    lows = [ref_close * 0.99] * 30
+    a = _calc_decision_support_enhanced(mmd, closes, highs, lows, None, None)
+    return {
+        "entry_idx": entry_idx,
+        "entry_price": a["entry_price"],
+        "stop_loss": a["stop_loss"],  # 做空：止损在上方、止盈在下方
+        "take_profit_1": a["take_profit_1"],
+        "max_hold": 10,
+        "direction": "short",
     }
 
 
@@ -73,7 +97,8 @@ def main() -> int:
     md = "--md" in sys.argv  # 输出 markdown 报告（供文档引用/无行情环境验证）
     closes, highs, lows = _synthetic_klines(120)
 
-    advices = [_buy3_advice(i, closes[i]) for i in (15, 35, 55, 75, 95)]
+    advices = [_buy3_advice(i, closes[i]) for i in (15, 55, 95)]
+    advices += [_sell3_advice(i, closes[i]) for i in (35, 75)]
     report = simulate_advice_batch(highs, lows, closes, advices)
 
     reason_cn = {"stop": "止损", "tp1": "止盈", "expire": "到期"}

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**实证脚本补 3卖 做空演示（V346）—— validate_v102_advice 多空双向覆盖** —— scripts/validate_v102_advice.py 新增 _sell3_advice（MMDType.SELL_3 + direction=short，止损在上方/止盈在下方）；main 改为 3 笔 3买（做多）+ 2 笔 3卖（做空）混合回放，合成行情演示覆盖多空双向；markdown 报告同步反映做空收益特征（上行行情中做空亏损，教育意义明确）。
+
+---
+
 **训练页逐步揭示接入 V102 教学（V344）—— 用户作答后同时看到真实信号 + V102 质量评级与操作建议** —— 后端 train/session 候选点信号补 v102_grade/v102_advice（取自 mmd 的 _signal_quality_scorecard/_decision_support，仅 3买/3卖 有）；前端训练揭示卡在「缠论引擎」答案旁显示 V102 质量徽章 + 操作建议摘要——训练者作答后不仅看到信号方向，还能理解该信号的可执行建议来源。
 
 ---
