@@ -364,6 +364,46 @@ async function copyCandJson() {
   }
   setTimeout(() => { candJsonMsg.value = '' }, 2500)
 }
+// V255: 候选批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
+const candCsvMsg = ref('')
+function candCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportCandCsv() {
+  if (candRows.value.length === 0) return
+  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const lines = [header.join(',')]
+  sortedCandRows.value.forEach((r, i) => {
+    const row = [
+      i + 1,
+      candCsvEscape(r.symbol),
+      candPct(r.total_return),
+      candPct(r.win_rate),
+      candPct(r.hit_rate),
+      candPct(r.excess_hit_rate),
+      candCsvEscape(candTrust(r)),
+      candOosLabel(r),
+      r.trades ?? '',
+    ]
+    lines.push(row.join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_cand_batch_verify_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    candCsvMsg.value = '✓ 已导出 CSV'
+  } catch {
+    candCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { candCsvMsg.value = '' }, 2500)
+}
 
 // ── 保存策略（把当前组合结果 + 配置 + 上下文存进策略库）──────────────────────
 const showSaveForm = ref(false)
@@ -580,11 +620,13 @@ async function onSave() {
               </button>
               <button class="ghost small" @click="copyCandRanking">📋 复制排名</button>
               <button class="ghost small" @click="copyCandJson">⚙ 复制 JSON</button>
+              <button class="ghost small" @click="exportCandCsv">📊 导出 CSV</button>
               <button class="ghost small" :disabled="candSaving" @click="saveCandAsPortfolio">
                 {{ candSaving ? '保存中…' : '💾 保存为组合策略' }}
               </button>
               <button class="ghost small" @click="addAllCands">全部加入组合</button>
               <span v-if="candSaveMsg" class="cand-msg">{{ candSaveMsg }}</span>
+              <span v-if="candCsvMsg" class="cand-msg">{{ candCsvMsg }}</span>
             </span>
           </div>
           <table class="cand-table">

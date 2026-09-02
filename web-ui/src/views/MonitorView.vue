@@ -455,6 +455,46 @@ function viewMonBatchStock(r: typeof monBatchRows.value[number]) {
     query: { symbol: r.market + r.code, category: 'DAY' },
   })
 }
+// V255: 监控批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
+const monBatchCsvMsg = ref('')
+function monCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportMonBatchCsv() {
+  if (monBatchRows.value.length === 0) return
+  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const lines = [header.join(',')]
+  sortedMonBatchRows.value.forEach((r, i) => {
+    const row = [
+      i + 1,
+      monCsvEscape(r.symbol),
+      monPct(r.total_return),
+      monPct(r.win_rate),
+      monPct(r.hit_rate),
+      monPct(r.excess_hit_rate),
+      monCsvEscape(monTrust(r)),
+      monOosLabel(r),
+      r.trades ?? '',
+    ]
+    lines.push(row.join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_mon_batch_verify_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    monBatchCsvMsg.value = '✓ 已导出 CSV'
+  } catch {
+    monBatchCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { monBatchCsvMsg.value = '' }, 2500)
+}
 // V180: 样本外列辅助
 function monOosLabel(r: typeof monBatchRows.value[number]): string {
   if (r.oos_degraded === null || r.oos_degraded === undefined) return '-'
@@ -714,11 +754,13 @@ onUnmounted(() => {
           </button>
           <button class="ghost small" @click="copyMonBatchRanking">📋 复制排名</button>
           <button class="ghost small" @click="copyMonBatchJson">⚙ 复制 JSON</button>
+          <button class="ghost small" @click="exportMonBatchCsv">📊 导出 CSV</button>
           <button class="ghost small" :disabled="monBatchSaving" @click="saveMonBatchAsPortfolio">
             {{ monBatchSaving ? '保存中…' : '💾 保存为组合策略' }}
           </button>
           <span v-if="monBatchCopyMsg" class="save-msg">{{ monBatchCopyMsg }}</span>
           <span v-if="monBatchJsonCopyMsg" class="save-msg">{{ monBatchJsonCopyMsg }}</span>
+          <span v-if="monBatchCsvMsg" class="save-msg">{{ monBatchCsvMsg }}</span>
           <span v-if="monBatchSaveMsg" class="save-msg" :class="{ err: monBatchSaveMsg.includes('失败') }">{{ monBatchSaveMsg }}</span>
         </div>
       </div>

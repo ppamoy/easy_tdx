@@ -4,28 +4,16 @@
 
 ## [Unreleased]
 
-**模型准确度验证指南扩展到 V203（V204）—— 文档覆盖保存遵循过滤与指南自身迭代** —— V202 仅把指南更新到 V201，V203 新增的「保存遵循仅看样本外稳健过滤」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V203：标题、全景表补 V202/V203 两行、3.1/3.3/3.4/3.5 四处批量验证节补保存遵循过滤说明。
+**「导出 CSV」扩展到四处批量验证入口（V255）—— 批量验证排名统一 Excel 友好导出** —— 回测页批量验证已有「📊 导出 CSV」（V253），监控/选股/组合候选/寻优四处批量验证只有 Markdown 与 JSON 复制。本次四处统一加「📊 导出 CSV」：BOM + 表头（排名/标的/总收益/胜率/5根命中率/超额命中率/可信度/样本外/交易数）+ 排序后行数据，下载 easy_tdx_*_batch_verify_日期.csv。
 
 ### 新增
 
-- **docs/model-accuracy-guide.md** —— 标题改 V95–V203；全景表补 V202/V203；四处批量验证节补「开启过滤后保存为组合策略也只存筛选视图里的 ✅泛化 标的（V203）」说明。
-
-### 验证
-
-- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
-
-## [Unreleased]
-
-**批量验证「保存为组合策略」遵循「仅看样本外稳健」过滤（V203）—— 保存动作与筛选视图一致** —— V192–V195 的「仅看样本外稳健」过滤只是展示层，保存组合策略时仍把所有标的入库，用户开着过滤保存会得到包含 ⚠衰减 标的的组合。本次四处保存函数（回测 V141/监控 V145/选股 V131/组合候选 V188）都改为：过滤开启时只把筛选视图里的 ✅泛化 标的入库；无稳健标的可保存时给出明确提示。
-
-### 新增
-
-- **web-ui/src/views/BacktestView.vue / MonitorView.vue / ScreeningView.vue / PortfolioView.vue** —— 四处 save*AsPortfolio 先计算 visible（开启仅看样本外稳健时过滤 oos_degraded===false），据此计算 stocks/avgTrust/OOS 聚合；visible 为空时提示并中止。
+- **web-ui/src/views/MonitorView.vue / ScreeningView.vue / PortfolioView.vue / OptimizeView.vue** —— 四处批量验证操作区新增「📊 导出 CSV」（各自 export*Csv + csvEscape 辅助）与提示。
 
 ### 验证
 
 - vue-tsc + vite build 通过；ruff/mypy 无后端改动。
-- Playwright 浏览器回归：回测页开启「仅看样本外稳健」→保存提示「无稳健可保存」；关闭→正常保存快照含 avg_oos_degraded/oos_verdict、console 零错误。
+- Playwright 浏览器回归（代表入口）：选股页批量验证 →「导出 CSV」→ 下载文件含 BOM 表头与 13 行数据、console 零错误。
 
 ## [Unreleased]
 
@@ -658,6 +646,33 @@
 
 - vue-tsc + vite build 通过；ruff/mypy 无后端改动。
 - Playwright 浏览器回归：寻优（1×1 网格）→「批量验证自选股」→ 2 行结果（含样本外列）、console 零错误。
+
+## [Unreleased]
+
+**模型准确度验证指南扩展到 V203（V204）—— 文档覆盖保存遵循过滤与指南自身迭代** —— V202 仅把指南更新到 V201，V203 新增的「保存遵循仅看样本外稳健过滤」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V203：标题、全景表补 V202/V203 两行、3.1/3.3/3.4/3.5 四处批量验证节补保存遵循过滤说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V203；全景表补 V202/V203；四处批量验证节补「开启过滤后保存为组合策略也只存筛选视图里的 ✅泛化 标的（V203）」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+
+## [Unreleased]
+
+**批量验证「保存为组合策略」遵循「仅看样本外稳健」过滤（V203）—— 保存动作与筛选视图一致** —— V192–V195 的「仅看样本外稳健」过滤只是展示层，保存组合策略时仍把所有标的入库，用户开着过滤保存会得到包含 ⚠衰减 标的的组合。本次四处保存函数（回测 V141/监控 V145/选股 V131/组合候选 V188）都改为：过滤开启时只把筛选视图里的 ✅泛化 标的入库；无稳健标的可保存时给出明确提示。
+
+### 新增
+
+- **web-ui/src/views/BacktestView.vue / MonitorView.vue / ScreeningView.vue / PortfolioView.vue** —— 四处 save*AsPortfolio 先计算 visible（开启仅看样本外稳健时过滤 oos_degraded===false），据此计算 stocks/avgTrust/OOS 聚合；visible 为空时提示并中止。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：回测页开启「仅看样本外稳健」→保存提示「无稳健可保存」；关闭→正常保存快照含 avg_oos_degraded/oos_verdict、console 零错误。
+
+## [Unreleased]
 
 ## [Unreleased]
 

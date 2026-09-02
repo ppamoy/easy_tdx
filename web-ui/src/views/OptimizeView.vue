@@ -517,6 +517,46 @@ async function copyOptBatchJson() {
   }
   setTimeout(() => { optBatchJsonMsg.value = '' }, 2500)
 }
+// V255: 寻优批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
+const optBatchCsvMsg = ref('')
+function optCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportOptBatchCsv() {
+  if (optBatchRows.value.length === 0) return
+  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const lines = [header.join(',')]
+  sortedOptBatchRows.value.forEach((r, i) => {
+    const row = [
+      i + 1,
+      optCsvEscape(r.symbol),
+      optBatchPct(r.total_return),
+      optBatchPct(r.win_rate),
+      optBatchPct(r.hit_rate),
+      optBatchPct(r.excess_hit_rate),
+      optCsvEscape(optBatchTrust(r)),
+      optBatchOosLabel(r),
+      r.trades ?? '',
+    ]
+    lines.push(row.join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_opt_batch_verify_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    optBatchCsvMsg.value = '✓ 已导出 CSV'
+  } catch {
+    optBatchCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { optBatchCsvMsg.value = '' }, 2500)
+}
 const optBatchSaveMsg = ref('')
 const optBatchSaving = ref(false)
 async function saveOptBatchAsPortfolio() {
@@ -842,11 +882,13 @@ async function saveOptBatchAsPortfolio() {
             </button>
             <button class="ghost small" @click="copyOptBatchRanking">📋 复制排名</button>
             <button class="ghost small" @click="copyOptBatchJson">⚙ 复制 JSON</button>
+            <button class="ghost small" @click="exportOptBatchCsv">📊 导出 CSV</button>
             <button class="ghost small" :disabled="optBatchSaving" @click="saveOptBatchAsPortfolio">
               {{ optBatchSaving ? '保存中…' : '💾 保存为组合策略' }}
             </button>
             <span v-if="optBatchCopyMsg" class="save-msg">{{ optBatchCopyMsg }}</span>
             <span v-if="optBatchJsonMsg" class="save-msg">{{ optBatchJsonMsg }}</span>
+            <span v-if="optBatchCsvMsg" class="save-msg">{{ optBatchCsvMsg }}</span>
             <span v-if="optBatchSaveMsg" class="save-msg" :class="{ err: optBatchSaveMsg.includes('失败') }">{{ optBatchSaveMsg }}</span>
           </div>
         </div>

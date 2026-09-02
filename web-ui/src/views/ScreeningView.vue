@@ -548,6 +548,46 @@ async function copyBatchJson() {
   }
   setTimeout(() => { batchJsonCopyMsg.value = '' }, 2500)
 }
+// V255: 选股批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
+const batchCsvMsg = ref('')
+function batchCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportBatchCsv() {
+  if (batchResults.value.length === 0) return
+  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const lines = [header.join(',')]
+  filteredBatchResults.value.forEach((r, i) => {
+    const row = [
+      i + 1,
+      batchCsvEscape(r.symbol),
+      batchPct(r.total_return),
+      batchPct(r.win_rate),
+      batchPct(r.hit_rate),
+      batchPct(r.excess_hit_rate),
+      batchCsvEscape(batchTrust(r)),
+      batchOosLabel(r),
+      r.trades ?? '',
+    ]
+    lines.push(row.join(','))
+  })
+  const csv = '\uFEFF' + lines.join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_screen_batch_verify_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    batchCsvMsg.value = '✓ 已导出 CSV'
+  } catch {
+    batchCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { batchCsvMsg.value = '' }, 2500)
+}
 
 // ── 选择股票 ────────────────────────────────────────────────────────────
 async function selectStock(stock: StockResult) {
@@ -804,11 +844,13 @@ onMounted(() => {
           </button>
           <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
           <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
+          <button class="ghost small" @click="exportBatchCsv">📊 导出 CSV</button>
           <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
             {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
           </button>
           <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
           <span v-if="batchJsonCopyMsg" class="save-msg">{{ batchJsonCopyMsg }}</span>
+          <span v-if="batchCsvMsg" class="save-msg">{{ batchCsvMsg }}</span>
           <span v-if="batchSaveMsg" class="save-msg" :class="{ err: batchSaveMsg.includes('失败') }">{{ batchSaveMsg }}</span>
         </div>
       </div>
