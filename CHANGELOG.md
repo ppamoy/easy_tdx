@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**watch 新信号自动生成建议报告（V368）—— JSONL 行直接携带入场/止损/止盈** —— offline watch 的 --out 输出行新增 entry_price/stop_loss/take_profit_1（取自 V102 _decision_support），信号管道（V365 JSONL）直接产出可执行建议，脚本/定时任务无需二次计算；新增 _watch_signal_row 纯函数 + 2 个单测（含无决策数据返回 None 的边界）。
+
+---
+
 **离线链路端到端回归制度化（V367）—— 合成 .day 三命令 pytest 回归** —— 新增 tests/unit/test_offline_chain.py：用 append_daily_bars 生成合成 .day，通过 CliRunner 依次调用 offline advice --file / advice-batch --dir / watch --dir --out，断言三者 exit 0 且 batch 无 error 行——把 V366 抓出的 3 类运行时 bug（pandas 导入/输出契约/空建议字段）固化为 pytest 回归，防止复发。
 
 ---

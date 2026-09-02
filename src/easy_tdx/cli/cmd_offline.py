@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import click
 
@@ -842,6 +842,26 @@ def _print_advice_md(report: dict[str, object]) -> None:
     )
 
 
+def _watch_signal_row(symbol: str, mmd: Any, date_str: str) -> dict[str, object]:
+    """V368: 构造 watch 新信号行（含 V102 建议的入场/止损/止盈）。
+
+    抽为纯函数便于单测（合成行情难以触发 3买/3卖，直接喂构造的 MMD）。
+    """
+    scorecard = getattr(mmd, "_signal_quality_scorecard", None) or {}
+    decision = getattr(mmd, "_decision_support", None) or {}
+    return {
+        "symbol": symbol,
+        "type": mmd.mmd_type.value,
+        "date": date_str,
+        "confidence": round(mmd.confidence, 2),
+        "v102_grade": scorecard.get("overall_grade") or None,
+        "advice": decision.get("action_recommendation") or None,
+        "entry_price": decision.get("entry_price"),
+        "stop_loss": decision.get("stop_loss"),
+        "take_profit_1": decision.get("take_profit_1"),
+    }
+
+
 @offline.command("advice-batch")
 @click.option("--dir", "day_dir", default=None, help=".day 文件目录（缺省自动检测通达信 vipdoc）")
 @click.option("--limit", default=0, type=int, help="最多处理的股票数（0=全部）")
@@ -1184,18 +1204,7 @@ def watch(
                     key = f"{symbol}:{mmd.mmd_type.value}:{date_str}"
                     if key in seen:
                         continue
-                    scorecard = getattr(mmd, "_signal_quality_scorecard", None) or {}
-                    decision = getattr(mmd, "_decision_support", None) or {}
-                    rows.append(
-                        {
-                            "symbol": symbol,
-                            "type": mmd.mmd_type.value,
-                            "date": date_str,
-                            "confidence": round(mmd.confidence, 2),
-                            "v102_grade": scorecard.get("overall_grade") or None,
-                            "advice": decision.get("action_recommendation") or None,
-                        }
-                    )
+                    rows.append(_watch_signal_row(symbol, mmd, date_str))
                     seen.add(key)
             except Exception as e:  # noqa: BLE001
                 click.echo(f"⚠ {symbol}: {e}", err=True)

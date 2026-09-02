@@ -13,10 +13,11 @@ from __future__ import annotations
 import math
 import random
 from pathlib import Path
+from unittest.mock import MagicMock
 
 from click.testing import CliRunner
 
-from easy_tdx.cli.cmd_offline import offline
+from easy_tdx.cli.cmd_offline import _watch_signal_row, offline
 from easy_tdx.models.bar import SecurityBar
 from easy_tdx.offline.write_daily import append_daily_bars
 
@@ -109,3 +110,40 @@ def test_offline_watch_with_out_runs(tmp_path: Path) -> None:
     assert res.exit_code == 0, res.output
     # 状态文件必然写回；JSONL 仅在发现新信号时创建（合成数据无 3买/3卖 属预期）
     assert state.is_file()
+
+
+def test_watch_signal_row_includes_advice_fields():
+    """V368: watch 新信号 JSONL 行含 V102 建议的入场/止损/止盈字段。"""
+    mmd = MagicMock()
+    mmd.mmd_type.value = "3buy"
+    mmd.confidence = 0.72
+    mmd._signal_quality_scorecard = {"overall_grade": "A"}
+    mmd._decision_support = {
+        "action_recommendation": "买入",
+        "entry_price": 10.5,
+        "stop_loss": 9.8,
+        "take_profit_1": 11.6,
+    }
+    row = _watch_signal_row("SH600000", mmd, "2024-03-15")
+    assert row["symbol"] == "SH600000"
+    assert row["type"] == "3buy"
+    assert row["date"] == "2024-03-15"
+    assert row["v102_grade"] == "A"
+    assert row["advice"] == "买入"
+    assert row["entry_price"] == 10.5
+    assert row["stop_loss"] == 9.8
+    assert row["take_profit_1"] == 11.6
+
+
+def test_watch_signal_row_missing_decision_is_null():
+    """V368: 无决策支持数据时，入场/止损/止盈字段为 None（不崩溃）。"""
+    mmd = MagicMock()
+    mmd.mmd_type.value = "3sell"
+    mmd.confidence = 0.6
+    mmd._signal_quality_scorecard = None
+    mmd._decision_support = None
+    row = _watch_signal_row("SZ000001", mmd, "2024-03-15")
+    assert row["entry_price"] is None
+    assert row["stop_loss"] is None
+    assert row["take_profit_1"] is None
+    assert row["v102_grade"] is None
