@@ -157,6 +157,10 @@ class ZS:
     done: bool = False  # 中枢是否完成
     start: FX | None = None  # 起始分型
     end: FX | None = None  # 结束分型
+    # v89: 中枢质量评分字段
+    quality_score: float = 0.0  # 综合质量评分 0-1
+    grade: str = ""  # 质量等级: strong/medium/weak
+    width_pct: float = 0.0  # 中枢宽度百分比
 
     def add_line(self, line: BI | XD) -> None:
         self.lines.append(line)
@@ -618,6 +622,12 @@ class MMD:
     _volatility_compression_breakout_v82: dict[str, Any] | None = (
         None  # 波动率压缩突破确认（条件263）
     )
+
+    # V102 enhancement fields (决策支持增强 条件264-267)
+    _multi_signal_correlation: dict[str, Any] | None = None  # 多信号相关性分析（条件264）
+    _signal_quality_scorecard: dict[str, Any] | None = None  # 信号质量评分卡（条件265）
+    _decision_support: dict[str, Any] | None = None  # 决策支持输出（条件266）
+    _historical_pattern_match: dict[str, Any] | None = None  # 历史模式匹配（条件267）
 
     def __str__(self) -> str:
         return f"MMD({self.mmd_type.value} conf={self.confidence:.0%} {self.msg})"

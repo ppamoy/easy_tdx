@@ -1168,6 +1168,23 @@ async def diagnose_stock(
                         )
                         if latest_mmd
                         else None,
+                        # V102 缠论决策支持增强（条件264-267）
+                        "v102_multi_signal_correlation": getattr(
+                            latest_mmd, "_multi_signal_correlation", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v102_signal_quality": getattr(
+                            latest_mmd, "_signal_quality_scorecard", None
+                        )
+                        if latest_mmd
+                        else None,
+                        "v102_decision_support": getattr(latest_mmd, "_decision_support", None)
+                        if latest_mmd
+                        else None,
+                        "v102_pattern_match": getattr(latest_mmd, "_historical_pattern_match", None)
+                        if latest_mmd
+                        else None,
                     }
                     if latest_mmd
                     else None,
@@ -1222,6 +1239,13 @@ async def diagnose_stock(
                             "v82_volatility_compression": getattr(
                                 m, "_volatility_compression_breakout_v82", None
                             ),
+                            # V102 缠论决策支持增强（条件264-267）
+                            "v102_multi_signal_correlation": getattr(
+                                m, "_multi_signal_correlation", None
+                            ),
+                            "v102_signal_quality": getattr(m, "_signal_quality_scorecard", None),
+                            "v102_decision_support": getattr(m, "_decision_support", None),
+                            "v102_pattern_match": getattr(m, "_historical_pattern_match", None),
                         }
                         for m in sorted(
                             result.mmds,

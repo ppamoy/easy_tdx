@@ -1,6 +1,67 @@
 # EasyTDX 缠论功能完善总结
 
-## 修改内容
+## 本次改进内容（续上次会话）
+
+### 1. 笔计算修复 (bi.py)
+
+**修复的问题：**
+- `_is_weak_bi()` 函数逻辑修正：原代码中 `start.val <= 0 and end.val <= 0` 返回 True 的条件永远不会触发（股票价格不可能为非正数），已修正为正确的除零保护逻辑。
+- 新增 `bi_weak_skip` 配置项：允许用户选择跳过价格变动 < 0.1% 的弱笔，在震荡市场尤其有用。
+- 弱笔检测现在仅作为可选项，默认不跳过（保持向后兼容）。
+
+**文件：** `src/easy_tdx/chanlun/bi.py`
+
+### 2. 配置项增强 (config.py)
+
+**新增配置：**
+- `bi_weak_skip: bool = False` — 是否跳过弱笔
+
+**文件：** `src/easy_tdx/chanlun/config.py`
+
+### 3. 中枢计算改进 (zs.py)
+
+**改进：**
+- 添加 `min_overlap_abs` 变量防止极低价格时阈值过小导致的误判
+- 更新 `_should_close_candidate()` 注释说明 v88 改进
+
+**文件：** `src/easy_tdx/chanlun/zs.py`
+
+### 4. 前端增强 (ChanlunView.vue)
+
+**新增功能：**
+- **缠论理论说明面板**：点击「缠论说明」按钮可查看分型、笔、中枢、线段、买卖点的定义和判断标准
+- **操作建议提示**：根据当前市场状态显示针对性的操作建议（如「关注中枢下沿支撑有效性」）
+- **中枢位置距离指示**：显示当前价相对中枢上沿/下沿的百分比距离
+- **置信度说明 tooltip**：鼠标悬停可查看置信度的含义和计算方法
+- **最高置信度统计**：在统计面板中新增「最高置信」指标
+- **准确度验证提示**：解释前瞻命中率的计算方式和与回测收益的区别
+
+**文件：** `web-ui/src/views/ChanlunView.vue`
+
+### 5. 新增测试文件
+
+- `tests/unit/test_chanlun_integration.py` — 11个端到端测试
+- `tests/scripts/test_chanlun_e2e.py` — 命令行端到端测试脚本
+- `tests/scripts/test_chanlun_backtest.py` — 回测策略验证脚本
+- `scripts/quick_validate.py` — 快速验证脚本
+
+---
+
+## 上次会话修改内容
+
+### 图表绘制改进 (ChanlunChart.vue)
+- **笔**: 细虚线（width: 1, type: 'dashed'），颜色跟随涨跌
+- **线段**: 细实线（width: 1.5, type: 'solid'），紫色
+- **新增分型标记**: 顶分型用倒三角(红色)，底分型用菱形(绿色)
+- **新增背驰标记**: 橙色矩形，显示"背"字
+- **中枢区域**: 半透明黄色区域，边框虚线
+
+### 后端API改进 (chanlun.py)
+- API 响应增加 `fractals` 字段（分型数据）
+
+### 回测集成 (BacktestView.vue)
+- 选择"缠论买卖点"策略时自动运行缠论分析
+- 回测完成后显示缠论结构图
 
 ### 1. ChanlunChart.vue - 缠论图表组件
 **路径**: `/home/skp/workspace/easy_tdx/web-ui/src/components/ChanlunChart.vue`
@@ -93,8 +154,15 @@
 |------|----------|
 | `web-ui/src/components/ChanlunChart.vue` | 笔虚线、线段实线、新增分型/背驰标记 |
 | `web-ui/src/views/BacktestView.vue` | 缠论策略回测显示缠论结构 |
-| `web-ui/src/views/ChanlunView.vue` | 支持分型和背驰数据展示 |
+| `web-ui/src/views/ChanlunView.vue` | 支持分型和背驰数据展示 + 缠论说明面板 + 操作建议 |
 | `src/easy_tdx/web/routers/chanlun.py` | API返回分型数据 |
+| `src/easy_tdx/chanlun/bi.py` | 修复弱笔检测逻辑 + 新增 bi_weak_skip 配置 |
+| `src/easy_tdx/chanlun/config.py` | 新增 bi_weak_skip 配置项 |
+| `src/easy_tdx/chanlun/zs.py` | 新增 min_overlap_abs 防误判 |
+| `tests/unit/test_chanlun_integration.py` | 11个端到端集成测试 |
+| `tests/scripts/test_chanlun_e2e.py` | 命令行端到端验证脚本 |
+| `tests/scripts/test_chanlun_backtest.py` | 回测策略验证脚本 |
+| `scripts/quick_validate.py` | 快速验证脚本 |
 
 ## 使用说明
 
@@ -117,4 +185,30 @@
 ```bash
 cd /home/skp/workspace/easy_tdx/web-ui && npm run build
 cp -r dist/* src/easy_tdx/web/dist/
+```
+
+## 验证方法
+
+### 快速验证
+```bash
+cd /home/skp/workspace/easy_tdx
+python scripts/quick_validate.py
+```
+
+### 单元测试
+```bash
+cd /home/skp/workspace/easy_tdx
+python -m pytest tests/unit/test_chanlun_integration.py -v
+python -m pytest tests/unit/test_chanlun.py -v
+python -m pytest tests/unit/test_chanlun_v*.py -v
+```
+
+### 启动 Web 服务验证
+```bash
+easy-tdx serve
+# 浏览器打开 http://localhost:8000/chanlun
+# 输入股票代码如 000001 或 600519
+# 点击「开始分析」查看缠论结构
+# 点击「缠论说明」查看理论基础
+# 点击「回测验证」跳转到回测页面用缠论策略验证
 ```

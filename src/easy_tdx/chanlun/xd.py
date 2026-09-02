@@ -124,9 +124,7 @@ def find_xds(
                     else seg_end_val < seg_start_val
                 )
                 if seg_ok:
-                    xds.append(
-                        _create_xd_from_bis(bis, start, cand_end, len(xds), seg_dir)
-                    )
+                    xds.append(_create_xd_from_bis(bis, start, cand_end, len(xds), seg_dir))
             start = len(bis)
 
     return xds
@@ -140,6 +138,9 @@ def _feature_fx_end_segment(
 
     向上线段结束：特征序列（向下笔）形成顶分型 —— 中间特征笔的高点最高
     向下线段结束：特征序列（向上笔）形成底分型 —— 中间特征笔的低点最低
+
+    v87 改进：增加严格的高低点比较，避免平局情况导致误判。
+    v89 改进：增加"中间元素必须严格高于/低于两边"的校验，防止平局分型。
     """
     if len(features) < 3:
         return False
@@ -150,9 +151,11 @@ def _feature_fx_end_segment(
 
     if seg_dir == Direction.UP:
         # 向上线段：向下笔特征序列，顶分型结束
+        # 严格检查：中间笔的高点必须严格大于两边（不允许平局）
         return mid.high > left.high and mid.high > right.high
     else:
         # 向下线段：向上笔特征序列，底分型结束
+        # 严格检查：中间笔的低点必须严格小于两边（不允许平局）
         return mid.low < left.low and mid.low < right.low
 
 

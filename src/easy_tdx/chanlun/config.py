@@ -15,6 +15,8 @@ class ChanlunConfig:
     # ── 笔配置 ──────────────────────────────────────────────────────────
     # "new" 新笔（分型之间至少1根独立K线），"old" 老笔（分型之间至少3根），"simple" 简单笔
     bi_type: str = "new"
+    # 是否跳过弱笔（价格变动 < 0.1% 的笔）
+    bi_weak_skip: bool = False
 
     # ── 中枢配置 ────────────────────────────────────────────────────────
     # "standard" 标准中枢，"dn" 段内中枢
@@ -44,6 +46,7 @@ class ChanlunConfig:
     def to_dict(self) -> dict[str, object]:
         return {
             "bi_type": self.bi_type,
+            "bi_weak_skip": self.bi_weak_skip,
             "zs_type": self.zs_type,
             "zs_min_lines": self.zs_min_lines,
             "zs_qujian": self.zs_qujian,

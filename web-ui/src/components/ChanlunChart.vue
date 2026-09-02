@@ -80,6 +80,10 @@ interface ChanlunZs {
   start_index?: number
   end_index?: number
   done: boolean
+  // v89: 中枢质量评分
+  quality_score?: number | null
+  grade?: string | null
+  width_pct?: number | null
 }
 
 interface ChanlunMmd {
@@ -671,5 +675,12 @@ watch(() => [props.bars, props.bis, props.xds, props.zss, props.mmds, props.fxs,
   width: 100%;
   /* 双面板：主图（K线+缠论结构）+ MACD 副图，560 太矮导致所有元素挤在一起 */
   height: 760px;
+}
+
+/* 响应式高度：在小屏幕上缩小图表高度 */
+@media (max-width: 768px) {
+  .chanlun-chart {
+    height: 560px;
+  }
 }
 </style>

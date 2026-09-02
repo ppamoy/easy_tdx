@@ -150,6 +150,12 @@ class ChanlunResult:
                     "start_index": zs.start.bar_index if zs.start else None,
                     "end_index": zs.end.bar_index if zs.end else None,
                     "done": zs.done,
+                    # v89: 中枢质量评分
+                    "quality_score": (
+                        round(zs.quality_score, 2) if hasattr(zs, "quality_score") else None
+                    ),
+                    "grade": zs.grade if hasattr(zs, "grade") else None,
+                    "width_pct": round(zs.width_pct, 2) if hasattr(zs, "width_pct") else None,
                 }
                 for zs in self.zss
             ],
@@ -303,8 +309,8 @@ class ChanlunAnalyser:
         fractals = find_fractals(cklines, self._config)
         self._result.fractals = fractals
 
-        # Step 4: 笔计算
-        bis = find_bis(fractals, self._config)
+        # Step 4: 笔计算（传入 cklines 用于分型稳定性校验）
+        bis = find_bis(fractals, self._config, cklines=self._result.cklines)
         self._result.bis = bis
 
         # Step 5: 中枢计算

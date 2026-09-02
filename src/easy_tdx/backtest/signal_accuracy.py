@@ -77,6 +77,23 @@ def _horizon_stats(
     }
 
 
+def _safe_fwd(cur: Any, fwd: Any) -> Any:
+    """前瞻收益 fwd/cur - 1；价格为 0 时按 -100%（避免除零告警）。
+
+    零价格属于退化数据（不应出现在真实行情），按 -100% 处理可保持数值稳定，
+    且不产生 nan 污染后续命中率统计。
+    """
+    cur_arr = np.asarray(cur, dtype=float)
+    fwd_arr = np.asarray(fwd, dtype=float)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        denom = np.where(cur_arr == 0, np.nan, cur_arr)
+        out = fwd_arr / denom - 1.0
+    out = np.nan_to_num(out, nan=-1.0)
+    if np.ndim(out) == 0:
+        return float(out)
+    return out
+
+
 def compute_signal_accuracy(
     df: pd.DataFrame,
     trades: pd.DataFrame,
@@ -133,7 +150,7 @@ def compute_signal_accuracy(
             continue
         eligible = n_bars - h
         sample_idx = _random_split(eligible, seed)
-        fwd = closes[sample_idx + h] / closes[sample_idx] - 1.0
+        fwd = _safe_fwd(closes[sample_idx], closes[sample_idx + h])
         random_baseline[h] = {
             "count": int(len(sample_idx)),
             "hit_rate": float(np.mean(fwd > 0)),
@@ -158,7 +175,7 @@ def compute_signal_accuracy(
                 if idx is None or idx + h >= n_bars:
                     continue
                 # BUY 持有 N 根；SELL 为空仓避跌，命中 = 期间价格下跌
-                raw = closes[idx + h] / closes[idx] - 1.0
+                raw = _safe_fwd(closes[idx], closes[idx + h])
                 fwd_list.append(raw)
             fwd = np.asarray(fwd_list, dtype=float)
             base = random_baseline[h]
@@ -239,12 +256,14 @@ def _empty_report(
         benchmark["strategy_return"] = strategy_total_return
         benchmark["buy_hold_return"] = 0.0
         benchmark["alpha"] = strategy_total_return
-    report: dict[str, Any] = {"buy": None, "sell": None, "benchmark": benchmark}
-    if note:
-        report["note"] = note
+    report: dict[str, Any] = {
+        "buy": None,
+        "sell": None,
+        "benchmark": benchmark,
+        "note": note,
+    }
     report["verdict"] = note or "无成交记录，无法验证择时准确度"
     return report
-
 
 
 # ── 按信号类型分组的准确度验证（缠论买卖点等） ───────────────────────────────
@@ -276,7 +295,7 @@ def _signal_type_stats(
         for idx in idx_list:
             if idx is None or idx < 0 or idx + h >= n_bars:
                 continue
-            fwd_list.append(float(closes[idx + h] / closes[idx] - 1.0))
+            fwd_list.append(float(_safe_fwd(closes[idx], closes[idx + h])))
         fwd = np.asarray(fwd_list, dtype=float)
         stats = _horizon_stats(fwd)
         if direction == "SELL" and len(fwd) > 0:
@@ -353,7 +372,7 @@ def compute_signal_accuracy_by_type(
             continue
         eligible = n_bars - h
         sample_idx = _random_split(eligible, seed)
-        fwd = closes_arr[sample_idx + h] / closes_arr[sample_idx] - 1.0
+        fwd = _safe_fwd(closes_arr[sample_idx], closes_arr[sample_idx + h])
         baseline[h] = {
             "count": int(len(sample_idx)),
             "hit_rate": float(np.mean(fwd > 0)),
@@ -371,9 +390,7 @@ def compute_signal_accuracy_by_type(
 
     by_type: dict[str, Any] = {}
     for sig_type, idx_list in grouped.items():
-        by_type[sig_type] = _signal_type_stats(
-            sig_type, idx_list, closes_arr, horizons, baseline
-        )
+        by_type[sig_type] = _signal_type_stats(sig_type, idx_list, closes_arr, horizons, baseline)
 
     # 排名：按 5 根窗口超额命中率降序（缺窗口按 3/10）
     def _key(item: tuple[str, dict[str, Any]]) -> float:
@@ -390,9 +407,7 @@ def compute_signal_accuracy_by_type(
                 "type": sig_type,
                 "direction": report["direction"],
                 "signals": report["signals"],
-                "excess_hit_rate": float(h5.get("excess_hit_rate", 0.0))
-                if h5
-                else 0.0,
+                "excess_hit_rate": float(h5.get("excess_hit_rate", 0.0)) if h5 else 0.0,
                 "avg_return": float(h5.get("avg_return", 0.0)) if h5 else 0.0,
                 "hit_rate": float(h5.get("hit_rate", 0.0)) if h5 else 0.0,
                 "verdict": report["verdict"],
@@ -427,14 +442,24 @@ def _build_type_summary(by_type: dict[str, Any]) -> str:
     if best_buy:
         h5 = best_buy["horizons"].get("5") or best_buy["horizons"].get("3")
         parts.append(
-            "最强买点 " + best_buy.get("type", "?") + "（5根命中 " + f"{h5['hit_rate']:.0%}" +
-            "，超额 " + f"{h5['excess_hit_rate']:+.1%}" + "）"
+            "最强买点 "
+            + best_buy.get("type", "?")
+            + "（5根命中 "
+            + f"{h5['hit_rate']:.0%}"
+            + "，超额 "
+            + f"{h5['excess_hit_rate']:+.1%}"
+            + "）"
         )
     if best_sell:
         h5 = best_sell["horizons"].get("5") or best_sell["horizons"].get("3")
         parts.append(
-            "最强卖点 " + best_sell.get("type", "?") + "（5根命中 " + f"{h5['hit_rate']:.0%}" +
-            "，超额 " + f"{h5['excess_hit_rate']:+.1%}" + "）"
+            "最强卖点 "
+            + best_sell.get("type", "?")
+            + "（5根命中 "
+            + f"{h5['hit_rate']:.0%}"
+            + "，超额 "
+            + f"{h5['excess_hit_rate']:+.1%}"
+            + "）"
         )
     if not parts:
         return "各类型样本均不足，无法验证可靠命中率"
@@ -592,5 +617,3 @@ def _build_portfolio_verdict(portfolio: dict[str, Any]) -> str:
     if hit_n > 0:
         parts.append(f"{above}/{hit_n} 只命中率高于随机基准")
     return "；".join(parts) + "。"
-
-
