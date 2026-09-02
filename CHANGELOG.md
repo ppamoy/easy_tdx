@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V293（V294）—— 文档覆盖 verify-multi 表格与指南自身迭代** —— V292 仅把指南更新到 V291，V293 新增的 verify-multi `--table` 输出未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V293：标题、全景表补 V292/V293 两行、3.9 命令行节 verify-multi 条目补 --table 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V293；全景表补 V292/V293；3.9 命令行节 verify-multi 条目补「--table（V293）表格输出」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **CLI verify-multi 支持 --table（V293）—— 命令行批量验证选股表格化输出** —— verify-multi（V119）此前只输出 JSON，命令行选股比验证结论要读缩进 JSON。本次新增 `--table`：表格输出（排名/标的/总收益/胜率/5根命中/超额/可信度，按需追加「稳健/样本外/滚验」列），与 run-all 排名表（V115/V155）体验一致，脚本与人工都友好。
 
 ### 新增
