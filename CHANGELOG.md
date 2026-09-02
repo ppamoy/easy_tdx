@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline advice 支持 --file（V352）—— 直接指定本地 .day 文件路径离线回放** —— easy-tdx offline advice MARKET CODE --file /path/to/xx.day：从任意路径读取 .day 日线跑 V102 建议回放（不再依赖 TDX_HOME 自动检测），配合 --count/--max-hold/--output，让任意位置保存的行情文件都能离线实证建议。
+
+---
+
 **offline advice 子命令（V351）—— 本地 .day 日线直接跑 V102 建议回放（无需网络）** —— easy-tdx offline advice MARKET CODE：读取本地通达信日线 → 缠论分析 → 对 3买/3卖 信号生成 V102 建议 → 逐笔回放（止损/止盈/到期）→ json/table/csv 输出（含 symbol/bars/signals/advices 上下文），让无网络行情目录用户也能实证 V102 建议。
 
 ---

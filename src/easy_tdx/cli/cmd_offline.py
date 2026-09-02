@@ -697,19 +697,26 @@ def sync_all(vipdoc: str | None) -> None:
 @offline.command()
 @click.argument("market")
 @click.argument("code")
+@click.option(
+    "--file",
+    "file_path",
+    default=None,
+    help="直接指定 .day 文件路径（缺省自动检测通达信目录）",
+)
 @click.option("--count", default=0, type=int, help="读取K线条数（0=全部）")
 @click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
 @click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
 def advice(
     market: str,
     code: str,
+    file_path: str | None,
     count: int,
     max_hold: int,
     output_fmt: str,
 ) -> None:
     """用本地 .day 日线跑 V102 建议回放（无需网络/通达信连接）。
 
-    MARKET: 市场代码（SZ/SH）
+    MARKET: 市场代码（SZ/SH，作为上下文；--file 时仍须给出）
     CODE: 6 位股票代码
 
     读取本地日线 → 缠论分析 → 对 3买/3卖 信号生成 V102 建议
@@ -718,6 +725,7 @@ def advice(
     示例：
 
       easy-tdx offline advice SZ 000001 --output csv
+      easy-tdx offline advice SZ 000001 --file /path/to/sh600000.day --output csv
     """
     from .output import print_error, print_output
     from .parsers import parse_market
@@ -729,8 +737,10 @@ def advice(
         raise SystemExit(1)
 
     try:
-        filepath = find_daily_bar_file(parse_market(market), code)
-        bars = read_daily_bars(filepath)
+        if file_path is not None:
+            bars = read_daily_bars(file_path)
+        else:
+            bars = read_daily_bars(find_daily_bar_file(parse_market(market), code))
     except Exception as e:
         print_error(str(e))
         raise SystemExit(1)
