@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V291（V292）—— 文档覆盖策略库清单 JSON 与指南自身迭代** —— V290 仅把指南更新到 V289，V291 新增的策略库「复制清单 JSON」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V291：标题、全景表补 V290/V291 两行、3.6 策略库节补「⚙ 复制清单 JSON」说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V291；全景表补 V290/V291；3.6 策略库节「📊 导出策略清单」后补「⚙ 复制清单 JSON」（V291）说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **策略库「复制清单 JSON」（V291）—— 全库验证档案机器可读导出** —— 策略库已有整库 CSV（V269）与单条 JSON（V251），但缺整库清单 JSON。本次在页头加「⚙ 复制清单 JSON」：把当前可见策略的完整档案（id/name/kind/strategy/params/context/trade_config/snapshot/tags/notes/时间戳）打包为结构化 JSON 复制到剪贴板，Agent/脚本友好，与 CSV V269 互补。
 
 ### 新增

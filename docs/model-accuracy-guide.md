@@ -1,4 +1,4 @@
-# 模型准确度验证指南（V95–V289）
+# 模型准确度验证指南（V95–V291）
 
 > 本文档汇总 easy-tdx 自 V95 起新增的「通过历史回测验证模型/策略准确度」能力。
 > 目标：让用户不只是看账户盈亏，而是能回答三件事——**信号准不准、稳健不稳健、过不过拟合**。
@@ -197,6 +197,8 @@
 | V287 | 回测页 Walk-Forward 滚动验证 | Web 单标回测补齐防过拟合维度 | 回测页「Walk-Forward 滚动验证」勾选 |
 | V288 | 模型准确度验证指南扩展到 V287 | 文档覆盖回测 Walk-Forward 入口 | docs/model-accuracy-guide.md |
 | V289 | WalkForwardPanel「导出 CSV」 | 滚动窗口明细 Excel 友好导出 | Walk-Forward 面板「📊 导出 CSV」 |
+| V290 | 模型准确度验证指南扩展到 V289 | 文档覆盖 WF 面板 CSV 导出入口 | docs/model-accuracy-guide.md |
+| V291 | 策略库「复制清单 JSON」 | 全库验证档案机器可读导出 | 策略库页头「⚙ 复制清单 JSON」 |
 
 ## 二、核心概念
 
@@ -252,7 +254,7 @@
 - 卡片头部「验证来源」徽章（V164/V207）：批量验证入库的策略（source=batch-verify*）会显示对应徽章——选股/回测/监控/组合候选（V188）/寻优批量验证（V205）五种来源全覆盖，一眼看出策略从哪个验证流程入库。
 - 单标卡片「↻ 重验」（V209）：用保存的策略+参数对原标的重新回测（含样本外），刷新快照中的 performance/accuracy/robustness/trust/out_of_sample 并标记 source=reverify / reverified_at——行情变化后一键更新验证结论，不必删除重存；组合策略卡片同样支持「↻ 重验」（V211）：用保存的 context.stocks 重跑组合回测（含 V126 组合样本外），刷新组合快照（accuracy_summary/portfolio_trust/out_of_sample）；多策略组合卡片也支持「↻ 重验」（V227）：用保存的 context.items 重跑多策略组合回测（含 V128 样本外），三类策略全部可一键刷新验证结论。
 - 卡片操作区「📋 验证摘要」（V235）：把类型/标的/绩效/准确度/稳健性/可信度/样本外/来源（含重验时间）拼成一段 Markdown 复制到剪贴板，方便归档/分享；「⚙ 验证 JSON」（V251）把单条策略的完整验证档案（name/kind/strategy/params/context/trade_config/snapshot/tags/notes/时间戳）以 JSON 导出，机器可读。
-- 页头「↻ 全部重验」（V249）：对当前可见（single/portfolio/multi）策略逐个重验并刷新验证结论（带进度提示与「成功 x、失败 y」汇总），与 CLI reverify 默认全量（V213）对齐；页头「📊 导出策略清单」（V269）：把当前可见策略的验证档案（name/kind/params/绩效/可信度/样本外/来源/标签）导出为 Excel 友好的 CSV，整库归档。
+- 页头「↻ 全部重验」（V249）：对当前可见（single/portfolio/multi）策略逐个重验并刷新验证结论（带进度提示与「成功 x、失败 y」汇总），与 CLI reverify 默认全量（V213）对齐；页头「📊 导出策略清单」（V269）：把当前可见策略的验证档案（name/kind/params/绩效/可信度/样本外/来源/标签）导出为 Excel 友好的 CSV，整库归档；「⚙ 复制清单 JSON」（V291）：把当前可见策略的完整档案（id/name/kind/strategy/params/context/trade_config/snapshot/tags/notes/时间戳）打包为结构化 JSON，机器可读。
 - 卡片快照「🧪 批量验证样本外」（V190）：批量验证保存的组合策略（source=batch-verify-backtest/monitor/cand）快照含 avg_oos_degraded 与 oos_verdict（如「✅ 2/3 只样本外稳健」/「⚠ 2/2 只样本外衰减」），卡片直接展示。
 - 结果对比页（V102）横向展示多个 task 的 📊 可信度 / 🎯 5根命中率 / 🎯 超额命中率；V125 起补「🔬 样本外验证」「🧱 稳健性」两行，跨任务比策略时也看是否过拟合；「指标对比」区「📊 导出 CSV」（V267）把对比表转置为 CSV（行=指标、列=对比任务），Excel 友好导出；「⚙ 复制 JSON」（V275）把所选任务的 performance/model_trust/signal_accuracy/segment_robustness/out_of_sample 打包为结构化 JSON，Agent/脚本友好。
 
