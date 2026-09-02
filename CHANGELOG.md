@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**监控页「信号列表导出 CSV」（V263）—— 模型发现的缠论买卖点信号 Excel 友好导出** —— 监控页会把检测到的高置信度缠论买卖点信号（1买/1卖等）展示在「🔔 新信号」面板，但只能看不能存。本次在信号面板加「📊 导出 CSV」：把信号列表（类型/标的/日期/置信度/说明）导出为 Excel 友好的 CSV，下载 easy_tdx_signals_日期.csv——用户可记录/核对模型触发过的买卖点信号。
+
+### 新增
+
+- **web-ui/src/views/MonitorView.vue** —— 新增 exportSignalsCsv（newSignals 明细，BOM+CSV+Blob 下载）+ 信号面板「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归（真实信号流）：监控页阈值调 0.5 → 开始监控 → 信号面板出现 →「导出 CSV」→ 下载文件含表头与 4 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V261（V262）—— 文档覆盖交易明细 CSV 与指南自身迭代** —— V260 仅把指南更新到 V259，V261 新增的回测页「交易明细 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V261：标题、全景表补 V260/V261 两行、3.1 回测页第 4 步导出补交易明细 CSV 说明。
 
 ### 新增

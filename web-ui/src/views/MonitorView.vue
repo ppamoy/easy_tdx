@@ -455,6 +455,35 @@ function viewMonBatchStock(r: typeof monBatchRows.value[number]) {
     query: { symbol: r.market + r.code, category: 'DAY' },
   })
 }
+// V263: 信号列表导出 CSV（模型发现的缠论买卖点信号）
+const signalsCsvMsg = ref('')
+function exportSignalsCsv() {
+  if (!newSignals.value.length) return
+  const header = ['类型', '标的', '日期', '置信度', '说明']
+  const rows = newSignals.value.map((s) => [
+    monCsvEscape(s.type),
+    monCsvEscape(s.stock),
+    monCsvEscape(s.date ?? '-'),
+    (s.confidence * 100).toFixed(0) + '%',
+    monCsvEscape(s.msg),
+  ])
+  const csv = '\uFEFF' + [header.join(','), ...rows.map((r) => r.join(','))].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_signals_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    signalsCsvMsg.value = '✓ 已导出信号列表 CSV'
+  } catch {
+    signalsCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { signalsCsvMsg.value = '' }, 2500)
+}
 // V255: 监控批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
 const monBatchCsvMsg = ref('')
 function monCsvEscape(v: string): string {
@@ -852,7 +881,9 @@ onUnmounted(() => {
     <div v-if="newSignals.length > 0" class="signals-panel">
       <div class="panel-header">
         <span class="panel-title">🔔 新信号（{{ newSignals.length }} 条）</span>
+        <button class="ghost small" @click="exportSignalsCsv">📊 导出 CSV</button>
         <button class="ghost small" @click="newSignals = []">清除</button>
+        <span v-if="signalsCsvMsg" class="save-msg">{{ signalsCsvMsg }}</span>
       </div>
       <div class="signal-items">
         <div v-for="(s, i) in newSignals" :key="i" class="signal-item"
