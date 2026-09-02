@@ -785,3 +785,166 @@ def advice(
     report["advices"] = advices
 
     print_output(report, output_fmt)
+
+
+@offline.command("advice-batch")
+@click.option("--dir", "day_dir", default=None, help=".day 文件目录（缺省自动检测通达信 vipdoc）")
+@click.option("--limit", default=0, type=int, help="最多处理的股票数（0=全部）")
+@click.option("--count", default=0, type=int, help="每只读取K线条数（0=全部）")
+@click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
+@click.option(
+    "--output",
+    "output_fmt",
+    type=click.Choice(["json", "table", "csv", "md"]),
+    default="json",
+)
+def advice_batch(
+    day_dir: str | None,
+    limit: int,
+    count: int,
+    max_hold: int,
+    output_fmt: str,
+) -> None:
+    """离线批量 V102 建议回放：扫描本地 .day 目录逐只跑建议实证并汇总。
+
+    --dir 缺省时自动检测通达信 vipdoc 目录；每只从文件名推断市场/代码
+    （sh600000.day → SH/600000）。输出每只汇总 + 全池聚合（json/table/csv/md）。
+
+    示例：
+
+      easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md
+    """
+    from .output import print_error, print_output
+
+    try:
+        from ..offline import read_daily_bars
+        from ..offline.paths import resolve_vipdoc
+    except Exception as e:
+        print_error(f"离线模块不可用: {e}")
+        raise SystemExit(1)
+
+    # 1. 定位 .day 目录
+    try:
+        if day_dir is not None:
+            lday_dir = Path(day_dir)
+        else:
+            lday_dir = resolve_vipdoc(None) / "sz" / "lday"
+        if not lday_dir.is_dir():
+            print_error(f".day 目录不存在: {lday_dir}")
+            raise SystemExit(1)
+        files = sorted(lday_dir.glob("*.day"))
+    except Exception as e:
+        print_error(str(e))
+        raise SystemExit(1)
+
+    if not files:
+        click.echo(f"目录 {lday_dir} 中没有 .day 文件")
+        raise SystemExit(0)
+    if limit > 0:
+        files = files[:limit]
+
+    # 2. 逐只跑 V102 建议回放
+    from easy_tdx.backtest.advice_simulator import (
+        collect_signal_advices,
+        simulate_advice_batch,
+        summarize_batch,
+    )
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    reports: list[dict[str, object]] = []
+    rows: list[dict[str, object]] = []
+    for filepath in files:
+        name = filepath.name.lower()  # e.g. sh600000.day
+        if not (name.startswith(("sh", "sz")) and name.endswith(".day")):
+            continue
+        mkt = name[:2].upper()  # SH / SZ
+        code = name[2:8]
+        symbol = f"{mkt}{code}"
+        try:
+            bars = read_daily_bars(filepath)
+            if not bars:
+                rows.append({"symbol": symbol, "error": "无数据"})
+                continue
+            if count > 0:
+                bars = bars[-count:]
+            if len(bars) < 30:
+                rows.append({"symbol": symbol, "error": "K线不足(30)"})
+                continue
+            df = pd.DataFrame(
+                [
+                    {
+                        "datetime": f"{b.year}-{b.month:02d}-{b.day:02d}",
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "vol": b.vol,
+                        "amount": b.amount,
+                    }
+                    for b in bars
+                ]
+            )
+            analyser = ChanlunAnalyser(code=code, frequency="daily")
+            result = analyser.process_klines(df)
+            closes = [float(k.close) for k in result.klines]
+            highs = [float(k.high) for k in result.klines]
+            lows = [float(k.low) for k in result.klines]
+            if len(closes) < 30:
+                rows.append({"symbol": symbol, "error": "K线不足(30)"})
+                continue
+            buy_hold = (closes[-1] / closes[0] - 1.0) * 100.0 if closes[0] > 0 else 0.0
+            advices = collect_signal_advices(result, closes, highs, lows, max_hold)
+            report = simulate_advice_batch(highs, lows, closes, advices)
+            report["symbol"] = symbol
+            reports.append(report)
+            rows.append(
+                {
+                    "symbol": symbol,
+                    "bars": len(closes),
+                    "signals": len(result.mmds),
+                    "advice_count": report["count"],
+                    "win_rate": round(report["win_rate"] * 100, 1),
+                    "avg_return": round(report["avg_return"], 2),
+                    "total_return": round(report["total_return"], 2),
+                    "buy_hold": round(buy_hold, 2),
+                    "stop_rate": round(report["stop_rate"] * 100, 1),
+                    "tp_rate": round(report["tp_rate"] * 100, 1),
+                    "expire_rate": round(report["expire_rate"] * 100, 1),
+                }
+            )
+        except Exception as e:  # noqa: BLE001
+            rows.append({"symbol": symbol, "error": str(e)})
+
+    # 3. 聚合 + 输出
+    summary = summarize_batch(reports)
+    if output_fmt == "md":
+        click.echo("# 离线 V102 批量建议实证报告")
+        click.echo()
+        click.echo(
+            f"扫描 **{len(files)}** 只 | 有建议 **{summary['symbols']}** | "
+            f"总建议 **{summary['advice_count']}** | 胜率 **{summary['win_rate'] * 100:.0f}%** | "
+            f"平均 **{summary['avg_return']:+.2f}%** | "
+            f"正收益 **{summary['positive_symbols']}/{summary['symbols']}**"
+        )
+        click.echo()
+        click.echo("| 标的 | K线 | 信号 | 建议数 | 胜率% | 平均收益% | 累计% | 买入持有% |")
+        click.echo("|------|-----|------|--------|-------|-----------|-------|-----------|")
+        for r in rows:
+            if "error" in r:
+                click.echo(f"| {r['symbol']} | - | - | - | - | - | - | {r['error']} |")
+            else:
+                click.echo(
+                    f"| {r['symbol']} | {r['bars']} | {r['signals']} | {r['advice_count']} | "
+                    f"{r['win_rate']} | {r['avg_return']:+.2f} | {r['total_return']:+.2f} | "
+                    f"{r['buy_hold']:+.2f} |"
+                )
+        return
+
+    # json/table/csv：每只一行（含 summary 字段便于聚合查看）
+    out_df = pd.DataFrame(rows)
+    out_df["summary_symbols"] = summary["symbols"]
+    out_df["summary_advice_count"] = summary["advice_count"]
+    out_df["summary_win_rate"] = round(summary["win_rate"] * 100, 1)
+    out_df["summary_avg_return"] = round(summary["avg_return"], 2)
+    out_df["summary_positive_symbols"] = summary["positive_symbols"]
+    print_output(out_df, output_fmt)

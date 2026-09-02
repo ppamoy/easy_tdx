@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline advice-batch 子命令（V353）—— 离线批量 V102 建议实证** —— easy-tdx offline advice-batch --dir <lday目录> [--limit N]：扫描本地 .day 目录，从文件名推断市场/代码（sh600000.day → SH/600000），逐只跑 V102 建议回放并汇总（summarize_batch 聚合：总建议/胜率/平均/正收益标的），输出 json/table/csv/md——离线用户一键批量实证自选股票池（vs 买入持有对照）。
+
+---
+
 **offline advice 支持 --file（V352）—— 直接指定本地 .day 文件路径离线回放** —— easy-tdx offline advice MARKET CODE --file /path/to/xx.day：从任意路径读取 .day 日线跑 V102 建议回放（不再依赖 TDX_HOME 自动检测），配合 --count/--max-hold/--output，让任意位置保存的行情文件都能离线实证建议。
 
 ---
