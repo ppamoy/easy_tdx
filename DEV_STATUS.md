@@ -13,6 +13,16 @@
 - **质量门禁**：ruff check/format + mypy src/ 归零；全量 pytest tests/unit/ 2501 通过；管道脚本 7/7；web-ui vue-tsc + vite build 通过
 - **提交**：3129a16 feat(chanlun): V102 缠论模型决策支持增强 + v85-v90 算法配套收尾
 
+## V102 决策支持落地（阶段1+2，V320-V325）✅ 已全部完成
+
+- **V320** 条件265/266 的 confidence_adjust 真实并入买卖点置信度（_apply_v102_decision_confidence，clamp [0,1]）；诊断页新增 V102DecisionCard 可执行卡片（操作建议/入场/止损/止盈/仓位/RRR + 质量评分卡 + 历史模式匹配）
+- **V321** advice_simulator：V102 建议执行模拟器（long/short 方向、止损优先、到期按收盘结算）+ 实证脚本 validate_v102_advice.py
+- **V322** POST /api/v1/diagnosis/advice-simulate + 诊断页「▶ 回放实证」按钮/结果表（每笔出场原因+收益、批量胜率）
+- **V323** easy-tdx advice MARKET CODE CLI 命令（--table/json）；collect_signal_advices 供 Web/CLI 共用
+- **V324** 缠论策略 use_v102_advice：3买 首仓按 V102 建议的止损/第一止盈动态出场（盘中 high/low 触发）
+- **V325** 批量实证：summarize_batch + scripts/advice_batch_validate.py（多标的汇总 vs 买入持有）
+- **质量门禁**：全量 pytest tests/unit/ 2534 通过（V320-V325 新增 33 个用例）；ruff/mypy/format 归零；vue-tsc + vite build 通过
+
 ## 上次会话状态
 - **无活跃后台任务** - 上一个 session 未留下进行中的工作
 - **项目已完成大部分核心功能** - 缠论算法(V48-V84)、回测引擎、前端可视化均已实现
