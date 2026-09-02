@@ -29,7 +29,7 @@ easy-tdx 的 V102 决策支持在缠论买卖点（3买/3卖）之上额外给�
 | CLI | `easy-tdx advice MARKET CODE` | json/table/csv 三类输出，与 Web 共用 `collect_signal_advices` |
 | 回测自动执行 | 缠论策略参数 `use_v102_advice` | 3买 首仓按 V102 建议的止损/第一止盈动态出场（盘中 high/low 触发） |
 | 批量实证 | `scripts/advice_batch_validate.py` | 多标的建议回放汇总 vs 买入持有（`--md` 输出 Markdown 报告） |
-| 单标实证 | `scripts/validate_v102_advice.py` | 合成行情端到端演示（`--md` 输出 Markdown 报告） |
+| 单标实证 | `scripts/validate_v102_advice.py` | 合成行情端到端演示（`--md` 输出 Markdown 报告；V346 起 3买/3卖 多空双向回放） |
 
 ### 关键数据流
 
