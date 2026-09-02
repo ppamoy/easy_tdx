@@ -705,7 +705,12 @@ def sync_all(vipdoc: str | None) -> None:
 )
 @click.option("--count", default=0, type=int, help="读取K线条数（0=全部）")
 @click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
-@click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
+@click.option(
+    "--output",
+    "output_fmt",
+    type=click.Choice(["json", "table", "csv", "md"]),
+    default="json",
+)
 def advice(
     market: str,
     code: str,
@@ -784,7 +789,48 @@ def advice(
     report["signals"] = len(result.mmds)
     report["advices"] = advices
 
+    if output_fmt == "md":
+        _print_advice_md(report)
+        return
     print_output(report, output_fmt)
+
+
+def _print_advice_md(report: dict[str, object]) -> None:
+    """V364: offline advice 单标 Markdown 报告（与 advice-batch --md 对齐）。"""
+    from typing import Any, cast
+
+    symbol = report.get("symbol", "")
+    reason_cn = {"stop": "止损", "tp1": "止盈", "expire": "到期", "invalid": "无效"}
+    trades = cast(list[dict[str, Any]], report.get("trades") or [])
+    advices = cast(list[dict[str, Any]], report.get("advices") or [])
+    click.echo(f"# 离线 V102 建议回放报告（{symbol}）")
+    click.echo()
+    click.echo(
+        f"K线 **{report.get('bars', 0)}** 根 | 缠论信号 **{report.get('signals', 0)}** | "
+        f"建议 **{report.get('count', 0)}** 笔"
+    )
+    click.echo()
+    click.echo("| # | 入场 | 止损 | 止盈1 | 出场价 | 原因 | 收益% |")
+    click.echo("|---|-----|-----|------|-------|------|-------|")
+    for i, t in enumerate(trades):
+        a = advices[i] if i < len(advices) else {}
+        reason = reason_cn.get(str(t.get("exit_reason", "")), t.get("exit_reason", ""))
+        click.echo(
+            f"| {i + 1} | {a.get('entry_price', 0.0):.2f} | "
+            f"{a.get('stop_loss', 0.0):.2f} | {a.get('take_profit_1', 0.0):.2f} | "
+            f"{t.get('exit_price', 0.0):.2f} | {reason} | {t.get('return_pct', 0.0):+.2f} |"
+        )
+    click.echo()
+    click.echo(
+        f"**汇总**：胜率 {cast(float, report.get('win_rate', 0.0)) * 100:.0f}% | "
+        f"平均收益 {cast(float, report.get('avg_return', 0.0)):+.2f}% | "
+        f"累计 {cast(float, report.get('total_return', 0.0)):+.2f}%"
+    )
+    click.echo(
+        f"**出场分布**：止损 {cast(float, report.get('stop_rate', 0.0)) * 100:.0f}% / "
+        f"止盈 {cast(float, report.get('tp_rate', 0.0)) * 100:.0f}% / "
+        f"到期 {cast(float, report.get('expire_rate', 0.0)) * 100:.0f}%"
+    )
 
 
 @offline.command("advice-batch")

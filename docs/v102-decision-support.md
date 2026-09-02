@@ -74,6 +74,7 @@ python scripts/advice_batch_validate.py SZ 000001 SH 600519 --md
 ```bash
 easy-tdx offline advice SZ 000001            # JSON
 easy-tdx offline advice SZ 000001 --output csv   # CSV 导出
+easy-tdx offline advice SZ 000001 --output md    # Markdown 报告（V364）
 easy-tdx offline advice SZ 000001 --count 300 --max-hold 15
 easy-tdx offline advice SZ 000001 --file /path/to/sh600000.day --output csv  # 指定任意 .day 路径（V352）
 ```

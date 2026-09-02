@@ -397,6 +397,7 @@ class TestAdviceCli:
         res = runner.invoke(offline, ["advice", "--help"])
         assert res.exit_code == 0
         assert "--file" in res.output  # V352: 直接指定 .day 文件路径
+        assert "md" in res.output  # V364: --output 支持 md 报告
 
     def test_offline_advice_batch_help(self):
         """V353: offline advice-batch（离线批量建议实证）注册可见，支持 md 输出。"""

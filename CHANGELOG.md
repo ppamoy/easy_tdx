@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline advice 支持 --output md（V364）—— 单标 Markdown 建议回放报告** —— easy-tdx offline advice MARKET CODE --output md：输出单标 Markdown 报告（K线/信号/建议数 + 逐笔明细表（入场/止损/止盈/出场/原因/收益）+ 胜率/平均收益/累计/出场分布），与 advice-batch --md / validate_v102_advice --md 对齐——离线建议回放三级报告能力统一（单标 md + 批量 md + 脚本 md）。
+
+---
+
 **offline watch 状态管理（V360）—— --reset 清空基线 / --info 查看状态** —— easy-tdx offline watch --reset（清空已见信号状态文件，下次运行重新建立基线）与 --info（显示状态文件路径 + 已记录信号数后退出）；两个操作不依赖 TDX_HOME/.day 目录即可执行，方便管理监控基线。
 
 ---
