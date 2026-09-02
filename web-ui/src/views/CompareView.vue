@@ -122,6 +122,73 @@ function refreshItems() {
 }
 
 watch(details, refreshItems, { deep: true })
+// V267: 指标对比导出 CSV（行=指标、列=对比任务，Excel 友好）
+const compareCsvMsg = ref('')
+function cmpPct(v: number | undefined | null): string {
+  return v === undefined || v === null || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%'
+}
+function cmpNum(v: number | undefined | null): string {
+  return v === undefined || v === null || !Number.isFinite(v) ? '-' : v.toFixed(3)
+}
+function cmpCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportCompareCsv() {
+  if (compareItems.value.length < 2) return
+  const perf = (i: { label: string; result: BacktestResult }) =>
+    (i.result.performance || {}) as unknown as Record<string, number>
+  const rows: string[][] = [['指标', ...compareItems.value.map((i) => cmpCsvEscape(i.label))]]
+  const metricRows: Array<[string, string, (p: Record<string, number>) => string]> = [
+    ['总收益', 'pct', (p) => cmpPct(p.total_return)],
+    ['年化收益', 'pct', (p) => cmpPct(p.annual_return)],
+    ['夏普', 'num', (p) => cmpNum(p.sharpe)],
+    ['最大回撤', 'pct', (p) => cmpPct(p.max_drawdown)],
+    ['胜率', 'pct', (p) => cmpPct(p.win_rate)],
+    ['盈亏比', 'num', (p) => cmpNum(p.profit_factor)],
+    ['交易数', 'num', (p) => String(p.total_trades ?? '-')],
+    ['波动率', 'pct', (p) => cmpPct(p.volatility)],
+  ]
+  metricRows.forEach(([label, , fmt]) => {
+    rows.push([label, ...compareItems.value.map((i) => fmt(perf(i)))])
+  })
+  // 验证维度行：可信度 / 5根命中率 / 超额命中率 / 样本外 / 稳健性
+  rows.push(['可信度', ...compareItems.value.map((i) => {
+    const t = i.result.model_trust
+    return t && t.score !== undefined ? Math.round(t.score) + '/100 ' + t.grade : '-'
+  })])
+  rows.push(['5根命中率', ...compareItems.value.map((i) => {
+    const h = i.result.signal_accuracy?.buy?.horizons?.['5']
+    return h && h.count > 0 ? cmpPct(h.hit_rate) : '-'
+  })])
+  rows.push(['超额命中率', ...compareItems.value.map((i) => {
+    const h = i.result.signal_accuracy?.buy?.horizons?.['5']
+    return h && h.count > 0 ? cmpPct(h.excess_hit_rate) : '-'
+  })])
+  rows.push(['样本外验证', ...compareItems.value.map((i) => {
+    const o = i.result.out_of_sample
+    return o ? (o.degraded ? '⚠ 衰减' : '✅ 泛化') : '-'
+  })])
+  rows.push(['稳健性', ...compareItems.value.map((i) => {
+    const s = i.result.segment_robustness
+    return s ? (s.overfit_likely ? '⚠ 过拟合' : '✅ 稳健') : '-'
+  })])
+  const csv = '\uFEFF' + rows.map((r) => r.join(',')).join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_compare_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    compareCsvMsg.value = '✓ 已导出对比 CSV'
+  } catch {
+    compareCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { compareCsvMsg.value = '' }, 2500)
+}
 </script>
 
 <template>
@@ -163,7 +230,10 @@ watch(details, refreshItems, { deep: true })
         </section>
 
         <section class="report-section">
-          <h3>指标对比</h3>
+          <h3>指标对比
+            <button class="ghost small" @click="exportCompareCsv">📊 导出 CSV</button>
+            <span v-if="compareCsvMsg" class="save-msg">{{ compareCsvMsg }}</span>
+          </h3>
           <CompareTable :items="compareItems" />
         </section>
       </div>

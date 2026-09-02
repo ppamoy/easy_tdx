@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**对比页「导出 CSV」（V267）—— 跨任务指标对比表 Excel 友好导出** —— 对比页（V102/V125）横向展示多个已完成任务的绩效/可信度/命中率/样本外/稳健性，但只能看不能存。本次在「指标对比」区加「📊 导出 CSV」：把对比表转置为 CSV（行=指标：总收益/年化/夏普/回撤/胜率/盈亏比/交易数/波动率/可信度/5根命中率/超额命中率/样本外/稳健性，列=对比任务），下载 easy_tdx_compare_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/CompareView.vue** —— 新增 exportCompareCsv（compareItems 各维度指标转置为 CSV，BOM+Blob 下载）+「指标对比」区「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：对比页勾选 2 个已完成任务 → 指标对比 →「导出 CSV」→ 下载文件含表头与 14 行、console 零错误。
+- clean HEAD 全量回归 **2400 passed / 0 failed**（V94–V266 全链认证）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V265（V266）—— 文档覆盖一键寻优排名 CSV 与指南自身迭代** —— V264 仅把指南更新到 V263，V265 新增的一键寻优排名「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V265：标题、全景表补 V264/V265 两行、3.7 参数寻优页补一键寻优排名 CSV 说明。
 
 ### 新增
