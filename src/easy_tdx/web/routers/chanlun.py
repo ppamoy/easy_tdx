@@ -156,6 +156,9 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
         if not mmd.bi:
             continue
         k_idx = mmd.bi.end.bar_index
+        # V344: 训练教学展示 V102 决策支持（仅 3买/3卖 有建议）
+        _v102_scorecard = getattr(mmd, "_signal_quality_scorecard", None) or {}
+        _v102_decision = getattr(mmd, "_decision_support", None) or {}
         mmd_cands.append(
             {
                 "index": k_idx,
@@ -166,6 +169,8 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
                     "type": mmd.mmd_type.value,
                     "confidence": round(mmd.confidence, 2),
                     "grade": getattr(getattr(mmd, "quality", None), "grade", None),
+                    "v102_grade": _v102_scorecard.get("overall_grade") or None,
+                    "v102_advice": _v102_decision.get("action_recommendation") or None,
                 },
             }
         )

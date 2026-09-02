@@ -34,7 +34,14 @@ interface ChanlunFx { type: 'ding' | 'di'; date: string; val: number }
 interface ChanlunBc { type: 'bi' | 'pz' | 'qs'; bc: boolean; date: string | null; msg: string }
 interface Candidate {
   index: number; date: string; kind: 'fractal' | 'mmd'; fx_type: 'ding' | 'di' | null
-  signal: { type: string; confidence: number; grade: string | null } | null
+  signal: {
+    type: string
+    confidence: number
+    grade: string | null
+    // V344: 训练教学展示 V102 决策支持（仅 3买/3卖 有建议）
+    v102_grade?: string | null
+    v102_advice?: string | null
+  } | null
 }
 interface MmdOutcome {
   type: string; date: string | null; price: number | null
@@ -439,6 +446,14 @@ onMounted(() => {
                     {{ currentCandidate.signal.type }}（置信度 {{ (currentCandidate.signal.confidence * 100).toFixed(0) }}%{{ currentCandidate.signal.grade ? ' · ' + currentCandidate.signal.grade + ' 级' : '' }}）
                   </span>
                   <span v-else class="answer-val hold">未发现信号（观望）</span>
+                  <!-- V344: V102 决策支持教学提示（仅 3买/3卖 有） -->
+                  <span v-if="currentCandidate.signal?.v102_grade" class="train-v102-grade" :class="'g' + currentCandidate.signal.v102_grade">
+                    V102·{{ currentCandidate.signal.v102_grade }}
+                  </span>
+                  <span v-if="currentCandidate.signal?.v102_advice" class="train-v102-advice"
+                        :class="{ 'adv-buy': currentCandidate.signal.v102_advice.includes('买入'), 'adv-sell': currentCandidate.signal.v102_advice.includes('卖出') }">
+                    {{ currentCandidate.signal.v102_advice }}
+                  </span>
                 </div>
                 <div class="answer-line">
                   <span class="answer-label">结果：</span>
