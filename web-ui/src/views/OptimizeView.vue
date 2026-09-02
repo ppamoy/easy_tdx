@@ -232,6 +232,43 @@ const sortedRanking = computed(() => {
   if (!rows.length || rankSort.value === 'return') return rows
   return [...rows].sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
 })
+// V265: 一键寻优排名导出 CSV（跨策略对比，Excel 友好）
+const allCsvMsg = ref('')
+function allCsvEscape(v: string): string {
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v
+}
+function exportAllCsv() {
+  if (!sortedRanking.value.length) return
+  const header = ['排名', '策略', '参数', '总收益', '夏普', '最大回撤', '交易数', '胜率', '5根命中', '可信度']
+  const data = sortedRanking.value.map((r, i) => [
+    i + 1,
+    allCsvEscape(r.strategy_label || r.strategy),
+    allCsvEscape(JSON.stringify(r.params ?? {})),
+    ((r.total_return ?? 0) * 100).toFixed(2) + '%',
+    (r.sharpe ?? 0).toFixed(2),
+    ((r.max_drawdown ?? 0) * 100).toFixed(2) + '%',
+    String(r.total_trades ?? ''),
+    ((r.win_rate ?? 0) * 100).toFixed(1) + '%',
+    r.hit_rate != null ? (r.hit_rate * 100).toFixed(1) + '%' : '',
+    r.trust_score != null ? Math.round(r.trust_score) : '',
+  ])
+  const csv = '\uFEFF' + [header.join(','), ...data.map((d) => d.join(','))].join('\n')
+  try {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'easy_tdx_optimize_all_' + new Date().toISOString().slice(0, 10) + '.csv'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    allCsvMsg.value = '✓ 已导出一键寻优排名 CSV'
+  } catch {
+    allCsvMsg.value = '导出失败（浏览器权限）'
+  }
+  setTimeout(() => { allCsvMsg.value = '' }, 2500)
+}
 
 // V135: 寻优报告导出（Markdown 复制）
 const copyMsg = ref('')
@@ -859,6 +896,8 @@ async function saveOptBatchAsPortfolio() {
             <div class="rank-toggle">
               <button class="ghost small" :class="{ active: rankSort === 'return' }" @click="rankSort = 'return'">按收益</button>
               <button class="ghost small" :class="{ active: rankSort === 'trust' }" @click="rankSort = 'trust'">按可信度</button>
+              <button class="ghost small" @click="exportAllCsv">📊 导出 CSV</button>
+              <span v-if="allCsvMsg" class="save-msg">{{ allCsvMsg }}</span>
             </div>
           </div>
           <table class="opt-table">

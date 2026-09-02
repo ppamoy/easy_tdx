@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**一键寻优排名「导出 CSV」（V265）—— 跨策略对比表 Excel 友好导出** —— 单策略寻优网格排名已有「📊 导出 CSV」（V257），一键寻优所有策略的「策略排名」表此前没有任何导出。本次在排名表「按收益/按可信度」旁加「📊 导出 CSV」：BOM + 表头（排名/策略/参数/总收益/夏普/最大回撤/交易数/胜率/5根命中/可信度）+ 排序后的行数据，下载 easy_tdx_optimize_all_日期.csv。
+
+### 新增
+
+- **web-ui/src/views/OptimizeView.vue** —— 新增 exportAllCsv（一键寻优 ranking，BOM+CSV+Blob 下载）+ 策略排名表「📊 导出 CSV」按钮 + 提示。
+
+### 验证
+
+- vue-tsc + vite build 通过；ruff/mypy 无后端改动。
+- Playwright 浏览器回归：寻优页一键寻优所有策略 → 策略排名 →「导出 CSV」→ 下载文件含表头与 22 行、console 零错误。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V263（V264）—— 文档覆盖信号列表 CSV 与指南自身迭代** —— V262 仅把指南更新到 V261，V263 新增的监控页「信号列表导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V263：标题、全景表补 V262/V263 两行、3.5 信号监控页补新信号面板导出说明。
 
 ### 新增
