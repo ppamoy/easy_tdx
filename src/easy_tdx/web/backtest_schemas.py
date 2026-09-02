@@ -66,6 +66,14 @@ class BacktestRequest(BaseModel):
     oos_train_ratio: float = Field(
         default=0.7, ge=0.5, le=0.9, description="训练段占比（样本外验证用）"
     )
+    use_walk_forward: bool = Field(
+        default=False,
+        description="Walk-Forward 滚动窗口验证（V287）：逐窗口回测聚合，"
+        "评估参数在未见数据上的稳定性/过拟合风险。默认 False 不做。",
+    )
+    step_ratio: float = Field(
+        default=0.1, gt=0, le=0.5, description="Walk-Forward 滚动步长比例"
+    )
 
     # 数据来源 A：内联 OHLCV（上限与 symbol 路径的 count 上限对齐，防 DoS）
     ohlcv: list[dict[str, Any]] | None = Field(
@@ -238,6 +246,7 @@ class BacktestResultResponse(BaseModel):
     segment_robustness: dict[str, Any] | None = None
     model_trust: dict[str, Any] | None = None
     out_of_sample: dict[str, Any] | None = None
+    walk_forward: dict[str, Any] | None = None
     diagnostic: str | None = None
 
 

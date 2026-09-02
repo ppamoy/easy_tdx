@@ -371,3 +371,41 @@ class TestBacktestCLI:
         assert "5根命中" in table
         assert "可信度" in table
         assert "样本外" in table
+
+    def test_backtest_walk_forward_request(self):
+        """V287: BacktestRequest 应支持 use_walk_forward，且 _run_backtest 返回 walk_forward。"""
+        import numpy as np
+        import pandas as pd
+        from datetime import datetime, timedelta
+
+        from easy_tdx.web.backtest_schemas import BacktestRequest
+        from easy_tdx.web.routers.backtest import _run_backtest
+
+        n = 220
+        base = datetime(2023, 1, 1)
+        close = np.linspace(100.0, 120.0, n)
+        df = pd.DataFrame({
+            "datetime": [base + timedelta(days=i) for i in range(n)],
+            "open": close - 0.1, "high": close + 0.2, "low": close - 0.2,
+            "close": close, "vol": np.full(n, 1_000_000.0),
+            "amount": np.full(n, 1_000_000_000.0),
+        })
+        ohlcv = df.to_dict(orient="records")
+        req = BacktestRequest(
+            strategy="ma_cross", params={"fast": 5, "slow": 20},
+            cash=500000, use_walk_forward=True, step_ratio=0.1, ohlcv=ohlcv,
+        )
+        assert req.use_walk_forward is True
+        assert req.step_ratio == 0.1
+        result = _run_backtest(df, req)
+        wf = result.get("walk_forward")
+        assert wf is not None
+        assert wf.get("windows", 0) >= 1
+        assert "verdict" in wf
+        # 不开启时不计算
+        req2 = BacktestRequest(
+            strategy="ma_cross", params={"fast": 5, "slow": 20},
+            cash=500000, ohlcv=ohlcv,
+        )
+        result2 = _run_backtest(df, req2)
+        assert result2.get("walk_forward") is None

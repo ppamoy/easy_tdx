@@ -64,6 +64,9 @@ export interface BacktestRequest {
   robustness_segments?: number | null
   out_of_sample?: boolean
   oos_train_ratio?: number
+  // V287: Walk-Forward 滚动窗口验证（逐窗口回测聚合防过拟合判定）
+  use_walk_forward?: boolean
+  step_ratio?: number
   ohlcv?: Bar[]
   symbol?: string
   category?: Category

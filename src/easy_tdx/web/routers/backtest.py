@@ -370,6 +370,31 @@ def _run_backtest(df: pd.DataFrame, req: BacktestRequest) -> dict[str, Any]:
         except Exception:
             pass
 
+    # V287: Walk-Forward 滚动窗口验证（与 CLI verify --walk-forward V225 对齐）
+    if getattr(req, "use_walk_forward", False):
+        try:
+
+            from easy_tdx.cli.cmd_run_all import _compute_walk_forward_single
+
+            # 仅保留 datetime + 数值列（去掉 date 等字符串列，StrategyDataProxy 逐列转 float）
+            num_cols = [
+                c for c in df.columns
+                if c == "datetime" or pd.api.types.is_numeric_dtype(df[c])
+            ]
+            wf_df = df[num_cols].copy()
+            wf = _compute_walk_forward_single(
+                wf_df,
+                entry.build(req.params).__class__,
+                cash=req.cash,
+                commission=req.commission,
+                step_ratio=getattr(req, "step_ratio", 0.1),
+            )
+            if wf:
+                result_dict["walk_forward"] = wf
+        except Exception:
+            pass
+
+
     return result_dict
 
 

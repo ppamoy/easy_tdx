@@ -4,6 +4,23 @@
 
 ## [Unreleased]
 
+**回测页 Walk-Forward 滚动验证（V287）—— Web 单标回测补齐防过拟合维度** —— CLI verify 已有 --walk-forward（V225），Web 回测页此前只有分段稳健性/样本外验证，缺滚动窗口维度。本次给回测页加「Walk-Forward 滚动验证」勾选：请求带 use_walk_forward/step_ratio，后端单标回测复用 _compute_walk_forward_single 计算 walk_forward（windows/train_mean/test_mean/degraded/verdict），报告区渲染「🔁 Walk-Forward 滚动窗口验证」面板，「📋 复制报告」同步补该段——与 CLI V225 / 寻优页 V123 对齐。
+
+### 新增
+
+- **src/easy_tdx/web/backtest_schemas.py** —— BacktestRequest 增加 use_walk_forward/step_ratio；BacktestResultResponse 增加 walk_forward 字段。
+- **src/easy_tdx/web/routers/backtest.py** —— _run_backtest 支持 use_walk_forward：仅保留 datetime+数值列后调用 _compute_walk_forward_single，结果写入 walk_forward。
+- **web-ui/src/views/BacktestView.vue** —— 新增 checkWalkForward 勾选 + 请求字段 + 报告区 Walk-Forward 面板（WalkForwardPanel）+ 复制报告补段。
+- **web-ui/src/types.ts** —— BacktestRequest 增加 use_walk_forward/step_ratio 字段。
+
+### 验证
+
+- 新增 1 项单测（tests/unit/test_backtest_cli.py）：BacktestRequest 支持 use_walk_forward 且 _run_backtest 返回 walk_forward（关闭时不计算）。
+- ruff / mypy 零告警；vue-tsc + vite build 通过。
+- Playwright 浏览器回归：勾选 Walk-Forward → 回测 → 报告区面板可见、复制报告含 Walk-Forward 段、console 零错误。
+- 全量单测 **2477 passed**（新增 1 项；其余失败为工作区未提交的缠论重构所致，与本次无关）。
+## [Unreleased]
+
 **模型准确度验证指南扩展到 V285（V286）—— 文档覆盖组合交易明细 CSV 与指南自身迭代** —— V284 仅把指南更新到 V283，V285 新增的组合交易明细「导出 CSV」入口未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V285：标题、全景表补 V284/V285 两行、3.4 组合回测页报告导出补交易明细 CVS 说明。
 
 ### 新增

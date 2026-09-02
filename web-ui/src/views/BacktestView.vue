@@ -15,6 +15,7 @@ import SignalAccuracyPanel from '../components/SignalAccuracyPanel.vue'
 import ChanlunAccuracyPanel from '../components/ChanlunAccuracyPanel.vue'
 import OutOfSamplePanel from '../components/OutOfSamplePanel.vue'
 import SegmentRobustnessPanel from '../components/SegmentRobustnessPanel.vue'
+import WalkForwardPanel from '../components/WalkForwardPanel.vue'
 import ValidationSummaryPanel from '../components/ValidationSummaryPanel.vue'
 import KlineChart from '../components/KlineChart.vue'
 import MetricTable from '../components/MetricTable.vue'
@@ -57,6 +58,8 @@ const checkRobustness = ref(false)
 const robustnessSegmentCount = ref(3)
 // 样本外验证（V105）：把区间切成训练段 + 样本外持有段验证模型泛化能力
 const checkOutOfSample = ref(false)
+// V287: Walk-Forward 滚动窗口验证（逐窗口回测聚合防过拟合判定）
+const checkWalkForward = ref(false)
 const oosTrainRatio = ref(0.7)
 
 // 缠论相关状态
@@ -172,6 +175,8 @@ async function onRun() {
     execution: execution.value,
     robustness_segments: checkRobustness.value ? robustnessSegmentCount.value : null,
     out_of_sample: checkOutOfSample.value,
+    use_walk_forward: checkWalkForward.value,
+    step_ratio: 0.1,
     oos_train_ratio: oosTrainRatio.value,
   })
   // 3. 如果选择了缠论策略，运行缠论分析
@@ -392,6 +397,14 @@ function buildReportText(): string {
     lines.push('- ' + (r.out_of_sample.verdict || ''))
     lines.push('- 训练段收益：' + pct(r.out_of_sample.train?.total_return) + ' · 样本外收益：' + pct(r.out_of_sample.test?.total_return))
     lines.push('- 样本外5根命中率：' + pct(r.out_of_sample.test?.hit_rate) + ' · 超额：' + (r.out_of_sample.test?.excess_hit_rate != null ? (r.out_of_sample.test.excess_hit_rate >= 0 ? '+' : '') + pct(r.out_of_sample.test.excess_hit_rate) : '-'))
+    lines.push('')
+  }
+  // V287: Walk-Forward 滚动窗口验证段
+  const wfr = (r as any).walk_forward
+  if (wfr) {
+    lines.push('## Walk-Forward 滚动窗口验证（防过拟合）')
+    lines.push('- ' + (wfr.verdict || ''))
+    lines.push('- 窗口数：' + (wfr.windows ?? '-') + ' · 训练段均值：' + pct(wfr.train_mean) + ' · 样本外均值：' + pct(wfr.test_mean))
     lines.push('')
   }
   lines.push('---')
@@ -933,6 +946,12 @@ async function onSave() {
             <option :value="0.8">训练 80%</option>
           </select>
         </div>
+        <div class="field">
+          <label title="V287: 逐窗口回测聚合，评估参数在未见数据上的稳定性/过拟合风险">
+            <input type="checkbox" v-model="checkWalkForward" />
+            Walk-Forward 滚动验证（防过拟合）
+          </label>
+        </div>
       </section>
 
       <button
@@ -1060,6 +1079,12 @@ async function onSave() {
         <section v-if="store.result.out_of_sample" class="report-section">
           <h3>🔬 样本外验证（训练段 vs 未见过数据）</h3>
           <OutOfSamplePanel :report="store.result.out_of_sample" />
+        </section>
+
+        <!-- V287: Walk-Forward 滚动窗口验证（勾选后显示） -->
+        <section v-if="(store.result as any).walk_forward" class="report-section">
+          <h3>🔁 Walk-Forward 滚动窗口验证（防过拟合）</h3>
+          <WalkForwardPanel :report="(store.result as any).walk_forward" />
         </section>
 
         <section class="report-section">
