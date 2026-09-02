@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+**模型准确度验证指南扩展到 V307（V308）—— 文档覆盖 verify 表格与指南自身迭代** —— V306 仅把指南更新到 V305，V307 新增的 verify `--table` 输出未收录。本次把 docs/model-accuracy-guide.md 更新为 V95–V307：标题、全景表补 V306/V307 两行、3.9 命令行节 verify 条目补 --table 说明。
+
+### 新增
+
+- **docs/model-accuracy-guide.md** —— 标题改 V95–V307；全景表补 V306/V307；3.9 命令行节 verify 条目补「--table（V307）表格输出」说明。
+
+### 验证
+
+- 纯文档改动，无需 ruff/mypy/构建；结构与其他 docs/*.md 一致。
+## [Unreleased]
+
 **CLI verify 支持 --table（V307）—— 单标验证报告表格化输出** —— verify-multi（V293）与 run-all 已有表格输出，单标 verify（V117）此前只有 JSON。本次给 verify 加 `--table`：输出绩效（总收益/年化/夏普/回撤/胜率/交易数）+ 准确度/稳健性/可信度/样本外/滚动验证各结论 + 汇总——命令行单标验证一眼看结论，与 verify-multi --table 体验一致。
 
 ### 新增
