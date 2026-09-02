@@ -37,7 +37,14 @@ interface StockResult {
   zs_count: number
   buy_1_count: number
   sell_1_count: number
-  latest_mmd: { type: string; date: string; price: number } | null
+  latest_mmd: {
+    type: string
+    date: string
+    price: number
+    v102_signal_quality?: { overall_grade: string; overall_score: number; strength: string; confidence_adjust: number } | null
+    v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string } | null
+    v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number } | null
+  } | null
   classification: string
   // 新增：用于快速操作建议
   days_since_signal?: number
@@ -1067,6 +1074,14 @@ onMounted(() => {
             <div v-if="stock.latest_mmd" class="stock-latest">
               最新: {{ stock.latest_mmd.type }} @ {{ stock.latest_mmd.date }}
               <span v-if="stock.days_since_signal !== undefined && stock.days_since_signal < 999" class="days-since">({{ stock.days_since_signal }}天前)</span>
+              <!-- V102: 质量评级 + 操作建议摘要 -->
+              <span v-if="stock.latest_mmd.v102_signal_quality?.overall_grade" class="screen-v102-grade" :class="'g' + stock.latest_mmd.v102_signal_quality.overall_grade">
+                质量{{ stock.latest_mmd.v102_signal_quality.overall_grade }}
+              </span>
+              <span v-if="stock.latest_mmd.v102_decision_support?.action_recommendation" class="screen-v102-advice"
+                    :class="{ 'adv-buy': stock.latest_mmd.v102_decision_support.action_recommendation.includes('买入'), 'adv-sell': stock.latest_mmd.v102_decision_support.action_recommendation.includes('卖出') }">
+                {{ stock.latest_mmd.v102_decision_support.action_recommendation }}
+              </span>
             </div>
             <div v-if="stock.latest_mmd" class="stock-hint" :style="{ borderColor: ACTION_COLORS[getRecommendation(stock).action] }">
               💡 {{ getActionExplanation(stock) }}
@@ -1720,4 +1735,30 @@ onMounted(() => {
   color: var(--text-dim);
   line-height: 1.5;
 }
+
+/* V102: 信号质量评级 + 操作建议摘要 */
+.screen-v102-grade {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  color: #fff;
+  margin-left: 6px;
+}
+.screen-v102-grade.gA { background: #22c55e; }
+.screen-v102-grade.gB { background: #4a9eff; }
+.screen-v102-grade.gC { background: #f59e0b; }
+.screen-v102-grade.gD { background: #ef4444; }
+.screen-v102-advice {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+.screen-v102-advice.adv-buy { color: #22c55e; }
+.screen-v102-advice.adv-sell { color: #ef4444; }
 </style>

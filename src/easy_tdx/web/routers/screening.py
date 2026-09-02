@@ -326,6 +326,10 @@ def _get_latest_mmd(result: Any) -> dict[str, Any] | None:
         else latest.bi.high
         if latest.bi
         else None,
+        # V102 决策支持（条件264-267）
+        "v102_signal_quality": getattr(latest, "_signal_quality_scorecard", None),
+        "v102_decision_support": getattr(latest, "_decision_support", None),
+        "v102_pattern_match": getattr(latest, "_historical_pattern_match", None),
     }
 
 
