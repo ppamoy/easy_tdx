@@ -98,9 +98,7 @@ function buildOption(): echarts.EChartsCoreOption {
       splitLine: { lineStyle: { color: '#2a2e3a' } },
       axisLabel: { formatter: (v: number) => fmt2(v) },
     },
-    dataZoom: [
-      { type: 'slider', bottom: 10, start: 60, end: 100 },
-    ],
+    dataZoom: [{ type: 'slider', bottom: 10, start: 60, end: 100 }],
     series: [
       {
         name: 'K线',
@@ -130,7 +128,10 @@ onMounted(() => {
   window.addEventListener('resize', resize)
   const el = container.value
   if (el) {
-    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), {
+      passive: false,
+      capture: true,
+    })
   }
 })
 onBeforeUnmount(() => {

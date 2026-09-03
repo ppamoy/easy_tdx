@@ -26,9 +26,25 @@ interface Signal {
   confidence: number
   msg: string
   // V102 决策支持（条件264-267）
-  v102_signal_quality?: { overall_grade: string; overall_score: number; strength: string; confidence_adjust: number } | null
-  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string } | null
-  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number } | null
+  v102_signal_quality?: {
+    overall_grade: string
+    overall_score: number
+    strength: string
+    confidence_adjust: number
+  } | null
+  v102_decision_support?: {
+    entry_price: number
+    stop_loss: number
+    take_profit_1: number
+    risk_reward_ratio: number
+    position_size_pct: number
+    action_recommendation: string
+  } | null
+  v102_pattern_match?: {
+    similar_patterns_found: number
+    win_rate: number
+    avg_return: number
+  } | null
 }
 
 const stocks = ref<MonitoredStock[]>([
@@ -66,7 +82,7 @@ function loadWatchList() {
 }
 
 function addFromWatchlist(item: WatchListItem) {
-  const exists = stocks.value.some(s => s.code === item.code)
+  const exists = stocks.value.some((s) => s.code === item.code)
   if (!exists) {
     stocks.value.push({ market: item.market, code: item.code })
     saveStocks()
@@ -77,7 +93,9 @@ function removeWatchlist(index: number) {
   watchList.value.splice(index, 1)
   try {
     localStorage.setItem('easy_tdx_watchlist', JSON.stringify(watchList.value))
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ── 自选股历史信号准确度（V107：复用 /chanlun/analyze 的 signal_accuracy） ──
@@ -120,7 +138,7 @@ async function toggleWatchAccuracy(item: WatchListItem) {
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}))
-      throw new Error((err as { detail?: string }).detail ?? ('HTTP ' + resp.status))
+      throw new Error((err as { detail?: string }).detail ?? 'HTTP ' + resp.status)
     }
     const data = await resp.json()
     const sa = data.signal_accuracy
@@ -159,7 +177,9 @@ function exportStockAccCsv(market: string, code: string) {
   const acc = stockAcc.value[key]
   if (!acc || acc.ranking.length === 0) {
     stockAccCsvMsg.value = '没有可导出的准确度明细'
-    setTimeout(() => { stockAccCsvMsg.value = '' }, 2500)
+    setTimeout(() => {
+      stockAccCsvMsg.value = ''
+    }, 2500)
     return
   }
   const header = ['信号类型', '方向', '信号数', '5根命中率', '超额命中率', '5根均值', '结论']
@@ -187,9 +207,10 @@ function exportStockAccCsv(market: string, code: string) {
   } catch {
     stockAccCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { stockAccCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    stockAccCsvMsg.value = ''
+  }, 2500)
 }
-
 
 // ── 主监控列表每股历史信号准确度（V121：复用 /chanlun/analyze signal_accuracy） ──
 const stockAcc = ref<Record<string, WatchAccuracy>>({})
@@ -216,7 +237,7 @@ async function toggleStockAcc(s: MonitoredStock) {
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}))
-      throw new Error((err as { detail?: string }).detail ?? ('HTTP ' + resp.status))
+      throw new Error((err as { detail?: string }).detail ?? 'HTTP ' + resp.status)
     }
     const data = await resp.json()
     const sa = data.signal_accuracy
@@ -251,7 +272,7 @@ let checkInterval: number | null = null
 
 function addStock() {
   if (!newCode.value.match(/^\d{6}$/)) return
-  const exists = stocks.value.some(s => s.code === newCode.value)
+  const exists = stocks.value.some((s) => s.code === newCode.value)
   if (exists) return
   stocks.value.push({ market: newMarket.value, code: newCode.value })
   newCode.value = ''
@@ -324,7 +345,7 @@ async function checkSignals(taskId: string) {
       }
     }
     // 更新任务状态
-    const task = tasks.value.find(t => t.task_id === taskId)
+    const task = tasks.value.find((t) => t.task_id === taskId)
     if (task) task.last_check = Date.now() / 1000
   } catch {
     // 静默失败
@@ -344,7 +365,7 @@ async function loadTasks() {
 
 async function stopTask(taskId: string) {
   await fetch(`/api/v1/monitor/${taskId}/stop`, { method: 'POST' })
-  tasks.value = tasks.value.filter(t => t.task_id !== taskId)
+  tasks.value = tasks.value.filter((t) => t.task_id !== taskId)
   if (checkInterval !== null) {
     clearInterval(checkInterval)
     checkInterval = null
@@ -362,22 +383,40 @@ function fmtTime(ts: number): string {
 }
 
 const MMD_COLORS: Record<string, string> = {
-  '1buy': '#22c55e', '2buy': '#4ade80', '3buy': '#86efac',
-  '1sell': '#ef4444', '2sell': '#f87171', '3sell': '#fca5a5',
+  '1buy': '#22c55e',
+  '2buy': '#4ade80',
+  '3buy': '#86efac',
+  '1sell': '#ef4444',
+  '2sell': '#f87171',
+  '3sell': '#fca5a5',
 }
 // V143: 批量验证监控股（对已选监控标的跑所选策略，按可信度排名）
 const batchStrategy = ref('ma_cross')
 const batchStrategyLabel = ref('双均线交叉')
-const strategyOptions = ref<Array<{ name: string; label: string; params: Array<{ name: string; default?: number | string | boolean }> }>>([])
+const strategyOptions = ref<
+  Array<{
+    name: string
+    label: string
+    params: Array<{ name: string; default?: number | string | boolean }>
+  }>
+>([])
 interface MonBatchRow {
-  symbol: string; market: string; code: string
-  total_return: number | null; win_rate: number | null; hit_rate: number | null
-  excess_hit_rate: number | null; trust_score: number | null; trust_grade: string | null
+  symbol: string
+  market: string
+  code: string
+  total_return: number | null
+  win_rate: number | null
+  hit_rate: number | null
+  excess_hit_rate: number | null
+  trust_score: number | null
+  trust_grade: string | null
   trades: number | null
   // V180: 该股样本外验证结论
-  oos_degraded: boolean | null; oos_verdict: string
+  oos_degraded: boolean | null
+  oos_verdict: string
   // V315: 该股 Walk-Forward 滚动验证结论
-  wf_degraded: boolean | null; wf_verdict: string
+  wf_degraded: boolean | null
+  wf_verdict: string
 }
 const monBatchRows = ref<MonBatchRow[]>([])
 const monBatchLoading = ref(false)
@@ -388,13 +427,18 @@ const lastMonBatchAt = ref('')
 function saveMonBatchPersist() {
   if (!monBatchRows.value.length) return
   try {
-    localStorage.setItem(MON_BATCH_KEY, JSON.stringify({
-      rows: monBatchRows.value,
-      strategy: batchStrategy.value,
-      strategy_label: batchStrategyLabel.value || batchStrategy.value,
-      at: new Date().toISOString(),
-    }))
-  } catch { /* localStorage 不可用忽略 */ }
+    localStorage.setItem(
+      MON_BATCH_KEY,
+      JSON.stringify({
+        rows: monBatchRows.value,
+        strategy: batchStrategy.value,
+        strategy_label: batchStrategyLabel.value || batchStrategy.value,
+        at: new Date().toISOString(),
+      }),
+    )
+  } catch {
+    /* localStorage 不可用忽略 */
+  }
 }
 function restoreMonBatchPersist() {
   try {
@@ -406,7 +450,9 @@ function restoreMonBatchPersist() {
       lastMonBatchAt.value = data.at || ''
       monBatchMsg.value = '已恢复上次监控批量验证（' + (data.strategy_label || '') + '）'
     }
-  } catch { /* 解析失败忽略 */ }
+  } catch {
+    /* 解析失败忽略 */
+  }
 }
 
 async function loadMonitorStrategies() {
@@ -416,10 +462,14 @@ async function loadMonitorStrategies() {
     if (!resp.ok) return
     const data = await resp.json()
     strategyOptions.value = (data.strategies ?? []).map((s: any) => ({
-      name: s.name, label: s.label, params: s.params ?? [],
+      name: s.name,
+      label: s.label,
+      params: s.params ?? [],
     }))
     if (strategyOptions.value.length) batchStrategy.value = strategyOptions.value[0].name
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function monBatchDefaults(): Record<string, number | string | boolean> {
@@ -478,7 +528,9 @@ async function runMonitorBatchVerify() {
           wf_degraded: result.walk_forward?.degraded ?? null,
           wf_verdict: result.walk_forward?.verdict ?? '',
         })
-      } catch { /* 单只失败跳过 */ }
+      } catch {
+        /* 单只失败跳过 */
+      }
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     monBatchRows.value = rows
@@ -495,12 +547,12 @@ function monPct(v: number | null | undefined): string {
   return v === null || v === undefined || !Number.isFinite(v) ? '-' : (v * 100).toFixed(1) + '%'
 }
 const monRouter = useRouter()
-function monTrust(r: typeof monBatchRows.value[number]): string {
+function monTrust(r: (typeof monBatchRows.value)[number]): string {
   if (r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
 // V239: 从监控批量验证直达该股单标回测（与选股 V118 / 回测 V137 / 组合候选 V237 对齐）
-function viewMonBatchStock(r: typeof monBatchRows.value[number]) {
+function viewMonBatchStock(r: (typeof monBatchRows.value)[number]) {
   monRouter.push({
     path: '/',
     query: {
@@ -538,7 +590,9 @@ function exportSignalsCsv() {
   } catch {
     signalsCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { signalsCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    signalsCsvMsg.value = ''
+  }, 2500)
 }
 // V283: 信号列表复制 JSON（机器可读，Agent/脚本友好）
 const signalsJsonMsg = ref('')
@@ -561,7 +615,9 @@ async function copySignalsJson() {
   } catch {
     signalsJsonMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { signalsJsonMsg.value = '' }, 2500)
+  setTimeout(() => {
+    signalsJsonMsg.value = ''
+  }, 2500)
 }
 // V255: 监控批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
 const monBatchCsvMsg = ref('')
@@ -570,7 +626,17 @@ function monCsvEscape(v: string): string {
 }
 function exportMonBatchCsv() {
   if (monBatchRows.value.length === 0) return
-  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const header = [
+    '排名',
+    '标的',
+    '总收益',
+    '胜率',
+    '5根命中率',
+    '超额命中率',
+    '可信度',
+    '样本外',
+    '交易数',
+  ]
   const lines = [header.join(',')]
   sortedMonBatchRows.value.forEach((r, i) => {
     const row = [
@@ -601,18 +667,20 @@ function exportMonBatchCsv() {
   } catch {
     monBatchCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { monBatchCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    monBatchCsvMsg.value = ''
+  }, 2500)
 }
 // V180: 样本外列辅助
-function monOosLabel(r: typeof monBatchRows.value[number]): string {
+function monOosLabel(r: (typeof monBatchRows.value)[number]): string {
   if (r.oos_degraded === null || r.oos_degraded === undefined) return '-'
   return r.oos_degraded ? '⚠衰减' : '✅泛化'
 }
-function monOosCls(r: typeof monBatchRows.value[number]): string {
+function monOosCls(r: (typeof monBatchRows.value)[number]): string {
   if (r.oos_degraded === null || r.oos_degraded === undefined) return ''
   return r.oos_degraded ? 'neg' : 'pos'
 }
-function monOosTitle(r: typeof monBatchRows.value[number]): string {
+function monOosTitle(r: (typeof monBatchRows.value)[number]): string {
   return r.oos_verdict || ''
 }
 // V151: 监控批量验证排序方式（收益 / 可信度）
@@ -642,13 +710,31 @@ function copyMonBatchRanking() {
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   monBatchRows.value.forEach((r, i) => {
     lines.push(
-      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + monPct(r.total_return) +
-      ' | ' + monPct(r.win_rate) + ' | ' + monPct(r.hit_rate) + ' | ' + monPct(r.excess_hit_rate) +
-      ' | ' + monTrust(r) + ' | ' + monOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
+      '| ' +
+        (i + 1) +
+        ' | ' +
+        r.symbol +
+        ' | ' +
+        monPct(r.total_return) +
+        ' | ' +
+        monPct(r.win_rate) +
+        ' | ' +
+        monPct(r.hit_rate) +
+        ' | ' +
+        monPct(r.excess_hit_rate) +
+        ' | ' +
+        monTrust(r) +
+        ' | ' +
+        monOosLabel(r) +
+        ' | ' +
+        (r.trades ?? '-') +
+        ' |',
     )
   })
   lines.push('')
-  lines.push('方法：对已选监控标的（最多 12 只）用所选策略独立回测（最近 500 根日线），按模型可信度（V101）降序排名。')
+  lines.push(
+    '方法：对已选监控标的（最多 12 只）用所选策略独立回测（最近 500 根日线），按模型可信度（V101）降序排名。',
+  )
   const text = lines.join('\n')
   const doCopy = async () => {
     try {
@@ -662,7 +748,9 @@ function copyMonBatchRanking() {
       document.body.removeChild(ta)
     }
     monBatchCopyMsg.value = '✓ 已复制批量验证排名'
-    setTimeout(() => { monBatchCopyMsg.value = '' }, 2500)
+    setTimeout(() => {
+      monBatchCopyMsg.value = ''
+    }, 2500)
   }
   void doCopy()
 }
@@ -683,7 +771,9 @@ async function copyMonBatchJson() {
   } catch {
     monBatchJsonCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { monBatchJsonCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    monBatchJsonCopyMsg.value = ''
+  }, 2500)
 }
 async function saveMonBatchAsPortfolio() {
   if (monBatchRows.value.length === 0 || monBatchSaving.value) return
@@ -697,7 +787,9 @@ async function saveMonBatchAsPortfolio() {
     if (visible.length === 0) {
       monBatchSaveMsg.value = '没有样本外稳健的监控股可保存（请关闭「仅看样本外稳健」再试）'
       monBatchSaving.value = false
-      setTimeout(() => { monBatchSaveMsg.value = '' }, 4000)
+      setTimeout(() => {
+        monBatchSaveMsg.value = ''
+      }, 4000)
       return
     }
     const stocks = visible.map((r) => r.market + ':' + r.code)
@@ -709,10 +801,13 @@ async function saveMonBatchAsPortfolio() {
     const oosDegradedN = oosKnown.filter((r) => r.oos_degraded === true).length
     const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
     const oosVerdict = oosKnown.length
-      ? (oosRatio! < 0.5 ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健' : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减')
+      ? oosRatio! < 0.5
+        ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健'
+        : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减'
       : ''
     await saveStrategy({
-      name: (batchStrategyLabel.value || batchStrategy.value) + ' · 监控验证' + stocks.length + '只',
+      name:
+        (batchStrategyLabel.value || batchStrategy.value) + ' · 监控验证' + stocks.length + '只',
       kind: 'portfolio',
       strategy: batchStrategy.value,
       strategy_label: batchStrategyLabel.value,
@@ -734,7 +829,9 @@ async function saveMonBatchAsPortfolio() {
       notes: '由信号监控页批量验证监控股（按模型可信度排名）生成，可在组合回测页载入复跑。',
     })
     monBatchSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
-    setTimeout(() => { monBatchSaveMsg.value = '' }, 4000)
+    setTimeout(() => {
+      monBatchSaveMsg.value = ''
+    }, 4000)
   } catch (e) {
     monBatchSaveMsg.value = '保存失败：' + formatError(e)
   } finally {
@@ -745,13 +842,19 @@ async function saveMonBatchAsPortfolio() {
 // V311: 监控信号列表持久化（存 localStorage，刷新恢复）
 const SIGNALS_KEY = 'easy_tdx_mon_signals'
 function saveSignalsPersist() {
-  try { localStorage.setItem(SIGNALS_KEY, JSON.stringify(newSignals.value)) } catch { /* ignore */ }
+  try {
+    localStorage.setItem(SIGNALS_KEY, JSON.stringify(newSignals.value))
+  } catch {
+    /* ignore */
+  }
 }
 function restoreSignalsPersist() {
   try {
     const raw = localStorage.getItem(SIGNALS_KEY)
     if (raw) newSignals.value = JSON.parse(raw).slice(0, 20)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 onMounted(async () => {
@@ -786,8 +889,13 @@ onUnmounted(() => {
       </div>
       <div class="field-group">
         <label>代码</label>
-        <input v-model="newCode" type="text" placeholder="6位代码" maxlength="6"
-               @keyup.enter="addStock" />
+        <input
+          v-model="newCode"
+          type="text"
+          placeholder="6位代码"
+          maxlength="6"
+          @keyup.enter="addStock"
+        />
       </div>
       <button class="ghost" @click="addStock">+ 添加</button>
 
@@ -818,7 +926,14 @@ onUnmounted(() => {
       <div class="stock-tags">
         <span v-for="(s, i) in stocks" :key="s.code" class="stock-tag">
           {{ s.market }}{{ s.code }}
-          <button class="acc-mini" :class="{ active: stockAcc[s.market + s.code] }" title="历史信号准确度" @click="toggleStockAcc(s)">🎯</button>
+          <button
+            class="acc-mini"
+            :class="{ active: stockAcc[s.market + s.code] }"
+            title="历史信号准确度"
+            @click="toggleStockAcc(s)"
+          >
+            🎯
+          </button>
           <button class="remove-btn" @click="removeStock(i)">×</button>
         </span>
       </div>
@@ -833,20 +948,41 @@ onUnmounted(() => {
           </template>
           <template v-else>
             <div v-if="stockAcc[s.market + s.code].summary" class="acc-summary">
-              <b>{{ s.market }}{{ s.code }}</b>：{{ stockAcc[s.market + s.code].summary }}
-              <button class="ghost small" @click="exportStockAccCsv(s.market, s.code)">📊 导出 CSV</button>
+              <b>{{ s.market }}{{ s.code }}</b
+              >：{{ stockAcc[s.market + s.code].summary }}
+              <button class="ghost small" @click="exportStockAccCsv(s.market, s.code)">
+                📊 导出 CSV
+              </button>
               <span v-if="stockAccCsvMsg" class="save-msg">{{ stockAccCsvMsg }}</span>
             </div>
             <table class="acc-table">
-              <thead><tr><th>信号类型</th><th>信号数</th><th>5根命中率</th><th>超额命中率</th><th>5根均值</th><th>结论</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>信号类型</th>
+                  <th>信号数</th>
+                  <th>5根命中率</th>
+                  <th>超额命中率</th>
+                  <th>5根均值</th>
+                  <th>结论</th>
+                </tr>
+              </thead>
               <tbody>
-                <tr v-for="rank in stockAcc[s.market + s.code].ranking" :key="rank.type"
-                    :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }">
-                  <td><strong>{{ rank.type }}</strong></td>
+                <tr
+                  v-for="rank in stockAcc[s.market + s.code].ranking"
+                  :key="rank.type"
+                  :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }"
+                >
+                  <td>
+                    <strong>{{ rank.type }}</strong>
+                  </td>
                   <td>{{ rank.signals }}</td>
                   <td>{{ accPct(rank.hit_rate) }}</td>
-                  <td :class="rank.excess_hit_rate >= 0 ? 'pos' : 'neg'">{{ accSigned(rank.excess_hit_rate) }}</td>
-                  <td :class="rank.avg_return >= 0 ? 'pos' : 'neg'">{{ accPct(rank.avg_return) }}</td>
+                  <td :class="rank.excess_hit_rate >= 0 ? 'pos' : 'neg'">
+                    {{ accSigned(rank.excess_hit_rate) }}
+                  </td>
+                  <td :class="rank.avg_return >= 0 ? 'pos' : 'neg'">
+                    {{ accPct(rank.avg_return) }}
+                  </td>
                   <td class="dim verdict-cell">{{ rank.verdict }}</td>
                 </tr>
               </tbody>
@@ -856,30 +992,72 @@ onUnmounted(() => {
       </template>
     </div>
 
-
     <!-- V143: 批量验证监控股（对已选标的跑所选策略，按可信度排名） -->
     <div v-if="stocks.length > 0" class="mon-batch-bar">
-      <select v-model="batchStrategy" class="strategy-select"
-              @change="batchStrategyLabel = strategyOptions.find(s => s.name === batchStrategy)?.label ?? batchStrategy">
+      <select
+        v-model="batchStrategy"
+        class="strategy-select"
+        @change="
+          batchStrategyLabel =
+            strategyOptions.find((s) => s.name === batchStrategy)?.label ?? batchStrategy
+        "
+      >
         <option v-for="s in strategyOptions" :key="s.name" :value="s.name">{{ s.label }}</option>
       </select>
-      <button class="ghost small" :disabled="monBatchLoading || strategyOptions.length === 0" @click="runMonitorBatchVerify">
+      <button
+        class="ghost small"
+        :disabled="monBatchLoading || strategyOptions.length === 0"
+        @click="runMonitorBatchVerify"
+      >
         {{ monBatchLoading ? '批量验证中…' : '🧪 批量验证监控股（按可信度排名）' }}
       </button>
       <span v-if="monBatchMsg" class="mon-batch-msg">{{ monBatchMsg }}</span>
     </div>
     <div v-if="monBatchRows.length > 0" class="mon-batch-panel">
       <div class="mon-batch-head">
-        <h4>🧪 批量验证监控股：{{ batchStrategyLabel }}
-          <span v-if="lastMonBatchAt" class="mon-batch-at" :title="'上次验证时间'">🕒 {{ new Date(lastMonBatchAt).toLocaleString() }}</span>
+        <h4>
+          🧪 批量验证监控股：{{ batchStrategyLabel }}
+          <span v-if="lastMonBatchAt" class="mon-batch-at" :title="'上次验证时间'"
+            >🕒 {{ new Date(lastMonBatchAt).toLocaleString() }}</span
+          >
         </h4>
         <div class="mon-batch-actions">
-          <button class="ghost small" :class="{ active: monBatchSort === 'return' }" @click="monBatchSort = 'return'">按收益</button>
-          <button class="ghost small" :class="{ active: monBatchSort === 'trust' }" @click="monBatchSort = 'trust'">按可信度</button>
-          <button class="ghost small" :class="{ active: monBatchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的监控股（当前 ' + monBatchRows.filter((r: MonBatchRow) => r.oos_degraded === false).length + ' 只）'" @click="monBatchOnlyRobust = !monBatchOnlyRobust">
+          <button
+            class="ghost small"
+            :class="{ active: monBatchSort === 'return' }"
+            @click="monBatchSort = 'return'"
+          >
+            按收益
+          </button>
+          <button
+            class="ghost small"
+            :class="{ active: monBatchSort === 'trust' }"
+            @click="monBatchSort = 'trust'"
+          >
+            按可信度
+          </button>
+          <button
+            class="ghost small"
+            :class="{ active: monBatchOnlyRobust }"
+            :title="
+              '仅保留样本外 ✅泛化 的监控股（当前 ' +
+              monBatchRows.filter((r: MonBatchRow) => r.oos_degraded === false).length +
+              ' 只）'
+            "
+            @click="monBatchOnlyRobust = !monBatchOnlyRobust"
+          >
             ✅ 仅看样本外稳健
           </button>
-          <button class="ghost small" :class="{ active: monBatchOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的监控股（当前 ' + monBatchRows.filter((r: MonBatchRow) => r.wf_degraded === false).length + ' 只）'" @click="monBatchOnlyWfRobust = !monBatchOnlyWfRobust">
+          <button
+            class="ghost small"
+            :class="{ active: monBatchOnlyWfRobust }"
+            :title="
+              '仅保留滚验 ✅稳 的监控股（当前 ' +
+              monBatchRows.filter((r: MonBatchRow) => r.wf_degraded === false).length +
+              ' 只）'
+            "
+            @click="monBatchOnlyWfRobust = !monBatchOnlyWfRobust"
+          >
             ✅ 仅看滚验稳健
           </button>
           <button class="ghost small" @click="copyMonBatchRanking">📋 复制排名</button>
@@ -891,33 +1069,68 @@ onUnmounted(() => {
           <span v-if="monBatchCopyMsg" class="save-msg">{{ monBatchCopyMsg }}</span>
           <span v-if="monBatchJsonCopyMsg" class="save-msg">{{ monBatchJsonCopyMsg }}</span>
           <span v-if="monBatchCsvMsg" class="save-msg">{{ monBatchCsvMsg }}</span>
-          <span v-if="monBatchSaveMsg" class="save-msg" :class="{ err: monBatchSaveMsg.includes('失败') }">{{ monBatchSaveMsg }}</span>
+          <span
+            v-if="monBatchSaveMsg"
+            class="save-msg"
+            :class="{ err: monBatchSaveMsg.includes('失败') }"
+            >{{ monBatchSaveMsg }}</span
+          >
         </div>
       </div>
       <table class="mon-batch-table">
         <thead>
-          <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
-              <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num" title="Walk-Forward 滚动验证">滚验</th><th class="num">交易数</th><th></th></tr>
+          <tr>
+            <th>#</th>
+            <th>标的</th>
+            <th class="num">总收益</th>
+            <th class="num">胜率</th>
+            <th class="num">5根命中率</th>
+            <th class="num">超额命中率</th>
+            <th class="num">可信度</th>
+            <th class="num" title="训练段 vs 未见过数据">样本外</th>
+            <th class="num" title="Walk-Forward 滚动验证">滚验</th>
+            <th class="num">交易数</th>
+            <th></th>
+          </tr>
         </thead>
         <tbody>
           <tr v-for="(r, i) in sortedMonBatchRows" :key="r.symbol">
             <td class="dim">{{ i + 1 }}</td>
             <td>{{ r.symbol }}</td>
-            <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ monPct(r.total_return) }}</td>
+            <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">
+              {{ monPct(r.total_return) }}
+            </td>
             <td class="num">{{ monPct(r.win_rate) }}</td>
             <td class="num">{{ monPct(r.hit_rate) }}</td>
-            <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ monPct(r.excess_hit_rate) }}</td>
-            <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ monTrust(r) }}</td>
+            <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">
+              {{ monPct(r.excess_hit_rate) }}
+            </td>
+            <td
+              class="num"
+              :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''"
+            >
+              {{ monTrust(r) }}
+            </td>
             <td class="num" :class="monOosCls(r)" :title="monOosTitle(r)">{{ monOosLabel(r) }}</td>
-            <td class="num" :title="r.wf_verdict || ''">{{ r.wf_degraded === null || r.wf_degraded === undefined ? '-' : (r.wf_degraded ? '⚠递减' : '✅稳') }}</td>
+            <td class="num" :title="r.wf_verdict || ''">
+              {{
+                r.wf_degraded === null || r.wf_degraded === undefined
+                  ? '-'
+                  : r.wf_degraded
+                    ? '⚠递减'
+                    : '✅稳'
+              }}
+            </td>
             <td class="num">{{ r.trades ?? '-' }}</td>
             <td><button class="ghost small" @click="viewMonBatchStock(r)">查看该股</button></td>
           </tr>
         </tbody>
       </table>
-      <p class="mon-batch-legend">对已选监控标的（最多 12 只）用所选策略独立回测（最近 500 根日线），按 V101 模型可信度降序排名——
-        可信度 = 择时准确度 + 稳健性 + 绩效对比，用于挑「策略验证最可信」的监控标的。</p>
+      <p class="mon-batch-legend">
+        对已选监控标的（最多 12 只）用所选策略独立回测（最近 500 根日线），按 V101
+        模型可信度降序排名—— 可信度 = 择时准确度 + 稳健性 +
+        绩效对比，用于挑「策略验证最可信」的监控标的。
+      </p>
     </div>
 
     <!-- 快速加入的 watchlist -->
@@ -930,7 +1143,10 @@ onUnmounted(() => {
         <template v-for="(item, i) in watchList" :key="'wl-' + i">
           <div class="watchlist-item">
             <span class="wl-symbol">{{ item.market }}{{ item.code }}</span>
-            <span class="wl-type" :style="{ color: item.direction === 'buy' ? '#22c55e' : '#ef4444' }">
+            <span
+              class="wl-type"
+              :style="{ color: item.direction === 'buy' ? '#22c55e' : '#ef4444' }"
+            >
               {{ item.signal_type }}
             </span>
             <button class="ghost small" @click="addFromWatchlist(item)">+ 加入监控</button>
@@ -952,24 +1168,39 @@ onUnmounted(() => {
               <table class="acc-table">
                 <thead>
                   <tr>
-                    <th>信号类型</th><th>信号数</th><th>5根命中率</th>
-                    <th>超额命中率</th><th>5根均值</th><th>结论</th>
+                    <th>信号类型</th>
+                    <th>信号数</th>
+                    <th>5根命中率</th>
+                    <th>超额命中率</th>
+                    <th>5根均值</th>
+                    <th>结论</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="rank in watchAccuracy[item.market + item.code].ranking" :key="rank.type"
-                      :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }">
-                    <td><strong>{{ rank.type }}</strong></td>
+                  <tr
+                    v-for="rank in watchAccuracy[item.market + item.code].ranking"
+                    :key="rank.type"
+                    :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }"
+                  >
+                    <td>
+                      <strong>{{ rank.type }}</strong>
+                    </td>
                     <td>{{ rank.signals }}</td>
                     <td>{{ accPct(rank.hit_rate) }}</td>
-                    <td :class="rank.excess_hit_rate >= 0 ? 'pos' : 'neg'">{{ accSigned(rank.excess_hit_rate) }}</td>
-                    <td :class="rank.avg_return >= 0 ? 'pos' : 'neg'">{{ accPct(rank.avg_return) }}</td>
+                    <td :class="rank.excess_hit_rate >= 0 ? 'pos' : 'neg'">
+                      {{ accSigned(rank.excess_hit_rate) }}
+                    </td>
+                    <td :class="rank.avg_return >= 0 ? 'pos' : 'neg'">
+                      {{ accPct(rank.avg_return) }}
+                    </td>
                     <td class="dim verdict-cell">{{ rank.verdict }}</td>
                   </tr>
                 </tbody>
               </table>
-              <p class="acc-legend">命中 = 买点后 5 根上涨 / 卖点后 5 根下跌；超额命中率 &gt; 0 说明该类型信号比随机择时更准。
-                数据来自缠论分析接口对最近 300 根日线的历史回看。</p>
+              <p class="acc-legend">
+                命中 = 买点后 5 根上涨 / 卖点后 5 根下跌；超额命中率 &gt; 0
+                说明该类型信号比随机择时更准。 数据来自缠论分析接口对最近 300 根日线的历史回看。
+              </p>
             </template>
           </div>
         </template>
@@ -990,19 +1221,35 @@ onUnmounted(() => {
         <span v-if="signalsJsonMsg" class="save-msg">{{ signalsJsonMsg }}</span>
       </div>
       <div class="signal-items">
-        <div v-for="(s, i) in newSignals" :key="i" class="signal-item"
-             :style="{ borderLeftColor: MMD_COLORS[s.type] ?? '#fff' }">
-          <span class="signal-type" :style="{ color: MMD_COLORS[s.type] ?? '#fff' }">{{ s.type }}</span>
+        <div
+          v-for="(s, i) in newSignals"
+          :key="i"
+          class="signal-item"
+          :style="{ borderLeftColor: MMD_COLORS[s.type] ?? '#fff' }"
+        >
+          <span class="signal-type" :style="{ color: MMD_COLORS[s.type] ?? '#fff' }">{{
+            s.type
+          }}</span>
           <span class="signal-stock">{{ s.stock }}</span>
           <span class="signal-date">{{ s.date ?? '-' }}</span>
           <span class="signal-conf">{{ (s.confidence * 100).toFixed(0) }}%</span>
           <span class="signal-msg">{{ s.msg }}</span>
           <!-- V102: 质量评级 + 操作建议摘要 -->
-          <span v-if="s.v102_signal_quality?.overall_grade" class="signal-v102-grade" :class="'g' + s.v102_signal_quality.overall_grade">
+          <span
+            v-if="s.v102_signal_quality?.overall_grade"
+            class="signal-v102-grade"
+            :class="'g' + s.v102_signal_quality.overall_grade"
+          >
             质量{{ s.v102_signal_quality.overall_grade }}
           </span>
-          <span v-if="s.v102_decision_support?.action_recommendation" class="signal-v102-advice"
-                :class="{ 'adv-buy': s.v102_decision_support.action_recommendation.includes('买入'), 'adv-sell': s.v102_decision_support.action_recommendation.includes('卖出') }">
+          <span
+            v-if="s.v102_decision_support?.action_recommendation"
+            class="signal-v102-advice"
+            :class="{
+              'adv-buy': s.v102_decision_support.action_recommendation.includes('买入'),
+              'adv-sell': s.v102_decision_support.action_recommendation.includes('卖出'),
+            }"
+          >
             {{ s.v102_decision_support.action_recommendation }}
           </span>
         </div>
@@ -1075,7 +1322,7 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-.field-group input[type="text"] {
+.field-group input[type='text'] {
   width: 90px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -1085,7 +1332,7 @@ onUnmounted(() => {
   color: var(--text);
 }
 
-.field-group input[type="range"] {
+.field-group input[type='range'] {
   width: 100px;
 }
 
@@ -1120,7 +1367,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 2px 8px;
@@ -1137,7 +1384,9 @@ onUnmounted(() => {
   line-height: 1;
   padding: 0 2px;
 }
-.remove-btn:hover { color: var(--up); }
+.remove-btn:hover {
+  color: var(--up);
+}
 
 .error-banner {
   background: rgba(239, 65, 70, 0.12);
@@ -1178,17 +1427,32 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 4px;
   border-left: 3px solid;
   font-size: 12px;
 }
 
-.signal-type { font-weight: 700; min-width: 40px; }
-.signal-stock { font-family: var(--font-mono); min-width: 80px; }
-.signal-date { color: var(--text-muted); min-width: 80px; }
-.signal-conf { font-weight: 600; min-width: 36px; }
-.signal-msg { color: var(--text-dim); flex: 1; }
+.signal-type {
+  font-weight: 700;
+  min-width: 40px;
+}
+.signal-stock {
+  font-family: var(--font-mono);
+  min-width: 80px;
+}
+.signal-date {
+  color: var(--text-muted);
+  min-width: 80px;
+}
+.signal-conf {
+  font-weight: 600;
+  min-width: 36px;
+}
+.signal-msg {
+  color: var(--text-dim);
+  flex: 1;
+}
 
 .tasks-panel {
   background: var(--bg-panel);
@@ -1215,7 +1479,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 6px;
   border: 1px solid var(--border);
   flex-wrap: wrap;
@@ -1235,7 +1499,9 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
-.task-stocks, .task-category, .task-threshold {
+.task-stocks,
+.task-category,
+.task-threshold {
   font-size: 12px;
   color: var(--text);
 }
@@ -1261,7 +1527,10 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.hint { font-size: 12px; opacity: 0.7; }
+.hint {
+  font-size: 12px;
+  opacity: 0.7;
+}
 
 /* 快速加入的 watchlist */
 .watchlist-section {
@@ -1287,7 +1556,7 @@ onUnmounted(() => {
 .watchlist-count {
   font-size: 11px;
   color: var(--text-muted);
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -1305,7 +1574,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 4px;
   font-size: 12px;
 }
@@ -1325,7 +1594,7 @@ onUnmounted(() => {
 /* V107: 自选股历史信号准确度面板 */
 .watch-acc-panel {
   padding: 10px 12px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   border: 1px solid var(--border);
   display: flex;
@@ -1351,7 +1620,7 @@ onUnmounted(() => {
 }
 .acc-table td {
   padding: 3px 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 .acc-legend {
@@ -1383,7 +1652,8 @@ onUnmounted(() => {
   opacity: 0.7;
   border-radius: 3px;
 }
-.acc-mini:hover, .acc-mini.active {
+.acc-mini:hover,
+.acc-mini.active {
   opacity: 1;
   background: rgba(255, 255, 255, 0.08);
 }
@@ -1409,7 +1679,7 @@ onUnmounted(() => {
 }
 .mon-batch-panel {
   padding: 12px 14px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   border: 1px solid var(--border);
   display: flex;
@@ -1425,13 +1695,13 @@ onUnmounted(() => {
   flex-wrap: wrap;
 }
 .mon-batch-head h4 {
-/* V219: 上次监控批量验证时间 */
-.mon-batch-at {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-weight: 400;
-  margin-left: 8px;
-}
+  /* V219: 上次监控批量验证时间 */
+  .mon-batch-at {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+    margin-left: 8px;
+  }
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
@@ -1468,10 +1738,13 @@ onUnmounted(() => {
   border-bottom: 1px solid var(--border);
   text-align: right;
 }
-.mon-batch-table th:first-child, .mon-batch-table td:first-child { text-align: left; }
+.mon-batch-table th:first-child,
+.mon-batch-table td:first-child {
+  text-align: left;
+}
 .mon-batch-table td {
   padding: 5px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   text-align: right;
   font-family: var(--font-mono);
 }
@@ -1490,10 +1763,18 @@ onUnmounted(() => {
   border-radius: 8px;
   color: #fff;
 }
-.signal-v102-grade.gA { background: #22c55e; }
-.signal-v102-grade.gB { background: #4a9eff; }
-.signal-v102-grade.gC { background: #f59e0b; }
-.signal-v102-grade.gD { background: #ef4444; }
+.signal-v102-grade.gA {
+  background: #22c55e;
+}
+.signal-v102-grade.gB {
+  background: #4a9eff;
+}
+.signal-v102-grade.gC {
+  background: #f59e0b;
+}
+.signal-v102-grade.gD {
+  background: #ef4444;
+}
 .signal-v102-advice {
   font-size: 11px;
   font-weight: 600;
@@ -1502,6 +1783,10 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   max-width: 240px;
 }
-.signal-v102-advice.adv-buy { color: #22c55e; }
-.signal-v102-advice.adv-sell { color: #ef4444; }
+.signal-v102-advice.adv-buy {
+  color: #22c55e;
+}
+.signal-v102-advice.adv-sell {
+  color: #ef4444;
+}
 </style>

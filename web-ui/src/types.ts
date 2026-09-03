@@ -638,63 +638,326 @@ export interface DiagnosisChanlunMmd {
   // V15: K线形态确认
   kline_pattern?: string | null
   // V16: 仓位建议
-  position_sizing?: { position_pct: number; suggestion: string; risk_level: string; notes: string[] } | null
+  position_sizing?: {
+    position_pct: number
+    suggestion: string
+    risk_level: string
+    notes: string[]
+  } | null
   // V79 缠论增强条件
-  v79_fractal_stability?: { stability_score: number; fractal_status: string; confidence_adjust: number; msg: string } | null
-  v79_distance_safety?: { distance_score: number; bars_to_nearest: number; safety_level: string; confidence_adjust: number; msg: string } | null
-  v79_multi_level_consistency?: { consistency_score: number; short_align: boolean; mid_align: boolean; long_align: boolean; confidence_adjust: number; msg: string } | null
-  v79_momentum_continuity?: { momentum_score: number; acceleration: number; momentum_level: string; confidence_adjust: number; msg: string } | null
+  v79_fractal_stability?: {
+    stability_score: number
+    fractal_status: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v79_distance_safety?: {
+    distance_score: number
+    bars_to_nearest: number
+    safety_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v79_multi_level_consistency?: {
+    consistency_score: number
+    short_align: boolean
+    mid_align: boolean
+    long_align: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  v79_momentum_continuity?: {
+    momentum_score: number
+    acceleration: number
+    momentum_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
   // V80 缠论增强条件
-  v80_zhongshu_distance?: { distance_score: number; nearest_zs_dist_pct: number; zs_position: string; confidence_adjust: number; msg: string } | null
-  v80_volume_confirmation?: { confirmation_score: number; vol_ratio: number; volume_trend: string; price_trend: string; confidence_adjust: number; msg: string } | null
-  v80_ma_alignment?: { alignment_score: number; ma_alignment: string; price_position: string; confidence_adjust: number; msg: string } | null
-  v80_risk_reward?: { rr_ratio: number; stop_loss_pct: number; take_profit_pct: number; risk_level: string; confidence_adjust: number; msg: string } | null
+  v80_zhongshu_distance?: {
+    distance_score: number
+    nearest_zs_dist_pct: number
+    zs_position: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v80_volume_confirmation?: {
+    confirmation_score: number
+    vol_ratio: number
+    volume_trend: string
+    price_trend: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v80_ma_alignment?: {
+    alignment_score: number
+    ma_alignment: string
+    price_position: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v80_risk_reward?: {
+    rr_ratio: number
+    stop_loss_pct: number
+    take_profit_pct: number
+    risk_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
   // V81 缠论增强条件（条件256-259）
-  v81_volatility_regime?: { regime: string; transition_type: string; atr_ratio: number; atr_change_pct: number; confidence_adjust: number; msg: string } | null
-  v81_support_resistance?: { strength_level: string; nearest_sr_dist_pct: number; sr_count: number; confidence_adjust: number; msg: string } | null
-  v81_energy_distribution?: { energy_zone: string; energy_score: number; volume_concentration: number; confidence_adjust: number; msg: string } | null
-  v81_execution_window?: { window_quality: string; volatility_score: number; liquidity_score: number; confidence_adjust: number; msg: string } | null
+  v81_volatility_regime?: {
+    regime: string
+    transition_type: string
+    atr_ratio: number
+    atr_change_pct: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  v81_support_resistance?: {
+    strength_level: string
+    nearest_sr_dist_pct: number
+    sr_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  v81_energy_distribution?: {
+    energy_zone: string
+    energy_score: number
+    volume_concentration: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  v81_execution_window?: {
+    window_quality: string
+    volatility_score: number
+    liquidity_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
   // V82 缠论增强条件（条件260-263）
-  v82_age_decay?: { age_bars: number; age_label: string; confidence_adjust: number; msg: string } | null
-  v82_breakout_retest?: { retest_detected: boolean; retest_quality: string; confidence_adjust: number; msg: string } | null
-  v82_macd_resonance?: { short_acceleration: number; mid_trend: string; resonance: string; confidence_adjust: number; msg: string } | null
-  v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
+  v82_age_decay?: {
+    age_bars: number
+    age_label: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v82_breakout_retest?: {
+    retest_detected: boolean
+    retest_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v82_macd_resonance?: {
+    short_acceleration: number
+    mid_trend: string
+    resonance: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v82_volatility_compression?: {
+    compression_level: number
+    breakout_strength: number
+    volume_confirm: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
   // V102 缠论决策支持增强（条件264-267）
-  v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
-  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; confidence_adjust: number; msg: string } | null
-  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
-  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
+  v102_multi_signal_correlation?: {
+    nearby_signals: number
+    signal_density: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v102_signal_quality?: {
+    tech_score: number
+    volume_score: number
+    trend_score: number
+    volatility_score: number
+    overall_grade: string
+    overall_score: number
+    strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v102_decision_support?: {
+    entry_price: number
+    stop_loss: number
+    take_profit_1: number
+    take_profit_2: number
+    risk_reward_ratio: number
+    position_size_pct: number
+    action_recommendation: string
+    risk_notes: string
+    confidence_adjust: number
+  } | null
+  v102_pattern_match?: {
+    similar_patterns_found: number
+    win_rate: number
+    avg_return: number
+    max_drawdown: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisChanlunRecentSignal {
   type: string
   confidence: number
-  quality: { grade: 'S'|'A'|'B'|'C'|'D'|null; score: number|null } | null
+  quality: { grade: 'S' | 'A' | 'B' | 'C' | 'D' | null; score: number | null } | null
   // V79 缠论增强条件
-  v79_fractal_stability?: { stability_score: number; fractal_status: string; confidence_adjust: number; msg: string } | null
-  v79_distance_safety?: { distance_score: number; bars_to_nearest: number; safety_level: string; confidence_adjust: number; msg: string } | null
-  v79_multi_level_consistency?: { consistency_score: number; short_align: boolean; mid_align: boolean; long_align: boolean; confidence_adjust: number; msg: string } | null
-  v79_momentum_continuity?: { momentum_score: number; acceleration: number; momentum_level: string; confidence_adjust: number; msg: string } | null
+  v79_fractal_stability?: {
+    stability_score: number
+    fractal_status: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v79_distance_safety?: {
+    distance_score: number
+    bars_to_nearest: number
+    safety_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v79_multi_level_consistency?: {
+    consistency_score: number
+    short_align: boolean
+    mid_align: boolean
+    long_align: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  v79_momentum_continuity?: {
+    momentum_score: number
+    acceleration: number
+    momentum_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
   // V80 缠论增强条件
-  v80_zhongshu_distance?: { distance_score: number; nearest_zs_dist_pct: number; zs_position: string; confidence_adjust: number; msg: string } | null
-  v80_volume_confirmation?: { confirmation_score: number; vol_ratio: number; volume_trend: string; price_trend: string; confidence_adjust: number; msg: string } | null
-  v80_ma_alignment?: { alignment_score: number; ma_alignment: string; price_position: string; confidence_adjust: number; msg: string } | null
-  v80_risk_reward?: { rr_ratio: number; stop_loss_pct: number; take_profit_pct: number; risk_level: string; confidence_adjust: number; msg: string } | null
+  v80_zhongshu_distance?: {
+    distance_score: number
+    nearest_zs_dist_pct: number
+    zs_position: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v80_volume_confirmation?: {
+    confirmation_score: number
+    vol_ratio: number
+    volume_trend: string
+    price_trend: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v80_ma_alignment?: {
+    alignment_score: number
+    ma_alignment: string
+    price_position: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v80_risk_reward?: {
+    rr_ratio: number
+    stop_loss_pct: number
+    take_profit_pct: number
+    risk_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
   // V81 缠论增强条件（条件256-259）
-  v81_volatility_regime?: { regime: string; transition_type: string; atr_ratio: number; atr_change_pct: number; confidence_adjust: number; msg: string } | null
-  v81_support_resistance?: { strength_level: string; nearest_sr_dist_pct: number; sr_count: number; confidence_adjust: number; msg: string } | null
-  v81_energy_distribution?: { energy_zone: string; energy_score: number; volume_concentration: number; confidence_adjust: number; msg: string } | null
-  v81_execution_window?: { window_quality: string; volatility_score: number; liquidity_score: number; confidence_adjust: number; msg: string } | null
+  v81_volatility_regime?: {
+    regime: string
+    transition_type: string
+    atr_ratio: number
+    atr_change_pct: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  v81_support_resistance?: {
+    strength_level: string
+    nearest_sr_dist_pct: number
+    sr_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  v81_energy_distribution?: {
+    energy_zone: string
+    energy_score: number
+    volume_concentration: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  v81_execution_window?: {
+    window_quality: string
+    volatility_score: number
+    liquidity_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
   // V82 缠论增强条件（条件260-263）
-  v82_age_decay?: { age_bars: number; age_label: string; confidence_adjust: number; msg: string } | null
-  v82_breakout_retest?: { retest_detected: boolean; retest_quality: string; confidence_adjust: number; msg: string } | null
-  v82_macd_resonance?: { short_acceleration: number; mid_trend: string; resonance: string; confidence_adjust: number; msg: string } | null
-  v82_volatility_compression?: { compression_level: number; breakout_strength: number; volume_confirm: boolean; confidence_adjust: number; msg: string } | null
+  v82_age_decay?: {
+    age_bars: number
+    age_label: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v82_breakout_retest?: {
+    retest_detected: boolean
+    retest_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v82_macd_resonance?: {
+    short_acceleration: number
+    mid_trend: string
+    resonance: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v82_volatility_compression?: {
+    compression_level: number
+    breakout_strength: number
+    volume_confirm: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
   // V102 缠论决策支持增强（条件264-267）
-  v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
-  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; confidence_adjust: number; msg: string } | null
-  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
-  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
+  v102_multi_signal_correlation?: {
+    nearby_signals: number
+    signal_density: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v102_signal_quality?: {
+    tech_score: number
+    volume_score: number
+    trend_score: number
+    volatility_score: number
+    overall_grade: string
+    overall_score: number
+    strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v102_decision_support?: {
+    entry_price: number
+    stop_loss: number
+    take_profit_1: number
+    take_profit_2: number
+    risk_reward_ratio: number
+    position_size_pct: number
+    action_recommendation: string
+    risk_notes: string
+    confidence_adjust: number
+  } | null
+  v102_pattern_match?: {
+    similar_patterns_found: number
+    win_rate: number
+    avg_return: number
+    max_drawdown: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 export interface DiagnosisSignalReport {
@@ -715,7 +978,12 @@ export interface DiagnosisSignalReport {
   // V15: K线形态确认
   kline_pattern?: string | null
   // V16: 仓位建议
-  position_sizing?: { position_pct: number; suggestion: string; risk_level: string; notes: string[] } | null
+  position_sizing?: {
+    position_pct: number
+    suggestion: string
+    risk_level: string
+    notes: string[]
+  } | null
 }
 
 export interface DiagnosisChanlun {
@@ -895,13 +1163,16 @@ export interface DiagnosisChanlun {
     short_trend: string
     mid_trend: string
     long_trend: string
-    per_signal: Record<string, {
-      resonance_score: number
-      trend_alignment: string
-      short_trend: string
-      mid_trend: string
-      long_trend: string
-    }>
+    per_signal: Record<
+      string,
+      {
+        resonance_score: number
+        trend_alignment: string
+        short_trend: string
+        mid_trend: string
+        long_trend: string
+      }
+    >
   } | null
   // V27: 买卖点结构位置评分（条件55）
   structure_position?: {
@@ -2493,171 +2764,171 @@ export interface DiagnosisChanlun {
     confidence_adjust: number
     msg: string
   } | null
-   // V78: 买卖点周期位置评分（条件244）
-   mmd_cycle_position_v78?: {
-     position_score: number
-     cycle_position: string
-     distance_to_low: number
-     distance_to_high: number
-     confidence_adjust: number
-     msg: string
-   } | null
-   // V78: 多信号时间窗口一致性（条件245）
-   multi_signal_consensus_v78?: {
-     consensus_score: number
-     nearby_buy_count: number
-     nearby_sell_count: number
-     consensus_level: string
-     confidence_adjust: number
-     msg: string
-   } | null
-   // V78: 波动率压缩突破预测（条件246）
-   volatility_compression_breakout_v78?: {
-     compression_score: number
-     boll_width_percentile: number
-     breakout_direction: string
-     confidence_adjust: number
-     msg: string
-   } | null
-   // V78: 资金流向与价格背离检测（条件247）
-   fund_flow_divergence_v78?: {
-     divergence_type: string
-     money_flow_score: number
-     volume_price_correlation: number
-     confidence_adjust: number
-     msg: string
-   } | null
-    // V79: 分型稳定性验证（条件248）
-    fractal_stability_validation_v79?: {
-      stability_score: number
-      fractal_status: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V79: 买卖点距离安全阈值（条件249）
-    mmd_distance_safety_v79?: {
-      distance_score: number
-      bars_to_nearest: number
-      safety_level: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V79: 多级别结构一致性评分（条件250）
-    multi_level_structure_consistency_v79?: {
-      consistency_score: number
-      short_align: boolean
-      mid_align: boolean
-      long_align: boolean
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V79: 价格动能持续性评分（条件251）
-    price_momentum_continuity_v79?: {
-      momentum_score: number
-      acceleration: number
-      vol_trend: string
-      momentum_level: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V80: 买卖点与中枢距离验证（条件252）
-    mmd_zhongshu_distance_v80?: {
-      distance_score: number
-      nearest_zs_dist_pct: number
-      zs_position: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V80: 量能配合度评分（条件253）
-    volume_confirmation_v80?: {
-      confirmation_score: number
-      vol_ratio: number
-      volume_trend: string
-      price_trend: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V80: 均线排列强度确认（条件254）
-    ma_alignment_strength_v80?: {
-      alignment_score: number
-      ma_alignment: string
-      price_position: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V80: 盈亏比动态评估（条件255）
-    dynamic_risk_reward_v80?: {
-      rr_ratio: number
-      stop_loss_pct: number
-      take_profit_pct: number
-      risk_level: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V81: 波动率状态转换检测（条件256）
-    volatility_regime_transition_v81?: {
-      regime: string
-      transition_type: string
-      atr_ratio: number
-      atr_change_pct: number
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V81: 关键支撑阻力强度验证（条件257）
-    support_resistance_strength_v81?: {
-      strength_level: string
-      nearest_sr_dist_pct: number
-      sr_count: number
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V81: 量价能量分布验证（条件258）
-    volume_price_energy_distribution_v81?: {
-      energy_zone: string
-      energy_score: number
-      volume_concentration: number
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V81: 信号执行窗口评估（条件259）
-    signal_execution_window_v81?: {
-      window_quality: string
-      volatility_score: number
-      liquidity_score: number
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V82: 买卖点时间衰减验证（条件260）
-    mmd_age_decay_v82?: {
-      age_bars: number
-      age_label: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V82: 中枢突破回踩确认（条件261）
-    breakout_retest_confirm_v82?: {
-      retest_detected: boolean
-      retest_quality: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V82: 多级别MACD共振（条件262）
-    macd_multi_tf_resonance_v82?: {
-      short_acceleration: number
-      mid_trend: string
-      resonance: string
-      confidence_adjust: number
-      msg: string
-    } | null
-    // V82: 波动率压缩突破确认（条件263）
-    volatility_compression_breakout_v82?: {
-      compression_level: number
-      breakout_strength: number
-      volume_confirm: boolean
-      confidence_adjust: number
-      msg: string
-    } | null
-  }
+  // V78: 买卖点周期位置评分（条件244）
+  mmd_cycle_position_v78?: {
+    position_score: number
+    cycle_position: string
+    distance_to_low: number
+    distance_to_high: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V78: 多信号时间窗口一致性（条件245）
+  multi_signal_consensus_v78?: {
+    consensus_score: number
+    nearby_buy_count: number
+    nearby_sell_count: number
+    consensus_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V78: 波动率压缩突破预测（条件246）
+  volatility_compression_breakout_v78?: {
+    compression_score: number
+    boll_width_percentile: number
+    breakout_direction: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V78: 资金流向与价格背离检测（条件247）
+  fund_flow_divergence_v78?: {
+    divergence_type: string
+    money_flow_score: number
+    volume_price_correlation: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V79: 分型稳定性验证（条件248）
+  fractal_stability_validation_v79?: {
+    stability_score: number
+    fractal_status: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V79: 买卖点距离安全阈值（条件249）
+  mmd_distance_safety_v79?: {
+    distance_score: number
+    bars_to_nearest: number
+    safety_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V79: 多级别结构一致性评分（条件250）
+  multi_level_structure_consistency_v79?: {
+    consistency_score: number
+    short_align: boolean
+    mid_align: boolean
+    long_align: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V79: 价格动能持续性评分（条件251）
+  price_momentum_continuity_v79?: {
+    momentum_score: number
+    acceleration: number
+    vol_trend: string
+    momentum_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V80: 买卖点与中枢距离验证（条件252）
+  mmd_zhongshu_distance_v80?: {
+    distance_score: number
+    nearest_zs_dist_pct: number
+    zs_position: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V80: 量能配合度评分（条件253）
+  volume_confirmation_v80?: {
+    confirmation_score: number
+    vol_ratio: number
+    volume_trend: string
+    price_trend: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V80: 均线排列强度确认（条件254）
+  ma_alignment_strength_v80?: {
+    alignment_score: number
+    ma_alignment: string
+    price_position: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V80: 盈亏比动态评估（条件255）
+  dynamic_risk_reward_v80?: {
+    rr_ratio: number
+    stop_loss_pct: number
+    take_profit_pct: number
+    risk_level: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V81: 波动率状态转换检测（条件256）
+  volatility_regime_transition_v81?: {
+    regime: string
+    transition_type: string
+    atr_ratio: number
+    atr_change_pct: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V81: 关键支撑阻力强度验证（条件257）
+  support_resistance_strength_v81?: {
+    strength_level: string
+    nearest_sr_dist_pct: number
+    sr_count: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V81: 量价能量分布验证（条件258）
+  volume_price_energy_distribution_v81?: {
+    energy_zone: string
+    energy_score: number
+    volume_concentration: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V81: 信号执行窗口评估（条件259）
+  signal_execution_window_v81?: {
+    window_quality: string
+    volatility_score: number
+    liquidity_score: number
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V82: 买卖点时间衰减验证（条件260）
+  mmd_age_decay_v82?: {
+    age_bars: number
+    age_label: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V82: 中枢突破回踩确认（条件261）
+  breakout_retest_confirm_v82?: {
+    retest_detected: boolean
+    retest_quality: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V82: 多级别MACD共振（条件262）
+  macd_multi_tf_resonance_v82?: {
+    short_acceleration: number
+    mid_trend: string
+    resonance: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  // V82: 波动率压缩突破确认（条件263）
+  volatility_compression_breakout_v82?: {
+    compression_level: number
+    breakout_strength: number
+    volume_confirm: boolean
+    confidence_adjust: number
+    msg: string
+  } | null
+}
 
 export interface DiagnosisMACD {
   dif: number
@@ -2789,78 +3060,78 @@ export interface DiagnosisResult {
     validity_score: number | null
     recommendation: string
   }
-   // V77: 四维度量摘要（条件240-243）
-   v77_summary?: {
-     quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
-     total_adjust: number | null
-     positive_count: number | null
-     negative_count: number | null
-     recommendation: string
-     vdd_energy_zone: string | null
-     zs_weight_score: number | null
-     signal_freshness: string | null
-     momentum_direction: string | null
-   }
-   // V78: 四维度量摘要（条件244-247）
-   v78_summary?: {
-     quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
-     total_adjust: number | null
-     positive_count: number | null
-     negative_count: number | null
-     recommendation: string
-     cycle_position: string | null
-     consensus_level: string | null
-     breakout_direction: string | null
-     divergence_type: string | null
-    }
-    // V79: 四维度量摘要（条件248-251）
-    v79_summary?: {
-      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
-      total_adjust: number | null
-      positive_count: number | null
-      negative_count: number | null
-      recommendation: string
-      fractal_status: string | null
-      safety_level: string | null
-      consistency_level: string | null
-      momentum_level: string | null
-    }
-    // V80: 四维度量摘要（条件252-255）
-    v80_summary?: {
-      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
-      total_adjust: number | null
-      positive_count: number | null
-      negative_count: number | null
-      recommendation: string
-      zs_position: string | null
-      volume_confirmed: string | null
-      ma_alignment: string | null
-      risk_level: string | null
-    }
-    // V81: 四维度量摘要（条件256-259）
-    v81_summary?: {
-      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
-      total_adjust: number | null
-      positive_count: number | null
-      negative_count: number | null
-      recommendation: string
-      regime: string | null
-      strength_level: string | null
-      energy_zone: string | null
-      window_quality: string | null
-    }
-    // V82: 四维度量摘要（条件260-263）
-    v82_summary?: {
-      quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
-      total_adjust: number | null
-      positive_count: number | null
-      negative_count: number | null
-      recommendation: string
-      age_label: string | null
-      retest_quality: string | null
-      resonance: string | null
-      compression_level: string | null
-    }
+  // V77: 四维度量摘要（条件240-243）
+  v77_summary?: {
+    quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+    total_adjust: number | null
+    positive_count: number | null
+    negative_count: number | null
+    recommendation: string
+    vdd_energy_zone: string | null
+    zs_weight_score: number | null
+    signal_freshness: string | null
+    momentum_direction: string | null
+  }
+  // V78: 四维度量摘要（条件244-247）
+  v78_summary?: {
+    quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+    total_adjust: number | null
+    positive_count: number | null
+    negative_count: number | null
+    recommendation: string
+    cycle_position: string | null
+    consensus_level: string | null
+    breakout_direction: string | null
+    divergence_type: string | null
+  }
+  // V79: 四维度量摘要（条件248-251）
+  v79_summary?: {
+    quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+    total_adjust: number | null
+    positive_count: number | null
+    negative_count: number | null
+    recommendation: string
+    fractal_status: string | null
+    safety_level: string | null
+    consistency_level: string | null
+    momentum_level: string | null
+  }
+  // V80: 四维度量摘要（条件252-255）
+  v80_summary?: {
+    quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+    total_adjust: number | null
+    positive_count: number | null
+    negative_count: number | null
+    recommendation: string
+    zs_position: string | null
+    volume_confirmed: string | null
+    ma_alignment: string | null
+    risk_level: string | null
+  }
+  // V81: 四维度量摘要（条件256-259）
+  v81_summary?: {
+    quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+    total_adjust: number | null
+    positive_count: number | null
+    negative_count: number | null
+    recommendation: string
+    regime: string | null
+    strength_level: string | null
+    energy_zone: string | null
+    window_quality: string | null
+  }
+  // V82: 四维度量摘要（条件260-263）
+  v82_summary?: {
+    quality_level: 'strong' | 'moderate' | 'weak' | 'mixed' | null
+    total_adjust: number | null
+    positive_count: number | null
+    negative_count: number | null
+    recommendation: string
+    age_label: string | null
+    retest_quality: string | null
+    resonance: string | null
+    compression_level: string | null
+  }
   chanlun: DiagnosisChanlun
   macd: DiagnosisMACD
   boll: DiagnosisBOLL

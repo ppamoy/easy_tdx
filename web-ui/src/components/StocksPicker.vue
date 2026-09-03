@@ -12,9 +12,9 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
 const code = ref('')
-const detectedMarket = computed(() => (code.value && /^\d{6}$/.test(code.value)
-  ? marketLabel(detectMarket(code.value))
-  : ''))
+const detectedMarket = computed(() =>
+  code.value && /^\d{6}$/.test(code.value) ? marketLabel(detectMarket(code.value)) : '',
+)
 
 function add() {
   if (!/^\d{6}$/.test(code.value)) return
@@ -26,7 +26,10 @@ function add() {
 }
 
 function remove(sym: string) {
-  emit('update:modelValue', props.modelValue.filter((s) => s !== sym))
+  emit(
+    'update:modelValue',
+    props.modelValue.filter((s) => s !== sym),
+  )
 }
 </script>
 

@@ -93,25 +93,33 @@ function loadRecentStocks() {
   try {
     const raw = localStorage.getItem(RECENT_KEY)
     if (raw) recentStocks.value = JSON.parse(raw)
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function saveRecentStock(code: string, cat: Category) {
   const market = detectMarket(code)
   // 去重：移除已存在的
-  recentStocks.value = recentStocks.value.filter(s => s.code !== code)
+  recentStocks.value = recentStocks.value.filter((s) => s.code !== code)
   // 添加至头部
   recentStocks.value.unshift({ code, market, category: cat, timestamp: Date.now() })
   // 只保留最近20条
   recentStocks.value = recentStocks.value.slice(0, 20)
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(recentStocks.value))
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 function clearRecentStocks() {
   recentStocks.value = []
-  try { localStorage.removeItem(RECENT_KEY) } catch { /* ignore */ }
+  try {
+    localStorage.removeItem(RECENT_KEY)
+  } catch {
+    /* ignore */
+  }
 }
 
 function selectRecent(stock: RecentStock) {
@@ -195,12 +203,12 @@ async function runChanlunAnalysis() {
   try {
     const market = detectMarket(code.value)
     const categoryMap: Record<string, string> = {
-      'DAY': 'DAY',
-      'WEEK': 'WEEK',
-      'MIN_5': 'MIN_5',
-      'MIN_15': 'MIN_15',
-      'MIN_30': 'MIN_30',
-      'MIN_60': 'MIN_60',
+      DAY: 'DAY',
+      WEEK: 'WEEK',
+      MIN_5: 'MIN_5',
+      MIN_15: 'MIN_15',
+      MIN_30: 'MIN_30',
+      MIN_60: 'MIN_60',
     }
     const resp = await fetch('/api/v1/chanlun/analyze', {
       method: 'POST',
@@ -259,26 +267,25 @@ const strategyLabel = computed(
 // 评级：基于完整 Performance，6 维度评分 + 一票否决。
 // total_return 不直接计入评分（只通过卡玛/夏普间接体现），
 // 体现「哪怕近期收益率高，长期风险大也该低评」的产品诉求。
-const grade = computed(() =>
-  store.result ? gradePerformance(store.result.performance) : null,
-)
+const grade = computed(() => (store.result ? gradePerformance(store.result.performance) : null))
 
 // 操作建议
 const tradingAdvice = computed(() => {
   if (!store.result) return null
   const perf = store.result.performance
   const trades = store.result.trades
-  const executed = trades.filter(t => !t.rejected && t.pnl !== 0)
+  const executed = trades.filter((t) => !t.rejected && t.pnl !== 0)
 
   if (executed.length === 0) {
     return { text: '暂无成交记录，无法给出操作建议。', color: '#94a3b8', details: [] }
   }
 
-  const wins = executed.filter(t => t.pnl > 0)
-  const losses = executed.filter(t => t.pnl < 0)
+  const wins = executed.filter((t) => t.pnl > 0)
+  const losses = executed.filter((t) => t.pnl < 0)
   const winRate = wins.length / executed.length
   const totalPnl = executed.reduce((s, t) => s + t.pnl, 0)
-  const avgLoss = losses.length > 0 ? Math.abs(losses.reduce((s, t) => s + t.pnl, 0)) / losses.length : 0
+  const avgLoss =
+    losses.length > 0 ? Math.abs(losses.reduce((s, t) => s + t.pnl, 0)) / losses.length : 0
   const profitFactor = avgLoss > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / avgLoss : Infinity
   const maxDrawdown = perf.max_drawdown ?? 0
 
@@ -289,9 +296,21 @@ const tradingAdvice = computed(() => {
       color: '#22c55e',
       details: [
         { label: '胜率', value: `${(winRate * 100).toFixed(1)}%`, color: '#22c55e' },
-        { label: '盈亏比', value: profitFactor === Infinity ? '∞' : profitFactor.toFixed(2), color: '#22c55e' },
-        { label: '总收益', value: `${(totalPnl > 0 ? '+' : '')}${totalPnl.toFixed(0)}元`, color: '#22c55e' },
-        { label: '最大回撤', value: `${(maxDrawdown * 100).toFixed(1)}%`, color: maxDrawdown < 0.15 ? '#22c55e' : '#fbbf24' },
+        {
+          label: '盈亏比',
+          value: profitFactor === Infinity ? '∞' : profitFactor.toFixed(2),
+          color: '#22c55e',
+        },
+        {
+          label: '总收益',
+          value: `${totalPnl > 0 ? '+' : ''}${totalPnl.toFixed(0)}元`,
+          color: '#22c55e',
+        },
+        {
+          label: '最大回撤',
+          value: `${(maxDrawdown * 100).toFixed(1)}%`,
+          color: maxDrawdown < 0.15 ? '#22c55e' : '#fbbf24',
+        },
       ],
     }
   } else if (winRate >= 0.5 && totalPnl > 0) {
@@ -299,9 +318,21 @@ const tradingAdvice = computed(() => {
       text: '策略基本有效：胜率尚可且整体盈利。建议：优化止损参数减少大额亏损，或调整仓位控制风险。',
       color: '#eab308',
       details: [
-        { label: '胜率', value: `${(winRate * 100).toFixed(1)}%`, color: winRate >= 0.5 ? '#22c55e' : '#ef4444' },
-        { label: '总收益', value: `${(totalPnl > 0 ? '+' : '')}${totalPnl.toFixed(0)}元`, color: '#eab308' },
-        { label: '最大回撤', value: `${(maxDrawdown * 100).toFixed(1)}%`, color: maxDrawdown < 0.2 ? '#fbbf24' : '#ef4444' },
+        {
+          label: '胜率',
+          value: `${(winRate * 100).toFixed(1)}%`,
+          color: winRate >= 0.5 ? '#22c55e' : '#ef4444',
+        },
+        {
+          label: '总收益',
+          value: `${totalPnl > 0 ? '+' : ''}${totalPnl.toFixed(0)}元`,
+          color: '#eab308',
+        },
+        {
+          label: '最大回撤',
+          value: `${(maxDrawdown * 100).toFixed(1)}%`,
+          color: maxDrawdown < 0.2 ? '#fbbf24' : '#ef4444',
+        },
       ],
     }
   } else if (totalPnl < 0) {
@@ -350,14 +381,14 @@ const bars = computed(() => {
     : store.ohlcv
 })
 
-
 // ── 回测报告导出（一键复制 Markdown 摘要） ────────────────────────────────
 // 把绩效 + 信号准确度 + 稳健性 + 可信度汇总成一份可粘贴/存档的文本报告。
 const copyMsg = ref('')
 function buildReportText(): string {
   const r = store.result
   if (!r) return ''
-  const pct = (v: number | null | undefined) => (v === undefined || v === null || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%')
+  const pct = (v: number | null | undefined) =>
+    v === undefined || v === null || !Number.isFinite(v) ? '-' : (v * 100).toFixed(2) + '%'
   const lines: string[] = []
   lines.push('# easy-tdx 回测报告')
   lines.push('')
@@ -374,7 +405,9 @@ function buildReportText(): string {
   lines.push('')
   if (r.model_trust) {
     lines.push('## 模型可信度（历史回测验证）')
-    lines.push('- 综合评分：' + Math.round(r.model_trust.score) + '/100 · ' + r.model_trust.grade + '可信')
+    lines.push(
+      '- 综合评分：' + Math.round(r.model_trust.score) + '/100 · ' + r.model_trust.grade + '可信',
+    )
     lines.push('- 结论：' + (r.model_trust.verdict || ''))
     lines.push('')
   }
@@ -383,7 +416,15 @@ function buildReportText(): string {
     lines.push('- ' + (r.signal_accuracy.verdict || ''))
     const h5 = r.signal_accuracy.buy?.horizons?.['5']
     if (h5 && h5.count > 0) {
-      lines.push('- 5根命中率：' + pct(h5.hit_rate) + ' · 随机基准：' + pct(h5.baseline_hit_rate) + ' · 超额：' + (h5.excess_hit_rate >= 0 ? '+' : '') + pct(h5.excess_hit_rate))
+      lines.push(
+        '- 5根命中率：' +
+          pct(h5.hit_rate) +
+          ' · 随机基准：' +
+          pct(h5.baseline_hit_rate) +
+          ' · 超额：' +
+          (h5.excess_hit_rate >= 0 ? '+' : '') +
+          pct(h5.excess_hit_rate),
+      )
     }
     lines.push('')
   }
@@ -395,8 +436,21 @@ function buildReportText(): string {
   if (r.out_of_sample) {
     lines.push('## 样本外验证（训练段 vs 未见过数据）')
     lines.push('- ' + (r.out_of_sample.verdict || ''))
-    lines.push('- 训练段收益：' + pct(r.out_of_sample.train?.total_return) + ' · 样本外收益：' + pct(r.out_of_sample.test?.total_return))
-    lines.push('- 样本外5根命中率：' + pct(r.out_of_sample.test?.hit_rate) + ' · 超额：' + (r.out_of_sample.test?.excess_hit_rate != null ? (r.out_of_sample.test.excess_hit_rate >= 0 ? '+' : '') + pct(r.out_of_sample.test.excess_hit_rate) : '-'))
+    lines.push(
+      '- 训练段收益：' +
+        pct(r.out_of_sample.train?.total_return) +
+        ' · 样本外收益：' +
+        pct(r.out_of_sample.test?.total_return),
+    )
+    lines.push(
+      '- 样本外5根命中率：' +
+        pct(r.out_of_sample.test?.hit_rate) +
+        ' · 超额：' +
+        (r.out_of_sample.test?.excess_hit_rate != null
+          ? (r.out_of_sample.test.excess_hit_rate >= 0 ? '+' : '') +
+            pct(r.out_of_sample.test.excess_hit_rate)
+          : '-'),
+    )
     lines.push('')
   }
   // V287: Walk-Forward 滚动窗口验证段
@@ -404,7 +458,14 @@ function buildReportText(): string {
   if (wfr) {
     lines.push('## Walk-Forward 滚动窗口验证（防过拟合）')
     lines.push('- ' + (wfr.verdict || ''))
-    lines.push('- 窗口数：' + (wfr.windows ?? '-') + ' · 训练段均值：' + pct(wfr.train_mean) + ' · 样本外均值：' + pct(wfr.test_mean))
+    lines.push(
+      '- 窗口数：' +
+        (wfr.windows ?? '-') +
+        ' · 训练段均值：' +
+        pct(wfr.train_mean) +
+        ' · 样本外均值：' +
+        pct(wfr.test_mean),
+    )
     lines.push('')
   }
   lines.push('---')
@@ -420,7 +481,9 @@ async function copyReport() {
     copyMsg.value = '复制失败（浏览器权限），已弹出报告'
     window.alert(text)
   }
-  setTimeout(() => { copyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    copyMsg.value = ''
+  }, 2500)
 }
 // V153: 机器可读 JSON 报告导出（Agent/脚本/存档友好）
 const jsonCopyMsg = ref('')
@@ -433,7 +496,9 @@ async function copyJsonReport() {
   } catch {
     jsonCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    jsonCopyMsg.value = ''
+  }, 2500)
 }
 // V261: 交易明细导出 CSV（成交记录，帮助核对模型触发的买卖点）
 const tradesCsvMsg = ref('')
@@ -445,24 +510,38 @@ function exportTradesCsv() {
   const trades = r?.trades as Array<Record<string, unknown>> | undefined
   if (!r || !Array.isArray(trades) || trades.length === 0) {
     tradesCsvMsg.value = '没有可导出的成交记录'
-    setTimeout(() => { tradesCsvMsg.value = '' }, 2500)
+    setTimeout(() => {
+      tradesCsvMsg.value = ''
+    }, 2500)
     return
   }
-  const header = ['时间', '方向', '数量', '价格', '手续费', '滑点', '已实现盈亏', '成本基数', '是否拒绝']
+  const header = [
+    '时间',
+    '方向',
+    '数量',
+    '价格',
+    '手续费',
+    '滑点',
+    '已实现盈亏',
+    '成本基数',
+    '是否拒绝',
+  ]
   const lines = [header.join(',')]
   trades.forEach((t) => {
     if (t.rejected) return
-    lines.push([
-      String(t.datetime ?? ''),
-      tradeCsvEscape(String(t.direction ?? '')),
-      String(t.size ?? ''),
-      String(t.price ?? ''),
-      String(t.commission ?? ''),
-      String(t.slippage ?? ''),
-      String(t.pnl ?? ''),
-      String(t.cost_basis ?? ''),
-      String(t.rejected ?? false),
-    ].join(','))
+    lines.push(
+      [
+        String(t.datetime ?? ''),
+        tradeCsvEscape(String(t.direction ?? '')),
+        String(t.size ?? ''),
+        String(t.price ?? ''),
+        String(t.commission ?? ''),
+        String(t.slippage ?? ''),
+        String(t.pnl ?? ''),
+        String(t.cost_basis ?? ''),
+        String(t.rejected ?? false),
+      ].join(','),
+    )
   })
   const csv = '\uFEFF' + lines.join('\n')
   try {
@@ -479,7 +558,9 @@ function exportTradesCsv() {
   } catch {
     tradesCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { tradesCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    tradesCsvMsg.value = ''
+  }, 2500)
 }
 
 // V137: 批量验证自选股（对全局自选股用当前策略各跑一次回测，按可信度排名）
@@ -510,13 +591,18 @@ const lastBatchVerifyAt = ref('')
 function saveBatchVerifyPersist() {
   if (!batchRows.value.length) return
   try {
-    localStorage.setItem(BATCH_VERIFY_KEY, JSON.stringify({
-      rows: batchRows.value,
-      strategy: strategy.value,
-      strategy_label: strategyLabel.value || strategy.value,
-      at: new Date().toISOString(),
-    }))
-  } catch { /* localStorage 不可用忽略 */ }
+    localStorage.setItem(
+      BATCH_VERIFY_KEY,
+      JSON.stringify({
+        rows: batchRows.value,
+        strategy: strategy.value,
+        strategy_label: strategyLabel.value || strategy.value,
+        at: new Date().toISOString(),
+      }),
+    )
+  } catch {
+    /* localStorage 不可用忽略 */
+  }
 }
 function restoreBatchVerifyPersist() {
   try {
@@ -528,7 +614,9 @@ function restoreBatchVerifyPersist() {
       lastBatchVerifyAt.value = data.at || ''
       batchMsg.value = '已恢复上次批量验证（' + (data.strategy_label || '') + '）'
     }
-  } catch { /* 解析失败忽略 */ }
+  } catch {
+    /* 解析失败忽略 */
+  }
 }
 // V149: 批量验证结果排序方式（收益 / 可信度）
 const batchSort = ref<'return' | 'trust'>('trust')
@@ -548,11 +636,17 @@ const sortedBatchRows = computed(() => {
 async function runBatchVerifyWatchlist() {
   if (batchLoading.value) return
   let raw: any[] = []
-  try { raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]') } catch { raw = [] }
+  try {
+    raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]')
+  } catch {
+    raw = []
+  }
   const watch = raw.filter((w) => w && w.code && w.market).slice(0, 12)
   if (watch.length === 0) {
     batchMsg.value = '自选股为空：请先在缠论分析页「加入自选股」'
-    setTimeout(() => { batchMsg.value = '' }, 3500)
+    setTimeout(() => {
+      batchMsg.value = ''
+    }, 3500)
     return
   }
   batchLoading.value = true
@@ -561,7 +655,14 @@ async function runBatchVerifyWatchlist() {
   try {
     for (const w of watch) {
       try {
-        const bars = await fetchBars(w.market, w.code, category.value as Category, undefined, undefined, 500)
+        const bars = await fetchBars(
+          w.market,
+          w.code,
+          category.value as Category,
+          undefined,
+          undefined,
+          500,
+        )
         if (bars.length < 30) continue
         const result = await runBacktest({
           strategy: strategy.value,
@@ -594,7 +695,9 @@ async function runBatchVerifyWatchlist() {
           wf_degraded: (result as any).walk_forward?.degraded ?? null,
           wf_verdict: (result as any).walk_forward?.verdict ?? '',
         })
-      } catch { /* 单只失败跳过 */ }
+      } catch {
+        /* 单只失败跳过 */
+      }
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     batchRows.value = rows
@@ -629,7 +732,9 @@ function batchOosCls(r: BatchVerifyRow): string {
   return r.oos_degraded ? 'neg' : 'pos'
 }
 function batchOosTitle(r: BatchVerifyRow): string {
-  return r.oos_verdict || (r.oos_degraded === null || r.oos_degraded === undefined ? '' : '样本外验证')
+  return (
+    r.oos_verdict || (r.oos_degraded === null || r.oos_degraded === undefined ? '' : '样本外验证')
+  )
 }
 // V139: 批量验证排名导出（Markdown 复制）
 const batchCopyMsg = ref('')
@@ -642,13 +747,31 @@ function copyBatchRanking() {
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   batchRows.value.forEach((r, i) => {
     lines.push(
-      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + batchPctV137(r.total_return) +
-      ' | ' + batchPctV137(r.win_rate) + ' | ' + batchPctV137(r.hit_rate) + ' | ' + batchPctV137(r.excess_hit_rate) +
-      ' | ' + batchTrustV137(r) + ' | ' + batchOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
+      '| ' +
+        (i + 1) +
+        ' | ' +
+        r.symbol +
+        ' | ' +
+        batchPctV137(r.total_return) +
+        ' | ' +
+        batchPctV137(r.win_rate) +
+        ' | ' +
+        batchPctV137(r.hit_rate) +
+        ' | ' +
+        batchPctV137(r.excess_hit_rate) +
+        ' | ' +
+        batchTrustV137(r) +
+        ' | ' +
+        batchOosLabel(r) +
+        ' | ' +
+        (r.trades ?? '-') +
+        ' |',
     )
   })
   lines.push('')
-  lines.push('方法：对全局自选股（最多 12 只）用当前策略与参数独立回测（最近 500 根日线），按模型可信度（V101）降序排名。')
+  lines.push(
+    '方法：对全局自选股（最多 12 只）用当前策略与参数独立回测（最近 500 根日线），按模型可信度（V101）降序排名。',
+  )
   const text = lines.join('\n')
   const doCopy = async () => {
     try {
@@ -662,7 +785,9 @@ function copyBatchRanking() {
       document.body.removeChild(ta)
     }
     batchCopyMsg.value = '✓ 已复制批量验证排名'
-    setTimeout(() => { batchCopyMsg.value = '' }, 2500)
+    setTimeout(() => {
+      batchCopyMsg.value = ''
+    }, 2500)
   }
   void doCopy()
 }
@@ -684,7 +809,9 @@ async function copyBatchJson() {
   } catch {
     batchJsonCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { batchJsonCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    batchJsonCopyMsg.value = ''
+  }, 2500)
 }
 // V253: 批量验证结果导出 CSV（Excel 友好）
 const batchCsvMsg = ref('')
@@ -693,7 +820,17 @@ function csvEscape(v: string): string {
 }
 function exportBatchCsv() {
   if (batchRows.value.length === 0) return
-  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const header = [
+    '排名',
+    '标的',
+    '总收益',
+    '胜率',
+    '5根命中率',
+    '超额命中率',
+    '可信度',
+    '样本外',
+    '交易数',
+  ]
   const lines = [header.join(',')]
   sortedBatchRows.value.forEach((r, i) => {
     const row = [
@@ -724,7 +861,9 @@ function exportBatchCsv() {
   } catch {
     batchCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { batchCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    batchCsvMsg.value = ''
+  }, 2500)
 }
 // V141: 把批量验证选出的股票保存为组合策略（kind=portfolio，可在策略库载入后组合页复跑）
 const batchSaveMsg = ref('')
@@ -741,7 +880,9 @@ async function saveBatchAsPortfolio() {
     if (visible.length === 0) {
       batchSaveMsg.value = '没有样本外稳健的候选股可保存（请关闭「仅看样本外稳健」再试）'
       batchSaving.value = false
-      setTimeout(() => { batchSaveMsg.value = '' }, 4000)
+      setTimeout(() => {
+        batchSaveMsg.value = ''
+      }, 4000)
       return
     }
     const stocks = visible.map((r) => r.symbol)
@@ -753,7 +894,9 @@ async function saveBatchAsPortfolio() {
     const oosDegradedN = oosKnown.filter((r) => r.oos_degraded === true).length
     const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
     const oosVerdict = oosKnown.length
-      ? (oosRatio! < 0.5 ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健' : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减')
+      ? oosRatio! < 0.5
+        ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健'
+        : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减'
       : ''
     await saveStrategy({
       name: (strategyLabel.value || strategy.value) + ' · 批量验证' + stocks.length + '只',
@@ -780,7 +923,9 @@ async function saveBatchAsPortfolio() {
       notes: '由回测页批量验证自选股（按模型可信度排名）生成，可在组合回测页载入复跑。',
     })
     batchSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
-    setTimeout(() => { batchSaveMsg.value = '' }, 4000)
+    setTimeout(() => {
+      batchSaveMsg.value = ''
+    }, 4000)
   } catch (e) {
     batchSaveMsg.value = '保存失败：' + formatError(e)
   } finally {
@@ -830,7 +975,8 @@ async function onSave() {
         // V100: 持久化历史回测验证的准确度/稳健性结论，策略库按「验证过准不准」比较
         accuracy: {
           hit_rate: store.result.signal_accuracy?.buy?.horizons?.['5']?.hit_rate ?? null,
-          excess_hit_rate: store.result.signal_accuracy?.buy?.horizons?.['5']?.excess_hit_rate ?? null,
+          excess_hit_rate:
+            store.result.signal_accuracy?.buy?.horizons?.['5']?.excess_hit_rate ?? null,
           verdict: store.result.signal_accuracy?.verdict ?? '',
         },
         robustness: {
@@ -964,11 +1110,7 @@ async function onSave() {
         </div>
       </section>
 
-      <button
-        class="primary run-btn"
-        :disabled="store.running"
-        @click="onRun"
-      >
+      <button class="primary run-btn" :disabled="store.running" @click="onRun">
         {{ store.running ? '取行情+回测中…' : '开始回测' }}
       </button>
     </aside>
@@ -996,7 +1138,6 @@ async function onSave() {
           <span v-if="batchMsg" class="save-msg">{{ batchMsg }}</span>
         </div>
 
-
         <!-- V106 验证总结（可信度 + 准确度 + 稳健性 + 样本外 一览） -->
         <section v-if="store.result" class="report-section">
           <ValidationSummaryPanel :result="store.result" />
@@ -1007,7 +1148,7 @@ async function onSave() {
             K线 + 买卖点
             <span v-if="strategy === 'chanlun'" class="chanlun-badge">缠论</span>
           </h3>
-        <!-- 缠论策略：显示缠论结构图 -->
+          <!-- 缠论策略：显示缠论结构图 -->
           <ChanlunChart
             v-if="isChanlunStrategy && !chanlunLoading && bars.length > 0"
             :bars="bars"
@@ -1052,7 +1193,9 @@ async function onSave() {
         <section v-if="store.result && tradingAdvice" class="report-section trading-advice">
           <h3>💡 操作建议</h3>
           <div class="advice-content" :style="{ borderColor: tradingAdvice.color }">
-            <div class="advice-main" :style="{ color: tradingAdvice.color }">{{ tradingAdvice.text }}</div>
+            <div class="advice-main" :style="{ color: tradingAdvice.color }">
+              {{ tradingAdvice.text }}
+            </div>
             <div v-if="tradingAdvice.details?.length" class="advice-details">
               <div v-for="(d, i) in tradingAdvice.details" :key="i" class="advice-detail-item">
                 <span class="detail-label">{{ d.label }}:</span>
@@ -1072,7 +1215,10 @@ async function onSave() {
           <SignalAccuracyPanel :report="store.result.signal_accuracy" />
         </section>
 
-        <section v-if="isChanlunStrategy && store.result.signal_accuracy?.chanlun_by_type" class="report-section">
+        <section
+          v-if="isChanlunStrategy && store.result.signal_accuracy?.chanlun_by_type"
+          class="report-section"
+        >
           <h3>📊 缠论买卖点类型准确度（按 1buy/2buy/3buy/... 分组验证）</h3>
           <ChanlunAccuracyPanel
             :by-type="store.result.signal_accuracy.chanlun_by_type"
@@ -1102,59 +1248,127 @@ async function onSave() {
           <TradeTable :trades="store.result.trades" :initial-cash="cash" />
         </section>
       </div>
-        <!-- V137 批量验证自选股（对全局自选股跑当前策略，按可信度排名） -->
-        <section v-if="batchRows.length" class="report-section">
-          <div class="batch-panel-head">
-            <h3>🗳️ 批量验证自选股（策略 {{ strategyLabel }}）
-              <span v-if="lastBatchVerifyAt" class="batch-verify-at" :title="'上次验证时间'">🕒 {{ new Date(lastBatchVerifyAt).toLocaleString() }}</span>
-            </h3>
-            <div class="batch-actions">
-              <button class="ghost small" :class="{ active: batchSort === 'return' }" @click="batchSort = 'return'">按收益</button>
-              <button class="ghost small" :class="{ active: batchSort === 'trust' }" @click="batchSort = 'trust'">按可信度</button>
-              <button class="ghost small" :class="{ active: batchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + batchRows.filter((r: BatchVerifyRow) => r.oos_degraded === false).length + ' 只）'" @click="batchOnlyRobust = !batchOnlyRobust">
-                ✅ 仅看样本外稳健
-              </button>
-              <button class="ghost small" :class="{ active: batchOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的候选股（当前 ' + batchRows.filter((r: BatchVerifyRow) => r.wf_degraded === false).length + ' 只）'" @click="batchOnlyWfRobust = !batchOnlyWfRobust">
-                ✅ 仅看滚验稳健
-              </button>
-              <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
-              <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
-              <button class="ghost small" @click="exportBatchCsv">📊 导出 CSV</button>
-              <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
-                {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
-              </button>
-              <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
-              <span v-if="batchJsonCopyMsg" class="save-msg">{{ batchJsonCopyMsg }}</span>
-              <span v-if="batchCsvMsg" class="save-msg">{{ batchCsvMsg }}</span>
-              <span v-if="batchSaveMsg" class="save-msg" :class="{ err: batchSaveMsg.includes('失败') }">{{ batchSaveMsg }}</span>
-            </div>
+      <!-- V137 批量验证自选股（对全局自选股跑当前策略，按可信度排名） -->
+      <section v-if="batchRows.length" class="report-section">
+        <div class="batch-panel-head">
+          <h3>
+            🗳️ 批量验证自选股（策略 {{ strategyLabel }}）
+            <span v-if="lastBatchVerifyAt" class="batch-verify-at" :title="'上次验证时间'"
+              >🕒 {{ new Date(lastBatchVerifyAt).toLocaleString() }}</span
+            >
+          </h3>
+          <div class="batch-actions">
+            <button
+              class="ghost small"
+              :class="{ active: batchSort === 'return' }"
+              @click="batchSort = 'return'"
+            >
+              按收益
+            </button>
+            <button
+              class="ghost small"
+              :class="{ active: batchSort === 'trust' }"
+              @click="batchSort = 'trust'"
+            >
+              按可信度
+            </button>
+            <button
+              class="ghost small"
+              :class="{ active: batchOnlyRobust }"
+              :title="
+                '仅保留样本外 ✅泛化 的候选股（当前 ' +
+                batchRows.filter((r: BatchVerifyRow) => r.oos_degraded === false).length +
+                ' 只）'
+              "
+              @click="batchOnlyRobust = !batchOnlyRobust"
+            >
+              ✅ 仅看样本外稳健
+            </button>
+            <button
+              class="ghost small"
+              :class="{ active: batchOnlyWfRobust }"
+              :title="
+                '仅保留滚验 ✅稳 的候选股（当前 ' +
+                batchRows.filter((r: BatchVerifyRow) => r.wf_degraded === false).length +
+                ' 只）'
+              "
+              @click="batchOnlyWfRobust = !batchOnlyWfRobust"
+            >
+              ✅ 仅看滚验稳健
+            </button>
+            <button class="ghost small" @click="copyBatchRanking">📋 复制排名</button>
+            <button class="ghost small" @click="copyBatchJson">⚙ 复制 JSON</button>
+            <button class="ghost small" @click="exportBatchCsv">📊 导出 CSV</button>
+            <button class="ghost small" :disabled="batchSaving" @click="saveBatchAsPortfolio">
+              {{ batchSaving ? '保存中…' : '💾 保存为组合策略' }}
+            </button>
+            <span v-if="batchCopyMsg" class="save-msg">{{ batchCopyMsg }}</span>
+            <span v-if="batchJsonCopyMsg" class="save-msg">{{ batchJsonCopyMsg }}</span>
+            <span v-if="batchCsvMsg" class="save-msg">{{ batchCsvMsg }}</span>
+            <span
+              v-if="batchSaveMsg"
+              class="save-msg"
+              :class="{ err: batchSaveMsg.includes('失败') }"
+              >{{ batchSaveMsg }}</span
+            >
           </div>
-          <table class="batch-table">
-            <thead>
-              <tr>
-                <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
-                <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-                <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num" title="Walk-Forward 滚动验证">滚验</th><th class="num">交易数</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(r, i) in sortedBatchRows" :key="r.symbol">
-                <td class="dim">{{ i + 1 }}</td>
-                <td>{{ r.symbol }}</td>
-                <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.total_return) }}</td>
-                <td class="num">{{ batchPctV137(r.win_rate) }}</td>
-                <td class="num">{{ batchPctV137(r.hit_rate) }}</td>
-                <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ batchPctV137(r.excess_hit_rate) }}</td>
-                <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ batchTrustV137(r) }}</td>
-                <td class="num" :class="batchOosCls(r)" :title="batchOosTitle(r)">{{ batchOosLabel(r) }}</td>
-                <td class="num" :title="r.wf_verdict || ''">{{ r.wf_degraded === null || r.wf_degraded === undefined ? '-' : (r.wf_degraded ? '⚠递减' : '✅稳') }}</td>
-                <td class="num">{{ r.trades ?? '-' }}</td>
-                <td><button class="ghost small" @click="viewBatchStockV137(r)">查看该股</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <p class="legend">对全局自选股（最多 12 只）用当前策略与参数各做一次独立回测（最近 500 根日线），按 V101 模型可信度降序排名；点「查看该股」直接切换目标重新回测。</p>
-        </section>
+        </div>
+        <table class="batch-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>标的</th>
+              <th class="num">总收益</th>
+              <th class="num">胜率</th>
+              <th class="num">5根命中率</th>
+              <th class="num">超额命中率</th>
+              <th class="num">可信度</th>
+              <th class="num" title="训练段 vs 未见过数据">样本外</th>
+              <th class="num" title="Walk-Forward 滚动验证">滚验</th>
+              <th class="num">交易数</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(r, i) in sortedBatchRows" :key="r.symbol">
+              <td class="dim">{{ i + 1 }}</td>
+              <td>{{ r.symbol }}</td>
+              <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">
+                {{ batchPctV137(r.total_return) }}
+              </td>
+              <td class="num">{{ batchPctV137(r.win_rate) }}</td>
+              <td class="num">{{ batchPctV137(r.hit_rate) }}</td>
+              <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">
+                {{ batchPctV137(r.excess_hit_rate) }}
+              </td>
+              <td
+                class="num"
+                :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''"
+              >
+                {{ batchTrustV137(r) }}
+              </td>
+              <td class="num" :class="batchOosCls(r)" :title="batchOosTitle(r)">
+                {{ batchOosLabel(r) }}
+              </td>
+              <td class="num" :title="r.wf_verdict || ''">
+                {{
+                  r.wf_degraded === null || r.wf_degraded === undefined
+                    ? '-'
+                    : r.wf_degraded
+                      ? '⚠递减'
+                      : '✅稳'
+                }}
+              </td>
+              <td class="num">{{ r.trades ?? '-' }}</td>
+              <td><button class="ghost small" @click="viewBatchStockV137(r)">查看该股</button></td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="legend">
+          对全局自选股（最多 12 只）用当前策略与参数各做一次独立回测（最近 500 根日线），按 V101
+          模型可信度降序排名；点「查看该股」直接切换目标重新回测。
+        </p>
+      </section>
     </main>
 
     <!-- 保存策略对话框 -->
@@ -1301,13 +1515,13 @@ async function onSave() {
   margin-bottom: 10px;
 }
 .batch-panel-head h3 {
-/* V217: 上次批量验证时间 */
-.batch-verify-at {
-  font-size: 11px;
-  color: var(--text-dim);
-  font-weight: 400;
-  margin-left: 8px;
-}
+  /* V217: 上次批量验证时间 */
+  .batch-verify-at {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+    margin-left: 8px;
+  }
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
@@ -1479,14 +1693,14 @@ async function onSave() {
   align-items: center;
   justify-content: space-between;
   padding: 4px 8px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
   transition: background 0.1s;
 }
 .recent-item:hover {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
 }
 .recent-item.active {
   background: rgba(74, 158, 255, 0.12);
@@ -1500,7 +1714,7 @@ async function onSave() {
 .recent-cat {
   font-size: 10px;
   color: var(--text-muted);
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   padding: 1px 4px;
   border-radius: 3px;
 }
@@ -1508,7 +1722,7 @@ async function onSave() {
 /* 操作建议 */
 .trading-advice .advice-content {
   padding: 12px 16px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid;
   border-left: 3px solid;
   border-radius: 6px;
@@ -1533,7 +1747,7 @@ async function onSave() {
   gap: 4px;
   font-size: 12px;
   padding: 4px 8px;
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 4px;
 }
 

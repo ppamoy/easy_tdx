@@ -190,9 +190,7 @@ function buildOption(): echarts.EChartsCoreOption {
     const time = k.slice(11, 19)
     return time && time !== '00:00:00'
   })
-  const dates = keys.map((k) =>
-    isIntraday ? k.replace('T', ' ').slice(5, 16) : k.slice(0, 10),
-  )
+  const dates = keys.map((k) => (isIntraday ? k.replace('T', ' ').slice(5, 16) : k.slice(0, 10)))
 
   const ohlc = props.bars.slice(0, revealLimit).map((b) => [b.open, b.close, b.low, b.high])
 
@@ -205,35 +203,45 @@ function buildOption(): echarts.EChartsCoreOption {
 
   // 揭示游标竖线（标记训练当前揭示到的位置）
   const cursorMarkLines = revealActive
-    ? [{
-        xAxis: Math.max(revealLimit - 1, 0),
-        lineStyle: { color: '#60a5fa', width: 1, type: 'dashed' as const },
-        label: { show: true, formatter: '揭示位', color: '#60a5fa', fontSize: 10, position: 'insideEndTop' as const },
-      }]
+    ? [
+        {
+          xAxis: Math.max(revealLimit - 1, 0),
+          lineStyle: { color: '#60a5fa', width: 1, type: 'dashed' as const },
+          label: {
+            show: true,
+            formatter: '揭示位',
+            color: '#60a5fa',
+            fontSize: 10,
+            position: 'insideEndTop' as const,
+          },
+        },
+      ]
     : []
 
   // ── 分型的 MarkPoint ──
   // 紧凑模式下不显示「顶/底」文字标签，只画小圆点（268 个分型每个都带文字会严重遮挡 K 线）。
-  const fxPoints = (props.fxs ?? []).map((fx) => {
-    const idx = findAnchorIndex(keyIndex, fx.bar_index, fx.date, revealLimit)
-    if (idx === -1 || idx >= revealLimit) return null
-    // 端点直接锚定在分型极值价上（fx.val），而不是用 K 线高/低偏移：
-    // 用户反馈「端点没在K线极值上」——分型标记必须精确落在极值点。
-    const price = fx.val
-    return {
-      coord: [idx, price],
-      itemStyle: { color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR },
-      symbol: fx.type === 'ding' ? 'triangle' : 'diamond',
-      symbolSize: props.compact ? 5 : 8,
-      label: {
-        show: props.showFractalLabels === true && !props.compact,
-        formatter: fx.type === 'ding' ? '顶' : '底',
-        color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR,
-        fontSize: 9,
-        position: fx.type === 'ding' ? 'top' : 'bottom',
-      },
-    }
-  }).filter(Boolean)
+  const fxPoints = (props.fxs ?? [])
+    .map((fx) => {
+      const idx = findAnchorIndex(keyIndex, fx.bar_index, fx.date, revealLimit)
+      if (idx === -1 || idx >= revealLimit) return null
+      // 端点直接锚定在分型极值价上（fx.val），而不是用 K 线高/低偏移：
+      // 用户反馈「端点没在K线极值上」——分型标记必须精确落在极值点。
+      const price = fx.val
+      return {
+        coord: [idx, price],
+        itemStyle: { color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR },
+        symbol: fx.type === 'ding' ? 'triangle' : 'diamond',
+        symbolSize: props.compact ? 5 : 8,
+        label: {
+          show: props.showFractalLabels === true && !props.compact,
+          formatter: fx.type === 'ding' ? '顶' : '底',
+          color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR,
+          fontSize: 9,
+          position: fx.type === 'ding' ? 'top' : 'bottom',
+        },
+      }
+    })
+    .filter(Boolean)
 
   // ── 笔的 MarkLine（细虚线） ──
   const biMarkLines = props.bis
@@ -329,14 +337,24 @@ function buildOption(): echarts.EChartsCoreOption {
       const price = isBuy
         ? props.bars[idx].low * (1 + priceOffset)
         : props.bars[idx].high * (1 - priceOffset)
-      
+
       // 根据买卖点类型选择图标和颜色
       const isType1 = m.type.startsWith('1')
       const isType3 = m.type.startsWith('3')
-      const symbolSize = isType1 ? 18 : (isType3 ? 14 : 12)
-      const color = isBuy ? (isType1 ? '#22c55e' : (isType3 ? '#86efac' : '#4ade80')) : (isType1 ? '#ef4444' : (isType3 ? '#fca5a5' : '#f87171'))
+      const symbolSize = isType1 ? 18 : isType3 ? 14 : 12
+      const color = isBuy
+        ? isType1
+          ? '#22c55e'
+          : isType3
+            ? '#86efac'
+            : '#4ade80'
+        : isType1
+          ? '#ef4444'
+          : isType3
+            ? '#fca5a5'
+            : '#f87171'
       const symbol = isBuy ? 'triangle' : 'pin'
-      
+
       return {
         name: m.type,
         coord: [idx, price],
@@ -425,7 +443,7 @@ function buildOption(): echarts.EChartsCoreOption {
         ...(props.zss.length ? ['中枢'] : []),
         ...(props.fxs && props.fxs.length ? ['分型'] : []),
         ...(props.mmds.length ? ['买卖点'] : []),
-        ...(props.bcs && props.bcs.some(bc => bc.bc) ? ['背驰'] : []),
+        ...(props.bcs && props.bcs.some((bc) => bc.bc) ? ['背驰'] : []),
         ...(macdHist.length ? ['MACD', 'DIF', 'DEA'] : []),
       ],
       top: 2,
@@ -473,7 +491,14 @@ function buildOption(): echarts.EChartsCoreOption {
       },
     ],
     dataZoom: [
-      { type: 'slider', bottom: 8, start: 50, end: 100, textStyle: { color: '#5c6370' }, xAxisIndex: [0, 1] },
+      {
+        type: 'slider',
+        bottom: 8,
+        start: 50,
+        end: 100,
+        textStyle: { color: '#5c6370' },
+        xAxisIndex: [0, 1],
+      },
     ],
     series: [
       // K 线
@@ -489,12 +514,14 @@ function buildOption(): echarts.EChartsCoreOption {
           borderColor: UP_COLOR,
           borderColor0: DOWN_COLOR,
         },
-        markLine: cursorMarkLines.length ? {
-          silent: true,
-          symbol: 'none',
-          label: { show: false },
-          data: cursorMarkLines,
-        } : undefined,
+        markLine: cursorMarkLines.length
+          ? {
+              silent: true,
+              symbol: 'none',
+              label: { show: false },
+              data: cursorMarkLines,
+            }
+          : undefined,
       },
       // 笔（虚线）
       {
@@ -541,7 +568,11 @@ function buildOption(): echarts.EChartsCoreOption {
           silent: true,
           label: { show: false },
           data: zsMarkAreas,
-          itemStyle: { color: 'rgba(255,200,50,0.08)', borderColor: 'rgba(255,200,50,0.3)', borderType: 'dashed' },
+          itemStyle: {
+            color: 'rgba(255,200,50,0.08)',
+            borderColor: 'rgba(255,200,50,0.3)',
+            borderType: 'dashed',
+          },
         },
       },
       // 分型标记
@@ -582,7 +613,8 @@ function buildOption(): echarts.EChartsCoreOption {
           formatter: (params: any) => (mmdMarkPoints as any[])[params.dataIndex]?.label.formatter,
           color: (params: any) => (mmdMarkPoints as any[])[params.dataIndex]?.label.color,
           fontSize: 10,
-          position: (params: any) => (mmdMarkPoints as any[])[params.dataIndex]?.label.position ?? 'top',
+          position: (params: any) =>
+            (mmdMarkPoints as any[])[params.dataIndex]?.label.position ?? 'top',
         },
         labelLayout: { hideOverlap: true },
       },
@@ -593,10 +625,7 @@ function buildOption(): echarts.EChartsCoreOption {
         type: 'scatter',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: (bcPoints as any[]).map((p) => [
-          p.coord[0],
-          macdHist[p.coord[0]] ?? 0,
-        ]),
+        data: (bcPoints as any[]).map((p) => [p.coord[0], macdHist[p.coord[0]] ?? 0]),
         symbol: (bcPoints as any[]).map((p) => p.symbol),
         symbolSize: (bcPoints as any[]).map((p) => p.symbolSize),
         itemStyle: {
@@ -620,7 +649,8 @@ function buildOption(): echarts.EChartsCoreOption {
         data: macdHist,
         barWidth: '60%',
         itemStyle: {
-          color: (params: any) => ((params.value ?? 0) >= 0 ? 'rgba(239,65,70,0.85)' : 'rgba(24,160,88,0.85)'),
+          color: (params: any) =>
+            (params.value ?? 0) >= 0 ? 'rgba(239,65,70,0.85)' : 'rgba(24,160,88,0.85)',
         },
       },
       {
@@ -655,7 +685,10 @@ onMounted(() => {
   // 在捕获阶段阻止图表容器吞没滚轮事件，确保页面可以滚动
   const el = container.value
   if (el) {
-    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), {
+      passive: false,
+      capture: true,
+    })
   }
 })
 onBeforeUnmount(() => {
@@ -663,7 +696,20 @@ onBeforeUnmount(() => {
   chart?.dispose()
   chart = null
 })
-watch(() => [props.bars, props.bis, props.xds, props.zss, props.mmds, props.fxs, props.bcs, props.macd, props.revealIndex], render)
+watch(
+  () => [
+    props.bars,
+    props.bis,
+    props.xds,
+    props.zss,
+    props.mmds,
+    props.fxs,
+    props.bcs,
+    props.macd,
+    props.revealIndex,
+  ],
+  render,
+)
 </script>
 
 <template>

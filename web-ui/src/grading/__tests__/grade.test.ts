@@ -117,7 +117,10 @@ test('用户实测场景：6年6笔交易 + 高夏普 → 应得 A/B（核心回
   }
   const r = gradePerformance(longTermGood)
   console.log('长线优质策略评级:', r.grade, '分数:', r.score)
-  console.log('维度权重:', r.dimensions.map((d) => `${d.label}=${(d.weight * 100).toFixed(0)}%`).join(', '))
+  console.log(
+    '维度权重:',
+    r.dimensions.map((d) => `${d.label}=${(d.weight * 100).toFixed(0)}%`).join(', '),
+  )
   assert.equal(r.insufficientSample, true)
   // 这是核心断言：高夏普长线策略不该因交易少被打到 D
   assert.ok(
@@ -188,7 +191,10 @@ test('寻优评级：4 维度降级版', () => {
   }
   const r = gradeGridPoint(point)
   assert.equal(r.scenario, 'optimize')
-  assert.ok(['A', 'B', 'S'].includes(r.grade), `优质寻优点应得 A/B/S，实际 ${r.grade}（${r.score}）`)
+  assert.ok(
+    ['A', 'B', 'S'].includes(r.grade),
+    `优质寻优点应得 A/B/S，实际 ${r.grade}（${r.score}）`,
+  )
   console.log('寻优点评级:', r.grade, r.score)
 })
 
@@ -205,10 +211,7 @@ test('寻优评级：网格点交易太少 → 降权但评级照常', () => {
   const r = gradeGridPoint(point)
   assert.equal(r.insufficientSample, true)
   // 高夏普 + 浅回撤，即使交易少也应该得高分（不再否决到 D）
-  assert.ok(
-    ['A', 'B', 'S'].includes(r.grade),
-    `优质寻优点不应因交易少被打到 D，实际 ${r.grade}`,
-  )
+  assert.ok(['A', 'B', 'S'].includes(r.grade), `优质寻优点不应因交易少被打到 D，实际 ${r.grade}`)
 })
 
 // ── 组合评级：构造合成净值曲线验证 ─────────────────────────────────────────
@@ -243,7 +246,7 @@ test('组合评级：稳定上涨净值应得 A 或 S', () => {
   // 252 个交易日，日均 0.05% → 年化约 13%，回撤极小
   const returns = Array.from({ length: 252 }, (_, i) => {
     // 平稳上涨 + 小幅噪声，偶尔回调
-    return i % 30 === 0 ? -0.008 : 0.0008 + (Math.sin(i) * 0.0003)
+    return i % 30 === 0 ? -0.008 : 0.0008 + Math.sin(i) * 0.0003
   })
   const equity = makeSyntheticEquity(1000000, returns)
   const m = computeCombinedMetrics(equity)
@@ -305,14 +308,16 @@ test('组合评级：高波动深回撤净值 → 低档', () => {
 })
 
 test('combinedMetrics：单点净值返回全 0（兜底）', () => {
-  const m = computeCombinedMetrics([{
-    datetime: '2022-01-03',
-    cash: 1000000,
-    position_value: 0,
-    total: 1000000,
-    drawdown: 0,
-    drawdown_pct: 0,
-  }])
+  const m = computeCombinedMetrics([
+    {
+      datetime: '2022-01-03',
+      cash: 1000000,
+      position_value: 0,
+      total: 1000000,
+      drawdown: 0,
+      drawdown_pct: 0,
+    },
+  ])
   assert.equal(m.total_return, 0)
   assert.equal(m.sharpe, 0)
   assert.equal(m.n_points, 1)

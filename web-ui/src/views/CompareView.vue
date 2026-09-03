@@ -49,9 +49,7 @@ async function loadTasks() {
 
 /** 从 task result 提取可对比的 equity + performance。
  * 支持单标的（equity_curve/performance）和组合（combined_equity/total_performance）。 */
-function extractComparable(
-  result: Record<string, unknown> | null,
-): {
+function extractComparable(result: Record<string, unknown> | null): {
   equity: EquityPoint[]
   performance: Record<string, number>
   model_trust?: BacktestResult['model_trust']
@@ -183,26 +181,41 @@ function exportCompareCsv() {
     rows.push([label, ...compareItems.value.map((i) => fmt(perf(i)))])
   })
   // 验证维度行：可信度 / 5根命中率 / 超额命中率 / 样本外 / 稳健性
-  rows.push(['可信度', ...compareItems.value.map((i) => {
-    const t = i.result.model_trust
-    return t && t.score !== undefined ? Math.round(t.score) + '/100 ' + t.grade : '-'
-  })])
-  rows.push(['5根命中率', ...compareItems.value.map((i) => {
-    const h = i.result.signal_accuracy?.buy?.horizons?.['5']
-    return h && h.count > 0 ? cmpPct(h.hit_rate) : '-'
-  })])
-  rows.push(['超额命中率', ...compareItems.value.map((i) => {
-    const h = i.result.signal_accuracy?.buy?.horizons?.['5']
-    return h && h.count > 0 ? cmpPct(h.excess_hit_rate) : '-'
-  })])
-  rows.push(['样本外验证', ...compareItems.value.map((i) => {
-    const o = i.result.out_of_sample
-    return o ? (o.degraded ? '⚠ 衰减' : '✅ 泛化') : '-'
-  })])
-  rows.push(['稳健性', ...compareItems.value.map((i) => {
-    const s = i.result.segment_robustness
-    return s ? (s.overfit_likely ? '⚠ 过拟合' : '✅ 稳健') : '-'
-  })])
+  rows.push([
+    '可信度',
+    ...compareItems.value.map((i) => {
+      const t = i.result.model_trust
+      return t && t.score !== undefined ? Math.round(t.score) + '/100 ' + t.grade : '-'
+    }),
+  ])
+  rows.push([
+    '5根命中率',
+    ...compareItems.value.map((i) => {
+      const h = i.result.signal_accuracy?.buy?.horizons?.['5']
+      return h && h.count > 0 ? cmpPct(h.hit_rate) : '-'
+    }),
+  ])
+  rows.push([
+    '超额命中率',
+    ...compareItems.value.map((i) => {
+      const h = i.result.signal_accuracy?.buy?.horizons?.['5']
+      return h && h.count > 0 ? cmpPct(h.excess_hit_rate) : '-'
+    }),
+  ])
+  rows.push([
+    '样本外验证',
+    ...compareItems.value.map((i) => {
+      const o = i.result.out_of_sample
+      return o ? (o.degraded ? '⚠ 衰减' : '✅ 泛化') : '-'
+    }),
+  ])
+  rows.push([
+    '稳健性',
+    ...compareItems.value.map((i) => {
+      const s = i.result.segment_robustness
+      return s ? (s.overfit_likely ? '⚠ 过拟合' : '✅ 稳健') : '-'
+    }),
+  ])
   const csv = '\uFEFF' + rows.map((r) => r.join(',')).join('\n')
   try {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -218,7 +231,9 @@ function exportCompareCsv() {
   } catch {
     compareCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { compareCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    compareCsvMsg.value = ''
+  }, 2500)
 }
 // V275: 对比结果复制 JSON（机器可读，Agent/脚本友好，与全站 JSON 系列对齐）
 const compareJsonMsg = ref('')
@@ -242,7 +257,9 @@ async function copyCompareJson() {
   } catch {
     compareJsonMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { compareJsonMsg.value = '' }, 2500)
+  setTimeout(() => {
+    compareJsonMsg.value = ''
+  }, 2500)
 }
 </script>
 
@@ -285,7 +302,8 @@ async function copyCompareJson() {
         </section>
 
         <section class="report-section">
-          <h3>指标对比
+          <h3>
+            指标对比
             <button class="ghost small" @click="exportCompareCsv">📊 导出 CSV</button>
             <button class="ghost small" @click="copyCompareJson">⚙ 复制 JSON</button>
             <span v-if="compareCsvMsg" class="save-msg">{{ compareCsvMsg }}</span>
@@ -296,7 +314,12 @@ async function copyCompareJson() {
 
         <!-- V340: V102 决策支持引导 -->
         <section class="report-section">
-          <p class="v102-tip">💡 各标的的 <b>V102 缠论决策支持</b>（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行 <code>easy-tdx advice MARKET CODE</code> 一键回放；缠论策略回测可勾选「3买按V102建议止损止盈」自动执行。</p>
+          <p class="v102-tip">
+            💡 各标的的
+            <b>V102 缠论决策支持</b>（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行
+            <code>easy-tdx advice MARKET CODE</code>
+            一键回放；缠论策略回测可勾选「3买按V102建议止损止盈」自动执行。
+          </p>
         </section>
       </div>
     </main>

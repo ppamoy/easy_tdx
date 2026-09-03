@@ -255,10 +255,13 @@ async function onLoadMulti(s: SavedStrategy) {
     error.value = '组合数据损坏：部分策略缺少 strategy 或 symbol 字段。'
     return
   }
-  if (!confirm(
-    `载入「${s.name}」并用今天（${isoToday()}）重跑 ${rawItems.length} 个策略？\n\n` +
-    `结果区会显示截至今天的策略信号（"哪些该买/该卖"）。`,
-  )) return
+  if (
+    !confirm(
+      `载入「${s.name}」并用今天（${isoToday()}）重跑 ${rawItems.length} 个策略？\n\n` +
+        `结果区会显示截至今天的策略信号（"哪些该买/该卖"）。`,
+    )
+  )
+    return
   const today = isoToday()
   const items = rawItems.map((it) => ({
     ...it,
@@ -357,7 +360,9 @@ async function onReverify(s: SavedStrategy) {
       await updateStrategySnapshot(s.id, freshSnapshot)
     } else if (s.kind === 'portfolio') {
       // V211: 组合策略——用保存的 stocks 重跑组合回测（含 V126 组合样本外）
-      const stocks: string[] = Array.isArray(ctx.stocks) ? ctx.stocks.filter((x) => typeof x === 'string') : []
+      const stocks: string[] = Array.isArray(ctx.stocks)
+        ? ctx.stocks.filter((x) => typeof x === 'string')
+        : []
       if (stocks.length === 0) throw new Error('策略缺少组合标的（context.stocks），无法重验')
       const { task_id } = await submitPortfolioTask({
         strategy: s.strategy,
@@ -374,7 +379,10 @@ async function onReverify(s: SavedStrategy) {
       let result: any = null
       for (;;) {
         const state = await fetchTask(task_id)
-        if (state.status === 'done' && state.result) { result = state.result; break }
+        if (state.status === 'done' && state.result) {
+          result = state.result
+          break
+        }
         if (state.status === 'failed') throw new Error(state.error || '组合重验失败')
         if (Date.now() - start > 360_000) throw new Error('组合重验超时（360s）')
         await new Promise((r2) => setTimeout(r2, 500))
@@ -427,7 +435,10 @@ async function onReverify(s: SavedStrategy) {
       let result: any = null
       for (;;) {
         const state = await fetchTask(task_id)
-        if (state.status === 'done' && state.result) { result = state.result; break }
+        if (state.status === 'done' && state.result) {
+          result = state.result
+          break
+        }
         if (state.status === 'failed') throw new Error(state.error || '多策略重验失败')
         if (Date.now() - start > 360_000) throw new Error('多策略重验超时（360s）')
         await new Promise((r2) => setTimeout(r2, 500))
@@ -455,10 +466,14 @@ async function onReverify(s: SavedStrategy) {
     }
     await load()
     reverifyMsg.value = '✓ 已重验「' + s.name + '」并刷新验证结论'
-    setTimeout(() => { reverifyMsg.value = '' }, 4000)
+    setTimeout(() => {
+      reverifyMsg.value = ''
+    }, 4000)
   } catch (e) {
     reverifyMsg.value = '重验失败：' + formatError(e)
-    setTimeout(() => { reverifyMsg.value = '' }, 4000)
+    setTimeout(() => {
+      reverifyMsg.value = ''
+    }, 4000)
   } finally {
     reverifyId.value = null
   }
@@ -473,11 +488,32 @@ function libCsvEscape(v: string): string {
 }
 function exportStrategiesCsv() {
   if (!sortedVisible.value.length) return
-  const header = ['名称', '类型', '策略', '参数', '总收益', '夏普', '可信度', '可信等级', '样本外', '来源', '标签']
+  const header = [
+    '名称',
+    '类型',
+    '策略',
+    '参数',
+    '总收益',
+    '夏普',
+    '可信度',
+    '可信等级',
+    '样本外',
+    '来源',
+    '标签',
+  ]
   const rows = sortedVisible.value.map((s) => {
     const snap = (s.snapshot || {}) as Record<string, any>
     const oos = (snap.out_of_sample || {}) as { degraded?: boolean }
-    const oosCell = oos.degraded === true ? '⚠ 衰减' : oos.degraded === false ? '✅ 泛化' : (snap.oos_degraded === false ? '✅ 泛化' : snap.oos_degraded === true ? '⚠ 衰减' : '-')
+    const oosCell =
+      oos.degraded === true
+        ? '⚠ 衰减'
+        : oos.degraded === false
+          ? '✅ 泛化'
+          : snap.oos_degraded === false
+            ? '✅ 泛化'
+            : snap.oos_degraded === true
+              ? '⚠ 衰减'
+              : '-'
     const trust = (snap.trust || {}) as { score?: number; grade?: string }
     return [
       libCsvEscape(s.name),
@@ -508,7 +544,9 @@ function exportStrategiesCsv() {
   } catch {
     libraryCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { libraryCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    libraryCsvMsg.value = ''
+  }, 2500)
 }
 // V291: 导出策略清单 JSON（全库验证档案机器可读，与 CSV V269 / 单条 JSON V251 互补）
 const libraryJsonMsg = ref('')
@@ -539,11 +577,15 @@ async function exportStrategiesJson() {
   } catch {
     libraryJsonMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { libraryJsonMsg.value = '' }, 2500)
+  setTimeout(() => {
+    libraryJsonMsg.value = ''
+  }, 2500)
 }
 
 async function onReverifyAll() {
-  const targets = [...sortedVisible.value].filter((s) => s.kind === 'single' || s.kind === 'portfolio' || s.kind === 'multi')
+  const targets = [...sortedVisible.value].filter(
+    (s) => s.kind === 'single' || s.kind === 'portfolio' || s.kind === 'multi',
+  )
   if (targets.length === 0 || reverifyAll.value) return
   reverifyAll.value = true
   reverifyAllMsg.value = ''
@@ -561,7 +603,9 @@ async function onReverifyAll() {
       }
     }
     reverifyAllMsg.value = `✓ 全部重验完成：成功 ${ok}、失败 ${fail}（共 ${targets.length}）`
-    setTimeout(() => { reverifyAllMsg.value = '' }, 5000)
+    setTimeout(() => {
+      reverifyAllMsg.value = ''
+    }, 5000)
   } finally {
     reverifyAll.value = false
   }
@@ -622,17 +666,39 @@ async function copyCardSummary(s: SavedStrategy) {
   const lines: string[] = []
   lines.push('# easy-tdx 策略验证摘要：' + s.name)
   lines.push('')
-  lines.push('- 类型：' + (s.kind === 'multi' ? '多策略组合' : s.kind === 'portfolio' ? '组合' : '单标的'))
+  lines.push(
+    '- 类型：' + (s.kind === 'multi' ? '多策略组合' : s.kind === 'portfolio' ? '组合' : '单标的'),
+  )
   lines.push('- 策略：' + (s.strategy_label || s.strategy) + ' · 参数 ' + JSON.stringify(s.params))
-  lines.push('- 标的：' + (s.kind === 'single' ? String(s.context?.symbol ?? '-') : (Array.isArray(s.context?.stocks) ? s.context!.stocks.join(', ') : (Array.isArray(s.context?.items) ? String(s.context!.items.length) + ' 个策略' : '-'))))
-  lines.push('- 总收益：' + pct(snap.total_return) + ' · 夏普：' + num(snap.sharpe) + ' · 回撤：' + pct(snap.max_drawdown))
+  lines.push(
+    '- 标的：' +
+      (s.kind === 'single'
+        ? String(s.context?.symbol ?? '-')
+        : Array.isArray(s.context?.stocks)
+          ? s.context!.stocks.join(', ')
+          : Array.isArray(s.context?.items)
+            ? String(s.context!.items.length) + ' 个策略'
+            : '-'),
+  )
+  lines.push(
+    '- 总收益：' +
+      pct(snap.total_return) +
+      ' · 夏普：' +
+      num(snap.sharpe) +
+      ' · 回撤：' +
+      pct(snap.max_drawdown),
+  )
   if (snap.accuracy?.verdict) lines.push('- 🎯 准确度验证：' + snap.accuracy.verdict)
   if (snap.robustness?.verdict) lines.push('- 🧱 稳健性：' + snap.robustness.verdict)
   if (snap.trust?.verdict) lines.push('- 📊 可信度：' + snap.trust.verdict)
   if (snap.out_of_sample?.verdict) lines.push('- 🔬 样本外：' + snap.out_of_sample.verdict)
   if (snap.oos_verdict) lines.push('- 🧪 批量验证样本外：' + snap.oos_verdict)
   const src = String(snap.source ?? '')
-  lines.push('- 来源：' + (src || '手动保存') + (snap.reverified_at ? ' · 重验于 ' + snap.reverified_at : ''))
+  lines.push(
+    '- 来源：' +
+      (src || '手动保存') +
+      (snap.reverified_at ? ' · 重验于 ' + snap.reverified_at : ''),
+  )
   const text = lines.join('\n')
   try {
     await navigator.clipboard.writeText(text)
@@ -645,7 +711,9 @@ async function copyCardSummary(s: SavedStrategy) {
     document.body.removeChild(ta)
   }
   cardCopyMsg.value = '✓ 已复制验证摘要'
-  setTimeout(() => { cardCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    cardCopyMsg.value = ''
+  }, 2500)
 }
 // V251: 复制验证 JSON——把单条策略的完整验证档案（快照+配置）以 JSON 导出，机器可读
 const cardJsonMsg = ref('')
@@ -676,7 +744,9 @@ async function copyCardJson(s: SavedStrategy) {
     document.body.removeChild(ta)
   }
   cardJsonMsg.value = '✓ 已复制验证 JSON'
-  setTimeout(() => { cardJsonMsg.value = '' }, 2500)
+  setTimeout(() => {
+    cardJsonMsg.value = ''
+  }, 2500)
 }
 
 // ── 展示辅助 ────────────────────────────────────────────────────────────────
@@ -690,7 +760,11 @@ function num(v: unknown, d = 2): string {
   return Number.isFinite(n) ? n.toFixed(d) : '-'
 }
 // V100: 准确度判定着色——命中率显著高于随机基准标绿，否则按文案关键词标色
-function accClass(acc: { hit_rate?: number | null; excess_hit_rate?: number | null; verdict?: string }): string {
+function accClass(acc: {
+  hit_rate?: number | null
+  excess_hit_rate?: number | null
+  verdict?: string
+}): string {
   const v = acc.verdict ?? ''
   if (v.includes('显著') || v.includes('具备参考价值')) return 'pos'
   if (v.includes('跑输') || v.includes('低于')) return 'neg'
@@ -701,11 +775,18 @@ function ctxLabel(s: SavedStrategy): string {
   const ctx = s.context
   if (s.kind === 'multi') {
     const items = Array.isArray(ctx.items) ? (ctx.items as MultiStrategyItem[]) : []
-    return items.length ? `${items.length} 策略 · ${items.map((i) => i.symbol).slice(0, 3).join(' ')}${items.length > 3 ? ' …' : ''}` : '-'
+    return items.length
+      ? `${items.length} 策略 · ${items
+          .map((i) => i.symbol)
+          .slice(0, 3)
+          .join(' ')}${items.length > 3 ? ' …' : ''}`
+      : '-'
   }
   if (s.kind === 'portfolio') {
     const stocks = Array.isArray(ctx.stocks) ? (ctx.stocks as string[]) : []
-    return stocks.length ? `${stocks.length} 只：${stocks.slice(0, 3).join(' ')}${stocks.length > 3 ? ' …' : ''}` : '-'
+    return stocks.length
+      ? `${stocks.length} 只：${stocks.slice(0, 3).join(' ')}${stocks.length > 3 ? ' …' : ''}`
+      : '-'
   }
   return (ctx.symbol as string) || '-'
 }
@@ -725,13 +806,16 @@ const SOURCE_LABELS: Record<string, { label: string; cls: string }> = {
   'batch-verify-optimize': { label: '🧪 寻优批量验证', cls: 'src-batch' },
 }
 function sourceBadge(s: SavedStrategy): { label: string; cls: string } | null {
-  const src = (s.snapshot?.source as string | undefined)
+  const src = s.snapshot?.source as string | undefined
   if (src && SOURCE_LABELS[src]) return SOURCE_LABELS[src]
   return null
 }
 function createdShort(s: SavedStrategy): string {
   // created_at 形如 "2026-07-04T15:30:22Z"，截到分钟
-  return (s.created_at || '').replace('T', ' ').replace(/:\d{2}Z?$/, '').slice(0, 16)
+  return (s.created_at || '')
+    .replace('T', ' ')
+    .replace(/:\d{2}Z?$/, '')
+    .slice(0, 16)
 }
 
 // ── 组合回测：当前持仓（回测结束时各策略的持仓快照）────────────────────────────
@@ -862,7 +946,9 @@ const comboGrade = computed(() =>
           :disabled="selectedStrategies.length === 0 || store.multiStrategyRunning"
           @click="onComboBacktest"
         >
-          {{ store.multiStrategyRunning ? '组合回测中…' : `组合回测（${selectedStrategies.length}）` }}
+          {{
+            store.multiStrategyRunning ? '组合回测中…' : `组合回测（${selectedStrategies.length}）`
+          }}
         </button>
         <button
           v-if="activeTab === 'single' && selectedStrategies.length > 0"
@@ -1001,8 +1087,12 @@ const comboGrade = computed(() =>
         </div>
 
         <div class="card-meta">
-          <div class="meta-row"><span class="k">标的</span><span class="v">{{ ctxLabel(s) }}</span></div>
-          <div class="meta-row"><span class="k">区间</span><span class="v">{{ dateRange(s) }}</span></div>
+          <div class="meta-row">
+            <span class="k">标的</span><span class="v">{{ ctxLabel(s) }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="k">区间</span><span class="v">{{ dateRange(s) }}</span>
+          </div>
         </div>
 
         <div v-if="Object.keys(s.snapshot).length" class="card-snapshot">
@@ -1016,7 +1106,8 @@ const comboGrade = computed(() =>
             <span class="k">夏普</span><span class="v mono">{{ num(s.snapshot.sharpe) }}</span>
           </div>
           <div class="snap-item">
-            <span class="k">回撤</span><span class="v mono neg">{{ pct(s.snapshot.max_drawdown) }}</span>
+            <span class="k">回撤</span
+            ><span class="v mono neg">{{ pct(s.snapshot.max_drawdown) }}</span>
           </div>
           <div v-if="s.snapshot.accuracy?.verdict" class="snap-item wide">
             <span class="k">🎯 准确度验证</span>
@@ -1033,7 +1124,16 @@ const comboGrade = computed(() =>
           <!-- V122: 模型可信度 + 样本外验证结论 -->
           <div v-if="s.snapshot.trust?.verdict" class="snap-item wide">
             <span class="k">📊 可信度</span>
-            <span class="v acc" :class="s.snapshot.trust.grade === '高' ? 'pos' : s.snapshot.trust.grade === '低' ? 'neg' : 'warn'">
+            <span
+              class="v acc"
+              :class="
+                s.snapshot.trust.grade === '高'
+                  ? 'pos'
+                  : s.snapshot.trust.grade === '低'
+                    ? 'neg'
+                    : 'warn'
+              "
+            >
               {{ s.snapshot.trust.verdict }}
             </span>
           </div>
@@ -1074,7 +1174,11 @@ const comboGrade = computed(() =>
               v-if="s.kind !== 'multi'"
               class="reverify-btn sm"
               :disabled="reverifyId !== null"
-              :title="s.kind === 'single' ? '用保存的策略+参数对原标的重新回测并刷新验证结论' : '用保存的组合标的重新跑组合回测并刷新验证结论'"
+              :title="
+                s.kind === 'single'
+                  ? '用保存的策略+参数对原标的重新回测并刷新验证结论'
+                  : '用保存的组合标的重新跑组合回测并刷新验证结论'
+              "
               @click="onReverify(s)"
             >
               {{ reverifyId === s.id ? '重验中…' : '↻ 重验' }}
@@ -1104,11 +1208,7 @@ const comboGrade = computed(() =>
             >
               ⚙ 验证 JSON
             </button>
-            <button
-              class="danger sm"
-              :disabled="deletingId === s.id"
-              @click="onDelete(s)"
-            >
+            <button class="danger sm" :disabled="deletingId === s.id" @click="onDelete(s)">
               {{ deletingId === s.id ? '…' : '删除' }}
             </button>
           </span>
@@ -1120,11 +1220,7 @@ const comboGrade = computed(() =>
     </div>
 
     <!-- 保存组合弹窗 -->
-    <div
-      v-if="saveComboOpen"
-      class="modal-mask"
-      @click.self="closeSaveCombo"
-    >
+    <div v-if="saveComboOpen" class="modal-mask" @click.self="closeSaveCombo">
       <div
         role="dialog"
         aria-modal="true"
@@ -1134,7 +1230,8 @@ const comboGrade = computed(() =>
       >
         <h3 id="combo-modal-title">保存为策略组合</h3>
         <p class="modal-desc">
-          将当前 {{ lastComboItems.length }} 个策略的整体配置（策略+参数+标的+资金配比）存为「组合」，
+          将当前
+          {{ lastComboItems.length }} 个策略的整体配置（策略+参数+标的+资金配比）存为「组合」，
           下次点「↻ 重跑到今天」即可用截至今天的行情算出每个策略的当前信号（持仓/空仓）。
         </p>
         <div class="modal-field">
@@ -1175,8 +1272,8 @@ const comboGrade = computed(() =>
       <h3 class="combo-title">
         组合回测结果
         <span v-if="store.multiStrategyResult" class="combo-meta">
-          · {{ store.multiStrategyResult.total_performance.total_stocks }} 个策略 ·
-          总资金 {{ store.multiStrategyResult.total_performance.total_cash.toFixed(0) }}
+          · {{ store.multiStrategyResult.total_performance.total_stocks }} 个策略 · 总资金
+          {{ store.multiStrategyResult.total_performance.total_cash.toFixed(0) }}
         </span>
         <button
           v-if="store.multiStrategyResult && !store.multiStrategyRunning"
@@ -1242,9 +1339,7 @@ const comboGrade = computed(() =>
 
         <div class="combo-chart-block">
           <h4>各策略净值叠加（归一化）</h4>
-          <PortfolioCompareChart
-            :results="store.multiStrategyResult.individual_results"
-          />
+          <PortfolioCompareChart :results="store.multiStrategyResult.individual_results" />
         </div>
 
         <div class="combo-chart-block">
@@ -1255,7 +1350,8 @@ const comboGrade = computed(() =>
 
           <!-- 模型仓位免责水印：与上方过拟合警示条互补，这里只强调"持仓≠你真实账户" -->
           <div class="warn-box disclaimer">
-            ⚠ 表中是<strong>模型仓位</strong>（策略说"该持仓"），<strong>不是你真实账户的持仓</strong>。
+            ⚠
+            表中是<strong>模型仓位</strong>（策略说"该持仓"），<strong>不是你真实账户的持仓</strong>。
             基于回测结束日收盘价计算，过夜后可能因新 K 线触发买卖而变化。
           </div>
 
@@ -1286,12 +1382,11 @@ const comboGrade = computed(() =>
                 <td class="num">{{ h.holding ? h.avgPrice.toFixed(2) : '-' }}</td>
                 <td class="num">{{ h.holding ? h.marketValue.toFixed(0) : '-' }}</td>
                 <td class="num" :class="{ pos: h.unrealizedPnl > 0, neg: h.unrealizedPnl < 0 }">
-                  {{ h.holding ? (h.unrealizedPnl > 0 ? '+' : '') + h.unrealizedPnl.toFixed(0) : '-' }}
+                  {{
+                    h.holding ? (h.unrealizedPnl > 0 ? '+' : '') + h.unrealizedPnl.toFixed(0) : '-'
+                  }}
                 </td>
-                <td
-                  class="num"
-                  :class="{ pos: h.unrealizedPct > 0, neg: h.unrealizedPct < 0 }"
-                >
+                <td class="num" :class="{ pos: h.unrealizedPct > 0, neg: h.unrealizedPct < 0 }">
                   {{ h.holding ? (h.unrealizedPct * 100).toFixed(2) + '%' : '-' }}
                 </td>
               </tr>
@@ -1338,16 +1433,16 @@ const comboGrade = computed(() =>
   border-radius: var(--radius);
 }
 .trust-sort {
-/* V215: 验证结论筛选下拉 */
-.filter-select {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: 6px;
-  padding: 3px 6px;
-  font-size: 12px;
-  cursor: pointer;
-}
+  /* V215: 验证结论筛选下拉 */
+  .filter-select {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 3px 6px;
+    font-size: 12px;
+    cursor: pointer;
+  }
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1377,7 +1472,9 @@ const comboGrade = computed(() =>
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 .tab:hover {
   color: var(--text);
@@ -1630,8 +1727,8 @@ const comboGrade = computed(() =>
 }
 /* V235: 复制验证摘要按钮 */
 .copy-summary-btn.sm {
-  background: rgba(96, 165, 250, 0.10);
-  border: 1px solid rgba(96, 165, 250, 0.30);
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.3);
   color: var(--accent);
 }
 .reverify-msg {

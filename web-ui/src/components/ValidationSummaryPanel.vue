@@ -37,14 +37,19 @@ const rows = computed<VerdictRow[]>(() => {
   // V95 信号准确度
   if (r.signal_accuracy?.verdict) {
     const v = r.signal_accuracy.verdict
-    const state = v.includes('显著') || v.includes('具备') ? 'pos' : v.includes('低于') ? 'neg' : 'neutral'
+    const state =
+      v.includes('显著') || v.includes('具备') ? 'pos' : v.includes('低于') ? 'neg' : 'neutral'
     out.push({ key: 'accuracy', label: '🎯 信号准确度', text: v, state })
   }
 
   // V97 分段稳健性
   if (r.segment_robustness?.verdict) {
     const v = r.segment_robustness.verdict
-    const state = r.segment_robustness.overfit_likely ? 'neg' : v.includes('较一致') ? 'pos' : 'neutral'
+    const state = r.segment_robustness.overfit_likely
+      ? 'neg'
+      : v.includes('较一致')
+        ? 'pos'
+        : 'neutral'
     out.push({ key: 'robust', label: '🧱 分段稳健性', text: v, state })
   }
 
@@ -61,7 +66,15 @@ const rows = computed<VerdictRow[]>(() => {
 const overall = computed(() => {
   const r = props.result
   if (!r?.model_trust) return { text: '', state: 'neutral' as const }
-  return { text: '综合可信度 ' + Math.round(r.model_trust.score) + '/100', state: r.model_trust.grade === '高' ? 'pos' as const : r.model_trust.grade === '低' ? 'neg' as const : 'warn' as const }
+  return {
+    text: '综合可信度 ' + Math.round(r.model_trust.score) + '/100',
+    state:
+      r.model_trust.grade === '高'
+        ? ('pos' as const)
+        : r.model_trust.grade === '低'
+          ? ('neg' as const)
+          : ('warn' as const),
+  }
 })
 // V301: 验证总结复制 Markdown（组件级，回测页 V106 等使用处一并受益）
 const vsCopyMsg = ref('')
@@ -82,14 +95,18 @@ async function copyValidationSummary() {
   } catch {
     vsCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { vsCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    vsCopyMsg.value = ''
+  }, 2500)
 }
 </script>
 
 <template>
   <div v-if="rows.length" class="validation-summary">
     <div class="vs-head">
-      <button class="ghost small vs-copy-btn" @click="copyValidationSummary">📋 复制验证总结</button>
+      <button class="ghost small vs-copy-btn" @click="copyValidationSummary">
+        📋 复制验证总结
+      </button>
       <span v-if="vsCopyMsg" class="save-msg">{{ vsCopyMsg }}</span>
       <span class="vs-title">✅ 验证总结</span>
       <span v-if="overall.text" class="vs-overall" :class="overall.state">{{ overall.text }}</span>
@@ -100,7 +117,9 @@ async function copyValidationSummary() {
         <span class="vs-text">{{ row.text }}</span>
       </div>
     </div>
-    <p class="vs-legend">综合可信度（V101）＝择时准确度＋分段稳健性＋绩效对比；配合信号准确度（V95）、分段稳健性（V97）、样本外验证（V105）共同回答「模型经过历史回测验证是否可信、是否可持续」。</p>
+    <p class="vs-legend">
+      综合可信度（V101）＝择时准确度＋分段稳健性＋绩效对比；配合信号准确度（V95）、分段稳健性（V97）、样本外验证（V105）共同回答「模型经过历史回测验证是否可信、是否可持续」。
+    </p>
   </div>
 </template>
 

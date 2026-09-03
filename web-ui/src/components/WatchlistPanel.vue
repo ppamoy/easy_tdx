@@ -34,14 +34,16 @@ function loadWatchlist() {
 function saveWatchlist() {
   try {
     localStorage.setItem('easy_tdx_global_watchlist', JSON.stringify(items.value))
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // 添加到自选
 function doAdd() {
   const code = addCode.value.trim()
   if (!code.match(/^\d{6}$/)) return
-  const exists = items.value.find(i => i.code === code)
+  const exists = items.value.find((i) => i.code === code)
   if (exists) return
   items.value.unshift({ code, market: addMarket.value, symbol: `${addMarket.value}${code}` })
   saveWatchlist()
@@ -58,8 +60,8 @@ function removeFromWatch(index: number) {
 const filtered = computed(() => {
   if (!search.value) return items.value
   const q = search.value.toLowerCase()
-  return items.value.filter(i =>
-    i.code.includes(q) || i.symbol.toLowerCase().includes(q) || (i.name ?? '').includes(q)
+  return items.value.filter(
+    (i) => i.code.includes(q) || i.symbol.toLowerCase().includes(q) || (i.name ?? '').includes(q),
   )
 })
 
@@ -106,11 +108,7 @@ onMounted(loadWatchlist)
 
       <!-- 搜索 -->
       <div class="search-box">
-        <input
-          v-model="search"
-          placeholder="搜索代码/名称..."
-          maxlength="20"
-        />
+        <input v-model="search" placeholder="搜索代码/名称..." maxlength="20" />
       </div>
 
       <!-- 列表 -->
@@ -119,11 +117,7 @@ onMounted(loadWatchlist)
         <p class="hint">在缠论分析页点击「👁 加入监控」添加</p>
       </div>
       <div v-else class="watchlist-items">
-        <div
-          v-for="(item, i) in filtered"
-          :key="item.symbol + i"
-          class="watch-item"
-        >
+        <div v-for="(item, i) in filtered" :key="item.symbol + i" class="watch-item">
           <div class="item-info">
             <span class="item-symbol">{{ item.symbol }}</span>
             <span v-if="item.name" class="item-name">{{ item.name }}</span>
@@ -174,9 +168,11 @@ onMounted(loadWatchlist)
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   z-index: 1000;
-  transition: transform 0.2s, background 0.2s;
+  transition:
+    transform 0.2s,
+    background 0.2s;
 }
 .watchlist-toggle:hover {
   transform: scale(1.05);
@@ -215,7 +211,7 @@ onMounted(loadWatchlist)
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -241,7 +237,9 @@ onMounted(loadWatchlist)
   font-size: 16px;
   padding: 2px 6px;
 }
-.close-btn:hover { color: var(--text); }
+.close-btn:hover {
+  color: var(--text);
+}
 
 /* 搜索 */
 .search-box {
@@ -274,13 +272,13 @@ onMounted(loadWatchlist)
   align-items: center;
   justify-content: space-between;
   padding: 8px 10px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 6px;
   margin-bottom: 4px;
   transition: background 0.1s;
 }
 .watch-item:hover {
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
 }
 .item-info {
   display: flex;
@@ -301,7 +299,7 @@ onMounted(loadWatchlist)
 .item-cat {
   font-size: 10px;
   padding: 1px 4px;
-  background: rgba(255,255,255,0.06);
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 3px;
   color: var(--text-dim);
 }
@@ -319,7 +317,9 @@ onMounted(loadWatchlist)
   line-height: 1;
   padding: 2px 4px;
 }
-.remove-btn:hover { color: #ef4444; }
+.remove-btn:hover {
+  color: #ef4444;
+}
 
 /* 添加区 */
 .add-section {
@@ -375,7 +375,9 @@ onMounted(loadWatchlist)
 /* 过渡动画 */
 .slide-enter-active,
 .slide-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
 }
 .slide-enter-from,
 .slide-leave-to {

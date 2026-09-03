@@ -76,5 +76,9 @@ jobs:
         working-directory: web-ui
       - run: npm run test
         working-directory: web-ui
+      - run: npm run format:check
+        working-directory: web-ui
+      - run: npm run lint
+        working-directory: web-ui
       - run: npm run build
         working-directory: web-ui

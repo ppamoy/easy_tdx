@@ -64,7 +64,10 @@ const sortedDimensions = computed<DimensionScore[]>(() =>
         <div class="dim-bar-track">
           <div
             class="dim-bar-fill"
-            :style="{ width: `${Math.min(100, Math.max(0, d.score))}%`, background: barColor(d.score) }"
+            :style="{
+              width: `${Math.min(100, Math.max(0, d.score))}%`,
+              background: barColor(d.score),
+            }"
           />
         </div>
       </div>

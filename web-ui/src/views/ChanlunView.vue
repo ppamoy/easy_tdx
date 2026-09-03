@@ -74,10 +74,42 @@ interface ChanlunMmd {
   bar_index?: number
   quality: ChanlunMmdQuality | null
   // V102 缠论决策支持（条件264-267）
-  v102_multi_signal_correlation?: { nearby_signals: number; signal_density: string; confidence_adjust: number; msg: string } | null
-  v102_signal_quality?: { tech_score: number; volume_score: number; trend_score: number; volatility_score: number; overall_grade: string; overall_score: number; strength: string; confidence_adjust: number; msg: string } | null
-  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; take_profit_2: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string; risk_notes: string; confidence_adjust: number } | null
-  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number; max_drawdown: number; confidence_adjust: number; msg: string } | null
+  v102_multi_signal_correlation?: {
+    nearby_signals: number
+    signal_density: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v102_signal_quality?: {
+    tech_score: number
+    volume_score: number
+    trend_score: number
+    volatility_score: number
+    overall_grade: string
+    overall_score: number
+    strength: string
+    confidence_adjust: number
+    msg: string
+  } | null
+  v102_decision_support?: {
+    entry_price: number
+    stop_loss: number
+    take_profit_1: number
+    take_profit_2: number
+    risk_reward_ratio: number
+    position_size_pct: number
+    action_recommendation: string
+    risk_notes: string
+    confidence_adjust: number
+  } | null
+  v102_pattern_match?: {
+    similar_patterns_found: number
+    win_rate: number
+    avg_return: number
+    max_drawdown: number
+    confidence_adjust: number
+    msg: string
+  } | null
 }
 
 interface ChanlunFx {
@@ -129,14 +161,20 @@ const multiLevelResult = ref<any>(null)
 const stats = computed(() => {
   const buy1 = mmds.value.filter((m) => m.type === '1buy')
   const sell1 = mmds.value.filter((m) => m.type === '1sell')
-  const highConfBuy = mmds.value.filter((m) => m.confidence >= 0.7 && (m.type === '1buy' || m.type === '2buy'))
-  const highConfSell = mmds.value.filter((m) => m.confidence >= 0.7 && (m.type === '1sell' || m.type === '2sell'))
+  const highConfBuy = mmds.value.filter(
+    (m) => m.confidence >= 0.7 && (m.type === '1buy' || m.type === '2buy'),
+  )
+  const highConfSell = mmds.value.filter(
+    (m) => m.confidence >= 0.7 && (m.type === '1sell' || m.type === '2sell'),
+  )
   // 按类型统计
   const typeCounts: Record<string, number> = {}
   const gradeCounts: Record<string, number> = { S: 0, A: 0, B: 0, C: 0, D: 0 }
   for (const m of mmds.value) {
     typeCounts[m.type] = (typeCounts[m.type] ?? 0) + 1
-    if (m.quality?.grade) gradeCounts[m.quality.grade] = (gradeCounts[m.quality.grade as keyof typeof gradeCounts] ?? 0) + 1
+    if (m.quality?.grade)
+      gradeCounts[m.quality.grade] =
+        (gradeCounts[m.quality.grade as keyof typeof gradeCounts] ?? 0) + 1
   }
   return {
     klineCount: bars.value.length,
@@ -156,14 +194,10 @@ const stats = computed(() => {
 })
 
 // 高置信度信号（用于告警）
-const strongSignals = computed(() =>
-  mmds.value.filter((m) => m.confidence >= 0.75),
-)
+const strongSignals = computed(() => mmds.value.filter((m) => m.confidence >= 0.75))
 
 // 最新买卖点（用于快速详情展示）
-const latestMmd = computed(() =>
-  mmds.value.length > 0 ? mmds.value[mmds.value.length - 1] : null,
-)
+const latestMmd = computed(() => (mmds.value.length > 0 ? mmds.value[mmds.value.length - 1] : null))
 
 // V341: 信号历史回溯 —— 每个 3买/3卖 信号的 V102 建议 + 事后 5/10/20 日表现
 interface SignalHistoryRow {
@@ -244,7 +278,8 @@ function exportHistoryCsv() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'easy_tdx_signal_history_' + code.value + '_' + new Date().toISOString().slice(0, 10) + '.csv'
+    a.download =
+      'easy_tdx_signal_history_' + code.value + '_' + new Date().toISOString().slice(0, 10) + '.csv'
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -253,7 +288,9 @@ function exportHistoryCsv() {
   } catch {
     historyCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { historyCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    historyCsvMsg.value = ''
+  }, 2500)
 }
 
 // 判断最新信号类型
@@ -273,13 +310,9 @@ const lastUnfinishedBi = computed(() => bis.value.find((b) => !b.done) ?? null)
 const lastZs = computed(() => zss.value.filter((z) => z.done).pop() ?? null)
 
 // 最新买点
-const latestBuy = computed(() =>
-  mmds.value.filter((m) => m.type.includes('buy')).pop() ?? null,
-)
+const latestBuy = computed(() => mmds.value.filter((m) => m.type.includes('buy')).pop() ?? null)
 // 最新卖点
-const latestSell = computed(() =>
-  mmds.value.filter((m) => m.type.includes('sell')).pop() ?? null,
-)
+const latestSell = computed(() => mmds.value.filter((m) => m.type.includes('sell')).pop() ?? null)
 
 // 当前最新K线价格
 const latestPrice = computed(() =>
@@ -299,10 +332,24 @@ const marketState = computed(() => {
 
   // 最近信号距今的K线条数
   const daysSinceBuy = lastBuy?.date
-    ? Math.max(0, Math.floor((new Date(bars.value[bars.value.length - 1].datetime.slice(0, 10)).getTime() - new Date(lastBuy.date).getTime()) / 86400000))
+    ? Math.max(
+        0,
+        Math.floor(
+          (new Date(bars.value[bars.value.length - 1].datetime.slice(0, 10)).getTime() -
+            new Date(lastBuy.date).getTime()) /
+            86400000,
+        ),
+      )
     : 999
   const daysSinceSell = lastSell?.date
-    ? Math.max(0, Math.floor((new Date(bars.value[bars.value.length - 1].datetime.slice(0, 10)).getTime() - new Date(lastSell.date).getTime()) / 86400000))
+    ? Math.max(
+        0,
+        Math.floor(
+          (new Date(bars.value[bars.value.length - 1].datetime.slice(0, 10)).getTime() -
+            new Date(lastSell.date).getTime()) /
+            86400000,
+        ),
+      )
     : 999
 
   // 中枢上下沿
@@ -312,7 +359,7 @@ const marketState = computed(() => {
   const zsRange = lastZsItem ? zsHigh - zsLow : 0
 
   // 当前笔方向
-  const biDir = lastBi?.direction ?? (unfinished?.direction ?? 'unknown')
+  const biDir = lastBi?.direction ?? unfinished?.direction ?? 'unknown'
   const isUpBi = biDir === 'up'
   const isDownBi = biDir === 'down'
 
@@ -323,7 +370,6 @@ const marketState = computed(() => {
     else if (price <= zsLow) priceZone = 'below'
     else priceZone = 'inside'
   }
-
 
   // 计算综合建议
   let advice: string = ''
@@ -339,7 +385,7 @@ const marketState = computed(() => {
 
   // 判断当前趋势（基于最近5根K线收盘价）
   if (bars.value.length >= 5) {
-    const recentCloses = bars.value.slice(-5).map(b => b.close)
+    const recentCloses = bars.value.slice(-5).map((b) => b.close)
     if (isUpBi) {
       trend = recentCloses[4] > recentCloses[0] ? '上升' : '盘整'
       trendColor = recentCloses[4] > recentCloses[0] ? '#22c55e' : '#fbbf24'
@@ -391,7 +437,7 @@ const marketState = computed(() => {
     action = '震荡'
     actionColor = '#fbbf24'
     advice = `价格在中枢区间 [${zsLow.toFixed(2)}, ${zsHigh.toFixed(2)}] 内震荡，等待方向选择。`
-    adviceDetail = `中枢宽度: ${(zsRange/price*100).toFixed(1)}%`
+    adviceDetail = `中枢宽度: ${((zsRange / price) * 100).toFixed(1)}%`
     adviceColor = '#fbbf24'
   } else {
     action = '观望'
@@ -402,7 +448,7 @@ const marketState = computed(() => {
   // 补充当前未完成笔信息
   if (unfinished) {
     const biRange = unfinished.high - unfinished.low
-    const biPct = biRange > 0 ? ((price - unfinished.low) / biRange * 100).toFixed(0) : '—'
+    const biPct = biRange > 0 ? (((price - unfinished.low) / biRange) * 100).toFixed(0) : '—'
     adviceDetail += ` 当前${isUpBi ? '上升' : '下降'}笔：低点${unfinished.low.toFixed(2)} 高点${unfinished.high.toFixed(2)} 当前位置${biPct}%`
   }
 
@@ -437,7 +483,13 @@ function confidenceColor(c: number): string {
 // 质量评级颜色
 function qualityColor(grade: string | null): string {
   if (!grade) return '#94a3b8'
-  const map: Record<string, string> = { S: '#f59e0b', A: '#22c55e', B: '#3b82f6', C: '#f97316', D: '#ef4444' }
+  const map: Record<string, string> = {
+    S: '#f59e0b',
+    A: '#22c55e',
+    B: '#3b82f6',
+    C: '#f97316',
+    D: '#ef4444',
+  }
   return map[grade] ?? '#94a3b8'
 }
 
@@ -550,7 +602,14 @@ async function analyze() {
     // 1. 取行情 —— 只取最新 count 根，与研究分析的窗口保持一致，
     //    否则图表会显示 8000 根历史而笔/线段/中枢/买卖点只覆盖最近 800 根。
     const market = detectMarket(code.value)
-    const allBars = await fetchBars(market, code.value, category.value, undefined, undefined, count.value)
+    const allBars = await fetchBars(
+      market,
+      code.value,
+      category.value,
+      undefined,
+      undefined,
+      count.value,
+    )
     if (allBars.length === 0) {
       error.value = `未取到 ${market}:${code.value} 的 ${category.value} 数据`
       return
@@ -623,11 +682,13 @@ async function analyze() {
         msg: m.msg,
         confidence: m.confidence ?? 0,
         bar_index: m.bar_index,
-        quality: m.quality ? {
-          grade: m.quality.grade ?? null,
-          score: m.quality.score ?? null,
-          reasons: m.quality.reasons ?? null,
-        } : null,
+        quality: m.quality
+          ? {
+              grade: m.quality.grade ?? null,
+              score: m.quality.score ?? null,
+              reasons: m.quality.reasons ?? null,
+            }
+          : null,
         // V102 缠论决策支持（条件264-267）
         v102_multi_signal_correlation: m.v102_multi_signal_correlation ?? null,
         v102_signal_quality: m.v102_signal_quality ?? null,
@@ -726,11 +787,13 @@ async function analyze() {
         msg: m.msg,
         confidence: m.confidence ?? 0,
         bar_index: m.bar_index,
-        quality: m.quality ? {
-          grade: m.quality.grade ?? null,
-          score: m.quality.score ?? null,
-          reasons: m.quality.reasons ?? null,
-        } : null,
+        quality: m.quality
+          ? {
+              grade: m.quality.grade ?? null,
+              score: m.quality.score ?? null,
+              reasons: m.quality.reasons ?? null,
+            }
+          : null,
         // V102 缠论决策支持（条件264-267）
         v102_multi_signal_correlation: m.v102_multi_signal_correlation ?? null,
         v102_signal_quality: m.v102_signal_quality ?? null,
@@ -803,7 +866,9 @@ function quickWatch(direction: 'buy' | 'sell') {
     timestamp: Date.now(),
   }
   // 去重
-  const filtered = watchList.filter((w: any) => !(w.code === item.code && w.direction === item.direction))
+  const filtered = watchList.filter(
+    (w: any) => !(w.code === item.code && w.direction === item.direction),
+  )
   filtered.unshift(item)
   localStorage.setItem('easy_tdx_watchlist', JSON.stringify(filtered.slice(0, 50)))
 
@@ -876,7 +941,9 @@ let toastTimer: number | null = null
 function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
   toast.value = { message, type }
   if (toastTimer !== null) clearTimeout(toastTimer)
-  toastTimer = window.setTimeout(() => { toast.value = null }, 3000)
+  toastTimer = window.setTimeout(() => {
+    toast.value = null
+  }, 3000)
 }
 
 // 实时价格轮询（每30秒刷新一次最新K线价格）
@@ -950,9 +1017,7 @@ onUnmounted(() => {
         <input v-model.number="count" type="number" min="100" max="800" step="100" />
       </div>
       <div class="field-group">
-        <label>
-          <input type="checkbox" v-model="multiLevel" /> 多级别联立
-        </label>
+        <label> <input type="checkbox" v-model="multiLevel" /> 多级别联立 </label>
       </div>
       <div v-if="multiLevel" class="field-group">
         <label>低级别</label>
@@ -969,7 +1034,11 @@ onUnmounted(() => {
       <button class="ghost" :disabled="loading || bars.length === 0" @click="goToBacktest">
         📈 去回测
       </button>
-      <button class="ghost" :disabled="loading || bars.length === 0" @click="goToBacktestWithChanlun">
+      <button
+        class="ghost"
+        :disabled="loading || bars.length === 0"
+        @click="goToBacktestWithChanlun"
+      >
         🔬 回测验证
       </button>
       <button v-if="!loading && bars.length > 0" class="ghost" @click="exportAnalysis">
@@ -983,12 +1052,17 @@ onUnmounted(() => {
     <!-- Toast 通知 -->
     <transition name="toast">
       <div v-if="toast" class="toast" :class="toast.type">
-        {{ toast.type === 'success' ? '✓' : toast.type === 'error' ? '✗' : 'ℹ' }} {{ toast.message }}
+        {{ toast.type === 'success' ? '✓' : toast.type === 'error' ? '✗' : 'ℹ' }}
+        {{ toast.message }}
       </div>
     </transition>
 
     <!-- 最新信号详情卡片 -->
-    <div v-if="!loading && latestMmd" class="latest-signal-card" :style="{ borderColor: MMD_COLORS[latestMmd.type] ?? '#94a3b8' }">
+    <div
+      v-if="!loading && latestMmd"
+      class="latest-signal-card"
+      :style="{ borderColor: MMD_COLORS[latestMmd.type] ?? '#94a3b8' }"
+    >
       <div class="signal-card-header">
         <span class="signal-card-type" :style="{ color: MMD_COLORS[latestMmd.type] ?? '#fff' }">
           {{ latestMmd.type.toUpperCase() }}
@@ -1002,8 +1076,12 @@ onUnmounted(() => {
       <!-- V102: 决策支持卡片（条件264-267） -->
       <V102DecisionCard :mmd="latestMmd" />
       <div class="signal-card-actions">
-        <button v-if="latestSignalType === 'buy'" class="ghost small" @click="quickWatch('buy')">👁 加入监控</button>
-        <button v-if="latestSignalType === 'sell'" class="ghost small" @click="quickWatch('sell')">⏰ 设置提醒</button>
+        <button v-if="latestSignalType === 'buy'" class="ghost small" @click="quickWatch('buy')">
+          👁 加入监控
+        </button>
+        <button v-if="latestSignalType === 'sell'" class="ghost small" @click="quickWatch('sell')">
+          ⏰ 设置提醒
+        </button>
         <button class="ghost small" @click="addToWatchlist">⭐ 加入自选</button>
         <button class="ghost small" @click="goToBacktest">📊 回测验证</button>
       </div>
@@ -1013,10 +1091,19 @@ onUnmounted(() => {
     <div v-if="!loading && strongSignals.length > 0" class="signal-alert">
       <div class="alert-title">🔔 高置信度信号（≥75%）</div>
       <div class="alert-items">
-        <div v-for="s in strongSignals" :key="s.date + s.type" class="alert-item" :style="{ borderLeftColor: MMD_COLORS[s.type] ?? '#fff' }">
-          <span class="alert-type" :style="{ color: MMD_COLORS[s.type] ?? '#fff' }">{{ s.type }}</span>
+        <div
+          v-for="s in strongSignals"
+          :key="s.date + s.type"
+          class="alert-item"
+          :style="{ borderLeftColor: MMD_COLORS[s.type] ?? '#fff' }"
+        >
+          <span class="alert-type" :style="{ color: MMD_COLORS[s.type] ?? '#fff' }">{{
+            s.type
+          }}</span>
           <span class="alert-date">{{ s.date ?? '-' }}</span>
-          <span class="alert-conf" :style="{ color: confidenceColor(s.confidence) }">{{ (s.confidence * 100).toFixed(0) }}%</span>
+          <span class="alert-conf" :style="{ color: confidenceColor(s.confidence) }"
+            >{{ (s.confidence * 100).toFixed(0) }}%</span
+          >
           <span class="alert-msg">{{ s.msg }}</span>
         </div>
       </div>
@@ -1059,7 +1146,11 @@ onUnmounted(() => {
     </div>
 
     <!-- 市场状态 + 操作建议面板 -->
-    <div v-if="!loading && marketState" class="advice-panel" :style="{ borderColor: marketState.actionColor }">
+    <div
+      v-if="!loading && marketState"
+      class="advice-panel"
+      :style="{ borderColor: marketState.actionColor }"
+    >
       <div class="advice-header">
         <span class="advice-action" :style="{ color: marketState.actionColor }">
           {{ marketState.action }}
@@ -1073,26 +1164,29 @@ onUnmounted(() => {
         </span>
       </div>
       <div class="advice-body">
-        <p class="advice-text" :style="{ color: marketState.adviceColor }">{{ marketState.advice }}</p>
+        <p class="advice-text" :style="{ color: marketState.adviceColor }">
+          {{ marketState.advice }}
+        </p>
         <p v-if="marketState.adviceDetail" class="advice-detail">{{ marketState.adviceDetail }}</p>
       </div>
       <div class="advice-meta">
-        <span class="meta-item">
-          最近买点: {{ marketState.daysSinceBuy }} 天前
-        </span>
-        <span class="meta-item">
-          最近卖点: {{ marketState.daysSinceSell }} 天前
-        </span>
+        <span class="meta-item"> 最近买点: {{ marketState.daysSinceBuy }} 天前 </span>
+        <span class="meta-item"> 最近卖点: {{ marketState.daysSinceSell }} 天前 </span>
         <span class="meta-item" v-if="marketState.zsRange > 0">
           中枢区间: {{ marketState.zsLow.toFixed(2) }} ~ {{ marketState.zsHigh.toFixed(2) }}
         </span>
       </div>
       <!-- 风险提示 -->
-      <div v-if="marketState.daysSinceBuy > 30 || marketState.daysSinceSell > 30" class="risk-warning">
+      <div
+        v-if="marketState.daysSinceBuy > 30 || marketState.daysSinceSell > 30"
+        class="risk-warning"
+      >
         ⚠️ 距离最近信号已超过30天，市场环境可能已发生变化，请谨慎操作。
       </div>
       <div v-if="latestBuy && latestBuy.confidence < 0.6" class="risk-warning">
-        ⚠️ 最近买入信号置信度较低（{{ (latestBuy.confidence * 100).toFixed(0) }}%），建议结合其他指标确认。
+        ⚠️ 最近买入信号置信度较低（{{
+          (latestBuy.confidence * 100).toFixed(0)
+        }}%），建议结合其他指标确认。
       </div>
       <!-- 关键价位参考 -->
       <div v-if="marketState.zsRange > 0" class="price-levels">
@@ -1100,17 +1194,28 @@ onUnmounted(() => {
         <div class="price-levels-grid">
           <div class="price-level" :style="{ borderColor: '#22c55e' }">
             <span class="level-label">支撑位</span>
-            <span class="level-value" style="color:#22c55e">{{ marketState.zsLow.toFixed(2) }}</span>
+            <span class="level-value" style="color: #22c55e">{{
+              marketState.zsLow.toFixed(2)
+            }}</span>
           </div>
           <div class="price-level" :style="{ borderColor: '#fbbf24' }">
             <span class="level-label">中枢中轴</span>
-            <span class="level-value" style="color:#fbbf24">{{ marketState.zsMid.toFixed(2) }}</span>
+            <span class="level-value" style="color: #fbbf24">{{
+              marketState.zsMid.toFixed(2)
+            }}</span>
           </div>
           <div class="price-level" :style="{ borderColor: '#ef4444' }">
             <span class="level-label">压力位</span>
-            <span class="level-value" style="color:#ef4444">{{ marketState.zsHigh.toFixed(2) }}</span>
+            <span class="level-value" style="color: #ef4444">{{
+              marketState.zsHigh.toFixed(2)
+            }}</span>
           </div>
-          <div class="price-level" :style="{ borderColor: marketState.price >= marketState.zsHigh ? '#22c55e' : '#f97316' }">
+          <div
+            class="price-level"
+            :style="{
+              borderColor: marketState.price >= marketState.zsHigh ? '#22c55e' : '#f97316',
+            }"
+          >
             <span class="level-label">当前价</span>
             <span class="level-value">{{ marketState.price.toFixed(2) }}</span>
           </div>
@@ -1122,8 +1227,24 @@ onUnmounted(() => {
         <div class="boll-grid">
           <div class="boll-item">
             <span class="boll-label">价格位置</span>
-            <span class="boll-value" :style="{ color: bollInfo.zone === 'above' ? '#22c55e' : bollInfo.zone === 'below' ? '#ef4444' : '#fbbf24' }">
-              {{ bollInfo.zone === 'above' ? '上轨上方' : bollInfo.zone === 'below' ? '下轨下方' : '轨道内' }}
+            <span
+              class="boll-value"
+              :style="{
+                color:
+                  bollInfo.zone === 'above'
+                    ? '#22c55e'
+                    : bollInfo.zone === 'below'
+                      ? '#ef4444'
+                      : '#fbbf24',
+              }"
+            >
+              {{
+                bollInfo.zone === 'above'
+                  ? '上轨上方'
+                  : bollInfo.zone === 'below'
+                    ? '下轨下方'
+                    : '轨道内'
+              }}
             </span>
             <span class="boll-pb">%B: {{ (bollInfo.percent_b * 100).toFixed(0) }}%</span>
           </div>
@@ -1165,12 +1286,21 @@ onUnmounted(() => {
       <!-- 信号统计摘要 -->
       <div class="signal-summary">
         <div class="summary-item" v-for="(count, type) in stats.typeCounts" :key="type">
-          <span class="summary-type" :style="{ color: MMD_COLORS[type] ?? '#fff' }">{{ type }}</span>
+          <span class="summary-type" :style="{ color: MMD_COLORS[type] ?? '#fff' }">{{
+            type
+          }}</span>
           <span class="summary-count">{{ count }}</span>
         </div>
         <div class="summary-sep"></div>
-        <div class="summary-item" v-for="(count, grade) in stats.gradeCounts" :key="grade" v-if="count > 0">
-          <span class="summary-grade" :style="{ color: qualityColor(grade), fontWeight: 700 }">{{ grade }}</span>
+        <div
+          class="summary-item"
+          v-for="(count, grade) in stats.gradeCounts"
+          :key="grade"
+          v-if="count > 0"
+        >
+          <span class="summary-grade" :style="{ color: qualityColor(grade), fontWeight: 700 }">{{
+            grade
+          }}</span>
           <span class="summary-count">{{ count }}</span>
         </div>
       </div>
@@ -1185,21 +1315,50 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="m in mmds" :key="m.date + m.type" :style="{ color: MMD_COLORS[m.type] ?? '#fff' }">
-            <td><strong>{{ m.type }}</strong></td>
+          <tr
+            v-for="m in mmds"
+            :key="m.date + m.type"
+            :style="{ color: MMD_COLORS[m.type] ?? '#fff' }"
+          >
+            <td>
+              <strong>{{ m.type }}</strong>
+            </td>
             <td>{{ m.date ?? '-' }}</td>
             <td>
-              <span class="conf-badge" :style="{ background: confidenceColor(m.confidence) + '22', color: confidenceColor(m.confidence) }">
+              <span
+                class="conf-badge"
+                :style="{
+                  background: confidenceColor(m.confidence) + '22',
+                  color: confidenceColor(m.confidence),
+                }"
+              >
                 {{ (m.confidence * 100).toFixed(0) }}%
               </span>
             </td>
             <td>
-              <span v-if="m.quality" class="quality-badge" :style="{ background: qualityColor(m.quality.grade) + '22', color: qualityColor(m.quality.grade), borderColor: qualityColor(m.quality.grade) }">
+              <span
+                v-if="m.quality"
+                class="quality-badge"
+                :style="{
+                  background: qualityColor(m.quality.grade) + '22',
+                  color: qualityColor(m.quality.grade),
+                  borderColor: qualityColor(m.quality.grade),
+                }"
+              >
                 {{ m.quality.grade }} · {{ m.quality.score }}分
               </span>
-              <span v-else class="quality-badge" style="background:#33415522;color:#94a3b8;border:1px solid #475569">-</span>
+              <span
+                v-else
+                class="quality-badge"
+                style="background: #33415522; color: #94a3b8; border: 1px solid #475569"
+                >-</span
+              >
               <!-- V102: 信号质量评分卡评级 -->
-              <span v-if="m.v102_signal_quality?.overall_grade" class="v102-grade-badge" :class="'g' + m.v102_signal_quality.overall_grade">
+              <span
+                v-if="m.v102_signal_quality?.overall_grade"
+                class="v102-grade-badge"
+                :class="'g' + m.v102_signal_quality.overall_grade"
+              >
                 V102·{{ m.v102_signal_quality.overall_grade }}
               </span>
             </td>
@@ -1229,28 +1388,56 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(s, i) in signalHistory" :key="i" :style="{ color: MMD_COLORS[s.type] ?? '#fff' }">
-            <td><strong>{{ s.type }}</strong></td>
+          <tr
+            v-for="(s, i) in signalHistory"
+            :key="i"
+            :style="{ color: MMD_COLORS[s.type] ?? '#fff' }"
+          >
+            <td>
+              <strong>{{ s.type }}</strong>
+            </td>
             <td>{{ s.date ?? '-' }}</td>
             <td>
-              <span v-if="s.grade" class="v102-grade-badge" :class="'g' + s.grade">V102·{{ s.grade }}</span>
+              <span v-if="s.grade" class="v102-grade-badge" :class="'g' + s.grade"
+                >V102·{{ s.grade }}</span
+              >
               <span v-else class="dim">-</span>
             </td>
             <td class="hist-advice">
-              <span v-if="s.entry != null">{{ s.entry.toFixed(2) }} / {{ s.stop != null ? s.stop.toFixed(2) : '-' }} / {{ s.tp1 != null ? s.tp1.toFixed(2) : '-' }}</span>
-              <span v-if="s.advice" class="hist-advice-text" :class="{ 'adv-buy': s.advice.includes('买入'), 'adv-sell': s.advice.includes('卖出') }">{{ s.advice }}</span>
+              <span v-if="s.entry != null"
+                >{{ s.entry.toFixed(2) }} / {{ s.stop != null ? s.stop.toFixed(2) : '-' }} /
+                {{ s.tp1 != null ? s.tp1.toFixed(2) : '-' }}</span
+              >
+              <span
+                v-if="s.advice"
+                class="hist-advice-text"
+                :class="{
+                  'adv-buy': s.advice.includes('买入'),
+                  'adv-sell': s.advice.includes('卖出'),
+                }"
+                >{{ s.advice }}</span
+              >
               <span v-if="s.entry == null" class="dim">非3买/3卖，无建议</span>
             </td>
-            <td :class="s.ret5 != null ? (s.ret5 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">{{ s.ret5 != null ? (s.ret5 >= 0 ? '+' : '') + s.ret5 + '%' : '-' }}</td>
-            <td :class="s.ret10 != null ? (s.ret10 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">{{ s.ret10 != null ? (s.ret10 >= 0 ? '+' : '') + s.ret10 + '%' : '-' }}</td>
-            <td :class="s.ret20 != null ? (s.ret20 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">{{ s.ret20 != null ? (s.ret20 >= 0 ? '+' : '') + s.ret20 + '%' : '-' }}</td>
-            <td><span :class="['verdict', s.hit20 ? 'ok' : 'miss']">{{ s.hit20 ? '✓' : '✗' }}</span></td>
+            <td :class="s.ret5 != null ? (s.ret5 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">
+              {{ s.ret5 != null ? (s.ret5 >= 0 ? '+' : '') + s.ret5 + '%' : '-' }}
+            </td>
+            <td :class="s.ret10 != null ? (s.ret10 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">
+              {{ s.ret10 != null ? (s.ret10 >= 0 ? '+' : '') + s.ret10 + '%' : '-' }}
+            </td>
+            <td :class="s.ret20 != null ? (s.ret20 >= 0 ? 'acc-pos' : 'acc-neg') : 'dim'">
+              {{ s.ret20 != null ? (s.ret20 >= 0 ? '+' : '') + s.ret20 + '%' : '-' }}
+            </td>
+            <td>
+              <span :class="['verdict', s.hit20 ? 'ok' : 'miss']">{{ s.hit20 ? '✓' : '✗' }}</span>
+            </td>
           </tr>
         </tbody>
       </table>
       <p class="acc-legend">
-        逐笔买卖点信号：显示 V102 建议（入场/止损/止盈，仅 3买/3卖 有）与信号后 5/10/20 根K线的实际表现；
-        20日命中 = 买点后 20 根收涨 / 卖点后 20 根收跌。用历史逐笔验证模型建议是否可靠。
+        逐笔买卖点信号：显示 V102 建议（入场/止损/止盈，仅 3买/3卖 有）与信号后 5/10/20
+        根K线的实际表现； 20日命中 = 买点后 20 根收涨 / 卖点后 20
+        根收跌。用历史逐笔验证模型建议是否可靠。
       </p>
     </div>
 
@@ -1271,16 +1458,31 @@ onUnmounted(() => {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="rank in signalAccuracy.ranking" :key="rank.type"
-              :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }">
-            <td><strong>{{ rank.type }}</strong></td>
+          <tr
+            v-for="rank in signalAccuracy.ranking"
+            :key="rank.type"
+            :style="{ color: MMD_COLORS[rank.type] ?? '#fff' }"
+          >
+            <td>
+              <strong>{{ rank.type }}</strong>
+            </td>
             <td>{{ rank.signals }}</td>
             <td>{{ fmtAccPct(rank.hit_rate) }}</td>
-            <td class="dim">{{ fmtAccPct((byTypeHorizon(rank.type)?.baseline_hit_rate)) }}</td>
-            <td :class="rank.excess_hit_rate >= 0.02 ? 'acc-pos' : (rank.excess_hit_rate <= -0.02 ? 'acc-neg' : '')">
+            <td class="dim">{{ fmtAccPct(byTypeHorizon(rank.type)?.baseline_hit_rate) }}</td>
+            <td
+              :class="
+                rank.excess_hit_rate >= 0.02
+                  ? 'acc-pos'
+                  : rank.excess_hit_rate <= -0.02
+                    ? 'acc-neg'
+                    : ''
+              "
+            >
               {{ fmtAccSigned(rank.excess_hit_rate) }}
             </td>
-            <td :class="rank.avg_return >= 0 ? 'acc-pos' : 'acc-neg'">{{ fmtAccPct(rank.avg_return) }}</td>
+            <td :class="rank.avg_return >= 0 ? 'acc-pos' : 'acc-neg'">
+              {{ fmtAccPct(rank.avg_return) }}
+            </td>
             <td class="verdict-cell">{{ rank.verdict }}</td>
           </tr>
         </tbody>
@@ -1295,30 +1497,45 @@ onUnmounted(() => {
     <div v-if="!loading && multiLevelResult" class="multi-level-panel">
       <h3>📊 多级别区间套分析（{{ category }} ↔ {{ lowLevel }}）</h3>
       <div class="ml-grid">
-        <div class="ml-card" :style="{ borderColor: mlConfColor(multiLevelResult.confluence?.score ?? 0) }">
+        <div
+          class="ml-card"
+          :style="{ borderColor: mlConfColor(multiLevelResult.confluence?.score ?? 0) }"
+        >
           <div class="ml-card-title">一致性评分</div>
-          <div class="ml-card-value" :style="{ color: mlConfColor(multiLevelResult.confluence?.score ?? 0) }">
+          <div
+            class="ml-card-value"
+            :style="{ color: mlConfColor(multiLevelResult.confluence?.score ?? 0) }"
+          >
             {{ ((multiLevelResult.confluence?.score ?? 0) * 100).toFixed(0) }}%
           </div>
           <div class="ml-card-desc">{{ mlConfLabel(multiLevelResult.confluence?.score ?? 0) }}</div>
         </div>
         <div class="ml-card">
           <div class="ml-card-title">趋势对齐</div>
-          <div class="ml-card-value" :style="{ color: multiLevelResult.confluence?.trend_aligned ? '#22c55e' : '#ef4444' }">
+          <div
+            class="ml-card-value"
+            :style="{ color: multiLevelResult.confluence?.trend_aligned ? '#22c55e' : '#ef4444' }"
+          >
             {{ multiLevelResult.confluence?.trend_aligned ? '✓ 一致' : '✗ 不一致' }}
           </div>
           <div class="ml-card-desc">高低级别买卖点方向是否相同</div>
         </div>
         <div class="ml-card">
           <div class="ml-card-title">中枢对齐</div>
-          <div class="ml-card-value" :style="{ color: multiLevelResult.confluence?.zs_aligned ? '#22c55e' : '#94a3b8' }">
+          <div
+            class="ml-card-value"
+            :style="{ color: multiLevelResult.confluence?.zs_aligned ? '#22c55e' : '#94a3b8' }"
+          >
             {{ multiLevelResult.confluence?.zs_aligned ? '✓ 有重叠' : '✗ 无重叠' }}
           </div>
           <div class="ml-card-desc">低级别中枢是否与高级别信号时间重叠</div>
         </div>
         <div class="ml-card">
           <div class="ml-card-title">时间对齐</div>
-          <div class="ml-card-value" :style="{ color: multiLevelResult.confluence?.time_aligned ? '#22c55e' : '#fbbf24' }">
+          <div
+            class="ml-card-value"
+            :style="{ color: multiLevelResult.confluence?.time_aligned ? '#22c55e' : '#fbbf24' }"
+          >
             {{ multiLevelResult.confluence?.time_aligned ? '✓ 同步' : '○ 滞后' }}
           </div>
           <div class="ml-card-desc">高低级别信号是否在相近时间窗口</div>
@@ -1332,21 +1549,47 @@ onUnmounted(() => {
           <span class="ml-detail-item">中枢数: {{ multiLevelResult.low_level_qs.zs_count }}</span>
           <span class="ml-detail-item">
             趋势:
-            <span :style="{ color: multiLevelResult.low_level_qs.trend_direction === 'up' ? '#22c55e' : multiLevelResult.low_level_qs.trend_direction === 'down' ? '#ef4444' : '#94a3b8' }">
-              {{ (multiLevelResult.low_level_qs.trend_direction === 'up' ? '↑ 上升' : multiLevelResult.low_level_qs.trend_direction === 'down' ? '↓ 下降' : '— 盘整') }}
+            <span
+              :style="{
+                color:
+                  multiLevelResult.low_level_qs.trend_direction === 'up'
+                    ? '#22c55e'
+                    : multiLevelResult.low_level_qs.trend_direction === 'down'
+                      ? '#ef4444'
+                      : '#94a3b8',
+              }"
+            >
+              {{
+                multiLevelResult.low_level_qs.trend_direction === 'up'
+                  ? '↑ 上升'
+                  : multiLevelResult.low_level_qs.trend_direction === 'down'
+                    ? '↓ 下降'
+                    : '— 盘整'
+              }}
             </span>
           </span>
-          <span class="ml-detail-item">背驰可能: {{ multiLevelResult.low_level_qs.divergence_possible ? '是' : '否' }}</span>
+          <span class="ml-detail-item"
+            >背驰可能: {{ multiLevelResult.low_level_qs.divergence_possible ? '是' : '否' }}</span
+          >
         </div>
       </div>
       <!-- 低级别买卖点预览 -->
       <div v-if="multiLevelResult.low_level?.mmds?.length" class="ml-low-signals">
         <div class="ml-detail-title">低级别买卖点（最近5个）</div>
         <div class="ml-signal-list">
-          <div v-for="m in multiLevelResult.low_level.mmds.slice(-5).reverse()" :key="m.date + m.type" class="ml-signal-item" :style="{ borderLeftColor: MMD_COLORS[m.type] ?? '#fff' }">
-            <span class="ml-signal-type" :style="{ color: MMD_COLORS[m.type] ?? '#fff' }">{{ m.type }}</span>
+          <div
+            v-for="m in multiLevelResult.low_level.mmds.slice(-5).reverse()"
+            :key="m.date + m.type"
+            class="ml-signal-item"
+            :style="{ borderLeftColor: MMD_COLORS[m.type] ?? '#fff' }"
+          >
+            <span class="ml-signal-type" :style="{ color: MMD_COLORS[m.type] ?? '#fff' }">{{
+              m.type
+            }}</span>
             <span class="ml-signal-date">{{ m.date ?? '-' }}</span>
-            <span class="ml-signal-conf" :style="{ color: confidenceColor(m.confidence ?? 0) }">{{ ((m.confidence ?? 0) * 100).toFixed(0) }}%</span>
+            <span class="ml-signal-conf" :style="{ color: confidenceColor(m.confidence ?? 0) }"
+              >{{ ((m.confidence ?? 0) * 100).toFixed(0) }}%</span
+            >
             <span class="ml-signal-msg">{{ m.msg }}</span>
           </div>
         </div>
@@ -1404,7 +1647,7 @@ onUnmounted(() => {
   width: 110px;
 }
 
-.field-group input[type="text"] {
+.field-group input[type='text'] {
   width: 90px;
 }
 
@@ -1486,7 +1729,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   padding: 3px 8px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 4px;
   font-size: 12px;
 }
@@ -1509,7 +1752,7 @@ onUnmounted(() => {
 .summary-count {
   font-weight: 700;
   color: var(--text);
-  background: rgba(255,255,255,0.08);
+  background: rgba(255, 255, 255, 0.08);
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 11px;
@@ -1531,7 +1774,7 @@ onUnmounted(() => {
 
 .mmd-list td {
   padding: 5px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 
@@ -1575,7 +1818,7 @@ onUnmounted(() => {
 }
 .mmd-history td {
   padding: 5px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 .mmd-history tr:last-child td {
@@ -1597,10 +1840,18 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.hist-advice-text.adv-buy { color: #22c55e; }
-.hist-advice-text.adv-sell { color: #ef4444; }
-.mmd-history .verdict.ok { color: var(--up); }
-.mmd-history .verdict.miss { color: var(--down); }
+.hist-advice-text.adv-buy {
+  color: #22c55e;
+}
+.hist-advice-text.adv-sell {
+  color: #ef4444;
+}
+.mmd-history .verdict.ok {
+  color: var(--up);
+}
+.mmd-history .verdict.miss {
+  color: var(--down);
+}
 .mmd-accuracy {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -1620,7 +1871,7 @@ onUnmounted(() => {
   margin-bottom: 10px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   line-height: 1.5;
 }
 .mmd-accuracy table {
@@ -1637,7 +1888,7 @@ onUnmounted(() => {
 }
 .mmd-accuracy td {
   padding: 5px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 .mmd-accuracy tr:last-child td {
@@ -1745,7 +1996,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   border-left: 3px solid;
   font-size: 12px;
@@ -1800,10 +2051,18 @@ onUnmounted(() => {
   color: #fff;
   letter-spacing: 0.3px;
 }
-.v102-grade-badge.gA { background: #22c55e; }
-.v102-grade-badge.gB { background: #3b82f6; }
-.v102-grade-badge.gC { background: #f59e0b; }
-.v102-grade-badge.gD { background: #ef4444; }
+.v102-grade-badge.gA {
+  background: #22c55e;
+}
+.v102-grade-badge.gB {
+  background: #3b82f6;
+}
+.v102-grade-badge.gC {
+  background: #f59e0b;
+}
+.v102-grade-badge.gD {
+  background: #ef4444;
+}
 
 /* 操作建议面板 */
 .advice-panel {
@@ -1871,7 +2130,7 @@ onUnmounted(() => {
 .meta-item {
   font-size: 11px;
   color: var(--text-muted);
-  background: rgba(255,255,255,0.04);
+  background: rgba(255, 255, 255, 0.04);
   padding: 2px 8px;
   border-radius: 4px;
 }
@@ -1899,7 +2158,7 @@ onUnmounted(() => {
 }
 
 .ml-card {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid;
   border-radius: 8px;
   padding: 10px 12px;
@@ -1968,7 +2227,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   padding: 4px 8px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 4px;
   border-left: 3px solid;
   font-size: 11px;
@@ -2018,7 +2277,7 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   padding: 6px 4px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border-radius: 4px;
   border-left: 2px solid;
 }
@@ -2084,9 +2343,18 @@ onUnmounted(() => {
   color: var(--text);
 }
 
-.boll-val-up { color: #22c55e; font-weight: 600; }
-.boll-val-mid { color: #f59e0b; font-weight: 600; }
-.boll-val-low { color: #ef4444; font-weight: 600; }
+.boll-val-up {
+  color: #22c55e;
+  font-weight: 600;
+}
+.boll-val-mid {
+  color: #f59e0b;
+  font-weight: 600;
+}
+.boll-val-low {
+  color: #ef4444;
+  font-weight: 600;
+}
 
 .boll-pb {
   margin-left: auto;
@@ -2098,7 +2366,7 @@ onUnmounted(() => {
   margin-left: auto;
   font-size: 10px;
   padding: 1px 6px;
-  background: rgba(255,255,255,0.05);
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 3px;
   color: var(--text-muted);
 }
@@ -2114,15 +2382,32 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   z-index: 1000;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.toast.success { background: rgba(34, 197, 94, 0.9); color: #fff; }
-.toast.error { background: rgba(239, 65, 70, 0.9); color: #fff; }
-.toast.info { background: rgba(59, 130, 246, 0.9); color: #fff; }
-.toast-enter-active, .toast-leave-active { transition: opacity 0.3s, transform 0.3s; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translate(-50%, 10px); }
-
+.toast.success {
+  background: rgba(34, 197, 94, 0.9);
+  color: #fff;
+}
+.toast.error {
+  background: rgba(239, 65, 70, 0.9);
+  color: #fff;
+}
+.toast.info {
+  background: rgba(59, 130, 246, 0.9);
+  color: #fff;
+}
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    opacity 0.3s,
+    transform 0.3s;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 10px);
+}
 </style>

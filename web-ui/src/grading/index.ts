@@ -12,7 +12,13 @@
  * @see docs/superpowers/plans 评级系统设计文档
  */
 
-import type { BacktestResult, EquityPoint, GridPointResult, Performance, PortfolioResult } from '../types'
+import type {
+  BacktestResult,
+  EquityPoint,
+  GridPointResult,
+  Performance,
+  PortfolioResult,
+} from '../types'
 import { buildResult, scoreDimension } from './engine'
 import { computeCombinedMetrics } from './combinedMetrics'
 import type { DimensionScore, GradeResult, VetoHit } from './types'
@@ -84,12 +90,7 @@ export function applyVetoes(ctx: VetoContext): {
   const enoughTrades = ctx.totalTrades === undefined || ctx.totalTrades >= 10
 
   // 胜率极低：win_rate < 25% 且样本充足 → 直接 D
-  if (
-    enoughTrades &&
-    ctx.winRate !== undefined &&
-    ctx.winRate !== null &&
-    ctx.winRate < 0.25
-  ) {
+  if (enoughTrades && ctx.winRate !== undefined && ctx.winRate !== null && ctx.winRate < 0.25) {
     vetoes.push({
       key: 'very_low_winrate',
       reason: `胜率 ${(ctx.winRate * 100).toFixed(1)}% < 25% 且样本充足，几乎一直亏`,
@@ -278,10 +279,7 @@ export function gradePortfolio(result: PortfolioResult): GradeResult {
  * @param point 网格点结果
  * @param totalTradesOverride 可选，覆盖 point.total_trades（用于排名表统一基准）
  */
-export function gradeGridPoint(
-  point: GridPointResult,
-  totalTradesOverride?: number,
-): GradeResult {
+export function gradeGridPoint(point: GridPointResult, totalTradesOverride?: number): GradeResult {
   const totalTrades = totalTradesOverride ?? point.total_trades
 
   const dimensions: DimensionScore[] = [

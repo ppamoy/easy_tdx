@@ -9,16 +9,32 @@ import { formatError } from '../api'
 import type { Bar } from '../types'
 
 interface ChanlunBi {
-  index: number; direction: 'up' | 'down'; start_date: string; end_date: string
-  high: number; low: number; done: boolean
+  index: number
+  direction: 'up' | 'down'
+  start_date: string
+  end_date: string
+  high: number
+  low: number
+  done: boolean
 }
 interface ChanlunXd {
-  index: number; direction: 'up' | 'down'; start_date: string; end_date: string
-  high: number; low: number
+  index: number
+  direction: 'up' | 'down'
+  start_date: string
+  end_date: string
+  high: number
+  low: number
 }
 interface ChanlunZs {
-  index: number; zg: number; zd: number; gg: number; dd: number
-  line_count: number; start_date: string; end_date: string; done: boolean
+  index: number
+  zg: number
+  zd: number
+  gg: number
+  dd: number
+  line_count: number
+  start_date: string
+  end_date: string
+  done: boolean
 }
 interface ChanlunMmd {
   type: string
@@ -26,14 +42,42 @@ interface ChanlunMmd {
   msg: string
   confidence: number
   // V102 缠论决策支持（条件264-267）
-  v102_signal_quality?: { overall_grade: string; overall_score: number; strength: string; confidence_adjust: number } | null
-  v102_decision_support?: { entry_price: number; stop_loss: number; take_profit_1: number; risk_reward_ratio: number; position_size_pct: number; action_recommendation: string } | null
-  v102_pattern_match?: { similar_patterns_found: number; win_rate: number; avg_return: number } | null
+  v102_signal_quality?: {
+    overall_grade: string
+    overall_score: number
+    strength: string
+    confidence_adjust: number
+  } | null
+  v102_decision_support?: {
+    entry_price: number
+    stop_loss: number
+    take_profit_1: number
+    risk_reward_ratio: number
+    position_size_pct: number
+    action_recommendation: string
+  } | null
+  v102_pattern_match?: {
+    similar_patterns_found: number
+    win_rate: number
+    avg_return: number
+  } | null
 }
-interface ChanlunFx { type: 'ding' | 'di'; date: string; val: number }
-interface ChanlunBc { type: 'bi' | 'pz' | 'qs'; bc: boolean; date: string | null; msg: string }
+interface ChanlunFx {
+  type: 'ding' | 'di'
+  date: string
+  val: number
+}
+interface ChanlunBc {
+  type: 'bi' | 'pz' | 'qs'
+  bc: boolean
+  date: string | null
+  msg: string
+}
 interface Candidate {
-  index: number; date: string; kind: 'fractal' | 'mmd'; fx_type: 'ding' | 'di' | null
+  index: number
+  date: string
+  kind: 'fractal' | 'mmd'
+  fx_type: 'ding' | 'di' | null
   signal: {
     type: string
     confidence: number
@@ -44,9 +88,14 @@ interface Candidate {
   } | null
 }
 interface MmdOutcome {
-  type: string; date: string | null; price: number | null
-  ret_5d: number | null; ret_10d: number | null; ret_20d: number | null
-  max_5d: number | null; min_5d: number | null
+  type: string
+  date: string | null
+  price: number | null
+  ret_5d: number | null
+  ret_10d: number | null
+  ret_20d: number | null
+  max_5d: number | null
+  min_5d: number | null
 }
 
 const code = ref('000001')
@@ -54,7 +103,7 @@ const category = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>(
 const count = ref(400)
 const loading = ref(false)
 const error = ref('')
-const mode = ref<'train' | 'review' | 'leaderboard'>('train')  // 训练 / 复盘 / 排行榜
+const mode = ref<'train' | 'review' | 'leaderboard'>('train') // 训练 / 复盘 / 排行榜
 
 // V90：训练成绩持久化 + 排行榜
 const playerName = ref('学员')
@@ -74,12 +123,12 @@ const candidates = ref<Candidate[]>([])
 const outcomes = ref<MmdOutcome[]>([])
 
 // ── 训练状态 ──
-const revealIndex = ref(0)          // 当前揭示到第几根 K 线（含）
-const autoReveal = ref(false)       // 自动推进
+const revealIndex = ref(0) // 当前揭示到第几根 K 线（含）
+const autoReveal = ref(false) // 自动推进
 let timer: number | null = null
 
 const currentCandidateIdx = ref(-1) // 正在提问的候选点（candidates 下标）
-const answered = ref(false)         // 本题是否已作答
+const answered = ref(false) // 本题是否已作答
 const userChoice = ref<'buy' | 'sell' | 'hold' | null>(null)
 
 // 计分
@@ -92,7 +141,7 @@ const finished = computed(() => revealIndex.value >= bars.value.length - 1)
 
 // 当前候选点
 const currentCandidate = computed<Candidate | null>(() =>
-  currentCandidateIdx.value >= 0 ? candidates.value[currentCandidateIdx.value] ?? null : null,
+  currentCandidateIdx.value >= 0 ? (candidates.value[currentCandidateIdx.value] ?? null) : null,
 )
 
 function detectMarket(code6: string): string {
@@ -108,7 +157,13 @@ async function startTraining() {
     const resp = await fetch('/api/v1/chanlun/train/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ market, code: code.value, category: category.value, count: count.value, start: 0 }),
+      body: JSON.stringify({
+        market,
+        code: code.value,
+        category: category.value,
+        count: count.value,
+        start: 0,
+      }),
     })
     if (!resp.ok) {
       const err = await resp.json().catch(() => ({}))
@@ -131,7 +186,12 @@ async function startTraining() {
       v102_pattern_match: m.v102_pattern_match ?? null,
     }))
     fxs.value = (d.fractals ?? []).map((f: any) => ({ type: f.fx_type, date: f.date, val: f.val }))
-    bcs.value = (d.bcs ?? []).map((bc: any) => ({ type: bc.type, bc: bc.bc, date: bc.date ?? bc.curr_date, msg: bc.msg }))
+    bcs.value = (d.bcs ?? []).map((bc: any) => ({
+      type: bc.type,
+      bc: bc.bc,
+      date: bc.date ?? bc.curr_date,
+      msg: bc.msg,
+    }))
     macd.value = d.macd && d.macd.dif?.length ? d.macd : null
     candidates.value = d.candidates ?? []
     outcomes.value = d.mmd_outcomes ?? []
@@ -246,7 +306,10 @@ function toggleAuto() {
   autoReveal.value = !autoReveal.value
   if (autoReveal.value) {
     timer = window.setInterval(() => {
-      if (finished.value) { stopAuto(); return }
+      if (finished.value) {
+        stopAuto()
+        return
+      }
       revealIndex.value = Math.min(revealIndex.value + 2, bars.value.length - 1)
     }, 120)
   } else {
@@ -254,12 +317,17 @@ function toggleAuto() {
   }
 }
 function stopAuto() {
-  if (timer !== null) { clearInterval(timer); timer = null }
+  if (timer !== null) {
+    clearInterval(timer)
+    timer = null
+  }
   autoReveal.value = false
 }
 
 // 命中率
-const hitRate = computed(() => totalAsked.value ? Math.round(hitCount.value / totalAsked.value * 100) : 0)
+const hitRate = computed(() =>
+  totalAsked.value ? Math.round((hitCount.value / totalAsked.value) * 100) : 0,
+)
 
 // ── V90：提交成绩 + 加载排行榜 ─────────────────────────────────────
 async function submitScore() {
@@ -284,9 +352,14 @@ async function submitScore() {
       scoreSubmitted.value = true
       loadLeaderboard()
     }
-  } catch (e) {
+  } catch {
     // 提交失败不打断训练流程，静默忽略
   }
+}
+
+function showLeaderboard() {
+  mode.value = 'leaderboard'
+  loadLeaderboard()
 }
 
 async function loadLeaderboard() {
@@ -297,7 +370,7 @@ async function loadLeaderboard() {
       const d = await resp.json()
       leaderboard.value = d.items ?? []
     }
-  } catch (e) {
+  } catch {
     // 排行榜加载失败不阻塞页面
   } finally {
     lbLoading.value = false
@@ -310,7 +383,7 @@ watch(finished, (v) => {
 })
 
 // 图表数据：训练模式用 revealIndex 截断
-const chartReveal = computed(() => mode.value === 'train' ? revealIndex.value : undefined)
+const chartReveal = computed(() => (mode.value === 'train' ? revealIndex.value : undefined))
 
 function confidenceColor(c: number): string {
   if (c >= 0.85) return '#22c55e'
@@ -339,7 +412,11 @@ const answerVerdict = computed<{ ok: boolean; text: string; cls: string }>(() =>
     return { ok: true, text: '✅ 判断正确', cls: 'good' }
   }
   if (actual === 'hold') return { ok: false, text: '❌ 应观望，此处无信号', cls: 'miss' }
-  return { ok: false, text: `❌ 应为${actual === 'buy' ? '买入' : '卖出'}，判断有偏差`, cls: 'miss' }
+  return {
+    ok: false,
+    text: `❌ 应为${actual === 'buy' ? '买入' : '卖出'}，判断有偏差`,
+    cls: 'miss',
+  }
 })
 
 // 复盘表：买入后 20 日收跌 / 卖出后 20 日收涨 → 未命中
@@ -381,9 +458,15 @@ onMounted(() => {
         {{ loading ? '加载中…' : '🔄 开始训练' }}
       </button>
       <div class="mode-tabs">
-        <button :class="['tab', { active: mode === 'train' }]" @click="mode = 'train'">🎯 逐步揭示训练</button>
-        <button :class="['tab', { active: mode === 'review' }]" @click="mode = 'review'">📖 复盘讲解</button>
-        <button :class="['tab', { active: mode === 'leaderboard' }]" @click="mode = 'leaderboard'; loadLeaderboard()">🏆 排行榜</button>
+        <button :class="['tab', { active: mode === 'train' }]" @click="mode = 'train'">
+          🎯 逐步揭示训练
+        </button>
+        <button :class="['tab', { active: mode === 'review' }]" @click="mode = 'review'">
+          📖 复盘讲解
+        </button>
+        <button :class="['tab', { active: mode === 'leaderboard' }]" @click="showLeaderboard">
+          🏆 排行榜
+        </button>
       </div>
     </div>
 
@@ -409,9 +492,15 @@ onMounted(() => {
           </div>
           <div class="train-controls">
             <button class="ghost" :disabled="finished" @click="stepForward">⏩ 揭示 +5 根</button>
-            <button class="ghost" :disabled="finished" @click="jumpToNextCandidate()">🎯 跳至下个关键点</button>
-            <button class="ghost" @click="toggleAuto">{{ autoReveal ? '⏸ 暂停' : '▶ 自动播放' }}</button>
-            <span class="reveal-info">已揭示 {{ Math.min(revealIndex + 1, bars.length) }} / {{ bars.length }} 根</span>
+            <button class="ghost" :disabled="finished" @click="jumpToNextCandidate()">
+              🎯 跳至下个关键点
+            </button>
+            <button class="ghost" @click="toggleAuto">
+              {{ autoReveal ? '⏸ 暂停' : '▶ 自动播放' }}
+            </button>
+            <span class="reveal-info"
+              >已揭示 {{ Math.min(revealIndex + 1, bars.length) }} / {{ bars.length }} 根</span
+            >
           </div>
         </div>
 
@@ -420,12 +509,19 @@ onMounted(() => {
           <template v-if="currentCandidate">
             <div class="question-card">
               <div class="q-header">
-                <span class="q-kind">{{ currentCandidate.kind === 'mmd' ? '🔔 潜在信号' : '🔎 关键分型' }}</span>
+                <span class="q-kind">{{
+                  currentCandidate.kind === 'mmd' ? '🔔 潜在信号' : '🔎 关键分型'
+                }}</span>
                 <span class="q-date">{{ currentCandidate.date }}</span>
               </div>
               <p class="q-text">
-                这里是{{ currentCandidate.fx_type === 'ding' ? '顶分型' : currentCandidate.fx_type === 'di' ? '底分型' : '转折点' }}附近
-                （第 {{ currentCandidate.index + 1 }} 根K线），你认为接下来会怎么走？
+                这里是{{
+                  currentCandidate.fx_type === 'ding'
+                    ? '顶分型'
+                    : currentCandidate.fx_type === 'di'
+                      ? '底分型'
+                      : '转折点'
+                }}附近 （第 {{ currentCandidate.index + 1 }} 根K线），你认为接下来会怎么走？
               </p>
               <div v-if="!answered" class="q-actions">
                 <button class="choice buy" @click="submitChoice('buy')">📈 买入</button>
@@ -436,28 +532,56 @@ onMounted(() => {
               <div v-else class="q-answer">
                 <div class="answer-line">
                   <span class="answer-label">你的判断：</span>
-                  <span :class="['answer-val', userChoice === 'buy' ? 'buy' : userChoice === 'sell' ? 'sell' : 'hold']">
+                  <span
+                    :class="[
+                      'answer-val',
+                      userChoice === 'buy' ? 'buy' : userChoice === 'sell' ? 'sell' : 'hold',
+                    ]"
+                  >
                     {{ userChoice === 'buy' ? '买入' : userChoice === 'sell' ? '卖出' : '观望' }}
                   </span>
                 </div>
                 <div class="answer-line">
                   <span class="answer-label">缠论引擎：</span>
-                  <span v-if="currentCandidate.signal" :class="['answer-val', currentCandidate.signal.type.includes('buy') ? 'buy' : 'sell']">
-                    {{ currentCandidate.signal.type }}（置信度 {{ (currentCandidate.signal.confidence * 100).toFixed(0) }}%{{ currentCandidate.signal.grade ? ' · ' + currentCandidate.signal.grade + ' 级' : '' }}）
+                  <span
+                    v-if="currentCandidate.signal"
+                    :class="[
+                      'answer-val',
+                      currentCandidate.signal.type.includes('buy') ? 'buy' : 'sell',
+                    ]"
+                  >
+                    {{ currentCandidate.signal.type }}（置信度
+                    {{ (currentCandidate.signal.confidence * 100).toFixed(0) }}%{{
+                      currentCandidate.signal.grade
+                        ? ' · ' + currentCandidate.signal.grade + ' 级'
+                        : ''
+                    }}）
                   </span>
                   <span v-else class="answer-val hold">未发现信号（观望）</span>
                   <!-- V344: V102 决策支持教学提示（仅 3买/3卖 有） -->
-                  <span v-if="currentCandidate.signal?.v102_grade" class="train-v102-grade" :class="'g' + currentCandidate.signal.v102_grade">
+                  <span
+                    v-if="currentCandidate.signal?.v102_grade"
+                    class="train-v102-grade"
+                    :class="'g' + currentCandidate.signal.v102_grade"
+                  >
                     V102·{{ currentCandidate.signal.v102_grade }}
                   </span>
-                  <span v-if="currentCandidate.signal?.v102_advice" class="train-v102-advice"
-                        :class="{ 'adv-buy': currentCandidate.signal.v102_advice.includes('买入'), 'adv-sell': currentCandidate.signal.v102_advice.includes('卖出') }">
+                  <span
+                    v-if="currentCandidate.signal?.v102_advice"
+                    class="train-v102-advice"
+                    :class="{
+                      'adv-buy': currentCandidate.signal.v102_advice.includes('买入'),
+                      'adv-sell': currentCandidate.signal.v102_advice.includes('卖出'),
+                    }"
+                  >
                     {{ currentCandidate.signal.v102_advice }}
                   </span>
                 </div>
                 <div class="answer-line">
                   <span class="answer-label">结果：</span>
-                  <span class="answer-val" :class="answerVerdict.cls">{{ answerVerdict.text }}</span>
+                  <span class="answer-val" :class="answerVerdict.cls">{{
+                    answerVerdict.text
+                  }}</span>
                 </div>
                 <!-- 事后验证 -->
                 <div v-if="outcomeFor(currentCandidate)" class="outcome-box">
@@ -465,19 +589,56 @@ onMounted(() => {
                   <div class="outcome-grid">
                     <div class="outcome-item">
                       <span class="o-label">5日</span>
-                      <span class="o-val" :style="{ color: retColor(outcomeFor(currentCandidate)!.ret_5d) }">{{ outcomeFor(currentCandidate)!.ret_5d != null ? (outcomeFor(currentCandidate)!.ret_5d! >= 0 ? '+' : '') + outcomeFor(currentCandidate)!.ret_5d + '%' : '—' }}</span>
+                      <span
+                        class="o-val"
+                        :style="{ color: retColor(outcomeFor(currentCandidate)!.ret_5d) }"
+                        >{{
+                          outcomeFor(currentCandidate)!.ret_5d != null
+                            ? (outcomeFor(currentCandidate)!.ret_5d! >= 0 ? '+' : '') +
+                              outcomeFor(currentCandidate)!.ret_5d +
+                              '%'
+                            : '—'
+                        }}</span
+                      >
                     </div>
                     <div class="outcome-item">
                       <span class="o-label">10日</span>
-                      <span class="o-val" :style="{ color: retColor(outcomeFor(currentCandidate)!.ret_10d) }">{{ outcomeFor(currentCandidate)!.ret_10d != null ? (outcomeFor(currentCandidate)!.ret_10d! >= 0 ? '+' : '') + outcomeFor(currentCandidate)!.ret_10d + '%' : '—' }}</span>
+                      <span
+                        class="o-val"
+                        :style="{ color: retColor(outcomeFor(currentCandidate)!.ret_10d) }"
+                        >{{
+                          outcomeFor(currentCandidate)!.ret_10d != null
+                            ? (outcomeFor(currentCandidate)!.ret_10d! >= 0 ? '+' : '') +
+                              outcomeFor(currentCandidate)!.ret_10d +
+                              '%'
+                            : '—'
+                        }}</span
+                      >
                     </div>
                     <div class="outcome-item">
                       <span class="o-label">20日</span>
-                      <span class="o-val" :style="{ color: retColor(outcomeFor(currentCandidate)!.ret_20d) }">{{ outcomeFor(currentCandidate)!.ret_20d != null ? (outcomeFor(currentCandidate)!.ret_20d! >= 0 ? '+' : '') + outcomeFor(currentCandidate)!.ret_20d + '%' : '—' }}</span>
+                      <span
+                        class="o-val"
+                        :style="{ color: retColor(outcomeFor(currentCandidate)!.ret_20d) }"
+                        >{{
+                          outcomeFor(currentCandidate)!.ret_20d != null
+                            ? (outcomeFor(currentCandidate)!.ret_20d! >= 0 ? '+' : '') +
+                              outcomeFor(currentCandidate)!.ret_20d +
+                              '%'
+                            : '—'
+                        }}</span
+                      >
                     </div>
                     <div class="outcome-item">
                       <span class="o-label">20日区间</span>
-                      <span class="o-val" style="color:#94a3b8">{{ outcomeFor(currentCandidate)!.max_5d != null ? (outcomeFor(currentCandidate)!.min_5d + '% ~ ' + outcomeFor(currentCandidate)!.max_5d + '%') : '—' }}</span>
+                      <span class="o-val" style="color: #94a3b8">{{
+                        outcomeFor(currentCandidate)!.max_5d != null
+                          ? outcomeFor(currentCandidate)!.min_5d +
+                            '% ~ ' +
+                            outcomeFor(currentCandidate)!.max_5d +
+                            '%'
+                          : '—'
+                      }}</span>
                     </div>
                   </div>
                 </div>
@@ -489,14 +650,26 @@ onMounted(() => {
             <div class="question-card done-card">
               <template v-if="finished">
                 <p class="done-title">🎉 训练完成！</p>
-                <p class="done-sub">共 {{ totalAsked }} 题，方向命中 {{ hitCount }} 题（{{ hitRate }}%）</p>
+                <p class="done-sub">
+                  共 {{ totalAsked }} 题，方向命中 {{ hitCount }} 题（{{ hitRate }}%）
+                </p>
                 <p class="done-score">得分：{{ score }}</p>
                 <div class="done-save" v-if="totalAsked > 0">
                   <span class="save-label">昵称</span>
-                  <input v-model="playerName" class="name-input" maxlength="12" placeholder="学员" :disabled="scoreSubmitted" />
-                  <button class="ghost save-btn" :disabled="scoreSubmitted" @click="submitScore()">{{ scoreSubmitted ? '✅ 已存入排行榜' : '💾 保存成绩' }}</button>
+                  <input
+                    v-model="playerName"
+                    class="name-input"
+                    maxlength="12"
+                    placeholder="学员"
+                    :disabled="scoreSubmitted"
+                  />
+                  <button class="ghost save-btn" :disabled="scoreSubmitted" @click="submitScore()">
+                    {{ scoreSubmitted ? '✅ 已存入排行榜' : '💾 保存成绩' }}
+                  </button>
                 </div>
-                <p class="done-hint">切换到「📖 复盘讲解」逐笔回看买卖点的结构依据，或「🏆 排行榜」看成绩排名。</p>
+                <p class="done-hint">
+                  切换到「📖 复盘讲解」逐笔回看买卖点的结构依据，或「🏆 排行榜」看成绩排名。
+                </p>
               </template>
               <template v-else>
                 <p>加载完成，等待揭示…</p>
@@ -506,10 +679,18 @@ onMounted(() => {
 
           <!-- 计分板 -->
           <div class="score-card">
-            <div class="score-item"><span>题目</span><b>{{ totalAsked }}</b></div>
-            <div class="score-item"><span>命中</span><b>{{ hitCount }}</b></div>
-            <div class="score-item"><span>命中率</span><b>{{ hitRate }}%</b></div>
-            <div class="score-item"><span>得分</span><b class="score-num">{{ score }}</b></div>
+            <div class="score-item">
+              <span>题目</span><b>{{ totalAsked }}</b>
+            </div>
+            <div class="score-item">
+              <span>命中</span><b>{{ hitCount }}</b>
+            </div>
+            <div class="score-item">
+              <span>命中率</span><b>{{ hitRate }}%</b>
+            </div>
+            <div class="score-item">
+              <span>得分</span><b class="score-num">{{ score }}</b>
+            </div>
           </div>
         </div>
       </div>
@@ -519,32 +700,66 @@ onMounted(() => {
     <template v-if="mode === 'review' && mmds.length">
       <div class="review-panel">
         <h3>买卖点复盘讲解（{{ mmds.length }} 个信号）</h3>
-        <p class="review-hint">逐笔查看「为什么成立」+「事后 20 日表现」——用历史验证本模型准确性。命中率定义：买入信号后 20 日收涨 / 卖出信号后 20 日收跌。</p>
+        <p class="review-hint">
+          逐笔查看「为什么成立」+「事后 20 日表现」——用历史验证本模型准确性。命中率定义：买入信号后
+          20 日收涨 / 卖出信号后 20 日收跌。
+        </p>
         <table>
           <thead>
             <tr>
-              <th>类型</th><th>日期</th><th>置信度</th><th>事后 20 日</th><th>验证</th><th>说明</th>
+              <th>类型</th>
+              <th>日期</th>
+              <th>置信度</th>
+              <th>事后 20 日</th>
+              <th>验证</th>
+              <th>说明</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(o, i) in outcomes" :key="o.date + o.type" :class="{ miss: isOutcomeMiss(o) }">
-              <td><strong :style="{ color: o.type.includes('buy') ? '#22c55e' : '#ef4444' }">{{ o.type }}</strong></td>
+            <tr
+              v-for="(o, i) in outcomes"
+              :key="o.date + o.type"
+              :class="{ miss: isOutcomeMiss(o) }"
+            >
+              <td>
+                <strong :style="{ color: o.type.includes('buy') ? '#22c55e' : '#ef4444' }">{{
+                  o.type
+                }}</strong>
+              </td>
               <td>{{ o.date }}</td>
               <td>
-                <span class="conf" :style="{ color: confidenceColor(mmds[i]?.confidence ?? 0) }">{{ ((mmds[i]?.confidence ?? 0) * 100).toFixed(0) }}%</span>
+                <span class="conf" :style="{ color: confidenceColor(mmds[i]?.confidence ?? 0) }"
+                  >{{ ((mmds[i]?.confidence ?? 0) * 100).toFixed(0) }}%</span
+                >
               </td>
-              <td :style="{ color: retColor(o.ret_20d) }">{{ o.ret_20d != null ? (o.ret_20d >= 0 ? '+' : '') + o.ret_20d + '%' : '—' }}</td>
+              <td :style="{ color: retColor(o.ret_20d) }">
+                {{ o.ret_20d != null ? (o.ret_20d >= 0 ? '+' : '') + o.ret_20d + '%' : '—' }}
+              </td>
               <td>
-                <span :class="['verdict', isOutcomeMiss(o) ? 'miss' : 'ok']">{{ isOutcomeMiss(o) ? '✗' : '✓' }}</span>
+                <span :class="['verdict', isOutcomeMiss(o) ? 'miss' : 'ok']">{{
+                  isOutcomeMiss(o) ? '✗' : '✓'
+                }}</span>
               </td>
               <td class="msg-cell">
                 {{ mmds[i]?.msg ?? '' }}
                 <!-- V102: 信号质量评分卡评级 + 操作建议摘要 -->
-                <span v-if="mmds[i]?.v102_signal_quality?.overall_grade" class="train-v102-grade" :class="'g' + mmds[i]!.v102_signal_quality!.overall_grade">
+                <span
+                  v-if="mmds[i]?.v102_signal_quality?.overall_grade"
+                  class="train-v102-grade"
+                  :class="'g' + mmds[i]!.v102_signal_quality!.overall_grade"
+                >
                   V102·{{ mmds[i]!.v102_signal_quality!.overall_grade }}
                 </span>
-                <span v-if="mmds[i]?.v102_decision_support?.action_recommendation" class="train-v102-advice"
-                      :class="{ 'adv-buy': mmds[i]!.v102_decision_support!.action_recommendation.includes('买入'), 'adv-sell': mmds[i]!.v102_decision_support!.action_recommendation.includes('卖出') }">
+                <span
+                  v-if="mmds[i]?.v102_decision_support?.action_recommendation"
+                  class="train-v102-advice"
+                  :class="{
+                    'adv-buy':
+                      mmds[i]!.v102_decision_support!.action_recommendation.includes('买入'),
+                    'adv-sell':
+                      mmds[i]!.v102_decision_support!.action_recommendation.includes('卖出'),
+                  }"
+                >
                   {{ mmds[i]!.v102_decision_support!.action_recommendation }}
                 </span>
               </td>
@@ -559,14 +774,24 @@ onMounted(() => {
       <div class="leaderboard-panel">
         <div class="lb-head">
           <h3>🏆 训练排行榜（逐步揭示命中率）</h3>
-          <button class="ghost" @click="loadLeaderboard()" :disabled="lbLoading">{{ lbLoading ? '加载中…' : '🔄 刷新' }}</button>
+          <button class="ghost" @click="loadLeaderboard()" :disabled="lbLoading">
+            {{ lbLoading ? '加载中…' : '🔄 刷新' }}
+          </button>
         </div>
-        <p class="review-hint">按得分降序；每轮训练完成后成绩自动/手动保存。得分 = 方向命中 +2/题 + 精确命中 +1。</p>
+        <p class="review-hint">
+          按得分降序；每轮训练完成后成绩自动/手动保存。得分 = 方向命中 +2/题 + 精确命中 +1。
+        </p>
         <table class="lb-table">
           <thead>
             <tr>
-              <th>#</th><th>学员</th><th>得分</th><th>命中率</th><th>题数</th>
-              <th>标的</th><th>周期</th><th>时间</th>
+              <th>#</th>
+              <th>学员</th>
+              <th>得分</th>
+              <th>命中率</th>
+              <th>题数</th>
+              <th>标的</th>
+              <th>周期</th>
+              <th>时间</th>
             </tr>
           </thead>
           <tbody>
@@ -595,72 +820,345 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.train-view { display: flex; flex-direction: column; gap: 16px; padding: 16px 20px; overflow-y: auto; height: 100%; }
-.config-bar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; }
-.field-group { display: flex; flex-direction: column; gap: 4px; }
-.field-group label { font-size: 11px; color: var(--text-muted); }
-.field-group input, .field-group select { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; font-size: 13px; color: var(--text); width: 110px; }
-.field-group input[type="text"] { width: 90px; }
-.primary { padding: 7px 18px; font-size: 13px; height: 34px; }
-.mode-tabs { display: flex; gap: 8px; margin-left: auto; }
-.tab { padding: 7px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--bg); color: var(--text-dim); font-size: 13px; cursor: pointer; }
-.tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-.error-banner { background: rgba(239,65,70,0.12); border: 1px solid var(--up); color: var(--up); padding: 10px 14px; border-radius: var(--radius); font-size: 13px; }
-.train-layout { display: flex; gap: 16px; align-items: flex-start; }
-.train-main { flex: 1; min-width: 0; }
-.chart-area { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.train-controls { display: flex; gap: 8px; margin-top: 10px; align-items: center; flex-wrap: wrap; }
-.train-controls .ghost { font-size: 12px; padding: 5px 12px; }
-.reveal-info { font-size: 12px; color: var(--text-dim); margin-left: auto; }
-.train-side { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
-.question-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.q-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.q-kind { font-size: 12px; font-weight: 700; color: var(--accent); }
-.q-date { font-size: 12px; color: var(--text-muted); }
-.q-text { font-size: 13px; color: var(--text); line-height: 1.5; margin: 0 0 12px 0; }
-.q-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.choice { padding: 9px 0; border-radius: 6px; border: 1px solid var(--border); font-size: 13px; font-weight: 600; cursor: pointer; background: var(--bg); color: var(--text); }
-.choice.buy:hover { border-color: #22c55e; color: #22c55e; }
-.choice.sell:hover { border-color: #ef4444; color: #ef4444; }
-.choice.hold:hover { border-color: #fbbf24; color: #fbbf24; }
-.q-answer { display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--border); padding-top: 12px; }
-.answer-line { display: flex; gap: 8px; font-size: 13px; align-items: baseline; }
-.answer-label { color: var(--text-dim); flex-shrink: 0; }
-.answer-val { font-weight: 700; }
-.answer-val.buy { color: #22c55e; }
-.answer-val.sell { color: #ef4444; }
-.answer-val.hold { color: #fbbf24; }
-.answer-val.good { color: #22c55e; }
-.answer-val.miss { color: #ef4444; }
-.outcome-box { background: rgba(255,255,255,0.03); border-radius: 6px; padding: 10px; }
-.outcome-title { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
-.outcome-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
-.outcome-item { display: flex; flex-direction: column; align-items: center; background: rgba(255,255,255,0.03); border-radius: 4px; padding: 6px 4px; }
-.o-label { font-size: 10px; color: var(--text-dim); }
-.o-val { font-size: 13px; font-weight: 700; font-family: var(--font-mono); }
-.next-btn { width: 100%; margin-top: 10px; }
-.score-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
-.score-item { display: flex; flex-direction: column; align-items: center; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 4px; }
-.score-item span { font-size: 11px; color: var(--text-dim); }
-.score-item b { font-size: 18px; color: var(--text); }
-.score-item b.score-num { color: var(--accent); }
-.done-card { text-align: center; }
-.done-title { font-size: 18px; font-weight: 700; color: var(--accent); margin: 0 0 8px; }
-.done-sub { font-size: 13px; color: var(--text); margin: 0 0 4px; }
-.done-score { font-size: 24px; font-weight: 700; color: var(--text); margin: 0 0 8px; }
-.done-hint { font-size: 12px; color: var(--text-dim); margin: 0; }
-.review-panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.review-panel h3 { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
-.review-hint { font-size: 12px; color: var(--text-dim); margin: 0 0 10px; }
-.review-panel table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.review-panel th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-weight: 500; }
-.review-panel td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text); }
-.review-panel tr.miss td { background: rgba(239,65,70,0.05); }
-.conf { font-weight: 600; }
-.verdict { font-weight: 700; }
-.verdict.ok { color: #22c55e; }
-.verdict.miss { color: #ef4444; }
-.msg-cell { color: var(--text-dim); font-size: 11px; max-width: 420px; }
+.train-view {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  height: 100%;
+}
+.config-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+}
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-group label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.field-group input,
+.field-group select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--text);
+  width: 110px;
+}
+.field-group input[type='text'] {
+  width: 90px;
+}
+.primary {
+  padding: 7px 18px;
+  font-size: 13px;
+  height: 34px;
+}
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.tab {
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.error-banner {
+  background: rgba(239, 65, 70, 0.12);
+  border: 1px solid var(--up);
+  color: var(--up);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.train-layout {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.train-main {
+  flex: 1;
+  min-width: 0;
+}
+.chart-area {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.train-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.train-controls .ghost {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+.reveal-info {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+.train-side {
+  width: 360px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.question-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.q-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.q-kind {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.q-date {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.q-text {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  margin: 0 0 12px 0;
+}
+.q-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.choice {
+  padding: 9px 0;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--bg);
+  color: var(--text);
+}
+.choice.buy:hover {
+  border-color: #22c55e;
+  color: #22c55e;
+}
+.choice.sell:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+}
+.choice.hold:hover {
+  border-color: #fbbf24;
+  color: #fbbf24;
+}
+.q-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px dashed var(--border);
+  padding-top: 12px;
+}
+.answer-line {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  align-items: baseline;
+}
+.answer-label {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+.answer-val {
+  font-weight: 700;
+}
+.answer-val.buy {
+  color: #22c55e;
+}
+.answer-val.sell {
+  color: #ef4444;
+}
+.answer-val.hold {
+  color: #fbbf24;
+}
+.answer-val.good {
+  color: #22c55e;
+}
+.answer-val.miss {
+  color: #ef4444;
+}
+.outcome-box {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  padding: 10px;
+}
+.outcome-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.outcome-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.outcome-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 4px;
+  padding: 6px 4px;
+}
+.o-label {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.o-val {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+.next-btn {
+  width: 100%;
+  margin-top: 10px;
+}
+.score-card {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.score-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 4px;
+}
+.score-item span {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.score-item b {
+  font-size: 18px;
+  color: var(--text);
+}
+.score-item b.score-num {
+  color: var(--accent);
+}
+.done-card {
+  text-align: center;
+}
+.done-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+.done-sub {
+  font-size: 13px;
+  color: var(--text);
+  margin: 0 0 4px;
+}
+.done-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+.done-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}
+.review-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.review-panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.review-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0 0 10px;
+}
+.review-panel table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.review-panel th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.review-panel td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+.review-panel tr.miss td {
+  background: rgba(239, 65, 70, 0.05);
+}
+.conf {
+  font-weight: 600;
+}
+.verdict {
+  font-weight: 700;
+}
+.verdict.ok {
+  color: #22c55e;
+}
+.verdict.miss {
+  color: #ef4444;
+}
+.msg-cell {
+  color: var(--text-dim);
+  font-size: 11px;
+  max-width: 420px;
+}
 
 /* V102: 信号质量评级 + 操作建议摘要（复盘讲解） */
 .train-v102-grade {
@@ -672,10 +1170,18 @@ onMounted(() => {
   font-weight: 700;
   color: #fff;
 }
-.train-v102-grade.gA { background: #22c55e; }
-.train-v102-grade.gB { background: #3b82f6; }
-.train-v102-grade.gC { background: #f59e0b; }
-.train-v102-grade.gD { background: #ef4444; }
+.train-v102-grade.gA {
+  background: #22c55e;
+}
+.train-v102-grade.gB {
+  background: #3b82f6;
+}
+.train-v102-grade.gC {
+  background: #f59e0b;
+}
+.train-v102-grade.gD {
+  background: #ef4444;
+}
 .train-v102-advice {
   display: block;
   margin-top: 3px;
@@ -686,28 +1192,109 @@ onMounted(() => {
   text-overflow: ellipsis;
   max-width: 360px;
 }
-.train-v102-advice.adv-buy { color: #22c55e; }
-.train-v102-advice.adv-sell { color: #ef4444; }
-.done-save { display: flex; align-items: center; gap: 8px; justify-content: center; margin: 10px 0; }
-.save-label { font-size: 12px; color: var(--text-dim); }
-.name-input {
-  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 5px 10px; font-size: 12px; color: var(--text); width: 90px;
+.train-v102-advice.adv-buy {
+  color: #22c55e;
 }
-.save-btn { font-size: 12px; padding: 5px 12px; }
-.leaderboard-panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
-.lb-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.lb-head h3 { font-size: 15px; font-weight: 700; color: var(--text); margin: 0; }
-.lb-head .ghost { font-size: 12px; padding: 5px 12px; }
-.lb-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.lb-table th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); color: var(--text-dim); font-weight: 500; }
-.lb-table td { padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text); }
-.rank { font-weight: 700; color: var(--text-dim); }
-.rank.top { color: #f59e0b; }
-.lb-player { font-weight: 600; }
-.lb-score { font-weight: 700; color: var(--accent); }
-.code-cell { font-family: monospace; font-weight: 600; }
-.lb-time { color: var(--text-dim); font-size: 11px; }
-.lb-empty { text-align: center; color: var(--text-muted); padding: 24px; }
-.placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; color: var(--text-dim); gap: 8px; }
+.train-v102-advice.adv-sell {
+  color: #ef4444;
+}
+.done-save {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: center;
+  margin: 10px 0;
+}
+.save-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.name-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text);
+  width: 90px;
+}
+.save-btn {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+.leaderboard-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.lb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.lb-head h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+.lb-head .ghost {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.lb-table th {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-dim);
+  font-weight: 500;
+}
+.lb-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+.rank {
+  font-weight: 700;
+  color: var(--text-dim);
+}
+.rank.top {
+  color: #f59e0b;
+}
+.lb-player {
+  font-weight: 600;
+}
+.lb-score {
+  font-weight: 700;
+  color: var(--accent);
+}
+.code-cell {
+  font-family: monospace;
+  font-weight: 600;
+}
+.lb-time {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.lb-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 24px;
+}
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: var(--text-dim);
+  gap: 8px;
+}
 </style>

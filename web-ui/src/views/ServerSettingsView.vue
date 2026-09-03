@@ -131,7 +131,14 @@ function latencyText(ms: number | null): string {
           <tr
             v-for="h in hosts"
             :key="h.host"
-            :class="{ 'is-current': h.is_current, 'is-unreachable': !h.reachable && h.latency_ms === null && testing === false && hosts.some(x => x.latency_ms !== null) }"
+            :class="{
+              'is-current': h.is_current,
+              'is-unreachable':
+                !h.reachable &&
+                h.latency_ms === null &&
+                testing === false &&
+                hosts.some((x) => x.latency_ms !== null),
+            }"
           >
             <td class="host-ip">{{ h.host }}</td>
             <td class="latency" :style="{ color: latencyColor(h.latency_ms) }">

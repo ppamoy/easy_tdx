@@ -58,12 +58,7 @@ function updateParam(p: ParamSchema, raw: string | boolean) {
       <label>策略</label>
       <select
         :value="strategy"
-        @change="
-          emit(
-            'update:strategy',
-            ($event.target as HTMLSelectElement).value,
-          )
-        "
+        @change="emit('update:strategy', ($event.target as HTMLSelectElement).value)"
       >
         <option v-for="s in strategies" :key="s.name" :value="s.name">
           {{ s.label }}（{{ s.name }}）
@@ -75,7 +70,8 @@ function updateParam(p: ParamSchema, raw: string | boolean) {
 
     <!-- V102: 缠论策略按建议止损止盈提示 -->
     <div v-if="selectedSchema?.name === 'chanlun'" class="v102-tip">
-      💡 勾选「3买按V102建议止损止盈」：3买 首仓将按 V102 决策支持的止损价/第一止盈价动态出场（优先于固定百分比止损）。
+      💡 勾选「3买按V102建议止损止盈」：3买 首仓将按 V102
+      决策支持的止损价/第一止盈价动态出场（优先于固定百分比止损）。
     </div>
 
     <!-- 动态参数表单：按 schema 渲染 -->

@@ -91,7 +91,10 @@ onMounted(() => {
   window.addEventListener('resize', resize)
   const el = container.value
   if (el) {
-    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), {
+      passive: false,
+      capture: true,
+    })
   }
 })
 onBeforeUnmount(() => {

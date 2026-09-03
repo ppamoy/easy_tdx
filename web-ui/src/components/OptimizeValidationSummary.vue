@@ -31,22 +31,27 @@ const rows = computed<Array<{ label: string; text: string; cls: string }>>(() =>
   const out: Array<{ label: string; text: string; cls: string }> = []
   if (b) {
     if (b.trust_score !== null && b.trust_score !== undefined) {
-      out.push({ label: "📊 最佳参数可信度", text: trustText.value, cls: overallClass.value })
+      out.push({ label: '📊 最佳参数可信度', text: trustText.value, cls: overallClass.value })
     }
     if (b.hit_rate !== null && b.hit_rate !== undefined) {
       const excess = b.excess_hit_rate ?? 0
       out.push({
-        label: "🎯 5根命中率",
-        text: (b.hit_rate * 100).toFixed(0) + "% · 超额 " + (excess >= 0 ? "+" : "") + (excess * 100).toFixed(1) + "%",
-        cls: excess > 0 ? "pos" : excess < 0 ? "neg" : "neutral",
+        label: '🎯 5根命中率',
+        text:
+          (b.hit_rate * 100).toFixed(0) +
+          '% · 超额 ' +
+          (excess >= 0 ? '+' : '') +
+          (excess * 100).toFixed(1) +
+          '%',
+        cls: excess > 0 ? 'pos' : excess < 0 ? 'neg' : 'neutral',
       })
     }
   }
   if (wf?.verdict) {
-    out.push({ label: "🔁 Walk-Forward", text: wf.verdict, cls: wf.degraded ? "neg" : "pos" })
+    out.push({ label: '🔁 Walk-Forward', text: wf.verdict, cls: wf.degraded ? 'neg' : 'pos' })
   }
   if (props.result?.walk_forward && !wf) {
-    out.push({ label: "🔁 Walk-Forward", text: "未启用", cls: "neutral" })
+    out.push({ label: '🔁 Walk-Forward', text: '未启用', cls: 'neutral' })
   }
   return out
 })
@@ -70,7 +75,9 @@ async function copyOptimizeSummary() {
   } catch {
     ovCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { ovCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    ovCopyMsg.value = ''
+  }, 2500)
 }
 </script>
 
@@ -80,7 +87,9 @@ async function copyOptimizeSummary() {
       <span class="ov-title">✅ 验证总结（最优点）</span>
       <button class="ghost small ov-copy-btn" @click="copyOptimizeSummary">📋 复制验证总结</button>
       <span v-if="ovCopyMsg" class="save-msg">{{ ovCopyMsg }}</span>
-      <span v-if="trustText !== '未评估'" class="ov-overall" :class="overallClass">{{ trustText }}</span>
+      <span v-if="trustText !== '未评估'" class="ov-overall" :class="overallClass">{{
+        trustText
+      }}</span>
     </div>
     <div class="ov-rows">
       <div v-for="row in rows" :key="row.label" class="ov-row" :class="row.cls">
@@ -88,7 +97,10 @@ async function copyOptimizeSummary() {
         <span class="ov-text">{{ row.text }}</span>
       </div>
     </div>
-    <p class="ov-legend">最优点按寻优排序取第一位；配合 Walk-Forward 滚动验证判断参数是否过拟合。勾选「Walk-Forward 验证」可看到逐窗口训练/测试表现。</p>
+    <p class="ov-legend">
+      最优点按寻优排序取第一位；配合 Walk-Forward 滚动验证判断参数是否过拟合。勾选「Walk-Forward
+      验证」可看到逐窗口训练/测试表现。
+    </p>
   </div>
 </template>
 
@@ -102,18 +114,71 @@ async function copyOptimizeSummary() {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.02);
 }
-.ov-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.ov-title { font-size: 14px; font-weight: 700; color: var(--text); }
-.ov-overall { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 4px; }
-.ov-overall.pos { color: var(--up); background: rgba(34, 197, 94, 0.12); }
-.ov-overall.warn { color: var(--warn, #f59e0b); background: rgba(245, 158, 11, 0.12); }
-.ov-overall.neg { color: var(--down); background: rgba(239, 68, 68, 0.12); }
-.ov-rows { display: flex; flex-direction: column; gap: 6px; }
-.ov-row { display: flex; gap: 10px; align-items: baseline; font-size: 12px; padding-left: 8px; border-left: 3px solid var(--border); }
-.ov-row.pos { border-left-color: var(--up); }
-.ov-row.warn { border-left-color: var(--warn, #f59e0b); }
-.ov-row.neg { border-left-color: var(--down); }
-.ov-label { color: var(--text-muted); font-weight: 600; white-space: nowrap; min-width: 108px; }
-.ov-text { color: var(--text); line-height: 1.5; }
-.ov-legend { font-size: 11px; color: var(--text-dim); line-height: 1.6; margin: 0; }
+.ov-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ov-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.ov-overall {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.ov-overall.pos {
+  color: var(--up);
+  background: rgba(34, 197, 94, 0.12);
+}
+.ov-overall.warn {
+  color: var(--warn, #f59e0b);
+  background: rgba(245, 158, 11, 0.12);
+}
+.ov-overall.neg {
+  color: var(--down);
+  background: rgba(239, 68, 68, 0.12);
+}
+.ov-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ov-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+  padding-left: 8px;
+  border-left: 3px solid var(--border);
+}
+.ov-row.pos {
+  border-left-color: var(--up);
+}
+.ov-row.warn {
+  border-left-color: var(--warn, #f59e0b);
+}
+.ov-row.neg {
+  border-left-color: var(--down);
+}
+.ov-label {
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+  min-width: 108px;
+}
+.ov-text {
+  color: var(--text);
+  line-height: 1.5;
+}
+.ov-legend {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  margin: 0;
+}
 </style>

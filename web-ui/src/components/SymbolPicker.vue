@@ -37,9 +37,9 @@ const loading = ref(false)
 const CATEGORIES: Category[] = ['DAY', 'WEEK', 'MONTH', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60']
 
 // 智能识别的市场（用于提示展示）
-const detectedMarket = computed(() => (code.value && /^\d{6}$/.test(code.value)
-  ? marketLabel(detectMarket(code.value))
-  : ''))
+const detectedMarket = computed(() =>
+  code.value && /^\d{6}$/.test(code.value) ? marketLabel(detectMarket(code.value)) : '',
+)
 
 /** 取行情（由父组件在点击「开始回测/开始寻优」时调用）。
  * 成功返回 true，失败返回 false（并把错误写入 store.error 供父组件感知）。 */
@@ -60,13 +60,7 @@ async function loadBars(): Promise<boolean> {
   error.value = ''
   try {
     const market = detectMarket(code.value)
-    const bars = await fetchBars(
-      market,
-      code.value,
-      category.value,
-      startDate.value,
-      endDate.value,
-    )
+    const bars = await fetchBars(market, code.value, category.value, startDate.value, endDate.value)
     if (bars.length < 2) {
       error.value = `该日期范围内仅取到 ${bars.length} 根 K 线，不足以回测`
       store.error = error.value
@@ -93,11 +87,7 @@ defineExpose({ loadBars, loading })
   <div class="symbol-picker">
     <div class="field code-field">
       <label>代码</label>
-      <input
-        v-model="code"
-        maxlength="6"
-        placeholder="6位代码（市场自动识别）"
-      />
+      <input v-model="code" maxlength="6" placeholder="6位代码（市场自动识别）" />
       <span v-if="detectedMarket" class="market-tag">{{ detectedMarket }}</span>
     </div>
 

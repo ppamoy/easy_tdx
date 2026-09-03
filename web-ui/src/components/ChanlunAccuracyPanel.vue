@@ -8,15 +8,18 @@ import type { SignalHorizonStat } from '../types'
 
 const props = defineProps<{
   byType: Record<string, any> | null | undefined
-  ranking: Array<{
-    type: string
-    direction: string
-    signals: number
-    excess_hit_rate: number
-    hit_rate: number
-    avg_return: number
-    verdict: string
-  }> | null | undefined
+  ranking:
+    | Array<{
+        type: string
+        direction: string
+        signals: number
+        excess_hit_rate: number
+        hit_rate: number
+        avg_return: number
+        verdict: string
+      }>
+    | null
+    | undefined
   summary: string | null | undefined
 }>()
 
@@ -91,9 +94,20 @@ function typeColor(type: string): string {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in ranking" :key="r.type" :class="{ 'row-buy': r.direction === 'BUY', 'row-sell': r.direction === 'SELL' }">
+          <tr
+            v-for="r in ranking"
+            :key="r.type"
+            :class="{ 'row-buy': r.direction === 'BUY', 'row-sell': r.direction === 'SELL' }"
+          >
             <td>
-              <span class="type-badge" :style="{ background: typeColor(r.type) + '22', color: typeColor(r.type), borderColor: typeColor(r.type) }">
+              <span
+                class="type-badge"
+                :style="{
+                  background: typeColor(r.type) + '22',
+                  color: typeColor(r.type),
+                  borderColor: typeColor(r.type),
+                }"
+              >
                 {{ r.type }}
               </span>
             </td>
@@ -118,7 +132,14 @@ function typeColor(type: string): string {
     <!-- 各类型详细前瞻命中表 -->
     <div v-for="row in typeRows" :key="row.type" class="type-detail">
       <h4>
-        <span class="type-badge" :style="{ background: typeColor(row.type) + '22', color: typeColor(row.type), borderColor: typeColor(row.type) }">
+        <span
+          class="type-badge"
+          :style="{
+            background: typeColor(row.type) + '22',
+            color: typeColor(row.type),
+            borderColor: typeColor(row.type),
+          }"
+        >
           {{ row.type }}
         </span>
         {{ row.direction === 'BUY' ? '买入' : '卖出' }}信号前瞻命中率
@@ -146,10 +167,12 @@ function typeColor(type: string): string {
               </td>
               <td class="dim">{{ fmtPct(row.horizons[h].baseline_hit_rate) }}</td>
               <td :class="row.horizons[h].excess_hit_rate >= 0 ? 'pos' : 'neg'">
-                {{ row.horizons[h].excess_hit_rate >= 0 ? '+' : '' }}{{ fmtPct(row.horizons[h].excess_hit_rate) }}
+                {{ row.horizons[h].excess_hit_rate >= 0 ? '+' : ''
+                }}{{ fmtPct(row.horizons[h].excess_hit_rate) }}
               </td>
               <td :class="row.horizons[h].avg_return >= 0 ? 'pos' : 'neg'">
-                {{ row.horizons[h].avg_return >= 0 ? '+' : '' }}{{ fmtPct(row.horizons[h].avg_return) }}
+                {{ row.horizons[h].avg_return >= 0 ? '+' : ''
+                }}{{ fmtPct(row.horizons[h].avg_return) }}
               </td>
               <td class="dim">{{ fmtPct(row.horizons[h].median_return) }}</td>
             </template>
@@ -221,7 +244,7 @@ function typeColor(type: string): string {
 .ranking-table td,
 .detail-table td {
   padding: 4px 8px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   text-align: right;
   font-family: var(--font-mono);
 }
@@ -231,8 +254,12 @@ function typeColor(type: string): string {
   text-align: left;
 }
 
-.row-buy { background: rgba(34, 197, 94, 0.03); }
-.row-sell { background: rgba(239, 65, 70, 0.03); }
+.row-buy {
+  background: rgba(34, 197, 94, 0.03);
+}
+.row-sell {
+  background: rgba(239, 65, 70, 0.03);
+}
 
 .type-badge {
   display: inline-block;
@@ -250,9 +277,15 @@ function typeColor(type: string): string {
   color: var(--text-muted);
 }
 
-.dim { color: var(--text-dim); }
-.pos { color: var(--up); }
-.neg { color: var(--down); }
+.dim {
+  color: var(--text-dim);
+}
+.pos {
+  color: var(--up);
+}
+.neg {
+  color: var(--down);
+}
 
 .verdict {
   font-family: inherit;

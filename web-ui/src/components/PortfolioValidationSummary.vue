@@ -10,7 +10,9 @@ const props = defineProps<{
   result: PortfolioResult | null | undefined
 }>()
 
-const hasData = computed(() => Boolean(props.result?.portfolio_trust || props.result?.accuracy_summary))
+const hasData = computed(() =>
+  Boolean(props.result?.portfolio_trust || props.result?.accuracy_summary),
+)
 
 const trust = computed(() => props.result?.portfolio_trust ?? null)
 
@@ -37,7 +39,9 @@ const overallClass = computed(() => {
   return 'warn'
 })
 
-function trustText(r: { trust_score?: number | null; trust_grade?: string | null } | null | undefined): string {
+function trustText(
+  r: { trust_score?: number | null; trust_grade?: string | null } | null | undefined,
+): string {
   if (!r || r.trust_score === null || r.trust_score === undefined) return '-'
   return Math.round(r.trust_score) + ' ' + (r.trust_grade ?? '')
 }
@@ -49,7 +53,9 @@ async function copyPortfolioSummary() {
   const lines = ['# easy-tdx 组合验证总结']
   lines.push('')
   if (trust.value) {
-    lines.push('- 组合可信度：' + Math.round(trust.value.score) + '/100 · ' + trust.value.grade + '可信')
+    lines.push(
+      '- 组合可信度：' + Math.round(trust.value.score) + '/100 · ' + trust.value.grade + '可信',
+    )
     if (trust.value.verdict) lines.push('- ' + trust.value.verdict)
   }
   if (accuracy.value?.verdict) {
@@ -57,7 +63,8 @@ async function copyPortfolioSummary() {
   }
   const tb = topBottom.value
   if (tb.top) lines.push('- 最强标的：' + tb.top.symbol + '（可信度 ' + trustText(tb.top) + '）')
-  if (tb.bottom) lines.push('- 最弱标的：' + tb.bottom.symbol + '（可信度 ' + trustText(tb.bottom) + '）')
+  if (tb.bottom)
+    lines.push('- 最弱标的：' + tb.bottom.symbol + '（可信度 ' + trustText(tb.bottom) + '）')
   lines.push('')
   lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
   const text = lines.join('\n')
@@ -67,7 +74,9 @@ async function copyPortfolioSummary() {
   } catch {
     pvCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { pvCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    pvCopyMsg.value = ''
+  }, 2500)
 }
 </script>
 
@@ -97,21 +106,26 @@ async function copyPortfolioSummary() {
           {{ accuracy.portfolio.symbols }} 只标的 · 加权5根命中率
           {{ ((accuracy.portfolio.avg_hit_rate ?? 0) * 100).toFixed(1) }}% ·
           {{ accuracy.portfolio.positive_symbols }}/{{ accuracy.portfolio.symbols }} 正收益 ·
-          {{ accuracy.portfolio.hit_above_baseline }}/{{ accuracy.portfolio.symbols_with_accuracy }} 命中率高于基准
+          {{ accuracy.portfolio.hit_above_baseline }}/{{ accuracy.portfolio.symbols_with_accuracy }}
+          命中率高于基准
         </span>
       </div>
       <div v-if="topBottom.top || topBottom.bottom" class="pv-row neutral">
         <span class="pv-label">逐标可信度</span>
         <span class="pv-text">
-          最强 <b>{{ topBottom.top?.symbol ?? '-' }}</b>（{{ trustText(topBottom.top) }}）
+          最强 <b>{{ topBottom.top?.symbol ?? '-' }}</b
+          >（{{ trustText(topBottom.top) }}）
           <template v-if="topBottom.bottom && topBottom.bottom.symbol !== topBottom.top?.symbol">
-            · 最弱 <b>{{ topBottom.bottom.symbol }}</b>（{{ trustText(topBottom.bottom) }}）
+            · 最弱 <b>{{ topBottom.bottom.symbol }}</b
+            >（{{ trustText(topBottom.bottom) }}）
           </template>
         </span>
       </div>
     </div>
 
-    <p class="pv-legend">组合可信度＝组合加权超额命中率（40%）＋跨标一致性（35%）＋组合加权绩效（25%）；配合组合准确度聚合与逐标可信度，回答「同一策略放在这批标的上，整体验证是否可信、哪些标的最可信」。</p>
+    <p class="pv-legend">
+      组合可信度＝组合加权超额命中率（40%）＋跨标一致性（35%）＋组合加权绩效（25%）；配合组合准确度聚合与逐标可信度，回答「同一策略放在这批标的上，整体验证是否可信、哪些标的最可信」。
+    </p>
   </div>
 </template>
 

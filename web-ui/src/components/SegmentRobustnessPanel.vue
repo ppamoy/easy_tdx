@@ -39,13 +39,19 @@ const rows = computed(() => (props.report?.segments ?? []).filter((s) => !s.skip
       </div>
       <div class="summary-item">
         <span class="s-label">正收益段占比</span>
-        <span class="s-value" :class="(report.consistency.positive_segment_ratio ?? 0) >= 0.6 ? 'pos' : 'neg'">
+        <span
+          class="s-value"
+          :class="(report.consistency.positive_segment_ratio ?? 0) >= 0.6 ? 'pos' : 'neg'"
+        >
           {{ fmtPct(report.consistency.positive_segment_ratio) }}
         </span>
       </div>
       <div class="summary-item">
         <span class="s-label">跑赢买入持有占比</span>
-        <span class="s-value" :class="(report.consistency.beats_buy_hold_ratio ?? 0) >= 0.6 ? 'pos' : 'neg'">
+        <span
+          class="s-value"
+          :class="(report.consistency.beats_buy_hold_ratio ?? 0) >= 0.6 ? 'pos' : 'neg'"
+        >
           {{ fmtPct(report.consistency.beats_buy_hold_ratio) }}
         </span>
       </div>
@@ -92,7 +98,8 @@ const rows = computed(() => (props.report?.segments ?? []).filter((s) => !s.skip
     </table>
 
     <p class="legend">
-      方法：把回测区间均分为 N 段，对每段用同一策略 + 同一参数独立重跑（每段全新实例，避免状态串扰）。
+      方法：把回测区间均分为 N 段，对每段用同一策略 +
+      同一参数独立重跑（每段全新实例，避免状态串扰）。
       若各段收益/胜率/命中率一致、多数分段正收益并跑赢买入持有，说明模型稳健；
       若某段一枝独秀而其余段亏损，或胜率/命中率离散度大，提示可能存在过拟合，全时段成绩需谨慎对待。
     </p>

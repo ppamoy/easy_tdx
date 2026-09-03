@@ -49,7 +49,11 @@ const barColor = computed(() => {
           {{ report!.components.accuracy.note }}
         </span>
         <template v-else>
-          <span class="dim-sub">5根命中 {{ ((report!.components?.accuracy?.hit_rate as number) ?? 0 * 100).toFixed(0) }}% · 超额 {{ ((report!.components?.accuracy?.excess_hit_rate as number) ?? 0).toFixed(1) }}%</span>
+          <span class="dim-sub"
+            >5根命中
+            {{ ((report!.components?.accuracy?.hit_rate as number) ?? 0 * 100).toFixed(0) }}% · 超额
+            {{ ((report!.components?.accuracy?.excess_hit_rate as number) ?? 0).toFixed(1) }}%</span
+          >
         </template>
       </div>
       <div class="dim-row">
@@ -64,13 +68,17 @@ const barColor = computed(() => {
       </div>
       <div class="dim-row">
         <span class="dim-label">绩效对比</span>
-        <span class="dim-sub">总收益 {{ ((report!.components?.performance?.total_return as number) ?? 0).toFixed(1) }}% · 超额 alpha {{ ((report!.components?.performance?.alpha as number) ?? 0).toFixed(1) }}%</span>
+        <span class="dim-sub"
+          >总收益 {{ ((report!.components?.performance?.total_return as number) ?? 0).toFixed(1) }}%
+          · 超额 alpha
+          {{ ((report!.components?.performance?.alpha as number) ?? 0).toFixed(1) }}%</span
+        >
       </div>
     </div>
 
     <p class="legend">
-      综合可信度 = 40% 择时准确度（信号命中率 vs 随机基准）+ 35% 分段稳健性（过拟合/行情依赖风险）
-      + 25% 绩效对比（相对买入持有）。分数越高说明「历史回测验证过的准确度」越扎实、越可持续。
+      综合可信度 = 40% 择时准确度（信号命中率 vs 随机基准）+ 35% 分段稳健性（过拟合/行情依赖风险） +
+      25% 绩效对比（相对买入持有）。分数越高说明「历史回测验证过的准确度」越扎实、越可持续。
     </p>
   </div>
 </template>

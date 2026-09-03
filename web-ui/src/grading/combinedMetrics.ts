@@ -80,9 +80,8 @@ export function computeCombinedMetrics(equity: EquityPoint[]): CombinedMetrics {
     Number.isFinite(firstDt) && Number.isFinite(lastDt) && lastDt > firstDt
       ? (lastDt - firstDt) / (365.25 * 24 * 3600 * 1000)
       : n / TRADING_DAYS_PER_YEAR
-  const annual_return = years > 0 && endValue > 0 && startValue > 0
-    ? Math.pow(endValue / startValue, 1 / years) - 1
-    : 0
+  const annual_return =
+    years > 0 && endValue > 0 && startValue > 0 ? Math.pow(endValue / startValue, 1 / years) - 1 : 0
 
   // ── 逐期收益率（用于夏普/波动率） ────────────────────────────────────────
   const periodReturns: number[] = []
@@ -103,12 +102,12 @@ export function computeCombinedMetrics(equity: EquityPoint[]): CombinedMetrics {
 
   // ── 索提诺（仅用下行波动） ───────────────────────────────────────────────
   const downsideReturns = periodReturns.filter((r) => r < 0)
-  const downsideStd = downsideReturns.length > 0
-    ? Math.sqrt(downsideReturns.reduce((s, r) => s + r * r, 0) / downsideReturns.length)
-    : 0
-  const sortino = downsideStd > 0
-    ? (meanPeriod / downsideStd) * Math.sqrt(TRADING_DAYS_PER_YEAR)
-    : 0
+  const downsideStd =
+    downsideReturns.length > 0
+      ? Math.sqrt(downsideReturns.reduce((s, r) => s + r * r, 0) / downsideReturns.length)
+      : 0
+  const sortino =
+    downsideStd > 0 ? (meanPeriod / downsideStd) * Math.sqrt(TRADING_DAYS_PER_YEAR) : 0
 
   // ── 最大回撤 & 持续天数 ─────────────────────────────────────────────────
   // 优先用后端已算好的 drawdown_pct（与图表一致），反推峰值&持续更准。
@@ -149,7 +148,7 @@ export function computeCombinedMetrics(equity: EquityPoint[]): CombinedMetrics {
   }
 
   // ── 卡玛比率 = 年化收益 / 最大回撤 ───────────────────────────────────────
-  const calmar = maxDrawdown > 0 ? annual_return / maxDrawdown : (annual_return > 0 ? Infinity : 0)
+  const calmar = maxDrawdown > 0 ? annual_return / maxDrawdown : annual_return > 0 ? Infinity : 0
 
   return {
     total_return,

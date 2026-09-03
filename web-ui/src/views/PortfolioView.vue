@@ -132,13 +132,18 @@ const lastCandBatchAt = ref('')
 function saveCandBatchPersist() {
   if (!candRows.value.length) return
   try {
-    localStorage.setItem(CAND_BATCH_KEY, JSON.stringify({
-      rows: candRows.value,
-      strategy: strategy.value,
-      strategy_label: strategyLabel.value || strategy.value,
-      at: new Date().toISOString(),
-    }))
-  } catch { /* localStorage 不可用忽略 */ }
+    localStorage.setItem(
+      CAND_BATCH_KEY,
+      JSON.stringify({
+        rows: candRows.value,
+        strategy: strategy.value,
+        strategy_label: strategyLabel.value || strategy.value,
+        at: new Date().toISOString(),
+      }),
+    )
+  } catch {
+    /* localStorage 不可用忽略 */
+  }
 }
 function restoreCandBatchPersist() {
   try {
@@ -150,7 +155,9 @@ function restoreCandBatchPersist() {
       lastCandBatchAt.value = data.at || ''
       candMsg.value = '已恢复上次候选批量验证（' + (data.strategy_label || '') + '）'
     }
-  } catch { /* 解析失败忽略 */ }
+  } catch {
+    /* 解析失败忽略 */
+  }
 }
 const candSort = ref<'return' | 'trust'>('trust')
 // V195: 仅看样本外稳健（过滤掉 oos_degraded=true 的候选股）
@@ -168,11 +175,17 @@ const sortedCandRows = computed(() => {
 async function runCandVerify() {
   if (candLoading.value) return
   let raw: any[] = []
-  try { raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]') } catch { raw = [] }
+  try {
+    raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]')
+  } catch {
+    raw = []
+  }
   const watch = raw.filter((w) => w && w.code && w.market).slice(0, 12)
   if (watch.length === 0) {
     candMsg.value = '自选股为空：请先在缠论分析页「加入自选股」'
-    setTimeout(() => { candMsg.value = '' }, 3500)
+    setTimeout(() => {
+      candMsg.value = ''
+    }, 3500)
     return
   }
   candLoading.value = true
@@ -214,7 +227,9 @@ async function runCandVerify() {
           wf_degraded: result.walk_forward?.degraded ?? null,
           wf_verdict: result.walk_forward?.verdict ?? '',
         })
-      } catch { /* 单只失败跳过 */ }
+      } catch {
+        /* 单只失败跳过 */
+      }
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     candRows.value = rows
@@ -283,7 +298,9 @@ async function saveCandAsPortfolio() {
     if (visible.length === 0) {
       candSaveMsg.value = '没有样本外稳健的候选股可保存（请关闭「仅看样本外稳健」再试）'
       candSaving.value = false
-      setTimeout(() => { candSaveMsg.value = '' }, 4000)
+      setTimeout(() => {
+        candSaveMsg.value = ''
+      }, 4000)
       return
     }
     const stocks = visible.map((c) => c.market + ':' + c.code)
@@ -295,7 +312,9 @@ async function saveCandAsPortfolio() {
     const oosDegradedN = oosKnown.filter((c) => c.oos_degraded === true).length
     const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
     const oosVerdict = oosKnown.length
-      ? (oosRatio! < 0.5 ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健' : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减')
+      ? oosRatio! < 0.5
+        ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健'
+        : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减'
       : ''
     await saveStrategy({
       name: (strategyLabel.value || strategy.value) + ' · 候选验证' + stocks.length + '只',
@@ -322,7 +341,9 @@ async function saveCandAsPortfolio() {
       notes: '由组合回测页候选批量验证生成，可在策略库载入后组合页复跑。',
     })
     candSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
-    setTimeout(() => { candSaveMsg.value = '' }, 4000)
+    setTimeout(() => {
+      candSaveMsg.value = ''
+    }, 4000)
   } catch (e) {
     candSaveMsg.value = '保存失败：' + formatError(e)
   } finally {
@@ -340,13 +361,31 @@ function copyCandRanking() {
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   sortedCandRows.value.forEach((r, i) => {
     lines.push(
-      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + candPct(r.total_return) +
-      ' | ' + candPct(r.win_rate) + ' | ' + candPct(r.hit_rate) + ' | ' + candPct(r.excess_hit_rate) +
-      ' | ' + candTrust(r) + ' | ' + candOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
+      '| ' +
+        (i + 1) +
+        ' | ' +
+        r.symbol +
+        ' | ' +
+        candPct(r.total_return) +
+        ' | ' +
+        candPct(r.win_rate) +
+        ' | ' +
+        candPct(r.hit_rate) +
+        ' | ' +
+        candPct(r.excess_hit_rate) +
+        ' | ' +
+        candTrust(r) +
+        ' | ' +
+        candOosLabel(r) +
+        ' | ' +
+        (r.trades ?? '-') +
+        ' |',
     )
   })
   lines.push('')
-  lines.push('方法：读全局自选股（最多 12 只），用当前策略独立回测（最近 500 根日线），按模型可信度（V101）降序排名。')
+  lines.push(
+    '方法：读全局自选股（最多 12 只），用当前策略独立回测（最近 500 根日线），按模型可信度（V101）降序排名。',
+  )
   const text = lines.join('\n')
   const doCopy = async () => {
     try {
@@ -360,7 +399,9 @@ function copyCandRanking() {
       document.body.removeChild(ta)
     }
     candCopyMsg.value = '✓ 已复制候选排名'
-    setTimeout(() => { candCopyMsg.value = '' }, 2500)
+    setTimeout(() => {
+      candCopyMsg.value = ''
+    }, 2500)
   }
   void doCopy()
 }
@@ -381,7 +422,9 @@ async function copyCandJson() {
   } catch {
     candJsonMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { candJsonMsg.value = '' }, 2500)
+  setTimeout(() => {
+    candJsonMsg.value = ''
+  }, 2500)
 }
 // V255: 候选批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
 const candCsvMsg = ref('')
@@ -390,7 +433,17 @@ function candCsvEscape(v: string): string {
 }
 function exportCandCsv() {
   if (candRows.value.length === 0) return
-  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const header = [
+    '排名',
+    '标的',
+    '总收益',
+    '胜率',
+    '5根命中率',
+    '超额命中率',
+    '可信度',
+    '样本外',
+    '交易数',
+  ]
   const lines = [header.join(',')]
   sortedCandRows.value.forEach((r, i) => {
     const row = [
@@ -421,7 +474,9 @@ function exportCandCsv() {
   } catch {
     candCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { candCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    candCsvMsg.value = ''
+  }, 2500)
 }
 
 // ── 保存策略（把当前组合结果 + 配置 + 上下文存进策略库）──────────────────────
@@ -452,7 +507,13 @@ function buildPortfolioReportText(): string {
   lines.push('')
   if (r.portfolio_trust) {
     lines.push('## 组合可信度（V103）')
-    lines.push('- 综合评分：' + Math.round(r.portfolio_trust.score) + '/100 · ' + r.portfolio_trust.grade + '可信')
+    lines.push(
+      '- 综合评分：' +
+        Math.round(r.portfolio_trust.score) +
+        '/100 · ' +
+        r.portfolio_trust.grade +
+        '可信',
+    )
     lines.push('- 结论：' + (r.portfolio_trust.verdict || ''))
     lines.push('')
   }
@@ -462,8 +523,14 @@ function buildPortfolioReportText(): string {
     const pf = r.accuracy_summary.portfolio
     if (pf) {
       lines.push(
-        '- 加权5根命中率：' + pct(pf.avg_hit_rate) + ' · 超额：' + pct(pf.avg_excess_hit_rate) +
-        ' · 正收益标的：' + pf.positive_symbols + '/' + pf.symbols,
+        '- 加权5根命中率：' +
+          pct(pf.avg_hit_rate) +
+          ' · 超额：' +
+          pct(pf.avg_excess_hit_rate) +
+          ' · 正收益标的：' +
+          pf.positive_symbols +
+          '/' +
+          pf.symbols,
       )
     }
     lines.push('')
@@ -471,7 +538,12 @@ function buildPortfolioReportText(): string {
   if (r.out_of_sample) {
     lines.push('## 组合样本外验证（V126）')
     lines.push('- ' + (r.out_of_sample.verdict || ''))
-    lines.push('- 平均训练段：' + pct(r.out_of_sample.avg_train_return) + ' · 平均样本外：' + pct(r.out_of_sample.avg_test_return))
+    lines.push(
+      '- 平均训练段：' +
+        pct(r.out_of_sample.avg_train_return) +
+        ' · 平均样本外：' +
+        pct(r.out_of_sample.avg_test_return),
+    )
     lines.push('')
   }
   // V303: 组合级 Walk-Forward 滚动验证段
@@ -488,7 +560,9 @@ function buildPortfolioReportText(): string {
     lines.push('')
   }
   lines.push('---')
-  lines.push('> 💡 各标的的 V102 缠论决策支持（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行 easy-tdx advice MARKET CODE 一键回放。')
+  lines.push(
+    '> 💡 各标的的 V102 缠论决策支持（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行 easy-tdx advice MARKET CODE 一键回放。',
+  )
   lines.push('生成时间：' + new Date().toLocaleString('zh-CN'))
   return lines.join('\n')
 }
@@ -506,7 +580,9 @@ async function copyReport() {
     document.body.removeChild(ta)
   }
   copyMsg.value = '✓ 已复制组合报告'
-  setTimeout(() => { copyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    copyMsg.value = ''
+  }, 2500)
 }
 // V162: 组合回测报告 JSON 导出（机器可读，Agent/脚本友好，与 V153/V157/V158 对齐）
 const jsonCopyMsg = ref('')
@@ -519,7 +595,9 @@ async function copyPortfolioJson() {
   } catch {
     jsonCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    jsonCopyMsg.value = ''
+  }, 2500)
 }
 // V259: 组合报告导出 CSV（组合绩效 + 各标的对比表，Excel 友好）
 const portCsvMsg = ref('')
@@ -542,7 +620,15 @@ function exportPortfolioCsv() {
   lines.push(['标的总数', String(p.total_stocks ?? '')].join(','))
   lines.push(['总资金', String(p.total_cash ?? '')].join(','))
   if (r.portfolio_trust) {
-    lines.push(['组合可信度', String(r.portfolio_trust.grade ?? '') + '（' + Math.round(r.portfolio_trust.score) + '/100）'].join(','))
+    lines.push(
+      [
+        '组合可信度',
+        String(r.portfolio_trust.grade ?? '') +
+          '（' +
+          Math.round(r.portfolio_trust.score) +
+          '/100）',
+      ].join(','),
+    )
   }
   if (r.accuracy_summary) {
     const pf = r.accuracy_summary.portfolio
@@ -551,24 +637,35 @@ function exportPortfolioCsv() {
   }
   if (r.out_of_sample) {
     lines.push(['样本外结论', portCsvEscape(r.out_of_sample.verdict || '')].join(','))
-    lines.push(['样本外稳健数', String(r.out_of_sample.symbols - (r.out_of_sample.degraded_symbols || 0)) + '/' + String(r.out_of_sample.symbols)].join(','))
+    lines.push(
+      [
+        '样本外稳健数',
+        String(r.out_of_sample.symbols - (r.out_of_sample.degraded_symbols || 0)) +
+          '/' +
+          String(r.out_of_sample.symbols),
+      ].join(','),
+    )
   }
   lines.push('')
   // 各标的对比块
   lines.push('# 各标的对比')
-  lines.push(['标的', '总收益', '年化收益', '最大回撤', '夏普', '胜率', '交易次数', '盈亏比'].join(','))
+  lines.push(
+    ['标的', '总收益', '年化收益', '最大回撤', '夏普', '胜率', '交易次数', '盈亏比'].join(','),
+  )
   Object.entries(r.individual_results || {}).forEach(([key, res]) => {
     const perf = res.performance || {}
-    lines.push([
-      portCsvEscape(key),
-      portPctV(perf.total_return),
-      portPctV(perf.annual_return),
-      portPctV(perf.max_drawdown),
-      perf.sharpe != null ? perf.sharpe.toFixed(2) : '',
-      portPctV(perf.win_rate),
-      String(perf.total_trades ?? ''),
-      perf.profit_factor != null ? perf.profit_factor.toFixed(2) : '',
-    ].join(','))
+    lines.push(
+      [
+        portCsvEscape(key),
+        portPctV(perf.total_return),
+        portPctV(perf.annual_return),
+        portPctV(perf.max_drawdown),
+        perf.sharpe != null ? perf.sharpe.toFixed(2) : '',
+        portPctV(perf.win_rate),
+        String(perf.total_trades ?? ''),
+        perf.profit_factor != null ? perf.profit_factor.toFixed(2) : '',
+      ].join(','),
+    )
   })
   const csv = '\uFEFF' + lines.join('\n')
   try {
@@ -585,7 +682,9 @@ function exportPortfolioCsv() {
   } catch {
     portCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { portCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    portCsvMsg.value = ''
+  }, 2500)
 }
 // V285: 组合交易明细导出 CSV（聚合各标的成交记录，带标的列，与回测页 V261 对齐）
 const portTradesCsvMsg = ref('')
@@ -595,29 +694,44 @@ function portTradesEscape(v: string): string {
 function exportPortfolioTradesCsv() {
   const r = store.portfolioResult
   if (!r) return
-  const ind = r.individual_results as unknown as Record<string, { trades?: Array<Record<string, unknown>> }> | undefined
+  const ind = r.individual_results as unknown as
+    Record<string, { trades?: Array<Record<string, unknown>> }> | undefined
   if (!ind || Object.keys(ind).length === 0) {
     portTradesCsvMsg.value = '没有可导出的成交记录'
-    setTimeout(() => { portTradesCsvMsg.value = '' }, 2500)
+    setTimeout(() => {
+      portTradesCsvMsg.value = ''
+    }, 2500)
     return
   }
-  const header = ['标的', '时间', '方向', '数量', '价格', '手续费', '滑点', '已实现盈亏', '成本基数']
+  const header = [
+    '标的',
+    '时间',
+    '方向',
+    '数量',
+    '价格',
+    '手续费',
+    '滑点',
+    '已实现盈亏',
+    '成本基数',
+  ]
   const rows: string[] = []
   Object.entries(ind).forEach(([key, res]) => {
     const trades = res.trades || []
     trades.forEach((t) => {
       if (t.rejected) return
-      rows.push([
-        portTradesEscape(key),
-        String(t.datetime ?? ''),
-        portTradesEscape(String(t.direction ?? '')),
-        String(t.size ?? ''),
-        String(t.price ?? ''),
-        String(t.commission ?? ''),
-        String(t.slippage ?? ''),
-        String(t.pnl ?? ''),
-        String(t.cost_basis ?? ''),
-      ].join(','))
+      rows.push(
+        [
+          portTradesEscape(key),
+          String(t.datetime ?? ''),
+          portTradesEscape(String(t.direction ?? '')),
+          String(t.size ?? ''),
+          String(t.price ?? ''),
+          String(t.commission ?? ''),
+          String(t.slippage ?? ''),
+          String(t.pnl ?? ''),
+          String(t.cost_basis ?? ''),
+        ].join(','),
+      )
     })
   })
   const csv = '\uFEFF' + [header.join(','), ...rows].join('\n')
@@ -635,7 +749,9 @@ function exportPortfolioTradesCsv() {
   } catch {
     portTradesCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { portTradesCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    portTradesCsvMsg.value = ''
+  }, 2500)
 }
 
 const strategyLabel = computed(
@@ -644,9 +760,7 @@ const strategyLabel = computed(
 
 // 组合评级：从 combined_equity 重算夏普/卡玛/波动率等（组合级净值算不出胜率/利润因子），
 // 用 5 维度评分。净值点数过少（< 60 个交易日）视为样本不足。
-const grade = computed(() =>
-  store.portfolioResult ? gradePortfolio(store.portfolioResult) : null,
-)
+const grade = computed(() => (store.portfolioResult ? gradePortfolio(store.portfolioResult) : null))
 
 function openSaveForm() {
   saveName.value = `${strategyLabel.value} · 组合${stocks.value.length}只`
@@ -705,7 +819,8 @@ async function onSave() {
         // V134: 组合验证结论一并入快照（字段与单标 V122 对齐，策略库卡片可展示）
         accuracy: {
           hit_rate: store.portfolioResult.accuracy_summary?.portfolio?.avg_hit_rate ?? null,
-          excess_hit_rate: store.portfolioResult.accuracy_summary?.portfolio?.avg_excess_hit_rate ?? null,
+          excess_hit_rate:
+            store.portfolioResult.accuracy_summary?.portfolio?.avg_excess_hit_rate ?? null,
           verdict: store.portfolioResult.accuracy_summary?.verdict ?? '',
         },
         trust: {
@@ -749,25 +864,64 @@ async function onSave() {
       </section>
       <section class="panel-section">
         <h3>批量验证候选股（选股验证）</h3>
-        <p class="hint">读全局自选股（最多 12 只），用当前策略逐只回测并按可信度排名，可一键加入组合标的。</p>
+        <p class="hint">
+          读全局自选股（最多 12 只），用当前策略逐只回测并按可信度排名，可一键加入组合标的。
+        </p>
         <div class="cand-bar">
-          <button class="ghost small" :disabled="candLoading || !store.strategies.length" @click="runCandVerify">
+          <button
+            class="ghost small"
+            :disabled="candLoading || !store.strategies.length"
+            @click="runCandVerify"
+          >
             {{ candLoading ? '批量验证中…' : '🧪 批量验证候选股' }}
           </button>
           <span v-if="candMsg" class="cand-msg">{{ candMsg }}</span>
         </div>
         <div v-if="candRows.length" class="cand-table-wrap">
           <div class="cand-head">
-            <span>候选排名（{{ candRows.length }}）
-              <span v-if="lastCandBatchAt" class="cand-batch-at" :title="'上次验证时间'">🕒 {{ new Date(lastCandBatchAt).toLocaleString() }}</span>
+            <span
+              >候选排名（{{ candRows.length }}）
+              <span v-if="lastCandBatchAt" class="cand-batch-at" :title="'上次验证时间'"
+                >🕒 {{ new Date(lastCandBatchAt).toLocaleString() }}</span
+              >
             </span>
             <span class="cand-sort">
-              <button class="ghost small" :class="{ active: candSort === 'return' }" @click="candSort = 'return'">按收益</button>
-              <button class="ghost small" :class="{ active: candSort === 'trust' }" @click="candSort = 'trust'">按可信度</button>
-              <button class="ghost small" :class="{ active: candOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + candRows.filter((r: CandRow) => r.oos_degraded === false).length + ' 只）'" @click="candOnlyRobust = !candOnlyRobust">
+              <button
+                class="ghost small"
+                :class="{ active: candSort === 'return' }"
+                @click="candSort = 'return'"
+              >
+                按收益
+              </button>
+              <button
+                class="ghost small"
+                :class="{ active: candSort === 'trust' }"
+                @click="candSort = 'trust'"
+              >
+                按可信度
+              </button>
+              <button
+                class="ghost small"
+                :class="{ active: candOnlyRobust }"
+                :title="
+                  '仅保留样本外 ✅泛化 的候选股（当前 ' +
+                  candRows.filter((r: CandRow) => r.oos_degraded === false).length +
+                  ' 只）'
+                "
+                @click="candOnlyRobust = !candOnlyRobust"
+              >
                 ✅ 仅看样本外稳健
               </button>
-              <button class="ghost small" :class="{ active: candOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的候选股（当前 ' + candRows.filter((r: CandRow) => r.wf_degraded === false).length + ' 只）'" @click="candOnlyWfRobust = !candOnlyWfRobust">
+              <button
+                class="ghost small"
+                :class="{ active: candOnlyWfRobust }"
+                :title="
+                  '仅保留滚验 ✅稳 的候选股（当前 ' +
+                  candRows.filter((r: CandRow) => r.wf_degraded === false).length +
+                  ' 只）'
+                "
+                @click="candOnlyWfRobust = !candOnlyWfRobust"
+              >
                 ✅ 仅看滚验稳健
               </button>
               <button class="ghost small" @click="copyCandRanking">📋 复制排名</button>
@@ -783,17 +937,43 @@ async function onSave() {
           </div>
           <table class="cand-table">
             <thead>
-              <tr><th>#</th><th>标的</th><th class="num">总收益</th><th class="num">5根命中率</th><th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num" title="Walk-Forward 滚动验证">滚验</th><th class="num">可信度</th><th></th></tr>
+              <tr>
+                <th>#</th>
+                <th>标的</th>
+                <th class="num">总收益</th>
+                <th class="num">5根命中率</th>
+                <th class="num" title="训练段 vs 未见过数据">样本外</th>
+                <th class="num" title="Walk-Forward 滚动验证">滚验</th>
+                <th class="num">可信度</th>
+                <th></th>
+              </tr>
             </thead>
             <tbody>
               <tr v-for="(r, i) in sortedCandRows" :key="r.symbol">
                 <td class="dim">{{ i + 1 }}</td>
                 <td>{{ r.symbol }}</td>
-                <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ candPct(r.total_return) }}</td>
+                <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">
+                  {{ candPct(r.total_return) }}
+                </td>
                 <td class="num">{{ candPct(r.hit_rate) }}</td>
-                <td class="num" :class="candOosCls(r)" :title="candOosTitle(r)">{{ candOosLabel(r) }}</td>
-                <td class="num" :title="r.wf_verdict || ''">{{ r.wf_degraded === null || r.wf_degraded === undefined ? '-' : (r.wf_degraded ? '⚠递减' : '✅稳') }}</td>
-                <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ candTrust(r) }}</td>
+                <td class="num" :class="candOosCls(r)" :title="candOosTitle(r)">
+                  {{ candOosLabel(r) }}
+                </td>
+                <td class="num" :title="r.wf_verdict || ''">
+                  {{
+                    r.wf_degraded === null || r.wf_degraded === undefined
+                      ? '-'
+                      : r.wf_degraded
+                        ? '⚠递减'
+                        : '✅稳'
+                  }}
+                </td>
+                <td
+                  class="num"
+                  :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''"
+                >
+                  {{ candTrust(r) }}
+                </td>
                 <td>
                   <button class="ghost small" @click="viewCandStock(r)">查看该股</button>
                   <button class="ghost small" @click="addCandToPortfolio(r)">加入组合</button>
@@ -927,7 +1107,9 @@ async function onSave() {
             </div>
             <div class="perf-item">
               <span class="label">组合总资金</span>
-              <span class="value">{{ store.portfolioResult.total_performance.total_cash.toFixed(0) }}</span>
+              <span class="value">{{
+                store.portfolioResult.total_performance.total_cash.toFixed(0)
+              }}</span>
             </div>
           </div>
         </section>
@@ -948,15 +1130,30 @@ async function onSave() {
         <!-- V299: 组合级 Walk-Forward 滚动窗口验证 -->
         <section v-if="(store.portfolioResult as any)?.walk_forward" class="report-section">
           <h3>🔁 组合 Walk-Forward 滚动验证（防过拟合）</h3>
-          <div class="verdict-cell" :class="(store.portfolioResult as any).walk_forward.degraded_symbols >= Math.max(1, (store.portfolioResult as any).walk_forward.symbols * 0.5) ? 'neg' : 'pos'">
+          <div
+            class="verdict-cell"
+            :class="
+              (store.portfolioResult as any).walk_forward.degraded_symbols >=
+              Math.max(1, (store.portfolioResult as any).walk_forward.symbols * 0.5)
+                ? 'neg'
+                : 'pos'
+            "
+          >
             {{ (store.portfolioResult as any).walk_forward.verdict }}
           </div>
           <table class="cand-table wf-table">
             <thead>
-              <tr><th>标的</th><th>窗口数</th><th class="num">结论</th></tr>
+              <tr>
+                <th>标的</th>
+                <th>窗口数</th>
+                <th class="num">结论</th>
+              </tr>
             </thead>
             <tbody>
-              <tr v-for="(v, sym, i) in (store.portfolioResult as any).walk_forward.per_symbol" :key="i">
+              <tr
+                v-for="(v, sym, i) in (store.portfolioResult as any).walk_forward.per_symbol"
+                :key="i"
+              >
                 <td>{{ sym }}</td>
                 <td class="num">{{ v.windows ?? '-' }}</td>
                 <td :class="v.degraded ? 'neg' : 'pos'" class="dim">{{ v.verdict }}</td>
@@ -1297,14 +1494,23 @@ async function onSave() {
   border-bottom: 1px solid var(--border);
   text-align: right;
 }
-.cand-table th:first-child, .cand-table td:first-child { text-align: left; }
+.cand-table th:first-child,
+.cand-table td:first-child {
+  text-align: left;
+}
 .cand-table td {
   padding: 4px 6px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   text-align: right;
   font-family: var(--font-mono);
 }
-.pos { color: var(--up); }
-.neg { color: var(--down); }
-.dim { color: var(--text-dim); }
+.pos {
+  color: var(--up);
+}
+.neg {
+  color: var(--down);
+}
+.dim {
+  color: var(--text-dim);
+}
 </style>

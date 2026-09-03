@@ -54,12 +54,19 @@ function trustClass(r: { trust_grade?: string | null }): string {
     <!-- 组合可信度（V103） -->
     <div v-if="trust" class="trust-banner">
       <div class="trust-score">
-        <span class="score-num" :style="{ color: trustBarColor }">{{ Math.round(trust.score) }}</span>
+        <span class="score-num" :style="{ color: trustBarColor }">{{
+          Math.round(trust.score)
+        }}</span>
         <span class="score-max">/100</span>
         <span class="grade-badge" :class="trustGradeClass">{{ trust.grade }}可信</span>
       </div>
       <div class="trust-verdict">{{ trust.verdict }}</div>
-      <div class="bar-track"><div class="bar-fill" :style="{ width: trust.score + '%', background: trustBarColor }"></div></div>
+      <div class="bar-track">
+        <div
+          class="bar-fill"
+          :style="{ width: trust.score + '%', background: trustBarColor }"
+        ></div>
+      </div>
     </div>
 
     <!-- 结论行 -->
@@ -88,11 +95,17 @@ function trustClass(r: { trust_grade?: string | null }): string {
       </div>
       <div class="summary-item">
         <span class="s-label">正收益标的</span>
-        <span class="s-value">{{ report.portfolio.positive_symbols }}/{{ report.portfolio.symbols }}</span>
+        <span class="s-value"
+          >{{ report.portfolio.positive_symbols }}/{{ report.portfolio.symbols }}</span
+        >
       </div>
       <div class="summary-item">
         <span class="s-label">命中率高于基准标的</span>
-        <span class="s-value">{{ report.portfolio.hit_above_baseline }}/{{ report.portfolio.symbols_with_accuracy }}</span>
+        <span class="s-value"
+          >{{ report.portfolio.hit_above_baseline }}/{{
+            report.portfolio.symbols_with_accuracy
+          }}</span
+        >
       </div>
       <div class="summary-item">
         <span class="s-label">加权平均收益</span>
@@ -124,11 +137,21 @@ function trustClass(r: { trust_grade?: string | null }): string {
           <td>{{ fmtPct(r.allocation) }}</td>
           <td :class="r.total_return >= 0 ? 'pos' : 'neg'">{{ fmtPct(r.total_return) }}</td>
           <td>{{ fmtPct(r.win_rate) }}</td>
-          <td :class="r.excess_hit_rate !== null && r.excess_hit_rate > 0 ? 'pos' : (r.excess_hit_rate !== null && r.excess_hit_rate < 0 ? 'neg' : '')">
+          <td
+            :class="
+              r.excess_hit_rate !== null && r.excess_hit_rate > 0
+                ? 'pos'
+                : r.excess_hit_rate !== null && r.excess_hit_rate < 0
+                  ? 'neg'
+                  : ''
+            "
+          >
             {{ fmtPct(r.hit_rate) }}
           </td>
           <td class="dim">{{ fmtPct(r.baseline_hit_rate) }}</td>
-          <td :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmtPct(r.excess_hit_rate) }}</td>
+          <td :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">
+            {{ fmtPct(r.excess_hit_rate) }}
+          </td>
           <td :class="trustClass(r)">{{ trustText(r) }}</td>
           <td>{{ (r.sharpe ?? 0).toFixed(2) }}</td>
           <td>{{ r.trades }}</td>

@@ -62,10 +62,30 @@ function exportAccCsv() {
   const data: string[] = []
   rows.value.forEach((row) => {
     if (r.buy && row.buy) {
-      data.push([row.horizon + ' 根', '买入', cell(row.buy.count), fmtPct(row.buy.hit_rate), fmtPct(row.buy.baseline_hit_rate), fmtPct(row.buy.avg_return), fmtPct(row.buy.baseline_avg_return)].join(','))
+      data.push(
+        [
+          row.horizon + ' 根',
+          '买入',
+          cell(row.buy.count),
+          fmtPct(row.buy.hit_rate),
+          fmtPct(row.buy.baseline_hit_rate),
+          fmtPct(row.buy.avg_return),
+          fmtPct(row.buy.baseline_avg_return),
+        ].join(','),
+      )
     }
     if (r.sell && row.sell) {
-      data.push([row.horizon + ' 根', '卖出', cell(row.sell.count), fmtPct(row.sell.hit_rate), fmtPct(row.sell.baseline_hit_rate), fmtPct(row.sell.avg_return), fmtPct(row.sell.baseline_avg_return)].join(','))
+      data.push(
+        [
+          row.horizon + ' 根',
+          '卖出',
+          cell(row.sell.count),
+          fmtPct(row.sell.hit_rate),
+          fmtPct(row.sell.baseline_hit_rate),
+          fmtPct(row.sell.avg_return),
+          fmtPct(row.sell.baseline_avg_return),
+        ].join(','),
+      )
     }
   })
   const csv = '\uFEFF' + [header.join(','), ...data].join('\n')
@@ -83,7 +103,9 @@ function exportAccCsv() {
   } catch {
     accCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { accCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    accCsvMsg.value = ''
+  }, 2500)
 }
 </script>
 

@@ -67,9 +67,7 @@ function loadWorkersFromStorage(): number {
     const raw = localStorage.getItem(WORKERS_STORAGE_KEY)
     if (raw == null) return DEFAULT_WORKERS
     const n = Number(raw)
-    return Number.isFinite(n) && WORKER_OPTIONS.some((o) => o.value === n)
-      ? n
-      : DEFAULT_WORKERS
+    return Number.isFinite(n) && WORKER_OPTIONS.some((o) => o.value === n) ? n : DEFAULT_WORKERS
   } catch {
     return DEFAULT_WORKERS
   }
@@ -239,7 +237,18 @@ function allCsvEscape(v: string): string {
 }
 function exportAllCsv() {
   if (!sortedRanking.value.length) return
-  const header = ['排名', '策略', '参数', '总收益', '夏普', '最大回撤', '交易数', '胜率', '5根命中', '可信度']
+  const header = [
+    '排名',
+    '策略',
+    '参数',
+    '总收益',
+    '夏普',
+    '最大回撤',
+    '交易数',
+    '胜率',
+    '5根命中',
+    '可信度',
+  ]
   const data = sortedRanking.value.map((r, i) => [
     i + 1,
     allCsvEscape(r.strategy_label || r.strategy),
@@ -267,7 +276,9 @@ function exportAllCsv() {
   } catch {
     allCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { allCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    allCsvMsg.value = ''
+  }, 2500)
 }
 
 // V135: 寻优报告导出（Markdown 复制）
@@ -287,14 +298,30 @@ function buildOptimizeReportText(): string {
   if (r.best) {
     lines.push('## 最优参数')
     lines.push('- 参数：' + JSON.stringify(r.best.params))
-    lines.push('- 总收益：' + pct2(r.best.total_return) + ' · 夏普：' + (r.best.sharpe?.toFixed(2) ?? '-'))
-    lines.push('- 5根命中率：' + (r.best.hit_rate != null ? (r.best.hit_rate * 100).toFixed(0) + '%' : '-') + ' · 可信度：' + (r.best.trust_score != null ? Math.round(r.best.trust_score) + '/100 ' + (r.best.trust_grade ?? '') : '-'))
+    lines.push(
+      '- 总收益：' + pct2(r.best.total_return) + ' · 夏普：' + (r.best.sharpe?.toFixed(2) ?? '-'),
+    )
+    lines.push(
+      '- 5根命中率：' +
+        (r.best.hit_rate != null ? (r.best.hit_rate * 100).toFixed(0) + '%' : '-') +
+        ' · 可信度：' +
+        (r.best.trust_score != null
+          ? Math.round(r.best.trust_score) + '/100 ' + (r.best.trust_grade ?? '')
+          : '-'),
+    )
     lines.push('')
   }
   if (r.walk_forward) {
     lines.push('## Walk-Forward 滚动验证')
     lines.push('- ' + r.walk_forward.verdict)
-    lines.push('- 窗口数：' + r.walk_forward.windows + ' · 平均训练段：' + pct2(r.walk_forward.train_mean) + ' · 平均样本外：' + pct2(r.walk_forward.test_mean))
+    lines.push(
+      '- 窗口数：' +
+        r.walk_forward.windows +
+        ' · 平均训练段：' +
+        pct2(r.walk_forward.train_mean) +
+        ' · 平均样本外：' +
+        pct2(r.walk_forward.test_mean),
+    )
     lines.push('')
   }
   lines.push('## 网格点排名（前 10）')
@@ -302,9 +329,21 @@ function buildOptimizeReportText(): string {
   lines.push('| --- | --- | --- | --- | --- | --- |')
   for (const [i, row] of r.results.slice(0, 10).entries()) {
     lines.push(
-      '| ' + (i + 1) + ' | ' + JSON.stringify(row.params) + ' | ' + pct2(row.total_return) +
-      ' | ' + (row.sharpe?.toFixed(2) ?? '-') + ' | ' + (row.hit_rate != null ? (row.hit_rate * 100).toFixed(0) + '%' : '-') +
-      ' | ' + (row.trust_score != null ? Math.round(row.trust_score) + ' ' + (row.trust_grade ?? '') : '-') + ' |',
+      '| ' +
+        (i + 1) +
+        ' | ' +
+        JSON.stringify(row.params) +
+        ' | ' +
+        pct2(row.total_return) +
+        ' | ' +
+        (row.sharpe?.toFixed(2) ?? '-') +
+        ' | ' +
+        (row.hit_rate != null ? (row.hit_rate * 100).toFixed(0) + '%' : '-') +
+        ' | ' +
+        (row.trust_score != null
+          ? Math.round(row.trust_score) + ' ' + (row.trust_grade ?? '')
+          : '-') +
+        ' |',
     )
   }
   lines.push('')
@@ -325,7 +364,9 @@ async function copyOptimizeReport() {
     document.body.removeChild(ta)
   }
   copyMsg.value = '✓ 已复制寻优报告'
-  setTimeout(() => { copyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    copyMsg.value = ''
+  }, 2500)
 }
 // V158: 寻优报告 JSON 导出（机器可读，Agent/脚本友好，与 V153/V157 对齐）
 const jsonCopyMsg = ref('')
@@ -339,7 +380,9 @@ async function copyOptimizeJson() {
   } catch {
     jsonCopyMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { jsonCopyMsg.value = '' }, 2500)
+  setTimeout(() => {
+    jsonCopyMsg.value = ''
+  }, 2500)
 }
 // V257: 网格点排名导出 CSV（Excel 友好，与批量验证 CSV 导出系列对齐）
 const gridCsvMsg = ref('')
@@ -349,22 +392,34 @@ function gridCsvEscape(v: string): string {
 function exportGridCsv() {
   const r = store.optimizeResult
   if (!r || !r.results || r.results.length === 0) return
-  const header = ['排名', '参数', '总收益', '夏普', '最大回撤', '交易数', '胜率', '5根命中', '可信度']
+  const header = [
+    '排名',
+    '参数',
+    '总收益',
+    '夏普',
+    '最大回撤',
+    '交易数',
+    '胜率',
+    '5根命中',
+    '可信度',
+  ]
   const lines = [header.join(',')]
   r.results.forEach((row, i) => {
     const p = row.params as Record<string, unknown> | undefined
     const paramsStr = p ? JSON.stringify(p) : ''
-    lines.push([
-      i + 1,
-      gridCsvEscape(paramsStr),
-      ((row.total_return ?? 0) * 100).toFixed(2) + '%',
-      (row.sharpe ?? 0).toFixed(2),
-      ((row.max_drawdown ?? 0) * 100).toFixed(2) + '%',
-      row.total_trades ?? '',
-      ((row.win_rate ?? 0) * 100).toFixed(1) + '%',
-      row.hit_rate != null ? (row.hit_rate * 100).toFixed(1) + '%' : '',
-      row.trust_score != null ? Math.round(row.trust_score) : '',
-    ].join(','))
+    lines.push(
+      [
+        i + 1,
+        gridCsvEscape(paramsStr),
+        ((row.total_return ?? 0) * 100).toFixed(2) + '%',
+        (row.sharpe ?? 0).toFixed(2),
+        ((row.max_drawdown ?? 0) * 100).toFixed(2) + '%',
+        row.total_trades ?? '',
+        ((row.win_rate ?? 0) * 100).toFixed(1) + '%',
+        row.hit_rate != null ? (row.hit_rate * 100).toFixed(1) + '%' : '',
+        row.trust_score != null ? Math.round(row.trust_score) : '',
+      ].join(','),
+    )
   })
   const csv = '\uFEFF' + lines.join('\n')
   try {
@@ -381,7 +436,9 @@ function exportGridCsv() {
   } catch {
     gridCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { gridCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    gridCsvMsg.value = ''
+  }, 2500)
 }
 
 // V205: 批量验证自选股（用寻优得到的最优策略+参数对全局自选股逐只回测，按可信度排名）
@@ -412,13 +469,18 @@ function saveOptBatchPersist() {
   if (!optBatchRows.value.length) return
   try {
     const best = optBestStrategy()
-    localStorage.setItem(OPT_BATCH_KEY, JSON.stringify({
-      rows: optBatchRows.value,
-      strategy: best?.name ?? strategy.value,
-      strategy_label: best?.label ?? strategy.value,
-      at: new Date().toISOString(),
-    }))
-  } catch { /* localStorage 不可用忽略 */ }
+    localStorage.setItem(
+      OPT_BATCH_KEY,
+      JSON.stringify({
+        rows: optBatchRows.value,
+        strategy: best?.name ?? strategy.value,
+        strategy_label: best?.label ?? strategy.value,
+        at: new Date().toISOString(),
+      }),
+    )
+  } catch {
+    /* localStorage 不可用忽略 */
+  }
 }
 function restoreOptBatchPersist() {
   try {
@@ -430,7 +492,9 @@ function restoreOptBatchPersist() {
       lastOptBatchAt.value = data.at || ''
       optBatchMsg.value = '已恢复上次批量验证（' + (data.strategy_label || '') + '）'
     }
-  } catch { /* 解析失败忽略 */ }
+  } catch {
+    /* 解析失败忽略 */
+  }
 }
 const optBatchOnlyRobust = ref(false)
 // V319: 仅看滚验稳健（过滤掉 wf_degraded=true 的候选股）
@@ -444,7 +508,11 @@ const sortedOptBatchRows = computed(() => {
   if (!filtered.length || optBatchSort.value === 'trust') return filtered
   return [...filtered].sort((a, b) => (b.total_return ?? -Infinity) - (a.total_return ?? -Infinity))
 })
-function optBestStrategy(): { name: string; label: string; params: Record<string, number | string> } | null {
+function optBestStrategy(): {
+  name: string
+  label: string
+  params: Record<string, number | string>
+} | null {
   if (store.optimizeResult?.best) {
     return {
       name: store.optimizeResult.strategy,
@@ -463,15 +531,23 @@ async function runOptBatchVerify() {
   const best = optBestStrategy()
   if (!best) {
     optBatchMsg.value = '请先完成寻优（得到最优参数）'
-    setTimeout(() => { optBatchMsg.value = '' }, 3500)
+    setTimeout(() => {
+      optBatchMsg.value = ''
+    }, 3500)
     return
   }
   let raw: any[] = []
-  try { raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]') } catch { raw = [] }
+  try {
+    raw = JSON.parse(localStorage.getItem('easy_tdx_global_watchlist') ?? '[]')
+  } catch {
+    raw = []
+  }
   const watch = raw.filter((w) => w && w.code && w.market).slice(0, 12)
   if (watch.length === 0) {
     optBatchMsg.value = '自选股为空：请先在缠论分析页「加入自选股」'
-    setTimeout(() => { optBatchMsg.value = '' }, 3500)
+    setTimeout(() => {
+      optBatchMsg.value = ''
+    }, 3500)
     return
   }
   optBatchLoading.value = true
@@ -513,7 +589,9 @@ async function runOptBatchVerify() {
           wf_degraded: result.walk_forward?.degraded ?? null,
           wf_verdict: result.walk_forward?.verdict ?? '',
         })
-      } catch { /* 单只失败跳过 */ }
+      } catch {
+        /* 单只失败跳过 */
+      }
     }
     rows.sort((a, b) => (b.trust_score ?? -1) - (a.trust_score ?? -1))
     optBatchRows.value = rows
@@ -568,13 +646,31 @@ function copyOptBatchRanking() {
   lines.push('| --- | --- | --- | --- | --- | --- | --- | --- | --- |')
   sortedOptBatchRows.value.forEach((r, i) => {
     lines.push(
-      '| ' + (i + 1) + ' | ' + r.symbol + ' | ' + optBatchPct(r.total_return) +
-      ' | ' + optBatchPct(r.win_rate) + ' | ' + optBatchPct(r.hit_rate) + ' | ' + optBatchPct(r.excess_hit_rate) +
-      ' | ' + optBatchTrust(r) + ' | ' + optBatchOosLabel(r) + ' | ' + (r.trades ?? '-') + ' |',
+      '| ' +
+        (i + 1) +
+        ' | ' +
+        r.symbol +
+        ' | ' +
+        optBatchPct(r.total_return) +
+        ' | ' +
+        optBatchPct(r.win_rate) +
+        ' | ' +
+        optBatchPct(r.hit_rate) +
+        ' | ' +
+        optBatchPct(r.excess_hit_rate) +
+        ' | ' +
+        optBatchTrust(r) +
+        ' | ' +
+        optBatchOosLabel(r) +
+        ' | ' +
+        (r.trades ?? '-') +
+        ' |',
     )
   })
   lines.push('')
-  lines.push('方法：用寻优得到的最优策略+参数对全局自选股（最多 12 只）独立回测（最近 500 根日线，逐只开启样本外），按模型可信度降序排名。')
+  lines.push(
+    '方法：用寻优得到的最优策略+参数对全局自选股（最多 12 只）独立回测（最近 500 根日线，逐只开启样本外），按模型可信度降序排名。',
+  )
   const text = lines.join('\n')
   const doCopy = async () => {
     try {
@@ -588,7 +684,9 @@ function copyOptBatchRanking() {
       document.body.removeChild(ta)
     }
     optBatchCopyMsg.value = '✓ 已复制批量验证排名'
-    setTimeout(() => { optBatchCopyMsg.value = '' }, 2500)
+    setTimeout(() => {
+      optBatchCopyMsg.value = ''
+    }, 2500)
   }
   void doCopy()
 }
@@ -610,7 +708,9 @@ async function copyOptBatchJson() {
   } catch {
     optBatchJsonMsg.value = '复制失败（浏览器权限）'
   }
-  setTimeout(() => { optBatchJsonMsg.value = '' }, 2500)
+  setTimeout(() => {
+    optBatchJsonMsg.value = ''
+  }, 2500)
 }
 // V255: 寻优批量验证导出 CSV（Excel 友好，与回测页 V253 对齐）
 const optBatchCsvMsg = ref('')
@@ -619,7 +719,17 @@ function optCsvEscape(v: string): string {
 }
 function exportOptBatchCsv() {
   if (optBatchRows.value.length === 0) return
-  const header = ['排名', '标的', '总收益', '胜率', '5根命中率', '超额命中率', '可信度', '样本外', '交易数']
+  const header = [
+    '排名',
+    '标的',
+    '总收益',
+    '胜率',
+    '5根命中率',
+    '超额命中率',
+    '可信度',
+    '样本外',
+    '交易数',
+  ]
   const lines = [header.join(',')]
   sortedOptBatchRows.value.forEach((r, i) => {
     const row = [
@@ -650,7 +760,9 @@ function exportOptBatchCsv() {
   } catch {
     optBatchCsvMsg.value = '导出失败（浏览器权限）'
   }
-  setTimeout(() => { optBatchCsvMsg.value = '' }, 2500)
+  setTimeout(() => {
+    optBatchCsvMsg.value = ''
+  }, 2500)
 }
 const optBatchSaveMsg = ref('')
 const optBatchSaving = ref(false)
@@ -667,7 +779,9 @@ async function saveOptBatchAsPortfolio() {
     if (visible.length === 0) {
       optBatchSaveMsg.value = '没有样本外稳健的候选股可保存（请关闭「仅看样本外稳健」再试）'
       optBatchSaving.value = false
-      setTimeout(() => { optBatchSaveMsg.value = '' }, 4000)
+      setTimeout(() => {
+        optBatchSaveMsg.value = ''
+      }, 4000)
       return
     }
     const stocks = visible.map((r) => r.market + ':' + r.code)
@@ -678,7 +792,9 @@ async function saveOptBatchAsPortfolio() {
     const oosDegradedN = oosKnown.filter((r) => r.oos_degraded === true).length
     const oosRatio = oosKnown.length ? oosDegradedN / oosKnown.length : null
     const oosVerdict = oosKnown.length
-      ? (oosRatio! < 0.5 ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健' : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减')
+      ? oosRatio! < 0.5
+        ? '✅ ' + (oosKnown.length - oosDegradedN) + '/' + oosKnown.length + ' 只样本外稳健'
+        : '⚠ ' + oosDegradedN + '/' + oosKnown.length + ' 只样本外衰减'
       : ''
     await saveStrategy({
       name: (best.label || best.name) + ' · 寻优验证' + stocks.length + '只',
@@ -700,7 +816,9 @@ async function saveOptBatchAsPortfolio() {
       notes: '由寻优页批量验证自选股（最优参数，按可信度排名）生成，可在组合回测页载入复跑。',
     })
     optBatchSaveMsg.value = '✓ 已保存为组合策略，可在「策略库」载入复跑'
-    setTimeout(() => { optBatchSaveMsg.value = '' }, 4000)
+    setTimeout(() => {
+      optBatchSaveMsg.value = ''
+    }, 4000)
   } catch (e) {
     optBatchSaveMsg.value = '保存失败：' + formatError(e)
   } finally {
@@ -758,16 +876,17 @@ async function saveOptBatchAsPortfolio() {
         <div class="field">
           <label
             >工作进程
-            <span class="hint"
-              >CPU {{ cpuCount }} 核 · 推荐 {{ recommendedWorkers }}</span
-            ></label
+            <span class="hint">CPU {{ cpuCount }} 核 · 推荐 {{ recommendedWorkers }}</span></label
           >
           <select v-model.number="workers">
-            <option v-for="o in WORKER_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+            <option v-for="o in WORKER_OPTIONS" :key="o.value" :value="o.value">
+              {{ o.label }}
+            </option>
           </select>
         </div>
         <p class="workers-tip">
-          寻优是 CPU 密集计算，多进程可显著提速（仅对「一键寻优所有策略」生效）。机器较弱时建议先用串行测一次再开并发。
+          寻优是 CPU
+          密集计算，多进程可显著提速（仅对「一键寻优所有策略」生效）。机器较弱时建议先用串行测一次再开并发。
         </p>
       </section>
 
@@ -817,7 +936,13 @@ async function saveOptBatchAsPortfolio() {
       <div v-if="store.error" class="error-banner">⚠ {{ store.error }}</div>
 
       <div
-        v-if="!store.optimizeResult && !store.optimizeAllResult && !store.optimizeRunning && !store.optimizeAllRunning && !store.error"
+        v-if="
+          !store.optimizeResult &&
+          !store.optimizeAllResult &&
+          !store.optimizeRunning &&
+          !store.optimizeAllRunning &&
+          !store.error
+        "
         class="placeholder"
       >
         <p>选标的 → 选策略 → 勾选寻优参数 → 开始寻优；或点「一键寻优所有策略」</p>
@@ -857,7 +982,12 @@ async function saveOptBatchAsPortfolio() {
 
         <!-- V342: V102 决策支持引导 -->
         <section class="report-section">
-          <p class="v102-tip">💡 各标的的 <b>V102 缠论决策支持</b>（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行 <code>easy-tdx advice MARKET CODE</code> 一键回放；缠论策略回测可勾选「3买按V102建议止损止盈」自动执行。</p>
+          <p class="v102-tip">
+            💡 各标的的
+            <b>V102 缠论决策支持</b>（入场/止损/止盈/仓位/RRR）请到「诊断」页查看，或运行
+            <code>easy-tdx advice MARKET CODE</code>
+            一键回放；缠论策略回测可勾选「3买按V102建议止损止盈」自动执行。
+          </p>
         </section>
 
         <!-- V124: 验证总结（最优点可信度 + 5根命中 + Walk-Forward） -->
@@ -866,7 +996,10 @@ async function saveOptBatchAsPortfolio() {
         </section>
 
         <section v-if="store.optimizeResult.heatmap" class="report-section">
-          <h3>参数热力图（{{ store.optimizeResult.heatmap.x_name }} × {{ store.optimizeResult.heatmap.y_name }}）</h3>
+          <h3>
+            参数热力图（{{ store.optimizeResult.heatmap.x_name }} ×
+            {{ store.optimizeResult.heatmap.y_name }}）
+          </h3>
           <OptimizeHeatmap :heatmap="store.optimizeResult.heatmap" />
         </section>
 
@@ -906,8 +1039,8 @@ async function saveOptBatchAsPortfolio() {
             </span>
           </div>
           <p class="meta-line">
-            共 {{ store.optimizeAllResult.ranking.length }} 个策略有效 ·
-            合计 {{ store.optimizeAllResult.total_grid_points }} 网格点
+            共 {{ store.optimizeAllResult.ranking.length }} 个策略有效 · 合计
+            {{ store.optimizeAllResult.total_grid_points }} 网格点
           </p>
         </section>
 
@@ -915,8 +1048,20 @@ async function saveOptBatchAsPortfolio() {
           <div class="rank-head">
             <h3>策略排名{{ rankSort === 'trust' ? '（按可信度降序）' : '（按总收益降序）' }}</h3>
             <div class="rank-toggle">
-              <button class="ghost small" :class="{ active: rankSort === 'return' }" @click="rankSort = 'return'">按收益</button>
-              <button class="ghost small" :class="{ active: rankSort === 'trust' }" @click="rankSort = 'trust'">按可信度</button>
+              <button
+                class="ghost small"
+                :class="{ active: rankSort === 'return' }"
+                @click="rankSort = 'return'"
+              >
+                按收益
+              </button>
+              <button
+                class="ghost small"
+                :class="{ active: rankSort === 'trust' }"
+                @click="rankSort = 'trust'"
+              >
+                按可信度
+              </button>
               <button class="ghost small" @click="exportAllCsv">📊 导出 CSV</button>
               <span v-if="allCsvMsg" class="save-msg">{{ allCsvMsg }}</span>
             </div>
@@ -939,11 +1084,7 @@ async function saveOptBatchAsPortfolio() {
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="(r, i) in sortedRanking"
-                :key="r.strategy"
-                :class="{ best: i === 0 }"
-              >
+              <tr v-for="(r, i) in sortedRanking" :key="r.strategy" :class="{ best: i === 0 }">
                 <td class="rank">{{ i + 1 }}</td>
                 <td class="grade-cell">
                   <GradeBadge
@@ -955,7 +1096,10 @@ async function saveOptBatchAsPortfolio() {
                 </td>
                 <td>{{ r.strategy_label }}</td>
                 <td class="params">{{ JSON.stringify(r.params) }}</td>
-                <td class="num" :class="r.total_return !== null && r.total_return > 0 ? 'pos' : 'neg'">
+                <td
+                  class="num"
+                  :class="r.total_return !== null && r.total_return > 0 ? 'pos' : 'neg'"
+                >
                   {{ pct(r.total_return) }}
                 </td>
                 <td class="num">{{ num(r.sharpe) }}</td>
@@ -975,16 +1119,49 @@ async function saveOptBatchAsPortfolio() {
       <!-- V205: 批量验证自选股（用最优策略+参数对自选股逐只回测，按可信度排名） -->
       <section v-if="optBatchRows.length" class="report-content opt-batch-panel">
         <div class="opt-batch-head">
-          <h3>🗳️ 批量验证自选股（最优参数）
-            <span v-if="lastOptBatchAt" class="opt-batch-at" :title="'上次验证时间'">🕒 {{ new Date(lastOptBatchAt).toLocaleString() }}</span>
+          <h3>
+            🗳️ 批量验证自选股（最优参数）
+            <span v-if="lastOptBatchAt" class="opt-batch-at" :title="'上次验证时间'"
+              >🕒 {{ new Date(lastOptBatchAt).toLocaleString() }}</span
+            >
           </h3>
           <div class="opt-batch-actions">
-            <button class="ghost small" :class="{ active: optBatchSort === 'return' }" @click="optBatchSort = 'return'">按收益</button>
-            <button class="ghost small" :class="{ active: optBatchSort === 'trust' }" @click="optBatchSort = 'trust'">按可信度</button>
-            <button class="ghost small" :class="{ active: optBatchOnlyRobust }" :title="'仅保留样本外 ✅泛化 的候选股（当前 ' + optBatchRows.filter((r: OptBatchRow) => r.oos_degraded === false).length + ' 只）'" @click="optBatchOnlyRobust = !optBatchOnlyRobust">
+            <button
+              class="ghost small"
+              :class="{ active: optBatchSort === 'return' }"
+              @click="optBatchSort = 'return'"
+            >
+              按收益
+            </button>
+            <button
+              class="ghost small"
+              :class="{ active: optBatchSort === 'trust' }"
+              @click="optBatchSort = 'trust'"
+            >
+              按可信度
+            </button>
+            <button
+              class="ghost small"
+              :class="{ active: optBatchOnlyRobust }"
+              :title="
+                '仅保留样本外 ✅泛化 的候选股（当前 ' +
+                optBatchRows.filter((r: OptBatchRow) => r.oos_degraded === false).length +
+                ' 只）'
+              "
+              @click="optBatchOnlyRobust = !optBatchOnlyRobust"
+            >
               ✅ 仅看样本外稳健
             </button>
-            <button class="ghost small" :class="{ active: optBatchOnlyWfRobust }" :title="'仅保留滚验 ✅稳 的候选股（当前 ' + optBatchRows.filter((r: OptBatchRow) => r.wf_degraded === false).length + ' 只）'" @click="optBatchOnlyWfRobust = !optBatchOnlyWfRobust">
+            <button
+              class="ghost small"
+              :class="{ active: optBatchOnlyWfRobust }"
+              :title="
+                '仅保留滚验 ✅稳 的候选股（当前 ' +
+                optBatchRows.filter((r: OptBatchRow) => r.wf_degraded === false).length +
+                ' 只）'
+              "
+              @click="optBatchOnlyWfRobust = !optBatchOnlyWfRobust"
+            >
               ✅ 仅看滚验稳健
             </button>
             <button class="ghost small" @click="copyOptBatchRanking">📋 复制排名</button>
@@ -996,28 +1173,60 @@ async function saveOptBatchAsPortfolio() {
             <span v-if="optBatchCopyMsg" class="save-msg">{{ optBatchCopyMsg }}</span>
             <span v-if="optBatchJsonMsg" class="save-msg">{{ optBatchJsonMsg }}</span>
             <span v-if="optBatchCsvMsg" class="save-msg">{{ optBatchCsvMsg }}</span>
-            <span v-if="optBatchSaveMsg" class="save-msg" :class="{ err: optBatchSaveMsg.includes('失败') }">{{ optBatchSaveMsg }}</span>
+            <span
+              v-if="optBatchSaveMsg"
+              class="save-msg"
+              :class="{ err: optBatchSaveMsg.includes('失败') }"
+              >{{ optBatchSaveMsg }}</span
+            >
           </div>
         </div>
         <table class="opt-batch-table">
           <thead>
             <tr>
-              <th>#</th><th>标的</th><th class="num">总收益</th><th class="num">胜率</th>
-              <th class="num">5根命中率</th><th class="num">超额命中率</th><th class="num">可信度</th>
-              <th class="num" title="训练段 vs 未见过数据">样本外</th><th class="num" title="Walk-Forward 滚动验证">滚验</th><th class="num">交易数</th><th></th>
+              <th>#</th>
+              <th>标的</th>
+              <th class="num">总收益</th>
+              <th class="num">胜率</th>
+              <th class="num">5根命中率</th>
+              <th class="num">超额命中率</th>
+              <th class="num">可信度</th>
+              <th class="num" title="训练段 vs 未见过数据">样本外</th>
+              <th class="num" title="Walk-Forward 滚动验证">滚验</th>
+              <th class="num">交易数</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="(r, i) in sortedOptBatchRows" :key="r.symbol">
               <td class="dim">{{ i + 1 }}</td>
               <td>{{ r.symbol }}</td>
-              <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ optBatchPct(r.total_return) }}</td>
+              <td class="num" :class="(r.total_return ?? 0) >= 0 ? 'pos' : 'neg'">
+                {{ optBatchPct(r.total_return) }}
+              </td>
               <td class="num">{{ optBatchPct(r.win_rate) }}</td>
               <td class="num">{{ optBatchPct(r.hit_rate) }}</td>
-              <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ optBatchPct(r.excess_hit_rate) }}</td>
-              <td class="num" :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''">{{ optBatchTrust(r) }}</td>
-              <td class="num" :class="optBatchOosCls(r)" :title="optBatchOosTitle(r)">{{ optBatchOosLabel(r) }}</td>
-              <td class="num" :title="r.wf_verdict || ''">{{ r.wf_degraded === null || r.wf_degraded === undefined ? '-' : (r.wf_degraded ? '⚠递减' : '✅稳') }}</td>
+              <td class="num" :class="(r.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">
+                {{ optBatchPct(r.excess_hit_rate) }}
+              </td>
+              <td
+                class="num"
+                :class="r.trust_grade === '高' ? 'pos' : r.trust_grade === '低' ? 'neg' : ''"
+              >
+                {{ optBatchTrust(r) }}
+              </td>
+              <td class="num" :class="optBatchOosCls(r)" :title="optBatchOosTitle(r)">
+                {{ optBatchOosLabel(r) }}
+              </td>
+              <td class="num" :title="r.wf_verdict || ''">
+                {{
+                  r.wf_degraded === null || r.wf_degraded === undefined
+                    ? '-'
+                    : r.wf_degraded
+                      ? '⚠递减'
+                      : '✅稳'
+                }}
+              </td>
               <td class="num">{{ r.trades ?? '-' }}</td>
               <td><button class="ghost small" @click="viewOptBatchStock(r)">查看该股</button></td>
             </tr>
@@ -1082,7 +1291,7 @@ async function saveOptBatchAsPortfolio() {
   cursor: pointer;
   font-size: 13px;
 }
-.checkbox-label input[type="checkbox"] {
+.checkbox-label input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -1279,38 +1488,78 @@ async function saveOptBatchAsPortfolio() {
 }
 
 /* V205: 批量验证自选股面板 */
-.opt-batch-panel { margin-top: 8px; }
+.opt-batch-panel {
+  margin-top: 8px;
+}
 .opt-batch-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
 }
 .opt-batch-head h3 {
-/* V231: 上次寻优批量验证时间 */
-.opt-batch-at {
+  /* V231: 上次寻优批量验证时间 */
+  .opt-batch-at {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-weight: 400;
+    margin-left: 8px;
+  }
+  margin: 0;
+  font-size: 14px;
+}
+.opt-batch-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.opt-batch-actions .ghost.active {
+  background: rgba(96, 165, 250, 0.18);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.opt-batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.opt-batch-table th {
   font-size: 11px;
   color: var(--text-dim);
-  font-weight: 400;
-  margin-left: 8px;
-} margin: 0; font-size: 14px; }
-.opt-batch-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
-.opt-batch-actions .ghost.active {
-  background: rgba(96, 165, 250, 0.18); color: var(--accent); border-color: var(--accent);
+  font-weight: 600;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
 }
-.opt-batch-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.opt-batch-table th {
-  font-size: 11px; color: var(--text-dim); font-weight: 600;
-  padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: right;
+.opt-batch-table th:first-child,
+.opt-batch-table td:first-child {
+  text-align: left;
 }
-.opt-batch-table th:first-child, .opt-batch-table td:first-child { text-align: left; }
 .opt-batch-table td {
-  padding: 4px 6px; border-bottom: 1px solid rgba(255,255,255,0.04);
-  text-align: right; font-family: var(--font-mono);
+  padding: 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: right;
+  font-family: var(--font-mono);
 }
-.pos { color: var(--up); }
-.neg { color: var(--down); }
-.dim { color: var(--text-dim); }
-.save-msg { font-size: 12px; color: var(--up); }
-.save-msg.err { color: var(--down); }
+.pos {
+  color: var(--up);
+}
+.neg {
+  color: var(--down);
+}
+.dim {
+  color: var(--text-dim);
+}
+.save-msg {
+  font-size: 12px;
+  color: var(--up);
+}
+.save-msg.err {
+  color: var(--down);
+}
 .v102-tip {
   margin: 0;
   padding: 8px 12px;

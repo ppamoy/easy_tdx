@@ -35,9 +35,10 @@ const stats = computed(() => {
   const totalPnl = executed.reduce((s, t) => s + t.pnl, 0)
   const avgWin = wins.length > 0 ? wins.reduce((s, t) => s + t.pnl, 0) / wins.length : 0
   const avgLoss = losses.length > 0 ? losses.reduce((s, t) => s + t.pnl, 0) / losses.length : 0
-  const profitFactor = losses.length > 0 && Math.abs(avgLoss) > 0
-    ? wins.reduce((s, t) => s + t.pnl, 0) / Math.abs(losses.reduce((s, t) => s + t.pnl, 0))
-    : Infinity
+  const profitFactor =
+    losses.length > 0 && Math.abs(avgLoss) > 0
+      ? wins.reduce((s, t) => s + t.pnl, 0) / Math.abs(losses.reduce((s, t) => s + t.pnl, 0))
+      : Infinity
   const bestTrade = executed.reduce((a, b) => (b.pnl > a.pnl ? b : a), executed[0])
   const worstTrade = executed.reduce((a, b) => (b.pnl < a.pnl ? b : a), executed[0])
 
@@ -73,13 +74,22 @@ const tradingAdvice = computed(() => {
   if (!stats.value) return null
   const s = stats.value
   if (s.winRate >= 0.6 && s.profitFactor >= 1.5 && s.totalPnl > 0) {
-    return { text: '策略表现优秀：胜率高、盈亏比合理，可加大仓位或延长持有周期。', color: '#22c55e' }
+    return {
+      text: '策略表现优秀：胜率高、盈亏比合理，可加大仓位或延长持有周期。',
+      color: '#22c55e',
+    }
   }
   if (s.winRate >= 0.5 && s.totalPnl > 0) {
-    return { text: '策略基本有效：胜率尚可且整体盈利，建议优化止损参数减少大额亏损。', color: '#eab308' }
+    return {
+      text: '策略基本有效：胜率尚可且整体盈利，建议优化止损参数减少大额亏损。',
+      color: '#eab308',
+    }
   }
   if (s.totalPnl < 0) {
-    return { text: '策略当前亏损：建议检查市场环境是否适合该策略，或调整参数重新回测。', color: '#ef4444' }
+    return {
+      text: '策略当前亏损：建议检查市场环境是否适合该策略，或调整参数重新回测。',
+      color: '#ef4444',
+    }
   }
   return { text: '交易样本不足，无法给出可靠建议。', color: '#94a3b8' }
 })
@@ -96,19 +106,28 @@ const tradingAdvice = computed(() => {
         </div>
         <div class="summary-item">
           <span class="summary-label">胜率</span>
-          <span class="summary-value" :style="{ color: stats.winRate >= 0.5 ? '#22c55e' : '#ef4444' }">
+          <span
+            class="summary-value"
+            :style="{ color: stats.winRate >= 0.5 ? '#22c55e' : '#ef4444' }"
+          >
             {{ (stats.winRate * 100).toFixed(1) }}%
           </span>
         </div>
         <div class="summary-item">
           <span class="summary-label">盈亏比</span>
-          <span class="summary-value" :style="{ color: stats.profitFactor >= 1.5 ? '#22c55e' : '#f97316' }">
+          <span
+            class="summary-value"
+            :style="{ color: stats.profitFactor >= 1.5 ? '#22c55e' : '#f97316' }"
+          >
             {{ isFinite(stats.profitFactor) ? stats.profitFactor.toFixed(2) : '∞' }}
           </span>
         </div>
         <div class="summary-item">
           <span class="summary-label">总盈亏</span>
-          <span class="summary-value" :style="{ color: stats.totalPnl >= 0 ? '#22c55e' : '#ef4444' }">
+          <span
+            class="summary-value"
+            :style="{ color: stats.totalPnl >= 0 ? '#22c55e' : '#ef4444' }"
+          >
             {{ fmtNum(stats.totalPnl, 0) }}
           </span>
         </div>
@@ -126,7 +145,10 @@ const tradingAdvice = computed(() => {
         </div>
         <div class="summary-item">
           <span class="summary-label">最大连亏</span>
-          <span class="summary-value" :style="{ color: stats.maxConsecLoss <= 2 ? '#22c55e' : '#f97316' }">
+          <span
+            class="summary-value"
+            :style="{ color: stats.maxConsecLoss <= 2 ? '#22c55e' : '#f97316' }"
+          >
             {{ stats.maxConsecLoss }} 笔
           </span>
         </div>
@@ -134,7 +156,9 @@ const tradingAdvice = computed(() => {
       <!-- 操作建议 -->
       <div v-if="tradingAdvice" class="trade-advice" :style="{ borderColor: tradingAdvice.color }">
         <span class="advice-icon">💡</span>
-        <span class="advice-text" :style="{ color: tradingAdvice.color }">{{ tradingAdvice.text }}</span>
+        <span class="advice-text" :style="{ color: tradingAdvice.color }">{{
+          tradingAdvice.text
+        }}</span>
       </div>
     </div>
 
@@ -155,7 +179,11 @@ const tradingAdvice = computed(() => {
         <tr
           v-for="(t, i) in tradesWithPct"
           :key="i"
-          :class="{ rejected: t.rejected, best: t === stats?.bestTrade, worst: t === stats?.worstTrade }"
+          :class="{
+            rejected: t.rejected,
+            best: t === stats?.bestTrade,
+            worst: t === stats?.worstTrade,
+          }"
         >
           <td>{{ fmtDate(t.datetime) }}</td>
           <td :class="t.direction">{{ t.direction }}</td>
@@ -172,8 +200,12 @@ const tradingAdvice = computed(() => {
       </tbody>
     </table>
     <p v-if="stats" class="legend">
-      <span class="legend-item"><span class="dot" style="background:#22c55e"></span>绿色=最优交易</span>
-      <span class="legend-item"><span class="dot" style="background:#ef4444"></span>红色=最差交易</span>
+      <span class="legend-item"
+        ><span class="dot" style="background: #22c55e"></span>绿色=最优交易</span
+      >
+      <span class="legend-item"
+        ><span class="dot" style="background: #ef4444"></span>红色=最差交易</span
+      >
     </p>
   </div>
 </template>
@@ -188,7 +220,7 @@ const tradingAdvice = computed(() => {
   padding: 16px 0;
 }
 .trade-summary {
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 12px 14px;
@@ -220,7 +252,7 @@ const tradingAdvice = computed(() => {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
   border: 1px solid;
   border-radius: 6px;
   font-size: 12px;

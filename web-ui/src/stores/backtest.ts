@@ -174,7 +174,12 @@ export const useBacktestStore = defineStore('backtest', () => {
     endDate: string
   } | null>(null)
 
-  function setOptimizeContext(ctx: { code: string; category: Category; startDate: string; endDate: string }) {
+  function setOptimizeContext(ctx: {
+    code: string
+    category: Category
+    startDate: string
+    endDate: string
+  }) {
     optimizeContext.value = ctx
   }
 

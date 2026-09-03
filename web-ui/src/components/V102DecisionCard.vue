@@ -24,23 +24,37 @@
         </div>
         <div class="v102-item">
           <span class="v102-k">风险收益比</span>
-          <b>{{ mmd.v102_decision_support.risk_reward_ratio ? '1 : ' + mmd.v102_decision_support.risk_reward_ratio : '—' }}</b>
+          <b>{{
+            mmd.v102_decision_support.risk_reward_ratio
+              ? '1 : ' + mmd.v102_decision_support.risk_reward_ratio
+              : '—'
+          }}</b>
         </div>
         <div class="v102-item">
           <span class="v102-k">建议仓位</span>
           <b :class="positionClass">{{ mmd.v102_decision_support.position_size_pct }}%</b>
         </div>
       </div>
-      <div v-if="mmd.v102_decision_support.risk_notes" class="v102-note">⚙️ {{ mmd.v102_decision_support.risk_notes }}</div>
+      <div v-if="mmd.v102_decision_support.risk_notes" class="v102-note">
+        ⚙️ {{ mmd.v102_decision_support.risk_notes }}
+      </div>
     </div>
 
     <!-- 条件265：信号质量评分卡 -->
     <div v-if="mmd && mmd.v102_signal_quality" class="v102-sec">
       <div class="v102-sub">📊 信号质量评分卡</div>
       <div class="v102-grade-row">
-        <span class="v102-grade" :class="'g' + (mmd.v102_signal_quality.overall_grade || 'C')">{{ mmd.v102_signal_quality.overall_grade || 'C' }}</span>
-        <span class="v102-grade-text">{{ mmd.v102_signal_quality.overall_score }} 分 · {{ strengthText }}</span>
-        <span v-if="mmd.v102_signal_quality.confidence_adjust" class="v102-adjust" :class="mmd.v102_signal_quality.confidence_adjust > 0 ? 'up' : 'down'">
+        <span class="v102-grade" :class="'g' + (mmd.v102_signal_quality.overall_grade || 'C')">{{
+          mmd.v102_signal_quality.overall_grade || 'C'
+        }}</span>
+        <span class="v102-grade-text"
+          >{{ mmd.v102_signal_quality.overall_score }} 分 · {{ strengthText }}</span
+        >
+        <span
+          v-if="mmd.v102_signal_quality.confidence_adjust"
+          class="v102-adjust"
+          :class="mmd.v102_signal_quality.confidence_adjust > 0 ? 'up' : 'down'"
+        >
           {{ fmtAdj(mmd.v102_signal_quality.confidence_adjust) }}
         </span>
       </div>
@@ -73,12 +87,19 @@
           <b class="sell">{{ mmd.v102_pattern_match.max_drawdown }}%</b>
         </div>
       </div>
-      <div v-if="mmd.v102_pattern_match.msg" class="v102-note">{{ mmd.v102_pattern_match.msg }}</div>
+      <div v-if="mmd.v102_pattern_match.msg" class="v102-note">
+        {{ mmd.v102_pattern_match.msg }}
+      </div>
     </div>
 
     <!-- 条件264：多信号相关性 -->
-    <div v-if="mmd && mmd.v102_multi_signal_correlation && mmd.v102_multi_signal_correlation.msg" class="v102-sec">
-      <div class="v102-note" style="color: var(--text-dim)">{{ mmd.v102_multi_signal_correlation.msg }}</div>
+    <div
+      v-if="mmd && mmd.v102_multi_signal_correlation && mmd.v102_multi_signal_correlation.msg"
+      class="v102-sec"
+    >
+      <div class="v102-note" style="color: var(--text-dim)">
+        {{ mmd.v102_multi_signal_correlation.msg }}
+      </div>
     </div>
   </div>
 </template>
@@ -92,7 +113,12 @@ const props = defineProps<{ mmd: DiagnosisChanlunMmd | null }>()
 const hasV102 = computed(
   () =>
     !!props.mmd &&
-    !!(props.mmd.v102_decision_support || props.mmd.v102_signal_quality || props.mmd.v102_pattern_match || props.mmd.v102_multi_signal_correlation),
+    !!(
+      props.mmd.v102_decision_support ||
+      props.mmd.v102_signal_quality ||
+      props.mmd.v102_pattern_match ||
+      props.mmd.v102_multi_signal_correlation
+    ),
 )
 
 const recText = computed(() => {
@@ -120,7 +146,9 @@ const STRENGTH_TEXT: Record<string, string> = {
   very_weak: '极弱',
 }
 
-const strengthText = computed(() => STRENGTH_TEXT[props.mmd?.v102_signal_quality?.strength ?? ''] ?? '')
+const strengthText = computed(
+  () => STRENGTH_TEXT[props.mmd?.v102_signal_quality?.strength ?? ''] ?? '',
+)
 
 const qualityBars = computed(() => {
   const q = props.mmd?.v102_signal_quality

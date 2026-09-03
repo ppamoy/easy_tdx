@@ -141,15 +141,177 @@ interface StockItem {
 }
 
 const stockPool = ref<StockItem[]>([
-  { code: '600519', name: '贵州茅台', price: 1680, change: 1.2, pe: 28, pb: 10, dividend: 1.5, growth: 15, moat: '品牌护城河极深', type: 'tree', seasonAllocation: { spring: '40%', summer: '50%', autumn: '30%', winter: '20%', unknown: '30%' } },
-  { code: '000858', name: '五粮液', price: 145, change: -0.5, pe: 20, pb: 4, dividend: 2.0, growth: 12, moat: '浓香龙头', type: 'tree', seasonAllocation: { spring: '40%', summer: '50%', autumn: '30%', winter: '20%', unknown: '30%' } },
-  { code: '000333', name: '美的集团', price: 68, change: 0.8, pe: 12, pb: 2.5, dividend: 3.5, growth: 10, moat: '家电龙头', type: 'tree', seasonAllocation: { spring: '40%', summer: '50%', autumn: '30%', winter: '20%', unknown: '30%' } },
-  { code: '601318', name: '中国平安', price: 48, change: -1.2, pe: 9, pb: 1.2, dividend: 4.0, growth: 8, moat: '金融综合平台', type: 'grain', seasonAllocation: { spring: '20%', summer: '20%', autumn: '30%', winter: '40%', unknown: '30%' } },
-  { code: '600036', name: '招商银行', price: 35, change: 0.3, pe: 6, pb: 0.9, dividend: 5.0, growth: 6, moat: '零售银行龙头', type: 'grain', seasonAllocation: { spring: '20%', summer: '20%', autumn: '30%', winter: '40%', unknown: '30%' } },
-  { code: '600900', name: '长江电力', price: 28, change: 0.1, pe: 18, pb: 2, dividend: 3.8, growth: 5, moat: '水电垄断', type: 'grain', seasonAllocation: { spring: '20%', summer: '20%', autumn: '30%', winter: '40%', unknown: '30%' } },
-  { code: '300750', name: '宁德时代', price: 195, change: 2.5, pe: 25, pb: 5, dividend: 0.5, growth: 35, moat: '电池龙头', type: 'vegetable', seasonAllocation: { spring: '30%', summer: '30%', autumn: '20%', winter: '10%', unknown: '20%' } },
-  { code: '002594', name: '比亚迪', price: 265, change: 1.8, pe: 22, pb: 4, dividend: 0.3, growth: 40, moat: '新能源整车', type: 'vegetable', seasonAllocation: { spring: '30%', summer: '30%', autumn: '20%', winter: '10%', unknown: '20%' } },
-  { code: '601012', name: '隆基绿能', price: 25, change: -3.5, pe: 8, pb: 1.5, dividend: 1.0, growth: -10, moat: '光伏龙头', type: 'vegetable', seasonAllocation: { spring: '30%', summer: '30%', autumn: '20%', winter: '10%', unknown: '20%' } },
+  {
+    code: '600519',
+    name: '贵州茅台',
+    price: 1680,
+    change: 1.2,
+    pe: 28,
+    pb: 10,
+    dividend: 1.5,
+    growth: 15,
+    moat: '品牌护城河极深',
+    type: 'tree',
+    seasonAllocation: {
+      spring: '40%',
+      summer: '50%',
+      autumn: '30%',
+      winter: '20%',
+      unknown: '30%',
+    },
+  },
+  {
+    code: '000858',
+    name: '五粮液',
+    price: 145,
+    change: -0.5,
+    pe: 20,
+    pb: 4,
+    dividend: 2.0,
+    growth: 12,
+    moat: '浓香龙头',
+    type: 'tree',
+    seasonAllocation: {
+      spring: '40%',
+      summer: '50%',
+      autumn: '30%',
+      winter: '20%',
+      unknown: '30%',
+    },
+  },
+  {
+    code: '000333',
+    name: '美的集团',
+    price: 68,
+    change: 0.8,
+    pe: 12,
+    pb: 2.5,
+    dividend: 3.5,
+    growth: 10,
+    moat: '家电龙头',
+    type: 'tree',
+    seasonAllocation: {
+      spring: '40%',
+      summer: '50%',
+      autumn: '30%',
+      winter: '20%',
+      unknown: '30%',
+    },
+  },
+  {
+    code: '601318',
+    name: '中国平安',
+    price: 48,
+    change: -1.2,
+    pe: 9,
+    pb: 1.2,
+    dividend: 4.0,
+    growth: 8,
+    moat: '金融综合平台',
+    type: 'grain',
+    seasonAllocation: {
+      spring: '20%',
+      summer: '20%',
+      autumn: '30%',
+      winter: '40%',
+      unknown: '30%',
+    },
+  },
+  {
+    code: '600036',
+    name: '招商银行',
+    price: 35,
+    change: 0.3,
+    pe: 6,
+    pb: 0.9,
+    dividend: 5.0,
+    growth: 6,
+    moat: '零售银行龙头',
+    type: 'grain',
+    seasonAllocation: {
+      spring: '20%',
+      summer: '20%',
+      autumn: '30%',
+      winter: '40%',
+      unknown: '30%',
+    },
+  },
+  {
+    code: '600900',
+    name: '长江电力',
+    price: 28,
+    change: 0.1,
+    pe: 18,
+    pb: 2,
+    dividend: 3.8,
+    growth: 5,
+    moat: '水电垄断',
+    type: 'grain',
+    seasonAllocation: {
+      spring: '20%',
+      summer: '20%',
+      autumn: '30%',
+      winter: '40%',
+      unknown: '30%',
+    },
+  },
+  {
+    code: '300750',
+    name: '宁德时代',
+    price: 195,
+    change: 2.5,
+    pe: 25,
+    pb: 5,
+    dividend: 0.5,
+    growth: 35,
+    moat: '电池龙头',
+    type: 'vegetable',
+    seasonAllocation: {
+      spring: '30%',
+      summer: '30%',
+      autumn: '20%',
+      winter: '10%',
+      unknown: '20%',
+    },
+  },
+  {
+    code: '002594',
+    name: '比亚迪',
+    price: 265,
+    change: 1.8,
+    pe: 22,
+    pb: 4,
+    dividend: 0.3,
+    growth: 40,
+    moat: '新能源整车',
+    type: 'vegetable',
+    seasonAllocation: {
+      spring: '30%',
+      summer: '30%',
+      autumn: '20%',
+      winter: '10%',
+      unknown: '20%',
+    },
+  },
+  {
+    code: '601012',
+    name: '隆基绿能',
+    price: 25,
+    change: -3.5,
+    pe: 8,
+    pb: 1.5,
+    dividend: 1.0,
+    growth: -10,
+    moat: '光伏龙头',
+    type: 'vegetable',
+    seasonAllocation: {
+      spring: '30%',
+      summer: '30%',
+      autumn: '20%',
+      winter: '10%',
+      unknown: '20%',
+    },
+  },
 ])
 
 // 周期判断指标
@@ -175,20 +337,20 @@ const portfolio = ref({
 // ── 周期判断逻辑 ────────────────────────────────────────────────────────
 function analyzeSeason(): Season {
   if (bars.value.length < 100) return 'unknown'
-  
+
   const last = bars.value[bars.value.length - 1]
   const prev100 = bars.value[Math.max(0, bars.value.length - 100)]
-  
+
   const priceChange = (last.close - prev100.open) / prev100.open
   const avgVol = bars.value.slice(-20).reduce((s, b) => s + b.vol, 0) / 20
   const volRatio = avgVol / (bars.value.slice(-60).reduce((s, b) => s + b.vol, 0) / 60)
-  
+
   if (priceChange > 0.3 && volRatio > 1.2) return 'summer'
   if (priceChange > 0.1 && volRatio > 1.0) return 'spring'
   if (priceChange < -0.3 && volRatio > 1.5) return 'winter'
   if (priceChange < -0.1) return 'autumn'
   if (Math.abs(priceChange) < 0.05) return 'summer'
-  
+
   return 'unknown'
 }
 
@@ -199,51 +361,52 @@ let chart: echarts.ECharts | null = null
 function renderChart() {
   if (!chartRef.value || bars.value.length === 0) return
   if (!chart) chart = echarts.init(chartRef.value, 'dark')
-  
-  const dates = bars.value.map(b => b.datetime.slice(0, 10))
-  const ohlc = bars.value.map(b => [b.open, b.close, b.low, b.high])
-  
-  chart.setOption({
-    backgroundColor: 'transparent',
-    tooltip: {
-      trigger: 'axis',
-      axisPointer: { type: 'cross' },
-      formatter: (params: any) => {
-        const p = params[0]
-        const d = p.value
-        return `${p.axisValue}<br/>O:${fmt2(d[1])} C:${fmt2(d[2])} H:${fmt2(d[3])} L:${fmt2(d[4])}`
-      },
-    },
-    grid: { left: '5%', right: '3%', top: '10%', bottom: '15%' },
-    xAxis: {
-      type: 'category',
-      data: dates,
-      axisLine: { lineStyle: { color: '#2a2e3a' } },
-      axisLabel: { color: '#5c6370', formatter: (v: string) => v },
-    },
-    yAxis: {
-      type: 'value',
-      scale: true,
-      splitLine: { lineStyle: { color: '#2a2e3a' } },
-      axisLabel: { formatter: fmt2, color: '#5c6370' },
-    },
-    dataZoom: [
-      { type: 'slider', bottom: 10, start: 50, end: 100 },
-    ],
-    series: [
-      {
-        name: 'K线',
-        type: 'candlestick',
-        data: ohlc,
-        itemStyle: {
-          color: UP_COLOR,
-          color0: DOWN_COLOR,
-          borderColor: UP_COLOR,
-          borderColor0: DOWN_COLOR,
+
+  const dates = bars.value.map((b) => b.datetime.slice(0, 10))
+  const ohlc = bars.value.map((b) => [b.open, b.close, b.low, b.high])
+
+  chart.setOption(
+    {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        axisPointer: { type: 'cross' },
+        formatter: (params: any) => {
+          const p = params[0]
+          const d = p.value
+          return `${p.axisValue}<br/>O:${fmt2(d[1])} C:${fmt2(d[2])} H:${fmt2(d[3])} L:${fmt2(d[4])}`
         },
       },
-    ],
-  }, true)
+      grid: { left: '5%', right: '3%', top: '10%', bottom: '15%' },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLine: { lineStyle: { color: '#2a2e3a' } },
+        axisLabel: { color: '#5c6370', formatter: (v: string) => v },
+      },
+      yAxis: {
+        type: 'value',
+        scale: true,
+        splitLine: { lineStyle: { color: '#2a2e3a' } },
+        axisLabel: { formatter: fmt2, color: '#5c6370' },
+      },
+      dataZoom: [{ type: 'slider', bottom: 10, start: 50, end: 100 }],
+      series: [
+        {
+          name: 'K线',
+          type: 'candlestick',
+          data: ohlc,
+          itemStyle: {
+            color: UP_COLOR,
+            color0: DOWN_COLOR,
+            borderColor: UP_COLOR,
+            borderColor0: DOWN_COLOR,
+          },
+        },
+      ],
+    },
+    true,
+  )
 }
 
 function resize() {
@@ -283,7 +446,7 @@ function getSeasonStrategy(): string {
 // ── 计算属性 ────────────────────────────────────────────────────────────
 const filteredStocks = computed(() => {
   if (filterType.value === 'all') return stockPool.value
-  return stockPool.value.filter(s => s.type === filterType.value)
+  return stockPool.value.filter((s) => s.type === filterType.value)
 })
 
 // ── 生命周期 ────────────────────────────────────────────────────────────
@@ -293,7 +456,10 @@ onMounted(() => {
   // 阻止图表容器吞没滚轮事件，确保页面可以滚动
   const el = chartRef.value
   if (el) {
-    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), { passive: false, capture: true })
+    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), {
+      passive: false,
+      capture: true,
+    })
   }
 })
 
@@ -311,7 +477,13 @@ watch([code, category], () => {
         <p class="hero-desc">穿越牛熊 · 四季轮回 · 长期主义</p>
         <p class="hero-source">基于吴伟志《长赢：穿越股市的牛熊周期》投资体系</p>
       </div>
-      <div class="season-badge" :style="{ borderColor: SEASON_MAP[currentSeason].color, color: SEASON_MAP[currentSeason].color }">
+      <div
+        class="season-badge"
+        :style="{
+          borderColor: SEASON_MAP[currentSeason].color,
+          color: SEASON_MAP[currentSeason].color,
+        }"
+      >
         {{ SEASON_MAP[currentSeason].label }}
       </div>
     </div>
@@ -325,11 +497,15 @@ watch([code, category], () => {
         :class="{ active: currentSeason === key }"
         :style="{ borderTopColor: info.color }"
       >
-        <div class="season-icon">{{ key === 'spring' ? '🌱' : key === 'summer' ? '☀️' : key === 'autumn' ? '🍂' : '❄️' }}</div>
+        <div class="season-icon">
+          {{ key === 'spring' ? '🌱' : key === 'summer' ? '☀️' : key === 'autumn' ? '🍂' : '❄️' }}
+        </div>
         <div class="season-label">{{ info.label }}</div>
         <div class="season-desc">{{ info.desc }}</div>
         <div class="season-strategy">{{ info.strategy }}</div>
-        <div class="season-position">建议仓位: <span :style="{ color: info.color }">{{ info.position }}</span></div>
+        <div class="season-position">
+          建议仓位: <span :style="{ color: info.color }">{{ info.position }}</span>
+        </div>
       </div>
     </div>
 
@@ -353,7 +529,13 @@ watch([code, category], () => {
         <div class="panel-header">
           <h3>📈 行情分析</h3>
           <div class="chart-controls">
-            <input v-model="code" type="text" placeholder="股票代码" maxlength="6" class="code-input" />
+            <input
+              v-model="code"
+              type="text"
+              placeholder="股票代码"
+              maxlength="6"
+              class="code-input"
+            />
             <select v-model="category" class="category-select">
               <option value="DAY">日线</option>
               <option value="WEEK">周线</option>
@@ -377,14 +559,36 @@ watch([code, category], () => {
             <span class="metric-label">PE分位数</span>
             <span class="metric-value">{{ marketMetrics.pePercentile.toFixed(1) }}%</span>
             <div class="metric-bar">
-              <div class="metric-fill" :style="{ width: marketMetrics.pePercentile + '%', background: marketMetrics.pePercentile < 30 ? '#22c55e' : marketMetrics.pePercentile > 70 ? '#ef4444' : '#f59e0b' }"></div>
+              <div
+                class="metric-fill"
+                :style="{
+                  width: marketMetrics.pePercentile + '%',
+                  background:
+                    marketMetrics.pePercentile < 30
+                      ? '#22c55e'
+                      : marketMetrics.pePercentile > 70
+                        ? '#ef4444'
+                        : '#f59e0b',
+                }"
+              ></div>
             </div>
           </div>
           <div class="metric-item">
             <span class="metric-label">PB分位数</span>
             <span class="metric-value">{{ marketMetrics.pbPercentile.toFixed(1) }}%</span>
             <div class="metric-bar">
-              <div class="metric-fill" :style="{ width: marketMetrics.pbPercentile + '%', background: marketMetrics.pbPercentile < 30 ? '#22c55e' : marketMetrics.pbPercentile > 70 ? '#ef4444' : '#f59e0b' }"></div>
+              <div
+                class="metric-fill"
+                :style="{
+                  width: marketMetrics.pbPercentile + '%',
+                  background:
+                    marketMetrics.pbPercentile < 30
+                      ? '#22c55e'
+                      : marketMetrics.pbPercentile > 70
+                        ? '#ef4444'
+                        : '#f59e0b',
+                }"
+              ></div>
             </div>
           </div>
           <div class="metric-item">
@@ -393,15 +597,35 @@ watch([code, category], () => {
           </div>
           <div class="metric-item">
             <span class="metric-label">涨跌比</span>
-            <span class="metric-value" :style="{ color: marketMetrics.advanceDecline > 0 ? UP_COLOR : DOWN_COLOR }">{{ marketMetrics.advanceDecline > 0 ? '+' : '' }}{{ marketMetrics.advanceDecline.toFixed(2) }}</span>
+            <span
+              class="metric-value"
+              :style="{ color: marketMetrics.advanceDecline > 0 ? UP_COLOR : DOWN_COLOR }"
+              >{{ marketMetrics.advanceDecline > 0 ? '+' : ''
+              }}{{ marketMetrics.advanceDecline.toFixed(2) }}</span
+            >
           </div>
           <div class="metric-item">
             <span class="metric-label">恐慌贪婪</span>
-            <span class="metric-value" :style="{ color: marketMetrics.fearGreedIndex < 30 ? '#22c55e' : marketMetrics.fearGreedIndex > 70 ? '#ef4444' : '#f59e0b' }">{{ marketMetrics.fearGreedIndex }}</span>
+            <span
+              class="metric-value"
+              :style="{
+                color:
+                  marketMetrics.fearGreedIndex < 30
+                    ? '#22c55e'
+                    : marketMetrics.fearGreedIndex > 70
+                      ? '#ef4444'
+                      : '#f59e0b',
+              }"
+              >{{ marketMetrics.fearGreedIndex }}</span
+            >
           </div>
           <div class="metric-item">
             <span class="metric-label">距200日均线</span>
-            <span class="metric-value" :style="{ color: marketMetrics.ma200 > 0 ? UP_COLOR : DOWN_COLOR }">{{ marketMetrics.ma200 > 0 ? '+' : '' }}{{ marketMetrics.ma200.toFixed(2) }}%</span>
+            <span
+              class="metric-value"
+              :style="{ color: marketMetrics.ma200 > 0 ? UP_COLOR : DOWN_COLOR }"
+              >{{ marketMetrics.ma200 > 0 ? '+' : '' }}{{ marketMetrics.ma200.toFixed(2) }}%</span
+            >
           </div>
         </div>
       </div>
@@ -431,10 +655,18 @@ watch([code, category], () => {
           <div class="type-meta">
             <span>持有周期: {{ config.holdPeriod }}</span>
           </div>
-      <div class="type-allocation">
-            <div v-for="s in ['spring', 'summer', 'autumn', 'winter'] as Season[]" :key="s" class="alloc-item">
-              <span class="alloc-season">{{ s === 'spring' ? '春' : s === 'summer' ? '夏' : s === 'autumn' ? '秋' : '冬' }}</span>
-              <span class="alloc-value" :style="{ color: SEASON_MAP[s].color }">{{ config.allocation[s] }}</span>
+          <div class="type-allocation">
+            <div
+              v-for="s in ['spring', 'summer', 'autumn', 'winter'] as Season[]"
+              :key="s"
+              class="alloc-item"
+            >
+              <span class="alloc-season">{{
+                s === 'spring' ? '春' : s === 'summer' ? '夏' : s === 'autumn' ? '秋' : '冬'
+              }}</span>
+              <span class="alloc-value" :style="{ color: SEASON_MAP[s].color }">{{
+                config.allocation[s]
+              }}</span>
             </div>
           </div>
         </div>
@@ -446,9 +678,36 @@ watch([code, category], () => {
           <h3>精选标的池（{{ stockPool.length }} 只）</h3>
           <div class="table-filter">
             <button class="filter-btn active" @click="filterType = 'all'">全部</button>
-            <button class="filter-btn" :style="{ borderColor: STOCK_TYPE_MAP.tree.color, color: filterType === 'tree' ? STOCK_TYPE_MAP.tree.color : '' }" @click="filterType = 'tree'">树</button>
-            <button class="filter-btn" :style="{ borderColor: STOCK_TYPE_MAP.grain.color, color: filterType === 'grain' ? STOCK_TYPE_MAP.grain.color : '' }" @click="filterType = 'grain'">粮</button>
-            <button class="filter-btn" :style="{ borderColor: STOCK_TYPE_MAP.vegetable.color, color: filterType === 'vegetable' ? STOCK_TYPE_MAP.vegetable.color : '' }" @click="filterType = 'vegetable'">菜</button>
+            <button
+              class="filter-btn"
+              :style="{
+                borderColor: STOCK_TYPE_MAP.tree.color,
+                color: filterType === 'tree' ? STOCK_TYPE_MAP.tree.color : '',
+              }"
+              @click="filterType = 'tree'"
+            >
+              树
+            </button>
+            <button
+              class="filter-btn"
+              :style="{
+                borderColor: STOCK_TYPE_MAP.grain.color,
+                color: filterType === 'grain' ? STOCK_TYPE_MAP.grain.color : '',
+              }"
+              @click="filterType = 'grain'"
+            >
+              粮
+            </button>
+            <button
+              class="filter-btn"
+              :style="{
+                borderColor: STOCK_TYPE_MAP.vegetable.color,
+                color: filterType === 'vegetable' ? STOCK_TYPE_MAP.vegetable.color : '',
+              }"
+              @click="filterType = 'vegetable'"
+            >
+              菜
+            </button>
           </div>
         </div>
         <table>
@@ -471,7 +730,14 @@ watch([code, category], () => {
               <td class="code-cell">{{ stock.code }}</td>
               <td class="name-cell">{{ stock.name }}</td>
               <td>
-                <span class="type-badge" :style="{ background: STOCK_TYPE_MAP[stock.type].color + '20', color: STOCK_TYPE_MAP[stock.type].color, borderColor: STOCK_TYPE_MAP[stock.type].color }">
+                <span
+                  class="type-badge"
+                  :style="{
+                    background: STOCK_TYPE_MAP[stock.type].color + '20',
+                    color: STOCK_TYPE_MAP[stock.type].color,
+                    borderColor: STOCK_TYPE_MAP[stock.type].color,
+                  }"
+                >
                   {{ STOCK_TYPE_MAP[stock.type].icon }} {{ STOCK_TYPE_MAP[stock.type].label }}
                 </span>
               </td>
@@ -487,7 +753,13 @@ watch([code, category], () => {
               <td class="moat-cell">{{ stock.moat }}</td>
               <td>
                 <div class="season-allocation">
-                  <span v-for="(s, key) in SEASON_MAP" :key="key" class="season-dot" :style="{ background: s.color, opacity: currentSeason === key ? 1 : 0.4 }" :title="s.label + ': ' + stock.seasonAllocation[key]">
+                  <span
+                    v-for="(s, key) in SEASON_MAP"
+                    :key="key"
+                    class="season-dot"
+                    :style="{ background: s.color, opacity: currentSeason === key ? 1 : 0.4 }"
+                    :title="s.label + ': ' + stock.seasonAllocation[key]"
+                  >
                     {{ stock.seasonAllocation[key] }}
                   </span>
                 </div>
@@ -514,7 +786,13 @@ watch([code, category], () => {
               <span class="config-dot" style="background: #22c55e"></span>
               树型企业（核心底仓）
             </div>
-            <input v-model.number="portfolio.treeWeight" type="number" min="0" max="100" class="config-input" />
+            <input
+              v-model.number="portfolio.treeWeight"
+              type="number"
+              min="0"
+              max="100"
+              class="config-input"
+            />
             <span class="config-percent">{{ portfolio.treeWeight }}%</span>
           </div>
           <div class="config-item">
@@ -522,7 +800,13 @@ watch([code, category], () => {
               <span class="config-dot" style="background: #f59e0b"></span>
               粮型企业（稳健收益）
             </div>
-            <input v-model.number="portfolio.grainWeight" type="number" min="0" max="100" class="config-input" />
+            <input
+              v-model.number="portfolio.grainWeight"
+              type="number"
+              min="0"
+              max="100"
+              class="config-input"
+            />
             <span class="config-percent">{{ portfolio.grainWeight }}%</span>
           </div>
           <div class="config-item">
@@ -530,7 +814,13 @@ watch([code, category], () => {
               <span class="config-dot" style="background: #ef4444"></span>
               菜型企业（波段收益）
             </div>
-            <input v-model.number="portfolio.vegetableWeight" type="number" min="0" max="100" class="config-input" />
+            <input
+              v-model.number="portfolio.vegetableWeight"
+              type="number"
+              min="0"
+              max="100"
+              class="config-input"
+            />
             <span class="config-percent">{{ portfolio.vegetableWeight }}%</span>
           </div>
           <div class="config-item">
@@ -538,7 +828,13 @@ watch([code, category], () => {
               <span class="config-dot" style="background: #60a5fa"></span>
               现金（防守仓位）
             </div>
-            <input v-model.number="portfolio.cashWeight" type="number" min="0" max="100" class="config-input" />
+            <input
+              v-model.number="portfolio.cashWeight"
+              type="number"
+              min="0"
+              max="100"
+              class="config-input"
+            />
             <span class="config-percent">{{ portfolio.cashWeight }}%</span>
           </div>
         </div>
@@ -546,11 +842,13 @@ watch([code, category], () => {
       <div class="portfolio-summary">
         <div class="summary-item">
           <span class="summary-label">当前季节</span>
-          <span class="summary-value" :style="{ color: SEASON_MAP[currentSeason].color }">{{ SEASON_MAP[currentSeason].label }}</span>
+          <span class="summary-value" :style="{ color: SEASON_MAP[currentSeason].color }">{{
+            SEASON_MAP[currentSeason].label
+          }}</span>
         </div>
         <div class="summary-item">
           <span class="summary-label">建议股票仓位</span>
-          <span class="summary-value">{{ (100 - portfolio.cashWeight) }}%</span>
+          <span class="summary-value">{{ 100 - portfolio.cashWeight }}%</span>
         </div>
         <div class="summary-item">
           <span class="summary-label">配置原则</span>
@@ -569,27 +867,37 @@ watch([code, category], () => {
         <div class="discipline-card">
           <div class="discipline-icon">🔄</div>
           <div class="discipline-title">逆向布局，拒绝从众</div>
-          <div class="discipline-desc">底部绝望时敢布局，顶部狂热时敢离场，市场共识极强的方向往往是风险拐点</div>
+          <div class="discipline-desc">
+            底部绝望时敢布局，顶部狂热时敢离场，市场共识极强的方向往往是风险拐点
+          </div>
         </div>
         <div class="discipline-card">
           <div class="discipline-icon">🎯</div>
           <div class="discipline-title">不预测终点，只应对周期</div>
-          <div class="discipline-desc">不精准猜测牛市顶、熊市底，只根据当下市场四季状态，匹配对应的仓位和策略</div>
+          <div class="discipline-desc">
+            不精准猜测牛市顶、熊市底，只根据当下市场四季状态，匹配对应的仓位和策略
+          </div>
         </div>
         <div class="discipline-card">
           <div class="discipline-icon">🛡️</div>
           <div class="discipline-title">本金优先，容错第一</div>
-          <div class="discipline-desc">长赢的前提是"活着"，熊市严控仓位、守住本金，拒绝重仓博弈、满仓抄底</div>
+          <div class="discipline-desc">
+            长赢的前提是"活着"，熊市严控仓位、守住本金，拒绝重仓博弈、满仓抄底
+          </div>
         </div>
         <div class="discipline-card">
           <div class="discipline-icon">⚖️</div>
           <div class="discipline-title">动态均衡，不偏执单一风格</div>
-          <div class="discipline-desc">不固守价值、不迷信成长，根据市场周期轮动切换风格，适配A股结构性行情</div>
+          <div class="discipline-desc">
+            不固守价值、不迷信成长，根据市场周期轮动切换风格，适配A股结构性行情
+          </div>
         </div>
         <div class="discipline-card">
           <div class="discipline-icon">🎓</div>
           <div class="discipline-title">赚认知内的钱</div>
-          <div class="discipline-desc">看不懂的赛道、估值透支的标的坚决不碰，所有收益都是认知的变现</div>
+          <div class="discipline-desc">
+            看不懂的赛道、估值透支的标的坚决不碰，所有收益都是认知的变现
+          </div>
         </div>
         <div class="discipline-card">
           <div class="discipline-icon">⏰</div>
@@ -607,19 +915,27 @@ watch([code, category], () => {
       <div class="philosophy-grid">
         <div class="philosophy-card">
           <h3>🌾 投资是种庄稼，不是种天气</h3>
-          <p>短期市场波动是不可控的"天气"，企业成长、周期轮回是可把握的"庄稼生长规律"。拒绝投机博弈，坚持价值成长长期主义。</p>
+          <p>
+            短期市场波动是不可控的"天气"，企业成长、周期轮回是可把握的"庄稼生长规律"。拒绝投机博弈，坚持价值成长长期主义。
+          </p>
         </div>
         <div class="philosophy-card">
           <h3>🔄 唯一永恒的投资信仰：相信周期</h3>
-          <p>市场永远遵循盛极而衰、否极泰来的轮回规律。所有市场狂热、极致恐慌都是周期的极端拐点，唯有周期规律恒定不变。</p>
+          <p>
+            市场永远遵循盛极而衰、否极泰来的轮回规律。所有市场狂热、极致恐慌都是周期的极端拐点，唯有周期规律恒定不变。
+          </p>
         </div>
         <div class="philosophy-card">
           <h3>📐 投资只需要解两道核心题</h3>
-          <p>一是企业题：筛选优质、有持续成长空间的好公司；二是市场题：识别市场周期阶段、顺势而为、逆向布局。两道题缺一不可。</p>
+          <p>
+            一是企业题：筛选优质、有持续成长空间的好公司；二是市场题：识别市场周期阶段、顺势而为、逆向布局。两道题缺一不可。
+          </p>
         </div>
         <div class="philosophy-card">
           <h3>🎋 术道结合，知行合一</h3>
-          <p>选股、择时、仓位等技巧是"术"，周期思维、价值思维、敬畏市场是"道"。长赢的本质是用规律指导操作，用纪律落地认知。</p>
+          <p>
+            选股、择时、仓位等技巧是"术"，周期思维、价值思维、敬畏市场是"道"。长赢的本质是用规律指导操作，用纪律落地认知。
+          </p>
         </div>
       </div>
     </div>
@@ -714,7 +1030,7 @@ watch([code, category], () => {
 .season-card.active {
   opacity: 1;
   transform: scale(1.02);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 .season-icon {
   font-size: 24px;
@@ -736,7 +1052,7 @@ watch([code, category], () => {
   color: var(--text-muted);
   margin-bottom: 6px;
   padding: 4px 8px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 4px;
 }
 .season-position {
@@ -778,7 +1094,7 @@ watch([code, category], () => {
   font-size: 13px;
   color: var(--text-muted);
   padding: 8px 12px;
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
 }
 
@@ -788,7 +1104,8 @@ watch([code, category], () => {
   grid-template-columns: 2fr 1fr;
   gap: 16px;
 }
-.chart-panel, .metrics-panel {
+.chart-panel,
+.metrics-panel {
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -991,8 +1308,9 @@ watch([code, category], () => {
   cursor: pointer;
   transition: all 0.2s;
 }
-.filter-btn:hover, .filter-btn.active {
-  background: rgba(255,255,255,0.05);
+.filter-btn:hover,
+.filter-btn.active {
+  background: rgba(255, 255, 255, 0.05);
 }
 table {
   width: 100%;
@@ -1009,11 +1327,11 @@ th {
 }
 td {
   padding: 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   color: var(--text);
 }
 tr:hover td {
-  background: rgba(255,255,255,0.02);
+  background: rgba(255, 255, 255, 0.02);
 }
 .code-cell {
   font-family: var(--font-mono);
@@ -1218,7 +1536,7 @@ tr:hover td {
   align-items: center;
   gap: 16px;
   padding: 12px 16px;
-  background: rgba(0,0,0,0.2);
+  background: rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
 }
 .conclusion-num {

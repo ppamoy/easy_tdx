@@ -4,7 +4,13 @@
  * 这一层是纯函数 + 零业务依赖，所有场景（单标的/组合/寻优）共用。
  */
 
-import { GRADE_THRESHOLDS, type DimensionScore, type Grade, type GradeResult, type VetoHit } from './types'
+import {
+  GRADE_THRESHOLDS,
+  type DimensionScore,
+  type Grade,
+  type GradeResult,
+  type VetoHit,
+} from './types'
 import { THRESHOLDS, type DimensionKey } from './thresholds'
 
 /**
@@ -17,7 +23,10 @@ import { THRESHOLDS, type DimensionKey } from './thresholds'
  * interpolate(THRESHOLDS.max_drawdown.anchors, 0.4165)  // ≈ 30（回撤深）
  * interpolate(THRESHOLDS.sharpe.anchors, 0.529)         // ≈ 42
  */
-export function interpolate(anchors: readonly { threshold: number; score: number }[], value: number): number {
+export function interpolate(
+  anchors: readonly { threshold: number; score: number }[],
+  value: number,
+): number {
   if (!Number.isFinite(value)) return 0
   if (anchors.length === 0) return 0
 

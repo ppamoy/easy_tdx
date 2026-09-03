@@ -49,8 +49,12 @@ function fmt(v: number | null | undefined): string {
         </tr>
         <tr>
           <td class="dim">总收益</td>
-          <td :class="(report!.train.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmt(report!.train.total_return) }}</td>
-          <td :class="(report!.test.total_return ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmt(report!.test.total_return) }}</td>
+          <td :class="(report!.train.total_return ?? 0) >= 0 ? 'pos' : 'neg'">
+            {{ fmt(report!.train.total_return) }}
+          </td>
+          <td :class="(report!.test.total_return ?? 0) >= 0 ? 'pos' : 'neg'">
+            {{ fmt(report!.test.total_return) }}
+          </td>
         </tr>
         <tr>
           <td class="dim">胜率</td>
@@ -69,8 +73,12 @@ function fmt(v: number | null | undefined): string {
         </tr>
         <tr>
           <td class="dim">超额命中率</td>
-          <td :class="(report!.train.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmt(report!.train.excess_hit_rate) }}</td>
-          <td :class="(report!.test.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">{{ fmt(report!.test.excess_hit_rate) }}</td>
+          <td :class="(report!.train.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">
+            {{ fmt(report!.train.excess_hit_rate) }}
+          </td>
+          <td :class="(report!.test.excess_hit_rate ?? 0) >= 0 ? 'pos' : 'neg'">
+            {{ fmt(report!.test.excess_hit_rate) }}
+          </td>
         </tr>
         <tr>
           <td class="dim">买入持有</td>

@@ -250,9 +250,15 @@ onMounted(() => {
     <!-- 模式切换 + 配置栏 -->
     <div class="config-bar">
       <div class="mode-tabs">
-        <button class="mode-tab" :class="{ active: mode === 'screen' }" @click="mode = 'screen'">📌 单日选股</button>
-        <button class="mode-tab" :class="{ active: mode === 'verify' }" @click="mode = 'verify'">📈 批量时点验证</button>
-        <button class="mode-tab" :class="{ active: mode === 'scan' }" @click="mode = 'scan'">🔭 全市场扫描</button>
+        <button class="mode-tab" :class="{ active: mode === 'screen' }" @click="mode = 'screen'">
+          📌 单日选股
+        </button>
+        <button class="mode-tab" :class="{ active: mode === 'verify' }" @click="mode = 'verify'">
+          📈 批量时点验证
+        </button>
+        <button class="mode-tab" :class="{ active: mode === 'scan' }" @click="mode = 'scan'">
+          🔭 全市场扫描
+        </button>
       </div>
 
       <template v-if="mode === 'screen'">
@@ -277,7 +283,12 @@ onMounted(() => {
       <template v-else-if="mode === 'verify'">
         <div class="field-group dates-group">
           <label>历史日期（每行一个 YYYY-MM-DD，多个时点汇总验证）</label>
-          <textarea v-model="verifyDatesText" class="pool-input" rows="3" placeholder="2024-04-15&#10;2025-04-15&#10;..." />
+          <textarea
+            v-model="verifyDatesText"
+            class="pool-input"
+            rows="3"
+            placeholder="2024-04-15&#10;2025-04-15&#10;..."
+          />
         </div>
         <button class="primary scan-btn" :disabled="verifyLoading" @click="runVerify">
           {{ verifyLoading ? '批量验证中（逐时点选股 + 回看后续）…' : '📈 运行批量时点验证' }}
@@ -292,8 +303,12 @@ onMounted(() => {
         <div class="field-group">
           <label>市场</label>
           <div class="market-checks">
-            <label class="check-item"><input type="checkbox" v-model="scanMarkets.SH" /> 沪 SH</label>
-            <label class="check-item"><input type="checkbox" v-model="scanMarkets.SZ" /> 深 SZ</label>
+            <label class="check-item"
+              ><input type="checkbox" v-model="scanMarkets.SH" /> 沪 SH</label
+            >
+            <label class="check-item"
+              ><input type="checkbox" v-model="scanMarkets.SZ" /> 深 SZ</label
+            >
           </div>
         </div>
         <div class="field-group">
@@ -315,9 +330,16 @@ onMounted(() => {
         </div>
         <div class="field-group sina-pool-group">
           <label>新浪补充自选池（可选，gpcw 未覆盖的更早历史时点用）</label>
-          <textarea v-model="scanSinaPool" class="pool-input" rows="2" placeholder="600519&#10;000858&#10;..." />
+          <textarea
+            v-model="scanSinaPool"
+            class="pool-input"
+            rows="2"
+            placeholder="600519&#10;000858&#10;..."
+          />
         </div>
-        <label class="check-item perf-check"><input type="checkbox" v-model="scanWithPerf" /> 附带后续表现</label>
+        <label class="check-item perf-check"
+          ><input type="checkbox" v-model="scanWithPerf" /> 附带后续表现</label
+        >
         <button class="primary scan-btn" :disabled="scanLoading" @click="runScan">
           {{ scanLoading ? '扫描中（全市场财报 + 树粮菜打分）…' : '🔭 运行全市场扫描' }}
         </button>
@@ -325,7 +347,12 @@ onMounted(() => {
 
       <div class="field-group pool-group" v-if="mode !== 'scan'">
         <label>自选池（每行一个 6 位代码，留空用默认池）</label>
-        <textarea v-model="poolText" class="pool-input" rows="3" placeholder="600519&#10;000858&#10;..." />
+        <textarea
+          v-model="poolText"
+          class="pool-input"
+          rows="3"
+          placeholder="600519&#10;000858&#10;..."
+        />
       </div>
     </div>
 
@@ -338,23 +365,46 @@ onMounted(() => {
     <template v-if="mode === 'screen' && result">
       <div v-if="result.season" class="season-card" :style="{ borderColor: result.season.color }">
         <div class="season-left">
-          <div class="season-title" :style="{ color: result.season.color }">📅 当时四季：{{ result.season.label }}</div>
+          <div class="season-title" :style="{ color: result.season.color }">
+            📅 当时四季：{{ result.season.label }}
+          </div>
           <div class="season-desc">{{ result.season.description }}</div>
         </div>
         <div class="season-right">
           <div class="season-row"><span>策略</span>{{ result.season.strategy }}</div>
           <div class="season-row"><span>操作</span>{{ result.season.action }}</div>
-          <div class="season-row"><span>仓位</span>{{ result.season.position_range[0] }}% ~ {{ result.season.position_range[1] }}%</div>
-          <div class="season-row" v-if="result.season.signals"><span>信号分</span>{{ result.season.signals.total_score }}（{{ result.season.signals.trend_60d_pct ?? 0 }}% / 60日）</div>
+          <div class="season-row">
+            <span>仓位</span>{{ result.season.position_range[0] }}% ~
+            {{ result.season.position_range[1] }}%
+          </div>
+          <div class="season-row" v-if="result.season.signals">
+            <span>信号分</span>{{ result.season.signals.total_score }}（{{
+              result.season.signals.trend_60d_pct ?? 0
+            }}% / 60日）
+          </div>
         </div>
       </div>
 
       <div class="stats-bar">
-        <div class="stat-item"><span class="stat-label">入选</span><span class="stat-value">{{ stats.total }}</span></div>
-        <div class="stat-item"><span class="stat-label">🌳 树</span><span class="stat-value" style="color:#22c55e">{{ stats.tree }}</span></div>
-        <div class="stat-item"><span class="stat-label">🌾 粮</span><span class="stat-value" style="color:#f59e0b">{{ stats.grain }}</span></div>
-        <div class="stat-item"><span class="stat-label">🥬 菜</span><span class="stat-value" style="color:#ef4444">{{ stats.vegetable }}</span></div>
-        <div class="stat-item"><span class="stat-label">数据口径</span><span class="stat-value" style="font-size:13px">披露日 ≤ {{ result.date }}</span></div>
+        <div class="stat-item">
+          <span class="stat-label">入选</span><span class="stat-value">{{ stats.total }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">🌳 树</span
+          ><span class="stat-value" style="color: #22c55e">{{ stats.tree }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">🌾 粮</span
+          ><span class="stat-value" style="color: #f59e0b">{{ stats.grain }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">🥬 菜</span
+          ><span class="stat-value" style="color: #ef4444">{{ stats.vegetable }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">数据口径</span
+          ><span class="stat-value" style="font-size: 13px">披露日 ≤ {{ result.date }}</span>
+        </div>
       </div>
 
       <div class="result-table-wrap">
@@ -381,7 +431,13 @@ onMounted(() => {
             <tr v-for="r in result.results" :key="r.market + r.code">
               <td class="code-cell">{{ r.market }}.{{ r.code }}</td>
               <td>
-                <span class="cat-badge" :style="{ color: CATEGORY_COLORS[r.category], background: CATEGORY_COLORS[r.category] + '22' }">
+                <span
+                  class="cat-badge"
+                  :style="{
+                    color: CATEGORY_COLORS[r.category],
+                    background: CATEGORY_COLORS[r.category] + '22',
+                  }"
+                >
                   {{ r.label }}
                 </span>
               </td>
@@ -391,16 +447,32 @@ onMounted(() => {
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
               <td>{{ fmt(r.indicators.net_margin) }}</td>
               <td>{{ fmt(r.indicators.debt_ratio) }}</td>
-              <td :style="{ color: colorBy(r.indicators.rev_yoy) }">{{ fmt(r.indicators.rev_yoy) }}</td>
-              <td :style="{ color: colorBy(r.indicators.np_yoy) }">{{ fmt(r.indicators.np_yoy) }}</td>
-              <td :style="{ color: colorBy(r.performance.ret_20d) }">{{ fmt(r.performance.ret_20d) }}</td>
-              <td :style="{ color: colorBy(r.performance.ret_60d) }">{{ fmt(r.performance.ret_60d) }}</td>
-              <td :style="{ color: colorBy(r.performance.ret_250d) }">{{ fmt(r.performance.ret_250d) }}</td>
+              <td :style="{ color: colorBy(r.indicators.rev_yoy) }">
+                {{ fmt(r.indicators.rev_yoy) }}
+              </td>
+              <td :style="{ color: colorBy(r.indicators.np_yoy) }">
+                {{ fmt(r.indicators.np_yoy) }}
+              </td>
+              <td :style="{ color: colorBy(r.performance.ret_20d) }">
+                {{ fmt(r.performance.ret_20d) }}
+              </td>
+              <td :style="{ color: colorBy(r.performance.ret_60d) }">
+                {{ fmt(r.performance.ret_60d) }}
+              </td>
+              <td :style="{ color: colorBy(r.performance.ret_250d) }">
+                {{ fmt(r.performance.ret_250d) }}
+              </td>
               <td>
                 <details class="score-details">
-                  <summary>🌳{{ Math.round(r.scores.tree) }} / 🌾{{ Math.round(r.scores.grain) }} / 🥬{{ Math.round(r.scores.vegetable) }}</summary>
+                  <summary>
+                    🌳{{ Math.round(r.scores.tree) }} / 🌾{{ Math.round(r.scores.grain) }} / 🥬{{
+                      Math.round(r.scores.vegetable)
+                    }}
+                  </summary>
                   <div v-for="(ds, cat) in r.details" :key="cat" class="score-block">
-                    <div class="score-cat" :style="{ color: CATEGORY_COLORS[cat] }">{{ CATEGORY_LABELS[cat] }} {{ Math.round(r.scores[cat]) }}分</div>
+                    <div class="score-cat" :style="{ color: CATEGORY_COLORS[cat] }">
+                      {{ CATEGORY_LABELS[cat] }} {{ Math.round(r.scores[cat]) }}分
+                    </div>
                     <ul>
                       <li v-for="d in ds" :key="d.name">{{ d.reason }}</li>
                     </ul>
@@ -420,8 +492,14 @@ onMounted(() => {
     <!-- ── 批量时点验证结果 ─────────────────────────────────────────── -->
     <template v-if="mode === 'verify' && verifyResult">
       <div class="verify-head">
-        <h3>📈 长赢理论批量时点验证（{{ verifyPeriods.length }} 个历史时点 × 自选池 {{ pool.length }} 只）</h3>
-        <p class="hint">口径：每个时点用「披露日 ≤ 该日」的财报选股，回看标的自该日起 20/60/250 个交易日的实际涨跌，并与同期上证指数对比。</p>
+        <h3>
+          📈 长赢理论批量时点验证（{{ verifyPeriods.length }} 个历史时点 × 自选池
+          {{ pool.length }} 只）
+        </h3>
+        <p class="hint">
+          口径：每个时点用「披露日 ≤ 该日」的财报选股，回看标的自该日起 20/60/250
+          个交易日的实际涨跌，并与同期上证指数对比。
+        </p>
       </div>
 
       <!-- 是否跑赢基准 -->
@@ -430,7 +508,12 @@ onMounted(() => {
         <div class="beats-grid">
           <div class="beats-item" v-for="h in ['ret_20d', 'ret_60d', 'ret_250d']" :key="h">
             <span class="beats-label">{{ h.replace('ret_', '+').replace('d', '日') }}</span>
-            <span class="beats-alpha" :style="{ color: (verifySummary.beats_index[h].alpha ?? 0) >= 0 ? '#22c55e' : '#ef4444' }">
+            <span
+              class="beats-alpha"
+              :style="{
+                color: (verifySummary.beats_index[h].alpha ?? 0) >= 0 ? '#22c55e' : '#ef4444',
+              }"
+            >
               α {{ fmt(verifySummary.beats_index[h].alpha) }}%
             </span>
             <span class="beats-badge" :class="verifySummary.beats_index[h].beats ? 'win' : 'lose'">
@@ -458,26 +541,41 @@ onMounted(() => {
           <tbody>
             <tr v-for="cat in ['tree', 'grain', 'vegetable']" :key="cat">
               <td>
-                <span class="cat-badge" :style="{ color: CATEGORY_COLORS[cat], background: CATEGORY_COLORS[cat] + '22' }">
+                <span
+                  class="cat-badge"
+                  :style="{ color: CATEGORY_COLORS[cat], background: CATEGORY_COLORS[cat] + '22' }"
+                >
                   {{ CATEGORY_LABELS[cat] }}
                 </span>
               </td>
               <td>{{ verifySummary.by_category[cat].count }}</td>
-              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_20d.avg) }">{{ fmt(verifySummary.by_category[cat].ret_20d.avg) }}</td>
+              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_20d.avg) }">
+                {{ fmt(verifySummary.by_category[cat].ret_20d.avg) }}
+              </td>
               <td>{{ pct(verifySummary.by_category[cat].ret_20d.hit_rate) }}</td>
-              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_60d.avg) }">{{ fmt(verifySummary.by_category[cat].ret_60d.avg) }}</td>
+              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_60d.avg) }">
+                {{ fmt(verifySummary.by_category[cat].ret_60d.avg) }}
+              </td>
               <td>{{ pct(verifySummary.by_category[cat].ret_60d.hit_rate) }}</td>
-              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_250d.avg) }">{{ fmt(verifySummary.by_category[cat].ret_250d.avg) }}</td>
+              <td :style="{ color: colorBy(verifySummary.by_category[cat].ret_250d.avg) }">
+                {{ fmt(verifySummary.by_category[cat].ret_250d.avg) }}
+              </td>
               <td>{{ pct(verifySummary.by_category[cat].ret_250d.hit_rate) }}</td>
             </tr>
             <tr class="overall-row">
               <td>📊 总体（长赢选股）</td>
               <td>{{ verifySummary.overall.count }}</td>
-              <td :style="{ color: colorBy(verifySummary.overall.ret_20d.avg) }">{{ fmt(verifySummary.overall.ret_20d.avg) }}</td>
+              <td :style="{ color: colorBy(verifySummary.overall.ret_20d.avg) }">
+                {{ fmt(verifySummary.overall.ret_20d.avg) }}
+              </td>
               <td>{{ pct(verifySummary.overall.ret_20d.hit_rate) }}</td>
-              <td :style="{ color: colorBy(verifySummary.overall.ret_60d.avg) }">{{ fmt(verifySummary.overall.ret_60d.avg) }}</td>
+              <td :style="{ color: colorBy(verifySummary.overall.ret_60d.avg) }">
+                {{ fmt(verifySummary.overall.ret_60d.avg) }}
+              </td>
               <td>{{ pct(verifySummary.overall.ret_60d.hit_rate) }}</td>
-              <td :style="{ color: colorBy(verifySummary.overall.ret_250d.avg) }">{{ fmt(verifySummary.overall.ret_250d.avg) }}</td>
+              <td :style="{ color: colorBy(verifySummary.overall.ret_250d.avg) }">
+                {{ fmt(verifySummary.overall.ret_250d.avg) }}
+              </td>
               <td>{{ pct(verifySummary.overall.ret_250d.hit_rate) }}</td>
             </tr>
             <tr class="index-row">
@@ -499,9 +597,12 @@ onMounted(() => {
         <div v-for="p in verifyPeriods" :key="p.date" class="period-card">
           <div class="period-head">
             <span class="period-date">📅 {{ p.date }}</span>
-            <span v-if="p.season" class="period-season" :style="{ color: p.season.color }">{{ p.season.label }}</span>
+            <span v-if="p.season" class="period-season" :style="{ color: p.season.color }">{{
+              p.season.label
+            }}</span>
             <span class="period-idx" v-if="p.index">
-              上证指数 +20日 {{ fmt(p.index.ret_20d) }}% / +60日 {{ fmt(p.index.ret_60d) }}% / +250日 {{ fmt(p.index.ret_250d) }}%
+              上证指数 +20日 {{ fmt(p.index.ret_20d) }}% / +60日 {{ fmt(p.index.ret_60d) }}% /
+              +250日 {{ fmt(p.index.ret_250d) }}%
             </span>
           </div>
           <table class="result-table period-table">
@@ -519,14 +620,26 @@ onMounted(() => {
               <tr v-for="r in p.results" :key="p.date + r.market + r.code">
                 <td class="code-cell">{{ r.market }}.{{ r.code }}</td>
                 <td>
-                  <span class="cat-badge" :style="{ color: CATEGORY_COLORS[r.category], background: CATEGORY_COLORS[r.category] + '22' }">
+                  <span
+                    class="cat-badge"
+                    :style="{
+                      color: CATEGORY_COLORS[r.category],
+                      background: CATEGORY_COLORS[r.category] + '22',
+                    }"
+                  >
                     {{ r.label }}
                   </span>
                 </td>
                 <td>{{ r.report_date }}</td>
-                <td :style="{ color: colorBy(r.performance.ret_20d) }">{{ fmt(r.performance.ret_20d) }}</td>
-                <td :style="{ color: colorBy(r.performance.ret_60d) }">{{ fmt(r.performance.ret_60d) }}</td>
-                <td :style="{ color: colorBy(r.performance.ret_250d) }">{{ fmt(r.performance.ret_250d) }}</td>
+                <td :style="{ color: colorBy(r.performance.ret_20d) }">
+                  {{ fmt(r.performance.ret_20d) }}
+                </td>
+                <td :style="{ color: colorBy(r.performance.ret_60d) }">
+                  {{ fmt(r.performance.ret_60d) }}
+                </td>
+                <td :style="{ color: colorBy(r.performance.ret_250d) }">
+                  {{ fmt(r.performance.ret_250d) }}
+                </td>
               </tr>
             </tbody>
           </table>
@@ -540,28 +653,68 @@ onMounted(() => {
     <!-- ── 全市场扫描结果 ─────────────────────────────────────────── -->
     <template v-if="mode === 'scan' && scanResult">
       <div v-if="scanResult.warning" class="warning-banner">⚠ {{ scanResult.warning }}</div>
-      <div v-if="scanResult.season" class="season-card" :style="{ borderColor: scanResult.season.color }">
+      <div
+        v-if="scanResult.season"
+        class="season-card"
+        :style="{ borderColor: scanResult.season.color }"
+      >
         <div class="season-left">
-          <div class="season-title" :style="{ color: scanResult.season.color }">📅 当时四季：{{ scanResult.season.label }}</div>
+          <div class="season-title" :style="{ color: scanResult.season.color }">
+            📅 当时四季：{{ scanResult.season.label }}
+          </div>
           <div class="season-desc">{{ scanResult.season.description }}</div>
         </div>
         <div class="season-right">
           <div class="season-row"><span>策略</span>{{ scanResult.season.strategy }}</div>
           <div class="season-row"><span>操作</span>{{ scanResult.season.action }}</div>
-          <div class="season-row"><span>仓位</span>{{ scanResult.season.position_range[0] }}% ~ {{ scanResult.season.position_range[1] }}%</div>
-          <div class="season-row" v-if="scanResult.season.signals"><span>信号分</span>{{ scanResult.season.signals.total_score }}（{{ scanResult.season.signals.trend_60d_pct ?? 0 }}% / 60日）</div>
+          <div class="season-row">
+            <span>仓位</span>{{ scanResult.season.position_range[0] }}% ~
+            {{ scanResult.season.position_range[1] }}%
+          </div>
+          <div class="season-row" v-if="scanResult.season.signals">
+            <span>信号分</span>{{ scanResult.season.signals.total_score }}（{{
+              scanResult.season.signals.trend_60d_pct ?? 0
+            }}% / 60日）
+          </div>
         </div>
       </div>
 
       <div class="stats-bar">
-        <div class="stat-item"><span class="stat-label">全市场扫描</span><span class="stat-value">{{ scanStats.total }}</span></div>
-        <div class="stat-item"><span class="stat-label">🌳 树</span><span class="stat-value" style="color:#22c55e">{{ scanStats.tree }}</span></div>
-        <div class="stat-item"><span class="stat-label">🌾 粮</span><span class="stat-value" style="color:#f59e0b">{{ scanStats.grain }}</span></div>
-        <div class="stat-item"><span class="stat-label">🥬 菜</span><span class="stat-value" style="color:#ef4444">{{ scanStats.vegetable }}</span></div>
-        <div class="stat-item"><span class="stat-label">返回 Top</span><span class="stat-value">{{ scanStats.returned }}</span></div>
-        <div class="stat-item" v-if="scanStats.truncated"><span class="stat-label">截断</span><span class="stat-value" style="color:#f59e0b">+{{ scanStats.truncated }}</span></div>
-        <div class="stat-item"><span class="stat-label">数据口径</span><span class="stat-value" style="font-size:13px">披露日 ≤ {{ scanResult.date }}</span></div>
-        <div class="stat-item" v-if="scanResult.cache"><span class="stat-label">财报缓存</span><span class="stat-value" style="font-size:13px;color:#22c55e">💾 {{ scanResult.cache.zips_count }} 期 / {{ (scanResult.cache.db_bytes/1048576).toFixed(1) }}MB</span></div>
+        <div class="stat-item">
+          <span class="stat-label">全市场扫描</span
+          ><span class="stat-value">{{ scanStats.total }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">🌳 树</span
+          ><span class="stat-value" style="color: #22c55e">{{ scanStats.tree }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">🌾 粮</span
+          ><span class="stat-value" style="color: #f59e0b">{{ scanStats.grain }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">🥬 菜</span
+          ><span class="stat-value" style="color: #ef4444">{{ scanStats.vegetable }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">返回 Top</span
+          ><span class="stat-value">{{ scanStats.returned }}</span>
+        </div>
+        <div class="stat-item" v-if="scanStats.truncated">
+          <span class="stat-label">截断</span
+          ><span class="stat-value" style="color: #f59e0b">+{{ scanStats.truncated }}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">数据口径</span
+          ><span class="stat-value" style="font-size: 13px">披露日 ≤ {{ scanResult.date }}</span>
+        </div>
+        <div class="stat-item" v-if="scanResult.cache">
+          <span class="stat-label">财报缓存</span
+          ><span class="stat-value" style="font-size: 13px; color: #22c55e"
+            >💾 {{ scanResult.cache.zips_count }} 期 /
+            {{ (scanResult.cache.db_bytes / 1048576).toFixed(1) }}MB</span
+          >
+        </div>
       </div>
 
       <div class="result-table-wrap">
@@ -590,13 +743,21 @@ onMounted(() => {
             <tr v-for="r in scanResult.results" :key="r.market + r.code">
               <td class="code-cell">{{ r.market }}.{{ r.code }}</td>
               <td>
-                <span class="cat-badge" :style="{ color: CATEGORY_COLORS[r.category], background: CATEGORY_COLORS[r.category] + '22' }">
+                <span
+                  class="cat-badge"
+                  :style="{
+                    color: CATEGORY_COLORS[r.category],
+                    background: CATEGORY_COLORS[r.category] + '22',
+                  }"
+                >
                   {{ r.label }}
                 </span>
               </td>
               <td class="score-cell">{{ fmt(r.score) }}</td>
               <td>
-                <span class="ds-badge" :class="r.data_source === 'sina' ? 'sina' : 'gpcw'">{{ r.data_source === 'sina' ? '新浪' : 'gpcw' }}</span>
+                <span class="ds-badge" :class="r.data_source === 'sina' ? 'sina' : 'gpcw'">{{
+                  r.data_source === 'sina' ? '新浪' : 'gpcw'
+                }}</span>
               </td>
               <td>{{ r.report_date }}</td>
               <td>{{ fmt(r.indicators.eps) }}</td>
@@ -604,16 +765,32 @@ onMounted(() => {
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
               <td>{{ fmt(r.indicators.net_margin) }}</td>
               <td>{{ fmt(r.indicators.debt_ratio) }}</td>
-              <td :style="{ color: colorBy(r.indicators.rev_yoy) }">{{ fmt(r.indicators.rev_yoy) }}</td>
-              <td :style="{ color: colorBy(r.indicators.np_yoy) }">{{ fmt(r.indicators.np_yoy) }}</td>
-              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_20d) }">{{ fmt(r.performance?.ret_20d) }}</td>
-              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_60d) }">{{ fmt(r.performance?.ret_60d) }}</td>
-              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_250d) }">{{ fmt(r.performance?.ret_250d) }}</td>
+              <td :style="{ color: colorBy(r.indicators.rev_yoy) }">
+                {{ fmt(r.indicators.rev_yoy) }}
+              </td>
+              <td :style="{ color: colorBy(r.indicators.np_yoy) }">
+                {{ fmt(r.indicators.np_yoy) }}
+              </td>
+              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_20d) }">
+                {{ fmt(r.performance?.ret_20d) }}
+              </td>
+              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_60d) }">
+                {{ fmt(r.performance?.ret_60d) }}
+              </td>
+              <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_250d) }">
+                {{ fmt(r.performance?.ret_250d) }}
+              </td>
               <td>
                 <details class="score-details">
-                  <summary>🌳{{ Math.round(r.scores.tree) }} / 🌾{{ Math.round(r.scores.grain) }} / 🥬{{ Math.round(r.scores.vegetable) }}</summary>
+                  <summary>
+                    🌳{{ Math.round(r.scores.tree) }} / 🌾{{ Math.round(r.scores.grain) }} / 🥬{{
+                      Math.round(r.scores.vegetable)
+                    }}
+                  </summary>
                   <div v-for="(ds, cat) in r.details" :key="cat" class="score-block">
-                    <div class="score-cat" :style="{ color: CATEGORY_COLORS[cat] }">{{ CATEGORY_LABELS[cat] }} {{ Math.round(r.scores[cat]) }}分</div>
+                    <div class="score-cat" :style="{ color: CATEGORY_COLORS[cat] }">
+                      {{ CATEGORY_LABELS[cat] }} {{ Math.round(r.scores[cat]) }}分
+                    </div>
                     <ul>
                       <li v-for="d in ds" :key="d.name">{{ d.reason }}</li>
                     </ul>
@@ -632,8 +809,14 @@ onMounted(() => {
 
     <div v-else-if="!loading && !verifyLoading && !scanLoading" class="intro">
       <h3>📊 长赢基本面选股（P1/P2）</h3>
-      <p>选一个历史日期，用<b>截至当天已披露</b>的 gpcw 财报，对自选池（或全市场）做树粮菜量化打分，并回看标的自该日起的实际走势。</p>
-      <p class="hint">「批量时点验证」跨多个历史日期汇总命中率并与上证指数对比；「全市场扫描」对全市场逐只打分返回 Top N。</p>
+      <p>
+        选一个历史日期，用<b>截至当天已披露</b>的 gpcw
+        财报，对自选池（或全市场）做树粮菜量化打分，并回看标的自该日起的实际走势。
+      </p>
+      <p class="hint">
+        「批量时点验证」跨多个历史日期汇总命中率并与上证指数对比；「全市场扫描」对全市场逐只打分返回
+        Top N。
+      </p>
     </div>
   </div>
 </template>
@@ -657,7 +840,10 @@ onMounted(() => {
   border-radius: var(--radius);
   padding: 12px 16px;
 }
-.mode-tabs { display: flex; gap: 6px; }
+.mode-tabs {
+  display: flex;
+  gap: 6px;
+}
 .mode-tab {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -667,10 +853,22 @@ onMounted(() => {
   color: var(--text-muted);
   cursor: pointer;
 }
-.mode-tab.active { background: var(--primary, #2563eb); color: #fff; border-color: transparent; }
-.field-group { display: flex; flex-direction: column; gap: 4px; }
-.field-group label { font-size: 11px; color: var(--text-muted); }
-.date-input, .market-select {
+.mode-tab.active {
+  background: var(--primary, #2563eb);
+  color: #fff;
+  border-color: transparent;
+}
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.field-group label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.date-input,
+.market-select {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -678,10 +876,19 @@ onMounted(() => {
   font-size: 13px;
   color: var(--text);
 }
-.date-input { width: 140px; }
-.market-select { width: 130px; }
-.pool-group { flex: 1; min-width: 200px; }
-.dates-group { min-width: 220px; }
+.date-input {
+  width: 140px;
+}
+.market-select {
+  width: 130px;
+}
+.pool-group {
+  flex: 1;
+  min-width: 200px;
+}
+.dates-group {
+  min-width: 220px;
+}
 .pool-input {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -693,7 +900,11 @@ onMounted(() => {
   resize: vertical;
   font-family: monospace;
 }
-.scan-btn { padding: 7px 18px; font-size: 13px; height: auto; }
+.scan-btn {
+  padding: 7px 18px;
+  font-size: 13px;
+  height: auto;
+}
 .error-banner {
   background: rgba(239, 65, 70, 0.12);
   border: 1px solid var(--up);
@@ -712,11 +923,30 @@ onMounted(() => {
   border-radius: var(--radius);
   padding: 12px 16px;
 }
-.season-left { display: flex; flex-direction: column; gap: 4px; }
-.season-title { font-size: 16px; font-weight: 600; }
-.season-desc { font-size: 12px; color: var(--text-muted); max-width: 420px; }
-.season-right { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
-.season-row span { color: var(--text-dim); margin-right: 8px; }
+.season-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.season-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.season-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 420px;
+}
+.season-right {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.season-row span {
+  color: var(--text-dim);
+  margin-right: 8px;
+}
 .stats-bar {
   display: flex;
   gap: 24px;
@@ -726,11 +956,31 @@ onMounted(() => {
   border-radius: var(--radius);
   padding: 10px 16px;
 }
-.stat-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.stat-label { font-size: 11px; color: var(--text-dim); }
-.stat-value { font-size: 18px; font-weight: 600; color: var(--text); }
-.verify-head { display: flex; flex-direction: column; gap: 4px; }
-.verify-head h3 { margin: 0; font-size: 16px; color: var(--text); }
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.stat-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.verify-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.verify-head h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text);
+}
 .beats-card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -739,11 +989,30 @@ onMounted(() => {
   border-radius: var(--radius);
   padding: 12px 16px;
 }
-.beats-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
-.beats-grid { display: flex; gap: 24px; flex-wrap: wrap; }
-.beats-item { display: flex; flex-direction: column; gap: 2px; }
-.beats-label { font-size: 11px; color: var(--text-dim); }
-.beats-alpha { font-size: 16px; font-weight: 700; }
+.beats-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.beats-grid {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.beats-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.beats-label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.beats-alpha {
+  font-size: 16px;
+  font-weight: 700;
+}
 .beats-badge {
   display: inline-block;
   padding: 1px 8px;
@@ -752,8 +1021,14 @@ onMounted(() => {
   font-weight: 600;
   width: fit-content;
 }
-.beats-badge.win { background: rgba(34,197,94,0.15); color: #22c55e; }
-.beats-badge.lose { background: rgba(239,68,68,0.15); color: #ef4444; }
+.beats-badge.win {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+.beats-badge.lose {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
 .result-table-wrap {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -766,29 +1041,66 @@ onMounted(() => {
   font-size: 12px;
   min-width: 1100px;
 }
-.result-table th, .result-table td {
+.result-table th,
+.result-table td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
   text-align: right;
   white-space: nowrap;
 }
-.result-table th { color: var(--text-dim); font-weight: 500; text-align: right; }
-.result-table th:first-child, .result-table td:first-child { text-align: left; }
-.result-table tbody tr:hover { background: rgba(255,255,255,0.03); }
-.overall-row td { font-weight: 700; background: rgba(37,99,235,0.06); }
-.index-row td { color: var(--text-muted); }
-.code-cell { font-family: monospace; font-weight: 600; }
+.result-table th {
+  color: var(--text-dim);
+  font-weight: 500;
+  text-align: right;
+}
+.result-table th:first-child,
+.result-table td:first-child {
+  text-align: left;
+}
+.result-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.overall-row td {
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.06);
+}
+.index-row td {
+  color: var(--text-muted);
+}
+.code-cell {
+  font-family: monospace;
+  font-weight: 600;
+}
 .cat-badge {
   padding: 2px 8px;
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
 }
-.score-details summary { cursor: pointer; font-size: 12px; }
-.score-block { margin: 6px 0 2px 4px; text-align: left; }
-.score-cat { font-weight: 600; font-size: 12px; margin-bottom: 2px; }
-.score-block ul { margin: 0; padding-left: 16px; color: var(--text-muted); font-size: 11px; }
-.verify-periods { display: flex; flex-direction: column; gap: 12px; }
+.score-details summary {
+  cursor: pointer;
+  font-size: 12px;
+}
+.score-block {
+  margin: 6px 0 2px 4px;
+  text-align: left;
+}
+.score-cat {
+  font-weight: 600;
+  font-size: 12px;
+  margin-bottom: 2px;
+}
+.score-block ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.verify-periods {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
 .period-card {
   background: var(--bg-panel);
   border: 1px solid var(--border);
@@ -803,19 +1115,63 @@ onMounted(() => {
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
-.period-date { font-weight: 700; color: var(--text); }
-.period-season { font-weight: 600; }
-.period-idx { margin-left: auto; color: var(--text-muted); font-size: 12px; }
-.period-table { min-width: 0; }
-.period-table th:first-child, .period-table td:first-child { text-align: left; }
-.empty-state { text-align: center; color: var(--text-muted); padding: 30px; }
-.intro { text-align: center; color: var(--text-muted); padding: 40px 20px; line-height: 1.8; }
-.intro h3 { color: var(--text); }
-.hint { font-size: 12px; color: var(--text-dim); }
-.market-checks { display: flex; gap: 10px; }
-.check-item { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text); cursor: pointer; }
-.perf-check { align-self: center; margin-bottom: 8px; white-space: nowrap; }
-.num-group { width: 110px; }
+.period-date {
+  font-weight: 700;
+  color: var(--text);
+}
+.period-season {
+  font-weight: 600;
+}
+.period-idx {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.period-table {
+  min-width: 0;
+}
+.period-table th:first-child,
+.period-table td:first-child {
+  text-align: left;
+}
+.empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 30px;
+}
+.intro {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px 20px;
+  line-height: 1.8;
+}
+.intro h3 {
+  color: var(--text);
+}
+.hint {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.market-checks {
+  display: flex;
+  gap: 10px;
+}
+.check-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.perf-check {
+  align-self: center;
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+.num-group {
+  width: 110px;
+}
 .num-input {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -826,21 +1182,36 @@ onMounted(() => {
   width: 100%;
 }
 .warning-banner {
-  background: rgba(245,158,11,0.12);
+  background: rgba(245, 158, 11, 0.12);
   border: 1px solid #f59e0b;
   color: #f59e0b;
   padding: 10px 14px;
   border-radius: var(--radius);
   font-size: 13px;
 }
-.score-cell { font-weight: 700; color: var(--text); }
-.scan-table { min-width: 1100px; }
-.sina-pool-group { min-width: 180px; }
-.ds-badge {
-  display: inline-block; padding: 1px 8px; border-radius: 12px;
-  font-size: 11px; font-weight: 600;
+.score-cell {
+  font-weight: 700;
+  color: var(--text);
 }
-.ds-badge.gpcw { background: rgba(37,99,235,0.15); color: #60a5fa; }
-.ds-badge.sina { background: rgba(245,158,11,0.15); color: #f59e0b; }
+.scan-table {
+  min-width: 1100px;
+}
+.sina-pool-group {
+  min-width: 180px;
+}
+.ds-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.ds-badge.gpcw {
+  background: rgba(37, 99, 235, 0.15);
+  color: #60a5fa;
+}
+.ds-badge.sina {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
 </style>
-

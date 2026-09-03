@@ -123,8 +123,12 @@ onUnmounted(() => {
   animation: quote-progress-fill var(--quote-interval, 3000ms) linear infinite;
 }
 @keyframes quote-progress-fill {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 
 /* 巨大引号装饰 */
@@ -184,8 +188,15 @@ onUnmounted(() => {
   animation: quote-pulse 1.2s ease-in-out infinite;
 }
 @keyframes quote-pulse {
-  0%, 100% { opacity: 0.3; transform: scale(0.8); }
-  50% { opacity: 1; transform: scale(1.2); }
+  0%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
 }
 
 /* 过渡：fade + 轻微 slide-up */

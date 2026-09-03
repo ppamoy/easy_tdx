@@ -88,8 +88,7 @@ const gridPoints = computed(() => {
 <template>
   <div class="grid-picker">
     <p class="hint">
-      勾选 1-2 个参数寻优，填入取值列表（逗号分隔）。
-      切换策略会自动填入预设参数，可直接编辑：
+      勾选 1-2 个参数寻优，填入取值列表（逗号分隔）。 切换策略会自动填入预设参数，可直接编辑：
     </p>
     <div v-for="p in strategy?.params" :key="p.name" class="param-row">
       <label class="check">

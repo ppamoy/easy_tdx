@@ -98,20 +98,20 @@ export async function fetchBars(
     if (pageBars.length < 800) break
   }
 
-    // 按日期范围过滤（闭区间）
-    let bars = allBars
-    if (startDate) bars = bars.filter((b) => b.datetime.slice(0, 10) >= startDate)
-    if (endDate) bars = bars.filter((b) => b.datetime.slice(0, 10) <= endDate)
-    // 翻页拼接后按时间正序排序：每页内部是正序，但页间是逆序
-    // （page1=最新段，page2=更旧段），concat 后需排序保证整体正序，
-    // 否则引擎/图表只正确处理第一页的数据。
-    bars.sort((a, b) => a.datetime.localeCompare(b.datetime))
-    // 可选 maxCount：只保留最新 maxCount 根（与缠论分析窗口对齐，
-    // 避免图表显示 8000 根历史但叠加层只覆盖最近 800 根）。
-    if (maxCount && bars.length > maxCount) {
-      bars = bars.slice(bars.length - maxCount)
-    }
-    return bars
+  // 按日期范围过滤（闭区间）
+  let bars = allBars
+  if (startDate) bars = bars.filter((b) => b.datetime.slice(0, 10) >= startDate)
+  if (endDate) bars = bars.filter((b) => b.datetime.slice(0, 10) <= endDate)
+  // 翻页拼接后按时间正序排序：每页内部是正序，但页间是逆序
+  // （page1=最新段，page2=更旧段），concat 后需排序保证整体正序，
+  // 否则引擎/图表只正确处理第一页的数据。
+  bars.sort((a, b) => a.datetime.localeCompare(b.datetime))
+  // 可选 maxCount：只保留最新 maxCount 根（与缠论分析窗口对齐，
+  // 避免图表显示 8000 根历史但叠加层只覆盖最近 800 根）。
+  if (maxCount && bars.length > maxCount) {
+    bars = bars.slice(bars.length - maxCount)
+  }
+  return bars
 }
 
 /** 把后端 bars 的单条记录归一化为统一 Bar（datetime 字段）。 */
@@ -278,7 +278,10 @@ export async function deleteSavedStrategy(id: string): Promise<void> {
 }
 
 /** V209: 更新一条已保存策略的快照（策略库「一键重验」后刷新验证结论）。 */
-export async function updateStrategySnapshot(id: string, snapshot: Record<string, unknown>): Promise<SavedStrategy> {
+export async function updateStrategySnapshot(
+  id: string,
+  snapshot: Record<string, unknown>,
+): Promise<SavedStrategy> {
   const resp = await fetch(`${BASE}/strategies/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
