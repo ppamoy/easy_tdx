@@ -88,7 +88,7 @@ easy-tdx offline advice SZ 000001 --file /path/to/sh600000.day --output csv  # �
 
 ```bash
 easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md
-easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --output csv
+easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --workers 4 --output csv   # 多线程并行加速（V378）
 ```
 扫描目录内 .day 文件（文件名推断市场/代码，如 sh600000.day → SH/600000），
 逐只跑 V102 建议回放并用 summarize_batch 聚合（总建议/胜率/平均收益/正收益标的），
@@ -116,6 +116,8 @@ easy-tdx offline watch --state /tmp/watch.json --info    # 查看状态（路径
 easy-tdx offline watch --state /tmp/watch.json --reset   # 清空基线重新开始（V360）
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --out /tmp/signals.jsonl   # 新信号 JSONL 落盘（V365；V368 起每行含入场/止损/止盈建议）
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --since-days 30   # 只看最近 30 天的新信号（V372）
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --report /tmp/signals.md   # 新信号 Markdown 报告落盘（V377；与 --out JSONL 双通道）
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output md   # stdout 直接输出 Markdown 报告（V379）
 ```
 状态文件（缺省 ~/.easy_tdx/offline_watch_state.json）记录已见信号
 （symbol+type+date），每次只报告**新发现**的 3买/3卖 信号 + V102 质量评级

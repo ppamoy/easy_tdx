@@ -1132,7 +1132,12 @@ def advice_batch(
 @click.option(
     "--info", "do_info", is_flag=True, help="显示状态文件信息（路径 + 已记录信号数）后退出"
 )
-@click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
+@click.option(
+    "--output",
+    "output_fmt",
+    type=click.Choice(["json", "table", "csv", "md"]),
+    default="json",
+)
 @click.option(
     "--out",
     "out_file",
@@ -1174,6 +1179,7 @@ def watch(
       easy-tdx offline watch --state /tmp/watch.json --reset
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --out /tmp/signals.jsonl
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --report /tmp/signals.md
+      easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --output md
     """
     import json
     import os
@@ -1323,7 +1329,11 @@ def watch(
             click.echo(f"⚠ 状态文件写入失败: {e}", err=True)
 
         if rows:
-            print_output(pd.DataFrame(rows), output_fmt)
+            if output_fmt == "md":
+                # V379: stdout Markdown 报告（与 V377 --report 落盘内容一致）
+                click.echo(_render_watch_report(rows))
+            else:
+                print_output(pd.DataFrame(rows), output_fmt)
             # V365: --out 以 JSONL 追加落盘（供脚本/定时任务消费）
             if out_file:
                 try:

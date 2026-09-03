@@ -647,3 +647,35 @@ def test_advice_batch_one_returns_error_row_for_missing_file(tmp_path: Path) -> 
     assert report is None
     assert row["symbol"] == "SH999999"
     assert "error" in row
+
+
+# ── V379: watch --output md（stdout Markdown 报告） ──
+
+
+def test_watch_output_md_stdout(tmp_path: Path, monkeypatch) -> None:
+    """V379: --output md 在 stdout 输出 Markdown 报告（与 V377 --report 落盘一致）。"""
+    lday, _ = _make_lday(tmp_path)
+    state = tmp_path / "watch_state.json"
+    today_str = date.today().strftime("%Y-%m-%d")
+    _patch_watch_analyser(monkeypatch, today_str)
+
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        [
+            "watch",
+            "--dir",
+            str(lday),
+            "--state",
+            str(state),
+            "--limit",
+            "1",
+            "--output",
+            "md",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert "# 离线 V102 信号监控报告" in res.output
+    assert "- 新信号: 1 条" in res.output
+    assert f"SH600000 | 3buy | {today_str} | 0.71 | - | - | - | - | -" in res.output
+    assert "| 标的 | 信号 | 日期 | 置信度 | 质量 | 建议 | 入场 | 止损 | 止盈1 |" in res.output
