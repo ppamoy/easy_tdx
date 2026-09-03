@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**V102 实证脚本运行时回归（V384）—— validate/advice_batch_validate 首个 pytest 覆盖** —— scripts/validate_v102_advice.py（V321/V334/V346）与 advice_batch_validate.py（V325/V335）是 V102 实证关键脚本，此前零 pytest。新增 tests/unit/test_scripts_v102_validate.py（3 用例）importlib 加载脚本真实运行 main()：validate 默认模式（合成行情直接跑，断言汇总/出场分布）与 --md 模式（Markdown 报告标题/表格/汇总/出场分布）；advice_batch_validate --md（patch get_mac_client 返回合成 K 线，断言批量报告标题与扫描计数，合成行情无 3买/3卖 时输出无建议提示属正常）——实证脚本防「文档引用/无行情验证」链路回归。
+
+---
+
 **Web 层 V102 字段契约补全（V383）—— 训练教学 + 诊断页最后两个数据源** —— 接 V382 补齐 Web V102 字段契约的最后两个消费面：build_train_session_payload 的候选点（mmd_cands）携带 v102_grade/v102_advice（V344 训练教学卡片数据源，含无 V102 数据时为 None）；diagnose_stock 的 chanlun.latest_mmd 与 chanlun.recent_signals 携带 V102 四字段（多信号相关性/质量评分卡/决策支持/模式匹配，诊断页决策卡片数据源）——至此 chanlun analyze / monitor / screening / train / diagnosis 五个 Web 序列化点全部有字段契约测试（V382+V383 共 9 用例）。
 
 ---
