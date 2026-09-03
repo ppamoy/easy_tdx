@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**策略执行层 use_v102_advice 边界回归（V385）—— 实际下单环节的 5 个边界固化 + demo 环境健壮性** —— V324「3买 按 V102 建议止损止盈」此前仅 1 个用例触及，本次走信号队列路径补 5 个边界：信号无建议（advice=None）→ 不激活 V102、百分比止损兜底；use_v102_advice=False 即使信号带建议也不激活（对照）；建议缺 stop_loss/take_profit_1 → sl/tp=0 不崩溃且百分比回退；3buy 首仓激活后再加仓 → 保留首仓 V102 止损/止盈；3sell 平仓 → V102 状态重置防残留——策略执行层（真实影响交易结果）边界全部钉住。另修复 scripts/offline_chain_demo.py 的 _run：easy-tdx 不在 PATH 时回退到项目 .venv/bin（demo 与 V381 真实 CLI 回归不再依赖 venv 激活，环境自包含）。
+
+---
+
 **V102 实证脚本运行时回归（V384）—— validate/advice_batch_validate 首个 pytest 覆盖** —— scripts/validate_v102_advice.py（V321/V334/V346）与 advice_batch_validate.py（V325/V335）是 V102 实证关键脚本，此前零 pytest。新增 tests/unit/test_scripts_v102_validate.py（3 用例）importlib 加载脚本真实运行 main()：validate 默认模式（合成行情直接跑，断言汇总/出场分布）与 --md 模式（Markdown 报告标题/表格/汇总/出场分布）；advice_batch_validate --md（patch get_mac_client 返回合成 K 线，断言批量报告标题与扫描计数，合成行情无 3买/3卖 时输出无建议提示属正常）——实证脚本防「文档引用/无行情验证」链路回归。
 
 ---
