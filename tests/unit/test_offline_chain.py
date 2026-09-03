@@ -20,7 +20,12 @@ from unittest.mock import MagicMock
 
 from click.testing import CliRunner
 
-from easy_tdx.cli.cmd_offline import _is_within_since_days, _watch_signal_row, offline
+from easy_tdx.cli.cmd_offline import (
+    _is_within_since_days,
+    _render_watch_report,
+    _watch_signal_row,
+    offline,
+)
 from easy_tdx.models.bar import SecurityBar
 from easy_tdx.offline.write_daily import append_daily_bars
 
@@ -524,3 +529,74 @@ def test_offline_advice_empty_file(tmp_path: Path) -> None:
     )
     assert res.exit_code == 0, res.output
     assert "未读取到数据" in res.output
+
+
+# ── V377: watch --report Markdown 报告落盘（纯函数 + 运行时回归） ──
+
+
+def test_render_watch_report_contains_advice_fields() -> None:
+    """V377: Markdown 报告含标题/表头/建议字段（价格两位小数）。"""
+    mmd = MagicMock()
+    mmd.mmd_type.value = "3buy"
+    mmd.confidence = 0.72
+    mmd._signal_quality_scorecard = {"overall_grade": "A"}
+    mmd._decision_support = {
+        "action_recommendation": "买入",
+        "entry_price": 10.5,
+        "stop_loss": 9.8,
+        "take_profit_1": 11.6,
+    }
+    row = _watch_signal_row("SH600000", mmd, "2024-03-15")
+    md = _render_watch_report([row])
+
+    assert "# 离线 V102 信号监控报告" in md
+    assert "- 新信号: 1 条" in md
+    assert "| 标的 | 信号 | 日期 | 置信度 | 质量 | 建议 | 入场 | 止损 | 止盈1 |" in md
+    assert "SH600000 | 3buy | 2024-03-15 | 0.72 | A | 买入 | 10.50 | 9.80 | 11.60" in md
+
+
+def test_render_watch_report_missing_fields_dash() -> None:
+    """V377: 无决策支持数据时质量/建议/价格渲染为 '-'（不崩溃）。"""
+    mmd = MagicMock()
+    mmd.mmd_type.value = "3sell"
+    mmd.confidence = 0.6
+    mmd._signal_quality_scorecard = None
+    mmd._decision_support = None
+    row = _watch_signal_row("SZ000001", mmd, "2024-03-15")
+    md = _render_watch_report([row])
+
+    assert "SZ000001 | 3sell | 2024-03-15 | 0.6 | - | - | - | - | -" in md
+
+
+def test_watch_report_md_written(tmp_path: Path, monkeypatch) -> None:
+    """V377: --report 将本轮新信号以 Markdown 追加落盘（与 --out 双通道并存）。"""
+    lday, _ = _make_lday(tmp_path)
+    state = tmp_path / "watch_state.json"
+    report = tmp_path / "signals.md"
+    today_str = date.today().strftime("%Y-%m-%d")
+    _patch_watch_analyser(monkeypatch, today_str)
+
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        [
+            "watch",
+            "--dir",
+            str(lday),
+            "--state",
+            str(state),
+            "--limit",
+            "1",
+            "--report",
+            str(report),
+            "--output",
+            "json",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert "新信号 1 条" in res.output
+    assert report.is_file()
+    text = report.read_text(encoding="utf-8")
+    assert "# 离线 V102 信号监控报告" in text
+    assert "- 新信号: 1 条" in text
+    assert f"SH600000 | 3buy | {today_str} | 0.71 | - | - | - | - | -" in text

@@ -878,6 +878,39 @@ def _is_within_since_days(date_str: str, since_days: int) -> bool:
     return sig_date >= date.today() - timedelta(days=since_days)
 
 
+def _fmt_opt_price(value: object) -> str:
+    """V377: 建议价格字段格式化（None → '-'，数字 → 两位小数）。"""
+    if value is None:
+        return "-"
+    if isinstance(value, (int, float)):
+        return f"{float(value):.2f}"
+    return str(value)
+
+
+def _render_watch_report(rows: list[dict[str, object]]) -> str:
+    """V377: 将本轮 watch 新信号渲染为 Markdown 报告（含 V102 建议）。
+
+    抽为纯函数便于单测（与 _watch_signal_row 同思路）；文件写入由 watch 负责。
+    """
+    lines: list[str] = []
+    lines.append("# 离线 V102 信号监控报告")
+    lines.append("")
+    lines.append(f"- 扫描时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append(f"- 新信号: {len(rows)} 条")
+    lines.append("")
+    lines.append("| 标的 | 信号 | 日期 | 置信度 | 质量 | 建议 | 入场 | 止损 | 止盈1 |")
+    lines.append("|------|------|------|--------|------|------|------|------|-------|")
+    for r in rows:
+        lines.append(
+            f"| {r['symbol']} | {r['type']} | {r['date']} | {r['confidence']} | "
+            f"{r['v102_grade'] or '-'} | {r['advice'] or '-'} | "
+            f"{_fmt_opt_price(r['entry_price'])} | {_fmt_opt_price(r['stop_loss'])} | "
+            f"{_fmt_opt_price(r['take_profit_1'])} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
 @offline.command("advice-batch")
 @click.option("--dir", "day_dir", default=None, help=".day 文件目录（缺省自动检测通达信 vipdoc）")
 @click.option("--limit", default=0, type=int, help="最多处理的股票数（0=全部）")
@@ -1072,6 +1105,12 @@ def advice_batch(
     default=None,
     help="将本轮新信号以 JSONL 追加写入文件（供脚本/定时任务消费）",
 )
+@click.option(
+    "--report",
+    "report_file",
+    default=None,
+    help="将本轮新信号以 Markdown 报告追加写入文件（供人阅读/定时任务存档）",
+)
 def watch(
     day_dir: str | None,
     limit: int,
@@ -1083,6 +1122,7 @@ def watch(
     do_info: bool,
     output_fmt: str,
     out_file: str | None,
+    report_file: str | None,
 ) -> None:
     """离线信号监控：扫描本地 .day 目录，报告「新」发现的 3买/3卖 信号 + V102 建议摘要。
 
@@ -1099,6 +1139,7 @@ def watch(
       easy-tdx offline watch --state /tmp/watch.json --info
       easy-tdx offline watch --state /tmp/watch.json --reset
       easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --out /tmp/signals.jsonl
+      easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --report /tmp/signals.md
     """
     import json
     import os
@@ -1258,6 +1299,14 @@ def watch(
                             fh.write(json.dumps(r, ensure_ascii=False) + "\n")
                 except Exception as e:  # noqa: BLE001
                     click.echo(f"⚠ JSONL 落盘失败: {e}", err=True)
+            # V377: --report 以 Markdown 报告追加落盘（供人阅读/定时任务存档）
+            if report_file:
+                try:
+                    os.makedirs(Path(report_file).parent, exist_ok=True)
+                    with open(report_file, "a", encoding="utf-8") as fh:
+                        fh.write(_render_watch_report(rows) + "\n")
+                except Exception as e:  # noqa: BLE001
+                    click.echo(f"⚠ Markdown 落盘失败: {e}", err=True)
             if interval > 0:
                 click.echo(f"[第{pass_no}轮] 新信号 {len(rows)} 条（基线已更新）。", err=True)
             else:
