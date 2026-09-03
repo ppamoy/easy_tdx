@@ -5,10 +5,10 @@
 
 ## 离线 V102 建议链路（V351-V360，10 个版本）✅ 全部完成
 
-- **V351** offline advice（本地 .day 单标建议回放）→ **V352** --file 任意路径 → **V353** advice-batch 批量实证（json/table/csv/md）→ **V354** watch 离线信号监控（新 3买/3卖 + V102 摘要）→ **V358** watch --interval 连续轮询守护 → **V360** watch --reset/--info 基线管理 → **V364** advice --output md（单标 Markdown 报告，报告能力三级统一）→ **V365** watch --out JSONL 落盘（脚本/定时任务可消费的信号管道）→ **V368** watch JSONL 行直接携带入场/止损/止盈建议（V102 决策支持，管道产出可执行建议）→ **V372** watch --since-days N（只看最近 N 天的新信号，聚焦近期信号无需重置基线）→ **V373** 测试完善（CLI 输出层 12 个单测 + --since-days 时间过滤抽纯函数并补运行时回归，V372 行为级固化）→ **V374** 测试完善（V102 四级报告 json/table/csv/md 全部输出分支 CliRunner 运行时回归 +8 用例，输出契约防线闭环）→ **V375** 测试完善（watch 状态管理 --reset/--info/互斥/损坏自愈/基线去重 8 项行为级回归，基线生命周期固化）→ **V376** 测试完善（advice 边界分支：数据不足<30 根 error JSON / 无 3买/3卖 信号 message 提示 / 离线空 .day 文件 3 项回归，CLI 行为防线闭环）
+- **V351** offline advice（本地 .day 单标建议回放）→ **V352** --file 任意路径 → **V353** advice-batch 批量实证（json/table/csv/md）→ **V354** watch 离线信号监控（新 3买/3卖 + V102 摘要）→ **V358** watch --interval 连续轮询守护 → **V360** watch --reset/--info 基线管理 → **V364** advice --output md（单标 Markdown 报告，报告能力三级统一）→ **V365** watch --out JSONL 落盘（脚本/定时任务可消费的信号管道）→ **V368** watch JSONL 行直接携带入场/止损/止盈建议（V102 决策支持，管道产出可执行建议）→ **V372** watch --since-days N（只看最近 N 天的新信号，聚焦近期信号无需重置基线）→ **V373** 测试完善（CLI 输出层 12 个单测 + --since-days 时间过滤抽纯函数并补运行时回归，V372 行为级固化）→ **V374** 测试完善（V102 四级报告 json/table/csv/md 全部输出分支 CliRunner 运行时回归 +8 用例，输出契约防线闭环）→ **V375** 测试完善（watch 状态管理 --reset/--info/互斥/损坏自愈/基线去重 8 项行为级回归，基线生命周期固化）→ **V376** 测试完善（advice 边界分支：数据不足<30 根 error JSON / 无 3买/3卖 信号 message 提示 / 离线空 .day 文件 3 项回归，CLI 行为防线闭环）→ **V377** watch --report 新信号 Markdown 报告落盘（标题/扫描时间/逐条含 V102 建议/汇总，无数据渲染 '-'；与 --out JSONL 双通道输出）
 - **文档**：docs/v102-decision-support.md（离线三小节）、QUICKSTART 第 5 项离线实证、DEV_STATUS 落地清单全收录
 - **使用流程**：sync-all 同步 → watch 监控新信号 → advice/advice-batch 单标/批量实证 → csv/md 导出 → use_v102_advice 落地策略（完全断网可用）
-- **质量**：全量 pytest tests/unit/ 2583 passed / 0 failed（V373-V376 新增 37 个用例）；ruff/mypy/format 归零；vue-tsc + vite build 通过
+- **质量**：全量 pytest tests/unit/ 2586 passed / 0 failed（V373-V377 新增 40 个用例）；ruff/mypy/format 归零；vue-tsc + vite build 通过
 
 ## V102 决策支持落地清单（V320-V346，27 个版本）✅ 全部完成
 

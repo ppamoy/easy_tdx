@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline watch 支持 --report（V377）—— 新信号 Markdown 报告落盘（供人阅读/定时任务存档）** —— easy-tdx offline watch --report /path/to/signals.md：本轮新发现的 3买/3卖 信号以 Markdown 报告**追加**写入文件——标题 + 扫描时间 + 新信号计数 + 逐条表格（标的/信号/日期/置信度/V102 质量评级/建议/入场/止损/止盈1），无决策数据字段渲染为 '-'（不崩溃）；与 --out JSONL 并存构成**双通道输出**（--out 供脚本/定时任务消费，--report 供人阅读/邮件/归档）。抽 _render_watch_report 纯函数便于单测（与 _watch_signal_row 同思路），3 个新用例（纯函数含建议字段/无数据渲染 '-'/运行时落盘断言）。
+
+---
+
 **测试完善：advice 边界分支运行时回归（V376）—— 数据不足/无信号/空文件** —— 补齐 advice 命令最后的边界空档，新增 3 个 CliRunner 回归：在线 advice 行情数据不足（<30 根）→ 返回 error JSON（symbol + 「行情数据不足（<30 根）」）不崩溃；在线 advice 无 3买/3卖 信号 → 返回 advice_count=0 + message 提示（「近 N 根K线未发现 3买/3卖 信号」）；离线 advice --file 指向空 .day 文件 → 提示「未读取到数据」exit 0——与 V373 输出层 / V374 四级报告 / V375 状态管理构成完整 CLI 行为防线。
 
 ---

@@ -115,5 +115,6 @@ easy-tdx offline watch --state /tmp/watch.json --info   # 查看监控基线状�
 easy-tdx offline watch --state /tmp/watch.json --reset  # 清空监控基线（V360）
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --out /tmp/signals.jsonl   # 新信号 JSONL 落盘（V365；每行含入场/止损/止盈建议 V368）
 easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --since-days 30   # 只看最近 30 天的新信号（V372）
+easy-tdx offline watch --dir /path/to/vipdoc/sz/lday --report /tmp/signals.md --out /tmp/signals.jsonl   # Markdown 报告 + JSONL 双通道落盘（V377）
 ```
 完整用法见 [docs/v102-decision-support.md](docs/v102-decision-support.md)。
