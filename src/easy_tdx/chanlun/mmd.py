@@ -14251,6 +14251,9 @@ def find_mmds_v40(
     """V40 版本的 find_mmds：完整集成条件101-110。
 
     别名：与 find_mmds_v39 完全相同，提供统一入口。
+
+    .. deprecated:: V390
+        版本化别名仅作向后兼容，请使用 find_mmds_v39 或 find_mmds。
     """
     return find_mmds_v39(
         bis=bis,
@@ -14280,6 +14283,9 @@ def find_mmds_v41(
 
     在 V40 基础上新增：量价能量分布(111)+量能周期(112)+走势预测(113)+质量分层(114)+反转风险(115)。
     V42 条件(116-120)已集成至 find_mmds_v39，故本函数同样生效。
+
+    .. deprecated:: V390
+        版本化别名仅作向后兼容，请使用 find_mmds_v39 或 find_mmds。
     """
     return find_mmds_v39(
         bis=bis,
@@ -14310,6 +14316,9 @@ def find_mmds_v42(
     在 V41 基础上新增：后确认验证(116)+突破-回调量比(117)+中枢距离验证(118)+ADX趋势确认(119)+指数衰减(120)。
     V43 修复了 API 暴露问题。V44 新增五维增强：趋势对齐(121)+突破力度(122)+回踩窗口(123)+波动自适应(124)+背离共振(125)。
     基础置信度已重新校准：BUY_3 0.65→0.55，SELL_3 0.60→0.50。
+
+    .. deprecated:: V390
+        版本化别名仅作向后兼容，请使用 find_mmds_v39 或 find_mmds。
     """
     return find_mmds_v39(
         bis=bis,
@@ -14343,38 +14352,6 @@ def find_mmds_v44(
     - 条件123：回踩时间窗口过滤（避免信号过期）
     - 条件124：波动率自适应阈值（动态调整敏感度）
     - 条件125：多指标背离共振（多指标同时确认）
-    """
-    return find_mmds_v39(
-        bis=bis,
-        zss=zss,
-        closes=closes,
-        config=config,
-        volumes=volumes,
-        macd_data=macd_data,
-        volatility=volatility,
-        highs=highs,
-        lows=lows,
-    )
-
-
-def find_mmds_v76(
-    bis: list[BI],
-    zss: list[ZS],
-    closes: list[float] | None = None,
-    config: ChanlunConfig | None = None,
-    volumes: list[float] | None = None,
-    macd_data: dict[str, list[float]] | None = None,
-    volatility: float | None = None,
-    highs: list[float] | None = None,
-    lows: list[float] | None = None,
-) -> list[MMD]:
-    """V77 版本的 find_mmds：完整集成条件101-243。
-
-    V77 在 V76 基础上新增四维结构评估：
-    - 条件240：量能分布深度分析（识别筹码集中区）
-    - 条件241：中枢结构权重评估（评估中枢支撑/压制作用）
-    - 条件242：信号新鲜度验证（评估信号时效性）
-    - 条件243：价格动能加速度（评估趋势动能变化）
     """
     return find_mmds_v39(
         bis=bis,
