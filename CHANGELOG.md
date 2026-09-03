@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**Web 层 V102 字段契约补全（V383）—— 训练教学 + 诊断页最后两个数据源** —— 接 V382 补齐 Web V102 字段契约的最后两个消费面：build_train_session_payload 的候选点（mmd_cands）携带 v102_grade/v102_advice（V344 训练教学卡片数据源，含无 V102 数据时为 None）；diagnose_stock 的 chanlun.latest_mmd 与 chanlun.recent_signals 携带 V102 四字段（多信号相关性/质量评分卡/决策支持/模式匹配，诊断页决策卡片数据源）——至此 chanlun analyze / monitor / screening / train / diagnosis 五个 Web 序列化点全部有字段契约测试（V382+V383 共 9 用例）。
+
+---
+
 **Web 层 V102 字段契约回归（V382）—— 序列化三层防线补齐** —— Web 是 V102 主消费面（chanlun/monitor/screening 三 router 暴露 v102_* 字段），但此前无字段契约测试——若序列化遗漏字段，前端 V102 卡片/徽章会静默空白。新增 tests/unit/test_web_v102_contract.py（6 用例）直接契约三类序列化源：ChanlunResult.to_dict() 的 mmds 完整携带 V102 四字段（多信号相关性/质量评分卡/决策支持/模式匹配，含普通 MMD 无字段时为 None 的安全回退）；SignalMonitor.check_signals 新信号携带三字段（质量卡/决策支持/模式匹配，含置信度阈值过滤）；screening._get_latest_mmd 候选携带三字段（含空信号返回 None）。
 
 ---
