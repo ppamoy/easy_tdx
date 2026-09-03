@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**测试完善：offline watch 状态管理行为级回归（V375）—— --reset/--info/互斥/损坏/去重全覆盖** —— V360 的 watch 状态管理此前只有 help 断言，本次补 8 个 CliRunner 运行时回归：--info（状态文件不存在→路径+计数0 / 已有 seen→正确计数 / 损坏→计数0 不崩溃）、--reset（删除已有状态文件 / 无文件提示无基线可清除）、--reset+--info 互斥报错退出（exit 1）、损坏状态文件视为首次运行（信号上报并重建合法 JSON 基线）、二次运行不重复报告已见信号（基线去重）——离线信号监控的基线生命周期（建/查/清/损坏自愈）行为级固化。
+
+---
+
 **测试完善：V102 四级报告输出分支全覆盖（V374）—— md/table/csv 运行时回归补齐** —— V366/V370 曾抓出「help 通过但运行崩溃」，本次把 online/offline 全部输出分支纳入 CliRunner 运行时回归，新增 8 个用例：offline advice --output md/table/csv（Markdown 报告标题/逐笔表/汇总/出场分布 + 标量列表格 + CSV 表头）、offline advice-batch --output md/table/csv（批量报告标题/汇总表 + 每只汇总行含 summary 列 + CSV 表头）、在线 advice --output table/csv（汇总行+出场分布+逐笔明细表 / 汇总 CSV+逐笔 CSV，TestOnlineAdviceOutput 由 md/json 扩到四级）——V102 四级报告（json/table/csv/md）全部输出分支闭环，与 V373 输出层单测构成完整输出契约防线。
 
 ---
