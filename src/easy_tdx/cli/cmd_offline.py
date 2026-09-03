@@ -911,11 +911,84 @@ def _render_watch_report(rows: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
+def _advice_batch_one(
+    filepath: Path, count: int, max_hold: int
+) -> tuple[dict[str, object] | None, dict[str, object]]:
+    """V378: 处理单个 .day 文件，返回 (report, row)（异常 → (None, error 行)）。
+
+    抽为模块级纯函数：advice-batch 串行/并行统一调用，且便于单测与保持输出顺序。
+    """
+    import pandas as pd
+
+    from easy_tdx.backtest.advice_simulator import (
+        collect_signal_advices,
+        simulate_advice_batch,
+    )
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    from ..offline import read_daily_bars
+
+    name = filepath.name.lower()  # e.g. sh600000.day
+    mkt = name[:2].upper()  # SH / SZ
+    code = name[2:8]
+    symbol = f"{mkt}{code}"
+    try:
+        bars = read_daily_bars(filepath)
+        if not bars:
+            return None, {"symbol": symbol, "error": "无数据"}
+        if count > 0:
+            bars = bars[-count:]
+        if len(bars) < 30:
+            return None, {"symbol": symbol, "error": "K线不足(30)"}
+        df = pd.DataFrame(
+            [
+                {
+                    "datetime": f"{b.year}-{b.month:02d}-{b.day:02d}",
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "vol": b.vol,
+                    "amount": b.amount,
+                }
+                for b in bars
+            ]
+        )
+        analyser = ChanlunAnalyser(code=code, frequency="daily")
+        result = analyser.process_klines(df)
+        closes = [float(k.close) for k in result.klines]
+        highs = [float(k.high) for k in result.klines]
+        lows = [float(k.low) for k in result.klines]
+        if len(closes) < 30:
+            return None, {"symbol": symbol, "error": "K线不足(30)"}
+        buy_hold = (closes[-1] / closes[0] - 1.0) * 100.0 if closes[0] > 0 else 0.0
+        advices = collect_signal_advices(result, closes, highs, lows, max_hold)
+        report = simulate_advice_batch(highs, lows, closes, advices)
+        report["symbol"] = symbol
+        row = {
+            "symbol": symbol,
+            "bars": len(closes),
+            "signals": len(result.mmds),
+            "advice_count": report["count"],
+            "win_rate": round(float(report.get("win_rate", 0.0)) * 100, 1),
+            "avg_return": round(float(report.get("avg_return", 0.0)), 2),
+            "total_return": round(float(report.get("total_return", 0.0)), 2),
+            "buy_hold": round(buy_hold, 2),
+            "stop_rate": round(float(report.get("stop_rate", 0.0)) * 100, 1),
+            "tp_rate": round(float(report.get("tp_rate", 0.0)) * 100, 1),
+            "expire_rate": round(float(report.get("expire_rate", 0.0)) * 100, 1),
+        }
+        return report, row
+    except Exception as e:  # noqa: BLE001
+        return None, {"symbol": symbol, "error": str(e)}
+
+
 @offline.command("advice-batch")
 @click.option("--dir", "day_dir", default=None, help=".day 文件目录（缺省自动检测通达信 vipdoc）")
 @click.option("--limit", default=0, type=int, help="最多处理的股票数（0=全部）")
 @click.option("--count", default=0, type=int, help="每只读取K线条数（0=全部）")
 @click.option("--max-hold", default=10, type=int, help="建议最大持有根数（1-60）")
+@click.option("--workers", default=1, type=int, help="并行处理线程数（1=串行，2+ 批量实证加速）")
 @click.option(
     "--output",
     "output_fmt",
@@ -927,23 +1000,25 @@ def advice_batch(
     limit: int,
     count: int,
     max_hold: int,
+    workers: int,
     output_fmt: str,
 ) -> None:
     """离线批量 V102 建议回放：扫描本地 .day 目录逐只跑建议实证并汇总。
 
     --dir 缺省时自动检测通达信 vipdoc 目录；每只从文件名推断市场/代码
     （sh600000.day → SH/600000）。输出每只汇总 + 全池聚合（json/table/csv/md）。
+    --workers N 用多线程并行处理（默认 1=串行，行为不变；输出顺序按文件名稳定）。
 
     示例：
 
       easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --limit 10 --output md
+      easy-tdx offline advice-batch --dir /path/to/vipdoc/sz/lday --workers 4 --output csv
     """
     import pandas as pd
 
     from .output import print_error, print_output
 
     try:
-        from ..offline import read_daily_bars
         from ..offline.paths import resolve_vipdoc
     except Exception as e:
         print_error(f"离线模块不可用: {e}")
@@ -969,77 +1044,36 @@ def advice_batch(
     if limit > 0:
         files = files[:limit]
 
-    # 2. 逐只跑 V102 建议回放
-    from easy_tdx.backtest.advice_simulator import (
-        collect_signal_advices,
-        simulate_advice_batch,
-        summarize_batch,
-    )
-    from easy_tdx.chanlun import ChanlunAnalyser
+    # 2. 逐只跑 V102 建议回放（--workers 并行，默认 1 串行；输出按文件名顺序稳定）
+    from easy_tdx.backtest.advice_simulator import summarize_batch
+
+    if workers < 1:
+        raise click.BadParameter("--workers 至少为 1")
+
+    # 仅处理沪深 A 股 .day 文件（与串行版一致：跳过其他文件）
+    valid_files = [
+        f
+        for f in files
+        if f.name.lower().startswith(("sh", "sz")) and f.name.lower().endswith(".day")
+    ]
+
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _run_one(fp: Path) -> tuple[dict[str, object] | None, dict[str, object]]:
+            return _advice_batch_one(fp, count, max_hold)
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(_run_one, valid_files))
+    else:
+        results = [_advice_batch_one(fp, count, max_hold) for fp in valid_files]
 
     reports: list[dict[str, object]] = []
     rows: list[dict[str, object]] = []
-    for filepath in files:
-        name = filepath.name.lower()  # e.g. sh600000.day
-        if not (name.startswith(("sh", "sz")) and name.endswith(".day")):
-            continue
-        mkt = name[:2].upper()  # SH / SZ
-        code = name[2:8]
-        symbol = f"{mkt}{code}"
-        try:
-            bars = read_daily_bars(filepath)
-            if not bars:
-                rows.append({"symbol": symbol, "error": "无数据"})
-                continue
-            if count > 0:
-                bars = bars[-count:]
-            if len(bars) < 30:
-                rows.append({"symbol": symbol, "error": "K线不足(30)"})
-                continue
-            df = pd.DataFrame(
-                [
-                    {
-                        "datetime": f"{b.year}-{b.month:02d}-{b.day:02d}",
-                        "open": b.open,
-                        "high": b.high,
-                        "low": b.low,
-                        "close": b.close,
-                        "vol": b.vol,
-                        "amount": b.amount,
-                    }
-                    for b in bars
-                ]
-            )
-            analyser = ChanlunAnalyser(code=code, frequency="daily")
-            result = analyser.process_klines(df)
-            closes = [float(k.close) for k in result.klines]
-            highs = [float(k.high) for k in result.klines]
-            lows = [float(k.low) for k in result.klines]
-            if len(closes) < 30:
-                rows.append({"symbol": symbol, "error": "K线不足(30)"})
-                continue
-            buy_hold = (closes[-1] / closes[0] - 1.0) * 100.0 if closes[0] > 0 else 0.0
-            advices = collect_signal_advices(result, closes, highs, lows, max_hold)
-            report = simulate_advice_batch(highs, lows, closes, advices)
-            report["symbol"] = symbol
+    for report, row in results:
+        if report is not None:
             reports.append(report)
-            rows.append(
-                {
-                    "symbol": symbol,
-                    "bars": len(closes),
-                    "signals": len(result.mmds),
-                    "advice_count": report["count"],
-                    "win_rate": round(float(report.get("win_rate", 0.0)) * 100, 1),
-                    "avg_return": round(float(report.get("avg_return", 0.0)), 2),
-                    "total_return": round(float(report.get("total_return", 0.0)), 2),
-                    "buy_hold": round(buy_hold, 2),
-                    "stop_rate": round(float(report.get("stop_rate", 0.0)) * 100, 1),
-                    "tp_rate": round(float(report.get("tp_rate", 0.0)) * 100, 1),
-                    "expire_rate": round(float(report.get("expire_rate", 0.0)) * 100, 1),
-                }
-            )
-        except Exception as e:  # noqa: BLE001
-            rows.append({"symbol": symbol, "error": str(e)})
+        rows.append(row)
 
     # 3. 聚合 + 输出
     summary = summarize_batch(reports)

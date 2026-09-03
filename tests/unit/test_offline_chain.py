@@ -21,6 +21,7 @@ from unittest.mock import MagicMock
 from click.testing import CliRunner
 
 from easy_tdx.cli.cmd_offline import (
+    _advice_batch_one,
     _is_within_since_days,
     _render_watch_report,
     _watch_signal_row,
@@ -600,3 +601,49 @@ def test_watch_report_md_written(tmp_path: Path, monkeypatch) -> None:
     assert "# 离线 V102 信号监控报告" in text
     assert "- 新信号: 1 条" in text
     assert f"SH600000 | 3buy | {today_str} | 0.71 | - | - | - | - | -" in text
+
+
+# ── V378: advice-batch --workers 并行（串行/并行结果一致性） ──
+
+
+def test_advice_batch_workers_consistent(tmp_path: Path) -> None:
+    """V378: --workers 2 与 --workers 1（默认串行）输出完全一致且顺序稳定。"""
+    lday, _ = _make_lday(tmp_path)
+    runner = CliRunner()
+
+    res_serial = runner.invoke(
+        offline,
+        ["advice-batch", "--dir", str(lday), "--output", "json"],
+    )
+    res_parallel = runner.invoke(
+        offline,
+        ["advice-batch", "--dir", str(lday), "--workers", "2", "--output", "json"],
+    )
+
+    assert res_serial.exit_code == 0, res_serial.output
+    assert res_parallel.exit_code == 0, res_parallel.output
+    # ThreadPoolExecutor.map 保持输入顺序 → 两次输出应逐字段一致
+    assert json.loads(res_serial.output) == json.loads(res_parallel.output)
+
+
+def test_advice_batch_workers_four_runs(tmp_path: Path) -> None:
+    """V378: --workers 4 大批量并行正常运行（合成目录 2 只，无 error 行）。"""
+    lday, _ = _make_lday(tmp_path)
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice-batch", "--dir", str(lday), "--workers", "4", "--output", "json"],
+    )
+    assert res.exit_code == 0, res.output
+    assert '"error"' not in res.output
+    assert '"symbol":"SH600000"' in res.output
+    assert '"symbol":"SZ000001"' in res.output
+
+
+def test_advice_batch_one_returns_error_row_for_missing_file(tmp_path: Path) -> None:
+    """V378: _advice_batch_one 对不可读文件返回 (None, error 行) 而不抛异常。"""
+    missing = tmp_path / "sh999999.day"  # 不存在
+    report, row = _advice_batch_one(missing, 0, 10)
+    assert report is None
+    assert row["symbol"] == "SH999999"
+    assert "error" in row
