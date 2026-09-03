@@ -679,3 +679,56 @@ def test_watch_output_md_stdout(tmp_path: Path, monkeypatch) -> None:
     assert "- 新信号: 1 条" in res.output
     assert f"SH600000 | 3buy | {today_str} | 0.71 | - | - | - | - | -" in res.output
     assert "| 标的 | 信号 | 日期 | 置信度 | 质量 | 建议 | 入场 | 止损 | 止盈1 |" in res.output
+
+
+# ── V380: watch --interval 轮询分支（多轮/去重/第N轮标记/Ctrl+C 退出） ──
+
+
+def test_watch_interval_polls_and_graceful_exit(tmp_path: Path, monkeypatch) -> None:
+    """V380: --interval 连续轮询——第一轮新信号/第二轮去重/第N轮标记/Ctrl+C 优雅退出。
+
+    用 monkeypatch 冻结 time.sleep：第 1 次 sleep 正常，第 2 次抛 KeyboardInterrupt
+    模拟 Ctrl+C，验证两轮扫描 + 状态跨轮累积 + 优雅退出。
+    """
+    import time as time_module
+
+    lday, _ = _make_lday(tmp_path)
+    state = tmp_path / "watch_state.json"
+    today_str = date.today().strftime("%Y-%m-%d")
+    _patch_watch_analyser(monkeypatch, today_str)
+
+    sleep_calls = {"n": 0}
+
+    def fake_sleep(seconds: float) -> None:
+        sleep_calls["n"] += 1
+        if sleep_calls["n"] >= 2:
+            raise KeyboardInterrupt  # 第二轮 sleep 时模拟 Ctrl+C
+
+    monkeypatch.setattr(time_module, "sleep", fake_sleep)
+
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        [
+            "watch",
+            "--dir",
+            str(lday),
+            "--state",
+            str(state),
+            "--limit",
+            "1",
+            "--interval",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    # 第一轮：新信号上报（含轮次标记）；第二轮：基线去重 → 无新信号
+    assert "[第1轮] 新信号 1 条（基线已更新）。" in res.output
+    assert "[第2轮] 无新信号。" in res.output
+    assert "已停止监控（Ctrl+C）。" in res.output
+    # 状态文件跨轮累积：信号键在第二轮结束后仍在基线中
+    data = json.loads(state.read_text(encoding="utf-8"))
+    assert any(f"SH600000:3buy:{today_str}" == s for s in data["seen"])
+    assert sleep_calls["n"] == 2
