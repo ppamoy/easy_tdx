@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**测试完善（V373）—— CLI 输出层单测 + --since-days 时间过滤运行时回归** —— 新增 tests/unit/test_cli_output.py（12 个用例）：format_output 的 json（force_ascii=False + ISO 日期）/ csv / table（tabulate 与无 tabulate 回退两条路径）/ 空表（json→[]，csv/table→空串）/ 非法格式抛 UsageError / print_output stdout / print_error stderr 前缀 / 表格长文本截断（_render_table 30 字符）与全量保留（_render_table_full）——输出层此前仅被命令间接调用、零直接覆盖。watch 的时间过滤抽为纯函数 _is_within_since_days（0=不过滤；边界含当天；解析失败保守跳过），补 4 个纯函数单测 + 2 个 CliRunner 运行时回归（mock ChanlunAnalyser 产出 3buy：旧信号被过滤不写 JSONL / 新信号上报且 JSONL 含 V102 字段）——V372 的过滤逻辑从「help 断言」升级为行为级回归。
+
+---
+
 **offline watch 支持 --since-days（V372）—— 只看最近 N 天的新信号** —— easy-tdx offline watch --since-days N：只报告最近 N 天内出现的 3买/3卖 信号（按信号日期过滤），首次运行即可聚焦近期信号、无需手动 --reset 清空陈旧基线；0=不按时间过滤（默认，行为不变）。
 
 ---

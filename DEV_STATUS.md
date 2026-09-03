@@ -5,10 +5,10 @@
 
 ## 离线 V102 建议链路（V351-V360，10 个版本）✅ 全部完成
 
-- **V351** offline advice（本地 .day 单标建议回放）→ **V352** --file 任意路径 → **V353** advice-batch 批量实证（json/table/csv/md）→ **V354** watch 离线信号监控（新 3买/3卖 + V102 摘要）→ **V358** watch --interval 连续轮询守护 → **V360** watch --reset/--info 基线管理 → **V364** advice --output md（单标 Markdown 报告，报告能力三级统一）→ **V365** watch --out JSONL 落盘（脚本/定时任务可消费的信号管道）→ **V368** watch JSONL 行直接携带入场/止损/止盈建议（V102 决策支持，管道产出可执行建议）→ **V372** watch --since-days N（只看最近 N 天的新信号，聚焦近期信号无需重置基线）
+- **V351** offline advice（本地 .day 单标建议回放）→ **V352** --file 任意路径 → **V353** advice-batch 批量实证（json/table/csv/md）→ **V354** watch 离线信号监控（新 3买/3卖 + V102 摘要）→ **V358** watch --interval 连续轮询守护 → **V360** watch --reset/--info 基线管理 → **V364** advice --output md（单标 Markdown 报告，报告能力三级统一）→ **V365** watch --out JSONL 落盘（脚本/定时任务可消费的信号管道）→ **V368** watch JSONL 行直接携带入场/止损/止盈建议（V102 决策支持，管道产出可执行建议）→ **V372** watch --since-days N（只看最近 N 天的新信号，聚焦近期信号无需重置基线）→ **V373** 测试完善（CLI 输出层 12 个单测 + --since-days 时间过滤抽纯函数并补运行时回归，V372 行为级固化）
 - **文档**：docs/v102-decision-support.md（离线三小节）、QUICKSTART 第 5 项离线实证、DEV_STATUS 落地清单全收录
 - **使用流程**：sync-all 同步 → watch 监控新信号 → advice/advice-batch 单标/批量实证 → csv/md 导出 → use_v102_advice 落地策略（完全断网可用）
-- **质量**：全量 pytest tests/unit/ 2539 passed / 0 failed；ruff/mypy/format 归零；vue-tsc + vite build 通过
+- **质量**：全量 pytest tests/unit/ 2564 passed / 0 failed（V373 新增 18 个用例）；ruff/mypy/format 归零；vue-tsc + vite build 通过
 
 ## V102 决策支持落地清单（V320-V346，27 个版本）✅ 全部完成
 
