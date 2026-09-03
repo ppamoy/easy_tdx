@@ -387,3 +387,124 @@ def test_offline_advice_batch_csv_runs(tmp_path: Path) -> None:
     assert lines[0].startswith("symbol,bars,signals,advice_count")
     assert "summary_win_rate" in lines[0]
     assert "SH600000" in lines[1]
+
+
+# ── V375: offline watch 状态管理（--reset/--info/互斥/损坏/去重）运行时回归 ──
+# （V360 功能此前只有 help 断言；这些分支不依赖 .day 目录，直接走 CliRunner）
+
+
+def test_watch_info_without_state_file(tmp_path: Path) -> None:
+    """V375: --info 在状态文件不存在时输出路径 + 计数 0。"""
+    state = tmp_path / "watch_state.json"
+    runner = CliRunner()
+    res = runner.invoke(offline, ["watch", "--state", str(state), "--info"])
+    assert res.exit_code == 0, res.output
+    assert f"状态文件: {state}" in res.output
+    assert "已记录信号数: 0" in res.output
+
+
+def test_watch_info_counts_seen(tmp_path: Path) -> None:
+    """V375: --info 显示状态文件已记录信号数。"""
+    state = tmp_path / "watch_state.json"
+    state.write_text(json.dumps({"seen": ["a", "b", "c"]}), encoding="utf-8")
+    runner = CliRunner()
+    res = runner.invoke(offline, ["watch", "--state", str(state), "--info"])
+    assert res.exit_code == 0, res.output
+    assert "已记录信号数: 3" in res.output
+
+
+def test_watch_info_corrupt_state_counts_zero(tmp_path: Path) -> None:
+    """V375: 状态文件损坏时 --info 计数为 0（不崩溃）。"""
+    state = tmp_path / "watch_state.json"
+    state.write_text("{corrupt", encoding="utf-8")
+    runner = CliRunner()
+    res = runner.invoke(offline, ["watch", "--state", str(state), "--info"])
+    assert res.exit_code == 0, res.output
+    assert "已记录信号数: 0" in res.output
+
+
+def test_watch_reset_existing_state(tmp_path: Path) -> None:
+    """V375: --reset 删除已有状态文件并提示重建基线。"""
+    state = tmp_path / "watch_state.json"
+    state.write_text(json.dumps({"seen": ["x"]}), encoding="utf-8")
+    runner = CliRunner()
+    res = runner.invoke(offline, ["watch", "--state", str(state), "--reset"])
+    assert res.exit_code == 0, res.output
+    assert "已清空监控基线" in res.output
+    assert not state.exists()
+
+
+def test_watch_reset_without_state(tmp_path: Path) -> None:
+    """V375: 无状态文件时 --reset 提示无基线可清除。"""
+    state = tmp_path / "watch_state.json"
+    runner = CliRunner()
+    res = runner.invoke(offline, ["watch", "--state", str(state), "--reset"])
+    assert res.exit_code == 0, res.output
+    assert "无现有基线可清除（状态文件不存在）" in res.output
+
+
+def test_watch_reset_and_info_conflict(tmp_path: Path) -> None:
+    """V375: --reset 与 --info 互斥，报错退出。"""
+    state = tmp_path / "watch_state.json"
+    runner = CliRunner()
+    res = runner.invoke(offline, ["watch", "--state", str(state), "--reset", "--info"])
+    assert res.exit_code == 1, res.output
+    assert "--reset 与 --info 不能同时使用" in res.output
+
+
+def test_watch_corrupt_state_falls_back_fresh(tmp_path: Path, monkeypatch) -> None:
+    """V375: 损坏状态文件视为首次运行（不崩溃，信号上报并重建合法基线）。"""
+    lday, _ = _make_lday(tmp_path)
+    state = tmp_path / "watch_state.json"
+    state.write_text("{corrupt", encoding="utf-8")
+    today_str = date.today().strftime("%Y-%m-%d")
+    _patch_watch_analyser(monkeypatch, today_str)
+
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        [
+            "watch",
+            "--dir",
+            str(lday),
+            "--state",
+            str(state),
+            "--limit",
+            "1",
+            "--output",
+            "json",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert "新信号 1 条" in res.output
+    # 状态文件被重建为合法 JSON 且含该信号键
+    data = json.loads(state.read_text(encoding="utf-8"))
+    assert any("SH600000:3buy" in s for s in data["seen"])
+
+
+def test_watch_second_run_deduplicates(tmp_path: Path, monkeypatch) -> None:
+    """V375: 二次运行不重复报告已见信号（基线去重）。"""
+    lday, _ = _make_lday(tmp_path)
+    state = tmp_path / "watch_state.json"
+    today_str = date.today().strftime("%Y-%m-%d")
+    _patch_watch_analyser(monkeypatch, today_str)
+
+    runner = CliRunner()
+    args = [
+        "watch",
+        "--dir",
+        str(lday),
+        "--state",
+        str(state),
+        "--limit",
+        "1",
+        "--output",
+        "json",
+    ]
+    res1 = runner.invoke(offline, args)
+    assert res1.exit_code == 0, res1.output
+    assert "新信号 1 条" in res1.output
+
+    res2 = runner.invoke(offline, args)
+    assert res2.exit_code == 0, res2.output
+    assert "无新信号（状态已是最新）" in res2.output
