@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**质量加固系列（V386-V392）—— OpenSpec 四能力域全面落地** —— 按 OpenSpec 变更 easy-tdx-v386-quality-hardening 分阶段实施，每个版本均通过 ruff/mypy/pytest/vue-tsc/vite build/vitest 全部门禁：
+
+- **V386** 15 个零覆盖内置策略参数化回归（默认/显式参数实例化、200 根合成行情运行、短数据/空数据安全降级、信号三要素形状）——此前 atr_breakout/bbi/bias_reversal/dmi/donchian/ema_cross/emv/keltner/obv_breakout/rsi_divergence/rsi_macd_combo/supertrend/triple_ma/volume_breakout/wr_reversal 零测试引用，一旦 init()/next() 崩溃用户跑回测才暴露。
+- **V387** 11 个零覆盖 Web 路由契约测试（block/finance/board_mac/mac_data/mac_quotes/ex_market/indicator/fundamental/announcement/realtime/server 的成功响应契约 + 缺失/非法参数错误分支 + 空数据降级）。
+- **V388** 覆盖率门槛 60→65（补齐零覆盖策略/路由后实测 68.66%，2722 passed）+ .gitignore 覆盖率产物 + 根目录脚手架归档。
+- **V389** 前端 vitest 统一测试运行器（评级用例从 node:test 迁移、V102DecisionCard 三类数据形态 + 买入/卖出/持有着色 5 用例、format/market 纯函数 9 用例、13 视图页冒烟挂载）+ CI frontend job 增加 test 步骤。
+- **V390** 清理 mmd.py 版本化死代码 find_mmds_v76（零引用）+ 弃用 v40/v41/v42 别名。
+- **V391** 前端 eslint/prettier 落地（eslint flat config 务实级 + prettier + format/lint 脚本 + CI lint/format 门禁 + 全量格式化）。
+- **V392** mmd.py 拆分第一步：V102 决策支持增强（条件264-267）抽出为 mmd_v102.py 独立模块，mmd.py 顶层惰性再导出保持既有导入兼容——29k 行 god-module 治理起步。
+
+---
+
 **策略执行层 use_v102_advice 边界回归（V385）—— 实际下单环节的 5 个边界固化 + demo 环境健壮性** —— V324「3买 按 V102 建议止损止盈」此前仅 1 个用例触及，本次走信号队列路径补 5 个边界：信号无建议（advice=None）→ 不激活 V102、百分比止损兜底；use_v102_advice=False 即使信号带建议也不激活（对照）；建议缺 stop_loss/take_profit_1 → sl/tp=0 不崩溃且百分比回退；3buy 首仓激活后再加仓 → 保留首仓 V102 止损/止盈；3sell 平仓 → V102 状态重置防残留——策略执行层（真实影响交易结果）边界全部钉住。另修复 scripts/offline_chain_demo.py 的 _run：easy-tdx 不在 PATH 时回退到项目 .venv/bin（demo 与 V381 真实 CLI 回归不再依赖 venv 激活，环境自包含）。
 
 ---
