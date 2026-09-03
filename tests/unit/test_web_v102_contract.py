@@ -189,3 +189,165 @@ def test_screening_get_latest_mmd_empty_returns_none() -> None:
     result = MagicMock()
     result.mmds = []
     assert _get_latest_mmd(result) is None
+
+
+# ── 4. build_train_session_payload（训练教学候选点契约，V344） ──
+
+
+class _TrainFakeResult:
+    """build_train_session_payload 所需的鸭子类型结果对象（可控序列化）。"""
+
+    def __init__(
+        self,
+        mmds: list,
+        code: str = "SZ000001",
+        klines: list | None = None,
+        fractals: list | None = None,
+    ) -> None:
+        self.code = code
+        self.frequency = "daily"
+        self.mmds = mmds
+        self.klines = klines or []
+        self.fractals = fractals or []
+        self.boll = None
+        self._date = "2024-05-01"
+        self._to_dict: dict = {"bis": [], "xds": [], "zss": [], "bcs": [], "boll": None, "macd": {}}
+
+    def _fmt_dt(self, dt: object) -> str:
+        return self._date
+
+    def _fx_anchor_datetime(self, fx: object) -> str:
+        return self._date
+
+    def to_dict(self) -> dict:
+        return self._to_dict
+
+
+def _train_df(n: int = 40) -> pd.DataFrame:
+    closes = [100.0] * n
+    return pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=n, freq="D"),
+            "open": closes,
+            "close": closes,
+            "high": [101.0] * n,
+            "low": [99.0] * n,
+            "vol": [1e6] * n,
+            "amount": [1e8] * n,
+        }
+    )
+
+
+def _v102_mmd_with_bi(mmd_maker, mmd_type: str) -> object:
+    mmd = mmd_maker(mmd_type, idx=10)
+    mmd._signal_quality_scorecard = {"overall_grade": "A"}
+    mmd._decision_support = {"action_recommendation": "买入"}
+    mmd._historical_pattern_match = {"win_rate": 0.7}
+    return mmd
+
+
+def _attach_bi(mmd: object, index: int = 10) -> None:
+    mmd.bi = MagicMock()
+    mmd.bi.index = index
+    mmd.bi.end = MagicMock()
+    mmd.bi.end.k = MagicMock()
+    mmd.bi.end.k.k_index = index
+    mmd.bi.end.k.date = pd.Timestamp("2024-05-01")
+
+
+def test_train_candidates_include_v102_grade_advice() -> None:
+    """V383: 训练教学候选点携带 v102_grade / v102_advice（V344 卡片数据源）。"""
+    from easy_tdx.chanlun.types import MMD, MMDType
+    from easy_tdx.web.routers.chanlun import build_train_session_payload
+
+    mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
+    mmd.confidence = 0.8
+    mmd._signal_quality_scorecard = {"overall_grade": "A"}
+    mmd._decision_support = {"action_recommendation": "买入"}
+    _attach_bi(mmd)
+
+    payload = build_train_session_payload(_TrainFakeResult([mmd]), _train_df(), "DAY")
+
+    cands = [c for c in payload["candidates"] if c["kind"] == "mmd"]
+    assert len(cands) == 1
+    sig = cands[0]["signal"]
+    assert sig["type"] == "3buy"
+    assert sig["v102_grade"] == "A"
+    assert sig["v102_advice"] == "买入"
+
+
+def test_train_candidates_missing_v102_is_none() -> None:
+    """V383: 无 V102 数据的候选点 v102_grade/v102_advice 为 None。"""
+    from easy_tdx.chanlun.types import MMD, MMDType
+    from easy_tdx.web.routers.chanlun import build_train_session_payload
+
+    mmd = MMD(mmd_type=MMDType.SELL_3, msg="3卖")
+    mmd.confidence = 0.6
+    _attach_bi(mmd)
+
+    payload = build_train_session_payload(_TrainFakeResult([mmd]), _train_df(), "DAY")
+
+    cands = [c for c in payload["candidates"] if c["kind"] == "mmd"]
+    assert len(cands) == 1
+    sig = cands[0]["signal"]
+    assert sig["v102_grade"] is None
+    assert sig["v102_advice"] is None
+
+
+# ── 5. diagnose_stock（诊断页 latest_mmd / recent_signals 契约） ──
+
+
+async def test_diagnose_stock_includes_v102_fields() -> None:
+    """V383: 诊断页 latest_mmd 与 recent_signals 携带 V102 四字段。"""
+    from easy_tdx.chanlun.analyser import ChanlunResult
+    from easy_tdx.chanlun.types import MMD, MMDType
+    from easy_tdx.web.routers.diagnosis import diagnose_stock
+    from easy_tdx.web.schemas import StockIdentifier
+
+    mmd = MMD(mmd_type=MMDType.BUY_3, msg="3买")
+    mmd.confidence = 0.8
+    mmd._multi_signal_correlation = {"dense": False}
+    mmd._signal_quality_scorecard = {"overall_grade": "A"}
+    mmd._decision_support = {"action_recommendation": "买入"}
+    mmd._historical_pattern_match = {"win_rate": 0.7}
+    _attach_bi(mmd)
+
+    result = ChanlunResult(frequency="daily", mmds=[mmd])
+    result._fmt_dt = MagicMock(return_value="2024-05-01")  # type: ignore[method-assign]
+
+    def _fake_anchor(fx: object) -> object:
+        return pd.Timestamp("2024-05-01")
+
+    result._fx_anchor_datetime = _fake_anchor  # type: ignore[method-assign]
+
+    with (
+        patch("easy_tdx.web.routers.diagnosis.get_client") as mock_get_client,
+        patch("easy_tdx.chanlun.ChanlunAnalyser") as mock_analyser,
+        patch(
+            "easy_tdx.chanlun.mmd.calc_signal_quality_report",
+            return_value={"grade": "A", "score": 85},
+        ),
+    ):
+        mock_client = AsyncMock()
+        mock_client.get_security_bars = AsyncMock(return_value=_kline_df())
+        mock_get_client.return_value = mock_client
+        mock_analyser.return_value.process_klines.return_value = result
+
+        req = StockIdentifier(market="SZ", code="000001")
+        resp = await diagnose_stock(req, mock_client)
+
+    assert "error" not in resp
+    chan = resp["chanlun"]
+    lm = chan["latest_mmd"]
+    assert lm["v102_signal_quality"]["overall_grade"] == "A"
+    assert lm["v102_decision_support"]["action_recommendation"] == "买入"
+    assert lm["v102_pattern_match"]["win_rate"] == 0.7
+    assert lm["v102_multi_signal_correlation"] == {"dense": False}
+
+    recent = [s for s in chan.get("recent_signals", []) if s["type"] == "3buy"]
+    assert recent, "recent_signals 应包含 3buy"
+    r = recent[0]
+    assert r["v102_signal_quality"]["overall_grade"] == "A"
+    assert r["v102_decision_support"]["action_recommendation"] == "买入"
+    assert r["v102_pattern_match"]["win_rate"] == 0.7
+    assert r["v102_multi_signal_correlation"] == {"dense": False}
