@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**离线链路 demo 升级 V381—— 一键演示覆盖 V372-V380 新能力（八级链路）** —— scripts/offline_chain_demo.py 从 V351-V365 六级升级为 V351-V380 八级：advice-batch 加 --workers 2（并行加速 V378）、watch 加 --since-days 30（V372）+ --report Markdown 落盘（V377）+ --output md stdout 报告（V379），保留 --out JSONL 通道并验证状态文件写回；docstring/标题同步。新增 test_offline_chain_demo_main_runs 真实 CLI 回归（importlib 加载 demo 直接跑 main()，八级命令全部 exit 0）——无网络环境的一键联调演示与当前 CLI 能力对齐。
+
+---
+
 **测试完善：watch --interval 轮询分支运行时回归（V380）—— 多轮/去重/第N轮标记/Ctrl+C 优雅退出** —— V358 的连续轮询此前只有 help 断言，本次用 monkeypatch 冻结 time.sleep（第 2 次调用抛 KeyboardInterrupt 模拟 Ctrl+C）加速两轮扫描：断言第一轮新信号上报（含「第1轮」标记）、第二轮基线去重（「第2轮 无新信号」）、状态文件跨轮累积（信号键仍在基线）、「已停止监控（Ctrl+C）」优雅退出——V358 轮询守护生命周期行为级固化。
 
 ---
