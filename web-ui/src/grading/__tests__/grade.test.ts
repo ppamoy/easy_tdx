@@ -1,16 +1,16 @@
 /**
  * 评级系统自检脚本。
  *
- * 项目未引入 vitest，采用 Node 内置 test runner（node:test）跑。
- * 评级逻辑是纯函数 + 零 DOM 依赖，可直接 import ESM TypeScript（Node v22+ 原生支持）。
+ * V389 迁移到 vitest 统一测试运行器（与 Vue 组件测试同入口）。
+ * 评级逻辑是纯函数 + 零 DOM 依赖，可直接 import ESM TypeScript。
  *
- * 运行：node --test src/grading/__tests__/grade.test.ts
+ * 运行：npm test（vitest run）
  *
  * 关键断言：京东方案例（126.43% 收益但胜率 35.56%、回撤 41.65%、卡玛 0.336）
  * 必须落在 D 档——这是产品诉求的核心验证点。
  */
 
-import { test } from 'node:test'
+import { test } from 'vitest'
 import assert from 'node:assert/strict'
 
 import { gradePerformance, gradeGridPoint, gradePortfolio } from '../index.ts'
