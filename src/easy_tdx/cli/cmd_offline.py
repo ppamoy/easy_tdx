@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -862,6 +863,21 @@ def _watch_signal_row(symbol: str, mmd: Any, date_str: str) -> dict[str, object]
     }
 
 
+def _is_within_since_days(date_str: str, since_days: int) -> bool:
+    """V373: watch 信号日期是否落在最近 N 天窗口内（0=不过滤）。
+
+    日期解析失败时**保守跳过**（不报告），与 V372 运行时行为一致；
+    抽为纯函数便于单测（原来内联在 watch 循环中，无直接测试覆盖）。
+    """
+    if since_days <= 0:
+        return True
+    try:
+        sig_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return False  # 日期解析失败则保守跳过
+    return sig_date >= date.today() - timedelta(days=since_days)
+
+
 @offline.command("advice-batch")
 @click.option("--dir", "day_dir", default=None, help=".day 文件目录（缺省自动检测通达信 vipdoc）")
 @click.option("--limit", default=0, type=int, help="最多处理的股票数（0=全部）")
@@ -1209,16 +1225,9 @@ def watch(
                     if not mmd.bi or not mmd.bi.end:
                         continue
                     date_str = result._fmt_dt(result._fx_anchor_datetime(mmd.bi.end))
-                    if since_days > 0:
+                    if not _is_within_since_days(date_str, since_days):
                         # V372: 只看最近 N 天的新信号（避免首次运行报告陈旧基线）
-                        from datetime import date, datetime, timedelta
-
-                        try:
-                            sig_date = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
-                            if sig_date < date.today() - timedelta(days=since_days):
-                                continue
-                        except ValueError:
-                            continue  # 日期解析失败则保守跳过
+                        continue
                     key = f"{symbol}:{mmd.mmd_type.value}:{date_str}"
                     if key in seen:
                         continue

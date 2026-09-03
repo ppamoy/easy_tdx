@@ -10,14 +10,17 @@ offline advice --file / advice-batch --dir / watch --dir --out，
 
 from __future__ import annotations
 
+import json
 import math
 import random
+from datetime import date, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from click.testing import CliRunner
 
-from easy_tdx.cli.cmd_offline import _watch_signal_row, offline
+from easy_tdx.cli.cmd_offline import _is_within_since_days, _watch_signal_row, offline
 from easy_tdx.models.bar import SecurityBar
 from easy_tdx.offline.write_daily import append_daily_bars
 
@@ -147,3 +150,150 @@ def test_watch_signal_row_missing_decision_is_null():
     assert row["stop_loss"] is None
     assert row["take_profit_1"] is None
     assert row["v102_grade"] is None
+
+
+class _FakeWatchResult:
+    """watch 运行时回归：模拟分析结果，固定产生一个 3buy 信号（日期可注入）。"""
+
+    def __init__(self, signal_date: str) -> None:
+        self.mmds = [
+            SimpleNamespace(
+                mmd_type=SimpleNamespace(value="3buy"),
+                bi=SimpleNamespace(end="anchor"),
+                confidence=0.71,
+                _signal_quality_scorecard=None,
+                _decision_support=None,
+            )
+        ]
+        self._signal_date = signal_date
+
+    def _fx_anchor_datetime(self, bi_end: object) -> object:
+        return "anchor"
+
+    def _fmt_dt(self, anchor: object) -> str:
+        return self._signal_date
+
+
+class _FakeWatchAnalyser:
+    """返回固定信号的假 ChanlunAnalyser（patch easy_tdx.chanlun.ChanlunAnalyser）。"""
+
+    def __init__(self, signal_date: str) -> None:
+        self._signal_date = signal_date
+
+    def process_klines(self, df) -> _FakeWatchResult:
+        return _FakeWatchResult(self._signal_date)
+
+
+def _patch_watch_analyser(monkeypatch, signal_date: str) -> None:
+    monkeypatch.setattr(
+        "easy_tdx.chanlun.ChanlunAnalyser",
+        lambda code=None, frequency=None: _FakeWatchAnalyser(signal_date),
+    )
+
+
+# ── V373: _is_within_since_days 纯函数 ──
+
+
+def test_is_within_since_days_zero_or_negative_means_no_filter() -> None:
+    """V373: since_days<=0 不过滤（与 --since-days 0 默认行为一致）。"""
+    assert _is_within_since_days("2000-01-01", 0) is True
+    assert _is_within_since_days("2000-01-01", -5) is True
+
+
+def test_is_within_since_days_today_and_boundary_are_included() -> None:
+    """V373: 今天与恰好 N 天前（边界含当天）的信号均保留。"""
+    today = date.today()
+    assert _is_within_since_days(today.strftime("%Y-%m-%d"), 30) is True
+    boundary = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+    assert _is_within_since_days(boundary, 30) is True
+
+
+def test_is_within_since_days_old_signal_is_filtered() -> None:
+    """V373: 早于 N 天窗口的信号被过滤。"""
+    old = date.today() - timedelta(days=31)
+    assert _is_within_since_days(old.strftime("%Y-%m-%d"), 30) is False
+
+
+def test_is_within_since_days_invalid_date_is_filtered_conservatively() -> None:
+    """V373: 日期解析失败保守跳过（不报告），与 V372 运行时行为一致。"""
+    assert _is_within_since_days("not-a-date", 30) is False
+    assert _is_within_since_days("", 30) is False
+
+
+# ── V373: watch --since-days 运行时回归（mock 分析器产生 3buy） ──
+
+
+def test_watch_since_days_filters_old_signal(tmp_path: Path, monkeypatch) -> None:
+    """V373: 信号日期早于窗口时，watch 不输出也不写 JSONL，但状态文件仍写回。"""
+    lday, _ = _make_lday(tmp_path)
+    state = tmp_path / "watch_state.json"
+    jsonl = tmp_path / "signals.jsonl"
+    old_date = (date.today() - timedelta(days=400)).strftime("%Y-%m-%d")
+    _patch_watch_analyser(monkeypatch, old_date)
+
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        [
+            "watch",
+            "--dir",
+            str(lday),
+            "--state",
+            str(state),
+            "--limit",
+            "1",
+            "--since-days",
+            "30",
+            "--out",
+            str(jsonl),
+            "--output",
+            "json",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert "无新信号（状态已是最新）" in res.output
+    assert not jsonl.exists()  # 旧信号被过滤 → 无 JSONL 落盘
+    assert state.is_file()  # 状态文件仍写回（seen 为空）
+
+
+def test_watch_since_days_reports_recent_signal(tmp_path: Path, monkeypatch) -> None:
+    """V373: 信号日期在窗口内时正常上报，JSONL 含 V102 建议字段。"""
+    lday, _ = _make_lday(tmp_path)
+    state = tmp_path / "watch_state.json"
+    jsonl = tmp_path / "signals.jsonl"
+    today_str = date.today().strftime("%Y-%m-%d")
+    _patch_watch_analyser(monkeypatch, today_str)
+
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        [
+            "watch",
+            "--dir",
+            str(lday),
+            "--state",
+            str(state),
+            "--limit",
+            "1",
+            "--since-days",
+            "30",
+            "--out",
+            str(jsonl),
+            "--output",
+            "json",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    assert "新信号 1 条" in res.output
+    assert '"symbol"' in res.output
+    assert "SH600000" in res.output
+
+    lines = jsonl.read_text(encoding="utf-8").strip().splitlines()
+    assert len(lines) == 1
+    row = json.loads(lines[0])
+    assert row["symbol"] == "SH600000"
+    assert row["type"] == "3buy"
+    assert row["date"] == today_str
+    assert row["confidence"] == 0.71
+    assert row["v102_grade"] is None
+    assert row["advice"] is None
