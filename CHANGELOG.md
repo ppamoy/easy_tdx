@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline advice-batch 支持 --workers（V378）—— 离线批量实证多线程并行加速** —— easy-tdx offline advice-batch --workers N：用 ThreadPoolExecutor 并行处理 .day 文件（默认 1=串行，行为完全不变；N≥2 批量实证加速，输出顺序按文件名稳定一致）。单文件处理抽为模块级 _advice_batch_one 纯函数（返回 (report, row)，异常兜底为 error 行），串行/并行统一调用；3 个新回归：--workers 2 与默认串行 JSON 输出逐字段一致、--workers 4 大批量无 error 行、_advice_batch_one 对缺失文件返回 error 行不抛异常——全股票池离线实证从分钟级提速到秒级（视核数）。
+
+---
+
 **offline watch 支持 --report（V377）—— 新信号 Markdown 报告落盘（供人阅读/定时任务存档）** —— easy-tdx offline watch --report /path/to/signals.md：本轮新发现的 3买/3卖 信号以 Markdown 报告**追加**写入文件——标题 + 扫描时间 + 新信号计数 + 逐条表格（标的/信号/日期/置信度/V102 质量评级/建议/入场/止损/止盈1），无决策数据字段渲染为 '-'（不崩溃）；与 --out JSONL 并存构成**双通道输出**（--out 供脚本/定时任务消费，--report 供人阅读/邮件/归档）。抽 _render_watch_report 纯函数便于单测（与 _watch_signal_row 同思路），3 个新用例（纯函数含建议字段/无数据渲染 '-'/运行时落盘断言）。
 
 ---
