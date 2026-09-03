@@ -286,3 +286,108 @@ class TestV102Advice:
         assert advice is not None
         assert advice["stop_loss"] == 95.0
         assert advice["take_profit_1"] == 110.0
+
+    # ── V385: use_v102_advice 边界（信号队列路径：空仓 → 3buy 首仓） ──
+
+    def _make_entry_strategy(self, advice: dict | None, use_v102: bool = True) -> ChanlunStrategy:
+        """构造空仓策略，信号队列首条为 3buy（可带/不带 V102 建议）。"""
+        from unittest.mock import MagicMock
+
+        s = self._make_strategy()
+        s._position_count = 0
+        s._entry_price = 0.0
+        s.buy = MagicMock()
+        s.data.close = [100.0]
+        s.data.high = [101.0]
+        s.data.low = [99.0]
+        s._v102_active = False
+        s._v102_sl = 0.0
+        s._v102_tp = 0.0
+        s.p["use_v102_advice"] = use_v102
+        s.p["stop_loss_pct"] = 0.0
+        s.p["take_profit_pct"] = 0.0
+        s._chanlun_signals = [(1, "3buy", 0.8, advice)]
+        s._signal_ptr = 0
+        s._bar_index = 1
+        return s
+
+    def test_v102_advice_none_falls_back_to_pct(self) -> None:
+        """V385: use_v102_advice=True 但信号无建议 → 不激活 V102，百分比止损生效。"""
+        s = self._make_entry_strategy(None)
+        s.next()  # 消费 3buy → 建仓
+        assert s._position_count == 1
+        assert s._v102_active is False
+
+        s.p["stop_loss_pct"] = 0.05  # 95
+        s._bar_index = 2
+        s.data.close = [94.0]
+        s.data.high = [95.0]
+        s.data.low = [93.0]
+        s.next()
+        assert s._position_count == 0
+        assert s._trade_log[-1]["signal_type"] == "stop_loss"
+
+    def test_v102_disabled_with_advice_falls_back(self) -> None:
+        """V385: use_v102_advice=False 即使信号带建议也不激活（对照）。"""
+        s = self._make_entry_strategy({"stop_loss": 95.0, "take_profit_1": 110.0}, use_v102=False)
+        s.next()
+        assert s._position_count == 1
+        assert s._v102_active is False
+        assert s._v102_sl == 0.0
+
+    def test_v102_incomplete_advice_no_crash(self) -> None:
+        """V385: 建议缺 stop_loss/take_profit_1 → sl/tp=0 不崩溃，百分比回退兜底。"""
+        s = self._make_entry_strategy({"entry_price": 100.0})
+        s.next()
+        assert s._position_count == 1
+        assert s._v102_active is True  # advice 非空 → 激活
+        assert s._v102_sl == 0.0  # 缺失字段 → 0
+        assert s._v102_tp == 0.0
+
+        s.p["stop_loss_pct"] = 0.05
+        s._bar_index = 2
+        s.data.close = [94.0]
+        s.data.high = [95.0]
+        s.data.low = [93.0]
+        s.next()
+        assert s._position_count == 0
+        assert s._trade_log[-1]["signal_type"] == "stop_loss"
+
+    def test_v102_add_position_keeps_first_v102(self) -> None:
+        """V385: 3buy 首仓激活 V102 后再加仓 → 不覆盖首仓的 V102 止损/止盈。"""
+        advice = {"stop_loss": 95.0, "take_profit_1": 110.0}
+        s = self._make_entry_strategy(advice)
+        s.next()  # 首仓
+        assert s._v102_active is True
+        assert s._v102_sl == 95.0
+
+        # 第二次 3buy → 加仓分支（position>=1），不重置 V102
+        s._chanlun_signals = [(2, "3buy", 0.8, advice)]
+        s._signal_ptr = 0
+        s._bar_index = 2
+        s.data.close = [102.0]
+        s.data.high = [103.0]
+        s.data.low = [101.0]
+        s.next()
+        assert s._position_count == 2
+        assert s._v102_sl == 95.0  # 保留首仓 V102
+        assert s._v102_tp == 110.0
+
+    def test_v102_close_position_resets_state(self) -> None:
+        """V385: 3sell 平仓后 V102 状态重置（防残留影响后续持仓）。"""
+        advice = {"stop_loss": 95.0, "take_profit_1": 110.0}
+        s = self._make_entry_strategy(advice)
+        s.next()  # 首仓带 V102
+        assert s._v102_active is True
+
+        s._chanlun_signals = [(2, "3sell", 0.8, None)]
+        s._signal_ptr = 0
+        s._bar_index = 2
+        s.data.close = [103.0]
+        s.data.high = [104.0]
+        s.data.low = [102.0]
+        s.next()
+        assert s._position_count == 0
+        assert s._v102_active is False
+        assert s._v102_sl == 0.0
+        assert s._v102_tp == 0.0

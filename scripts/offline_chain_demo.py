@@ -86,6 +86,11 @@ def _run(sub_args: list[str], cwd: Path) -> tuple[int, str]:
     """执行 easy-tdx 子命令并返回 (退出码, stdout 前 600 字)。"""
     exe = shutil.which("easy-tdx")
     if exe is None:
+        # 未激活 venv 时回退到项目自带 venv（demo 自包含，不依赖 PATH）
+        venv_exe = Path(__file__).resolve().parent.parent / ".venv" / "bin" / "easy-tdx"
+        if venv_exe.is_file():
+            exe = str(venv_exe)
+    if exe is None:
         return 1, "easy-tdx 不在 PATH（请先 pip install -e . 或激活 venv）"
     res = subprocess.run([exe, *sub_args], cwd=cwd, capture_output=True, text=True, timeout=180)
     out = (res.stdout or "") + (res.stderr or "")
