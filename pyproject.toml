@@ -91,7 +91,7 @@ source = ["easy_tdx"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
-# 覆盖率门槛。从 50 提升到 60（审计 #9）：补充 reconnect/bitmap/config 测试后
-# 实测约 61%。进一步提到 70 需补 web/ 路由与更多 client 镜像测试，留待后续。
-fail_under = 60
+# 覆盖率门槛。V388 从 60 提升到 65：补齐 15 个零覆盖策略 + 11 个零覆盖路由
+# 后实测约 68.66%（2722 passed）。下一步 70 需补 client 镜像/tray/unified 等，留待后续。
+fail_under = 65
 show_missing = true
