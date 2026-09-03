@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""V366: 离线 V102 建议链路端到端联调演示（无需网络/通达信）。
+"""V366/V381: 离线 V102 建议链路端到端联调演示（无需网络/通达信）。
 
 用合成日线生成临时 .day 文件，依次调用：
   1. offline advice --file    （单标建议回放）
-  2. offline advice-batch --dir（批量建议实证）
-  3. offline watch --dir --out （信号监控 + JSONL 落盘）
-验证六级链路（V351-V365）在无网络环境可完整衔接。
+  2. offline advice-batch --dir --workers（批量建议实证 + 并行加速 V378）
+  3. offline watch --dir --since-days --report --output md --out
+                              （信号监控：最近 N 天过滤 V372 + Markdown 报告
+                               落盘 V377 / stdout V379 + JSONL 落盘 V365）
+验证八级链路（V351-V380）在无网络环境可完整衔接。
 
 运行：
     cd /home/skp/workspace/easy_tdx
     source .venv/bin/activate
     python scripts/offline_chain_demo.py
 """
+
 
 from __future__ import annotations
 
@@ -91,7 +94,7 @@ def _run(sub_args: list[str], cwd: Path) -> tuple[int, str]:
 
 def main() -> int:
     print("=" * 64)
-    print("离线 V102 建议链路端到端联调（V351-V365 六级）")
+    print("离线 V102 建议链路端到端联调（V351-V380 八级）")
     print("=" * 64)
 
     workdir = Path(tempfile.mkdtemp(prefix="easy_tdx_chain_demo_"))
@@ -127,14 +130,16 @@ def main() -> int:
             print("✗ 单标建议回放失败")
             return 1
 
-        # 3. 批量建议实证（V353）
-        print("\n3) offline advice-batch --dir（批量建议实证）")
+        # 3. 批量建议实证（V353/V378：--workers 并行加速）
+        print("\n3) offline advice-batch --dir --workers 2（批量建议实证 + 并行）")
         rc, out = _run(
             [
                 "offline",
                 "advice-batch",
                 "--dir",
                 str(lday),
+                "--workers",
+                "2",
                 "--output",
                 "json",
             ],
@@ -146,10 +151,11 @@ def main() -> int:
             print("✗ 批量建议实证失败")
             return 1
 
-        # 4. 信号监控 + JSONL 落盘（V354/V358/V360/V365）
+        # 4. 信号监控 + 多通道输出（V354/V358/V360/V365/V372/V377/V379）
         state = workdir / "watch_state.json"
         jsonl = workdir / "signals.jsonl"
-        print("\n4) offline watch --dir --out（信号监控 + JSONL 落盘）")
+        report = workdir / "signals.md"
+        print("\n4) offline watch --since-days --report --output md --out（信号监控多通道）")
         rc, out = _run(
             [
                 "offline",
@@ -158,10 +164,14 @@ def main() -> int:
                 str(lday),
                 "--state",
                 str(state),
+                "--since-days",
+                "30",
+                "--report",
+                str(report),
+                "--output",
+                "md",
                 "--out",
                 str(jsonl),
-                "--output",
-                "json",
             ],
             workdir,
         )
@@ -170,13 +180,18 @@ def main() -> int:
         if rc != 0:
             print("✗ 信号监控失败")
             return 1
+        # 合成数据通常无 3买/3卖：状态文件必然写回，JSONL/Markdown 仅在有新信号时生成
+        if state.is_file():
+            print(f"   状态文件写回: {state}")
         if jsonl.is_file():
             n = len(jsonl.read_text(encoding="utf-8").strip().splitlines())
             print(f"   JSONL 落盘: {jsonl}（{n} 行）")
+        if report.is_file():
+            print(f"   Markdown 报告落盘: {report}（V377）")
 
         # 5. 汇总
         print("\n" + "=" * 64)
-        print("✓ 离线链路六级全部衔接成功（无需网络）")
+        print("✓ 离线链路八级全部衔接成功（无需网络）")
         print(f"  临时目录: {workdir}")
         print("=" * 64)
         return 0

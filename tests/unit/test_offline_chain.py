@@ -732,3 +732,19 @@ def test_watch_interval_polls_and_graceful_exit(tmp_path: Path, monkeypatch) -> 
     data = json.loads(state.read_text(encoding="utf-8"))
     assert any(f"SH600000:3buy:{today_str}" == s for s in data["seen"])
     assert sleep_calls["n"] == 2
+
+
+# ── V381: 离线链路 demo 脚本（V351-V380 八级）真实 CLI 回归 ──
+
+
+def test_offline_chain_demo_main_runs() -> None:
+    """V381: offline_chain_demo.py main() 跑通（真实 easy-tdx CLI + 合成数据）。"""
+    import importlib.util
+
+    demo_path = Path(__file__).resolve().parent.parent.parent / "scripts" / "offline_chain_demo.py"
+    spec = importlib.util.spec_from_file_location("offline_chain_demo", demo_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    rc = mod.main()
+    assert rc == 0  # 八级链路全部衔接成功（V351-V380）
