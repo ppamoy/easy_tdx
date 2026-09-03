@@ -566,6 +566,67 @@ class TestOnlineAdviceOutput:
         assert '"advice_count": 2' in res.output
         assert '"report"' in res.output
 
+    def test_advice_table_runs(self, monkeypatch):
+        """V374: 在线 advice --output table 运行时输出汇总行 + 逐笔明细表。"""
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        self._patch_env(monkeypatch)
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.collect_signal_advices",
+            lambda *a, **k: self._fake_advices(),
+        )
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.simulate_advice_batch",
+            lambda *a, **k: self._fake_report(),
+        )
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["SZ", "000001", "--output", "table"])
+        assert res.exit_code == 0, res.output
+        assert "标的 SZ000001 | 建议 2 笔" in res.output
+        assert "胜率 50%" in res.output
+        assert "平均 +1.00%" in res.output
+        assert "出场分布: 止损 50%" in res.output
+        assert "止盈 50%" in res.output
+        assert "100.00" in res.output  # fake advice entry_price 100.0
+        assert "112.00" in res.output  # fake trade exit_price 112.0
+        assert "到期" in res.output  # fake trade #1 exit_reason=expire
+
+    def test_advice_csv_runs(self, monkeypatch):
+        """V374: 在线 advice --output csv 运行时输出汇总行 + 逐笔明细 CSV。"""
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        self._patch_env(monkeypatch)
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.collect_signal_advices",
+            lambda *a, **k: self._fake_advices(),
+        )
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.simulate_advice_batch",
+            lambda *a, **k: self._fake_report(),
+        )
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["SZ", "000001", "--output", "csv"])
+        assert res.exit_code == 0, res.output
+        lines = res.output.strip().splitlines()
+        assert lines[0] == (
+            "symbol,advice_count,win_rate,avg_return,total_return,stop_rate,tp_rate,expire_rate"
+        )
+        # fake report: count=2 win=0.5 avg=1.0 total=2.0 stop=0.5 tp=0.5 expire=0.0
+        assert lines[1] == "SZ000001,2,50.0%,+1.00%,+2.00%,50.0%,50.0%,0.0%"
+        assert lines[2] == ""
+        assert lines[3] == (
+            "no,entry_price,stop_loss,take_profit_1,exit_price,exit_reason,return_pct"
+        )
+        # 逐笔行收益无 % 后缀（f"{t['return_pct']:+.2f}"）
+        assert "1,100.00,97.00,106.00,100.00,expire,+0.00" in lines
+        assert "2,110.00,107.00,116.00,112.00,tp1,+2.00" in lines
+
 
 class TestSummarizeBatch:
     """多标的批量汇总（summarize_batch）。"""

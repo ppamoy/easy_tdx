@@ -297,3 +297,93 @@ def test_watch_since_days_reports_recent_signal(tmp_path: Path, monkeypatch) -> 
     assert row["confidence"] == 0.71
     assert row["v102_grade"] is None
     assert row["advice"] is None
+
+
+# ── V374: offline advice / advice-batch 的 md/table/csv 输出分支运行时回归 ──
+# （V366/V370 曾抓出「help 通过但运行崩溃」：输出分支必须真实走 CliRunner）
+
+
+def test_offline_advice_md_runs(tmp_path: Path) -> None:
+    """V374: offline advice --output md 输出 Markdown 报告结构。"""
+    _lday, day_a = _make_lday(tmp_path)
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice", "SH", "600000", "--file", str(day_a), "--output", "md"],
+    )
+    assert res.exit_code == 0, res.output
+    assert "# 离线 V102 建议回放报告（SH600000）" in res.output
+    assert "K线 **150** 根" in res.output
+    assert "| # | 入场 | 止损 | 止盈1 |" in res.output
+    assert "**汇总**" in res.output
+    assert "**出场分布**" in res.output
+
+
+def test_offline_advice_table_runs(tmp_path: Path) -> None:
+    """V374: offline advice --output table 输出标量列表格（嵌套列不崩溃）。"""
+    _lday, day_a = _make_lday(tmp_path)
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice", "SH", "600000", "--file", str(day_a), "--output", "table"],
+    )
+    assert res.exit_code == 0, res.output
+    assert "count" in res.output
+    assert "SH600000" in res.output
+
+
+def test_offline_advice_csv_runs(tmp_path: Path) -> None:
+    """V374: offline advice --output csv 输出标量列 CSV（含 symbol/bars）。"""
+    _lday, day_a = _make_lday(tmp_path)
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice", "SH", "600000", "--file", str(day_a), "--output", "csv"],
+    )
+    assert res.exit_code == 0, res.output
+    lines = res.output.strip().splitlines()
+    assert lines[0] == "count,win_rate,avg_return,total_return,symbol,bars,signals"
+    assert "SH600000" in lines[1]
+
+
+def test_offline_advice_batch_md_runs(tmp_path: Path) -> None:
+    """V374: offline advice-batch --output md 输出批量 Markdown 报告。"""
+    lday, _ = _make_lday(tmp_path)
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice-batch", "--dir", str(lday), "--output", "md"],
+    )
+    assert res.exit_code == 0, res.output
+    assert "# 离线 V102 批量建议实证报告" in res.output
+    assert "| 标的 | K线 | 信号 |" in res.output
+    assert "SH600000" in res.output
+
+
+def test_offline_advice_batch_table_runs(tmp_path: Path) -> None:
+    """V374: offline advice-batch --output table 输出每只汇总行（含 summary 列）。"""
+    lday, _ = _make_lday(tmp_path)
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice-batch", "--dir", str(lday), "--output", "table"],
+    )
+    assert res.exit_code == 0, res.output
+    assert "symbol" in res.output
+    assert "summary_symbols" in res.output
+    assert "SH600000" in res.output
+
+
+def test_offline_advice_batch_csv_runs(tmp_path: Path) -> None:
+    """V374: offline advice-batch --output csv 输出每只汇总 CSV。"""
+    lday, _ = _make_lday(tmp_path)
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice-batch", "--dir", str(lday), "--output", "csv"],
+    )
+    assert res.exit_code == 0, res.output
+    lines = res.output.strip().splitlines()
+    assert lines[0].startswith("symbol,bars,signals,advice_count")
+    assert "summary_win_rate" in lines[0]
+    assert "SH600000" in lines[1]
