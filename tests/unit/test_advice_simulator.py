@@ -627,6 +627,71 @@ class TestOnlineAdviceOutput:
         assert "1,100.00,97.00,106.00,100.00,expire,+0.00" in lines
         assert "2,110.00,107.00,116.00,112.00,tp1,+2.00" in lines
 
+    def test_advice_insufficient_data_runs(self, monkeypatch):
+        """V376: 行情数据不足（<30 根）返回 error JSON，不崩溃。"""
+        import json
+
+        import numpy as np
+        import pandas as pd
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        self._patch_env(monkeypatch)
+
+        class ShortClient:
+            def get_stock_kline(self, *a, **k):
+                dates = pd.date_range("2024-01-01", periods=10, freq="D")
+                return pd.DataFrame(
+                    {
+                        "datetime": dates,
+                        "open": np.arange(100, 110),
+                        "close": np.arange(100, 110),
+                        "high": np.arange(101, 111),
+                        "low": np.arange(99, 109),
+                        "vol": [1e6] * 10,
+                        "amount": [1e8] * 10,
+                    }
+                )
+
+        class ShortCtx:
+            def __enter__(self):
+                return ShortClient()
+
+            def __exit__(self, *a):
+                return False
+
+        monkeypatch.setattr("easy_tdx.cli.conn.get_mac_client", lambda: ShortCtx())
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["SZ", "000001", "--output", "json"])
+        assert res.exit_code == 0, res.output
+        data = json.loads(res.output)
+        assert data["symbol"] == "SZ000001"
+        assert "行情数据不足（<30 根）" in data["error"]
+
+    def test_advice_no_signals_runs(self, monkeypatch):
+        """V376: 无 3买/3卖 信号时返回 advice_count=0 + message 提示。"""
+        import json
+
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        self._patch_env(monkeypatch)
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.collect_signal_advices",
+            lambda *a, **k: [],  # 无 3买/3卖 信号
+        )
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["SZ", "000001", "--output", "json"])
+        assert res.exit_code == 0, res.output
+        data = json.loads(res.output)
+        assert data["symbol"] == "SZ000001"
+        assert data["advice_count"] == 0
+        assert "未发现 3买/3卖 信号" in data["message"]
+
 
 class TestSummarizeBatch:
     """多标的批量汇总（summarize_batch）。"""

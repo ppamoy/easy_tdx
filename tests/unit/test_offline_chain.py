@@ -508,3 +508,19 @@ def test_watch_second_run_deduplicates(tmp_path: Path, monkeypatch) -> None:
     res2 = runner.invoke(offline, args)
     assert res2.exit_code == 0, res2.output
     assert "无新信号（状态已是最新）" in res2.output
+
+
+# ── V376: advice 边界分支（数据不足/无信号/空文件）运行时回归 ──
+
+
+def test_offline_advice_empty_file(tmp_path: Path) -> None:
+    """V376: --file 指向空 .day 文件时提示未读取到数据（exit 0，不崩溃）。"""
+    empty = tmp_path / "empty.day"
+    empty.write_bytes(b"")
+    runner = CliRunner()
+    res = runner.invoke(
+        offline,
+        ["advice", "SH", "600000", "--file", str(empty), "--output", "json"],
+    )
+    assert res.exit_code == 0, res.output
+    assert "未读取到数据" in res.output
