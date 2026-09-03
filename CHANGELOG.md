@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**测试完善：watch --interval 轮询分支运行时回归（V380）—— 多轮/去重/第N轮标记/Ctrl+C 优雅退出** —— V358 的连续轮询此前只有 help 断言，本次用 monkeypatch 冻结 time.sleep（第 2 次调用抛 KeyboardInterrupt 模拟 Ctrl+C）加速两轮扫描：断言第一轮新信号上报（含「第1轮」标记）、第二轮基线去重（「第2轮 无新信号」）、状态文件跨轮累积（信号键仍在基线）、「已停止监控（Ctrl+C）」优雅退出——V358 轮询守护生命周期行为级固化。
+
+---
+
 **offline watch 支持 --output md（V379）—— stdout 直接输出 Markdown 报告，四级输出统一** —— easy-tdx offline watch --output md：新信号以 Markdown 报告直接输出到 stdout（与 V377 --report 落盘内容一致：标题 + 扫描时间 + 新信号计数 + 逐条表格含 V102 质量/建议/入场/止损/止盈1）——watch 的输出能力与 advice/advice-batch 对齐成 json/table/csv/md 四级；docs/v102-decision-support.md 离线章节补齐 V372-V378 新参数示例（--since-days/--report/--workers/--output md）。
 
 ---
