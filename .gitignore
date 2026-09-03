@@ -18,6 +18,9 @@ FK/
 
 # 测试覆盖率与运行时产物
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/
 signals.json
 
 # 本地独立脚本（不属于 easy_tdx 库，依赖外部 unified_config / sqlalchemy）
@@ -28,3 +31,6 @@ CLAUDE.md
 
 # 代码审计报告（本地产物，不入库）
 audit-report-*.html
+
+# 一次性脚手架脚本归档（本地保留，不入库）
+scaffolds/
