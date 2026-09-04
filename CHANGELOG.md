@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十三（V399x）—— mac 零星边界测试**：
+
+- **V399x** mac/commands 零星边界测试（kline_offset/auction/belong_board，+4 用例）。
+
+---
+
 **质量加固续章二十二（V399w）—— mac 最后残余路径测试**：
 
 - **V399w** mac/commands 最后残余路径测试（+4 用例）。
