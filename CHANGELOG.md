@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十（V399u）—— symbol_bar/tick_chart 解析测试**：
+
+- **V399u** mac/commands/symbol_bar.py + symbol_tick_chart.py 解析测试（+3 用例）。
+
+---
+
 **质量加固续章十九（V399t）—— cmd_verify 校验分支测试**：
 
 - **V399t** cli/cmd_verify.py verify 命令的 --params 非法 JSON / 未知策略分支测试（+2 用例）。
