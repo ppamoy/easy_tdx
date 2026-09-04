@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章九（V399i）—— backtest 路由纯函数测试**：
+
+- **V399i** web/routers/backtest.py 的 _ohlcv_to_df/_filter_df_by_date/_now 纯函数测试（+8 用例）。
+
+---
+
 **质量加固续章八（V399g/h）—— 协议编解码 + 板块名解析测试**：
 
 - **V399g** mac/commands/unusual.py 协议编解码（_describe_unusual 全类型分支 + UnusualCmd，+9 用例）。
