@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章十五（V399p）—— mac 协议编解码测试五**：
+
+- **V399p** mac/commands/symbol_tick_chart.py + symbol_quotes.py + board_members_quotes.py 协议编解码测试（+7 用例）。
+
+---
+
 **质量加固续章十四（V399o）—— mac 协议编解码测试四**：
 
 - **V399o** mac/commands/symbol_transaction.py + file_query.py 协议编解码测试（+8 用例）。
