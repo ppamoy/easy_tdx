@@ -55,7 +55,7 @@ def _calc_volume_profile_for_diagnosis(
     if closes is None or volumes is None or len(closes) < 60:
         return None
     try:
-        from easy_tdx.chanlun.mmd import _calc_volume_profile
+        from easy_tdx.chanlun.mmd_conditions import _calc_volume_profile
 
         profile = _calc_volume_profile(closes, volumes, lookback=60, num_bins=20)
         return {

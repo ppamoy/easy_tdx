@@ -78,10 +78,18 @@ class TestPickReport:
     def _frame(self) -> pd.DataFrame:
         return pd.DataFrame(
             [
-                {"code": "000001", "market": "SZ", "report_date": date(2024, 3, 31),
-                 "disclosure_date": date(2024, 4, 25)},
-                {"code": "000001", "market": "SZ", "report_date": date(2023, 12, 31),
-                 "disclosure_date": date(2024, 1, 20)},
+                {
+                    "code": "000001",
+                    "market": "SZ",
+                    "report_date": date(2024, 3, 31),
+                    "disclosure_date": date(2024, 4, 25),
+                },
+                {
+                    "code": "000001",
+                    "market": "SZ",
+                    "report_date": date(2023, 12, 31),
+                    "disclosure_date": date(2024, 1, 20),
+                },
             ]
         )
 
