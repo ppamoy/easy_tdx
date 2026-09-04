@@ -3,6 +3,16 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 质量加固续章（V393-V396）✅ 全部完成
+
+mmd.py 第二阶段拆分 + 覆盖率冲刺 70%：
+
+- **V393** mmd.py 拆分第二步：V76-V82 版本化条件簇（条件236-263，28 个 _calc_* 函数约 2400 行）抽出为 mmd_conditions.py 独立模块，连同共享辅助 _calc_atr_volatility 一并迁出；mmd.py 顶层惰性再导出保兼容，并修正 advice_simulator/analyser/diagnosis 三处显式导入（消除 mypy 隐式再导出告警）——29k 行 god-module 再瘦身 2400 行
+- **V394** unified.py(38%→91%) 与 screen/strength.py(44%→54%) 低覆盖模块边界测试：同步/异步统一客户端懒加载、A股→Mac/扩展→MacEx 路由、全部代理方法委托、上下文管理与关闭；strength 纯函数数值/边界/权重归一化 + 排名器序列化
+- **V395** Web 路由成功路径契约补强：chanlun analyze/multi-level/recommend/train 三端点、market 8 端点、monitor create/status/check/stop/list、sina 财报；顺带修复 /monitor/list 被 /monitor/{task_id} 动态路由遮蔽的真实 bug（列表接口返回「任务不存在」）
+- **V396** 覆盖率门槛 65→70（实测 69.57%，2821 passed）
+- **质量**：全量 pytest tests/unit/ 2821 passed / 0 failed（V393-V396 新增 99 个用例）；ruff/mypy/format 归零；覆盖率 69.57%（门槛 70）
+
 ## 质量加固系列（V386-V392）✅ 全部完成
 
 OpenSpec 变更 easy-tdx-v386-quality-hardening 四能力域分阶段落地，质量行从 2609 → 2722 passed：

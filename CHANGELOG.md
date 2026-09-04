@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+**质量加固续章（V393-V395）—— mmd.py 第二阶段拆分 + 覆盖率冲刺 70%** —— 延续 V386-V392 的 OpenSpec 变更 easy-tdx-v386-quality-hardening，每个版本全门禁通过：
+
+- **V393** mmd.py 拆分第二步：V76-V82 版本化条件簇（条件236-263，28 个 _calc_* 函数约 2400 行）抽出为 mmd_conditions.py 独立模块，连同共享辅助 _calc_atr_volatility 一并迁出；mmd.py 顶层惰性再导出保兼容，并修正 advice_simulator/analyser/diagnosis 三处显式导入到新模块（消除 mypy 隐式再导出告警）——29k 行 god-module 再瘦身 2400 行。
+- **V394** unified.py(38%→57%) 与 screen/strength.py(44%→54%) 低覆盖模块边界测试：同步/异步统一客户端的懒加载、A股→Mac/扩展→MacEx 路由、全部代理方法委托、上下文管理与关闭；strength 纯函数数值/边界/权重归一化 + 排名器序列化。
+- **V395** Web 路由成功路径契约补强：chanlun analyze/multi-level/recommend 三端点（mock fetch_qfq_klines + analyser）、market 8 端点、monitor list、sina 财报；顺带修复 /monitor/list 被 /monitor/{task_id} 动态路由遮蔽的真实 bug（列表接口返回「任务不存在」）——覆盖率 69%→70%+。
+
+---
+
 **质量加固系列（V386-V392）—— OpenSpec 四能力域全面落地** —— 按 OpenSpec 变更 easy-tdx-v386-quality-hardening 分阶段实施，每个版本均通过 ruff/mypy/pytest/vue-tsc/vite build/vitest 全部门禁：
 
 - **V386** 15 个零覆盖内置策略参数化回归（默认/显式参数实例化、200 根合成行情运行、短数据/空数据安全降级、信号三要素形状）——此前 atr_breakout/bbi/bias_reversal/dmi/donchian/ema_cross/emv/keltner/obv_breakout/rsi_divergence/rsi_macd_combo/supertrend/triple_ma/volume_breakout/wr_reversal 零测试引用，一旦 init()/next() 崩溃用户跑回测才暴露。
