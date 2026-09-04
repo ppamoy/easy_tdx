@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章四（V399b）—— mmd.py 第五阶段拆分（V41-V65 全部迁出）**：
+
+- **V399b** mmd.py 拆分第五步：V44 条件簇（13 个 _calc_* 函数）+ _calc_confidence 及其共享辅助闭包（8 个函数）迁入 mmd_conditions.py，mmd.py 从 15605 行降到 14001 行；V41-V65 版本化条件簇至此全部迁出，mmd.py 顶层惰性再导出保持兼容。
+
+---
+
 **质量加固续章三（V399）—— mmd.py 第四阶段拆分**：
 
 - **V399** mmd.py 拆分第四步：5 个叶子辅助函数（_calc_atr/_calc_rsi/_calc_adx_strength/_calc_ma_slope/_calc_volume_profile）+ V41/V42/V48/V51 四个条件簇（17 个 _calc_* 函数）迁入 mmd_conditions.py，mmd.py 17328→15607 行；另补 cmd_run_all 纯函数 + fundamental/indicators 纯函数测试（+13 用例）。
