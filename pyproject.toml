@@ -91,7 +91,7 @@ source = ["easy_tdx"]
 omit = ["tests/*"]
 
 [tool.coverage.report]
-# 覆盖率门槛。V388 从 60 提升到 65：补齐 15 个零覆盖策略 + 11 个零覆盖路由
-# 后实测约 68.66%（2722 passed）。下一步 70 需补 client 镜像/tray/unified 等，留待后续。
-fail_under = 65
+# 覆盖率门槛。V395 从 65 提升到 70：补齐 unified/strength/market/monitor/sina
+# 与 chanlun 路由测试后实测 69.57%（2821 passed）。
+fail_under = 70
 show_missing = true
