@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三（V399）—— mmd.py 第四阶段拆分**：
+
+- **V399** mmd.py 拆分第四步：5 个叶子辅助函数（_calc_atr/_calc_rsi/_calc_adx_strength/_calc_ma_slope/_calc_volume_profile）+ V41/V42/V48/V51 四个条件簇（17 个 _calc_* 函数）迁入 mmd_conditions.py，mmd.py 17328→15607 行；另补 cmd_run_all 纯函数 + fundamental/indicators 纯函数测试（+13 用例）。
+
+---
+
 **质量加固续章二（V397-V398）—— mmd.py 第三阶段拆分 + 覆盖率冲过 70% 门槛**：
 
 - **V397** mmd.py 拆分第三步：V49-V65 自包含条件簇（条件137-195 的 95 个 _calc_* 函数约 9500 行）迁入 mmd_conditions.py，mmd.py 从 26693 行降到 17328 行；mmd_conditions.py 补充 ATR/KDJ/RSI/numpy/MMDType/BI/ZS 依赖，顶层惰性再导出保兼容——29k 行 god-module 三阶段累计瘦身约 1.2 万行。
