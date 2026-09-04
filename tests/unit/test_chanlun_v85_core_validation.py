@@ -29,10 +29,11 @@ def test_calc_confidence_v47_single_definition():
     import inspect
 
     from easy_tdx.chanlun import mmd as mmd_mod
+    from easy_tdx.chanlun import mmd_conditions
 
-    # 确认只有一个 _calc_confidence_v47
-    sources = inspect.getsource(mmd_mod)
-    # 统计函数定义数量
+    # V399b：_calc_confidence_v47 已迁入 mmd_conditions.py，mmd.py 仅惰性再导出。
+    # 确认唯一真实定义在 mmd_conditions 中。
+    sources = inspect.getsource(mmd_conditions)
     import re
 
     definitions = re.findall(r"^def _calc_confidence_v47\(", sources, re.MULTILINE)
