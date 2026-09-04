@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章七（V399f）—— cli/cmd_offline 纯函数测试**：
+
+- **V399f** 补 cli/cmd_offline.py 的 _df_to_bars/_is_index_code/_watch_signal_row/_is_within_since_days/_fmt_opt_price/_render_watch_report/_advice_batch_one 纯函数测试（+10 用例）。
+
+---
+
 **质量加固续章五（V399c）—— fundamental/pipeline 纯函数测试**：
 
 - **V399c** 补 fundamental/pipeline.py 的 _returns_at/_sina_frame/_summarize_periods 纯函数测试（+6 用例），并修正 diagnosis 的 _calc_volume_profile 显式导入。

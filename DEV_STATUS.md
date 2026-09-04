@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 质量加固续章七（V399f）✅ 全部完成
+
+- **V399f** cli/cmd_offline.py 纯函数测试（_df_to_bars/_is_index_code/_watch_signal_row/_is_within_since_days/_fmt_opt_price/_render_watch_report/_advice_batch_one，+10 用例）
+- **质量**：全量 pytest 2903 passed / 0 failed；ruff/mypy/format 归零；覆盖率 70.84%（门槛 70）
 ## 质量加固续章六（V399d/e）✅ 全部完成
 
 - **V399d** client.py 纯函数测试（_record_signature/_page_signature/_classify_fund_flow/_date_from_bar/缓存序列化，+9 用例）
