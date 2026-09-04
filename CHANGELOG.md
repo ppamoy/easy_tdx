@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十二（V399w）—— mac 最后残余路径测试**：
+
+- **V399w** mac/commands 最后残余路径测试（+4 用例）。
+
+---
+
 **质量加固续章二十一（V399v）—— mac 残余边界测试**：
 
 - **V399v** mac/commands 残余边界测试（symbol_bar 分时/非法日期 + unusual 0x0B/0x14 子分支，+4 用例）。
