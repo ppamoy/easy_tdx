@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章十七（V399r）—— symbol_quotes 字段位图 + unusual 文本段测试**：
+
+- **V399r** mac/commands/symbol_quotes.py 字段位图解析路径 + unusual.py 名称文本段测试（+2 用例）。
+
+---
+
 **质量加固续章十六（V399q）—— mac unusual 全类型分支测试**：
 
 - **V399q** mac/commands/unusual.py _describe_unusual 全部异动类型分支测试（+14 用例）。
