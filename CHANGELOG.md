@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章十六（V399q）—— mac unusual 全类型分支测试**：
+
+- **V399q** mac/commands/unusual.py _describe_unusual 全部异动类型分支测试（+14 用例）。
+
+---
+
 **质量加固续章十五（V399p）—— mac 协议编解码测试五**：
 
 - **V399p** mac/commands/symbol_tick_chart.py + symbol_quotes.py + board_members_quotes.py 协议编解码测试（+7 用例）。
