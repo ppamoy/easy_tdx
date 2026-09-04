@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十一（V399v）—— mac 残余边界测试**：
+
+- **V399v** mac/commands 残余边界测试（symbol_bar 分时/非法日期 + unusual 0x0B/0x14 子分支，+4 用例）。
+
+---
+
 **质量加固续章二十（V399u）—— symbol_bar/tick_chart 解析测试**：
 
 - **V399u** mac/commands/symbol_bar.py + symbol_tick_chart.py 解析测试（+3 用例）。
