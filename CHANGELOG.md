@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章五（V399c）—— fundamental/pipeline 纯函数测试**：
+
+- **V399c** 补 fundamental/pipeline.py 的 _returns_at/_sina_frame/_summarize_periods 纯函数测试（+6 用例），并修正 diagnosis 的 _calc_volume_profile 显式导入。
+
+---
+
 **质量加固续章四（V399b）—— mmd.py 第五阶段拆分（V41-V65 全部迁出）**：
 
 - **V399b** mmd.py 拆分第五步：V44 条件簇（13 个 _calc_* 函数）+ _calc_confidence 及其共享辅助闭包（8 个函数）迁入 mmd_conditions.py，mmd.py 从 15605 行降到 14001 行；V41-V65 版本化条件簇至此全部迁出，mmd.py 顶层惰性再导出保持兼容。
