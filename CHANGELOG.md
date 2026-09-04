@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章十一（V399k/l）—— mac 协议编解码测试**：
+
+- **V399k/l** mac/commands/server_info.py + symbol_belong_board.py 协议编解码测试（+9 用例）。
+
+---
+
 **质量加固续章十（V399j）—— diagnosis 路由纯函数测试**：
 
 - **V399j** web/routers/diagnosis.py 纯函数测试（_to_json_safe/_detect_divergence/_calculate_position_recommendation/_get_position_notes/_calc_volume_profile_for_diagnosis，+13 用例）。
