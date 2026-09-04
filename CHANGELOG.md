@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章十九（V399t）—— cmd_verify 校验分支测试**：
+
+- **V399t** cli/cmd_verify.py verify 命令的 --params 非法 JSON / 未知策略分支测试（+2 用例）。
+
+---
+
 **质量加固续章十八（V399s）—— transport recv + tick_chart 编解码测试**：
 
 - **V399s** ex/transport/sync _recv_exact_sock + mac/commands/symbol_tick_chart 编解码测试（+5 用例）。
