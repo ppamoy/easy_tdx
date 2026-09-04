@@ -3,6 +3,14 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 质量加固续章二（V397-V398）✅ 全部完成
+
+mmd.py 第三阶段拆分 + 覆盖率冲过 70%：
+
+- **V397** mmd.py 拆分第三步：V49-V65 自包含条件簇（条件137-195，95 个 _calc_* 函数约 9500 行）迁入 mmd_conditions.py，mmd.py 26693→17328 行；mmd_conditions.py 补 ATR/KDJ/RSI/numpy/MMDType/BI/ZS 依赖，顶层惰性再导出保兼容——god-module 三阶段累计瘦身约 1.2 万行
+- **V398** 低覆盖模块边界测试 +32 用例（ranker/reverify/verify_print/screen_cli/backtest_cli），覆盖率 69.57%→70.08%，首次稳定越过 70% CI 门槛
+- **质量**：全量 pytest 2853 passed / 0 failed；ruff/mypy/format 归零；覆盖率 70.08%（门槛 70）
+
 ## 质量加固续章（V393-V396）✅ 全部完成
 
 mmd.py 第二阶段拆分 + 覆盖率冲刺 70%：

@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**质量加固续章二（V397-V398）—— mmd.py 第三阶段拆分 + 覆盖率冲过 70% 门槛**：
+
+- **V397** mmd.py 拆分第三步：V49-V65 自包含条件簇（条件137-195 的 95 个 _calc_* 函数约 9500 行）迁入 mmd_conditions.py，mmd.py 从 26693 行降到 17328 行；mmd_conditions.py 补充 ATR/KDJ/RSI/numpy/MMDType/BI/ZS 依赖，顶层惰性再导出保兼容——29k 行 god-module 三阶段累计瘦身约 1.2 万行。
+- **V398** 低覆盖模块边界测试 +32 用例：screen/ranker.py（回测排名 to_json/to_table/load_signals/rank 排序截断）、cli/cmd_reverify.py（单标/组合/多策略重验错误分支）、cli/cmd_verify.py 表格输出、screen/cli.py 命令 help/校验、backtest/cli.py 表格输出——覆盖率 69.57%→70.08%，首次稳定越过 70% CI 门槛。
+
+---
+
 **质量加固续章（V393-V395）—— mmd.py 第二阶段拆分 + 覆盖率冲刺 70%** —— 延续 V386-V392 的 OpenSpec 变更 easy-tdx-v386-quality-hardening，每个版本全门禁通过：
 
 - **V393** mmd.py 拆分第二步：V76-V82 版本化条件簇（条件236-263，28 个 _calc_* 函数约 2400 行）抽出为 mmd_conditions.py 独立模块，连同共享辅助 _calc_atr_volatility 一并迁出；mmd.py 顶层惰性再导出保兼容，并修正 advice_simulator/analyser/diagnosis 三处显式导入到新模块（消除 mypy 隐式再导出告警）——29k 行 god-module 再瘦身 2400 行。
