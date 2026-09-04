@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十五（V399z）—— cmd_run_all _load_strategy_class 测试，覆盖率越过 72%**：
+
+- **V399z** cli/cmd_run_all.py _load_strategy_class 测试（+4 用例）。
+
+---
+
 **质量加固续章二十四（V399y）—— unusual 截断记录边界测试**：
 
 - **V399y** mac/commands/unusual.py 截断记录边界测试（+1 用例）。
