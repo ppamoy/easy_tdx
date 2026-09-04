@@ -122,6 +122,62 @@ class TestHelpers:
             _json_default(object())
 
 
+class TestStrengthRankIntegration:
+    def _make_day(self, tmp_path, name: str, n: int = 90) -> None:
+        from pathlib import Path
+
+        from easy_tdx.models.bar import SecurityBar
+        from easy_tdx.offline.write_daily import append_daily_bars
+
+        lday = Path(tmp_path) / name[:2] / "lday"
+        lday.mkdir(parents=True, exist_ok=True)
+        bars = []
+        base = 10.0
+        for i in range(n):
+            close = base + i * 0.05
+            bars.append(
+                SecurityBar(
+                    open=close - 0.05,
+                    close=close,
+                    high=close + 0.5,
+                    low=close - 0.5,
+                    vol=1e6 + i,
+                    amount=1e7 + i * 100,
+                    year=2024,
+                    month=1,
+                    day=1 + i,
+                    hour=15,
+                    minute=0,
+                )
+            )
+        append_daily_bars(lday / f"{name}.day", bars, 0.01, 0.01)
+
+    def test_rank_serial_with_synthetic_day(self, tmp_path) -> None:
+        self._make_day(tmp_path, "sz000001")
+        ranker = StrengthRanker(vipdoc_path=str(tmp_path), preset="steady")
+        results = ranker.rank(universe="all", top_n=5)
+        assert results
+        assert results[0].rank == 1
+        assert results[0].code == "000001"
+        assert results[0].strength > 0
+
+    def test_rank_parallel_with_synthetic_day(self, tmp_path) -> None:
+        self._make_day(tmp_path, "sz000001")
+        self._make_day(tmp_path, "sh600000")
+        ranker = StrengthRanker(vipdoc_path=str(tmp_path), preset="breakout")
+        results = ranker.rank(universe="all", top_n=0, workers=2)
+        assert len(results) == 2
+        assert {r.code for r in results} == {"000001", "600000"}
+
+    def test_rank_from_file(self, tmp_path) -> None:
+        self._make_day(tmp_path, "sz000001")
+        list_file = tmp_path / "universe.txt"
+        list_file.write_text("SZ 000001\n# 注释行\n", encoding="utf-8")
+        ranker = StrengthRanker(vipdoc_path=str(tmp_path), preset="balanced")
+        results = ranker.rank(universe=str(list_file), top_n=0)
+        assert len(results) == 1
+
+
 class TestComputeStrengthOne:
     def test_insufficient_bars(self, tmp_path) -> None:
         # 空文件 → read_daily_bars 返回空 → None

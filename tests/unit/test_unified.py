@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from easy_tdx.unified import UnifiedTdxClient
+from easy_tdx.unified import AsyncUnifiedTdxClient, UnifiedTdxClient
 
 # 同步 A 股代理方法名列表（用于批量委托校验）
 _SYNC_A_METHODS = [
@@ -147,6 +147,108 @@ class TestUnifiedTdxClient:
             result = getattr(mock, method)(*[])
             getattr(mock, method).assert_called_once()
             return
+        assert result is getattr(mock, method).return_value
+
+
+_ASYNC_A_METHODS = _SYNC_A_METHODS
+_ASYNC_EX_METHODS = _SYNC_EX_METHODS
+
+
+class TestAsyncUnifiedTdxClient:
+    def test_connect_lazy_creates_async_mac(self) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        mock = AsyncMock()
+        with patch("easy_tdx.unified.AsyncMacClient.from_best_host", return_value=mock) as fbh:
+            c = AsyncUnifiedTdxClient(heartbeat_interval=4.0, timeout=6.0)
+            asyncio.run(c.connect())
+            fbh.assert_called_once_with(heartbeat_interval=4.0, timeout=6.0)
+
+    def test_ensure_mac_ex_lazy_async(self) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        mock = AsyncMock()
+        with patch("easy_tdx.unified.AsyncMacExClient.from_best_host", return_value=mock) as fbh:
+            c = AsyncUnifiedTdxClient(timeout=5.0)
+            asyncio.run(c._ensure_mac_ex())
+            fbh.assert_called_once_with(timeout=5.0)
+
+    def test_close_resets_and_closes_async(self) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        c = AsyncUnifiedTdxClient()
+        mac = AsyncMock()
+        ex = AsyncMock()
+        c._mac = mac
+        c._mac_ex = ex
+        asyncio.run(c.close())
+        assert c._mac is None
+        assert c._mac_ex is None
+
+    @pytest.mark.parametrize("method", _ASYNC_A_METHODS)
+    def test_a_share_delegation_async(self, method: str) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        c = AsyncUnifiedTdxClient()
+        mock = AsyncMock()
+        c._mac = mock
+        args = {
+            "stocks": [(0, "600000")],
+            "category": 0,
+            "market": 0,
+            "code": "600000",
+            "indicators": ["MA"],
+            "period": 4,
+            "date": 20240101,
+            "days": 5,
+            "count": 10,
+            "start": 0,
+            "fields": None,
+            "board_type": 0,
+            "board_symbol": "881001",
+            "sort_type": 0,
+            "sort_order": 0,
+            "exclude_flags": None,
+            "offset": 0,
+            "filename": "x.dat",
+            "index": 0,
+            "size": 100,
+            "filesize": 0,
+            "times": 1,
+            "adjust": 0,
+            "params": None,
+        }
+        fn = getattr(c, method)
+        result = asyncio.run(fn(**{k: v for k, v in args.items() if k in _arg_names(fn)}))
+        assert result is getattr(mock, method).return_value
+
+    @pytest.mark.parametrize("method", _ASYNC_EX_METHODS)
+    def test_ex_delegation_async(self, method: str) -> None:
+        import asyncio
+        from unittest.mock import AsyncMock
+
+        c = AsyncUnifiedTdxClient()
+        mock = AsyncMock()
+        c._mac_ex = mock
+        args = {
+            "market": 0,
+            "stocks": [(0, "600000")],
+            "fields": None,
+            "start": 0,
+            "count": 10,
+            "sort_type": 0,
+            "sort_order": 0,
+            "code": "600000",
+            "period": 4,
+            "adjust": 0,
+            "query_date": None,
+        }
+        fn = getattr(c, method)
+        result = asyncio.run(fn(**{k: v for k, v in args.items() if k in _arg_names(fn)}))
         assert result is getattr(mock, method).return_value
 
 
