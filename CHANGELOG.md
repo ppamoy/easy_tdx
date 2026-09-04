@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**质量加固续章八（V399g/h）—— 协议编解码 + 板块名解析测试**：
+
+- **V399g** mac/commands/unusual.py 协议编解码（_describe_unusual 全类型分支 + UnusualCmd，+9 用例）。
+- **V399h** cli/cmd_company.py 分块读取/板块名解析（_read_full_section/_resolve_filename，+6 用例）。
+
+---
+
 **质量加固续章七（V399f）—— cli/cmd_offline 纯函数测试**：
 
 - **V399f** 补 cli/cmd_offline.py 的 _df_to_bars/_is_index_code/_watch_signal_row/_is_within_since_days/_fmt_opt_price/_render_watch_report/_advice_batch_one 纯函数测试（+10 用例）。
