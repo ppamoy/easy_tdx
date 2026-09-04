@@ -255,6 +255,26 @@ async def monitor_create(
     return {"task_id": task_id, "stock_count": len(stocks), "interval": interval}
 
 
+@router.get("/monitor/list")
+async def monitor_list() -> dict[str, Any]:
+    """列出所有监控任务。"""
+    tasks = []
+    for tid, task in _monitor._tasks.items():
+        tasks.append(
+            {
+                "task_id": task.task_id,
+                "stock_count": len(task.stocks),
+                "category": task.category,
+                "threshold": task.confidence_threshold,
+                "interval": task.interval_seconds,
+                "last_check": task.last_check,
+                "running": task.running,
+                "scheduled": task.scheduled,
+            }
+        )
+    return {"tasks": tasks, "count": len(tasks)}
+
+
 @router.get("/monitor/{task_id}")
 async def monitor_status(task_id: str) -> dict[str, Any]:
     """获取监控任务状态。"""
@@ -303,23 +323,3 @@ async def monitor_stop(task_id: str) -> dict[str, Any]:
     """停止监控任务（含后台定时任务）。"""
     removed = await _monitor.stop_task(task_id)
     return {"removed": removed}
-
-
-@router.get("/monitor/list")
-async def monitor_list() -> dict[str, Any]:
-    """列出所有监控任务。"""
-    tasks = []
-    for tid, task in _monitor._tasks.items():
-        tasks.append(
-            {
-                "task_id": task.task_id,
-                "stock_count": len(task.stocks),
-                "category": task.category,
-                "threshold": task.confidence_threshold,
-                "interval": task.interval_seconds,
-                "last_check": task.last_check,
-                "running": task.running,
-                "scheduled": task.scheduled,
-            }
-        )
-    return {"tasks": tasks, "count": len(tasks)}

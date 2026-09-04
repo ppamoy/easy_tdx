@@ -253,11 +253,11 @@ async def diagnose_stock(
     """
     from easy_tdx.chanlun import ChanlunAnalyser
     from easy_tdx.chanlun.mmd import (
-        _calc_atr_volatility,
         calc_signal_quality_report,
         find_mmds,
         find_mmds_v39,
     )
+    from easy_tdx.chanlun.mmd_conditions import _calc_atr_volatility
     from easy_tdx.MyTT import ATR, BOLL, DMI, KDJ, MA, MACD, OBV, RSI
 
     market = req.market

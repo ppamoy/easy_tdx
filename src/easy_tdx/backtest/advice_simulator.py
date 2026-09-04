@@ -197,7 +197,7 @@ def collect_signal_advices(
     Returns:
         list[dict]：每条含 entry_idx/entry_price/stop_loss/take_profit_1/max_hold/direction
     """
-    from easy_tdx.chanlun.mmd import _calc_decision_support_enhanced
+    from easy_tdx.chanlun.mmd_v102 import _calc_decision_support_enhanced
     from easy_tdx.chanlun.types import MMDType
 
     advices: list[dict[str, Any]] = []
