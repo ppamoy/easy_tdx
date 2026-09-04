@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章十四（V399o）—— mac 协议编解码测试四**：
+
+- **V399o** mac/commands/symbol_transaction.py + file_query.py 协议编解码测试（+8 用例）。
+
+---
+
 **质量加固续章十三（V399n）—— mac 协议编解码测试三**：
 
 - **V399n** mac/commands/board_list.py + symbol_info.py + goods_list.py 协议编解码测试（+9 用例）。
