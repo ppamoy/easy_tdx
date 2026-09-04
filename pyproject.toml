@@ -74,6 +74,7 @@ select = ["E", "F", "I", "UP"]
 
 [tool.ruff.lint.per-file-ignores]
 "src/easy_tdx/chanlun/mmd.py" = ["E501"]
+"src/easy_tdx/chanlun/mmd_conditions.py" = ["E501"]
 "src/easy_tdx/web/routers/diagnosis.py" = ["E501"]
 "src/easy_tdx/backtest/chanlun_validator.py" = ["E501"]
 "src/easy_tdx/backtest/strategies/builtin.py" = ["E501"]
