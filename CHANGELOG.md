@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章十（V399j）—— diagnosis 路由纯函数测试**：
+
+- **V399j** web/routers/diagnosis.py 纯函数测试（_to_json_safe/_detect_divergence/_calculate_position_recommendation/_get_position_notes/_calc_volume_profile_for_diagnosis，+13 用例）。
+
+---
+
 **质量加固续章九（V399i）—— backtest 路由纯函数测试**：
 
 - **V399i** web/routers/backtest.py 的 _ohlcv_to_df/_filter_df_by_date/_now 纯函数测试（+8 用例）。
