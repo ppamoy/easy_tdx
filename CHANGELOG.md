@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十四（V399y）—— unusual 截断记录边界测试**：
+
+- **V399y** mac/commands/unusual.py 截断记录边界测试（+1 用例）。
+
+---
+
 **质量加固续章二十三（V399x）—— mac 零星边界测试**：
 
 - **V399x** mac/commands 零星边界测试（kline_offset/auction/belong_board，+4 用例）。
