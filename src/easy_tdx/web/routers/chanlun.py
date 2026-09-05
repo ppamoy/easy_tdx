@@ -97,7 +97,46 @@ def _to_json_safe(obj: Any) -> Any:
     return obj
 
 
-def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) -> dict[str, Any]:
+def _filter_candidates_by_difficulty(
+    candidates: list[dict[str, Any]], difficulty: str, seed: int = 0
+) -> list[dict[str, Any]]:
+    """按难度过滤训练候选点（D3：难度 = f(信号置信度, 是否干扰项)）。
+
+    - easy：仅高置信度买卖点（confidence >= 0.8）+ 少量干扰项
+    - medium：全部候选点（现状，不过滤）
+    - hard：低置信度买卖点（confidence < 0.75）+ 更多干扰项
+
+    用 seed 初始化 random 做干扰项采样，保证同 (code, difficulty, seed) 出题可复现。
+    """
+    import random
+
+    if difficulty not in ("easy", "medium", "hard"):
+        difficulty = "medium"
+    mmd_cands = [c for c in candidates if c.get("kind") == "mmd"]
+    fx_cands = [c for c in candidates if c.get("kind") == "fractal"]
+
+    if difficulty == "medium":
+        return candidates
+
+    if difficulty == "easy":
+        picked_mmd = [c for c in mmd_cands if (c.get("signal") or {}).get("confidence", 0) >= 0.8]
+        # 少量干扰项：mmd 数量的 1/3，seed 复现
+        rng = random.Random(seed)
+        n_fx = max(len(picked_mmd) // 3, 0)
+        picked_fx = rng.sample(fx_cands, min(n_fx, len(fx_cands))) if fx_cands and n_fx > 0 else []
+    else:  # hard
+        picked_mmd = [c for c in mmd_cands if (c.get("signal") or {}).get("confidence", 0) < 0.75]
+        # 更多干扰项：mmd 数量的 1/2
+        rng = random.Random(seed)
+        n_fx = max(len(picked_mmd) // 2, 0)
+        picked_fx = rng.sample(fx_cands, min(n_fx, len(fx_cands))) if fx_cands and n_fx > 0 else []
+
+    return sorted(picked_mmd + picked_fx, key=lambda c: c["index"])
+
+
+def build_train_session_payload(
+    result: Any, df: pd.DataFrame, category: str, difficulty: str = "medium", seed: int = 0
+) -> dict[str, Any]:
     """把缠论分析结果组装成训练会话负载（纯函数，可单测）。
 
     - bars：K 线（与 /bars 同列）
@@ -196,6 +235,8 @@ def build_train_session_payload(result: Any, df: pd.DataFrame, category: str) ->
         step = len(fx_cands) / distract_max
         fx_cands = [fx_cands[int(i * step)] for i in range(distract_max)]
     candidates = sorted(mmd_cands + fx_cands, key=lambda c: c["index"])
+    # V421: 难度分级过滤（D3），seed 保证出题可复现
+    candidates = _filter_candidates_by_difficulty(candidates, difficulty, seed)
 
     # 买卖点信号后 N 日收益
     closes = [k.close for k in result.klines]
@@ -863,6 +904,8 @@ async def chanlun_train_session(
     req: ChanlunRequest,
     client: Any = Depends(get_client),
     mac_client: Any | None = Depends(get_mac_client_optional),
+    difficulty: str = "medium",
+    seed: int = 0,
 ) -> dict[str, Any]:
     """创建缠论学习训练会话（P0：逐步揭示训练 + 逐笔复盘讲解）。
 
@@ -898,8 +941,8 @@ async def chanlun_train_session(
     analyser = ChanlunAnalyser(code=symbol, frequency=freq)
     result = analyser.process_klines(df)
 
-    # 2. 组装训练会话负载（纯函数，可单测）
-    payload = build_train_session_payload(result, df, req.category)
+    # 2. 组装训练会话负载（纯函数，可单测；V421 难度分级 + seed 复现）
+    payload = build_train_session_payload(result, df, req.category, difficulty, seed)
     payload["code"] = symbol
     payload["frequency"] = freq
     return payload

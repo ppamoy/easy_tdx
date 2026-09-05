@@ -101,6 +101,31 @@ interface MmdOutcome {
 const code = ref('000001')
 const category = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
 const count = ref(400)
+// V421: 难度分级 + 随机标的
+const difficulty = ref<'easy' | 'medium' | 'hard'>('medium')
+const seed = ref(0)
+const RANDOM_POOL = [
+  '000001',
+  '000333',
+  '000651',
+  '000858',
+  '002415',
+  '002475',
+  '002594',
+  '300059',
+  '300750',
+  '600000',
+  '600030',
+  '600036',
+  '600276',
+  '600519',
+  '600887',
+  '600900',
+  '601012',
+  '601166',
+  '601318',
+  '601888',
+]
 const loading = ref(false)
 const error = ref('')
 const mode = ref<'train' | 'review' | 'leaderboard'>('train') // 训练 / 复盘 / 排行榜
@@ -149,6 +174,13 @@ function detectMarket(code6: string): string {
   return 'SZ'
 }
 
+// V421: 随机标的（本地代码池）
+function randomStock() {
+  const idx = Math.floor(Math.random() * RANDOM_POOL.length)
+  code.value = RANDOM_POOL[idx]
+  startTraining()
+}
+
 async function startTraining() {
   loading.value = true
   error.value = ''
@@ -163,6 +195,8 @@ async function startTraining() {
         category: category.value,
         count: count.value,
         start: 0,
+        difficulty: difficulty.value,
+        seed: seed.value,
       }),
     })
     if (!resp.ok) {
@@ -454,9 +488,18 @@ onMounted(() => {
         <label>K 线根数</label>
         <input v-model.number="count" type="number" min="100" max="800" step="100" />
       </div>
+      <div class="field-group">
+        <label>难度</label>
+        <select v-model="difficulty">
+          <option value="easy">简单（高置信度信号）</option>
+          <option value="medium">中等（全部信号）</option>
+          <option value="hard">困难（低置信度 + 干扰项）</option>
+        </select>
+      </div>
       <button class="primary" :disabled="loading" @click="startTraining">
         {{ loading ? '加载中…' : '🔄 开始训练' }}
       </button>
+      <button class="ghost" :disabled="loading" @click="randomStock">🎲 随机标的</button>
       <div class="mode-tabs">
         <button :class="['tab', { active: mode === 'train' }]" @click="mode = 'train'">
           🎯 逐步揭示训练
