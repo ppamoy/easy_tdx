@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+**买卖点实证复盘（V418-V419）—— 缠论学习页面需求与 Phase 7 落地**：
+
+- **V418** OpenSpec 需求梳理：7 能力域（理论教学/可视化/难度分级/错误归因/进度/排行榜/实证复盘）+ 45 项任务，提交于 openspec/changes/easy-tdx-chanlun-learning/
+- **V419** 买卖点实证复盘落地：后端 verify 路由（预置 20 只大市值标的池 + prerun 缓存 + list/detail + mmd.zs_index 同级别中枢关联）+ 前端 SignalVerifyView（左列表+右单标的详情，买卖点后逐根 K 线揭示，同级别中枢）
+- **V419** ChanlunChart 新增 singleZsIndex prop（同级别中枢过滤）+ reveal 逐根游标复用
+- **质量**：后端 pytest +7（verify 契约）、前端 vitest 43 passed、vue-tsc + vite build 通过、ruff/mypy 归零
+
+---
+
 **质量加固续章四十二（V416）—— backtest _optimize_one_strategy 测试**：
 
 - **V416** web/routers/backtest.py _optimize_one_strategy 未知策略/完整寻优测试（+2 用例）。

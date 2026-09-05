@@ -46,14 +46,14 @@
 
 ## Phase 7: 买卖点实证复盘（signal-backtest-verification）
 
-- [ ] **7.1** 后端预置 20 只大市值/大成交量标的池（常量/配置，code+name+market）
-- [ ] **7.2** 后端 `POST /verify/signals/prerun`：批量跑 20 只标的缠论分析（DAY、400 根），结果缓存内存/文件
-- [ ] **7.3** 后端 `GET /verify/signals/list`：返回 20 只清单 + 预跑状态；`GET /verify/signals/detail?code`：单标的买卖点 + MMD.zs 同级别中枢 + 基础K线
-- [ ] **7.4** 后端 pytest：预跑缓存正确性 + detail 返回 MMD.zs 同级别中枢 + 标的池数量/字段契约
-- [ ] **7.5** 前端 `SignalVerify.vue`：左列表（20 只）+ 右单标的详情（一次一只）+ 上一只/下一只切换
-- [ ] **7.6** 详情图：买卖点标注（类型+置信度）+ 买卖点后逐根 K 线揭示（下一根/快进10根/跳到末尾）
-- [ ] **7.7** ChanlunChart 支持「仅显示当前买卖点 MMD.zs 同级别中枢」+ reveal 逐根游标
-- [ ] **7.8** 前端 vitest：列表/切换/逐根揭示/同级别中枢渲染
+- [x] **7.1** 后端预置 20 只大市值/大成交量标的池（常量/配置，code+name+market）
+- [x] **7.2** 后端 `POST /verify/signals/prerun`：批量跑 20 只标的缠论分析（DAY、400 根），结果缓存内存/文件
+- [x] **7.3** 后端 `GET /verify/signals/list`：返回 20 只清单 + 预跑状态；`GET /verify/signals/detail?code`：单标的买卖点 + MMD.zs 同级别中枢 + 基础K线
+- [x] **7.4** 后端 pytest：预跑缓存正确性 + detail 返回 MMD.zs 同级别中枢 + 标的池数量/字段契约
+- [x] **7.5** 前端 `SignalVerify.vue`：左列表（20 只）+ 右单标的详情（一次一只）+ 上一只/下一只切换
+- [x] **7.6** 详情图：买卖点标注（类型+置信度）+ 买卖点后逐根 K 线揭示（下一根/快进10根/跳到末尾）
+- [x] **7.7** ChanlunChart 支持「仅显示当前买卖点 MMD.zs 同级别中枢」+ reveal 逐根游标
+- [x] **7.8** 前端 vitest：列表/切换/逐根揭示/同级别中枢渲染
 
 ## 依赖与验证
 

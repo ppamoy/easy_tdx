@@ -3,6 +3,12 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 买卖点实证复盘（V418-V419）✅ 全部完成
+
+- **V418** OpenSpec 需求梳理：缠论学习页面 7 能力域 + 45 任务（openspec/changes/easy-tdx-chanlun-learning/）
+- **V419** Phase 7 买卖点实证复盘落地：verify 路由（20 只标的池 + prerun + list/detail + 同级别中枢）+ SignalVerifyView（逐根揭示）+ ChanlunChart singleZsIndex
+- **质量**：后端 pytest +7、前端 vitest 43 passed、vue-tsc + vite build、ruff/mypy 全绿
+
 ## 质量加固续章四十三（V417）✅ 全部完成
 
 - **V417** web/routers/backtest.py _run_portfolio_backtest 测试（未知策略/完整运行，+2 用例）
