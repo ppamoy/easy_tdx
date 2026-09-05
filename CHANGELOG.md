@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十七（V411）—— mac get_board_change_ranking 测试**：
+
+- **V411** mac/client.py get_board_change_ranking 非法 days/空板块/完整排行测试（+3 用例）。
+
+---
+
 **质量加固续章三十六（V410）—— mac K线分页编排测试**：
 
 - **V410** mac/client.py _fetch_kline_pages 分页 + get_stock_kline/get_stock_kline_with_indicators 测试（+4 用例）。
