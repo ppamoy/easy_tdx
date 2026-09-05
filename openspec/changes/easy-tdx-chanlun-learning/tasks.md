@@ -2,11 +2,11 @@
 
 ## Phase 1: 理论教学（theory-lessons）
 
-- [ ] **1.1** 新建 `web-ui/src/content/lessons/`，编写 6 篇 Markdown 概念讲解（fractal/bi/segment/zs/mmd/beichi）
-- [ ] **1.2** 新建 `LessonCard.vue`：Markdown 渲染 + ChanlunChart 静态图例插槽
-- [ ] **1.3** 新建 `TheoryLessons.vue`：概念列表（localStorage 已读标记）+ 上一篇/下一篇导航
-- [ ] **1.4** 新建 `LearnView.vue` 容器 + `/learn` 路由（含子 Tab：理论/训练/学习中心）
-- [ ] **1.5** vitest：LessonCard 渲染 + TheoryLessons 已读标记 + LearnView 冒烟
+- [x] **1.1** 新建 `web-ui/src/content/lessons/`，编写 6 篇 Markdown 概念讲解（fractal/bi/segment/zs/mmd/beichi）
+- [x] **1.2** 新建 `LessonCard.vue`：Markdown 渲染 + ChanlunChart 静态图例插槽
+- [x] **1.3** 新建 `TheoryLessons.vue`：概念列表（localStorage 已读标记）+ 上一篇/下一篇导航
+- [x] **1.4** 新建 `LearnView.vue` 容器 + `/learn` 路由（含子 Tab：理论/训练/学习中心）
+- [x] **1.5** vitest：LessonCard 渲染 + TheoryLessons 已读标记 + LearnView 冒烟
 
 ## Phase 2: 逐步构建可视化（visual-teaching）
 
