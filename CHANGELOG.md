@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十二（V406）—— mac client get_* 编排路径测试**：
+
+- **V406** mac/client.py get_symbol_info/belong_board/capital_flow/auction/unusual/server_info/kline_offset 编排路径测试（+7 用例）。
+
+---
+
 **质量加固续章三十一（V405）—— client get_* 编排路径测试二**：
 
 - **V405** client.py get_security_quotes/get_block_info/get_report_file/get_price_limits 编排路径测试（+6 用例）。
