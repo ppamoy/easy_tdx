@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.mmd import _calc_bi_force
+from easy_tdx.chanlun.mmd_conditions import _calc_bi_force
 from easy_tdx.chanlun.types import BC, BI, ZS, BCType
 
 
