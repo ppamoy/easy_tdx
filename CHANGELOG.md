@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章四十二（V416）—— backtest _optimize_one_strategy 测试**：
+
+- **V416** web/routers/backtest.py _optimize_one_strategy 未知策略/完整寻优测试（+2 用例）。
+
+---
+
 **质量加固续章四十一（V415）—— backtest _run_optimize 测试**：
 
 - **V415** web/routers/backtest.py _run_optimize 网格寻优/Walk-Forward 测试（+2 用例）。
