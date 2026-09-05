@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十九（V413）—— client fund_flow/minute 编排测试**：
+
+- **V413** client.py get_fund_flow/get_history_fund_flow/get_minute_time_data 编排测试（+4 用例）。
+
+---
+
 **质量加固续章三十八（V412）—— mac qfq 重算 + 逐笔分页测试**：
 
 - **V412** mac/client.py _local_recompute_qfq 降级 + get_transactions 分页测试（+3 用例）。
