@@ -15,6 +15,8 @@ interface ChanlunBi {
   end_date: string
   high: number
   low: number
+  start_index?: number
+  end_index?: number
   done: boolean
 }
 interface ChanlunXd {
@@ -34,6 +36,8 @@ interface ChanlunZs {
   line_count: number
   start_date: string
   end_date: string
+  start_index?: number
+  end_index?: number
   done: boolean
 }
 interface ChanlunMmd {
@@ -66,6 +70,8 @@ interface ChanlunFx {
   type: 'ding' | 'di'
   date: string
   val: number
+  index?: number
+  bar_index?: number
 }
 interface ChanlunBc {
   type: 'bi' | 'pz' | 'qs'
@@ -221,7 +227,12 @@ async function startTraining() {
       v102_decision_support: m.v102_decision_support ?? null,
       v102_pattern_match: m.v102_pattern_match ?? null,
     }))
-    fxs.value = (d.fractals ?? []).map((f: any) => ({ type: f.fx_type, date: f.date, val: f.val }))
+    fxs.value = (d.fractals ?? []).map((f: any) => ({
+      type: f.fx_type,
+      date: f.date,
+      val: f.val,
+      bar_index: f.bar_index,
+    }))
     bcs.value = (d.bcs ?? []).map((bc: any) => ({
       type: bc.type,
       bc: bc.bc,
@@ -421,6 +432,40 @@ watch(finished, (v) => {
 // 图表数据：训练模式用 revealIndex 截断
 const chartReveal = computed(() => (mode.value === 'train' ? revealIndex.value : undefined))
 
+// V423: 结构时间线（已揭示的分型/笔/中枢事件，点击跳转）
+interface StructureEvent {
+  index: number
+  kind: 'fx' | 'bi' | 'zs'
+  label: string
+}
+const structureTimeline = computed<StructureEvent[]>(() => {
+  const limit = revealIndex.value
+  const events: StructureEvent[] = []
+  for (const fx of fxs.value) {
+    const idx = fx.bar_index ?? fx.index
+    if (idx !== undefined && idx <= limit) {
+      events.push({ index: idx, kind: 'fx', label: `${fx.type === 'ding' ? '顶分型' : '底分型'}` })
+    }
+  }
+  for (const bi of bis.value) {
+    const idx = bi.end_index ?? bi.start_index
+    if (idx !== undefined && idx <= limit) {
+      events.push({ index: idx, kind: 'bi', label: `笔 ${bi.direction === 'up' ? '↑' : '↓'}` })
+    }
+  }
+  for (const zs of zss.value) {
+    const idx = zs.end_index ?? zs.start_index
+    if (idx !== undefined && idx <= limit) {
+      events.push({ index: idx, kind: 'zs', label: `中枢 [${zs.zd}, ${zs.zg}]` })
+    }
+  }
+  return events.sort((a, b) => a.index - b.index)
+})
+
+function jumpToStructure(ev: StructureEvent) {
+  revealIndex.value = Math.min(ev.index, bars.value.length - 1)
+}
+
 function confidenceColor(c: number): string {
   if (c >= 0.85) return '#22c55e'
   if (c >= 0.7) return '#eab308'
@@ -546,6 +591,28 @@ onMounted(() => {
             <span class="reveal-info"
               >已揭示 {{ Math.min(revealIndex + 1, bars.length) }} / {{ bars.length }} 根</span
             >
+          </div>
+
+          <!-- V423: 结构时间线（已揭示的分型/笔/中枢，点击跳转） -->
+          <div class="structure-timeline">
+            <div class="timeline-head">
+              结构时间线（{{ structureTimeline.length }} 个已成形事件）
+            </div>
+            <div class="timeline-scroll">
+              <button
+                v-for="(ev, i) in structureTimeline"
+                :key="i"
+                class="timeline-item"
+                :class="'kind-' + ev.kind"
+                @click="jumpToStructure(ev)"
+              >
+                <span class="tl-idx">#{{ ev.index }}</span>
+                <span class="tl-label">{{ ev.label }}</span>
+              </button>
+              <div v-if="structureTimeline.length === 0" class="timeline-empty">
+                尚未揭示到任何结构
+              </div>
+            </div>
           </div>
         </div>
 
@@ -975,6 +1042,60 @@ onMounted(() => {
   font-size: 12px;
   color: var(--text-dim);
   margin-left: auto;
+}
+.structure-timeline {
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.timeline-head {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border);
+}
+.timeline-scroll {
+  max-height: 140px;
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.timeline-item {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  color: var(--text);
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+}
+.timeline-item:hover {
+  background: #1f2937;
+}
+.timeline-item.kind-fx {
+  border-color: #f59e0b;
+}
+.timeline-item.kind-bi {
+  border-color: #22c55e;
+}
+.timeline-item.kind-zs {
+  border-color: #60a5fa;
+}
+.tl-idx {
+  font-family: monospace;
+  color: var(--text-dim);
+}
+.timeline-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 8px;
 }
 .train-side {
   width: 360px;
