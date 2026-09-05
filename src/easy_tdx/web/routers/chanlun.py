@@ -1046,7 +1046,8 @@ async def learn_progress(player: str = "学员") -> dict[str, Any]:
 
     def _run() -> dict[str, Any]:
         store = get_score_store()
-        return {"player": player, "matrix": store.progress(player)}
+        data = store.progress(player)
+        return {"player": player, "matrix": data["matrix"], "recent": data["recent"]}
 
     try:
         return await asyncio.to_thread(_run)

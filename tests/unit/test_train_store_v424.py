@@ -53,7 +53,9 @@ class TestTrainStoreV424:
         _rec(store, "甲", "DAY", "hard", 20, 50)
         _rec(store, "甲", "MIN_5", "easy", 30, 90)
         _rec(store, "乙", "DAY", "easy", 40, 70)
-        matrix = store.progress("甲")
+        data = store.progress("甲")
+        assert "recent" in data
+        matrix = data["matrix"]
         assert "DAY" in matrix
         assert "easy" in matrix["DAY"]
         assert matrix["DAY"]["easy"]["rounds"] == 1

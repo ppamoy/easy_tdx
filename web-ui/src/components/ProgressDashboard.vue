@@ -7,6 +7,9 @@ const player = ref('学员')
 const matrix = ref<
   Record<string, Record<string, { rounds: number; total_asked: number; hit_rate: number }>>
 >({})
+const recent = ref<
+  { created_at: string; code: string; category: string; difficulty: string; hit_rate: number }[]
+>([])
 const loading = ref(false)
 const error = ref('')
 
@@ -23,6 +26,7 @@ async function load() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const d = await resp.json()
     matrix.value = d.matrix ?? {}
+    recent.value = d.recent ?? []
   } catch (e) {
     error.value = formatError(e)
   } finally {
@@ -69,6 +73,22 @@ onMounted(load)
         </tr>
       </tbody>
     </table>
+
+    <!-- V425: 最近成绩趋势（命中率条形） -->
+    <div v-if="recent.length" class="trend-panel">
+      <h4>最近 {{ recent.length }} 次训练命中率</h4>
+      <div class="trend-list">
+        <div v-for="(r, i) in recent" :key="i" class="trend-row">
+          <span class="trend-code"
+            >{{ r.code || '—' }} · {{ r.category }} · {{ r.difficulty }}</span
+          >
+          <div class="trend-bar">
+            <div class="trend-fill" :style="{ width: Math.min(r.hit_rate, 100) + '%' }"></div>
+          </div>
+          <span class="trend-hit">{{ r.hit_rate }}%</span>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -144,5 +164,48 @@ button.ghost {
 }
 button.ghost:hover {
   background: #1f2937;
+}
+.trend-panel {
+  margin-top: 16px;
+}
+.trend-panel h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.trend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.trend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.trend-code {
+  width: 160px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #94a3b8;
+  font-family: monospace;
+}
+.trend-bar {
+  flex: 1;
+  height: 12px;
+  background: #1f2937;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.trend-fill {
+  height: 100%;
+  background: #22c55e;
+  border-radius: 6px;
+}
+.trend-hit {
+  width: 44px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #e5e7eb;
+  text-align: right;
 }
 </style>

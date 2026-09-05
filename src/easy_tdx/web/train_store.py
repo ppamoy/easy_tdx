@@ -243,13 +243,21 @@ class TrainScoreStore:
         }
 
     def progress(self, player: str) -> dict[str, Any]:
-        """V424: 学习进度聚合——按 category×difficulty 统计命中率/题数。"""
+        """V424: 学习进度聚合——按 category×difficulty 统计命中率/题数。
+
+        同时返回最近 N 次成绩（时序趋势，V425 折线图用）。
+        """
         with self._connect() as conn:
             rows = conn.execute(
                 """SELECT category, difficulty, COUNT(*) AS rounds,
                           SUM(total_asked) AS asked, SUM(hit_count) AS hit
                    FROM train_scores WHERE player_name = ?
                    GROUP BY category, difficulty""",
+                (player,),
+            ).fetchall()
+            recent_rows = conn.execute(
+                """SELECT * FROM train_scores WHERE player_name = ?
+                   ORDER BY created_at DESC LIMIT 20""",
                 (player,),
             ).fetchall()
         matrix: dict[str, dict[str, dict[str, Any]]] = {}
@@ -264,7 +272,17 @@ class TrainScoreStore:
                 "hit_count": hit,
                 "hit_rate": round((hit / asked * 100) if asked else 0.0, 1),
             }
-        return matrix
+        recent = [
+            {
+                "created_at": r["created_at"],
+                "code": r["code"],
+                "category": r["category"],
+                "difficulty": r["difficulty"],
+                "hit_rate": r["hit_rate"],
+            }
+            for r in recent_rows
+        ]
+        return {"matrix": matrix, "recent": recent}
 
     def list_all(self) -> list[TrainScore]:
         """全部成绩，创建时间倒序（最近的在最前）。"""
