@@ -143,6 +143,9 @@ const playerName = ref('学员')
 const scoreSubmitted = ref(false)
 const leaderboard = ref<any[]>([])
 const lbLoading = ref(false)
+// V424: 排行榜筛选 + 汇总
+const lbDifficulty = ref<string>('')
+const lbSummary = ref<{ count: number; avg_hit_rate: number; max_score: number } | null>(null)
 
 const bars = ref<Bar[]>([])
 const bis = ref<ChanlunBi[]>([])
@@ -412,10 +415,12 @@ function showLeaderboard() {
 async function loadLeaderboard() {
   lbLoading.value = true
   try {
-    const resp = await fetch('/api/v1/chanlun/train/leaderboard?limit=10')
+    const qs = lbDifficulty.value ? `?limit=10&difficulty=${lbDifficulty.value}` : '?limit=10'
+    const resp = await fetch('/api/v1/chanlun/train/leaderboard' + qs)
     if (resp.ok) {
       const d = await resp.json()
       leaderboard.value = d.items ?? []
+      lbSummary.value = d.summary ?? null
     }
   } catch {
     // 排行榜加载失败不阻塞页面
@@ -894,10 +899,23 @@ onMounted(() => {
       <div class="leaderboard-panel">
         <div class="lb-head">
           <h3>🏆 训练排行榜（逐步揭示命中率）</h3>
-          <button class="ghost" @click="loadLeaderboard()" :disabled="lbLoading">
-            {{ lbLoading ? '加载中…' : '🔄 刷新' }}
-          </button>
+          <div class="lb-filters">
+            <select v-model="lbDifficulty" @change="loadLeaderboard()">
+              <option value="">全部难度</option>
+              <option value="easy">简单</option>
+              <option value="medium">中等</option>
+              <option value="hard">困难</option>
+            </select>
+            <button class="ghost" @click="loadLeaderboard()" :disabled="lbLoading">
+              {{ lbLoading ? '加载中…' : '🔄 刷新' }}
+            </button>
+          </div>
         </div>
+        <p v-if="lbSummary" class="review-hint">
+          <span class="lb-sum">人数 {{ lbSummary.count }}</span>
+          <span class="lb-sum">平均命中率 {{ lbSummary.avg_hit_rate }}%</span>
+          <span class="lb-sum">最高分 {{ lbSummary.max_score }}</span>
+        </p>
         <p class="review-hint">
           按得分降序；每轮训练完成后成绩自动/手动保存。得分 = 方向命中 +2/题 + 精确命中 +1。
         </p>

@@ -3,6 +3,7 @@
 // D1：TrainView 训练核心复用为子组件，不重写；学习中心 Phase 5 接入。
 import { ref } from 'vue'
 import TheoryLessons from '../components/TheoryLessons.vue'
+import ProgressDashboard from '../components/ProgressDashboard.vue'
 import TrainView from './TrainView.vue'
 
 const tab = ref<'theory' | 'train' | 'center'>('theory')
@@ -24,7 +25,7 @@ const tab = ref<'theory' | 'train' | 'center'>('theory')
 
     <TheoryLessons v-if="tab === 'theory'" />
     <TrainView v-else-if="tab === 'train'" />
-    <div v-else class="center-placeholder">学习中心（进度追踪）将在后续版本接入</div>
+    <ProgressDashboard v-else />
   </div>
 </template>
 

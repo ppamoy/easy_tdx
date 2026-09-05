@@ -54,6 +54,7 @@ class TrainScore:
     code: str = ""
     market: str = "SZ"
     category: str = "DAY"
+    difficulty: str = "medium"
     count: int = 400
     total_asked: int = 0
     hit_count: int = 0
@@ -73,6 +74,7 @@ class TrainScore:
             "code": self.code,
             "market": self.market,
             "category": self.category,
+            "difficulty": self.difficulty,
             "count": self.count,
             "created_at": self.created_at,
             "extra": self.extra,
@@ -92,6 +94,7 @@ class TrainScore:
             code=row["code"],
             market=row["market"],
             category=row["category"],
+            difficulty=row["difficulty"] if "difficulty" in row.keys() else "medium",
             count=row["count"],
             created_at=row["created_at"],
             extra=json.loads(row["extra"]) if row["extra"] else {},
@@ -115,6 +118,7 @@ class TrainScoreStore:
         code        TEXT NOT NULL DEFAULT '',
         market      TEXT NOT NULL DEFAULT 'SZ',
         category    TEXT NOT NULL DEFAULT 'DAY',
+        difficulty  TEXT NOT NULL DEFAULT 'medium',
         count       INTEGER NOT NULL DEFAULT 400,
         created_at  TEXT NOT NULL DEFAULT '',
         extra       TEXT NOT NULL DEFAULT '{}'
@@ -138,6 +142,13 @@ class TrainScoreStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(self._SCHEMA)
+            # V424: 幂等迁移——旧库补 difficulty 列
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(train_scores)")}
+            if "difficulty" not in cols:
+                conn.execute(
+                    "ALTER TABLE train_scores "
+                    "ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'"
+                )
 
     @staticmethod
     def _new_id() -> str:
@@ -157,8 +168,8 @@ class TrainScoreStore:
             conn.execute(
                 """INSERT INTO train_scores
                    (id, player_name, score, hit_rate, total_asked, hit_count,
-                    code, market, category, count, created_at, extra)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    code, market, category, difficulty, count, created_at, extra)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     record.id,
                     record.player_name,
@@ -169,6 +180,7 @@ class TrainScoreStore:
                     record.code,
                     record.market,
                     record.category,
+                    record.difficulty,
                     record.count,
                     record.created_at,
                     json.dumps(record.extra, ensure_ascii=False),
@@ -181,18 +193,78 @@ class TrainScoreStore:
         *,
         limit: int = 20,
         category: str | None = None,
+        difficulty: str | None = None,
     ) -> list[TrainScore]:
-        """返回排行榜：得分降序、命中率降序，可限定周期。"""
+        """返回排行榜：得分降序、命中率降序，可限定周期/难度。"""
         sql = "SELECT * FROM train_scores"
         params: list[Any] = []
+        conds: list[str] = []
         if category:
-            sql += " WHERE category = ?"
+            conds.append("category = ?")
             params.append(category)
+        if difficulty:
+            conds.append("difficulty = ?")
+            params.append(difficulty)
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
         sql += " ORDER BY score DESC, hit_rate DESC, created_at DESC LIMIT ?"
         params.append(int(limit))
         with self._connect() as conn:
             rows = conn.execute(sql, params).fetchall()
         return [TrainScore.from_row(r) for r in rows]
+
+    def summary(
+        self,
+        *,
+        category: str | None = None,
+        difficulty: str | None = None,
+    ) -> dict[str, Any]:
+        """V424: 排行榜分组汇总（总人数/平均命中率/最高分）。"""
+        sql = (
+            "SELECT COUNT(*) AS n, AVG(hit_rate) AS avg_hit, "
+            "MAX(score) AS max_score FROM train_scores"
+        )
+        params: list[Any] = []
+        conds: list[str] = []
+        if category:
+            conds.append("category = ?")
+            params.append(category)
+        if difficulty:
+            conds.append("difficulty = ?")
+            params.append(difficulty)
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        with self._connect() as conn:
+            row = conn.execute(sql, params).fetchone()
+        return {
+            "count": row["n"] or 0,
+            "avg_hit_rate": round(row["avg_hit"] or 0.0, 1),
+            "max_score": row["max_score"] or 0.0,
+        }
+
+    def progress(self, player: str) -> dict[str, Any]:
+        """V424: 学习进度聚合——按 category×difficulty 统计命中率/题数。"""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """SELECT category, difficulty, COUNT(*) AS rounds,
+                          SUM(total_asked) AS asked, SUM(hit_count) AS hit
+                   FROM train_scores WHERE player_name = ?
+                   GROUP BY category, difficulty""",
+                (player,),
+            ).fetchall()
+        matrix: dict[str, dict[str, dict[str, Any]]] = {}
+        for r in rows:
+            cat = r["category"]
+            diff = r["difficulty"]
+            asked = r["asked"] or 0
+            hit = r["hit"] or 0
+            matrix.setdefault(cat, {})[diff] = {
+                "rounds": r["rounds"],
+                "total_asked": asked,
+                "hit_count": hit,
+                "hit_rate": round((hit / asked * 100) if asked else 0.0, 1),
+            }
+        return matrix
 
     def list_all(self) -> list[TrainScore]:
         """全部成绩，创建时间倒序（最近的在最前）。"""

@@ -990,6 +990,7 @@ async def chanlun_train_score(req: dict[str, Any]) -> dict[str, Any]:
             code=str(req.get("code") or "").strip(),
             market=str(req.get("market") or "SZ").upper()[:2],
             category=str(req.get("category") or "DAY").upper(),
+            difficulty=str(req.get("difficulty") or "medium").lower(),
             count=int(req.get("count", 400) or 400),
             total_asked=int(req.get("total_asked", 0) or 0),
             hit_count=int(req.get("hit_count", 0) or 0),
@@ -1010,22 +1011,45 @@ async def chanlun_train_score(req: dict[str, Any]) -> dict[str, Any]:
 async def chanlun_train_leaderboard(
     limit: int = 20,
     category: str | None = None,
+    difficulty: str | None = None,
 ) -> dict[str, Any]:
-    """V90 训练排行榜：得分降序、命中率降序，可限定周期。
+    """V90 训练排行榜：得分降序、命中率降序，可限定周期/难度。
 
     Query:
       limit=20   返回条数（默认 20）
       category=DAY  只返回该周期（缺省全部）
+      difficulty=hard  只返回该难度（缺省全部）
     """
     from easy_tdx.web.train_store import get_score_store
 
     def _run() -> dict[str, Any]:
         store = get_score_store()
-        rows = store.leaderboard(limit=limit, category=category)
-        return {"items": [r.to_dict() for r in rows], "count": len(rows)}
+        rows = store.leaderboard(limit=limit, category=category, difficulty=difficulty)
+        summary = store.summary(category=category, difficulty=difficulty)
+        return {
+            "items": [r.to_dict() for r in rows],
+            "count": len(rows),
+            "summary": summary,
+        }
 
     try:
         return await asyncio.to_thread(_run)
     except Exception as e:  # noqa: BLE001
         logger.exception("chanlun train leaderboard 失败")
         raise HTTPException(status_code=500, detail=f"排行榜失败: {e}") from e
+
+
+@router.get("/learn/progress")
+async def learn_progress(player: str = "学员") -> dict[str, Any]:
+    """V424: 学习进度聚合——按 category×difficulty 统计命中率/题数。"""
+    from easy_tdx.web.train_store import get_score_store
+
+    def _run() -> dict[str, Any]:
+        store = get_score_store()
+        return {"player": player, "matrix": store.progress(player)}
+
+    try:
+        return await asyncio.to_thread(_run)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("learn progress 失败")
+        raise HTTPException(status_code=500, detail=f"学习进度失败: {e}") from e
