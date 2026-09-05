@@ -23,6 +23,7 @@ import ScreeningView from '../ScreeningView.vue'
 import ServerSettingsView from '../ServerSettingsView.vue'
 import StrategiesView from '../StrategiesView.vue'
 import TrainView from '../TrainView.vue'
+import SignalVerifyView from '../SignalVerifyView.vue'
 
 vi.mock('../../api', () => {
   const fn = vi.fn(async () => undefined)
@@ -90,6 +91,7 @@ const VIEWS = [
   ServerSettingsView,
   StrategiesView,
   TrainView,
+  SignalVerifyView,
 ] as const
 
 describe('视图冒烟测试', () => {
