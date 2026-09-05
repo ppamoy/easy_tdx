@@ -85,6 +85,8 @@ interface Candidate {
     // V344: 训练教学展示 V102 决策支持（仅 3买/3卖 有建议）
     v102_grade?: string | null
     v102_advice?: string | null
+    // V422: 错误归因「正确解读」（答错时展示）
+    explanation?: string | null
   } | null
 }
 interface MmdOutcome {
@@ -626,6 +628,14 @@ onMounted(() => {
                     answerVerdict.text
                   }}</span>
                 </div>
+                <!-- V422: 错误归因「正确解读」（答错时展示） -->
+                <div
+                  v-if="!answerVerdict.ok && currentCandidate.signal?.explanation"
+                  class="explain-box"
+                >
+                  <div class="explain-title">💡 正确解读</div>
+                  <p class="explain-text">{{ currentCandidate.signal.explanation }}</p>
+                </div>
                 <!-- 事后验证 -->
                 <div v-if="outcomeFor(currentCandidate)" class="outcome-box">
                   <div class="outcome-title">📊 事后 20 日验证（复盘该点是否可靠）</div>
@@ -1061,6 +1071,24 @@ onMounted(() => {
 }
 .answer-val.miss {
   color: #ef4444;
+}
+.explain-box {
+  background: rgba(96, 165, 250, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  border-radius: 6px;
+  padding: 10px;
+}
+.explain-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #60a5fa;
+  margin-bottom: 6px;
+}
+.explain-text {
+  font-size: 12px;
+  color: #cbd5e1;
+  line-height: 1.6;
+  margin: 0;
 }
 .outcome-box {
   background: rgba(255, 255, 255, 0.03);

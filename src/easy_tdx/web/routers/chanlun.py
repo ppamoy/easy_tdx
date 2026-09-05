@@ -97,6 +97,23 @@ def _to_json_safe(obj: Any) -> Any:
     return obj
 
 
+def _build_signal_explanation(mmd: Any) -> str:
+    """V422 错误归因「正确解读」（D4：复用 mmd.msg + V102 建议拼接）。
+
+    从买卖点对象生成一段可读解读：信号类型 + 置信度 + V102 操作建议。
+    """
+    parts: list[str] = []
+    parts.append(f"模型识别为 {mmd.mmd_type.value}（置信度 {mmd.confidence:.0%}）")
+    _decision = getattr(mmd, "_decision_support", None) or {}
+    advice = _decision.get("action_recommendation")
+    if advice:
+        parts.append(f"V102 建议：{advice}")
+    msg = getattr(mmd, "msg", "")
+    if msg:
+        parts.append(str(msg))
+    return "；".join(parts)
+
+
 def _filter_candidates_by_difficulty(
     candidates: list[dict[str, Any]], difficulty: str, seed: int = 0
 ) -> list[dict[str, Any]]:
@@ -210,6 +227,8 @@ def build_train_session_payload(
                     "grade": getattr(getattr(mmd, "quality", None), "grade", None),
                     "v102_grade": _v102_scorecard.get("overall_grade") or None,
                     "v102_advice": _v102_decision.get("action_recommendation") or None,
+                    # V422: 错误归因「正确解读」（D4：复用 mmd.msg + V102 建议）
+                    "explanation": _build_signal_explanation(mmd),
                 },
             }
         )
