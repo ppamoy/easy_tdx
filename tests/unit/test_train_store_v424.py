@@ -7,7 +7,14 @@ from pathlib import Path
 from easy_tdx.web.train_store import TrainScore, TrainScoreStore
 
 
-def _rec(store: TrainScoreStore, player: str, cat: str, diff: str, score: float, hit: float) -> TrainScore:
+def _rec(
+    store: TrainScoreStore,
+    player: str,
+    cat: str,
+    diff: str,
+    score: float,
+    hit: float,
+) -> TrainScore:
     r = TrainScore(
         player_name=player,
         category=cat,
@@ -23,7 +30,7 @@ def _rec(store: TrainScoreStore, player: str, cat: str, diff: str, score: float,
 class TestTrainStoreV424:
     def test_difficulty_persisted(self, tmp_path: Path) -> None:
         store = TrainScoreStore(tmp_path / "s.db")
-        rec = _rec(store, "甲", "DAY", "hard", 10, 60)
+        _rec(store, "甲", "DAY", "hard", 10, 60)
         rows = store.leaderboard(difficulty="hard")
         assert len(rows) == 1
         assert rows[0].difficulty == "hard"
