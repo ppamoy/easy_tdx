@@ -10,10 +10,10 @@
 
 ## Phase 2: 逐步构建可视化（visual-teaching）
 
-- [ ] **2.1** ChanlunChart 扩展：中枢成形高亮（revealIndex 处新成中枢 → ZG/ZD 矩形 + 标注）
-- [ ] **2.2** ChanlunChart 扩展：买卖点触发高亮（信号 K 线 + V102 摘要弹出）
-- [ ] **2.3** TrainPractice.vue 新增「结构时间线」侧栏（分型/笔/中枢事件列表，点击跳转）
-- [ ] **2.4** vitest：中枢高亮/信号高亮/时间线跳转逻辑
+- [x] **2.1** ChanlunChart 扩展：中枢成形高亮（revealIndex 处新成中枢 → ZG/ZD 矩形 + 标注）
+- [x] **2.2** ChanlunChart 扩展：买卖点触发高亮（信号 K 线 + V102 摘要弹出）
+- [x] **2.3** TrainPractice.vue 新增「结构时间线」侧栏（分型/笔/中枢事件列表，点击跳转）
+- [x] **2.4** vitest：中枢高亮/信号高亮/时间线跳转逻辑
 
 ## Phase 3: 难度分级 + 随机标的（difficulty-tiering）
 
