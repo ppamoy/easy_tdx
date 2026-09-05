@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十九（V403）—— client _execute 韧性路径测试**：
+
+- **V403** client.py TdxClient._execute 成功/无重连/重试恢复测试（+3 用例）。
+
+---
+
 **质量加固续章二十八（V402）—— cmd_run_all 组合边界 + cmd_reverify 多策略错误分支测试**：
 
 - **V402** _run_combo_screen 边界 + _reverify_multi 未知市场/策略未注册/行情不足测试（+4 用例）。
