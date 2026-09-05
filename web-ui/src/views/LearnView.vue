@@ -4,6 +4,7 @@
 import { ref } from 'vue'
 import TheoryLessons from '../components/TheoryLessons.vue'
 import ProgressDashboard from '../components/ProgressDashboard.vue'
+import MistakesReview from '../components/MistakesReview.vue'
 import TrainView from './TrainView.vue'
 
 const tab = ref<'theory' | 'train' | 'center'>('theory')
@@ -25,7 +26,10 @@ const tab = ref<'theory' | 'train' | 'center'>('theory')
 
     <TheoryLessons v-if="tab === 'theory'" />
     <TrainView v-else-if="tab === 'train'" />
-    <ProgressDashboard v-else />
+    <div v-else class="center-stack">
+      <ProgressDashboard />
+      <MistakesReview />
+    </div>
   </div>
 </template>
 
@@ -57,5 +61,10 @@ const tab = ref<'theory' | 'train' | 'center'>('theory')
   color: #94a3b8;
   padding: 40px;
   text-align: center;
+}
+.center-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 </style>

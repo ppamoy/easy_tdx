@@ -330,7 +330,31 @@ function submitChoice(choice: 'buy' | 'sell' | 'hold') {
     if (c.kind === 'mmd' && sig.toLowerCase() === choice.toLowerCase() + '点') score.value += 1
   } else {
     score.value += 0
+    // V426: 答错入错题集
+    recordMistake(c, choice, actual)
   }
+}
+
+// V426: 答错时提交错题（fire-and-forget，不阻塞训练）
+function recordMistake(c: Candidate, choice: string, actual: string) {
+  if (c.kind !== 'mmd' || !c.signal) return
+  fetch('/api/v1/learn/mistakes', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      player: playerName.value.trim() || '学员',
+      symbol: `${detectMarket(code.value)}${code.value}`,
+      category: category.value,
+      difficulty: difficulty.value,
+      question_date: c.date,
+      signal_type: c.signal.type,
+      user_choice: choice,
+      actual,
+      explanation: c.signal.explanation ?? '',
+    }),
+  }).catch(() => {
+    // 错题记录失败不阻塞训练
+  })
 }
 
 // 进入下一题

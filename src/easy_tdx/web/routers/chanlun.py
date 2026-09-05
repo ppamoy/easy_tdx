@@ -1054,3 +1054,38 @@ async def learn_progress(player: str = "学员") -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.exception("learn progress 失败")
         raise HTTPException(status_code=500, detail=f"学习进度失败: {e}") from e
+
+
+@router.post("/learn/mistakes")
+async def learn_mistakes_add(req: dict[str, Any]) -> dict[str, Any]:
+    """V426: 记录一道错题（供复习）。"""
+    from easy_tdx.web.train_store import get_score_store
+
+    def _run() -> dict[str, Any]:
+        get_score_store().add_mistake(req)
+        return {"ok": True}
+
+    try:
+        return await asyncio.to_thread(_run)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("learn mistakes add 失败")
+        raise HTTPException(status_code=500, detail=f"记录错题失败: {e}") from e
+
+
+@router.get("/learn/mistakes")
+async def learn_mistakes_list(
+    player: str = "学员",
+    category: str | None = None,
+) -> dict[str, Any]:
+    """V426: 错题复习列表（按时间倒序，可限定玩家/周期）。"""
+    from easy_tdx.web.train_store import get_score_store
+
+    def _run() -> dict[str, Any]:
+        rows = get_score_store().list_mistakes(player=player, category=category)
+        return {"items": rows, "count": len(rows)}
+
+    try:
+        return await asyncio.to_thread(_run)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("learn mistakes list 失败")
+        raise HTTPException(status_code=500, detail=f"错题列表失败: {e}") from e

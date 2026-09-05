@@ -125,6 +125,22 @@ class TrainScoreStore:
     );
     CREATE INDEX IF NOT EXISTS idx_train_score      ON train_scores(score DESC);
     CREATE INDEX IF NOT EXISTS idx_train_created    ON train_scores(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS learn_mistakes (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        player      TEXT NOT NULL DEFAULT '学员',
+        symbol      TEXT NOT NULL DEFAULT '',
+        category    TEXT NOT NULL DEFAULT 'DAY',
+        difficulty  TEXT NOT NULL DEFAULT 'medium',
+        question_date TEXT,
+        signal_type TEXT,
+        user_choice TEXT,
+        actual      TEXT,
+        explanation TEXT,
+        created_at  TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX IF NOT EXISTS idx_mistake_player   ON learn_mistakes(player);
+    CREATE INDEX IF NOT EXISTS idx_mistake_created  ON learn_mistakes(created_at DESC);
     """
 
     def __init__(self, db_path: Path | None = None) -> None:
@@ -295,6 +311,48 @@ class TrainScoreStore:
         with _write_lock, self._connect() as conn:
             cur = conn.execute("DELETE FROM train_scores")
             return cur.rowcount
+
+    def add_mistake(self, mistake: dict[str, Any]) -> None:
+        """V426: 记录一道错题（供复习）。"""
+        with _write_lock, self._connect() as conn:
+            conn.execute(
+                """INSERT INTO learn_mistakes
+                   (player, symbol, category, difficulty, question_date,
+                    signal_type, user_choice, actual, explanation, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(mistake.get("player") or "学员"),
+                    str(mistake.get("symbol") or ""),
+                    str(mistake.get("category") or "DAY"),
+                    str(mistake.get("difficulty") or "medium"),
+                    mistake.get("question_date"),
+                    mistake.get("signal_type"),
+                    mistake.get("user_choice"),
+                    mistake.get("actual"),
+                    mistake.get("explanation"),
+                    _now_iso(),
+                ),
+            )
+
+    def list_mistakes(
+        self, *, player: str | None = None, category: str | None = None
+    ) -> list[dict[str, Any]]:
+        """V426: 错题复习列表（按时间倒序，可限定玩家/周期）。"""
+        sql = "SELECT * FROM learn_mistakes"
+        params: list[Any] = []
+        conds: list[str] = []
+        if player:
+            conds.append("player = ?")
+            params.append(player)
+        if category:
+            conds.append("category = ?")
+            params.append(category)
+        if conds:
+            sql += " WHERE " + " AND ".join(conds)
+        sql += " ORDER BY created_at DESC"
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
 
 
 # ── 单例 ──────────────────────────────────────────────────────────────
