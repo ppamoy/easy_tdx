@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+**缠论学习页面（V420-V426）—— OpenSpec change easy-tdx-chanlun-learning 七能力域落地**：
+
+- **V420** 理论教学：6 篇缠论概念（分型/笔/线段/中枢/三类买卖点/背驰）+ LessonCard/TheoryLessons/LearnView + /learn 路由
+- **V421** 难度分级 + 随机标的：训练候选点按置信度过滤（easy/medium/hard，seed 复现）+ 🎲 随机标的
+- **V422** 错误归因：答错展示「正确解读」（explanation 拼接 mmd.msg + V102 建议）
+- **V423** 结构时间线：已揭示分型/笔/中枢事件列表，点击跳转
+- **V424** 学习进度 + 排行榜增强：train_score 加 difficulty 维度 + 掌握度矩阵 + 排行榜难度筛选/分组汇总
+- **V425** 成绩趋势：progress 返回最近 N 次，前端命中率条形图
+- **V426** 错题集：答错自动入集 + 学习中心错题复习列表
+- **质量**：后端 pytest 3121 passed（+21）、前端 vitest 47 passed、vue-tsc + vite build、ruff/mypy/prettier 全绿
+
+---
+
 **买卖点实证复盘（V418-V419）—— 缠论学习页面需求与 Phase 7 落地**：
 
 - **V418** OpenSpec 需求梳理：7 能力域（理论教学/可视化/难度分级/错误归因/进度/排行榜/实证复盘）+ 45 项任务，提交于 openspec/changes/easy-tdx-chanlun-learning/

@@ -3,6 +3,17 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 缠论学习页面（V420-V426）✅ 全部完成
+
+- **V420** 理论教学（6 篇概念 + LearnView + /learn）
+- **V421** 难度分级 + 随机标的（easy/medium/hard，seed 复现）
+- **V422** 错误归因（答错「正确解读」）
+- **V423** 结构时间线（分型/笔/中枢事件跳转）
+- **V424** 学习进度 + 排行榜增强（difficulty 维度 + 掌握度矩阵 + 分组汇总）
+- **V425** 成绩趋势（最近 N 次命中率条形）
+- **V426** 错题集（答错入集 + 复习列表）
+- **质量**：后端 pytest 3121 passed（+21）、前端 vitest 47 passed、vue-tsc + vite build、ruff/mypy/prettier 全绿
+
 ## 买卖点实证复盘（V418-V419）✅ 全部完成
 
 - **V418** OpenSpec 需求梳理：缠论学习页面 7 能力域 + 45 任务（openspec/changes/easy-tdx-chanlun-learning/）
