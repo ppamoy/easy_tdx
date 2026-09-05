@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章二十八（V402）—— cmd_run_all 组合边界 + cmd_reverify 多策略错误分支测试**：
+
+- **V402** _run_combo_screen 边界 + _reverify_multi 未知市场/策略未注册/行情不足测试（+4 用例）。
+
+---
+
 **质量加固续章二十七（V401）—— mmd.py 第五阶段拆分（V13-V40）**：
 
 - **V401** V13-V40 自包含条件簇（104 函数）+ MMDQuality 迁入 mmd_conditions.py，mmd.py 14000→5960 行，顶层 __all__ 惰性再导出。
