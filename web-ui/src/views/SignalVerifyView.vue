@@ -214,7 +214,9 @@ onMounted(() => {
       <button class="primary" :disabled="prerunning" @click="prerun">
         {{ prerunning ? '预跑中…' : '🔄 后台预跑 20 只标的' }}
       </button>
-      <span class="hint">后台预跑 20 只大市值标的（无需选日期），逐一呈现买卖点，逐根看事后走势验证模型精准度</span>
+      <span class="hint"
+        >后台预跑 20 只大市值标的（无需选日期），逐一呈现买卖点，逐根看事后走势验证模型精准度</span
+      >
     </div>
 
     <div v-if="error" class="error-banner">⚠ {{ error }}</div>
@@ -285,7 +287,9 @@ onMounted(() => {
                 <button class="ghost" @click="stepForward10">快进 10 根</button>
                 <button class="ghost" @click="jumpToEnd">跳到末尾</button>
                 <button class="ghost" @click="resetReveal">显示全部</button>
-                <span v-if="revealCursor !== undefined" class="reveal-pos">已揭示到第 {{ revealCursor + 1 }} / {{ bars.length }} 根</span>
+                <span v-if="revealCursor !== undefined" class="reveal-pos"
+                  >已揭示到第 {{ revealCursor + 1 }} / {{ bars.length }} 根</span
+                >
               </div>
             </div>
           </template>
@@ -297,41 +301,181 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.verify-view { padding: 16px; }
-.verify-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.verify-header h2 { margin: 0; }
-.verify-header .hint { color: #94a3b8; font-size: 12px; }
-.error-banner { background: #7f1d1d; color: #fecaca; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
-.verify-layout { display: flex; gap: 12px; }
-.stock-list { width: 200px; flex-shrink: 0; border: 1px solid #2a2e3a; border-radius: 8px; overflow-y: auto; max-height: 80vh; }
-.list-head { padding: 8px 12px; font-weight: 600; border-bottom: 1px solid #2a2e3a; }
-.stock-item { display: flex; align-items: center; gap: 6px; padding: 8px 12px; cursor: pointer; }
-.stock-item:hover { background: #1f2937; }
-.stock-item.active { background: #1e3a5f; }
-.stock-code { font-family: monospace; color: #60a5fa; }
-.stock-name { flex: 1; }
-.stock-mmd { font-size: 11px; color: #94a3b8; }
-.detail { flex: 1; min-width: 0; }
-.detail-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.detail-title { font-size: 16px; font-weight: 600; flex: 1; }
-.loading, .empty { color: #94a3b8; padding: 24px; text-align: center; }
-.mmd-panel { margin-top: 8px; border: 1px solid #2a2e3a; border-radius: 8px; }
-.mmd-panel-head { padding: 8px 12px; font-weight: 600; border-bottom: 1px solid #2a2e3a; }
-.mmd-list { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; }
-.mmd-item { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #2a2e3a; border-radius: 6px; cursor: pointer; background: transparent; color: #e5e7eb; }
-.mmd-item:hover { background: #1f2937; }
-.mmd-item.active { border-color: #60a5fa; background: #1e3a5f; }
-.mmd-type { font-weight: 600; }
-.mmd-buy { color: #22c55e; }
-.mmd-sell { color: #ef4444; }
-.mmd-date { font-size: 11px; color: #94a3b8; }
-.mmd-conf { font-size: 11px; color: #fbbf24; }
-.mmd-zs { font-size: 11px; color: #60a5fa; }
-.mmd-zs.none { color: #6b7280; }
-.reveal-controls { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid #2a2e3a; flex-wrap: wrap; }
-.reveal-label { color: #e5e7eb; }
-.reveal-pos { color: #94a3b8; font-size: 12px; }
-button.primary { background: #2563eb; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
-button.ghost { background: transparent; border: 1px solid #2a2e3a; color: #e5e7eb; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
-button.ghost:hover { background: #1f2937; }
+.verify-view {
+  padding: 16px;
+}
+.verify-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.verify-header h2 {
+  margin: 0;
+}
+.verify-header .hint {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.error-banner {
+  background: #7f1d1d;
+  color: #fecaca;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.verify-layout {
+  display: flex;
+  gap: 12px;
+}
+.stock-list {
+  width: 200px;
+  flex-shrink: 0;
+  border: 1px solid #2a2e3a;
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: 80vh;
+}
+.list-head {
+  padding: 8px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid #2a2e3a;
+}
+.stock-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.stock-item:hover {
+  background: #1f2937;
+}
+.stock-item.active {
+  background: #1e3a5f;
+}
+.stock-code {
+  font-family: monospace;
+  color: #60a5fa;
+}
+.stock-name {
+  flex: 1;
+}
+.stock-mmd {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.detail {
+  flex: 1;
+  min-width: 0;
+}
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.detail-title {
+  font-size: 16px;
+  font-weight: 600;
+  flex: 1;
+}
+.loading,
+.empty {
+  color: #94a3b8;
+  padding: 24px;
+  text-align: center;
+}
+.mmd-panel {
+  margin-top: 8px;
+  border: 1px solid #2a2e3a;
+  border-radius: 8px;
+}
+.mmd-panel-head {
+  padding: 8px 12px;
+  font-weight: 600;
+  border-bottom: 1px solid #2a2e3a;
+}
+.mmd-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.mmd-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 1px solid #2a2e3a;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  color: #e5e7eb;
+}
+.mmd-item:hover {
+  background: #1f2937;
+}
+.mmd-item.active {
+  border-color: #60a5fa;
+  background: #1e3a5f;
+}
+.mmd-type {
+  font-weight: 600;
+}
+.mmd-buy {
+  color: #22c55e;
+}
+.mmd-sell {
+  color: #ef4444;
+}
+.mmd-date {
+  font-size: 11px;
+  color: #94a3b8;
+}
+.mmd-conf {
+  font-size: 11px;
+  color: #fbbf24;
+}
+.mmd-zs {
+  font-size: 11px;
+  color: #60a5fa;
+}
+.mmd-zs.none {
+  color: #6b7280;
+}
+.reveal-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid #2a2e3a;
+  flex-wrap: wrap;
+}
+.reveal-label {
+  color: #e5e7eb;
+}
+.reveal-pos {
+  color: #94a3b8;
+  font-size: 12px;
+}
+button.primary {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button.ghost {
+  background: transparent;
+  border: 1px solid #2a2e3a;
+  color: #e5e7eb;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button.ghost:hover {
+  background: #1f2937;
+}
 </style>

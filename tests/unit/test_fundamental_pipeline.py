@@ -40,10 +40,13 @@ class TestReturnsAt:
 class TestSinaFrame:
     def test_build(self) -> None:
         rows = [
-            SimpleNamespace(code="000001", market="SZ",
-                            report_date=date(2024, 3, 31),
-                            disclosure_date=date(2024, 4, 25),
-                            indicators={"roe": 15.0, "eps": 1.2}),
+            SimpleNamespace(
+                code="000001",
+                market="SZ",
+                report_date=date(2024, 3, 31),
+                disclosure_date=date(2024, 4, 25),
+                indicators={"roe": 15.0, "eps": 1.2},
+            ),
         ]
         df = _sina_frame(rows)
         assert df.iloc[0]["code"] == "000001"

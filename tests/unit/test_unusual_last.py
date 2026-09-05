@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import struct
 
-from easy_tdx.mac.commands.unusual import _describe_unusual, UnusualCmd
+from easy_tdx.mac.commands.unusual import UnusualCmd
 
 
 class TestUnusualLast:

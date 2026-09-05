@@ -162,8 +162,7 @@ class TrainScoreStore:
             cols = {r[1] for r in conn.execute("PRAGMA table_info(train_scores)")}
             if "difficulty" not in cols:
                 conn.execute(
-                    "ALTER TABLE train_scores "
-                    "ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'"
+                    "ALTER TABLE train_scores ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'medium'"
                 )
 
     @staticmethod
