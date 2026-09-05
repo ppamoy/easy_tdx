@@ -17,10 +17,10 @@
 
 ## Phase 3: 难度分级 + 随机标的（difficulty-tiering）
 
-- [ ] **3.1** 后端 `train/session` 支持 `difficulty` + `seed`：候选点特征打分排序截取，seed 复现
-- [ ] **3.2** 后端单测：同 (code,category,difficulty,seed) 出题一致 + 不同难度题集特征差异
-- [ ] **3.3** 前端训练配置加难度选择 + 「🎲 随机标的」按钮（本地代码池）
-- [ ] **3.4** vitest：难度参数传递 + 随机标的更新
+- [x] **3.1** 后端 `train/session` 支持 `difficulty` + `seed`：候选点特征打分排序截取，seed 复现
+- [x] **3.2** 后端单测：同 (code,category,difficulty,seed) 出题一致 + 不同难度题集特征差异
+- [x] **3.3** 前端训练配置加难度选择 + 「🎲 随机标的」按钮（本地代码池）
+- [x] **3.4** vitest：难度参数传递 + 随机标的更新
 
 ## Phase 4: 错误归因（mistake-feedback）
 
