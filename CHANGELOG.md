@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十八（V412）—— mac qfq 重算 + 逐笔分页测试**：
+
+- **V412** mac/client.py _local_recompute_qfq 降级 + get_transactions 分页测试（+3 用例）。
+
+---
+
 **质量加固续章三十七（V411）—— mac get_board_change_ranking 测试**：
 
 - **V411** mac/client.py get_board_change_ranking 非法 days/空板块/完整排行测试（+3 用例）。
