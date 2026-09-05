@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十五（V409）—— mac get_board_ranking 测试**：
+
+- **V409** mac/client.py get_board_ranking 非法 sort_by/空板块/完整聚合 + get_stock_quotes 测试（+4 用例）。
+
+---
+
 **质量加固续章三十四（V408）—— mac client get_* 编排路径测试三**：
 
 - **V408** mac/client.py tick_chart/board_members/board_summary/transactions 编排路径测试（+5 用例）。
