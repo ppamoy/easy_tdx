@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十六（V410）—— mac K线分页编排测试**：
+
+- **V410** mac/client.py _fetch_kline_pages 分页 + get_stock_kline/get_stock_kline_with_indicators 测试（+4 用例）。
+
+---
+
 **质量加固续章三十五（V409）—— mac get_board_ranking 测试**：
 
 - **V409** mac/client.py get_board_ranking 非法 sort_by/空板块/完整聚合 + get_stock_quotes 测试（+4 用例）。
