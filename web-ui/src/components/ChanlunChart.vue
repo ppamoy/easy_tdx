@@ -35,6 +35,11 @@ const props = defineProps<{
   }
   /** 是否显示分型「顶/底」文字标签（默认 false）。 */
   showFractalLabels?: boolean
+  /**
+   * 同级别中枢：只渲染该 index 的中枢（买卖点所属中枢，MMD.zs 引用）。
+   * 未传（undefined）时渲染全部中枢。
+   */
+  singleZsIndex?: number
 }>()
 
 interface ChanlunBi {
@@ -313,6 +318,10 @@ function buildOption(): echarts.EChartsCoreOption {
   // ── 中枢的 MarkArea ──
   const zsMarkAreas = props.zss
     .filter((zs) => {
+      // 同级别中枢过滤：指定 singleZsIndex 时只渲染该中枢
+      if (props.singleZsIndex !== undefined && zs.index !== props.singleZsIndex) {
+        return false
+      }
       const si = findAnchorIndex(keyIndex, zs.start_index, zs.start_date ?? '', revealLimit)
       const ei = findAnchorIndex(keyIndex, zs.end_index, zs.end_date ?? '', revealLimit)
       return si !== -1 && ei !== -1
