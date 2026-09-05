@@ -26,8 +26,8 @@
 
 - [x] **4.1** 后端 build_train_session_payload 扩展 `candidate.signal.explanation`（msg + V102 拼接）
 - [x] **4.2** 前端答错时渲染「正确解读」区块（信号/V102 建议/事后表现一句话）
-- [ ] **4.3** 后端新端点：`POST /learn/mistakes`（写入错题集）+ `GET /learn/mistakes?player`
-- [ ] **4.4** 前端「错题复习」列表（按周期/难度筛选）
+- [x] **4.3** 后端新端点：`POST /learn/mistakes`（写入错题集）+ `GET /learn/mistakes?player`
+- [x] **4.4** 前端「错题复习」列表（按周期/难度筛选）
 - [x] **4.5** 后端 pytest（explanation 拼接 + mistakes 读写契约）+ 前端 vitest
 
 ## Phase 5: 学习进度（progress-tracking）
@@ -35,7 +35,7 @@
 - [x] **5.1** 后端 `POST /learn/progress` + `GET /learn/progress?player`（按 category×difficulty 聚合）
 - [x] **5.2** SQLite 迁移：train_scores 加 difficulty 列；新建 learn_progress / learn_mistakes 表
 - [x] **5.3** `ProgressDashboard.vue`：掌握度矩阵表格
-- [ ] **5.4** `ProgressDashboard.vue`：最近 20 次命中率折线图
+- [x] **5.4** `ProgressDashboard.vue`：最近 20 次命中率折线图
 - [x] **5.5** 后端 pytest（聚合正确性）+ 前端 vitest
 
 ## Phase 6: 排行榜增强（leaderboard-enhance）
