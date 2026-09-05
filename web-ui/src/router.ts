@@ -14,6 +14,7 @@ import FundamentalView from './views/FundamentalView.vue'
 import ServerSettingsView from './views/ServerSettingsView.vue'
 import StrategiesView from './views/StrategiesView.vue'
 import SignalVerifyView from './views/SignalVerifyView.vue'
+import LearnView from './views/LearnView.vue'
 
 // 单标的回测（/）+ 缠论分析（/chanlun）+ 长赢投资（/changying）+ 动态选股（/screening）+ 组合回测（/portfolio）+ 参数寻优（/optimize）+ 结果对比（/compare）+ 策略库（/strategies）+ 服务器设置（/settings）+ 信号监控（/monitor）+ 技术诊断（/diagnosis）。
 const routes = [
@@ -31,6 +32,7 @@ const routes = [
   { path: '/monitor', name: 'monitor', component: MonitorView },
   { path: '/diagnosis', name: 'diagnosis', component: DiagnosisView },
   { path: '/verify', name: 'verify', component: SignalVerifyView },
+  { path: '/learn', name: 'learn', component: LearnView },
 ]
 
 export const router = createRouter({
