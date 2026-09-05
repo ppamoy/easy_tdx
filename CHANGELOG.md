@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十四（V408）—— mac client get_* 编排路径测试三**：
+
+- **V408** mac/client.py tick_chart/board_members/board_summary/transactions 编排路径测试（+5 用例）。
+
+---
+
 **质量加固续章三十三（V407）—— mac client get_* 编排路径测试二**：
 
 - **V407** mac/client.py chart_sampling/board_list/file_meta/download_file/goods_list 编排路径测试（+7 用例）。
