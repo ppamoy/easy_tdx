@@ -24,11 +24,11 @@
 
 ## Phase 4: 错误归因（mistake-feedback）
 
-- [ ] **4.1** 后端 build_train_session_payload 扩展 `candidate.signal.explanation`（msg + V102 拼接）
-- [ ] **4.2** 前端答错时渲染「正确解读」区块（信号/V102 建议/事后表现一句话）
+- [x] **4.1** 后端 build_train_session_payload 扩展 `candidate.signal.explanation`（msg + V102 拼接）
+- [x] **4.2** 前端答错时渲染「正确解读」区块（信号/V102 建议/事后表现一句话）
 - [ ] **4.3** 后端新端点：`POST /learn/mistakes`（写入错题集）+ `GET /learn/mistakes?player`
 - [ ] **4.4** 前端「错题复习」列表（按周期/难度筛选）
-- [ ] **4.5** 后端 pytest（explanation 拼接 + mistakes 读写契约）+ 前端 vitest
+- [x] **4.5** 后端 pytest（explanation 拼接 + mistakes 读写契约）+ 前端 vitest
 
 ## Phase 5: 学习进度（progress-tracking）
 
