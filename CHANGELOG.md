@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章四十（V414）—— backtest _run_backtest 测试**：
+
+- **V414** web/routers/backtest.py _run_backtest 未知策略/完整运行测试（+2 用例）。
+
+---
+
 **质量加固续章三十九（V413）—— client fund_flow/minute 编排测试**：
 
 - **V413** client.py get_fund_flow/get_history_fund_flow/get_minute_time_data 编排测试（+4 用例）。
