@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十一（V405）—— client get_* 编排路径测试二**：
+
+- **V405** client.py get_security_quotes/get_block_info/get_report_file/get_price_limits 编排路径测试（+6 用例）。
+
+---
+
 **质量加固续章三十（V404）—— client get_* 编排路径测试**：
 
 - **V404** client.py get_security_count/list/xdxr/finance/company/market_stat 编排路径测试（+8 用例）。
