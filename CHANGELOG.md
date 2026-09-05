@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十（V404）—— client get_* 编排路径测试**：
+
+- **V404** client.py get_security_count/list/xdxr/finance/company/market_stat 编排路径测试（+8 用例）。
+
+---
+
 **质量加固续章二十九（V403）—— client _execute 韧性路径测试**：
 
 - **V403** client.py TdxClient._execute 成功/无重连/重试恢复测试（+3 用例）。
