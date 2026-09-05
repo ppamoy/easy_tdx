@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**质量加固续章二十七（V401）—— mmd.py 第五阶段拆分（V13-V40）**：
+
+- **V401** V13-V40 自包含条件簇（104 函数）+ MMDQuality 迁入 mmd_conditions.py，mmd.py 14000→5960 行，顶层 __all__ 惰性再导出。
+
+---
+
+**质量加固续章二十六（V400）—— cmd_verify 校验 + scanner 测试**：
+
+- **V400** cli/cmd_verify.py verify-multi/verify-portfolio 校验分支 + screen/scanner.py 策略文件定位测试（+8 用例）。
+
+---
+
 **质量加固续章二十五（V399z）—— cmd_run_all _load_strategy_class 测试，覆盖率越过 72%**：
 
 - **V399z** cli/cmd_run_all.py _load_strategy_class 测试（+4 用例）。
