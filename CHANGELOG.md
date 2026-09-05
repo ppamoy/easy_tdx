@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章三十三（V407）—— mac client get_* 编排路径测试二**：
+
+- **V407** mac/client.py chart_sampling/board_list/file_meta/download_file/goods_list 编排路径测试（+7 用例）。
+
+---
+
 **质量加固续章三十二（V406）—— mac client get_* 编排路径测试**：
 
 - **V406** mac/client.py get_symbol_info/belong_board/capital_flow/auction/unusual/server_info/kline_offset 编排路径测试（+7 用例）。
