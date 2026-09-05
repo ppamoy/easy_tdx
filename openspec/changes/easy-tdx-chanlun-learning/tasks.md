@@ -32,17 +32,17 @@
 
 ## Phase 5: 学习进度（progress-tracking）
 
-- [ ] **5.1** 后端 `POST /learn/progress` + `GET /learn/progress?player`（按 category×difficulty 聚合）
-- [ ] **5.2** SQLite 迁移：train_scores 加 difficulty 列；新建 learn_progress / learn_mistakes 表
-- [ ] **5.3** `ProgressDashboard.vue`：掌握度矩阵表格
+- [x] **5.1** 后端 `POST /learn/progress` + `GET /learn/progress?player`（按 category×difficulty 聚合）
+- [x] **5.2** SQLite 迁移：train_scores 加 difficulty 列；新建 learn_progress / learn_mistakes 表
+- [x] **5.3** `ProgressDashboard.vue`：掌握度矩阵表格
 - [ ] **5.4** `ProgressDashboard.vue`：最近 20 次命中率折线图
-- [ ] **5.5** 后端 pytest（聚合正确性）+ 前端 vitest
+- [x] **5.5** 后端 pytest（聚合正确性）+ 前端 vitest
 
 ## Phase 6: 排行榜增强（leaderboard-enhance）
 
-- [ ] **6.1** 后端 leaderboard 支持 `category`/`difficulty` 筛选 + 分组汇总（总人数/平均命中率/最高分）
-- [ ] **6.2** 前端排行榜加筛选下拉 + 汇总行
-- [ ] **6.3** 后端 pytest（筛选/汇总契约）+ 前端 vitest
+- [x] **6.1** 后端 leaderboard 支持 `category`/`difficulty` 筛选 + 分组汇总（总人数/平均命中率/最高分）
+- [x] **6.2** 前端排行榜加筛选下拉 + 汇总行
+- [x] **6.3** 后端 pytest（筛选/汇总契约）+ 前端 vitest
 
 ## Phase 7: 买卖点实证复盘（signal-backtest-verification）
 
