@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**质量加固续章四十一（V415）—— backtest _run_optimize 测试**：
+
+- **V415** web/routers/backtest.py _run_optimize 网格寻优/Walk-Forward 测试（+2 用例）。
+
+---
+
 **质量加固续章四十（V414）—— backtest _run_backtest 测试**：
 
 - **V414** web/routers/backtest.py _run_backtest 未知策略/完整运行测试（+2 用例）。
