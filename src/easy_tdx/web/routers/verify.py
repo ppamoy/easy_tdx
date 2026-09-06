@@ -13,8 +13,10 @@ from datetime import datetime
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+
+from easy_tdx.web.deps import get_client, get_mac_client_optional
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +87,29 @@ def _load_offline_df(market: str, code: str) -> pd.DataFrame | None:
         return None
 
 
+async def _fetch_online_df(
+    mac_client: Any | None,
+    client: Any | None,
+    market: str,
+    code: str,
+) -> pd.DataFrame | None:
+    """V427: 在线 TDX 客户端回退取数（离线 .day 无数据时）。
+
+    复用 chanlun.fetch_qfq_klines（QFQ 前复权，与 /bars 同一价格体系）。
+    客户端不可用或取数失败返回 None，由调用方降级为 failed。
+    """
+    if client is None:
+        return None
+    try:
+        from easy_tdx.web.routers.chanlun import fetch_qfq_klines
+
+        df = await fetch_qfq_klines(mac_client, client, market, code, "DAY", 0, 400)
+        return df if df is not None and not df.empty else None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("在线取数 %s%s 失败: %s", market, code, exc)
+        return None
+
+
 def _analyze(df: pd.DataFrame, market: str, code: str) -> dict[str, Any]:
     """跑缠论分析并序列化（含 mmd.zs_index 关联同级别中枢）。"""
     from easy_tdx.chanlun import ChanlunAnalyser
@@ -131,17 +156,31 @@ _prerun_cache: dict[str, dict[str, Any]] = {}
 _prerun_status: dict[str, str] = {}  # code -> pending/ready/failed
 
 
-def _prerun_one(item: dict[str, str]) -> dict[str, Any]:
-    """预跑单只标的，返回分析结果（失败返回 error）。"""
+async def _prerun_one(
+    item: dict[str, str],
+    client: Any | None = None,
+    mac_client: Any | None = None,
+) -> dict[str, Any]:
+    """预跑单只标的，返回分析结果（失败返回 error）。
+
+    数据源：离线 .day 优先，无数据时在线 TDX 客户端回退（V427）。
+    """
     market = item["market"]
     code = item["code"]
     _prerun_status[code] = "pending"
     try:
         df = _load_offline_df(market, code)
         if df is None or len(df) < 100:
+            df = await _fetch_online_df(mac_client, client, market, code)
+        if df is None or len(df) < 100:
             _prerun_status[code] = "failed"
-            return {"code": code, "name": item["name"], "market": market, "error": "无离线数据"}
-        result = _analyze(df, market, code)
+            return {
+                "code": code,
+                "name": item["name"],
+                "market": market,
+                "error": "无离线/在线数据",
+            }
+        result = await asyncio.to_thread(_analyze, df, market, code)
         _prerun_cache[code] = {
             "code": code,
             "name": item["name"],
@@ -168,13 +207,17 @@ class PrerunRequest(BaseModel):
 
 
 @router.post("/verify/signals/prerun")
-async def prerun_signals(req: PrerunRequest) -> dict[str, Any]:
-    """后台预跑 20 只标的缠论分析（同步批量，结果缓存）。"""
+async def prerun_signals(
+    req: PrerunRequest,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
+    """后台预跑 20 只标的缠论分析（批量，结果缓存）。"""
     if _prerun_cache and not req.force:
         return {"status": "cached", "total": len(_prerun_cache)}
     results = []
     for item in VERIFY_POOL:
-        results.append(await asyncio.to_thread(_prerun_one, item))
+        results.append(await _prerun_one(item, client, mac_client))
     ready = [r for r in results if "error" not in r]
     return {"status": "done", "total": len(VERIFY_POOL), "ready": len(ready), "items": results}
 
@@ -200,14 +243,18 @@ async def list_signals() -> dict[str, Any]:
 
 
 @router.get("/verify/signals/detail")
-async def detail_signals(code: str) -> dict[str, Any]:
+async def detail_signals(
+    code: str,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
     """单标的详情：买卖点 + 同级别中枢 + 基础 K 线。"""
     if code not in _prerun_cache:
         item = next((i for i in VERIFY_POOL if i["code"] == code), None)
         if item is None:
             return {"error": f"未知标的 {code}"}
-        # 未预跑则现场分析
-        entry = _prerun_one(item)
+        # 未预跑则现场分析（含在线回退）
+        entry = await _prerun_one(item, client, mac_client)
         if "error" in entry:
             return entry
     return _prerun_cache[code]

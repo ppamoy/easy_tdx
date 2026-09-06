@@ -14,7 +14,13 @@ import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
-from easy_tdx.web.routers.verify import VERIFY_POOL, _analyze, _bars_to_df, router
+from easy_tdx.web.routers.verify import (
+    VERIFY_POOL,
+    _analyze,
+    _bars_to_df,
+    _fetch_online_df,
+    router,
+)
 
 
 def _df(n: int = 200) -> pd.DataFrame:
@@ -74,6 +80,15 @@ class TestBarsToDf:
         assert df.iloc[0]["date"] == datetime(2024, 1, 2)
 
 
+class TestOnlineFallback:
+    def test_client_none_returns_none(self) -> None:
+        """V427: 客户端不可用时在线回退降级为 None（不抛错）。"""
+        import asyncio
+
+        df = asyncio.run(_fetch_online_df(None, None, "SH", "600519"))
+        assert df is None
+
+
 class TestAnalyze:
     def test_mmd_zs_index_field(self) -> None:
         result = _analyze(_df(), "SH", "600000")
@@ -89,6 +104,9 @@ class TestRoutes:
         from fastapi import FastAPI
 
         a = FastAPI()
+        # V427: verify 端点依赖 get_client/get_mac_client_optional，测试注入 None
+        a.state.tdx_client = None
+        a.state.mac_client = None
         a.include_router(router, prefix="/api/v1")
         return TestClient(a)
 
