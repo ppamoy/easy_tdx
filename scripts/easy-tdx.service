@@ -1,0 +1,17 @@
+[Unit]
+Description=easy_tdx Chanlun Web Service
+After=network.target
+
+[Service]
+Type=simple
+User=skp
+Group=skp
+WorkingDirectory=/home/skp/workspace/easy_tdx
+Environment=EASY_TDX_WEB_DIST=/home/skp/workspace/easy_tdx/web-ui/dist
+ExecStart=/home/skp/workspace/easy_tdx/.venv/bin/python -m uvicorn easy_tdx.web:create_app --factory --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target
