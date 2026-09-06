@@ -3,6 +3,11 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 买卖点实证复盘在线回退（V427）✅ 完成
+
+- verify 预跑离线 .day 无数据 → 回退在线 TDX 客户端（fetch_qfq_klines）
+- 新增 _fetch_online_df（client None 降级保护）+ 单测
+
 ## 缠论学习页面（V420-V426）✅ 全部完成
 
 - **V420** 理论教学（6 篇概念 + LearnView + /learn）

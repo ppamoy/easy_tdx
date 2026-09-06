@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**买卖点实证复盘在线回退（V427）**：verify 预跑数据源离线 .day 无数据时，自动回退在线 TDX 客户端（复用 fetch_qfq_klines QFQ 前复权），保证无本地 vipdoc 数据也能预跑 20 只标的。
+
+---
+
 **缠论学习页面（V420-V426）—— OpenSpec change easy-tdx-chanlun-learning 七能力域落地**：
 
 - **V420** 理论教学：6 篇缠论概念（分型/笔/线段/中枢/三类买卖点/背驰）+ LessonCard/TheoryLessons/LearnView + /learn 路由
