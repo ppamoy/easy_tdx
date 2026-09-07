@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**advice table 输出补充指标（V446）**：advice --output table 格式汇总补 profit_factor、逐笔明细补 MAE%/MFE% 列，与 CSV/Markdown 格式对齐。
+
+---
+
 **信号排名加盈亏比（V445）**：compute_signal_accuracy_by_type 的 ranking 条目加 profit_factor，前端排名表直接用 rank.profit_factor（不再间接查 by_type），前后端契约自包含。
 
 ---
