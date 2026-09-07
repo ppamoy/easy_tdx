@@ -94,6 +94,24 @@ def _safe_fwd(cur: Any, fwd: Any) -> Any:
     return out
 
 
+def _profit_factor(fwd: np.ndarray) -> float:
+    """V430: 盈亏比 = 平均盈利 / 平均亏损。
+
+    仅盈利无亏损时取 999.0（有限值，避免 JSON inf）；无样本或无盈利取 0。
+    """
+    if len(fwd) == 0:
+        return 0.0
+    gains = fwd[fwd > 0]
+    losses = fwd[fwd < 0]
+    avg_gain = float(np.mean(gains)) if len(gains) else 0.0
+    avg_loss = float(np.mean(np.abs(losses))) if len(losses) else 0.0
+    if avg_loss > 0:
+        return round(avg_gain / avg_loss, 2)
+    if avg_gain > 0:
+        return 999.0
+    return 0.0
+
+
 def compute_signal_accuracy(
     df: pd.DataFrame,
     trades: pd.DataFrame,
@@ -298,6 +316,9 @@ def _signal_type_stats(
             fwd_list.append(float(_safe_fwd(closes[idx], closes[idx + h])))
         fwd = np.asarray(fwd_list, dtype=float)
         stats = _horizon_stats(fwd)
+        # V430: 方向对齐后的盈亏比（BUY 用 fwd，SELL 用 -fwd）
+        aligned = -fwd if direction == "SELL" else fwd
+        stats["profit_factor"] = _profit_factor(aligned)
         if direction == "SELL" and len(fwd) > 0:
             stats["hit_rate"] = float(np.mean(fwd < 0))
             stats["avg_return"] = float(np.mean(-fwd))
