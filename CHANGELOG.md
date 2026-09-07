@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**选股逻辑测试覆盖（V447-V448）**：
+
+- **V447** _calc_stock_quality 集成测试（验证 V102 评级 + 风险回报比 + 买入方向加分）
+- **V448** _pass_screening 选股门槛测试（无信号/低质量不通过）
+
+---
+
 **advice table 输出补充指标（V446）**：advice --output table 格式汇总补 profit_factor、逐笔明细补 MAE%/MFE% 列，与 CSV/Markdown 格式对齐。
 
 ---
