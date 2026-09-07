@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline advice JSON 补盈亏比（V449）**：offline advice 单标的 JSON 汇总补 profit_factor，与 CSV/Markdown/table 格式对齐。
+
+---
+
 **选股逻辑测试覆盖（V447-V448）**：
 
 - **V447** _calc_stock_quality 集成测试（验证 V102 评级 + 风险回报比 + 买入方向加分）
