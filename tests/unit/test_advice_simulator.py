@@ -754,6 +754,8 @@ class TestSummarizeBatch:
         assert s["stop_rate"] == round(1 / 3, 4)
         assert s["tp_rate"] == round(1 / 3, 4)
         assert s["expire_rate"] == round(1 / 3, 4)
+        # V436: 盈亏比 = (3+1)/2 盈利 / 2 亏损 = 1.0
+        assert s["profit_factor"] == 1.0
 
     def test_empty_reports(self):
         """无交易时返回零汇总。"""
