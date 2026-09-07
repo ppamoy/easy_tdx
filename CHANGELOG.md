@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议模拟 CLI 输出补充指标（V441）**：advice --output csv/md 输出补充 profit_factor（汇总）、mae_pct/mfe_pct（逐笔明细），与 V435/V439/V440 新增字段对齐。
+
+---
+
 **建议模拟单笔加最大有利偏移（V440）**：simulate_advice_trade 结果在 MAE 之外再加 mfe_pct（最大有利偏移 MFE，方向对齐后的最大浮盈百分比），与 MAE 对称——MFE 大但 return_pct 小说明止盈过早。
 
 ---
