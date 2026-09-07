@@ -311,6 +311,27 @@ def _v102_quality_bonus(mmd: Any) -> tuple[int, str]:
     return bonus, " ".join(reasons)
 
 
+def _v102_rr_bonus(mmd: Any) -> tuple[int, str]:
+    """V437: 从 V102 决策支持的风险回报比计算选股加分。
+
+    decision_support 字段（mmd_v102._calc_decision_support_enhanced）：
+    risk_reward_ratio（风险回报比，>=2.0 为优秀交易计划）。
+    返回 (加分, 理由)。
+    """
+    decision = getattr(mmd, "_decision_support", None) or {}
+    rr = decision.get("risk_reward_ratio")
+    if rr is None:
+        return 0, ""
+    rr_f = float(rr)
+    if rr_f >= 2.0:
+        return 10, f"RR={rr_f:.1f}"
+    if rr_f >= 1.5:
+        return 7, f"RR={rr_f:.1f}"
+    if rr_f >= 1.0:
+        return 3, f"RR={rr_f:.1f}"
+    return 0, f"RR={rr_f:.1f}"
+
+
 def _calc_stock_quality(result: Any) -> float:
     """计算股票质量分数（结构数量 + V102 信号质量）。"""
     score = 50  # 基础分
@@ -345,11 +366,13 @@ def _calc_stock_quality(result: Any) -> float:
     if bc_count >= 3:
         score += 5
 
-    # V428: 最新买卖点的 V102 信号质量加分 + 买入方向加分
+    # V428/V437: 最新买卖点的 V102 信号质量 + 风险回报比 + 买入方向加分
     if result.mmds:
         latest = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0)
         v102_bonus, _reason = _v102_quality_bonus(latest)
         score += v102_bonus
+        rr_bonus, _rr_reason = _v102_rr_bonus(latest)
+        score += rr_bonus
         if "buy" in latest.mmd_type.value:
             score += 5  # 买入信号优先
 
