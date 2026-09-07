@@ -165,12 +165,25 @@ def simulate_advice_batch(
     for t in trades:
         kinds[t["exit_reason"]] = kinds.get(t["exit_reason"], 0) + 1
 
+    # V435: 盈亏比 = 平均盈利 / 平均亏损（仅盈利取 999 避免 JSON inf）
+    gains = [t["return_pct"] for t in trades if t["return_pct"] > 0]
+    losses = [t["return_pct"] for t in trades if t["return_pct"] < 0]
+    avg_gain = sum(gains) / len(gains) if gains else 0.0
+    avg_loss = abs(sum(losses) / len(losses)) if losses else 0.0
+    if avg_loss > 0:
+        profit_factor = round(avg_gain / avg_loss, 2)
+    elif avg_gain > 0:
+        profit_factor = 999.0
+    else:
+        profit_factor = 0.0
+
     return {
         "trades": trades,
         "count": len(trades),
         "win_rate": round(len(wins) / len(trades), 4),
         "avg_return": round(avg, 2),
         "total_return": round(total, 2),
+        "profit_factor": profit_factor,
         "stop_rate": round(kinds["stop"] / len(trades), 4),
         "tp_rate": round(kinds["tp1"] / len(trades), 4),
         "expire_rate": round(kinds["expire"] / len(trades), 4),

@@ -209,8 +209,42 @@ class TestSimulateAdviceBatch:
         result = simulate_advice_batch(highs, lows, closes, advices)
         assert result["count"] == 3
         assert 0.0 <= result["win_rate"] <= 1.0
-        for key in ("avg_return", "total_return", "stop_rate", "tp_rate", "expire_rate"):
+        for key in (
+            "avg_return",
+            "total_return",
+            "profit_factor",
+            "stop_rate",
+            "tp_rate",
+            "expire_rate",
+        ):
             assert key in result
+
+    def test_batch_profit_factor(self) -> None:
+        """V435: 批量模拟返回盈亏比。"""
+        # 构造两笔：一笔 +2%（tp 106 from 100），一笔 -2%（stop 98 from 100）
+        highs = [100.0, 106.0, 104.0, 103.0, 102.0, 101.0, 100.0, 99.0, 98.0, 97.0]
+        lows = [99.0, 100.0, 101.0, 102.0, 101.0, 100.0, 99.0, 98.0, 97.0, 96.0]
+        closes = [100.0, 105.0, 103.0, 102.0, 101.5, 100.5, 99.5, 98.5, 97.5, 97.0]
+        advices = [
+            {
+                "entry_idx": 0,
+                "entry_price": 100.0,
+                "stop_loss": 97.0,
+                "take_profit_1": 106.0,
+                "max_hold": 3,
+            },
+            {
+                "entry_idx": 1,
+                "entry_price": 105.0,
+                "stop_loss": 98.0,
+                "take_profit_1": 110.0,
+                "max_hold": 3,
+            },
+        ]
+        result = simulate_advice_batch(highs, lows, closes, advices)
+        assert result["count"] == 2
+        assert "profit_factor" in result
+        assert result["profit_factor"] >= 0
 
     def test_invalid_advices_skipped(self):
         """非法建议在批量中被过滤。"""
