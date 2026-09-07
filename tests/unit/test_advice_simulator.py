@@ -787,11 +787,15 @@ class TestSummarizeBatch:
         reports = [
             {
                 "trades": [
-                    {"return_pct": 3.0, "exit_reason": "tp1"},
-                    {"return_pct": -2.0, "exit_reason": "stop"},
+                    {"return_pct": 3.0, "exit_reason": "tp1", "mae_pct": -1.0, "mfe_pct": 3.5},
+                    {"return_pct": -2.0, "exit_reason": "stop", "mae_pct": -2.0, "mfe_pct": 1.0},
                 ]
             },
-            {"trades": [{"return_pct": 1.0, "exit_reason": "expire"}]},
+            {
+                "trades": [
+                    {"return_pct": 1.0, "exit_reason": "expire", "mae_pct": -0.5, "mfe_pct": 1.5}
+                ]
+            },
             {"trades": []},  # 无交易标的跳过
         ]
         s = summarize_batch(reports)
@@ -806,6 +810,9 @@ class TestSummarizeBatch:
         assert s["expire_rate"] == round(1 / 3, 4)
         # V436: 盈亏比 = (3+1)/2 盈利 / 2 亏损 = 1.0
         assert s["profit_factor"] == 1.0
+        # V442: 平均最大不利/有利偏移
+        assert s["avg_mae_pct"] == -1.17
+        assert s["avg_mfe_pct"] == 2.0
 
     def test_empty_reports(self):
         """无交易时返回零汇总。"""

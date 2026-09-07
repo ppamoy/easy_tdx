@@ -318,6 +318,10 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
     else:
         profit_factor = 0.0
 
+    # V442: 平均最大不利/有利偏移
+    avg_mae_pct = round(sum(t.get("mae_pct", 0.0) for t in merged) / n, 2)
+    avg_mfe_pct = round(sum(t.get("mfe_pct", 0.0) for t in merged) / n, 2)
+
     return {
         "symbols": symbol_count,
         "advice_count": n,
@@ -325,6 +329,8 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_return": round(avg, 2),
         "total_return": round(total, 2),
         "profit_factor": profit_factor,
+        "avg_mae_pct": avg_mae_pct,
+        "avg_mfe_pct": avg_mfe_pct,
         "stop_rate": round(kinds["stop"] / n, 4),
         "tp_rate": round(kinds["tp1"] / n, 4),
         "expire_rate": round(kinds["expire"] / n, 4),
