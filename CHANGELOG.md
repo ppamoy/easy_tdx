@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议模拟单笔加最大有利偏移（V440）**：simulate_advice_trade 结果在 MAE 之外再加 mfe_pct（最大有利偏移 MFE，方向对齐后的最大浮盈百分比），与 MAE 对称——MFE 大但 return_pct 小说明止盈过早。
+
+---
+
 **建议模拟单笔加最大不利偏移（V439）**：simulate_advice_trade 结果加 mae_pct（最大不利偏移 MAE，方向对齐后的最大浮亏百分比），与 profit_factor（收益）互补，评估止损设置是否合理。
 
 ---
