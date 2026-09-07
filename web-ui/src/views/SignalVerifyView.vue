@@ -234,6 +234,9 @@ onMounted(() => {
         >
           <span class="stock-code">{{ s.code }}</span>
           <span class="stock-name">{{ s.name }}</span>
+          <span class="stock-status" :class="'st-' + s.status">
+            {{ s.status === 'ready' ? '✓' : s.status === 'failed' ? '✗' : '…' }}
+          </span>
           <span class="stock-mmd">{{ s.mmd_count ?? '—' }} 信号</span>
         </div>
       </aside>
@@ -363,6 +366,19 @@ onMounted(() => {
 }
 .stock-mmd {
   font-size: 11px;
+  color: #94a3b8;
+}
+.stock-status {
+  font-size: 11px;
+  font-weight: 700;
+}
+.stock-status.st-ready {
+  color: #22c55e;
+}
+.stock-status.st-failed {
+  color: #ef4444;
+}
+.stock-status.st-pending {
   color: #94a3b8;
 }
 .detail {
