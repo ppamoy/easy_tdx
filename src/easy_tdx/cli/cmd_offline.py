@@ -974,6 +974,7 @@ def _advice_batch_one(
             "win_rate": round(float(report.get("win_rate", 0.0)) * 100, 1),
             "avg_return": round(float(report.get("avg_return", 0.0)), 2),
             "total_return": round(float(report.get("total_return", 0.0)), 2),
+            "profit_factor": round(float(report.get("profit_factor", 0.0)), 2),
             "buy_hold": round(buy_hold, 2),
             "stop_rate": round(float(report.get("stop_rate", 0.0)) * 100, 1),
             "tp_rate": round(float(report.get("tp_rate", 0.0)) * 100, 1),
