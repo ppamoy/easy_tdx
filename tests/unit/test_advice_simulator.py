@@ -54,6 +54,24 @@ class TestSimulateAdviceTrade:
         assert "mae_pct" in result
         assert result["mae_pct"] == -4.0  # (96-100)/100 = -4%
 
+    def test_mfe_tracked(self):
+        """V440: 最大有利偏移 MFE 被跟踪（浮盈为正值）。"""
+        closes = [100, 100, 100]
+        highs = [101, 103, 102]  # 最有利 103
+        lows = [99, 99, 99]
+        result = simulate_advice_trade(
+            highs,
+            lows,
+            closes,
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=97.0,
+            take_profit_1=104.0,
+            max_hold=5,
+        )
+        assert "mfe_pct" in result
+        assert result["mfe_pct"] == 3.0  # (103-100)/100 = 3%
+
     def test_take_profit_triggered(self):
         """价格先达止盈 → 以止盈价出场（盈利单）。"""
         closes = [100, 100]
