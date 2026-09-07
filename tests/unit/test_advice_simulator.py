@@ -35,6 +35,25 @@ class TestSimulateAdviceTrade:
         assert result["exit_price"] == 97.0
         assert result["return_pct"] == -3.0
 
+    def test_mae_tracked(self):
+        """V439: 最大不利偏移 MAE 被跟踪（浮亏为负值）。"""
+        closes = [100, 100, 100]
+        highs = [101, 101, 101]
+        lows = [99, 96, 98]  # 最不利 96
+        result = simulate_advice_trade(
+            highs,
+            lows,
+            closes,
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=97.0,
+            take_profit_1=104.0,
+            max_hold=5,
+        )
+        assert result["exit_reason"] == "stop"
+        assert "mae_pct" in result
+        assert result["mae_pct"] == -4.0  # (96-100)/100 = -4%
+
     def test_take_profit_triggered(self):
         """价格先达止盈 → 以止盈价出场（盈利单）。"""
         closes = [100, 100]

@@ -78,13 +78,16 @@ def simulate_advice_trade(
     exit_idx = min(entry_idx + max_hold, n - 1)
     exit_reason = "expire"
     exit_price = closes[exit_idx]
+    mae_price = entry_price  # V439: 最大不利偏移跟踪（long 用最低，short 用最高）
 
     last_check = min(entry_idx + 1 + max_hold, n)
     for i in range(entry_idx + 1, last_check):
         if direction == "long":
+            mae_price = min(mae_price, lows[i])
             stop_hit = lows[i] <= stop_price
             tp_hit = highs[i] >= tp_price
         else:
+            mae_price = max(mae_price, highs[i])
             stop_hit = highs[i] >= stop_price
             tp_hit = lows[i] <= tp_price
 
@@ -105,11 +108,17 @@ def simulate_advice_trade(
 
     raw_return = (exit_price - entry_price) / entry_price * 100.0
     return_pct = round(raw_return if direction == "long" else -raw_return, 2)
+    # V439: 最大不利偏移 MAE（方向对齐后的最大浮亏百分比，负值）
+    if direction == "long":
+        mae_pct = round((mae_price - entry_price) / entry_price * 100.0, 2)
+    else:
+        mae_pct = round(-(mae_price - entry_price) / entry_price * 100.0, 2)
     return {
         "exit_idx": exit_idx,
         "exit_price": round(exit_price, 4),
         "exit_reason": exit_reason,
         "return_pct": return_pct,
+        "mae_pct": mae_pct,
         "profit": round((exit_price - entry_price) * (1 if direction == "long" else -1), 4),
     }
 
