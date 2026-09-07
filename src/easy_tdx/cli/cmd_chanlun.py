@@ -300,7 +300,8 @@ def advice_simulate(
             f"止盈 {report['tp_rate'] * 100:.0f}% / 到期 {report['expire_rate'] * 100:.0f}%"
         )
         click.echo(
-            f"{'#':>3} {'入场':>9} {'止损':>9} {'止盈1':>9} {'出场价':>9} {'原因':>4} {'收益%':>8}"
+            f"{'#':>3} {'入场':>9} {'止损':>9} {'止盈1':>9} {'出场价':>9} {'原因':>4} "
+            f"{'收益%':>8} {'MAE%':>7} {'MFE%':>7}"
         )
         for i, (adv, t) in enumerate(zip(advices, report["trades"])):
             reason = {"stop": "止损", "tp1": "止盈", "expire": "到期"}.get(
@@ -309,7 +310,8 @@ def advice_simulate(
             click.echo(
                 f"{i + 1:>3} {adv['entry_price']:>9.2f} {adv['stop_loss']:>9.2f} "
                 f"{adv['take_profit_1']:>9.2f} {t['exit_price']:>9.2f} {reason:>4} "
-                f"{t['return_pct']:>+8.2f}%"
+                f"{t['return_pct']:>+8.2f}% {t.get('mae_pct', 0.0):>+7.2f} "
+                f"{t.get('mfe_pct', 0.0):>+7.2f}"
             )
     elif output_fmt == "md":
         # V370: Markdown 报告（与 offline advice --output md / advice-batch --md 对齐）
