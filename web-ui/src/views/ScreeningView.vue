@@ -1299,6 +1299,13 @@ onMounted(() => {
               >
                 {{ stock.latest_mmd.v102_decision_support.action_recommendation }}
               </span>
+              <!-- V437: 风险回报比 -->
+              <span
+                v-if="stock.latest_mmd.v102_decision_support?.risk_reward_ratio"
+                class="screen-v102-rr"
+              >
+                RR {{ stock.latest_mmd.v102_decision_support.risk_reward_ratio.toFixed(1) }}
+              </span>
             </div>
             <div
               v-if="stock.latest_mmd"
@@ -2024,5 +2031,12 @@ onMounted(() => {
 }
 .screen-v102-advice.adv-sell {
   color: #ef4444;
+}
+.screen-v102-rr {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #fbbf24;
 }
 </style>
