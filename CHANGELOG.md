@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline advice-batch 汇总补指标（V450）**：advice-batch 的 md 汇总加盈亏比，json/table/csv 输出加 summary_profit_factor/summary_avg_mae_pct/summary_avg_mfe_pct 字段。
+
+---
+
 **offline advice JSON 补盈亏比（V449）**：offline advice 单标的 JSON 汇总补 profit_factor，与 CSV/Markdown/table 格式对齐。
 
 ---
