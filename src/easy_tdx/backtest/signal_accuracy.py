@@ -458,6 +458,7 @@ def compute_signal_accuracy_by_type(
                 "excess_hit_rate": float(h5.get("excess_hit_rate", 0.0)) if h5 else 0.0,
                 "avg_return": float(h5.get("avg_return", 0.0)) if h5 else 0.0,
                 "hit_rate": float(h5.get("hit_rate", 0.0)) if h5 else 0.0,
+                "profit_factor": float(h5.get("profit_factor", 0.0)) if h5 else 0.0,
                 "verdict": report["verdict"],
             }
         )

@@ -1487,11 +1487,7 @@ onUnmounted(() => {
               {{ fmtAccPct(rank.avg_return) }}
             </td>
             <td>
-              {{
-                byTypeHorizon(rank.type)?.profit_factor != null
-                  ? byTypeHorizon(rank.type)?.profit_factor?.toFixed(2)
-                  : '—'
-              }}
+              {{ rank.profit_factor != null ? rank.profit_factor.toFixed(2) : '—' }}
             </td>
             <td class="verdict-cell">{{ rank.verdict }}</td>
           </tr>

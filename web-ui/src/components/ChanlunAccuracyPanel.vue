@@ -16,6 +16,7 @@ const props = defineProps<{
         excess_hit_rate: number
         hit_rate: number
         avg_return: number
+        profit_factor?: number
         verdict: string
       }>
     | null
