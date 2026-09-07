@@ -1086,6 +1086,7 @@ def advice_batch(
             f"扫描 **{len(files)}** 只 | 有建议 **{summary['symbols']}** | "
             f"总建议 **{summary['advice_count']}** | 胜率 **{summary['win_rate'] * 100:.0f}%** | "
             f"平均 **{summary['avg_return']:+.2f}%** | "
+            f"盈亏比 **{summary.get('profit_factor', 0.0):.2f}** | "
             f"正收益 **{summary['positive_symbols']}/{summary['symbols']}**"
         )
         click.echo()
@@ -1108,6 +1109,9 @@ def advice_batch(
     out_df["summary_advice_count"] = summary["advice_count"]
     out_df["summary_win_rate"] = round(summary["win_rate"] * 100, 1)
     out_df["summary_avg_return"] = round(summary["avg_return"], 2)
+    out_df["summary_profit_factor"] = round(summary.get("profit_factor", 0.0), 2)
+    out_df["summary_avg_mae_pct"] = round(summary.get("avg_mae_pct", 0.0), 2)
+    out_df["summary_avg_mfe_pct"] = round(summary.get("avg_mfe_pct", 0.0), 2)
     out_df["summary_positive_symbols"] = summary["positive_symbols"]
     print_output(out_df, output_fmt)
 
