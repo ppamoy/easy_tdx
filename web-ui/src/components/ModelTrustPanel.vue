@@ -52,7 +52,12 @@ const barColor = computed(() => {
           <span class="dim-sub"
             >5根命中
             {{ ((report!.components?.accuracy?.hit_rate as number) ?? 0 * 100).toFixed(0) }}% · 超额
-            {{ ((report!.components?.accuracy?.excess_hit_rate as number) ?? 0).toFixed(1) }}%</span
+            {{ ((report!.components?.accuracy?.excess_hit_rate as number) ?? 0).toFixed(1) }}%<template
+              v-if="(report!.components?.accuracy?.profit_factor as number) > 0"
+            >
+              · 盈亏比
+              {{ (report!.components?.accuracy?.profit_factor as number).toFixed(2) }}
+            </template></span
           >
         </template>
       </div>
