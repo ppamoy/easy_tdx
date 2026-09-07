@@ -176,8 +176,20 @@ function typeColor(type: string): string {
                 }}{{ fmtPct(row.horizons[h].avg_return) }}
               </td>
               <td class="dim">{{ fmtPct(row.horizons[h].median_return) }}</td>
-              <td :class="row.horizons[h].profit_factor != null && row.horizons[h].profit_factor > 1.2 ? 'pos' : row.horizons[h].profit_factor != null && row.horizons[h].profit_factor < 1 ? 'neg' : 'dim'">
-                {{ row.horizons[h].profit_factor != null ? row.horizons[h].profit_factor.toFixed(2) : '–' }}
+              <td
+                :class="
+                  row.horizons[h].profit_factor != null && row.horizons[h].profit_factor > 1.2
+                    ? 'pos'
+                    : row.horizons[h].profit_factor != null && row.horizons[h].profit_factor < 1
+                      ? 'neg'
+                      : 'dim'
+                "
+              >
+                {{
+                  row.horizons[h].profit_factor != null
+                    ? row.horizons[h].profit_factor.toFixed(2)
+                    : '–'
+                }}
               </td>
             </template>
             <td v-else colspan="7" class="dim">—</td>

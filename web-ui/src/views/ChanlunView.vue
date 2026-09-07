@@ -518,7 +518,9 @@ function fmtAccSigned(v: number | null | undefined): string {
   return sign + (v * 100).toFixed(1) + '%'
 }
 // 取某类型的 5 根窗口统计（缺则回退 3 根）
-function byTypeHorizon(type: string): { baseline_hit_rate?: number } | null {
+function byTypeHorizon(
+  type: string,
+): { baseline_hit_rate?: number; profit_factor?: number } | null {
   const rep = signalAccuracy.value?.by_type?.[type]
   return rep?.horizons?.['5'] ?? rep?.horizons?.['3'] ?? null
 }
@@ -1454,6 +1456,7 @@ onUnmounted(() => {
             <th>随机基准</th>
             <th>超额命中率</th>
             <th>5根均值收益</th>
+            <th>盈亏比</th>
             <th>结论</th>
           </tr>
         </thead>
@@ -1482,6 +1485,13 @@ onUnmounted(() => {
             </td>
             <td :class="rank.avg_return >= 0 ? 'acc-pos' : 'acc-neg'">
               {{ fmtAccPct(rank.avg_return) }}
+            </td>
+            <td>
+              {{
+                byTypeHorizon(rank.type)?.profit_factor != null
+                  ? byTypeHorizon(rank.type)?.profit_factor?.toFixed(2)
+                  : '—'
+              }}
             </td>
             <td class="verdict-cell">{{ rank.verdict }}</td>
           </tr>
