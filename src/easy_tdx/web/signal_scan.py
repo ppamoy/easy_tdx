@@ -10,6 +10,10 @@
    汇总最近 ``window`` 根内的买卖信号、结束仓位与最新收盘价。
 
 只扫信号、不重跑完整回测，也不改写策略库保存的业绩快照。
+
+信号只以**已收盘**的 K 线计算：A 股收盘（沪市时间 15:00）前，当天尚未走完的
+K 线会被剔除，盘中扫描不产生当日信号（避免盘中信号随价格反复出现/消失、
+干扰判断），收盘后重新扫描即会出现。
 """
 
 from __future__ import annotations
@@ -18,6 +22,8 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+from datetime import time as dt_time
 from typing import Any
 
 import pandas as pd
@@ -30,6 +36,43 @@ logger = logging.getLogger(__name__)
 
 # 每标的取的 K 线根数：标准协议单次上限 800 根，足够内置策略最慢参数（如慢线 250）预热。
 SCAN_BARS = 800
+
+# A 股行情统一按沪市时区判断。中国无夏令时，固定 UTC+8 即可精确表达，
+# 不依赖系统时区/zoneinfo 数据库（Windows 无 IANA tzdata；与 realtime.session 同口径）。
+_SHANGHAI_TZ = timezone(timedelta(hours=8), "Asia/Shanghai")
+
+# A 股收盘时刻（沪市时间）：沪深收盘集合竞价 14:57-15:00，15:00 起当天 K 线定型。
+_MARKET_CLOSE = dt_time(15, 0, 0)
+
+
+def market_closed(now: datetime | None = None) -> bool:
+    """当前是否已过 A 股收盘时刻（沪市时间 ≥ 15:00，周一至周五）。
+
+    只做"星期 + 时分"判断，不含法定节假日日历——周末/节假日不存在当天 K 线，
+    剔除逻辑自然空转，误判为"已收盘"无副作用（与 realtime.session 同一口径）。
+    """
+    t = now or datetime.now(_SHANGHAI_TZ)
+    if t.weekday() >= 5:  # 周六/周日
+        return True
+    return t.time() >= _MARKET_CLOSE
+
+
+def _drop_unclosed_bars(df: pd.DataFrame, now: datetime | None = None) -> pd.DataFrame:
+    """剔除"今天"尚未收盘的 K 线，保证信号只以已收盘数据计算。
+
+    盘中拉行情时 TDX 会返回当天正在走的新 K 线（日线即当天实时柱），基于它
+    触发的信号会随盘中价格反复出现/消失。收盘前统一剔除当天全部 K 线
+    （日线剔掉当天实时柱，分钟线剔掉当天全部柱）；15:00 后当天 K 线已定型，
+    原样返回。
+    """
+    if market_closed(now):
+        return df
+    today = (now or datetime.now(_SHANGHAI_TZ)).date().isoformat()
+    keep = df["datetime"].astype(str).str[:10] != today
+    if bool(keep.all()):
+        return df
+    return df.loc[keep].reset_index(drop=True)
+
 
 # 仓位跟踪用的佣金率（与 combo.extract_factor_signals 默认一致，只影响全仓股数估算）
 _COMMISSION = 0.0003
@@ -172,11 +215,13 @@ def _error_target(rec: SavedStrategy, message: str) -> ScanTarget:
 async def fetch_scan_bars(
     client: Any,
     targets: list[ScanTarget],
+    now: datetime | None = None,
 ) -> dict[tuple[str, str], pd.DataFrame | None]:
     """按 (symbol, category) 去重取最近 ``SCAN_BARS`` 根 K 线（async，event loop 内调用）。
 
     同一标的被多个策略引用时只取一次。单个标的取数失败/数据无效记 None
-    （不中断整批），run_scan 会给相关行统一标 error。
+    （不中断整批），run_scan 会给相关行统一标 error。收盘（15:00）前剔除
+    当天尚未走完的 K 线（``_drop_unclosed_bars``），保证盘中扫描不产生当日信号。
     """
     from easy_tdx.web.convert import category_from_str, market_from_str
 
@@ -208,7 +253,11 @@ async def fetch_scan_bars(
         if "datetime" not in df.columns:
             bars[key] = None
             continue
-        bars[key] = df.sort_values("datetime").reset_index(drop=True)
+        df = _drop_unclosed_bars(df.sort_values("datetime").reset_index(drop=True), now)
+        if df.empty:  # 当天新上市、剔除后一根不剩 → 视为无有效数据
+            bars[key] = None
+            continue
+        bars[key] = df
     return bars
 
 

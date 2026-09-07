@@ -194,7 +194,7 @@ function onLoad(r: SignalScanRow) {
 
       <p class="hint">
         窗口 = 最近 {{ windowBars }} 根 {{ result.rows[0]?.category === 'DAY' ? '交易日' : 'K 线' }}；
-        盘中最后一根 K 线未收盘，信号为盘中即时值，收盘后为准。
+        只统计已收盘的 K 线——当天 15:00 收盘前扫出的当日信号不会显示，收盘后重新扫描即会出现。
       </p>
 
       <!-- 筛选 tab -->

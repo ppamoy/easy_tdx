@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -24,6 +25,7 @@ from easy_tdx.web.signal_scan import (  # noqa: E402
     evaluate_signals,
     expand_targets,
     fetch_scan_bars,
+    market_closed,
     normalize_symbol,
     run_scan,
 )
@@ -206,6 +208,81 @@ def test_fetch_scan_bars_failure_tolerant() -> None:
     targets = expand_targets([_single()])
     bars = asyncio.run(fetch_scan_bars(client, targets))
     assert bars == {("SH:601088", "DAY"): None}
+
+
+# ── 收盘前剔除当日 K 线 ───────────────────────────────────────────────────────
+
+
+def test_market_closed() -> None:
+    # 工作日 15:00 起 = 已收盘（含收盘集合竞价结束）；之前 = 未收盘
+    assert market_closed(datetime(2026, 9, 7, 15, 0))  # 周一 15:00 整
+    assert market_closed(datetime(2026, 9, 7, 15, 30))
+    assert not market_closed(datetime(2026, 9, 7, 14, 59))
+    assert not market_closed(datetime(2026, 9, 7, 9, 30))
+    # 周末全天视为已收盘（无当天 K 线，剔除逻辑自然空转）
+    assert market_closed(datetime(2026, 9, 5, 10, 0))  # 周六
+
+
+def _today_golden_cross_df(today: str) -> pd.DataFrame:
+    """缓跌 59 根 + 末根跳涨并标注为"今天"：金叉恰好落在当天未收盘的 K 线上。"""
+    df = v_shape_df(n_fall=59, n_rise=0)
+    df.loc[df.index[-1], ["open", "high", "low", "close"]] = [14.95, 15.2, 14.8, 15.0]
+    df.loc[df.index[-1], "datetime"] = pd.Timestamp(today)
+    return df
+
+
+def test_fetch_scan_bars_drops_today_bar_before_close() -> None:
+    """盘中（15:00 前）当天 K 线被剔除；15:00 后保留。"""
+    df = _today_golden_cross_df("2026-09-07")
+    prev_bar = df["datetime"].iloc[-2]
+    client = FakeClient({"SH:601088": df})
+    targets = expand_targets([_single()])
+
+    # 盘中 10:00：当天 K 线剔除，最后一根退回前一交易日
+    bars = asyncio.run(fetch_scan_bars(client, targets, now=datetime(2026, 9, 7, 10, 0)))
+    out = bars[("SH:601088", "DAY")]
+    assert out["datetime"].iloc[-1] == prev_bar
+
+    # 收盘后 15:00：当天 K 线已定型，原样保留
+    bars_closed = asyncio.run(fetch_scan_bars(client, targets, now=datetime(2026, 9, 7, 15, 0)))
+    out_closed = bars_closed[("SH:601088", "DAY")]
+    assert out_closed["datetime"].iloc[-1] == pd.Timestamp("2026-09-07")
+
+
+def test_fetch_scan_bars_all_today_bars_before_close() -> None:
+    """当天新上市（全部 K 线都是今天）：盘中剔除后一根不剩 → 视为无有效数据。"""
+    df = v_shape_df()
+    df["datetime"] = pd.Timestamp("2026-09-07")
+    client = FakeClient({"SH:601088": df})
+    targets = expand_targets([_single()])
+    bars = asyncio.run(fetch_scan_bars(client, targets, now=datetime(2026, 9, 7, 10, 0)))
+    assert bars == {("SH:601088", "DAY"): None}
+
+
+def test_scan_hides_today_signal_until_close() -> None:
+    """端到端口径：盘中扫不出当日信号（中国神华场景），15:00 收盘后同一份
+    行情数据即可扫出 BUY。"""
+    df = _today_golden_cross_df("2026-09-07")
+    prev_bar = df["datetime"].iloc[-2]
+    client = FakeClient({"SH:601088": df})
+    targets = expand_targets([_single()])
+
+    # 盘中 10:00：当天 K 线剔除，窗口=1 内无任何信号
+    bars = asyncio.run(fetch_scan_bars(client, targets, now=datetime(2026, 9, 7, 10, 0)))
+    out = run_scan(bars, targets, window=1)
+    assert out["buy_count"] == 0
+    row = out["rows"][0]
+    assert row["latest_signal"] is None
+    assert row["recent_signals"] == []
+    assert row["last_bar_date"] == str(prev_bar)[:16]  # 退回上一根已收盘 K 线
+
+    # 收盘后 15:00：当天 K 线定型，金叉 BUY 出现且日期为当天
+    bars_closed = asyncio.run(fetch_scan_bars(client, targets, now=datetime(2026, 9, 7, 15, 0)))
+    out_closed = run_scan(bars_closed, targets, window=1)
+    assert out_closed["buy_count"] == 1
+    row_closed = out_closed["rows"][0]
+    assert row_closed["latest_signal"] == "BUY"
+    assert str(row_closed["signal_date"]).startswith("2026-09-07")
 
 
 # ── evaluate_signals ──────────────────────────────────────────────────────────
