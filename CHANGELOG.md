@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**信号排名加盈亏比（V445）**：compute_signal_accuracy_by_type 的 ranking 条目加 profit_factor，前端排名表直接用 rank.profit_factor（不再间接查 by_type），前后端契约自包含。
+
+---
+
 **多持有期敏感性分析（V444）**：新增 simulate_advice_hold_sweep，同一批建议用不同 max_hold（3/5/10/20）模拟，返回各持有期的表现对比，帮助评估建议对持有期的敏感性、选择合适止盈/到期窗口。
 
 ---
