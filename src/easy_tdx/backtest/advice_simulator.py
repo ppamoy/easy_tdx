@@ -263,6 +263,25 @@ def collect_signal_advices(
     return advices
 
 
+def simulate_advice_hold_sweep(
+    highs: list[float],
+    lows: list[float],
+    closes: list[float],
+    advices: list[dict[str, Any]],
+    holds: tuple[int, ...] = (3, 5, 10, 20),
+) -> dict[str, dict[str, Any]]:
+    """V444: 多持有期敏感性分析——同一批建议用不同 max_hold 模拟。
+
+    返回 {持有根数: simulate_advice_batch 结果}，帮助评估建议对持有期的
+    敏感性，选择合适的止盈/到期窗口。
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for h in holds:
+        advices_h = [{**a, "max_hold": int(h)} for a in advices]
+        out[str(h)] = simulate_advice_batch(highs, lows, closes, advices_h)
+    return out
+
+
 def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
     """聚合多只标的的回放报告（批量实证汇总）。
 
