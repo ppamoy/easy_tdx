@@ -356,6 +356,14 @@ def _calc_stock_quality(result: Any) -> float:
     return min(score, 100)
 
 
+def _is_buy_signal(mmd_type_value: str) -> bool:
+    """V429: 判断买卖点类型是否为买入方向。
+
+    用「包含 buy」而非 endswith——endswith 会漏判类二买（2buy_s）。
+    """
+    return "buy" in mmd_type_value
+
+
 def _get_latest_mmd(result: Any) -> dict[str, Any] | None:
     """获取最新买卖点。"""
     if not result.mmds:
@@ -366,7 +374,7 @@ def _get_latest_mmd(result: Any) -> dict[str, Any] | None:
         "type": latest.mmd_type.value,
         "date": latest.bi.end.k.date.strftime("%Y-%m-%d") if latest.bi else None,
         "price": latest.bi.low
-        if latest.bi and latest.mmd_type.value.endswith("buy")
+        if latest.bi and _is_buy_signal(latest.mmd_type.value)
         else latest.bi.high
         if latest.bi
         else None,
@@ -414,7 +422,7 @@ def _calc_quality_score(result: Any, target_date: datetime) -> float:
     # 根据最近买卖点评分
     if result.mmds:
         latest = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0)
-        if latest.mmd_type.value.endswith("buy"):
+        if _is_buy_signal(latest.mmd_type.value):
             score += 20
         else:
             score += 10
