@@ -155,6 +155,7 @@ function typeColor(type: string): string {
             <th>超额命中率</th>
             <th>平均收益</th>
             <th>中位收益</th>
+            <th>盈亏比</th>
           </tr>
         </thead>
         <tbody>
@@ -175,8 +176,11 @@ function typeColor(type: string): string {
                 }}{{ fmtPct(row.horizons[h].avg_return) }}
               </td>
               <td class="dim">{{ fmtPct(row.horizons[h].median_return) }}</td>
+              <td :class="row.horizons[h].profit_factor != null && row.horizons[h].profit_factor > 1.2 ? 'pos' : row.horizons[h].profit_factor != null && row.horizons[h].profit_factor < 1 ? 'neg' : 'dim'">
+                {{ row.horizons[h].profit_factor != null ? row.horizons[h].profit_factor.toFixed(2) : '–' }}
+              </td>
             </template>
-            <td v-else colspan="6" class="dim">—</td>
+            <td v-else colspan="7" class="dim">—</td>
           </tr>
         </tbody>
       </table>

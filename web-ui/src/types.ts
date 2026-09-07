@@ -132,6 +132,8 @@ export interface SignalHorizonStat {
   baseline_avg_return: number
   excess_hit_rate: number
   excess_avg_return: number
+  /** V430: 盈亏比 = 平均盈利 / 平均亏损（方向对齐后） */
+  profit_factor?: number
 }
 
 export interface SignalAccuracyReport {
