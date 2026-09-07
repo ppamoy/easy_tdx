@@ -275,8 +275,44 @@ async def _analyze_stock(
     }
 
 
+def _v102_quality_bonus(mmd: Any) -> tuple[int, str]:
+    """V428: 从 V102 信号质量评分卡计算选股加分。
+
+    评分卡字段（mmd_v102._calc_signal_quality_scorecard）：
+    overall_grade(A/B/C)、strength(strong/medium/weak)、overall_score(0-100)。
+    返回 (加分, 理由)。
+    """
+    scorecard = getattr(mmd, "_signal_quality_scorecard", None) or {}
+    grade = scorecard.get("overall_grade", "")
+    strength = scorecard.get("strength", "")
+    overall = scorecard.get("overall_score", 0.0)
+
+    bonus = 0
+    reasons: list[str] = []
+    if grade == "A":
+        bonus += 15
+        reasons.append("V102评级A")
+    elif grade == "B":
+        bonus += 10
+        reasons.append("V102评级B")
+    elif grade == "C":
+        bonus += 5
+        reasons.append("V102评级C")
+
+    if strength == "strong":
+        bonus += 5
+        reasons.append("强度strong")
+    elif strength == "medium":
+        bonus += 2
+        reasons.append("强度medium")
+
+    if overall >= 60:
+        reasons.append(f"评分{overall:.0f}")
+    return bonus, " ".join(reasons)
+
+
 def _calc_stock_quality(result: Any) -> float:
-    """计算股票质量分数。"""
+    """计算股票质量分数（结构数量 + V102 信号质量）。"""
     score = 50  # 基础分
 
     # 笔的数量（越多越活跃）
@@ -308,6 +344,14 @@ def _calc_stock_quality(result: Any) -> float:
     bc_count = len(result.bcs)
     if bc_count >= 3:
         score += 5
+
+    # V428: 最新买卖点的 V102 信号质量加分 + 买入方向加分
+    if result.mmds:
+        latest = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0)
+        v102_bonus, _reason = _v102_quality_bonus(latest)
+        score += v102_bonus
+        if "buy" in latest.mmd_type.value:
+            score += 5  # 买入信号优先
 
     return min(score, 100)
 
