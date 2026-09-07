@@ -251,7 +251,7 @@ def advice_simulate(
     if output_fmt == "csv":
         rows = []
         rows.append(
-            "symbol,advice_count,win_rate,avg_return,total_return,stop_rate,tp_rate,expire_rate"
+            "symbol,advice_count,win_rate,avg_return,total_return,profit_factor,stop_rate,tp_rate,expire_rate"
         )
         rows.append(
             ",".join(
@@ -261,6 +261,7 @@ def advice_simulate(
                     f"{report['win_rate'] * 100:.1f}%",
                     f"{report['avg_return']:+.2f}%",
                     f"{report['total_return']:+.2f}%",
+                    f"{report.get('profit_factor', 0.0):.2f}",
                     f"{report['stop_rate'] * 100:.1f}%",
                     f"{report['tp_rate'] * 100:.1f}%",
                     f"{report['expire_rate'] * 100:.1f}%",
@@ -268,7 +269,9 @@ def advice_simulate(
             )
         )
         rows.append("")
-        rows.append("no,entry_price,stop_loss,take_profit_1,exit_price,exit_reason,return_pct")
+        rows.append(
+            "no,entry_price,stop_loss,take_profit_1,exit_price,exit_reason,return_pct,mae_pct,mfe_pct"
+        )
         for i, (adv, t) in enumerate(zip(advices, report["trades"])):
             rows.append(
                 ",".join(
@@ -280,6 +283,8 @@ def advice_simulate(
                         f"{t['exit_price']:.2f}",
                         t["exit_reason"],
                         f"{t['return_pct']:+.2f}",
+                        f"{t.get('mae_pct', 0.0):+.2f}",
+                        f"{t.get('mfe_pct', 0.0):+.2f}",
                     ]
                 )
             )

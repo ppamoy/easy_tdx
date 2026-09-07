@@ -834,7 +834,8 @@ def _print_advice_md(report: dict[str, object]) -> None:
     click.echo(
         f"**汇总**：胜率 {cast(float, report.get('win_rate', 0.0)) * 100:.0f}% | "
         f"平均收益 {cast(float, report.get('avg_return', 0.0)):+.2f}% | "
-        f"累计 {cast(float, report.get('total_return', 0.0)):+.2f}%"
+        f"累计 {cast(float, report.get('total_return', 0.0)):+.2f}% | "
+        f"盈亏比 {cast(float, report.get('profit_factor', 0.0)):.2f}"
     )
     click.echo(
         f"**出场分布**：止损 {cast(float, report.get('stop_rate', 0.0)) * 100:.0f}% / "

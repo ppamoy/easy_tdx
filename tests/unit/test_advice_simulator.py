@@ -580,12 +580,25 @@ class TestOnlineAdviceOutput:
             "win_rate": 0.5,
             "avg_return": 1.0,
             "total_return": 2.0,
+            "profit_factor": 2.0,
             "stop_rate": 0.5,
             "tp_rate": 0.5,
             "expire_rate": 0.0,
             "trades": [
-                {"exit_price": 100.0, "exit_reason": "expire", "return_pct": 0.0},
-                {"exit_price": 112.0, "exit_reason": "tp1", "return_pct": 2.0},
+                {
+                    "exit_price": 100.0,
+                    "exit_reason": "expire",
+                    "return_pct": 0.0,
+                    "mae_pct": -1.0,
+                    "mfe_pct": 1.0,
+                },
+                {
+                    "exit_price": 112.0,
+                    "exit_reason": "tp1",
+                    "return_pct": 2.0,
+                    "mae_pct": -0.5,
+                    "mfe_pct": 2.5,
+                },
             ],
         }
 
@@ -686,17 +699,17 @@ class TestOnlineAdviceOutput:
         assert res.exit_code == 0, res.output
         lines = res.output.strip().splitlines()
         assert lines[0] == (
-            "symbol,advice_count,win_rate,avg_return,total_return,stop_rate,tp_rate,expire_rate"
+            "symbol,advice_count,win_rate,avg_return,total_return,profit_factor,stop_rate,tp_rate,expire_rate"
         )
-        # fake report: count=2 win=0.5 avg=1.0 total=2.0 stop=0.5 tp=0.5 expire=0.0
-        assert lines[1] == "SZ000001,2,50.0%,+1.00%,+2.00%,50.0%,50.0%,0.0%"
+        # fake report: count=2 win=0.5 avg=1.0 total=2.0 pf=2.0 stop=0.5 tp=0.5 expire=0.0
+        assert lines[1] == "SZ000001,2,50.0%,+1.00%,+2.00%,2.00,50.0%,50.0%,0.0%"
         assert lines[2] == ""
         assert lines[3] == (
-            "no,entry_price,stop_loss,take_profit_1,exit_price,exit_reason,return_pct"
+            "no,entry_price,stop_loss,take_profit_1,exit_price,exit_reason,return_pct,mae_pct,mfe_pct"
         )
         # 逐笔行收益无 % 后缀（f"{t['return_pct']:+.2f}"）
-        assert "1,100.00,97.00,106.00,100.00,expire,+0.00" in lines
-        assert "2,110.00,107.00,116.00,112.00,tp1,+2.00" in lines
+        assert "1,100.00,97.00,106.00,100.00,expire,+0.00,-1.00,+1.00" in lines
+        assert "2,110.00,107.00,116.00,112.00,tp1,+2.00,-0.50,+2.50" in lines
 
     def test_advice_insufficient_data_runs(self, monkeypatch):
         """V376: 行情数据不足（<30 根）返回 error JSON，不崩溃。"""
