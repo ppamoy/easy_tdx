@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from easy_tdx.backtest.signal_accuracy import _profit_factor, compute_signal_accuracy_by_type
+from easy_tdx.backtest.signal_accuracy import (
+    _profit_factor,
+    _signal_type_verdict,
+    compute_signal_accuracy_by_type,
+)
 
 
 class TestProfitFactor:
@@ -31,3 +35,31 @@ class TestTypeAccuracyProfitFactor:
         assert "3buy" in report["by_type"]
         h = report["by_type"]["3buy"]["horizons"]
         assert "profit_factor" in h["3"] or "profit_factor" in h["5"]
+
+
+class TestSignalTypeVerdict:
+    def test_significant_above_with_good_pf(self) -> None:
+        report = {
+            "direction": "BUY",
+            "horizons": {
+                "5": {"count": 20, "excess_hit_rate": 0.10, "profit_factor": 2.0},
+            },
+        }
+        v = _signal_type_verdict(report)
+        assert "显著优于随机" in v
+        assert "盈亏比差" not in v
+
+    def test_significant_above_with_bad_pf(self) -> None:
+        report = {
+            "direction": "BUY",
+            "horizons": {
+                "5": {"count": 20, "excess_hit_rate": 0.10, "profit_factor": 0.6},
+            },
+        }
+        v = _signal_type_verdict(report)
+        assert "显著优于随机" in v
+        assert "盈亏比差" in v
+
+    def test_insufficient_sample(self) -> None:
+        report = {"direction": "BUY", "horizons": {}}
+        assert _signal_type_verdict(report) == "样本不足，无法可靠评估"

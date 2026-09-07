@@ -338,18 +338,45 @@ def _signal_type_stats(
 
 
 def _signal_type_verdict(report: dict[str, Any]) -> str:
-    """单类型一句结论（取 5 根窗口，缺则回退 3/10）。"""
+    """单类型一句结论（取 5 根窗口，缺则回退 3/10）。
+
+    V432: 结合盈亏比 profit_factor——命中率优但 PF<1 时提示「盈亏比差」。
+    """
     horizons = report.get("horizons", {})
     h5 = horizons.get("5") or horizons.get("3") or horizons.get("10")
     if not h5 or h5.get("count", 0) == 0:
         return "样本不足，无法可靠评估"
     excess = float(h5.get("excess_hit_rate", 0.0))
+    pf = float(h5.get("profit_factor", 0.0))
     n = int(h5.get("count", 0))
     direction = report.get("direction", "BUY")
     verb = "买入" if direction == "BUY" else "卖出"
+    pf_note = f"PF={pf:.2f}" if pf > 0 else ""
     if excess > 0.05:
+        if pf_note and pf < 1.0:
+            return (
+                verb
+                + "点显著优于随机但盈亏比差（+"
+                + f"{excess:.1%}"
+                + "，"
+                + pf_note
+                + "，n="
+                + str(n)
+                + "）"
+            )
         return verb + "点显著优于随机（+" + f"{excess:.1%}" + "，n=" + str(n) + "）"
     if excess > 0:
+        if pf_note and pf < 1.0:
+            return (
+                verb
+                + "点略优于随机但盈亏比差（+"
+                + f"{excess:.1%}"
+                + "，"
+                + pf_note
+                + "，n="
+                + str(n)
+                + "）"
+            )
         return verb + "点略优于随机（+" + f"{excess:.1%}" + "，n=" + str(n) + "）"
     if excess > -0.05:
         return verb + "点与随机相当（" + f"{excess:+.1%}" + "，n=" + str(n) + "）"
