@@ -82,6 +82,14 @@ class TestAccuracyScore:
         assert score == pytest.approx(0.3)
         assert "note" in comp
 
+    def test_low_pf_discounts(self) -> None:
+        """V433: 命中率优但 PF<1（赢小亏大）时准确度分打折。"""
+        sa = _good_sa()
+        sa["buy"]["horizons"]["5"]["profit_factor"] = 0.6
+        score, comp = _accuracy_score(sa)
+        assert comp["profit_factor"] == pytest.approx(0.6)
+        assert score == pytest.approx(0.8)  # 1.0 * 0.8
+
 
 class TestRobustnessScore:
     def test_overfit_drags(self) -> None:

@@ -45,12 +45,17 @@ def _accuracy_score(signal_accuracy: dict[str, Any] | None) -> tuple[float, dict
     excess = float(stats.get("excess_hit_rate", 0.0))
     hit = float(stats.get("hit_rate", 0.0))
     baseline = float(stats.get("baseline_hit_rate", 0.0))
+    pf = float(stats.get("profit_factor", 0.0))
     score = _clamp(0.5 + excess / 0.15 * 0.5)
+    # V433: 盈亏比修正——命中率优但 PF<1（赢小亏大）时可信度打折
+    if pf > 0 and pf < 1.0:
+        score *= 0.8
     return score, {
         "score": score,
         "hit_rate": hit,
         "baseline_hit_rate": baseline,
         "excess_hit_rate": excess,
+        "profit_factor": pf,
         "n": int(stats.get("count", 0)),
     }
 
