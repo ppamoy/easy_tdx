@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**实证复盘页列表状态指示（V451）**：买卖点实证复盘页左列表加预跑状态指示（ready=绿✓ / failed=红✗ / pending=灰…），配合 V427 在线回退，让用户一目了然哪些标的已预跑、哪些无数据。
+
+---
+
 **offline advice-batch 汇总补指标（V450）**：advice-batch 的 md 汇总加盈亏比，json/table/csv 输出加 summary_profit_factor/summary_avg_mae_pct/summary_avg_mfe_pct 字段。
 
 ---
