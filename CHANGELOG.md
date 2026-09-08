@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**总体结论盈亏比 ∞ 显示（V473）**：_build_type_summary 的「最强买点/卖点」文案盈亏比 PF>=999（仅盈利）显示 ∞，与前端 fmtPf 一致。
+
+---
+
 **文档与边界测试（V470-V472）**：
 
 - **V470** simulate_advice_batch docstring 补 median_return/profit_factor/long_stats/short_stats
