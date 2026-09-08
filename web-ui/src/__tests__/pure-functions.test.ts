@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'vitest'
 
-import { fmt2, fmtAccPct, fmtAccSigned, fmtPct } from '../format'
+import { fmt2, fmtAccPct, fmtAccSigned, fmtPct, fmtPf } from '../format'
 import { detectMarket, marketLabel, toSymbol } from '../market'
 
 describe('format', () => {
@@ -30,6 +30,13 @@ describe('format', () => {
     expect(fmtAccSigned(0.05)).toBe('+5.0%')
     expect(fmtAccSigned(-0.03)).toBe('-3.0%')
     expect(fmtAccSigned(null)).toBe('-')
+  })
+
+  test('fmtPf：盈亏比 999 显示 ∞', () => {
+    expect(fmtPf(2.5)).toBe('2.50')
+    expect(fmtPf(999)).toBe('∞')
+    expect(fmtPf(999.0)).toBe('∞')
+    expect(fmtPf(null)).toBe('-')
   })
 })
 

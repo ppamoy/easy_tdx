@@ -3,7 +3,7 @@
 // 让用户通过历史回测核对「哪类信号真的准」，而不只是看账户总收益。
 
 import { computed } from 'vue'
-import { fmtPct } from '../format'
+import { fmtPct, fmtPf } from '../format'
 import type { SignalHorizonStat } from '../types'
 
 const props = defineProps<{
@@ -187,9 +187,7 @@ function typeColor(type: string): string {
                 "
               >
                 {{
-                  row.horizons[h].profit_factor != null
-                    ? row.horizons[h].profit_factor.toFixed(2)
-                    : '–'
+                  row.horizons[h].profit_factor != null ? fmtPf(row.horizons[h].profit_factor) : '–'
                 }}
               </td>
             </template>

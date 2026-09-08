@@ -24,3 +24,10 @@ export function fmtAccSigned(v: number | null | undefined): string {
   const sign = v >= 0 ? '+' : ''
   return `${sign}${(v * 100).toFixed(1)}%`
 }
+
+/** 盈亏比（profit_factor）：999 表示仅盈利无亏损，显示 ∞；其余保留两位小数。 */
+export function fmtPf(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  if (v >= 999) return '∞'
+  return v.toFixed(2)
+}

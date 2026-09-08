@@ -517,6 +517,11 @@ function fmtAccSigned(v: number | null | undefined): string {
   const sign = v >= 0 ? '+' : ''
   return sign + (v * 100).toFixed(1) + '%'
 }
+function fmtPf(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '-'
+  if (v >= 999) return '∞'
+  return v.toFixed(2)
+}
 // 取某类型的 5 根窗口统计（缺则回退 3 根）
 function byTypeHorizon(
   type: string,
@@ -1487,7 +1492,7 @@ onUnmounted(() => {
               {{ fmtAccPct(rank.avg_return) }}
             </td>
             <td>
-              {{ rank.profit_factor != null ? rank.profit_factor.toFixed(2) : '—' }}
+              {{ rank.profit_factor != null ? fmtPf(rank.profit_factor) : '—' }}
             </td>
             <td class="verdict-cell">{{ rank.verdict }}</td>
           </tr>
