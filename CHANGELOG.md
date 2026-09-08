@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**选股评分重构（V454）**：抽 _latest_mmd_obj 纯函数，消除 _calc_stock_quality/_get_latest_mmd/_calc_quality_score 三处重复的「取最新买卖点」逻辑。
+
+---
+
 **盈亏比 ∞ 显示（V453）**：新增 fmtPf——profit_factor >= 999（仅盈利无亏损）显示 ∞，其余保留两位小数；缠论准确度面板与缠论页排名表统一使用。
 
 ---
