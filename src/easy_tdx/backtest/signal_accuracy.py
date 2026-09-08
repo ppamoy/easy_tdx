@@ -490,6 +490,8 @@ def _build_type_summary(by_type: dict[str, Any]) -> str:
     parts: list[str] = []
     if best_buy:
         h5 = best_buy["horizons"].get("5") or best_buy["horizons"].get("3")
+        pf = float(h5.get("profit_factor", 0.0))
+        pf_note = f"，盈亏比 {pf:.2f}" if pf > 0 else ""
         parts.append(
             "最强买点 "
             + best_buy.get("type", "?")
@@ -497,10 +499,13 @@ def _build_type_summary(by_type: dict[str, Any]) -> str:
             + f"{h5['hit_rate']:.0%}"
             + "，超额 "
             + f"{h5['excess_hit_rate']:+.1%}"
+            + pf_note
             + "）"
         )
     if best_sell:
         h5 = best_sell["horizons"].get("5") or best_sell["horizons"].get("3")
+        pf = float(h5.get("profit_factor", 0.0))
+        pf_note = f"，盈亏比 {pf:.2f}" if pf > 0 else ""
         parts.append(
             "最强卖点 "
             + best_sell.get("type", "?")
@@ -508,6 +513,7 @@ def _build_type_summary(by_type: dict[str, Any]) -> str:
             + f"{h5['hit_rate']:.0%}"
             + "，超额 "
             + f"{h5['excess_hit_rate']:+.1%}"
+            + pf_note
             + "）"
         )
     if not parts:
