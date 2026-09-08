@@ -4,7 +4,7 @@
 
 import { computed, ref } from 'vue'
 
-import { fmtPct } from '../format'
+import { fmtPct, fmtPf } from '../format'
 import type { SignalAccuracyReport, SignalHorizonStat } from '../types'
 
 const props = defineProps<{
@@ -151,14 +151,16 @@ function exportAccCsv() {
             <th>命中率</th>
             <th>随机基准</th>
             <th>平均前瞻收益</th>
-            <th>基准收益</th>
+            <th>中位收益</th>
+            <th>盈亏比</th>
           </template>
           <template v-if="report?.sell">
             <th>信号数</th>
             <th>命中率</th>
             <th>随机基准</th>
             <th>平均前瞻收益</th>
-            <th>基准收益</th>
+            <th>中位收益</th>
+            <th>盈亏比</th>
           </template>
         </tr>
       </thead>
@@ -174,7 +176,8 @@ function exportAccCsv() {
             <td :class="(r.buy?.avg_return ?? 0) >= 0 ? 'pos' : 'neg'">
               {{ fmtPct(r.buy?.avg_return) }}
             </td>
-            <td class="dim">{{ fmtPct(r.buy?.baseline_avg_return) }}</td>
+            <td class="dim">{{ fmtPct(r.buy?.median_return) }}</td>
+            <td class="dim">{{ fmtPf(r.buy?.profit_factor) }}</td>
           </template>
           <template v-if="report?.sell">
             <td>{{ cell(r.sell?.count) }}</td>
@@ -185,7 +188,8 @@ function exportAccCsv() {
             <td :class="(r.sell?.avg_return ?? 0) >= 0 ? 'pos' : 'neg'">
               {{ fmtPct(r.sell?.avg_return) }}
             </td>
-            <td class="dim">{{ fmtPct(r.sell?.baseline_avg_return) }}</td>
+            <td class="dim">{{ fmtPct(r.sell?.median_return) }}</td>
+            <td class="dim">{{ fmtPf(r.sell?.profit_factor) }}</td>
           </template>
         </tr>
       </tbody>
