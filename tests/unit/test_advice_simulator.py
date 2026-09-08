@@ -844,6 +844,8 @@ class TestSummarizeBatch:
         # V442: 平均最大不利/有利偏移
         assert s["avg_mae_pct"] == -1.17
         assert s["avg_mfe_pct"] == 2.0
+        # V461: 中位数收益（sorted [-2, 1, 3] → 1.0）
+        assert s["median_return"] == 1.0
 
     def test_empty_reports(self):
         """无交易时返回零汇总。"""
