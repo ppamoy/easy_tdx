@@ -286,6 +286,44 @@ class TestSimulateAdviceBatch:
         assert "profit_factor" in result
         assert result["profit_factor"] >= 0
 
+    def test_batch_long_short_stats(self) -> None:
+        """V465: 多空分开统计正确分组。"""
+        highs = [100.0, 106.0, 104.0, 103.0, 102.0, 95.0, 94.0, 93.0, 92.0, 91.0]
+        lows = [99.0, 100.0, 101.0, 102.0, 101.0, 94.0, 93.0, 92.0, 91.0, 90.0]
+        closes = [100.0, 105.0, 103.0, 102.0, 101.5, 94.5, 93.5, 92.5, 91.5, 90.5]
+        advices = [
+            {
+                "entry_idx": 0,
+                "entry_price": 100.0,
+                "stop_loss": 97.0,
+                "take_profit_1": 106.0,
+                "max_hold": 3,
+                "direction": "long",
+            },
+            {
+                "entry_idx": 1,
+                "entry_price": 105.0,
+                "stop_loss": 98.0,
+                "take_profit_1": 110.0,
+                "max_hold": 3,
+                "direction": "long",
+            },
+            {
+                "entry_idx": 4,
+                "entry_price": 101.5,
+                "stop_loss": 104.0,
+                "take_profit_1": 94.0,
+                "max_hold": 3,
+                "direction": "short",
+            },
+        ]
+        result = simulate_advice_batch(highs, lows, closes, advices)
+        assert result["count"] == 3
+        assert result["long_stats"]["count"] == 2
+        assert result["short_stats"]["count"] == 1
+        assert result["long_stats"]["win_rate"] >= 0
+        assert result["short_stats"]["win_rate"] >= 0
+
     def test_invalid_advices_skipped(self):
         """非法建议在批量中被过滤。"""
         highs = _seq(100, 0.5, 10)
