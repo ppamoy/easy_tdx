@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议批量汇总加中位数收益（V461）**：summarize_batch 加 median_return（中位数收益，比均值稳健、不受极值影响）。
+
+---
+
 **advice 持有期敏感性 CLI（V460）**：advice 命令加 --hold-sweep 选项，对同一批建议用 3/5/10/20 根 max_hold 模拟并输出多持有期对比 JSON（各持有期的胜率/平均收益/盈亏比）。
 
 ---
