@@ -138,6 +138,8 @@ const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 
 // 买卖点分类准确度验证（由 /chanlun/analyze 返回的 signal_accuracy）
 const signalAccuracy = ref<any>(null)
+// V458: 准确度验证持有期切换（3/5/10/20 根）
+const accHorizon = ref<'3' | '5' | '10' | '20'>('5')
 
 interface ChanlunBoll {
   upper: number[]
@@ -522,12 +524,13 @@ function fmtPf(v: number | null | undefined): string {
   if (v >= 999) return '∞'
   return v.toFixed(2)
 }
-// 取某类型的 5 根窗口统计（缺则回退 3 根）
+// 取某类型指定持有期的统计（缺则回退 5/3 根）
 function byTypeHorizon(
   type: string,
 ): { baseline_hit_rate?: number; profit_factor?: number } | null {
   const rep = signalAccuracy.value?.by_type?.[type]
-  return rep?.horizons?.['5'] ?? rep?.horizons?.['3'] ?? null
+  const h = rep?.horizons?.[accHorizon.value]
+  return h ?? rep?.horizons?.['5'] ?? rep?.horizons?.['3'] ?? null
 }
 
 // 买卖点图例颜色
@@ -1451,6 +1454,15 @@ onUnmounted(() => {
     <!-- 买卖点分类准确度验证 -->
     <div v-if="!loading && signalAccuracy && signalAccuracy.ranking?.length" class="mmd-accuracy">
       <h3>🎯 买卖点准确度验证（命中率 vs 随机基准）</h3>
+      <div class="acc-horizon">
+        <label>持有期</label>
+        <select v-model="accHorizon">
+          <option value="3">3 根</option>
+          <option value="5">5 根</option>
+          <option value="10">10 根</option>
+          <option value="20">20 根</option>
+        </select>
+      </div>
       <div v-if="signalAccuracy.summary" class="accuracy-summary">{{ signalAccuracy.summary }}</div>
       <table>
         <thead>
@@ -1868,6 +1880,23 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
+}
+.acc-horizon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.acc-horizon label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.acc-horizon select {
+  background: #111827;
+  border: 1px solid #2a2e3a;
+  color: #e5e7eb;
+  padding: 4px 8px;
+  border-radius: 4px;
 }
 .mmd-accuracy h3 {
   font-size: 13px;
