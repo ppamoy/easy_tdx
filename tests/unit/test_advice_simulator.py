@@ -248,6 +248,7 @@ class TestSimulateAdviceBatch:
         assert 0.0 <= result["win_rate"] <= 1.0
         for key in (
             "avg_return",
+            "median_return",
             "total_return",
             "profit_factor",
             "stop_rate",
