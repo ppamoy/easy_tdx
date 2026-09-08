@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+**文档与边界测试（V470-V472）**：
+
+- **V470** simulate_advice_batch docstring 补 median_return/profit_factor/long_stats/short_stats
+- **V471** summarize_batch docstring 补 median_return/avg_mae/avg_mfe
+- **V472** fmtPf 补 Infinity/NaN 边界测试
+
+---
+
 **盈亏比 999 边界测试（V469）**：grading 补测试——profit_factor=999（仅盈利无亏损）评分应为满分 100（interpolate 取最高锚点分）。
 
 ---
