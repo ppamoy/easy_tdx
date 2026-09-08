@@ -275,6 +275,13 @@ async def _analyze_stock(
     }
 
 
+def _latest_mmd_obj(result: Any) -> Any | None:
+    """V454: 取最新买卖点对象（按 bi.index 最大），无则返回 None。"""
+    if not result.mmds:
+        return None
+    return max(result.mmds, key=lambda m: m.bi.index if m.bi else 0)
+
+
 def _v102_quality_bonus(mmd: Any) -> tuple[int, str]:
     """V428: 从 V102 信号质量评分卡计算选股加分。
 
@@ -367,8 +374,8 @@ def _calc_stock_quality(result: Any) -> float:
         score += 5
 
     # V428/V437: 最新买卖点的 V102 信号质量 + 风险回报比 + 买入方向加分
-    if result.mmds:
-        latest = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0)
+    latest = _latest_mmd_obj(result)
+    if latest is not None:
         v102_bonus, _reason = _v102_quality_bonus(latest)
         score += v102_bonus
         rr_bonus, _rr_reason = _v102_rr_bonus(latest)
@@ -389,10 +396,9 @@ def _is_buy_signal(mmd_type_value: str) -> bool:
 
 def _get_latest_mmd(result: Any) -> dict[str, Any] | None:
     """获取最新买卖点。"""
-    if not result.mmds:
+    latest = _latest_mmd_obj(result)
+    if latest is None:
         return None
-
-    latest = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0)
     return {
         "type": latest.mmd_type.value,
         "date": latest.bi.end.k.date.strftime("%Y-%m-%d") if latest.bi else None,
@@ -443,8 +449,8 @@ def _calc_quality_score(result: Any, target_date: datetime) -> float:
     score = 50
 
     # 根据最近买卖点评分
-    if result.mmds:
-        latest = max(result.mmds, key=lambda m: m.bi.index if m.bi else 0)
+    latest = _latest_mmd_obj(result)
+    if latest is not None:
         if _is_buy_signal(latest.mmd_type.value):
             score += 20
         else:
