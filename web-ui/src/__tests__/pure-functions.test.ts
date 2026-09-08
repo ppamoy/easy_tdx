@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest'
 
 import { fmt2, fmtAccPct, fmtAccSigned, fmtPct, fmtPf } from '../format'
 import { detectMarket, marketLabel, toSymbol } from '../market'
+import { formatError } from '../api'
 
 describe('format', () => {
   test('fmt2：正常数字保留两位小数', () => {
@@ -73,5 +74,21 @@ describe('market', () => {
     expect(marketLabel('SH')).toBe('沪市')
     expect(marketLabel('BJ')).toBe('北交所')
     expect(marketLabel('SZ')).toBe('深市')
+  })
+})
+
+describe('api formatError', () => {
+  test('fetch TypeError 提示网络错误', () => {
+    const e = new TypeError('fetch failed')
+    expect(formatError(e)).toContain('网络错误')
+  })
+
+  test('普通 Error 返回 message', () => {
+    expect(formatError(new Error('boom'))).toBe('boom')
+  })
+
+  test('非 Error 值转字符串', () => {
+    expect(formatError('oops')).toBe('oops')
+    expect(formatError(42)).toBe('42')
   })
 })
