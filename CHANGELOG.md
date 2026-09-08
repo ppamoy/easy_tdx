@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议模拟批量加中位数收益（V463）**：simulate_advice_batch 单标的批量结果也加 median_return（与 V461 的 summarize_batch 对齐），比均值稳健。
+
+---
+
 **中位数收益断言（V462）**：summarize_batch 测试补 median_return 断言（sorted [-2,1,3] → 1.0）。
 
 ---
