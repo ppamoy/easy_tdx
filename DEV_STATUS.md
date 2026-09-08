@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 建议模拟中位数断言（V464）✅ 完成
+
+- simulate_advice_batch median 断言
+
 ## 建议模拟批量加中位数收益（V463）✅ 完成
 
 - simulate_advice_batch 加 median_return
