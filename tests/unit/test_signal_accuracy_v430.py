@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from easy_tdx.backtest.signal_accuracy import (
+    _build_type_summary,
     _profit_factor,
     _signal_type_verdict,
     compute_signal_accuracy_by_type,
@@ -63,3 +64,44 @@ class TestSignalTypeVerdict:
     def test_insufficient_sample(self) -> None:
         report = {"direction": "BUY", "horizons": {}}
         assert _signal_type_verdict(report) == "样本不足，无法可靠评估"
+
+
+class TestBuildTypeSummary:
+    def test_summary_includes_profit_factor(self) -> None:
+        """V456: 最强买点/卖点文案附盈亏比。"""
+        by_type = {
+            "3buy": {
+                "type": "3buy",
+                "direction": "BUY",
+                "horizons": {
+                    "5": {
+                        "count": 20,
+                        "hit_rate": 0.7,
+                        "excess_hit_rate": 0.15,
+                        "profit_factor": 2.5,
+                    },
+                },
+            },
+        }
+        s = _build_type_summary(by_type)
+        assert "最强买点 3buy" in s
+        assert "盈亏比 2.50" in s
+
+    def test_summary_no_pf_when_zero(self) -> None:
+        by_type = {
+            "1sell": {
+                "type": "1sell",
+                "direction": "SELL",
+                "horizons": {
+                    "5": {
+                        "count": 10,
+                        "hit_rate": 0.4,
+                        "excess_hit_rate": -0.05,
+                        "profit_factor": 0.0,
+                    },
+                },
+            },
+        }
+        s = _build_type_summary(by_type)
+        assert "最强卖点 1sell" in s
+        assert "盈亏比" not in s
