@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议模拟多空分开统计（V465）**：simulate_advice_batch 加 long_stats/short_stats（买点/卖点信号分别的笔数、胜率、平均收益），揭示模型多空不对称表现。
+
+---
+
 **建议模拟中位数断言（V464）**：simulate_advice_batch 测试字段循环补 median_return。
 
 ---
