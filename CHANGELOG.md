@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**advice 持有期敏感性 CLI（V460）**：advice 命令加 --hold-sweep 选项，对同一批建议用 3/5/10/20 根 max_hold 模拟并输出多持有期对比 JSON（各持有期的胜率/平均收益/盈亏比）。
+
+---
+
 **非按类型信号准确度加盈亏比（V459）**：compute_signal_accuracy（回测页信号准确度，buy/sell 方向）的统计也加 profit_factor，与 V430 的按类型版本对齐。
 
 ---
