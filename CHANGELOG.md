@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**盈亏比 999 边界测试（V469）**：grading 补测试——profit_factor=999（仅盈利无亏损）评分应为满分 100（interpolate 取最高锚点分）。
+
+---
+
 **信号准确度面板加中位/盈亏比（V468）**：SignalAccuracyPanel（回测页信号准确度，buy/sell 方向）表格加中位收益与盈亏比列（复用 fmtPct/fmtPf）。
 
 ---
