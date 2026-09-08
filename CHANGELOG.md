@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**信号类型总体结论加盈亏比（V456）**：_build_type_summary 的「最强买点/卖点」文案加盈亏比（PF>0 时附），与 V432 单类型判定、V430 统计对齐。
+
+---
+
 **formatError 测试（V455）**：前端 formatError 纯函数补测试（fetch TypeError → 网络错误提示、Error → message、非 Error → 字符串）。
 
 ---
