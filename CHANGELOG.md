@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**中位数收益断言（V462）**：summarize_batch 测试补 median_return 断言（sorted [-2,1,3] → 1.0）。
+
+---
+
 **建议批量汇总加中位数收益（V461）**：summarize_batch 加 median_return（中位数收益，比均值稳健、不受极值影响）。
 
 ---
