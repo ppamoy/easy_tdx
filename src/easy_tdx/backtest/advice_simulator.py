@@ -177,6 +177,13 @@ def simulate_advice_batch(
     wins = [t for t in trades if t["return_pct"] > 0]
     avg = sum(t["return_pct"] for t in trades) / len(trades)
     total = sum(t["return_pct"] for t in trades)
+    # V463: 中位数收益（比均值稳健）
+    n = len(trades)
+    sorted_ret = sorted(t["return_pct"] for t in trades)
+    mid = n // 2
+    median_return = (
+        sorted_ret[mid] if n % 2 == 1 else (sorted_ret[mid - 1] + sorted_ret[mid]) / 2
+    )
     kinds = {"stop": 0, "tp1": 0, "expire": 0}
     for t in trades:
         kinds[t["exit_reason"]] = kinds.get(t["exit_reason"], 0) + 1
@@ -198,6 +205,7 @@ def simulate_advice_batch(
         "count": len(trades),
         "win_rate": round(len(wins) / len(trades), 4),
         "avg_return": round(avg, 2),
+        "median_return": round(median_return, 2),
         "total_return": round(total, 2),
         "profit_factor": profit_factor,
         "stop_rate": round(kinds["stop"] / len(trades), 4),
