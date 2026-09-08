@@ -317,10 +317,16 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
             "positive_symbols": 0,
         }
 
-    wins = [t for t in merged if t["return_pct"] > 0]
-    avg = sum(t["return_pct"] for t in merged) / len(merged)
-    total = sum(t["return_pct"] for t in merged)
     n = len(merged)
+    wins = [t for t in merged if t["return_pct"] > 0]
+    avg = sum(t["return_pct"] for t in merged) / n
+    total = sum(t["return_pct"] for t in merged)
+    # V461: 中位数收益（比均值稳健，不受极值影响）
+    sorted_ret = sorted(t["return_pct"] for t in merged)
+    mid = n // 2
+    median_return = (
+        sorted_ret[mid] if n % 2 == 1 else (sorted_ret[mid - 1] + sorted_ret[mid]) / 2
+    )
     kinds = {"stop": 0, "tp1": 0, "expire": 0}
     for t in merged:
         kinds[t["exit_reason"]] = kinds.get(t["exit_reason"], 0) + 1
@@ -346,6 +352,7 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
         "advice_count": n,
         "win_rate": round(len(wins) / n, 4),
         "avg_return": round(avg, 2),
+        "median_return": round(median_return, 2),
         "total_return": round(total, 2),
         "profit_factor": profit_factor,
         "avg_mae_pct": avg_mae_pct,
