@@ -144,7 +144,8 @@ def simulate_advice_batch(
             可选 direction（long/short，默认 long）
 
     Returns:
-        dict：{trades: [单笔结果], count, win_rate, avg_return, total_return,
+        dict：{trades: [单笔结果], count, win_rate, avg_return, median_return,
+               total_return, profit_factor, long_stats, short_stats,
                stop_rate, tp_rate, expire_rate}
     """
     trades: list[dict[str, Any]] = []
