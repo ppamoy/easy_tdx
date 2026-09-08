@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**advice 输出补中位数（V466）**：advice CSV/JSON 输出补 median_return，与 V461/V463 后端中位数对齐。
+
+---
+
 **建议模拟多空分开统计（V465）**：simulate_advice_batch 加 long_stats/short_stats（买点/卖点信号分别的笔数、胜率、平均收益），揭示模型多空不对称表现。
 
 ---
