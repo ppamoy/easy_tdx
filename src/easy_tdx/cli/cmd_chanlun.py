@@ -183,6 +183,11 @@ def _print_table(result: dict[str, Any]) -> None:
     type=click.Choice(["json", "table", "csv", "md"]),
     default="json",
 )
+@click.option(
+    "--hold-sweep",
+    is_flag=True,
+    help="多持有期敏感性分析（3/5/10/20 根对比，输出 JSON）",
+)
 def advice_simulate(
     market: str,
     code: str,
@@ -190,6 +195,7 @@ def advice_simulate(
     count: int,
     max_hold: int,
     output_fmt: str,
+    hold_sweep: bool,
 ) -> None:
     """V102 建议回放实证：对 3买/3卖 信号生成入场/止损/止盈建议并在历史行情回放。
 
@@ -247,6 +253,30 @@ def advice_simulate(
             return
 
         report = simulate_advice_batch(highs, lows, closes, advices)
+
+        if hold_sweep:
+            # V460: 多持有期敏感性分析
+            from ..backtest.advice_simulator import simulate_advice_hold_sweep
+
+            sweep = simulate_advice_hold_sweep(highs, lows, closes, advices)
+            click.echo(
+                json.dumps(
+                    {
+                        "symbol": f"{market}{code}",
+                        "hold_sweep": {
+                            h: {
+                                "count": r["count"],
+                                "win_rate": round(r["win_rate"] * 100, 1),
+                                "avg_return": r["avg_return"],
+                                "profit_factor": r.get("profit_factor", 0.0),
+                            }
+                            for h, r in sweep.items()
+                        },
+                    },
+                    ensure_ascii=False,
+                )
+            )
+            return
 
     if output_fmt == "csv":
         rows = []

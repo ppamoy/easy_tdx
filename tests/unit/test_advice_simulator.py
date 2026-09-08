@@ -711,6 +711,37 @@ class TestOnlineAdviceOutput:
         assert "1,100.00,97.00,106.00,100.00,expire,+0.00,-1.00,+1.00" in lines
         assert "2,110.00,107.00,116.00,112.00,tp1,+2.00,-0.50,+2.50" in lines
 
+    def test_advice_hold_sweep_runs(self, monkeypatch):
+        """V460: advice --hold-sweep 输出多持有期对比 JSON。"""
+        import json
+
+        from click.testing import CliRunner
+
+        from easy_tdx.cli.cmd_chanlun import advice_simulate
+
+        self._patch_env(monkeypatch)
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.collect_signal_advices",
+            lambda *a, **k: self._fake_advices(),
+        )
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.simulate_advice_batch",
+            lambda *a, **k: self._fake_report(),
+        )
+        monkeypatch.setattr(
+            "easy_tdx.backtest.advice_simulator.simulate_advice_hold_sweep",
+            lambda *a, **k: {"3": self._fake_report(), "5": self._fake_report()},
+        )
+
+        runner = CliRunner()
+        res = runner.invoke(advice_simulate, ["SZ", "000001", "--hold-sweep"])
+        assert res.exit_code == 0, res.output
+        data = json.loads(res.output)
+        assert data["symbol"] == "SZ000001"
+        assert "3" in data["hold_sweep"]
+        assert "5" in data["hold_sweep"]
+        assert data["hold_sweep"]["3"]["profit_factor"] == 2.0
+
     def test_advice_insufficient_data_runs(self, monkeypatch):
         """V376: 行情数据不足（<30 根）返回 error JSON，不崩溃。"""
         import json
