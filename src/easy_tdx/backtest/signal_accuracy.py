@@ -494,7 +494,9 @@ def _build_type_summary(by_type: dict[str, Any]) -> str:
     if best_buy:
         h5 = best_buy["horizons"].get("5") or best_buy["horizons"].get("3")
         pf = float(h5.get("profit_factor", 0.0))
-        pf_note = f"，盈亏比 {pf:.2f}" if pf > 0 else ""
+        # V473: PF >= 999（仅盈利）显示 ∞，与前端 fmtPf 一致
+        pf_str = "∞" if pf >= 999 else f"{pf:.2f}"
+        pf_note = f"，盈亏比 {pf_str}" if pf > 0 else ""
         parts.append(
             "最强买点 "
             + best_buy.get("type", "?")
@@ -508,7 +510,8 @@ def _build_type_summary(by_type: dict[str, Any]) -> str:
     if best_sell:
         h5 = best_sell["horizons"].get("5") or best_sell["horizons"].get("3")
         pf = float(h5.get("profit_factor", 0.0))
-        pf_note = f"，盈亏比 {pf:.2f}" if pf > 0 else ""
+        pf_str = "∞" if pf >= 999 else f"{pf:.2f}"
+        pf_note = f"，盈亏比 {pf_str}" if pf > 0 else ""
         parts.append(
             "最强卖点 "
             + best_sell.get("type", "?")
