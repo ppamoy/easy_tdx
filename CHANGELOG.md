@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**多空分组测试（V467）**：simulate_advice_batch 测试补 long/short 分组正确性（2 long + 1 short → long_stats.count=2, short_stats.count=1）。
+
+---
+
 **advice 输出补中位数（V466）**：advice CSV/JSON 输出补 median_return，与 V461/V463 后端中位数对齐。
 
 ---
