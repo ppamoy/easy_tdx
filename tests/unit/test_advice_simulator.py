@@ -251,6 +251,8 @@ class TestSimulateAdviceBatch:
             "median_return",
             "total_return",
             "profit_factor",
+            "long_stats",
+            "short_stats",
             "stop_rate",
             "tp_rate",
             "expire_rate",

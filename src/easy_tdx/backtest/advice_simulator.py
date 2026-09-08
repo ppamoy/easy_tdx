@@ -148,6 +148,7 @@ def simulate_advice_batch(
                stop_rate, tp_rate, expire_rate}
     """
     trades: list[dict[str, Any]] = []
+    trade_directions: list[str] = []  # V465: 与 trades 同步，供多空分组统计
     for adv in advices:
         idx = int(adv.get("entry_idx", -1))
         entry = float(adv.get("entry_price", 0.0) or 0.0)
@@ -170,6 +171,7 @@ def simulate_advice_batch(
                 direction=direction,
             )
         )
+        trade_directions.append(direction)
 
     if not trades:
         return {"trades": [], "count": 0, "win_rate": 0.0, "avg_return": 0.0, "total_return": 0.0}
@@ -184,6 +186,24 @@ def simulate_advice_batch(
     median_return = (
         sorted_ret[mid] if n % 2 == 1 else (sorted_ret[mid - 1] + sorted_ret[mid]) / 2
     )
+    # V465: 多空分开统计（买点/卖点信号的不对称表现）
+    def _dir_stats(rets: list[float]) -> dict[str, Any]:
+        if not rets:
+            return {"count": 0, "win_rate": 0.0, "avg_return": 0.0}
+        return {
+            "count": len(rets),
+            "win_rate": round(sum(1 for r in rets if r > 0) / len(rets), 4),
+            "avg_return": round(sum(rets) / len(rets), 2),
+        }
+
+    long_rets = [
+        t["return_pct"] for t, d in zip(trades, trade_directions) if d == "long"
+    ]
+    short_rets = [
+        t["return_pct"] for t, d in zip(trades, trade_directions) if d == "short"
+    ]
+    long_stats = _dir_stats(long_rets)
+    short_stats = _dir_stats(short_rets)
     kinds = {"stop": 0, "tp1": 0, "expire": 0}
     for t in trades:
         kinds[t["exit_reason"]] = kinds.get(t["exit_reason"], 0) + 1
@@ -208,6 +228,8 @@ def simulate_advice_batch(
         "median_return": round(median_return, 2),
         "total_return": round(total, 2),
         "profit_factor": profit_factor,
+        "long_stats": long_stats,
+        "short_stats": short_stats,
         "stop_rate": round(kinds["stop"] / len(trades), 4),
         "tp_rate": round(kinds["tp1"] / len(trades), 4),
         "expire_rate": round(kinds["expire"] / len(trades), 4),
