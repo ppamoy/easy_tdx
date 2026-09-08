@@ -322,3 +322,8 @@ test('combinedMetrics：单点净值返回全 0（兜底）', () => {
   assert.equal(m.sharpe, 0)
   assert.equal(m.n_points, 1)
 })
+
+test('profit_factor=999（仅盈利无亏损）应为满分 100', () => {
+  const score = interpolate(THRESHOLDS.profit_factor.anchors, 999)
+  assert.equal(score, 100)
+})
