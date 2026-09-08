@@ -582,6 +582,7 @@ class TestOnlineAdviceOutput:
             "count": 2,
             "win_rate": 0.5,
             "avg_return": 1.0,
+            "median_return": 1.0,
             "total_return": 2.0,
             "profit_factor": 2.0,
             "stop_rate": 0.5,
@@ -702,10 +703,10 @@ class TestOnlineAdviceOutput:
         assert res.exit_code == 0, res.output
         lines = res.output.strip().splitlines()
         assert lines[0] == (
-            "symbol,advice_count,win_rate,avg_return,total_return,profit_factor,stop_rate,tp_rate,expire_rate"
+            "symbol,advice_count,win_rate,avg_return,median_return,total_return,profit_factor,stop_rate,tp_rate,expire_rate"
         )
-        # fake report: count=2 win=0.5 avg=1.0 total=2.0 pf=2.0 stop=0.5 tp=0.5 expire=0.0
-        assert lines[1] == "SZ000001,2,50.0%,+1.00%,+2.00%,2.00,50.0%,50.0%,0.0%"
+        # fake: count=2 win=0.5 avg=1.0 median=1.0 total=2.0 pf=2.0 stop=0.5 tp=0.5 expire=0.0
+        assert lines[1] == "SZ000001,2,50.0%,+1.00%,+1.00%,+2.00%,2.00,50.0%,50.0%,0.0%"
         assert lines[2] == ""
         assert lines[3] == (
             "no,entry_price,stop_loss,take_profit_1,exit_price,exit_reason,return_pct,mae_pct,mfe_pct"
