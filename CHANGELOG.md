@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**信号准确度面板加中位/盈亏比（V468）**：SignalAccuracyPanel（回测页信号准确度，buy/sell 方向）表格加中位收益与盈亏比列（复用 fmtPct/fmtPf）。
+
+---
+
 **多空分组测试（V467）**：simulate_advice_batch 测试补 long/short 分组正确性（2 long + 1 short → long_stats.count=2, short_stats.count=1）。
 
 ---
