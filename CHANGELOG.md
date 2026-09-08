@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**formatError 测试（V455）**：前端 formatError 纯函数补测试（fetch TypeError → 网络错误提示、Error → message、非 Error → 字符串）。
+
+---
+
 **选股评分重构（V454）**：抽 _latest_mmd_obj 纯函数，消除 _calc_stock_quality/_get_latest_mmd/_calc_quality_score 三处重复的「取最新买卖点」逻辑。
 
 ---
