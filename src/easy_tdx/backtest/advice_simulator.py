@@ -320,7 +320,8 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
         reports: 每只标的的 simulate_advice_batch 结果（无交易则跳过该标的）
 
     Returns:
-        dict：{symbols, advice_count, win_rate, avg_return, total_return,
+        dict：{symbols, advice_count, win_rate, avg_return, median_return,
+               total_return, profit_factor, avg_mae_pct, avg_mfe_pct,
                stop_rate, tp_rate, expire_rate, positive_symbols}
     """
     merged: list[dict[str, Any]] = []
