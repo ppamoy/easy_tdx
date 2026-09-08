@@ -38,6 +38,8 @@ describe('format', () => {
     expect(fmtPf(999)).toBe('∞')
     expect(fmtPf(999.0)).toBe('∞')
     expect(fmtPf(null)).toBe('-')
+    expect(fmtPf(Number.NaN)).toBe('-')
+    expect(fmtPf(Number.POSITIVE_INFINITY)).toBe('-')
   })
 })
 
