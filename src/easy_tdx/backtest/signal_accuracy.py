@@ -198,6 +198,9 @@ def compute_signal_accuracy(
             fwd = np.asarray(fwd_list, dtype=float)
             base = random_baseline[h]
             stats = _horizon_stats(fwd)
+            # V459: 方向对齐后的盈亏比（BUY 用 fwd，SELL 用 -fwd）
+            aligned = -fwd if direction == "SELL" else fwd
+            stats["profit_factor"] = _profit_factor(aligned)
             if direction == "SELL" and len(fwd) > 0:
                 # 卖出方向：下跌为命中
                 stats["hit_rate"] = float(np.mean(fwd < 0))
