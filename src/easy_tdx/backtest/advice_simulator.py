@@ -354,6 +354,9 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
     wins = [t for t in merged if t["return_pct"] > 0]
     avg = sum(t["return_pct"] for t in merged) / n
     total = sum(t["return_pct"] for t in merged)
+    # V484: 平均持有根数
+    holding_vals = [t.get("holding_bars", 0) for t in merged]
+    avg_holding_bars = round(sum(holding_vals) / n, 2)
     # V461: 中位数收益（比均值稳健，不受极值影响）
     sorted_ret = sorted(t["return_pct"] for t in merged)
     mid = n // 2
@@ -387,6 +390,7 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
         "avg_return": round(avg, 2),
         "median_return": round(median_return, 2),
         "total_return": round(total, 2),
+        "avg_holding_bars": avg_holding_bars,
         "profit_factor": profit_factor,
         "avg_mae_pct": avg_mae_pct,
         "avg_mfe_pct": avg_mfe_pct,
