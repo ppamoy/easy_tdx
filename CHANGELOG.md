@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**fmtPct/fmtAcc 边界测试（V480）**：前端格式函数补 NaN/Infinity 边界测试（与 fmtPf V472 一致，均返回占位符）。
+
+---
+
 **advice-batch 汇总补中位数（V479）**：offline advice-batch 输出补 summary_median_return，与单标的 JSON 对齐。
 
 ---
