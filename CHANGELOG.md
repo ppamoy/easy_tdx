@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**advice table 汇总补中位/盈亏比（V478）**：advice --output table 汇总行补中位数收益与盈亏比，与 CSV/JSON 对齐。
+
+---
+
 **最大连续盈亏测试（V477）**：performance._compute_max_consecutive_trades 纯函数补测试（连续盈利/亏损最大次数、空序列、零盈亏打断连续）。
 
 ---
