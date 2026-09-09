@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**offline advice md 明细补列（V487）**：offline advice --output md 明细表补持有根数/MAE%/MFE% 列，与 CSV/table 格式对齐。
+
+---
+
 **平均持有期断言（V486）**：summarize_batch 测试补 avg_holding_bars 断言（3+2+5）/3 = 3.33。
 
 ---
