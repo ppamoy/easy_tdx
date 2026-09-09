@@ -206,6 +206,9 @@ def simulate_advice_batch(
     ]
     long_stats = _dir_stats(long_rets)
     short_stats = _dir_stats(short_rets)
+    # V485: 平均持有根数
+    holding_vals = [t.get("holding_bars", 0) for t in trades]
+    avg_holding_bars = round(sum(holding_vals) / len(trades), 2)
     kinds = {"stop": 0, "tp1": 0, "expire": 0}
     for t in trades:
         kinds[t["exit_reason"]] = kinds.get(t["exit_reason"], 0) + 1
@@ -232,6 +235,7 @@ def simulate_advice_batch(
         "profit_factor": profit_factor,
         "long_stats": long_stats,
         "short_stats": short_stats,
+        "avg_holding_bars": avg_holding_bars,
         "stop_rate": round(kinds["stop"] / len(trades), 4),
         "tp_rate": round(kinds["tp1"] / len(trades), 4),
         "expire_rate": round(kinds["expire"] / len(trades), 4),
