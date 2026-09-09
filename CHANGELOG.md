@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**平均持有期断言（V486）**：summarize_batch 测试补 avg_holding_bars 断言（3+2+5）/3 = 3.33。
+
+---
+
 **建议模拟批量加平均持有期（V485）**：simulate_advice_batch 单标的批量结果也加 avg_holding_bars（与 V484 的 summarize_batch 对齐）。
 
 ---
