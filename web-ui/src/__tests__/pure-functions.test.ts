@@ -24,6 +24,8 @@ describe('format', () => {
   test('fmtPct：小数转百分比', () => {
     expect(fmtPct(0.1234)).toBe('12.34%')
     expect(fmtPct(null)).toBe('-')
+    expect(fmtPct(Number.NaN)).toBe('-')
+    expect(fmtPct(Number.POSITIVE_INFINITY)).toBe('-')
   })
 
   test('fmtAccPct / fmtAccSigned', () => {
@@ -31,6 +33,8 @@ describe('format', () => {
     expect(fmtAccSigned(0.05)).toBe('+5.0%')
     expect(fmtAccSigned(-0.03)).toBe('-3.0%')
     expect(fmtAccSigned(null)).toBe('-')
+    expect(fmtAccPct(Number.NaN)).toBe('-')
+    expect(fmtAccSigned(Number.POSITIVE_INFINITY)).toBe('-')
   })
 
   test('fmtPf：盈亏比 999 显示 ∞', () => {
