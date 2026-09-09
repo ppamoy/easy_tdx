@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**最大连续盈亏测试（V477）**：performance._compute_max_consecutive_trades 纯函数补测试（连续盈利/亏损最大次数、空序列、零盈亏打断连续）。
+
+---
+
 **样本外判定测试（V476）**：out_of_sample._build_oos_verdict 纯函数补测试（过拟合/泛化/无命中率文案）。
 
 ---
