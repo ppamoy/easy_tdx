@@ -123,6 +123,7 @@ def simulate_advice_trade(
         "exit_idx": exit_idx,
         "exit_price": round(exit_price, 4),
         "exit_reason": exit_reason,
+        "holding_bars": exit_idx - entry_idx,
         "return_pct": return_pct,
         "mae_pct": mae_pct,
         "mfe_pct": mfe_pct,
