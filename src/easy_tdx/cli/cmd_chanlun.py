@@ -324,7 +324,8 @@ def advice_simulate(
         click.echo(
             f"标的 {market}{code} | 建议 {report['count']} 笔 | "
             f"胜率 {report['win_rate'] * 100:.0f}% | "
-            f"平均 {report['avg_return']:+.2f}% | 累计 {report['total_return']:+.2f}%"
+            f"平均 {report['avg_return']:+.2f}% | 中位 {report.get('median_return', 0.0):+.2f}% | "
+            f"累计 {report['total_return']:+.2f}% | 盈亏比 {report.get('profit_factor', 0.0):.2f}"
         )
         click.echo(
             f"出场分布: 止损 {report['stop_rate'] * 100:.0f}% / "
