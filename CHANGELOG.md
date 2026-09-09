@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**分段标签/判定测试（V475）**：robustness._best_segment_label/_worst_segment_label/_build_verdict 纯函数补测试（最佳/最差段标签、过拟合/稳健判定文案、空输入）。
+
+---
+
 **分段命中率测试（V474）**：robustness._seg_hit_rate 纯函数补测试（优先 5 根、回退 3 根、无准确度/无买入返回 None）。
 
 ---
