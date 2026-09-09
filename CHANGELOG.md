@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**advice-batch 汇总补中位数（V479）**：offline advice-batch 输出补 summary_median_return，与单标的 JSON 对齐。
+
+---
+
 **advice table 汇总补中位/盈亏比（V478）**：advice --output table 汇总行补中位数收益与盈亏比，与 CSV/JSON 对齐。
 
 ---
