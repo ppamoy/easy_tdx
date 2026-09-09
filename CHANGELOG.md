@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议批量汇总加平均持有期（V484）**：summarize_batch 加 avg_holding_bars（平均持有根数），与 V483 单笔 holding_bars 对齐。
+
+---
+
 **建议模拟持有根数（V483）**：simulate_advice_trade 单笔结果加 holding_bars（实际持有根数），便于统计平均持有期。
 
 ---
