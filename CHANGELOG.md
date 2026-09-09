@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议模拟批量加平均持有期（V485）**：simulate_advice_batch 单标的批量结果也加 avg_holding_bars（与 V484 的 summarize_batch 对齐）。
+
+---
+
 **建议批量汇总加平均持有期（V484）**：summarize_batch 加 avg_holding_bars（平均持有根数），与 V483 单笔 holding_bars 对齐。
 
 ---
