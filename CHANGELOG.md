@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**成交量序列测试（V481）**：execution._volume_series 纯函数补测试（vol 优先、volume 回退、缺失返回 None）。
+
+---
+
 **fmtPct/fmtAcc 边界测试（V480）**：前端格式函数补 NaN/Infinity 边界测试（与 fmtPf V472 一致，均返回占位符）。
 
 ---
