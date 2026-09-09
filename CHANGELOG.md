@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**分段命中率测试（V474）**：robustness._seg_hit_rate 纯函数补测试（优先 5 根、回退 3 根、无准确度/无买入返回 None）。
+
+---
+
 **总体结论盈亏比 ∞ 显示（V473）**：_build_type_summary 的「最强买点/卖点」文案盈亏比 PF>=999（仅盈利）显示 ∞，与前端 fmtPf 一致。
 
 ---
