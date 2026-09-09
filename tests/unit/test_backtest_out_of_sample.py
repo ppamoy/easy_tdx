@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from easy_tdx.backtest.out_of_sample import compute_out_of_sample
+from easy_tdx.backtest.out_of_sample import _build_oos_verdict, compute_out_of_sample
 from easy_tdx.backtest.strategies import get_registry
 
 
@@ -73,3 +73,23 @@ class TestComputeOutOfSample:
         assert "训练段收益" in rep["verdict"]
         assert "样本外" in rep["verdict"]
         assert isinstance(rep["degraded"], bool)
+
+
+class TestBuildOosVerdict:
+    def test_degraded(self) -> None:
+        train = {"total_return": 0.5}
+        test = {"total_return": -0.1, "alpha": -0.2, "hit_rate": 0.4, "excess_hit_rate": -0.05}
+        v = _build_oos_verdict(train, test, degraded=True, reasons=[])
+        assert "过拟合" in v
+
+    def test_robust(self) -> None:
+        train = {"total_return": 0.5}
+        test = {"total_return": 0.4, "alpha": 0.1, "hit_rate": 0.6, "excess_hit_rate": 0.08}
+        v = _build_oos_verdict(train, test, degraded=False, reasons=[])
+        assert "泛化能力" in v
+
+    def test_no_hit_rate(self) -> None:
+        train = {"total_return": 0.5}
+        test = {"total_return": 0.1, "alpha": 0.0, "hit_rate": 0.0, "excess_hit_rate": None}
+        v = _build_oos_verdict(train, test, degraded=False, reasons=[])
+        assert "不可考" in v
