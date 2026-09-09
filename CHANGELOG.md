@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**hold-sweep 输出补中位数（V482）**：advice --hold-sweep 各持有期对比补 median_return，与单标的批量统计对齐。
+
+---
+
 **成交量序列测试（V481）**：execution._volume_series 纯函数补测试（vol 优先、volume 回退、缺失返回 None）。
 
 ---
