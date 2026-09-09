@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**样本外判定测试（V476）**：out_of_sample._build_oos_verdict 纯函数补测试（过拟合/泛化/无命中率文案）。
+
+---
+
 **分段标签/判定测试（V475）**：robustness._best_segment_label/_worst_segment_label/_build_verdict 纯函数补测试（最佳/最差段标签、过拟合/稳健判定文案、空输入）。
 
 ---
