@@ -268,6 +268,7 @@ def advice_simulate(
                                 "count": r["count"],
                                 "win_rate": round(r["win_rate"] * 100, 1),
                                 "avg_return": r["avg_return"],
+                                "median_return": r.get("median_return", 0.0),
                                 "profit_factor": r.get("profit_factor", 0.0),
                             }
                             for h, r in sweep.items()
