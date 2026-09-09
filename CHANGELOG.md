@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**advice table 明细补持有（V488）**：advice --output table 明细表补持有根数列，与 V487 md 明细对齐。
+
+---
+
 **offline advice md 明细补列（V487）**：offline advice --output md 明细表补持有根数/MAE%/MFE% 列，与 CSV/table 格式对齐。
 
 ---
