@@ -860,13 +860,31 @@ class TestSummarizeBatch:
         reports = [
             {
                 "trades": [
-                    {"return_pct": 3.0, "exit_reason": "tp1", "mae_pct": -1.0, "mfe_pct": 3.5},
-                    {"return_pct": -2.0, "exit_reason": "stop", "mae_pct": -2.0, "mfe_pct": 1.0},
+                    {
+                        "return_pct": 3.0,
+                        "exit_reason": "tp1",
+                        "mae_pct": -1.0,
+                        "mfe_pct": 3.5,
+                        "holding_bars": 3,
+                    },
+                    {
+                        "return_pct": -2.0,
+                        "exit_reason": "stop",
+                        "mae_pct": -2.0,
+                        "mfe_pct": 1.0,
+                        "holding_bars": 2,
+                    },
                 ]
             },
             {
                 "trades": [
-                    {"return_pct": 1.0, "exit_reason": "expire", "mae_pct": -0.5, "mfe_pct": 1.5}
+                    {
+                        "return_pct": 1.0,
+                        "exit_reason": "expire",
+                        "mae_pct": -0.5,
+                        "mfe_pct": 1.5,
+                        "holding_bars": 5,
+                    }
                 ]
             },
             {"trades": []},  # 无交易标的跳过
@@ -888,6 +906,8 @@ class TestSummarizeBatch:
         assert s["avg_mfe_pct"] == 2.0
         # V461: 中位数收益（sorted [-2, 1, 3] → 1.0）
         assert s["median_return"] == 1.0
+        # V484: 平均持有根数（3+2+5）/3 = 3.33
+        assert s["avg_holding_bars"] == 3.33
 
     def test_empty_reports(self):
         """无交易时返回零汇总。"""
