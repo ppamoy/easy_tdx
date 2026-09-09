@@ -820,15 +820,17 @@ def _print_advice_md(report: dict[str, object]) -> None:
         f"建议 **{report.get('count', 0)}** 笔"
     )
     click.echo()
-    click.echo("| # | 入场 | 止损 | 止盈1 | 出场价 | 原因 | 收益% |")
-    click.echo("|---|-----|-----|------|-------|------|-------|")
+    click.echo("| # | 入场 | 止损 | 止盈1 | 出场价 | 原因 | 收益% | 持有 | MAE% | MFE% |")
+    click.echo("|---|-----|-----|------|-------|------|-------|------|------|------|")
     for i, t in enumerate(trades):
         a = advices[i] if i < len(advices) else {}
         reason = reason_cn.get(str(t.get("exit_reason", "")), t.get("exit_reason", ""))
         click.echo(
             f"| {i + 1} | {a.get('entry_price', 0.0):.2f} | "
             f"{a.get('stop_loss', 0.0):.2f} | {a.get('take_profit_1', 0.0):.2f} | "
-            f"{t.get('exit_price', 0.0):.2f} | {reason} | {t.get('return_pct', 0.0):+.2f} |"
+            f"{t.get('exit_price', 0.0):.2f} | {reason} | {t.get('return_pct', 0.0):+.2f} | "
+            f"{t.get('holding_bars', 0)} | {t.get('mae_pct', 0.0):+.2f} | "
+            f"{t.get('mfe_pct', 0.0):+.2f} |"
         )
     click.echo()
     click.echo(
