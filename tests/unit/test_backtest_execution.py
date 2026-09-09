@@ -11,6 +11,7 @@ from easy_tdx.backtest.execution import (
     LimitExecution,
     TWAPExecution,
     VWAPExecution,
+    _volume_series,
 )
 from easy_tdx.backtest.types import Signal
 
@@ -418,3 +419,19 @@ class TestLimitExecution:
             slippage_model=None,
         )
         assert len(trades) == 0
+
+
+class TestVolumeSeries:
+    def test_prefers_vol(self) -> None:
+        df = pd.DataFrame({"vol": [1, 2], "volume": [3, 4]})
+        out = _volume_series(df)
+        assert out is not None and list(out) == [1, 2]
+
+    def test_fallback_volume(self) -> None:
+        df = pd.DataFrame({"volume": [5, 6]})
+        out = _volume_series(df)
+        assert out is not None and list(out) == [5, 6]
+
+    def test_missing_returns_none(self) -> None:
+        assert _volume_series(pd.DataFrame({"close": [1.0]})) is None
+
