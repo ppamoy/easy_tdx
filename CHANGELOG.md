@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议模拟持有根数（V483）**：simulate_advice_trade 单笔结果加 holding_bars（实际持有根数），便于统计平均持有期。
+
+---
+
 **hold-sweep 输出补中位数（V482）**：advice --hold-sweep 各持有期对比补 median_return，与单标的批量统计对齐。
 
 ---
