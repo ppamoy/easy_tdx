@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**单标财务指标估值与离线回退（V524）**：fundamental/indicator 路由新增 `price` 查询参数——提供当前价时返回 `valuation`（PE/PB，EPS 按报告期年化，与 V497/V504 口径一致）；`pick_report_zips` 网络不可用时回退本地缓存报告期（`cache_stats`），离线也可取数。实测茅台价格 1342 时 PE=15.4、PB=6.2。
+
+---
+
 **IC 为正占比排除 NaN（V523）**：factor/analysis `full_report` 的 `ic_positive_rate` 原用 `(ic_series > 0).mean()`，把 NaN 截面（样本不足）误当作「非正」，系统性低估 IC 为正占比；改为 `dropna()` 后只统计有效截面。补 NaN 截面回归测试。
 
 ---

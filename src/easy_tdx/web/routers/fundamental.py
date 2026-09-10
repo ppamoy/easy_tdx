@@ -52,6 +52,7 @@ async def fundamental_indicator(
     code: str,
     as_of: str = Query(..., description="目标日期 YYYY-MM-DD（point-in-time）"),
     period: str | None = Query(None, description="指定报告期 YYYYMMDD（缺省自动取最新已披露）"),
+    price: float | None = Query(None, description="当前价（提供则返回 PE/PB 估值）"),
 ) -> dict[str, Any]:
     """单只股票在目标日期的财务指标（已按披露日截断）。"""
     try:
@@ -65,8 +66,19 @@ async def fundamental_indicator(
     )
     from easy_tdx.fundamental.pipeline import pick_report_zips
 
+    def _cached_zips() -> list[str]:
+        """V524: 网络不可用时回退本地缓存报告期（离线取数）。"""
+        try:
+            from easy_tdx.fundamental.cache import cache_stats
+
+            return [z["filename"] for z in cache_stats().get("zips", [])]
+        except Exception:  # noqa: BLE001
+            return []
+
     def _run() -> dict[str, Any]:
         zips = pick_report_zips(target)
+        if not zips:
+            zips = _cached_zips()
         if not zips:
             raise HTTPException(status_code=503, detail="无可用的 gpcw 财报文件")
         frame = load_all_periods_frame(zips, codes={code}, markets={market.upper()[:2]})
@@ -99,6 +111,13 @@ async def fundamental_indicator(
         d = {c: _clean(c) for c in cols}
         # V91：数据来源标注（gpcw / sina，screen/scan 补齐）
         d["data_source"] = str(row.get("data_source", "gpcw")) if "data_source" in row else "gpcw"
+        # V524: 提供当前价时返回 PE/PB 估值（EPS 按报告期年化，与 V497/V504 口径一致）
+        if price is not None and price > 0:
+            from easy_tdx.fundamental.pipeline import _valuation
+
+            d["valuation"] = _valuation(
+                {"eps": row.get("eps"), "bps": row.get("bps")}, price, row.get("report_date")
+            )
         return {"code": code, "market": market.upper(), "rows": [d]}
 
     try:
