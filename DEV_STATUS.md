@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 因子衰减守卫统一（V546）✅ 完成
+
+- factor/analysis `compute_decay` 自相关守卫统一用有效截面（dropna），与 V536/V542 口径一致
+
 ## 年化 EPS 透出与展示（V545）✅ 完成
 
 - fundamental/screener `screen_stock` indicators 新增 `eps_annualized`，前端 FundamentalView「EPS」列改为「年化EPS」

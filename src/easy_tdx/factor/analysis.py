@@ -119,10 +119,12 @@ class FactorAnalyzer:
     def compute_decay(self, max_lag: int = 10) -> pd.DataFrame:
         """因子衰减分析。"""
         ic_series = self.compute_ic()
+        # V546: 守卫统一用有效截面（dropna），与 V536/V542 口径一致
+        valid_ic = ic_series.dropna()
         autocorr_values: list[float] = []
         for lag in range(1, max_lag + 1):
-            if lag < len(ic_series):
-                ac = ic_series.autocorr(lag=lag)
+            if lag < len(valid_ic):
+                ac = valid_ic.autocorr(lag=lag)
                 autocorr_values.append(ac if not np.isnan(ac) else 0.0)
             else:
                 autocorr_values.append(0.0)

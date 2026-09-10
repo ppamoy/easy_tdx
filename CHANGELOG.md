@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**因子衰减守卫统一（V546）**：factor/analysis `compute_decay` 的自相关守卫统一用有效截面（dropna），与 V536/V542 口径一致。
+
+---
+
 **年化 EPS 透出与展示（V545）**：fundamental/screener `screen_stock` indicators 新增 `eps_annualized`（年化 EPS，保留原始 eps 供 PE 计算），前端 FundamentalView 的「EPS」列改为「年化EPS」——与年化 ROE/PE 展示口径一致，一季报不再显示被低估的单季 EPS。
 
 ---
