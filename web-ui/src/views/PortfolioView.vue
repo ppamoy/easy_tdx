@@ -503,6 +503,14 @@ function buildPortfolioReportText(): string {
   const p = r.total_performance
   lines.push('## 组合绩效')
   lines.push('- 总收益：' + pct(p.total_return) + ' · 年化：' + pct(p.annual_return))
+  lines.push(
+    '- 最大回撤：' +
+      pct(p.max_drawdown) +
+      ' · 夏普：' +
+      (p.sharpe ?? 0).toFixed(2) +
+      ' · 胜率：' +
+      pct(p.win_rate),
+  )
   lines.push('- 标的总数：' + p.total_stocks + ' · 总资金：' + p.total_cash.toLocaleString())
   lines.push('')
   if (r.portfolio_trust) {
@@ -617,6 +625,9 @@ function exportPortfolioCsv() {
   lines.push(['指标', '值'].join(','))
   lines.push(['总收益', portPctV(p.total_return)].join(','))
   lines.push(['年化收益', portPctV(p.annual_return)].join(','))
+  lines.push(['最大回撤', portPctV(p.max_drawdown)].join(','))
+  lines.push(['夏普比率', p.sharpe != null ? p.sharpe.toFixed(2) : ''].join(','))
+  lines.push(['胜率', portPctV(p.win_rate)].join(','))
   lines.push(['标的总数', String(p.total_stocks ?? '')].join(','))
   lines.push(['总资金', String(p.total_cash ?? '')].join(','))
   if (r.portfolio_trust) {

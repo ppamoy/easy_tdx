@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**组合报告导出补完整绩效（V519）**：前端 PortfolioView 的 Markdown/CSV 导出补「最大回撤」「夏普比率」「胜率」三行（V515/V516 完整绩效的导出落地）。
+
+---
+
 **因子分层收益顶底修复（V518）**：factor/analysis `full_report` 的 `top_minus_bottom` 原硬编码 `q5 - q1`，当 `n_quantiles != 5`（如 10 分位）时把中位层 q5 误当顶层；改为用最高分位 `q{n_quantiles} - q1`。补 10 分位回归测试。
 
 ---
