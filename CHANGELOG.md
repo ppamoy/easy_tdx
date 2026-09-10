@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**年化逻辑抽共享（V517）**：fundamental 的年化逻辑（按报告期月数把年初至今累计值年化，EPS/ROE 共用）抽取为 `indicators.annualize_ytd` 共享纯函数，`pipeline._annualize_eps`（V504 PE）与 `screener._annualize_pct`（V507 ROE）改为委托，消除两处重复实现。
+
+---
+
 **组合页完整绩效展示（V516）**：前端 PortfolioView 组合绩效摘要由「总收益/标的数/总资金」补「最大回撤」「夏普比率」「胜率」三项（V515 后端完整指标的前端落地），types.ts 补 total_performance 完整指标字段。
 
 ---

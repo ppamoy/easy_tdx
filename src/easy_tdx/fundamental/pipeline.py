@@ -172,25 +172,14 @@ def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, A
 
 
 def _annualize_eps(eps: float, report_date: Any) -> float:
-    """V504: 按报告期月数把单期 EPS 年化为全年口径（动态市盈率）。
+    """V504/V517: 按报告期月数把单期 EPS 年化为全年口径（动态市盈率）。
 
-    通达信专业财务的「基本每股收益」是年初至今累计值：一季报只含 3 个月、
-    中报 6 个月、三季报 9 个月、年报 12 个月。直接用一季报 EPS 算 PE 会
-    系统性高估（如 Q1 EPS=1 的股票 PE 被算成 4 倍真实值）。
-
-    年化系数：3 月(*4)、6 月(*2)、9 月(*4/3)、12 月(*1)；无法解析报告期
-    时按年报处理（不放大，避免过度外推）。
+    委托给 ``indicators.annualize_ytd`` 共享实现（V517 消除与 screener 的重复）。
     """
-    month: int | None = None
-    if report_date is not None:
-        try:
-            month = pd.Timestamp(report_date).month
-        except (ValueError, TypeError):
-            month = None
-    factor = 1.0
-    if month is not None:
-        factor = {3: 4.0, 6: 2.0, 9: 4.0 / 3.0, 12: 1.0}.get(month, 1.0)
-    return eps * factor
+    from easy_tdx.fundamental.indicators import annualize_ytd
+
+    result = annualize_ytd(eps, report_date)
+    return float(result) if result is not None else eps
 
 
 def _valuation(

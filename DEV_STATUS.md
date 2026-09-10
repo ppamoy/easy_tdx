@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 年化逻辑抽共享（V517）✅ 完成
+
+- 年化逻辑抽为 `indicators.annualize_ytd` 共享纯函数，pipeline/screener 两处重复实现改为委托
+
 ## 组合页完整绩效展示（V516）✅ 完成
 
 - 前端 PortfolioView 组合绩效摘要补「最大回撤」「夏普比率」「胜率」；types.ts 补 total_performance 完整指标字段

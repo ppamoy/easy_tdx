@@ -89,32 +89,13 @@ def _pct(v: Any) -> float | None:
 
 
 def _annualize_pct(v: float | None, report_date: Any) -> float | None:
-    """V507: 把年初至今累计比率按报告期月数年化（ROE 等）。
+    """V507/V517: 把年初至今累计比率按报告期月数年化（ROE 等）。
 
-    通达信「净资产收益率」与 EPS 同为年初至今累计值：一季报只含 3 个月、
-    中报 6 个月、三季报 9 个月。直接用一季报 ROE 判「高ROE」会系统性低估
-    （如茅台 2026Q1 ROE 10% 实际全年约 33%）。
-
-    年化系数：3 月(*4)、6 月(*2)、9 月(*4/3)、12 月(*1)；无法解析报告期
-    按年报处理（不放大，避免过度外推）。
+    委托给 ``indicators.annualize_ytd`` 共享实现（V517 消除与 pipeline 的重复）。
     """
-    if v is None:
-        return None
-    month: int | None = None
-    if report_date is not None:
-        if hasattr(report_date, "month"):
-            month = int(report_date.month)
-        else:
-            try:
-                from datetime import datetime as _dtm
+    from easy_tdx.fundamental.indicators import annualize_ytd
 
-                month = _dtm.fromisoformat(str(report_date)).month
-            except (ValueError, TypeError):
-                month = None
-    factor = 1.0
-    if month is not None:
-        factor = {3: 4.0, 6: 2.0, 9: 4.0 / 3.0, 12: 1.0}.get(month, 1.0)
-    return float(v) * factor
+    return annualize_ytd(v, report_date)
 
 
 def _contrib(score: float, max_score: float, reason: str) -> ScoreDetail:

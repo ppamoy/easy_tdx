@@ -299,6 +299,33 @@ def build_indicator_frame(
     return pd.DataFrame(rows)
 
 
+def annualize_ytd(v: float | None, report_date: Any) -> float | None:
+    """把年初至今累计值按报告期月数年化（EPS/ROE 等）。
+
+    通达信专业财务的「基本每股收益」「净资产收益率」均为年初至今累计值：
+    一季报只含 3 个月、中报 6 个月、三季报 9 个月、年报 12 个月。直接用
+    一季报数值判「高ROE」/算 PE 会系统性低估/高估。
+
+    年化系数：3 月(*4)、6 月(*2)、9 月(*4/3)、12 月(*1)；无法解析报告期
+    按年报处理（不放大，避免过度外推）。
+
+    V517: 抽取为共享纯函数，供 pipeline（PE 年化 V504）与 screener（ROE 年化
+    V507）复用，消除两处重复实现。
+    """
+    if v is None:
+        return None
+    month: int | None = None
+    if report_date is not None:
+        try:
+            month = pd.Timestamp(report_date).month
+        except (ValueError, TypeError):
+            month = None
+    factor = 1.0
+    if month is not None:
+        factor = {3: 4.0, 6: 2.0, 9: 4.0 / 3.0, 12: 1.0}.get(month, 1.0)
+    return float(v) * factor
+
+
 def indicator_values(v: dict[str, float | None]) -> dict[str, Any]:
     """从原始字段 dict 计算派生指标集。
 
