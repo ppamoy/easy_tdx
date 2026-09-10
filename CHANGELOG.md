@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**诊断页估值（V525）**：diagnosis 路由新增 `_fetch_diagnosis_valuation`——从本地缓存 gpcw 帧取最近一期财报算 PE/PB（EPS 按报告期年化，离线优先、无缓存返回 None 不阻断），诊断响应补 `valuation` 字段；实测茅台 PE=18.9/PB=6.7、五粮液 PE=24.4/PB=3.6、宁德 PE=9.5/PB=2.2。
+
+---
+
 **单标财务指标估值与离线回退（V524）**：fundamental/indicator 路由新增 `price` 查询参数——提供当前价时返回 `valuation`（PE/PB，EPS 按报告期年化，与 V497/V504 口径一致）；`pick_report_zips` 网络不可用时回退本地缓存报告期（`cache_stats`），离线也可取数。实测茅台价格 1342 时 PE=15.4、PB=6.2。
 
 ---

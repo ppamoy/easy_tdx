@@ -46,6 +46,41 @@ def _to_json_safe(obj: Any) -> Any:
     return obj
 
 
+def _fetch_diagnosis_valuation(
+    market: str,
+    code: str,
+    close: float,
+) -> dict[str, Any] | None:
+    """V525: 从本地缓存 gpcw 帧取最近一期财报，算 PE/PB 估值（离线优先）。
+
+    诊断页在技术面之外补充基本面估值视角。财报帧来自 gpcw SQLite 缓存
+    （cache_stats 列出已缓存报告期），无缓存/取数失败返回 None（不阻断主流程）。
+    """
+    if close is None or close <= 0:
+        return None
+    try:
+        from datetime import date as _date
+
+        from easy_tdx.fundamental.cache import cache_stats
+        from easy_tdx.fundamental.indicators import load_all_periods_frame, pick_report
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        zips = [z["filename"] for z in cache_stats().get("zips", [])]
+        if not zips:
+            return None
+        frame = load_all_periods_frame(zips, codes={code}, markets={market.upper()[:2]})
+        if frame.empty:
+            return None
+        row = pick_report(frame, code, _date.today(), market=market.upper()[:2])
+        if row is None:
+            return None
+        return _valuation(
+            {"eps": row.get("eps"), "bps": row.get("bps")}, close, row.get("report_date")
+        )
+    except Exception:  # noqa: BLE001 — 估值失败不阻断诊断
+        return None
+
+
 # V13: 延迟导入成交量剖面分析（避免循环导入）
 def _calc_volume_profile_for_diagnosis(
     closes: list[float] | None,
@@ -976,6 +1011,8 @@ async def diagnose_stock(
                 "symbol": symbol,
                 "date": latest_date,
                 "close": round(latest_close, 2),
+                # V525: 基本面估值（PE/PB），离线取缓存财报帧；无数据时为 None
+                "valuation": _fetch_diagnosis_valuation(market, code, latest_close),
                 "score": round(score, 1),
                 "action": action,
                 "action_label": action_label,
