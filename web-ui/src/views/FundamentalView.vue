@@ -420,7 +420,7 @@ onMounted(() => {
               <th>代码</th>
               <th>分类</th>
               <th>报告期</th>
-              <th>EPS</th>
+              <th>年化EPS</th>
               <th>每股净资产</th>
               <th>ROE%</th>
               <th>毛利率%</th>
@@ -452,7 +452,7 @@ onMounted(() => {
                 </span>
               </td>
               <td>{{ r.report_date }}</td>
-              <td>{{ fmt(r.indicators.eps) }}</td>
+              <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe) }}</td>
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
@@ -740,7 +740,7 @@ onMounted(() => {
               <th>得分</th>
               <th>数据源</th>
               <th>报告期</th>
-              <th>EPS</th>
+              <th>年化EPS</th>
               <th>每股净资产</th>
               <th>ROE%</th>
               <th>毛利率%</th>
@@ -778,7 +778,7 @@ onMounted(() => {
                 }}</span>
               </td>
               <td>{{ r.report_date }}</td>
-              <td>{{ fmt(r.indicators.eps) }}</td>
+              <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe) }}</td>
               <td>{{ fmt(r.indicators.gross_margin) }}</td>

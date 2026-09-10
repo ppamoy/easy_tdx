@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**年化 EPS 透出与展示（V545）**：fundamental/screener `screen_stock` indicators 新增 `eps_annualized`（年化 EPS，保留原始 eps 供 PE 计算），前端 FundamentalView 的「EPS」列改为「年化EPS」——与年化 ROE/PE 展示口径一致，一季报不再显示被低估的单季 EPS。
+
+---
+
 **粮型每股收益年化展示（V544）**：fundamental/screener `score_grain` 的「每股收益」改为年化后展示（分红能力按年计，一季报单季 EPS 会低估年度分红能力），明细明示「年化」；补年化 EPS 回归测试。
 
 ---

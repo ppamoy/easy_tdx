@@ -307,6 +307,8 @@ def screen_stock(
 
     ind = {
         "eps": row.get("eps"),
+        # V545: 年化 EPS 单独透出供前端展示（分红/估值按年计），保留原始 eps 供 PE 计算
+        "eps_annualized": _annualize(_pct(row.get("eps")), row.get("report_date")),
         "bps": row.get("bps"),
         # V530: ROE 年化后透出，与 score_tree 打分口径一致（一季报不再显示被低估的
         # 单季 ROE），前端展示与分类「高ROE」判断不再矛盾
