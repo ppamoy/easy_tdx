@@ -726,3 +726,10 @@ class TestEngineExecutionModel:
         engine = BacktestEngine(SimpleBuy, cash=100000)
         result = engine.run(df)
         assert result.positions["size"].max() > 0
+
+    def test_find_bar_index_uses_position_not_label(self) -> None:
+        """V509: _find_bar_index 返回位置索引而非 label（非默认 index 不取错）。"""
+        df = pd.DataFrame({"datetime": [20240101, 20240102, 20240103], "close": [1.0, 2.0, 3.0]})
+        df.index = [10, 20, 30]  # 非默认 RangeIndex
+        assert BacktestEngine._find_bar_index(df, 20240102) == 1  # 位置索引，非 label 20
+        assert BacktestEngine._find_bar_index(df, 99999999) is None

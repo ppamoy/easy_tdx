@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 引擎 bar 索引取位置修复（V509）✅ 完成
+
+- engine `_find_bar_index` 由 `.idxmax()`（label）改为 `.argmax()`（位置），非默认 index 时 ExecutionModel 路径不再取错 bar；补回归测试
+
 ## 在线 advice table 补平均持有（V508）✅ 完成
 
 - online advice --output table 汇总补「平均持有 N 根」，与 CSV/md/离线对齐

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**引擎 bar 索引取位置修复（V509）**：engine `_find_bar_index` 原用 `.idxmax()` 返回 label，当 df.index 非默认 RangeIndex 时 label != position，ExecutionModel（TWAP/VWAP/Limit）路径会取错 bar；改为 `.argmax()` 返回位置索引（与 orders.py `_find_bar_index` 的既有修复一致）。补非默认 index 回归测试。
+
+---
+
 **在线 advice table 补平均持有（V508）**：online advice --output table 汇总行补「平均持有 N 根」，与 CSV（V500）、md 明细及离线输出对齐。
 
 ---

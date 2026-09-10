@@ -266,19 +266,25 @@ class BacktestEngine:
 
     @staticmethod
     def _find_bar_index(df: pd.DataFrame, datetime_val: int) -> int | None:
-        """Find bar index by datetime value."""
+        """Find bar index by datetime value.
+
+        返回**位置索引**（供后续 ``df.iloc[...]`` 按位置取行）。旧实现用
+        ``.idxmax()`` 返回 label，当 ``df.index`` 非默认 RangeIndex 时
+        label != position，ExecutionModel 路径会取错 bar（与 orders.py
+        ``_find_bar_index`` 的 argmax 修复同一问题）。
+        """
         dt_col = df["datetime"]
         try:
-            idx = (dt_col == datetime_val).idxmax() if (dt_col == datetime_val).any() else None
-            if idx is not None:
-                return int(idx)
+            mask = (dt_col == datetime_val).to_numpy()
+            if mask.any():
+                return int(mask.argmax())
         except (TypeError, ValueError):
             pass
         if hasattr(dt_col, "dt"):
-            dt_ints = dt_col.dt.strftime("%Y%m%d").astype(int)
+            dt_ints = dt_col.dt.strftime("%Y%m%d").astype(int).to_numpy()
             mask = dt_ints == datetime_val
             if mask.any():
-                return int(mask.idxmax())
+                return int(mask.argmax())
         return None
 
     def _generate_signals(self, df: pd.DataFrame, chanlun_result: Any | None) -> list[Signal]:
