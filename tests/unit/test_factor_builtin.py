@@ -64,6 +64,7 @@ class TestAutoRegistration:
         assert "macd_hist_signal" in FACTORY_REGISTRY
         assert "rsi_14" in FACTORY_REGISTRY
         assert "boll_position" in FACTORY_REGISTRY
+        assert "kdj_j" in FACTORY_REGISTRY
 
     def test_chanlun_factors_registered(self):
         assert "chanlun_bi_dir" in FACTORY_REGISTRY
@@ -209,3 +210,22 @@ class TestTechnicalCompute:
         valid = result.dropna()
         assert (valid >= 0).all()
         assert (valid <= 1).all()
+
+    def test_kdj_j_rising_market_positive(self):
+        """上涨趋势 J 值处于超买区（归一化后 > 0）。"""
+        f = get_factor("kdj_j")()
+        n = 40
+        close = np.linspace(10, 20, n)
+        df = pd.DataFrame({"close": close, "high": close + 0.5, "low": close - 0.5})
+        result = f.compute(df)
+        assert len(result) == n
+        assert result.iloc[-1] > 0
+
+    def test_kdj_j_falling_market_negative(self):
+        """下跌趋势 J 值处于超卖区（归一化后 < 0）。"""
+        f = get_factor("kdj_j")()
+        n = 40
+        close = np.linspace(20, 10, n)
+        df = pd.DataFrame({"close": close, "high": close + 0.5, "low": close - 0.5})
+        result = f.compute(df)
+        assert result.iloc[-1] < 0

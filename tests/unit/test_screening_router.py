@@ -249,3 +249,14 @@ def test_scan_sorted_by_quality(app_client: TestClient, mock_client: AsyncMock):
     if len(qualified) > 1:
         scores = [s.get("quality_score", 0) for s in qualified]
         assert scores == sorted(scores, reverse=True)
+
+
+def test_hot_stock_pool_no_duplicates():
+    """V489: 预定义热门股票池不应含重复代码。"""
+    import asyncio
+
+    from easy_tdx.web.routers.screening import _get_stock_list
+
+    for market in ("SZ", "SH"):
+        stocks = asyncio.run(_get_stock_list(None, market))
+        assert len(stocks) == len(set(stocks)), f"{market} 股票池含重复代码"

@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+**选股技术因子补 KDJ（V491）**：factor/builtin/technical.py 新增 `kdj_j` 因子（KDJ J 值归一化到 [-1,1]，正值超买/负值超卖），补齐 A 股选股常用的技术指标因子，与 RSI14/BollPosition 归一化口径一致；补注册与上涨/下跌趋势方向性测试。
+
+---
+
+**选股热门股票池去重（V490）**：web/routers/screening.py `_get_stock_list` SH 池重复代码 601398 去重并补 600887；补「股票池无重复代码」回归测试。
+
+---
+
+**回放空结果契约对齐（V489）**：advice_simulator 的 `simulate_advice_batch` 与 `summarize_batch` 在「无有效交易」时空结果补齐全部统计键（median_return/profit_factor/long_stats/short_stats/avg_holding_bars/stop/tp/expire/avg_mae/avg_mfe 等），与正常结果键一致，下游可依赖稳定 schema 避免 KeyError；补空结果 schema parity 回归测试。
+
+---
+
 **advice table 明细补持有（V488）**：advice --output table 明细表补持有根数列，与 V487 md 明细对齐。
 
 ---

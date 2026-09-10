@@ -339,7 +339,10 @@ def test_offline_advice_table_runs(tmp_path: Path) -> None:
 
 
 def test_offline_advice_csv_runs(tmp_path: Path) -> None:
-    """V374: offline advice --output csv 输出标量列 CSV（含 symbol/bars）。"""
+    """V374/V489: offline advice --output csv 输出标量列 CSV（含 symbol/bars）。
+
+    V489 起空结果与正常结果键一致，CSV 头固定为完整统计列（含 median/profit_factor 等）。
+    """
     _lday, day_a = _make_lday(tmp_path)
     runner = CliRunner()
     res = runner.invoke(
@@ -348,7 +351,10 @@ def test_offline_advice_csv_runs(tmp_path: Path) -> None:
     )
     assert res.exit_code == 0, res.output
     lines = res.output.strip().splitlines()
-    assert lines[0] == "count,win_rate,avg_return,total_return,symbol,bars,signals"
+    assert lines[0] == (
+        "count,win_rate,avg_return,median_return,total_return,profit_factor,"
+        "avg_holding_bars,stop_rate,tp_rate,expire_rate,symbol,bars,signals"
+    )
     assert "SH600000" in lines[1]
 
 

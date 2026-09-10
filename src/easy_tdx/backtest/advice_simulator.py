@@ -176,7 +176,22 @@ def simulate_advice_batch(
         trade_directions.append(direction)
 
     if not trades:
-        return {"trades": [], "count": 0, "win_rate": 0.0, "avg_return": 0.0, "total_return": 0.0}
+        # V489: 空结果与正常结果保持键一致（下游可依赖稳定 schema，避免 KeyError）
+        return {
+            "trades": [],
+            "count": 0,
+            "win_rate": 0.0,
+            "avg_return": 0.0,
+            "median_return": 0.0,
+            "total_return": 0.0,
+            "profit_factor": 0.0,
+            "long_stats": {"count": 0, "win_rate": 0.0, "avg_return": 0.0},
+            "short_stats": {"count": 0, "win_rate": 0.0, "avg_return": 0.0},
+            "avg_holding_bars": 0.0,
+            "stop_rate": 0.0,
+            "tp_rate": 0.0,
+            "expire_rate": 0.0,
+        }
 
     wins = [t for t in trades if t["return_pct"] > 0]
     avg = sum(t["return_pct"] for t in trades) / len(trades)
@@ -185,9 +200,8 @@ def simulate_advice_batch(
     n = len(trades)
     sorted_ret = sorted(t["return_pct"] for t in trades)
     mid = n // 2
-    median_return = (
-        sorted_ret[mid] if n % 2 == 1 else (sorted_ret[mid - 1] + sorted_ret[mid]) / 2
-    )
+    median_return = sorted_ret[mid] if n % 2 == 1 else (sorted_ret[mid - 1] + sorted_ret[mid]) / 2
+
     # V465: 多空分开统计（买点/卖点信号的不对称表现）
     def _dir_stats(rets: list[float]) -> dict[str, Any]:
         if not rets:
@@ -198,12 +212,8 @@ def simulate_advice_batch(
             "avg_return": round(sum(rets) / len(rets), 2),
         }
 
-    long_rets = [
-        t["return_pct"] for t, d in zip(trades, trade_directions) if d == "long"
-    ]
-    short_rets = [
-        t["return_pct"] for t, d in zip(trades, trade_directions) if d == "short"
-    ]
+    long_rets = [t["return_pct"] for t, d in zip(trades, trade_directions) if d == "long"]
+    short_rets = [t["return_pct"] for t, d in zip(trades, trade_directions) if d == "short"]
     long_stats = _dir_stats(long_rets)
     short_stats = _dir_stats(short_rets)
     # V485: 平均持有根数
@@ -342,12 +352,18 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
             positive_symbols += 1
 
     if not merged:
+        # V489: 空结果与正常结果保持键一致（下游可依赖稳定 schema，避免 KeyError）
         return {
             "symbols": 0,
             "advice_count": 0,
             "win_rate": 0.0,
             "avg_return": 0.0,
+            "median_return": 0.0,
             "total_return": 0.0,
+            "avg_holding_bars": 0.0,
+            "profit_factor": 0.0,
+            "avg_mae_pct": 0.0,
+            "avg_mfe_pct": 0.0,
             "stop_rate": 0.0,
             "tp_rate": 0.0,
             "expire_rate": 0.0,
@@ -364,9 +380,7 @@ def summarize_batch(reports: list[dict[str, Any]]) -> dict[str, Any]:
     # V461: 中位数收益（比均值稳健，不受极值影响）
     sorted_ret = sorted(t["return_pct"] for t in merged)
     mid = n // 2
-    median_return = (
-        sorted_ret[mid] if n % 2 == 1 else (sorted_ret[mid - 1] + sorted_ret[mid]) / 2
-    )
+    median_return = sorted_ret[mid] if n % 2 == 1 else (sorted_ret[mid - 1] + sorted_ret[mid]) / 2
     kinds = {"stop": 0, "tp1": 0, "expire": 0}
     for t in merged:
         kinds[t["exit_reason"]] = kinds.get(t["exit_reason"], 0) + 1

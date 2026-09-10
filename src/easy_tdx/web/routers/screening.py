@@ -202,7 +202,7 @@ async def _get_stock_list(client: Any, market: str) -> list[str]:
             "600519",
             "601318",
             "601398",
-            "601398",
+            "600887",
             "600900",
         ],
     }

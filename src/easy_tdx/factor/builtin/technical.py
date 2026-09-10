@@ -53,3 +53,18 @@ class BollPosition(Factor):
         bandwidth = (upper - lower).replace(0, np.nan)
         position = (close_s - lower) / bandwidth
         return position.clip(0, 1)
+
+
+@register_factor
+class KDJJ(Factor):
+    name = "kdj_j"
+    category = "technical"
+    description = "KDJ J 值归一化到 [-1, 1]（0=中性，正值超买，负值超卖）"
+    inputs = ("high", "low", "close")
+
+    def compute(self, df: pd.DataFrame) -> pd.Series:
+        close = df["close"].to_numpy(dtype=np.float64)
+        high = df["high"].to_numpy(dtype=np.float64)
+        low = df["low"].to_numpy(dtype=np.float64)
+        _, _, j = MyTT.KDJ(close, high, low, N=9, M1=3, M2=3)
+        return (pd.Series(j) - 50.0) / 50.0

@@ -347,6 +347,36 @@ class TestSimulateAdviceBatch:
         result = simulate_advice_batch(highs, lows, closes, advices)
         assert result["count"] == 1
 
+    def test_empty_result_schema_parity(self):
+        """V489: 全部建议非法 → 空结果与正常结果键一致，下游可安全访问统计键。"""
+        highs = _seq(100, 0.5, 10)
+        lows = _seq(99, 0.4, 10)
+        closes = _seq(100, 0.5, 10)
+        advices = [
+            {"entry_idx": -1, "entry_price": 100.0, "stop_loss": 97.0, "take_profit_1": 106.0},
+            {"entry_idx": 0, "entry_price": 0.0, "stop_loss": 97.0, "take_profit_1": 106.0},
+        ]
+        result = simulate_advice_batch(highs, lows, closes, advices)
+        assert result["count"] == 0
+        for key in (
+            "trades",
+            "count",
+            "win_rate",
+            "avg_return",
+            "median_return",
+            "total_return",
+            "profit_factor",
+            "long_stats",
+            "short_stats",
+            "avg_holding_bars",
+            "stop_rate",
+            "tp_rate",
+            "expire_rate",
+        ):
+            assert key in result, f"空结果缺少键 {key}"
+        assert result["long_stats"] == {"count": 0, "win_rate": 0.0, "avg_return": 0.0}
+        assert result["short_stats"] == {"count": 0, "win_rate": 0.0, "avg_return": 0.0}
+
 
 class TestV102AdviceEndToEnd:
     """用 V102 条件266 生成的 3买 建议跑模拟器。"""
@@ -917,3 +947,31 @@ class TestSummarizeBatch:
         assert s["symbols"] == 0
         assert s["advice_count"] == 0
         assert s["win_rate"] == 0.0
+
+    def test_empty_result_schema_parity(self):
+        """V489: 空汇总与正常汇总键一致，下游可安全访问所有统计键。"""
+        from easy_tdx.backtest.advice_simulator import summarize_batch
+
+        s = summarize_batch([{"trades": []}, {"trades": []}])
+        for key in (
+            "symbols",
+            "advice_count",
+            "win_rate",
+            "avg_return",
+            "median_return",
+            "total_return",
+            "avg_holding_bars",
+            "profit_factor",
+            "avg_mae_pct",
+            "avg_mfe_pct",
+            "stop_rate",
+            "tp_rate",
+            "expire_rate",
+            "positive_symbols",
+        ):
+            assert key in s, f"空汇总缺少键 {key}"
+        assert s["median_return"] == 0.0
+        assert s["profit_factor"] == 0.0
+        assert s["avg_holding_bars"] == 0.0
+        assert s["avg_mae_pct"] == 0.0
+        assert s["avg_mfe_pct"] == 0.0

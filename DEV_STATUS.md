@@ -3,6 +3,18 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 选股技术因子补 KDJ（V491）✅ 完成
+
+- factor/builtin/technical.py 新增 `kdj_j` 因子（KDJ J 值归一化 [-1,1]，正值超买/负值超卖），补齐 A 股常用技术因子；补注册 + 上涨/下跌方向测试
+
+## 选股热门股票池去重（V490）✅ 完成
+
+- screening.py `_get_stock_list` SH 池去重（601398 重复）+ 补 600887；补无重复回归测试
+
+## 回放空结果契约对齐（V489）✅ 完成
+
+- `simulate_advice_batch` / `summarize_batch` 空结果补齐全部统计键，与正常结果键一致（下游稳定 schema 防 KeyError）；offline advice CSV 头随之固定为完整列；补 schema parity 测试
+
 ## advice table 明细补持有（V488）✅ 完成
 
 - table 明细补 holding_bars
