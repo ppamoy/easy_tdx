@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**因子引擎兼容 date 列（V527）**：factor/engine `compute_cross_section`/`compute_forward_returns` 原硬编码 `datetime` 列，喂入 get_security_bars 日线（返回 `date`）会 KeyError；改为兼容 `date` 列（与回测引擎的「date → datetime」派生一致）。补 date 列回归测试。
+
+---
+
 **诊断页估值展示（V526）**：前端 DiagnosisView 的 meta-info 补「PE」「PB」两项（诊断响应 V525 的 valuation 落地），types.ts 补 DiagnosisResult.valuation 字段——诊断页技术面（缠论）与基本面（估值）同框。
 
 ---

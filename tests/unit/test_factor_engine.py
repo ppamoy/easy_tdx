@@ -132,6 +132,14 @@ class TestComputeCrossSection:
         result = engine.compute_cross_section({}, [_SimpleMomentum()])
         assert len(result) == 0
 
+    def test_cross_section_accepts_date_column(self):
+        """V527: 兼容 date 列（get_security_bars 日线返回 date 而非 datetime）。"""
+        engine = FactorEngine()
+        df = _make_df(60, seed=1).rename(columns={"datetime": "date"})
+        result = engine.compute_cross_section({"000001": df}, [_SimpleMomentum()])
+        assert len(result) == 60
+        assert "date" in result.columns
+
 
 class TestComputeForwardReturns:
     def test_forward_returns_basic(self):
@@ -152,6 +160,14 @@ class TestComputeForwardReturns:
         data = {"000001": _make_df(60, seed=1)}
         result = engine.compute_forward_returns(data, period=10)
         assert "forward_10d" in result.columns
+
+    def test_forward_returns_accepts_date_column(self):
+        """V527: compute_forward_returns 兼容 date 列。"""
+        engine = FactorEngine()
+        df = _make_df(60, seed=1).rename(columns={"datetime": "date"})
+        result = engine.compute_forward_returns({"000001": df}, period=5)
+        assert len(result) == 60
+        assert "forward_5d" in result.columns
 
     def test_forward_returns_empty(self):
         engine = FactorEngine()

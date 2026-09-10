@@ -73,7 +73,10 @@ class FactorEngine:
                 continue
 
             computed = self.compute_single(df, factors)
-            computed["_date_int"] = computed["datetime"].apply(_datetime_to_int)
+            # V527: 兼容 date 列（get_security_bars 日线返回 date 而非 datetime），
+            # 与回测引擎的「date → datetime」派生一致。
+            dt_col = "datetime" if "datetime" in computed.columns else "date"
+            computed["_date_int"] = computed[dt_col].apply(_datetime_to_int)
 
             if date is not None and date is not _ALL_DATES:
                 computed = computed[computed["_date_int"] == date]
@@ -117,7 +120,9 @@ class FactorEngine:
             forward = np.full(len(close), np.nan)
             forward[: len(close) - period] = close[period:] / close[: len(close) - period] - 1
 
-            dates = df["datetime"].apply(_datetime_to_int)
+            # V527: 兼容 date 列（同上）
+            dt_col = "datetime" if "datetime" in df.columns else "date"
+            dates = df[dt_col].apply(_datetime_to_int)
 
             sub = pd.DataFrame(
                 {
