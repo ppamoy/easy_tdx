@@ -128,6 +128,18 @@ class TestFactorAnalyzerReport:
         # 3 个有效截面全部为正 → 1.0（而非把 NaN 当非正算成 0.75）
         assert report.ic_positive_rate == 1.0
 
+    def test_ic_std_single_valid(self, monkeypatch):
+        """V536: 1 个有效截面 + N 个 NaN 时 ic_std 应为 0（而非 NaN）。"""
+        fd, rd = _make_factor_and_return(ic=0.1)
+        analyzer = FactorAnalyzer(fd, rd, factor_col="test_factor", return_col="forward_5d")
+        monkeypatch.setattr(
+            analyzer, "compute_ic", lambda *a, **k: pd.Series([0.1, float("nan"), float("nan")])
+        )
+        report = analyzer.full_report()
+        assert report.ic_mean == 0.1
+        assert report.ic_std == 0.0
+        assert report.ir == 0.0
+
     def test_top_minus_bottom_uses_top_quantile(self):
         """V518: top_minus_bottom 用最高分位 q{n_quantiles}，而非硬编码 q5。"""
         fd, rd = _make_factor_and_return(n_dates=50, n_stocks=30, ic=0.2)

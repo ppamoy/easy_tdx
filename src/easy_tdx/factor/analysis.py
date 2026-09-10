@@ -133,12 +133,15 @@ class FactorAnalyzer:
         ic_series = self.compute_ic()
         qr = self.compute_quantile_returns()
 
-        ic_mean = float(ic_series.mean()) if len(ic_series) > 0 else 0.0
-        ic_std = float(ic_series.std()) if len(ic_series) > 1 else 0.0
+        # V523/V536: 所有 IC 派生指标统一只统计有效截面（dropna）——
+        # 旧实现 ic_mean/ic_std 用总长度作守卫，在「1 有效 + N 个 NaN」时 ic_std
+        # 会被算成 NaN（std 单样本），ir 随之退化；统一 dropna 后口径一致。
+        valid_ic = ic_series.dropna()
+        ic_mean = float(valid_ic.mean()) if len(valid_ic) > 0 else 0.0
+        ic_std = float(valid_ic.std()) if len(valid_ic) > 1 else 0.0
         ir = ic_mean / ic_std if ic_std > 0 else 0.0
         # V523: IC 为正占比应只统计有效截面（dropna），旧实现 (ic_series > 0).mean()
         # 把 NaN 截面（样本不足）误当作「非正」，系统性低估 IC 为正占比。
-        valid_ic = ic_series.dropna()
         ic_positive_rate = float((valid_ic > 0).mean()) if len(valid_ic) > 0 else 0.0
 
         quantile_means = qr.mean()

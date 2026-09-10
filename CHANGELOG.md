@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**IC 派生指标统一 dropna（V536）**：factor/analysis `full_report` 的 `ic_mean`/`ic_std` 原用总长度作守卫（「1 有效 + N 个 NaN」时 ic_std 被算成 NaN），统一改为 dropna 后只统计有效截面；补单有效截面回归测试。
+
+---
+
 **缠论页估值展示（V535）**：前端 ChanlunView 的市场状态面板补「PE」「PB」（复用 V534 后端 valuation），与诊断页估值（V526）同源同口径。
 
 ---
