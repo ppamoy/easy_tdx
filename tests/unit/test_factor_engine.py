@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from easy_tdx.factor.base import Factor
-from easy_tdx.factor.engine import FactorEngine
+from easy_tdx.factor.engine import FactorEngine, merge_fundamentals
 
 
 def _make_df(n: int = 60, seed: int = 42) -> pd.DataFrame:
@@ -220,3 +220,60 @@ class TestFactorEngineWithBuiltins:
             name = f_info["name"]
             result = engine.compute_single(df, [name])
             assert name in result.columns, f"因子 {name} 计算失败"
+
+
+class TestMergeFundamentals:
+    def test_merge_adds_eps_bps_columns(self):
+        """V529: merge_fundamentals 为每只股票追加 eps/bps 列。"""
+        data = {
+            "000001": _make_df(30, seed=1),
+            "600036": _make_df(30, seed=2),
+        }
+        frame = pd.DataFrame(
+            {
+                "code": ["000001", "600036"],
+                "report_date": pd.to_datetime(["2026-03-31", "2026-03-31"]),
+                "eps": [2.0, 4.0],
+                "bps": [10.0, 20.0],
+            }
+        )
+        merged = merge_fundamentals(data, frame)
+        assert merged["000001"]["eps"].iloc[-1] == 2.0
+        assert merged["000001"]["bps"].iloc[-1] == 10.0
+        assert merged["600036"]["eps"].iloc[-1] == 4.0
+
+    def test_merge_missing_code_gets_nan(self):
+        """V529: 无对应财报的股票 eps/bps 为 NaN。"""
+        data = {"000001": _make_df(30, seed=1), "600036": _make_df(30, seed=2)}
+        frame = pd.DataFrame(
+            {
+                "code": ["000001"],
+                "report_date": pd.to_datetime(["2026-03-31"]),
+                "eps": [2.0],
+                "bps": [10.0],
+            }
+        )
+        merged = merge_fundamentals(data, frame)
+        assert pd.isna(merged["600036"]["eps"].iloc[-1])
+
+    def test_pe_pb_factors_after_merge(self):
+        """V529: 合并基本面后可计算 PE/PB 价值因子。"""
+        from easy_tdx.factor.builtin import get_factor
+
+        data = {"000001": _make_df(30, seed=1)}
+        frame = pd.DataFrame(
+            {
+                "code": ["000001"],
+                "report_date": pd.to_datetime(["2026-03-31"]),
+                "eps": [2.0],
+                "bps": [10.0],
+            }
+        )
+        merged = merge_fundamentals(data, frame)
+        engine = FactorEngine()
+        result = engine.compute_single(
+            merged["000001"], [get_factor("pe_ratio")(), get_factor("pb_ratio")()]
+        )
+        # close / eps 与 close / bps
+        assert result["pe_ratio"].iloc[-1] == pytest.approx(data["000001"]["close"].iloc[-1] / 2.0)
+        assert result["pb_ratio"].iloc[-1] == pytest.approx(data["000001"]["close"].iloc[-1] / 10.0)

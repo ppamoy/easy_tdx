@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**因子引擎与基本面打通（V529）**：factor/engine 新增 `merge_fundamentals`——把基本面指标帧的 eps/bps 合并进 OHLCV 数据（每只股票取最新一期），之后可对 `pe_ratio`/`pb_ratio` 做截面计算（V495 价值因子落地）；补合并/缺失/PE/PB 计算测试。
+
+---
+
 **IC 方法校验前置（V528）**：factor/analysis `compute_ic` 增加方法校验（非 spearman/pearson 显式报错，不再静默回退 pearson），scipy 可用性检查移出循环（原每截面重复 import）；补未知方法报错测试。
 
 ---
