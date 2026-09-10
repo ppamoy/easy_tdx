@@ -146,12 +146,14 @@ class ReportRecord:
 def _market_from_code(code: str) -> str:
     """按 A 股代码前缀推断市场（gpcw 索引里的 market 字节不可靠，经常全 0）。
 
-    6xxxxx → SH；4/8xxxxx(43x/83x/87x/92x 等) → BJ；其余(SZ) 默认。
+    与前端 market.detectMarket / sina._build_paper_code 口径一致：
+    北交所（43/83/87/92/93/4xx/8xx）→ BJ；沪市（6/9/5 开头，含 B 股 900）→ SH；
+    其余 → SZ。V521 修复：旧实现漏判 9 开头（900 B股→SZ、920/930 北交所→SZ）。
     """
-    if code.startswith("6"):
-        return "SH"
-    if code.startswith(("4", "8")):
+    if code.startswith(("43", "83", "87", "92", "93", "4", "8")):
         return "BJ"
+    if code.startswith(("6", "9", "5")):
+        return "SH"
     return "SZ"
 
 

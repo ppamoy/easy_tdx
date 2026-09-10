@@ -48,6 +48,9 @@ class TestParsers:
         assert _market_from_code("600000") == "SH"
         assert _market_from_code("830000") == "BJ"
         assert _market_from_code("000001") == "SZ"
+        # V521: 9 开头细分——900 B股→SH、920 北交所→BJ
+        assert _market_from_code("900901") == "SH"
+        assert _market_from_code("920000") == "BJ"
 
 
 class TestIndicatorValues:

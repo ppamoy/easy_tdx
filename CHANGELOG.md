@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**gpcw 市场推断补 9 开头（V521）**：fundamental/indicators `_market_from_code` 原漏判 9 开头（900 B股被误判 SZ、920/930 北交所被误判 SZ），改为与前端 market.detectMarket / sina._build_paper_code 口径一致（北交所→BJ、沪市含 B 股→SH、其余→SZ）；补 900/920 回归测试。
+
+---
+
 **新浪 paperCode 北交所修复（V520）**：sina/client `_build_paper_code` 原只有「6→sh、其余→sz」，北交所（43/83/87/92/4xx/8xx）被误映射为 sz；改为与前端 market.detectMarket 口径一致（北交所→bj、沪市含 B 股→sh、其余→sz），北交所财报新浪数据源可正确取数。补 bj 前缀测试。
 
 ---
