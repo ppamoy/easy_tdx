@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 新浪 paperCode 北交所修复（V520）✅ 完成
+
+- sina/client `_build_paper_code` 补北交所→bj（旧实现误映射为 sz），与前端 market.detectMarket 口径一致；补 bj 前缀测试
+
 ## 组合报告导出补完整绩效（V519）✅ 完成
 
 - 前端 PortfolioView Markdown/CSV 导出补「最大回撤」「夏普比率」「胜率」三行

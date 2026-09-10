@@ -129,13 +129,21 @@ def test_build_paper_code_sh() -> None:
 
 
 def test_build_paper_code_sz() -> None:
-    """非 6 开头 → sz 前缀（含北交所 8/4）。"""
+    """非 6/8/4 开头 → sz 前缀。"""
     from easy_tdx.sina import SinaClient
 
     assert SinaClient()._build_paper_code("000001") == "sz000001"
     assert SinaClient()._build_paper_code("002594") == "sz002594"
     assert SinaClient()._build_paper_code("300750") == "sz300750"
-    assert SinaClient()._build_paper_code("830799") == "sz830799"
+
+
+def test_build_paper_code_bj() -> None:
+    """V520: 北交所 43/83/87/92/4xx/8xx → bj 前缀。"""
+    from easy_tdx.sina import SinaClient
+
+    assert SinaClient()._build_paper_code("830799") == "bj830799"
+    assert SinaClient()._build_paper_code("430047") == "bj430047"
+    assert SinaClient()._build_paper_code("920000") == "bj920000"
 
 
 # ---------------------------------------------------------------------------

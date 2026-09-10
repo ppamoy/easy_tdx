@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**新浪 paperCode 北交所修复（V520）**：sina/client `_build_paper_code` 原只有「6→sh、其余→sz」，北交所（43/83/87/92/4xx/8xx）被误映射为 sz；改为与前端 market.detectMarket 口径一致（北交所→bj、沪市含 B 股→sh、其余→sz），北交所财报新浪数据源可正确取数。补 bj 前缀测试。
+
+---
+
 **组合报告导出补完整绩效（V519）**：前端 PortfolioView 的 Markdown/CSV 导出补「最大回撤」「夏普比率」「胜率」三行（V515/V516 完整绩效的导出落地）。
 
 ---

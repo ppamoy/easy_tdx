@@ -79,8 +79,18 @@ class SinaClient:
         self.timeout = timeout
 
     def _build_paper_code(self, code: str) -> str:
-        """6 位代码 → 新浪 paperCode（sh/sz 前缀）。"""
-        prefix = "sh" if code.startswith("6") else "sz"
+        """6 位代码 → 新浪 paperCode（sh/sz/bj 前缀）。
+
+        与前端 market.detectMarket 口径一致：北交所（43/83/87/92/93/4xx/8xx）
+        → bj；沪市（6/9/5 开头，含 B 股 900）→ sh；其余 → sz。
+        V520 修复：旧实现只有 6→sh、其余→sz，北交所被误映射为 sz。
+        """
+        if code.startswith(("43", "83", "87", "92", "93", "4", "8")):
+            prefix = "bj"
+        elif code.startswith(("6", "9", "5")):
+            prefix = "sh"
+        else:
+            prefix = "sz"
         return f"{prefix}{code}"
 
     def get_financial_report(
