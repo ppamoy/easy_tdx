@@ -242,6 +242,14 @@ class TestFundamentalRouterValidation:
         )
         assert resp.status_code == 400
 
+    def test_indicator_cols_include_bps(self) -> None:
+        """V499: 单标财务指标 API 字段应包含每股净资产 bps。"""
+        from easy_tdx.web.routers.fundamental import _INDICATOR_COLS
+
+        assert "bps" in _INDICATOR_COLS
+        assert "eps" in _INDICATOR_COLS
+        assert "total_shares" in _INDICATOR_COLS
+
     def test_screen_missing_date(self) -> None:
         resp = _make_app_client().post("/api/v1/fundamental/screen", json={})
         assert resp.status_code == 400

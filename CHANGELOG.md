@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**基本面数据透出补全（V499）**：单标财务指标 API（/fundamental/indicator）字段补 `bps`（每股净资产，此前 indicator_values 已算但路由未透出），并抽为 `_INDICATOR_COLS` 常量便于维护；`screen_stock` indicators 补 `ocf_ps`（每股经营现金流，分红能力代理，此前同样被丢弃）。补 cols 契约 + bps/ocf_ps 输出测试。
+
+---
+
 **建议回放跳空成交（V498）**：advice_simulator 的 `simulate_advice_trade`/`simulate_advice_batch`/`simulate_advice_hold_sweep` 新增可选 `opens` 参数——提供开盘价时启用跳空成交：开盘价已越过止损/止盈则按开盘价成交（止损跳空更保守、止盈跳空更真实），否则仍按盘中 high/low 触发；CLI（online/offline advice、advice-batch、hold-sweep）与 Web advice-simulate 全链路透传 opens；补跳空多/空、未跳空回归测试。
 
 ---

@@ -150,12 +150,20 @@ class TestScreener:
         assert screen_stock(None, pool_size=1) is None
 
     def test_screen_stock_includes_bps(self):
-        """V497: screen_stock 的 indicators 应包含 bps（每股净资产）。"""
+        """V497/V499: screen_stock 的 indicators 应包含 bps（每股净资产）。"""
         row = _row()
         res = screen_stock(row, pool_size=1)
         assert res is not None
         assert "bps" in res.indicators
         assert res.indicators["bps"] == 8.0
+
+    def test_screen_stock_includes_ocf_ps(self):
+        """V499: screen_stock 的 indicators 应包含 ocf_ps（每股经营现金流）。"""
+        row = _row()
+        res = screen_stock(row, pool_size=1)
+        assert res is not None
+        assert "ocf_ps" in res.indicators
+        assert res.indicators["ocf_ps"] == 0.8
 
 
 class TestValuation:

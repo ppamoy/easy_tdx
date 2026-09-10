@@ -296,6 +296,7 @@ def screen_stock(
         "net_profit": row.get("net_profit"),
         "revenue": row.get("revenue"),
         "ocf": row.get("ocf"),
+        "ocf_ps": row.get("ocf_ps"),
     }
     return ScreenResult(
         code=code,

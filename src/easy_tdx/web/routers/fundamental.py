@@ -23,6 +23,28 @@ from fastapi import APIRouter, HTTPException, Query
 router = APIRouter(tags=["fundamental"])
 logger = logging.getLogger(__name__)
 
+# V499: 单标的财务指标 API 暴露的字段（与 indicator_values 派生指标对齐，
+# 含每股净资产 bps；抽为常量便于测试与维护，避免新增指标时遗漏同步）。
+_INDICATOR_COLS: tuple[str, ...] = (
+    "report_date",
+    "disclosure_date",
+    "eps",
+    "bps",
+    "roe",
+    "revenue",
+    "net_profit",
+    "gross_margin",
+    "net_margin",
+    "debt_ratio",
+    "ocf",
+    "rev_yoy",
+    "np_yoy",
+    "asset_yoy",
+    "op_yoy",
+    "total_shares",
+    "circ_a",
+)
+
 
 @router.get("/fundamental/indicator/{market}/{code}")
 async def fundamental_indicator(
@@ -62,24 +84,7 @@ async def fundamental_indicator(
                 "rows": [],
                 "warning": "截至目标日期无已披露财报",
             }
-        cols = [
-            "report_date",
-            "disclosure_date",
-            "eps",
-            "roe",
-            "revenue",
-            "net_profit",
-            "gross_margin",
-            "net_margin",
-            "debt_ratio",
-            "ocf",
-            "rev_yoy",
-            "np_yoy",
-            "asset_yoy",
-            "op_yoy",
-            "total_shares",
-            "circ_a",
-        ]
+        cols = list(_INDICATOR_COLS)
 
         def _clean(c: str) -> Any:
             v = row.get(c)
