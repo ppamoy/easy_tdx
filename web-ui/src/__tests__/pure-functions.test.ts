@@ -32,6 +32,7 @@ describe('format', () => {
     expect(fmtAccPct(0.076)).toBe('7.6%')
     expect(fmtAccSigned(0.05)).toBe('+5.0%')
     expect(fmtAccSigned(-0.03)).toBe('-3.0%')
+    expect(fmtAccSigned(0)).toBe('0.0%') // V514: 0 不带 '+'（中性）
     expect(fmtAccSigned(null)).toBe('-')
     expect(fmtAccPct(Number.NaN)).toBe('-')
     expect(fmtAccSigned(Number.POSITIVE_INFINITY)).toBe('-')

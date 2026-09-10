@@ -21,7 +21,8 @@ export function fmtAccPct(v: number | null | undefined): string {
 /** 带符号百分比（用于超额命中率等）。 */
 export function fmtAccSigned(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '-'
-  const sign = v >= 0 ? '+' : ''
+  // 仅正值显式加 '+'；0 不加号（「与随机相当」应为中性，而非 +0.0%）
+  const sign = v > 0 ? '+' : ''
   return `${sign}${(v * 100).toFixed(1)}%`
 }
 
