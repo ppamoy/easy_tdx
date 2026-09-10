@@ -186,7 +186,8 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     details: list[ScoreDetail] = []
 
     np = row.get("net_profit")
-    ocf = row.get("ocf")
+    # V539: 分红能力用「每股经营现金流」更直接（每股分红基础），缺省回退总量口径
+    ocf = row.get("ocf_ps") if row.get("ocf_ps") is not None else row.get("ocf")
     debt = _pct(row.get("debt_ratio"))
     eps = row.get("eps")
     np_yoy = _pct(row.get("np_yoy"))
@@ -220,9 +221,9 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
 
     if ocf is not None and ocf > 0:
         total += 20
-        details.append(_contrib(20, 20, "经营现金流为正（可持续分红的基础）"))
+        details.append(_contrib(20, 20, "每股经营现金流为正（可持续分红的基础）"))
     else:
-        details.append(_contrib(0, 20, "经营现金流为负/缺失"))
+        details.append(_contrib(0, 20, "每股经营现金流为负/缺失"))
 
     if eps is not None and eps > 0:
         total += 20
@@ -273,12 +274,12 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
     else:
         details.append(_contrib(0, 20, "亏损：需要更高增速来证明"))
 
-    ocf = row.get("ocf")
+    ocf = row.get("ocf_ps") if row.get("ocf_ps") is not None else row.get("ocf")
     if ocf is not None and ocf > 0:
         total += 10
-        details.append(_contrib(10, 10, "经营现金流为正"))
+        details.append(_contrib(10, 10, "每股经营现金流为正"))
     else:
-        details.append(_contrib(0, 10, "经营现金流非正"))
+        details.append(_contrib(0, 10, "每股经营现金流非正"))
 
     return min(total, 100), details
 

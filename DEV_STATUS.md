@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 粮型/菜型分红能力用每股口径（V539）✅ 完成
+
+- fundamental/screener `score_grain`/`score_vegetable` 分红/现金流判据改用每股经营现金流 ocf_ps（缺省回退总量口径）；补每股口径回归测试
+
 ## 日线写入成交量溢出报错（V538）✅ 完成
 
 - offline/write_daily `encode_daily_bar` 成交量溢出 uint32 时抛出可读 ValueError（原隐晦 struct 报错）；补溢出报错测试

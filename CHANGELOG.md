@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**粮型/菜型分红能力用每股口径（V539）**：fundamental/screener `score_grain`/`score_vegetable` 的「分红能力/现金流」判据改用「每股经营现金流 ocf_ps」（每股分红基础更直接），缺省回退总量口径；补每股口径回归测试。
+
+---
+
 **日线写入成交量溢出报错（V538）**：offline/write_daily `encode_daily_bar` 在成交量编码超出 .day 格式 uint32 上限时（高流动性标的，如平安银行日成交量 5.89 亿股）提前抛出可读 ValueError，而非隐晦的 struct.pack 'I' 报错；补溢出报错测试。
 
 ---

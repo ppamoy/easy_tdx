@@ -133,6 +133,14 @@ class TestScreener:
         sc, _ = score_grain(row, pool_size=1)
         assert sc >= 60
 
+    def test_grain_uses_ocf_ps(self):
+        """V539: 粮型分红能力用「每股经营现金流」（更直接的分红基础）。"""
+        row = _row()
+        _, details = score_grain(row, pool_size=1)
+        ocf_detail = next(d for d in details if "现金流" in d.reason)
+        assert "每股" in ocf_detail.reason
+        assert ocf_detail.score == 20
+
     def test_vegetable_high_growth(self):
         row = _row(rev_yoy=40.0, np_yoy=60.0, net_margin=12.0)
         sc, _ = score_vegetable(row, pool_size=1)
