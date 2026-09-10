@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+**树型选股变量命名修正（V493）**：fundamental/screener.py `score_tree` 中取营收的变量由误导性命名 `assets` 改为 `revenue`，与「营收体量大」打分语义一致（纯重构，行为不变）。
+
+---
+
+**强势股趋势一致性指标（V492）**：screen/strength.py 新增 `_trend_quality`（60 日对数价线性回归 R²，1=完美线性趋势，0=无序），`compute_strength_metrics` 返回 `trend_quality`，`StrengthResult`/`to_json`/`to_table` 同步输出「趋势」列——补充波动率惩罚只能量「幅度」、无法量「路径平滑度」的短板，直接服务 steady 预设「稳着涨」定位。
+
+---
+
 **选股技术因子补 KDJ（V491）**：factor/builtin/technical.py 新增 `kdj_j` 因子（KDJ J 值归一化到 [-1,1]，正值超买/负值超卖），补齐 A 股选股常用的技术指标因子，与 RSI14/BollPosition 归一化口径一致；补注册与上涨/下跌趋势方向性测试。
 
 ---

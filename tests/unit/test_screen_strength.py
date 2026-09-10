@@ -20,6 +20,7 @@ from easy_tdx.screen.strength import (
     _compute_strength_one,
     _fmt_date,
     _json_default,
+    _trend_quality,
     compute_strength_metrics,
 )
 
@@ -60,6 +61,51 @@ class TestComputeStrengthMetrics:
         m2 = compute_strength_metrics(_make_closes(), 0.2, 0.3, 0.5, False)
         assert m1 is not None and m2 is not None
         assert m1["strength"] == pytest.approx(m2["strength"])
+
+    def test_trend_quality_present_and_bounded(self) -> None:
+        """V492: 结果含 trend_quality 且落在 [0,1]。"""
+        metrics = compute_strength_metrics(_make_closes(), 0.2, 0.3, 0.5, True)
+        assert metrics is not None
+        assert "trend_quality" in metrics
+        assert 0.0 <= metrics["trend_quality"] <= 1.0
+
+
+class TestTrendQuality:
+    """V492: 趋势一致性 R² 纯函数。"""
+
+    def test_perfect_linear_up(self) -> None:
+        """完美线性上涨（对数价线性）→ R² ≈ 1。"""
+        log_close = np.linspace(np.log(10.0), np.log(20.0), 60)
+        assert _trend_quality(log_close) == pytest.approx(1.0, abs=1e-6)
+
+    def test_perfect_linear_down(self) -> None:
+        """完美线性下跌（对数价线性）→ R² ≈ 1（趋势方向无关）。"""
+        log_close = np.linspace(np.log(20.0), np.log(10.0), 60)
+        assert _trend_quality(log_close) == pytest.approx(1.0, abs=1e-6)
+
+    def test_flat_returns_zero(self) -> None:
+        """横盘无趋势 → R² = 0。"""
+        log_close = np.full(60, np.log(10.0))
+        assert _trend_quality(log_close) == 0.0
+
+    def test_noisy_lower_than_linear(self) -> None:
+        """带噪声的上涨比完美线性 R² 低。"""
+        rng = np.random.default_rng(7)
+        x = np.linspace(0, 1, 60)
+        noisy = np.log(10.0) + np.log(2.0) * x + rng.normal(0, 0.2, 60)
+        assert _trend_quality(noisy) < _trend_quality(np.linspace(np.log(10.0), np.log(20.0), 60))
+
+    def test_too_short_returns_zero(self) -> None:
+        """数据不足（<3 根）→ 0。"""
+        assert _trend_quality(np.array([np.log(10.0), np.log(11.0)])) == 0.0
+
+    def test_window_slicing(self) -> None:
+        """只取末尾 window 根计算。"""
+        # 前 100 根线性下跌（噪声干扰），末尾 60 根对数价线性上涨
+        head = np.linspace(np.log(30.0), np.log(10.0), 100)
+        tail = np.linspace(np.log(10.0), np.log(20.0), 60)
+        log_close = np.concatenate([head, tail])
+        assert _trend_quality(log_close, window=60) == pytest.approx(1.0, abs=1e-6)
 
 
 class TestStrengthRanker:

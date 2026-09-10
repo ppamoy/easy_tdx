@@ -550,6 +550,7 @@ class TestComputeStrengthMetrics:
             "ret_60",
             "vol_20",
             "strength",
+            "trend_quality",
         }
 
 
@@ -662,7 +663,16 @@ class TestStrengthRankerOutput:
         data = json.loads(json_str)
 
         entry = data["ranking"][0]
-        for key in ("ret_5", "ret_20", "ret_60", "vol_20", "strength", "last_close", "last_date"):
+        for key in (
+            "ret_5",
+            "ret_20",
+            "ret_60",
+            "vol_20",
+            "strength",
+            "trend_quality",
+            "last_close",
+            "last_date",
+        ):
             assert key in entry, f"排名条目缺少字段 {key}"
 
 

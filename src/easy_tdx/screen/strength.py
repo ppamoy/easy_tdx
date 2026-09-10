@@ -71,6 +71,7 @@ class StrengthResult:
         ret_60: 60 日涨幅
         vol_20: 20 日波动率（对数收益率标准差）
         strength: 强势综合分
+        trend_quality: 趋势一致性（60 日对数价格线性回归 R²，0-1）
     """
 
     rank: int = 0
@@ -84,6 +85,36 @@ class StrengthResult:
     ret_60: float = 0.0
     vol_20: float = 0.0
     strength: float = 0.0
+    trend_quality: float = 0.0
+
+
+def _trend_quality(log_close: np.ndarray, window: int = 60) -> float:
+    """最近 ``window`` 根对数收盘价的线性回归 R²（趋势一致性）。
+
+    R² ∈ [0, 1]：越接近 1 说明价格越贴合一条直线（「稳着涨」/「稳着跌」），
+    越接近 0 说明走势越无序（横盘后急拉、宽幅震荡）。用于补充波动率惩罚：
+    波动率只能衡量「幅度」，趋势一致性衡量「路径是否平滑」。
+
+    Args:
+        log_close: 对数收盘价序列（按时间升序，取末尾 window 根）
+        window: 回归窗口（默认 60 日）
+
+    Returns:
+        R²（0=无线性趋势，1=完美线性趋势；数据不足/无波动时返回 0）
+    """
+    y = np.asarray(log_close, dtype=np.float64)[-window:]
+    n = len(y)
+    if n < 3:
+        return 0.0
+    x = np.arange(n, dtype=np.float64)
+    coeffs = np.polyfit(x, y, 1)
+    y_pred = coeffs[0] * x + coeffs[1]
+    ss_res = float(np.sum((y - y_pred) ** 2))
+    ss_tot = float(np.sum((y - y.mean()) ** 2))
+    if ss_tot < 1e-12:
+        return 0.0
+    r2 = 1.0 - ss_res / ss_tot
+    return float(np.clip(r2, 0.0, 1.0))
 
 
 def compute_strength_metrics(
@@ -101,7 +132,8 @@ def compute_strength_metrics(
         vol_adjusted: 是否除以波动率
 
     Returns:
-        {"ret_5", "ret_20", "ret_60", "vol_20", "strength"} 或 None（数据不足）
+        {"ret_5", "ret_20", "ret_60", "vol_20", "strength", "trend_quality"}
+        或 None（数据不足）
     """
     n = len(closes)
     if n < 65:  # 至少需要 61 日算 ret_60，留余量
@@ -131,12 +163,16 @@ def compute_strength_metrics(
     if np.isnan(strength):
         return None
 
+    # V492: 趋势一致性（60 日对数价格线性回归 R²，衡量「稳着涨」程度）
+    trend_quality = _trend_quality(np.log(closes), window=60)
+
     return {
         "ret_5": float(ret_5),
         "ret_20": float(ret_20),
         "ret_60": float(ret_60),
         "vol_20": vol_20,
         "strength": float(strength),
+        "trend_quality": trend_quality,
     }
 
 
@@ -370,6 +406,7 @@ class StrengthRanker:
             ret_60=metrics["ret_60"],
             vol_20=metrics["vol_20"],
             strength=metrics["strength"],
+            trend_quality=metrics["trend_quality"],
         )
 
     @staticmethod
@@ -394,6 +431,7 @@ class StrengthRanker:
                     "ret_60": r.ret_60,
                     "vol_20": r.vol_20,
                     "strength": r.strength,
+                    "trend_quality": r.trend_quality,
                 }
                 for r in results
             ],
@@ -410,10 +448,10 @@ class StrengthRanker:
         lines = [
             f"[*] 强势股排名 [{preset}] 共 {len(results)} 只",
             f"    数据截止: {_fmt_date(data_date)} | {desc}",
-            "═" * 96,
+            "═" * 104,
             f"{'排名':>4}  {'代码':<10} {'名称':<8} {'现价':>10} "
-            f"{'5日':>8} {'20日':>8} {'60日':>8} {'波动率':>8} {'强势分':>8}",
-            "─" * 96,
+            f"{'5日':>8} {'20日':>8} {'60日':>8} {'波动率':>8} {'强势分':>8} {'趋势':>6}",
+            "─" * 104,
         ]
 
         for r in results:
@@ -430,7 +468,8 @@ class StrengthRanker:
             lines.append(
                 f"{medal}{r.rank:>2}  {r.market}{r.code:<9} {name:<8} "
                 f"{r.last_close:>9.2f} {r.ret_5:>7.2%} {r.ret_20:>7.2%} "
-                f"{r.ret_60:>7.2%} {r.vol_20:>7.4f} {r.strength:>8.2f}"
+                f"{r.ret_60:>7.2%} {r.vol_20:>7.4f} {r.strength:>8.2f} "
+                f"{r.trend_quality:>6.2f}"
             )
         return "\n".join(lines)
 
@@ -473,6 +512,7 @@ def _compute_strength_one(
         ret_60=metrics["ret_60"],
         vol_20=metrics["vol_20"],
         strength=metrics["strength"],
+        trend_quality=metrics["trend_quality"],
     )
 
 

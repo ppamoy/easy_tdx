@@ -102,16 +102,16 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     rev_yoy = _pct(row.get("rev_yoy"))
     np_yoy = _pct(row.get("np_yoy"))
     np = row.get("net_profit")
-    assets = row.get("revenue")
+    revenue = row.get("revenue")
 
     if np is not None and np > 0:
         total += 10
         details.append(_contrib(10, 10, "盈利为正（树的第一要义）"))
     else:
         details.append(_contrib(0, 10, "亏损/无净利润：不满足树条件"))
-    if assets is not None and assets > 1e10:
+    if revenue is not None and revenue > 1e10:
         total += 10
-        details.append(_contrib(10, 10, f"营收体量大（{assets / 1e8:.0f} 亿）"))
+        details.append(_contrib(10, 10, f"营收体量大（{revenue / 1e8:.0f} 亿）"))
     else:
         details.append(_contrib(0, 10, "营收规模偏小"))
 
