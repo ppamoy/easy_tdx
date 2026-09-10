@@ -3,6 +3,12 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 基本面选股估值（PE/PB）落地（V497）✅ 完成
+
+- fundamental：`screen_stock` indicators 补 `bps`；pipeline 新增 `_valuation`（as_of_close + eps/bps → PE/PB），`run_screen`/`scan_market` 输出 `valuation`
+- 前端：FundamentalView 结果表补「PE」「PB」两列
+- 测试：bps 输出 + PE/PB 计算/亏损/无价格/缺失 bps（+5 用例）
+
 ## 量价相关性因子（V496）✅ 完成
 
 - factor/builtin/volume.py 新增 `vol_price_corr`（20 日量价滚动相关系数）；补注册 + 有界/同向趋势测试

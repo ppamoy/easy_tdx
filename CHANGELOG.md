@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**基本面选股估值（PE/PB）落地（V497）**：fundamental 管线补齐估值输出——`screen_stock` indicators 补 `bps`（每股净资产），pipeline 新增 `_valuation`（用目标日收盘价 as_of_close + eps/bps 计算 PE/PB，亏损/无净资产/无价格置 None），`run_screen`/`scan_market` 在附带表现时输出 `valuation` 字段；前端 FundamentalView 结果表补「PE」「PB」两列（两位小数）。补 bps 输出 + PE/PB 计算/亏损/无价格/缺失 bps 测试。
+
+---
+
 **量价相关性因子（V496）**：factor/builtin/volume.py 新增 `vol_price_corr`（20 日收益率与成交量滚动相关系数，正值=上涨放量/下跌缩量的健康量价配合），补齐 A 股选股「量价背离」监测维度；补注册 + 有界性 + 同向趋势方向性测试。
 
 ---

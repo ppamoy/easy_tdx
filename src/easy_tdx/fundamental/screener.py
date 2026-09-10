@@ -286,6 +286,7 @@ def screen_stock(
 
     ind = {
         "eps": row.get("eps"),
+        "bps": row.get("bps"),
         "roe": row.get("roe"),
         "gross_margin": row.get("gross_margin"),
         "net_margin": row.get("net_margin"),

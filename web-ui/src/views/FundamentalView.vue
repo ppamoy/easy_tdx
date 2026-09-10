@@ -222,6 +222,12 @@ function fmt(v: any, suffix = '') {
   return String(v) + suffix
 }
 
+/** 估值（PE/PB）两位小数。 */
+function fmtVal(v: any) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '-'
+  return Number(v).toFixed(2)
+}
+
 function pct(v: any) {
   if (v === null || v === undefined || Number.isNaN(v)) return '-'
   return (v * 100).toFixed(0) + '%'
@@ -421,6 +427,8 @@ onMounted(() => {
               <th>负债率%</th>
               <th>营收同比%</th>
               <th>净利同比%</th>
+              <th>PE</th>
+              <th>PB</th>
               <th>+20日%</th>
               <th>+60日%</th>
               <th>+250日%</th>
@@ -453,6 +461,8 @@ onMounted(() => {
               <td :style="{ color: colorBy(r.indicators.np_yoy) }">
                 {{ fmt(r.indicators.np_yoy) }}
               </td>
+              <td>{{ fmtVal(r.valuation?.pe) }}</td>
+              <td>{{ fmtVal(r.valuation?.pb) }}</td>
               <td :style="{ color: colorBy(r.performance.ret_20d) }">
                 {{ fmt(r.performance.ret_20d) }}
               </td>

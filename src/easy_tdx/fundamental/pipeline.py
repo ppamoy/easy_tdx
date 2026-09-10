@@ -171,6 +171,28 @@ def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, A
     return out
 
 
+def _valuation(ind: dict[str, Any], close: float | None) -> dict[str, float | None]:
+    """V497: 用目标日收盘价 + 每股收益/净资产计算 PE/PB 估值。
+
+    Args:
+        ind: ``screen_stock`` 输出的 indicators（含 eps/bps）。
+        close: 目标日收盘价（``subsequent_performance`` 返回的 ``as_of_close``）。
+
+    Returns:
+        ``{"pe": float|None, "pb": float|None}``；无价格/亏损/无净资产时对应项为 None。
+    """
+    out: dict[str, float | None] = {"pe": None, "pb": None}
+    if close is None or not isinstance(close, (int, float)) or close <= 0:
+        return out
+    eps = ind.get("eps")
+    bps = ind.get("bps")
+    if eps is not None and float(eps) > 0:
+        out["pe"] = round(float(close) / float(eps), 2)
+    if bps is not None and float(bps) > 0:
+        out["pb"] = round(float(close) / float(bps), 2)
+    return out
+
+
 def subsequent_performance(
     market: str,
     code: str,
@@ -325,7 +347,10 @@ def run_screen(
                 continue
             d = sr.as_dict()
             if with_performance:
-                d["performance"] = subsequent_performance(sr.market, sr.code, target, client=client)
+                perf = subsequent_performance(sr.market, sr.code, target, client=client)
+                d["performance"] = perf
+                # V497: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产
+                d["valuation"] = _valuation(d["indicators"], perf.get("as_of_close"))
             results.append(d)
     season = detect_season_for_date(target, client=client)
     results.sort(key=lambda r: r["scores"].get(r["category"], 0), reverse=True)
@@ -476,6 +501,8 @@ def scan_market(
                 d["market"], d["code"], target, client=client, horizons=horizons
             )
             d["performance"] = perf
+            # V497: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产
+            d["valuation"] = _valuation(d["indicators"], perf.get("as_of_close"))
 
     base_out.update(
         {

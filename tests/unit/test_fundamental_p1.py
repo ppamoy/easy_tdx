@@ -149,6 +149,49 @@ class TestScreener:
     def test_screen_stock_none_for_empty(self):
         assert screen_stock(None, pool_size=1) is None
 
+    def test_screen_stock_includes_bps(self):
+        """V497: screen_stock 的 indicators 应包含 bps（每股净资产）。"""
+        row = _row()
+        res = screen_stock(row, pool_size=1)
+        assert res is not None
+        assert "bps" in res.indicators
+        assert res.indicators["bps"] == 8.0
+
+
+class TestValuation:
+    """V497: 基本面估值（PE/PB）计算。"""
+
+    def _ind(self, eps=None, bps=None):
+        return {"eps": eps, "bps": bps}
+
+    def test_pe_pb_normal(self):
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=2.0, bps=10.0), 30.0)
+        assert v["pe"] == 15.0  # 30 / 2
+        assert v["pb"] == 3.0  # 30 / 10
+
+    def test_loss_makes_pe_none(self):
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=-1.0, bps=10.0), 30.0)
+        assert v["pe"] is None
+        assert v["pb"] == 3.0
+
+    def test_no_price_none(self):
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=2.0, bps=10.0), None)
+        assert v["pe"] is None
+        assert v["pb"] is None
+
+    def test_missing_bps_pb_none(self):
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=2.0, bps=None), 30.0)
+        assert v["pe"] == 15.0
+        assert v["pb"] is None
+
 
 class TestSeason:
     def _make_bars(self, up: bool = True, n: int = 120) -> tuple[list, list]:
