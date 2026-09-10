@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**screen_stock ROE 年化透出（V530）**：fundamental/screener `screen_stock` 的 indicators.roe 改为报告期年化后透出（与 score_tree 打分口径一致），前端不再显示被低估的单季 ROE、与「高ROE」分类判断不再矛盾；补年化 ROE 回归测试。
+
+---
+
 **因子引擎与基本面打通（V529）**：factor/engine 新增 `merge_fundamentals`——把基本面指标帧的 eps/bps 合并进 OHLCV 数据（每只股票取最新一期），之后可对 `pe_ratio`/`pb_ratio` 做截面计算（V495 价值因子落地）；补合并/缺失/PE/PB 计算测试。
 
 ---

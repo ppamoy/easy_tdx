@@ -299,7 +299,9 @@ def screen_stock(
     ind = {
         "eps": row.get("eps"),
         "bps": row.get("bps"),
-        "roe": row.get("roe"),
+        # V530: ROE 年化后透出，与 score_tree 打分口径一致（一季报不再显示被低估的
+        # 单季 ROE），前端展示与分类「高ROE」判断不再矛盾
+        "roe": _annualize_pct(_pct(row.get("roe")), row.get("report_date")),
         "gross_margin": row.get("gross_margin"),
         "net_margin": row.get("net_margin"),
         "debt_ratio": row.get("debt_ratio"),
