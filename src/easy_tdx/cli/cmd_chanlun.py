@@ -236,6 +236,7 @@ def advice_simulate(
         closes = [float(k.close) for k in result.klines]
         highs = [float(k.high) for k in result.klines]
         lows = [float(k.low) for k in result.klines]
+        opens = [float(k.open) for k in result.klines]
         advices = collect_signal_advices(result, closes, highs, lows, max_hold)
 
         if not advices:
@@ -252,13 +253,13 @@ def advice_simulate(
             )
             return
 
-        report = simulate_advice_batch(highs, lows, closes, advices)
+        report = simulate_advice_batch(highs, lows, closes, advices, opens=opens)
 
         if hold_sweep:
             # V460: 多持有期敏感性分析
             from ..backtest.advice_simulator import simulate_advice_hold_sweep
 
-            sweep = simulate_advice_hold_sweep(highs, lows, closes, advices)
+            sweep = simulate_advice_hold_sweep(highs, lows, closes, advices, opens=opens)
             click.echo(
                 json.dumps(
                     {

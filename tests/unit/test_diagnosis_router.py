@@ -215,6 +215,7 @@ async def test_advice_simulate_full_path() -> None:
 
     class _FakeKline:
         def __init__(self, close: float, high: float, low: float) -> None:
+            self.open = close
             self.close = close
             self.high = high
             self.low = low

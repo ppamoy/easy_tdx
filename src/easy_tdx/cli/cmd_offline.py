@@ -784,9 +784,10 @@ def advice(
     closes = [float(k.close) for k in result.klines]
     highs = [float(k.high) for k in result.klines]
     lows = [float(k.low) for k in result.klines]
+    opens = [float(k.open) for k in result.klines]
 
     advices = collect_signal_advices(result, closes, highs, lows, max_hold)
-    report = simulate_advice_batch(highs, lows, closes, advices)
+    report = simulate_advice_batch(highs, lows, closes, advices, opens=opens)
     report["symbol"] = f"{market.upper()}{code}"
     report["bars"] = len(closes)
     report["signals"] = len(result.mmds)
@@ -962,11 +963,12 @@ def _advice_batch_one(
         closes = [float(k.close) for k in result.klines]
         highs = [float(k.high) for k in result.klines]
         lows = [float(k.low) for k in result.klines]
+        opens = [float(k.open) for k in result.klines]
         if len(closes) < 30:
             return None, {"symbol": symbol, "error": "K线不足(30)"}
         buy_hold = (closes[-1] / closes[0] - 1.0) * 100.0 if closes[0] > 0 else 0.0
         advices = collect_signal_advices(result, closes, highs, lows, max_hold)
-        report = simulate_advice_batch(highs, lows, closes, advices)
+        report = simulate_advice_batch(highs, lows, closes, advices, opens=opens)
         report["symbol"] = symbol
         row = {
             "symbol": symbol,

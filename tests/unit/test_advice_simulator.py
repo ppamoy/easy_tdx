@@ -211,6 +211,74 @@ class TestSimulateAdviceTrade:
         )
         assert result["exit_reason"] == "invalid"
 
+    def test_gap_down_fills_at_open(self):
+        """V498: 跳空低开越过止损 → 按开盘价成交（比止损价更差）。"""
+        result = simulate_advice_trade(
+            [101, 99, 99],
+            [99, 95, 96],
+            [100, 100, 100],
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=97.0,
+            take_profit_1=104.0,
+            max_hold=5,
+            opens=[100, 96, 99],
+        )
+        assert result["exit_reason"] == "stop"
+        assert result["exit_price"] == 96.0  # 开盘价成交，而非止损价 97
+        assert result["return_pct"] == -4.0
+
+    def test_gap_up_fills_at_open_tp(self):
+        """V498: 跳空高开越过止盈 → 按开盘价成交（比止盈价更好）。"""
+        result = simulate_advice_trade(
+            [101, 101],
+            [99, 99],
+            [100, 100],
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=97.0,
+            take_profit_1=104.0,
+            max_hold=5,
+            opens=[100, 105],
+        )
+        assert result["exit_reason"] == "tp1"
+        assert result["exit_price"] == 105.0
+        assert result["return_pct"] == 5.0
+
+    def test_no_gap_fills_at_stop(self):
+        """V498: 未跳空（开盘在区间内）→ 仍按止损/止盈价成交。"""
+        result = simulate_advice_trade(
+            [101, 101],
+            [99, 95],
+            [100, 100],
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=97.0,
+            take_profit_1=104.0,
+            max_hold=5,
+            opens=[100, 98],
+        )
+        assert result["exit_reason"] == "stop"
+        assert result["exit_price"] == 97.0
+
+    def test_short_gap_up_fills_at_open(self):
+        """V498: 空头跳空高开越过止损 → 按开盘价成交。"""
+        result = simulate_advice_trade(
+            [101, 101],
+            [99, 99],
+            [100, 100],
+            entry_idx=0,
+            entry_price=100.0,
+            stop_loss=103.0,
+            take_profit_1=96.0,
+            max_hold=5,
+            direction="short",
+            opens=[100, 104],
+        )
+        assert result["exit_reason"] == "stop"
+        assert result["exit_price"] == 104.0
+        assert result["return_pct"] == -4.0
+
 
 class TestSimulateAdviceBatch:
     """批量建议聚合测试。"""
@@ -585,6 +653,7 @@ class TestOnlineAdviceOutput:
 
         class FakeK:
             def __init__(self, v: float) -> None:
+                self.open = v
                 self.close = v
                 self.high = v + 1.0
                 self.low = v - 1.0

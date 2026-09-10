@@ -2724,6 +2724,7 @@ async def advice_simulate(
     closes = [k.close for k in result.klines]
     highs = [k.high for k in result.klines]
     lows = [k.low for k in result.klines]
+    opens = [k.open for k in result.klines]
 
     advices = _collect_v102_advices(result, closes, highs, lows, req.max_hold)
     if not advices:
@@ -2735,7 +2736,7 @@ async def advice_simulate(
             "message": f"近 {len(closes)} 根K线未发现 3买/3卖 信号，无法生成可回放建议",
         }
 
-    report = simulate_advice_batch(highs, lows, closes, advices)
+    report = simulate_advice_batch(highs, lows, closes, advices, opens=opens)
     return {
         "symbol": symbol,
         "signal_count": len(result.mmds),

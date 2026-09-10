@@ -39,6 +39,7 @@ def simulate_advice_trade(
     take_profit_1: float,
     max_hold: int = 10,
     direction: str = "long",
+    opens: list[float] | None = None,
 ) -> dict[str, Any]:
     """模拟单笔按建议执行的交易。
 
@@ -52,6 +53,8 @@ def simulate_advice_trade(
         take_profit_1: 第一止盈价
         max_hold: 最大持有根数（超出未触发按收盘结算）
         direction: "long"（买入：止损<止盈）或 "short"（卖出：止损>止盈）
+        opens: 开盘价序列（可选）。提供时启用跳空成交：开盘价已越过止损/止盈
+            则按开盘价成交（更保守/真实），否则按盘中 high/low 触发。
 
     Returns:
         dict：{exit_idx, exit_price, exit_reason, return_pct, profit}
@@ -83,6 +86,28 @@ def simulate_advice_trade(
 
     last_check = min(entry_idx + 1 + max_hold, n)
     for i in range(entry_idx + 1, last_check):
+        # V498: 跳空成交优先——开盘价已越过止损/止盈则按开盘价成交
+        if opens is not None and i < len(opens):
+            open_i = float(opens[i])
+            if direction == "long":
+                if open_i <= stop_price:
+                    mae_price = min(mae_price, open_i)
+                    exit_idx, exit_price, exit_reason = i, open_i, "stop"
+                    break
+                if open_i >= tp_price:
+                    mfe_price = max(mfe_price, open_i)
+                    exit_idx, exit_price, exit_reason = i, open_i, "tp1"
+                    break
+            else:
+                if open_i >= stop_price:
+                    mae_price = max(mae_price, open_i)
+                    exit_idx, exit_price, exit_reason = i, open_i, "stop"
+                    break
+                if open_i <= tp_price:
+                    mfe_price = min(mfe_price, open_i)
+                    exit_idx, exit_price, exit_reason = i, open_i, "tp1"
+                    break
+
         if direction == "long":
             mae_price = min(mae_price, lows[i])
             mfe_price = max(mfe_price, highs[i])
@@ -136,6 +161,8 @@ def simulate_advice_batch(
     lows: list[float],
     closes: list[float],
     advices: list[dict[str, Any]],
+    *,
+    opens: list[float] | None = None,
 ) -> dict[str, Any]:
     """批量模拟一组建议，输出聚合统计。
 
@@ -143,6 +170,7 @@ def simulate_advice_batch(
         highs / lows / closes: K 线序列
         advices: 每条含 entry_idx/entry_price/stop_loss/take_profit_1/max_hold，
             可选 direction（long/short，默认 long）
+        opens: 开盘价序列（可选，V498 跳空成交）
 
     Returns:
         dict：{trades: [单笔结果], count, win_rate, avg_return, median_return,
@@ -171,6 +199,7 @@ def simulate_advice_batch(
                 take_profit_1=tp1,
                 max_hold=hold,
                 direction=direction,
+                opens=opens,
             )
         )
         trade_directions.append(direction)
@@ -315,6 +344,7 @@ def simulate_advice_hold_sweep(
     closes: list[float],
     advices: list[dict[str, Any]],
     holds: tuple[int, ...] = (3, 5, 10, 20),
+    opens: list[float] | None = None,
 ) -> dict[str, dict[str, Any]]:
     """V444: 多持有期敏感性分析——同一批建议用不同 max_hold 模拟。
 
@@ -324,7 +354,7 @@ def simulate_advice_hold_sweep(
     out: dict[str, dict[str, Any]] = {}
     for h in holds:
         advices_h = [{**a, "max_hold": int(h)} for a in advices]
-        out[str(h)] = simulate_advice_batch(highs, lows, closes, advices_h)
+        out[str(h)] = simulate_advice_batch(highs, lows, closes, advices_h, opens=opens)
     return out
 
 

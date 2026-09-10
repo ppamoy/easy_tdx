@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 建议回放跳空成交（V498）✅ 完成
+
+- advice_simulator 新增可选 `opens` 参数启用跳空成交（开盘越过止损/止盈按开盘价成交）；CLI（online/offline advice、advice-batch、hold-sweep）与 Web advice-simulate 全链路透传 opens；补跳空多/空、未跳空回归测试
+
 ## 基本面选股估值（PE/PB）落地（V497）✅ 完成
 
 - fundamental：`screen_stock` indicators 补 `bps`；pipeline 新增 `_valuation`（as_of_close + eps/bps → PE/PB），`run_screen`/`scan_market` 输出 `valuation`

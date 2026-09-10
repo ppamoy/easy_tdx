@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**建议回放跳空成交（V498）**：advice_simulator 的 `simulate_advice_trade`/`simulate_advice_batch`/`simulate_advice_hold_sweep` 新增可选 `opens` 参数——提供开盘价时启用跳空成交：开盘价已越过止损/止盈则按开盘价成交（止损跳空更保守、止盈跳空更真实），否则仍按盘中 high/low 触发；CLI（online/offline advice、advice-batch、hold-sweep）与 Web advice-simulate 全链路透传 opens；补跳空多/空、未跳空回归测试。
+
+---
+
 **基本面选股估值（PE/PB）落地（V497）**：fundamental 管线补齐估值输出——`screen_stock` indicators 补 `bps`（每股净资产），pipeline 新增 `_valuation`（用目标日收盘价 as_of_close + eps/bps 计算 PE/PB，亏损/无净资产/无价格置 None），`run_screen`/`scan_market` 在附带表现时输出 `valuation` 字段；前端 FundamentalView 结果表补「PE」「PB」两列（两位小数）。补 bps 输出 + PE/PB 计算/亏损/无价格/缺失 bps 测试。
 
 ---
