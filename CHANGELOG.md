@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**多级别缠论估值（V541）**：chanlun 多级别端点 `chanlun_multi_level` 的高级别（日线）结果补 `valuation`（与单级别 chanlun_analyze 对齐），前端 ChanlunView 多级别路径同步取估值——多级别联立模式下也能看到 PE/PB。
+
+---
+
 **因子引擎 point-in-time 合并（V540）**：factor/engine `merge_fundamentals` 新增 `point_in_time=True` 选项——按披露日逐根取「已披露」最新一期 eps/bps（历史截面无前视偏差），默认仍为最新一期常量（V529 旧行为）；补 point-in-time 回归测试。
 
 ---

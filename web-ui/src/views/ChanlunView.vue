@@ -727,6 +727,7 @@ async function analyze() {
       }))
       macd.value = hr.macd && hr.macd.dif?.length ? hr.macd : null
       signalAccuracy.value = hr.signal_accuracy ?? null
+      valuation.value = hr.valuation ?? null
       // 保存多级别结果
       multiLevelResult.value = {
         confluence: data.confluence,

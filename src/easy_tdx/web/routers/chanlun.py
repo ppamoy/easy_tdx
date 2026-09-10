@@ -531,13 +531,23 @@ async def chanlun_multi_level(
         ]
         return d
 
+    # V541: 高级别（日线）补基本面估值，与单级别 chanlun_analyze 对齐
+    high_valuation: dict[str, Any] | None = None
+    try:
+        from easy_tdx.web.routers.diagnosis import _fetch_diagnosis_valuation
+
+        latest_close = float(high_result.klines[-1].close) if high_result.klines else 0.0
+        high_valuation = _fetch_diagnosis_valuation(req.market, req.code, latest_close)
+    except Exception:  # noqa: BLE001
+        high_valuation = None
+
     return cast(
         dict[str, Any],
         _to_json_safe(
             {
                 "high_level": {
                     "category": req.category,
-                    "result": fmt_result(high_result),
+                    "result": {**fmt_result(high_result), "valuation": high_valuation},
                 },
                 "low_level": {
                     "category": req.low_level,
