@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**IC 自相关守卫统一（V542）**：factor/analysis `full_report` 的 autocorr 守卫统一用有效截面（valid_ic），与 ic_mean/ic_std（V536）口径一致。
+
+---
+
 **多级别缠论估值（V541）**：chanlun 多级别端点 `chanlun_multi_level` 的高级别（日线）结果补 `valuation`（与单级别 chanlun_analyze 对齐），前端 ChanlunView 多级别路径同步取估值——多级别联立模式下也能看到 PE/PB。
 
 ---

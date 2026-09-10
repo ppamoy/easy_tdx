@@ -160,7 +160,9 @@ class FactorAnalyzer:
             top_minus_bottom = 0.0
 
         turnover = self.compute_turnover()
-        autocorr = float(ic_series.autocorr(lag=1)) if len(ic_series) > 1 else 0.0
+        # V542: autocorr 守卫统一用有效截面（valid_ic），与 ic_mean/ic_std（V536）
+        # 口径一致——旧实现用 ic_series 总长度 + isnan 兜底，语义等价但口径不一。
+        autocorr = float(valid_ic.autocorr(lag=1)) if len(valid_ic) > 1 else 0.0
 
         return FactorReport(
             name=self._factor_col,

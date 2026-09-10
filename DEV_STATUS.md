@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## IC 自相关守卫统一（V542）✅ 完成
+
+- factor/analysis `full_report` autocorr 守卫统一用有效截面（valid_ic），与 V536 口径一致
+
 ## 多级别缠论估值（V541）✅ 完成
 
 - chanlun 多级别端点高级别结果补 valuation，前端多级别路径同步取估值
