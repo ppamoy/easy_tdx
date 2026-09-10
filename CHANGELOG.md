@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**组合页完整绩效展示（V516）**：前端 PortfolioView 组合绩效摘要由「总收益/标的数/总资金」补「最大回撤」「夏普比率」「胜率」三项（V515 后端完整指标的前端落地），types.ts 补 total_performance 完整指标字段。
+
+---
+
 **组合绩效完整指标（V515）**：portfolio_engine `_aggregate_performance` 由「仅 total_return/annual_return/total_stocks/total_cash 4 字段」升级为与多策略引擎对齐——基于合并净值曲线 + 汇总成交喂给 PerformanceAnalyzer，得到与单标的回测同口径的完整 19 项指标（夏普/最大回撤/胜率/盈亏比等）；组合页可展示完整绩效。补完整指标回归测试。
 
 ---

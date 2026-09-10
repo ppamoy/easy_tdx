@@ -353,6 +353,15 @@ export interface PortfolioResult {
     annual_return: number
     total_stocks: number
     total_cash: number
+    // V515: 组合绩效完整指标（PerformanceAnalyzer 口径，空组合时缺省）
+    max_drawdown?: number
+    sharpe?: number
+    win_rate?: number
+    profit_factor?: number
+    sortino?: number
+    calmar?: number
+    total_trades?: number
+    volatility?: number
   }
   individual_results: Record<string, BacktestResult>
   equity_allocation: Record<string, number>

@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 组合页完整绩效展示（V516）✅ 完成
+
+- 前端 PortfolioView 组合绩效摘要补「最大回撤」「夏普比率」「胜率」；types.ts 补 total_performance 完整指标字段
+
 ## 组合绩效完整指标（V515）✅ 完成
 
 - portfolio_engine `_aggregate_performance` 升级为与多策略引擎对齐（PerformanceAnalyzer 完整 19 项指标），组合页可展示夏普/回撤/胜率/盈亏比等；补完整指标回归测试

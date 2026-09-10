@@ -1111,6 +1111,28 @@ async function onSave() {
                 store.portfolioResult.total_performance.total_cash.toFixed(0)
               }}</span>
             </div>
+            <div class="perf-item">
+              <span class="label">最大回撤</span>
+              <span class="value neg"
+                >{{
+                  ((store.portfolioResult.total_performance.max_drawdown ?? 0) * 100).toFixed(2)
+                }}%</span
+              >
+            </div>
+            <div class="perf-item">
+              <span class="label">夏普比率</span>
+              <span class="value">{{
+                (store.portfolioResult.total_performance.sharpe ?? 0).toFixed(2)
+              }}</span>
+            </div>
+            <div class="perf-item">
+              <span class="label">胜率</span>
+              <span class="value"
+                >{{
+                  ((store.portfolioResult.total_performance.win_rate ?? 0) * 100).toFixed(1)
+                }}%</span
+              >
+            </div>
           </div>
         </section>
 
