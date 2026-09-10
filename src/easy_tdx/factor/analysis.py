@@ -145,11 +145,16 @@ class FactorAnalyzer:
         quantile_returns = {
             f"q{i + 1}": float(quantile_means.iloc[i]) for i in range(len(quantile_means))
         }
-        # V518: 顶部层用最高分位 q{n_quantiles}，而非硬编码 q5——
-        # 当 n_quantiles != 5（如 10 分位）时旧实现把 q5 当中位误当顶层。
-        top_minus_bottom = quantile_returns.get(
-            f"q{self._n_quantiles}", 0.0
-        ) - quantile_returns.get("q1", 0.0)
+        # V518/V533: 顶底收益用实际有效的最高/最低分位。V518 已把硬编码 q5 改为
+        # q{n_quantiles}；V533 进一步处理 qcut 因重复值丢弃分位的情形——此时
+        # q{n_quantiles} 为 NaN，应回退到实际存在的最高分位，而非返回 NaN。
+        valid_returns = {k: v for k, v in quantile_returns.items() if not np.isnan(v)}
+        if len(valid_returns) >= 2:
+            top_key = max(valid_returns, key=lambda k: int(k[1:]))
+            bottom_key = min(valid_returns, key=lambda k: int(k[1:]))
+            top_minus_bottom = valid_returns[top_key] - valid_returns[bottom_key]
+        else:
+            top_minus_bottom = 0.0
 
         turnover = self.compute_turnover()
         autocorr = float(ic_series.autocorr(lag=1)) if len(ic_series) > 1 else 0.0

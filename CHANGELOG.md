@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**分层顶底收益丢分位修复（V533）**：factor/analysis `full_report` 的 `top_minus_bottom` 在 qcut 因重复值丢弃分位时（q{n_quantiles} 为 NaN）原返回 NaN；改为回退到实际存在的最高/最低非 NaN 分位。补丢分位回归测试。
+
+---
+
 **选股验证符号规范化统一市场推断（V532）**：web/routers/screening `_norm` 的 6 位裸代码市场推断由「6→SH 其余→请求 market」改为复用 `_market_from_code`（与前端 detectMarket / sina / gpcw 口径一致），北交所/9 开头不再被误判。
 
 ---

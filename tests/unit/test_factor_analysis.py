@@ -139,6 +139,27 @@ class TestFactorAnalyzerReport:
         expected = report.quantile_returns["q10"] - report.quantile_returns["q1"]
         assert abs(report.top_minus_bottom - expected) < 1e-9
 
+    def test_top_minus_bottom_dropped_quantile(self, monkeypatch):
+        """V533: qcut 丢分位（q{n} 为 NaN）时顶底收益回退到实际最高分位。"""
+        fd, rd = _make_factor_and_return(ic=0.2)
+        analyzer = FactorAnalyzer(
+            fd, rd, factor_col="test_factor", return_col="forward_5d", n_quantiles=5
+        )
+        # 模拟重复值导致 qcut 丢分位：q4/q5 全 NaN
+        qr = pd.DataFrame(
+            {
+                "q1": [0.01, 0.01],
+                "q2": [0.02, 0.02],
+                "q3": [0.05, 0.05],
+                "q4": [np.nan, np.nan],
+                "q5": [np.nan, np.nan],
+            }
+        )
+        monkeypatch.setattr(analyzer, "compute_quantile_returns", lambda: qr)
+        report = analyzer.full_report()
+        # 顶底 = q3 - q1 = 0.05 - 0.01 = 0.04（跳过 NaN 的 q4/q5）
+        assert abs(report.top_minus_bottom - 0.04) < 1e-9
+
 
 class TestFactorAnalyzerDecay:
     def test_decay_returns_dataframe(self):
