@@ -40,6 +40,15 @@ def encode_daily_bar(
         32 字节的二进制记录。
     """
     date_int = bar.year * 10000 + bar.month * 100 + bar.day
+    vol_int = int(round(bar.vol / vol_coeff))
+    # V538: 高流动性标的成交量编码可能超出 .day 格式 uint32 上限（如平安银行
+    # 日成交量 5.89 亿股，A 股 vol_coeff=0.01 → 编码 589 亿），提前给出可读报错，
+    # 而非 struct.pack 的隐晦 'I' format 报错。
+    if vol_int < 0 or vol_int > 0xFFFFFFFF:
+        raise ValueError(
+            f"成交量 {bar.vol} 编码为 {vol_int} 超出 .day 格式 uint32 范围"
+            f"（vol_coeff={vol_coeff}），请检查成交量单位/系数"
+        )
     return _DAILY_FMT.pack(
         date_int,
         int(round(bar.open / price_coeff)),
@@ -47,7 +56,7 @@ def encode_daily_bar(
         int(round(bar.low / price_coeff)),
         int(round(bar.close / price_coeff)),
         bar.amount,  # float32, 由 struct 自动截断
-        int(round(bar.vol / vol_coeff)),
+        vol_int,
         0,  # reserved
     )
 

@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 日线写入成交量溢出报错（V538）✅ 完成
+
+- offline/write_daily `encode_daily_bar` 成交量溢出 uint32 时抛出可读 ValueError（原隐晦 struct 报错）；补溢出报错测试
+
 ## 年化函数更名（V537）✅ 完成
 
 - fundamental/screener `_annualize_pct`→`_annualize`（旧名保留别名兼容）

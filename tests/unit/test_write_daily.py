@@ -5,6 +5,8 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
+import pytest
+
 from easy_tdx.models.bar import SecurityBar
 from easy_tdx.offline.daily_bar import (
     _DAILY_FMT,
@@ -120,6 +122,12 @@ class TestEncodeDailyBar:
         result = encode_daily_bar(bar, price_coeff=0.01, vol_coeff=1.0)
         vol_int = struct.unpack_from("<I", result, 24)[0]
         assert vol_int == 123456789
+
+    def test_volume_overflow_raises_clear_error(self) -> None:
+        """V538: 成交量编码溢出 uint32 时给出可读 ValueError（而非隐晦 struct 报错）。"""
+        bar = _make_bar(vol=5e9)  # 50 亿股 → /0.01 = 5000 亿 > uint32 上限
+        with pytest.raises(ValueError, match="uint32"):
+            encode_daily_bar(bar, price_coeff=0.01, vol_coeff=0.01)
 
     def test_amount_as_float32(self) -> None:
         bar = _make_bar(amount=1_025_000.0)

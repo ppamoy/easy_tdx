@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**日线写入成交量溢出报错（V538）**：offline/write_daily `encode_daily_bar` 在成交量编码超出 .day 格式 uint32 上限时（高流动性标的，如平安银行日成交量 5.89 亿股）提前抛出可读 ValueError，而非隐晦的 struct.pack 'I' 报错；补溢出报错测试。
+
+---
+
 **年化函数更名（V537）**：fundamental/screener 的 `_annualize_pct` 更名为 `_annualize`（该函数同时用于 ROE 百分数与营收绝对值，「pct」命名有误导），保留旧名作别名兼容。
 
 ---
