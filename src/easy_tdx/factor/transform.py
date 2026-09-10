@@ -29,8 +29,18 @@ def winsorize(
             if method == "mad":
                 median = valid.median()
                 mad = (valid - median).abs().median() * 1.4826
-                lower = median - threshold * mad
-                upper = median + threshold * mad
+                if mad <= 0:
+                    # V505: MAD 退化（超过半数取值相同）时回退标准差，避免
+                    # lower==upper==median 把全部值误裁到中位数、抹平真实离群点
+                    mean = valid.mean()
+                    std = valid.std()
+                    if std <= 0 or pd.isna(std):
+                        return group
+                    lower = mean - threshold * std
+                    upper = mean + threshold * std
+                else:
+                    lower = median - threshold * mad
+                    upper = median + threshold * mad
             elif method == "sigma":
                 mean = valid.mean()
                 std = valid.std()

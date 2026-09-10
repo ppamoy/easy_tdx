@@ -49,6 +49,16 @@ class TestWinsorize:
         assert len(result) == len(df)
         assert list(result.columns) == list(df.columns)
 
+    def test_mad_degenerate_falls_back_to_sigma(self):
+        """V505: MAD=0（多数值相同）时回退标准差，不把离群值误裁到中位数。"""
+        # 29 个 0 + 1 个 100：中位数 0，MAD=0 → 旧实现会把 100 抹平到 0
+        df = pd.DataFrame({"momentum_20d": [0.0] * 29 + [100.0]})
+        result = winsorize(df, ["momentum_20d"], method="mad", threshold=3.0)
+        # 回退 sigma 后离群值被裁到有限上界，但仍 > 0（未被抹平）
+        assert result["momentum_20d"].max() > 0
+        # 大多数值保持 0 不变
+        assert (result["momentum_20d"] == 0).sum() >= 29
+
 
 class TestZscore:
     def test_cross_section_standardization(self):
