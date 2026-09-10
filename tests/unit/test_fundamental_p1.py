@@ -164,6 +164,7 @@ class TestScreener:
         sc, details = score_tree(row, pool_size=1)
         roe_detail = next(d for d in details if "ROE" in d.reason)
         assert roe_detail.score == 30
+        assert "年化" in roe_detail.reason  # V547: 明细明示年化口径
         assert sc >= 60
         # 年报报告期不放大
         assert _annualize_pct(10.0, date(2026, 3, 31)) == 40.0

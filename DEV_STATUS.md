@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 树型 ROE 明细明示年化（V547）✅ 完成
+
+- fundamental/screener `score_tree` ROE 明细改为「年化ROE」，与营收/EPS 年化明示口径一致；补明示断言
+
 ## 因子衰减守卫统一（V546）✅ 完成
 
 - factor/analysis `compute_decay` 自相关守卫统一用有效截面（dropna），与 V536/V542 口径一致

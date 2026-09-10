@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树型 ROE 明细明示年化（V547）**：fundamental/screener `score_tree` 的 ROE 明细改为「年化ROE」（V507 年化后），与营收（V543）/EPS（V544）的年化明示口径一致；补明示断言。
+
+---
+
 **因子衰减守卫统一（V546）**：factor/analysis `compute_decay` 的自相关守卫统一用有效截面（dropna），与 V536/V542 口径一致。
 
 ---

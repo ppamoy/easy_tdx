@@ -135,18 +135,19 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         details.append(_contrib(0, 10, "营收规模偏小"))
 
     if roe is not None:
+        # V547: ROE 为年化口径（V507），明示「年化」避免与单季 ROE 混淆
         if roe >= 20:
             total += 30
-            details.append(_contrib(30, 30, f"ROE {roe:.1f}%≥20%（极强）"))
+            details.append(_contrib(30, 30, f"年化ROE {roe:.1f}%≥20%（极强）"))
         elif roe >= 15:
             total += 24
-            details.append(_contrib(24, 30, f"ROE {roe:.1f}%≥15%（优秀）"))
+            details.append(_contrib(24, 30, f"年化ROE {roe:.1f}%≥15%（优秀）"))
         elif roe >= 10:
             total += 15
-            details.append(_contrib(15, 30, f"ROE {roe:.1f}%≥10%（中等）"))
+            details.append(_contrib(15, 30, f"年化ROE {roe:.1f}%≥10%（中等）"))
         else:
             total += 4
-            details.append(_contrib(4, 30, f"ROE {roe:.1f}%<10%（不足）"))
+            details.append(_contrib(4, 30, f"年化ROE {roe:.1f}%<10%（不足）"))
     else:
         details.append(_contrib(0, 30, "无 ROE 数据"))
 
