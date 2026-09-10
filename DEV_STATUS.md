@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 因子引擎 point-in-time 合并（V540）✅ 完成
+
+- factor/engine `merge_fundamentals` 新增 point_in_time 选项（按披露日逐根取已披露最新一期，历史截面无前视偏差）；补 point-in-time 回归测试
+
 ## 粮型/菜型分红能力用每股口径（V539）✅ 完成
 
 - fundamental/screener `score_grain`/`score_vegetable` 分红/现金流判据改用每股经营现金流 ocf_ps（缺省回退总量口径）；补每股口径回归测试

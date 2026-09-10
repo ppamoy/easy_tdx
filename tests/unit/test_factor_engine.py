@@ -277,3 +277,27 @@ class TestMergeFundamentals:
         # close / eps 与 close / bps
         assert result["pe_ratio"].iloc[-1] == pytest.approx(data["000001"]["close"].iloc[-1] / 2.0)
         assert result["pb_ratio"].iloc[-1] == pytest.approx(data["000001"]["close"].iloc[-1] / 10.0)
+
+    def test_merge_point_in_time(self):
+        """V540: point_in_time=True 时 eps/bps 按披露日逐根截断（无前视偏差）。"""
+        df = pd.DataFrame(
+            {
+                "datetime": pd.to_datetime(["2026-04-01", "2026-05-01", "2026-08-20"]),
+                "close": [100.0, 110.0, 120.0],
+            }
+        )
+        frame = pd.DataFrame(
+            {
+                "code": ["000001", "000001"],
+                "report_date": pd.to_datetime(["2026-03-31", "2026-06-30"]),
+                "disclosure_date": pd.to_datetime(["2026-04-25", "2026-08-15"]),
+                "eps": [2.0, 5.0],
+                "bps": [10.0, 20.0],
+            }
+        )
+        merged = merge_fundamentals({"000001": df}, frame, point_in_time=True)
+        out = merged["000001"]
+        assert pd.isna(out["eps"].iloc[0])  # 4/01 未披露任何财报
+        assert out["eps"].iloc[1] == 2.0  # 5/01 已披露一季报
+        assert out["eps"].iloc[2] == 5.0  # 8/20 已披露中报
+        assert out["bps"].iloc[2] == 20.0

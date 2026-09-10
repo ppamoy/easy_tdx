@@ -35,20 +35,22 @@ _ALL_DATES: object = object()
 def merge_fundamentals(
     data: dict[str, pd.DataFrame],
     frame: pd.DataFrame | None,
+    *,
+    point_in_time: bool = False,
 ) -> dict[str, pd.DataFrame]:
-    """V529: 把基本面指标帧的 eps/bps 合并进 OHLCV 数据，供 PE/PB 因子使用。
+    """V529/V540: 把基本面指标帧的 eps/bps 合并进 OHLCV 数据，供 PE/PB 因子使用。
 
     打通因子引擎与基本面数据：``frame`` 为 ``build_indicator_frame`` 输出
-    （含 code/eps/bps/report_date），对每只股票取其最新一期 eps/bps 作为
-    常量列合并进它的 OHLCV DataFrame。之后即可对 ``pe_ratio``/``pb_ratio``
+    （含 code/eps/bps/report_date/disclosure_date），对每只股票取其 eps/bps
+    合并进它的 OHLCV DataFrame。之后即可对 ``pe_ratio``/``pb_ratio``
     做截面计算（V495 价值因子落地）。
-
-    注意：本函数做「最新一期」简化，适用于**当前日期截面**的估值因子计算；
-    历史截面需 point-in-time 截断（避免前视偏差），不在本函数职责内。
 
     Args:
         data: {code: OHLCV DataFrame}（须含 close 列）
         frame: 基本面指标帧（缺省/空则原样返回副本）
+        point_in_time: True 时按披露日逐根做 point-in-time 截断（每股收益/净资产
+            取「截至该 K 线日期已披露」的最新一期，历史截面无前视偏差）；False
+            时取最新一期作为常量列（仅适用于当前日期截面，V529 旧行为）。
 
     Returns:
         每只股票 df 追加了 eps/bps 列（无对应财报时为 NaN）的新字典。
@@ -58,15 +60,45 @@ def merge_fundamentals(
     out: dict[str, pd.DataFrame] = {}
     for code, df in data.items():
         sub = frame[frame["code"] == code]
-        eps: float | None = None
-        bps: float | None = None
-        if not sub.empty:
+        if sub.empty:
+            df2 = df.copy()
+            df2["eps"] = None
+            df2["bps"] = None
+            out[code] = df2
+            continue
+
+        if not point_in_time:
+            # V529 旧行为：最新一期作常量列
             sub = sub.sort_values("report_date") if "report_date" in sub.columns else sub
             eps = sub["eps"].iloc[-1] if "eps" in sub.columns else None
             bps = sub["bps"].iloc[-1] if "bps" in sub.columns else None
+            df2 = df.copy()
+            df2["eps"] = eps
+            df2["bps"] = bps
+            out[code] = df2
+            continue
+
+        # V540: point-in-time —— 按披露日逐根取「已披露」的最新一期
+        sub = sub.sort_values("disclosure_date")
+        eps_vals = sub["eps"].to_numpy(dtype=float) if "eps" in sub.columns else None
+        bps_vals = sub["bps"].to_numpy(dtype=float) if "bps" in sub.columns else None
+        disc_dates = pd.to_datetime(sub["disclosure_date"]).to_numpy()
+        dt_col = "datetime" if "datetime" in df.columns else "date"
+        df_dates = pd.to_datetime(df[dt_col]).to_numpy()
+        eps_series: list[float | None] = []
+        bps_series: list[float | None] = []
+        for dt in df_dates:
+            mask = disc_dates <= dt
+            if mask.any():
+                idx = int(mask.nonzero()[0][-1])
+                eps_series.append(float(eps_vals[idx]) if eps_vals is not None else None)
+                bps_series.append(float(bps_vals[idx]) if bps_vals is not None else None)
+            else:
+                eps_series.append(None)
+                bps_series.append(None)
         df2 = df.copy()
-        df2["eps"] = eps
-        df2["bps"] = bps
+        df2["eps"] = eps_series
+        df2["bps"] = bps_series
         out[code] = df2
     return out
 

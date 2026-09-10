@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**因子引擎 point-in-time 合并（V540）**：factor/engine `merge_fundamentals` 新增 `point_in_time=True` 选项——按披露日逐根取「已披露」最新一期 eps/bps（历史截面无前视偏差），默认仍为最新一期常量（V529 旧行为）；补 point-in-time 回归测试。
+
+---
+
 **粮型/菜型分红能力用每股口径（V539）**：fundamental/screener `score_grain`/`score_vegetable` 的「分红能力/现金流」判据改用「每股经营现金流 ocf_ps」（每股分红基础更直接），缺省回退总量口径；补每股口径回归测试。
 
 ---
