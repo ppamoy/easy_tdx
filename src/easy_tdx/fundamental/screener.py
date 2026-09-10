@@ -112,7 +112,9 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     rev_yoy = _pct(row.get("rev_yoy"))
     np_yoy = _pct(row.get("np_yoy"))
     np = row.get("net_profit")
-    revenue = row.get("revenue")
+    # V522: 营收同为年初至今累计值，一季报按报告期年化后再判「体量大」，
+    # 避免用单季营收低估龙头规模（如年营收 40 亿的公司 Q1 只 10 亿被误判「偏小」）
+    revenue = _annualize_pct(_pct(row.get("revenue")), row.get("report_date"))
 
     if np is not None and np > 0:
         total += 10

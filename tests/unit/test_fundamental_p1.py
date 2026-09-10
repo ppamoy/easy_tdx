@@ -155,6 +155,14 @@ class TestScreener:
         assert _annualize_pct(10.0, None) == 10.0
         assert _annualize_pct(None, date(2026, 3, 31)) is None
 
+    def test_tree_revenue_annualized(self):
+        """V522: 一季报营收年化后再判「体量大」，避免低估龙头规模。"""
+        # Q1 营收 50 亿 → 年化 200 亿 → 应判「体量大」
+        row = _row(**{"其中：营业收入": 5e9})
+        _, details = score_tree(row, pool_size=1)
+        rev_detail = next(d for d in details if "营收体量" in d.reason)
+        assert rev_detail.score == 10
+
     def test_screen_stock_returns_category(self):
         # 高 ROE + 高增长 + 高毛利 → 最可能是 tree
         row = _row(roe=30.0, rev_yoy=25.0, np_yoy=30.0)

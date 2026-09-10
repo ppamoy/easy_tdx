@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树型营收年化（V522）**：fundamental/screener `score_tree` 的「营收体量大」判据改为用报告期年化后的营收（同 V504/V507 口径），避免一季报单季营收低估龙头规模；补营收年化回归测试。
+
+---
+
 **gpcw 市场推断补 9 开头（V521）**：fundamental/indicators `_market_from_code` 原漏判 9 开头（900 B股被误判 SZ、920/930 北交所被误判 SZ），改为与前端 market.detectMarket / sina._build_paper_code 口径一致（北交所→BJ、沪市含 B 股→SH、其余→SZ）；补 900/920 回归测试。
 
 ---
