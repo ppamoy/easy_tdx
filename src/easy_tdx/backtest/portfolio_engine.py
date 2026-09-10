@@ -199,17 +199,18 @@ class PortfolioBacktestEngine:
         if total_cash == 0:
             return {"total_return": 0.0, "annual_return": 0.0}
 
-        # 资金加权收益率
+        # 资金加权收益率（总收益 + 年化收益各自加权，年化不再简化等于总收益）
         weighted_return = 0.0
+        weighted_annual = 0.0
         for key, result in results.items():
             alloc = allocations.get(key, 0)
             weight = alloc / total_cash
-            ret = result.performance.get("total_return", 0.0)
-            weighted_return += weight * ret
+            weighted_return += weight * result.performance.get("total_return", 0.0)
+            weighted_annual += weight * result.performance.get("annual_return", 0.0)
 
         return {
             "total_return": weighted_return,
-            "annual_return": weighted_return,  # 简化，实际应根据周期年化
+            "annual_return": weighted_annual,
             "total_stocks": len(results),
             "total_cash": total_cash,
         }

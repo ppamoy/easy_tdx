@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**组合年化收益加权（V513）**：portfolio_engine `_aggregate_performance` 的 `annual_return` 原简化为直接等于 `total_return`（非年化），改为各标的年化收益资金加权——组合页年化收益不再被高估/低估；补加权年化回归测试。
+
+---
+
 **自选池选股同分排序优化（V512）**：fundamental/pipeline `run_screen` 排序与 scan_market（V511）对齐——同分时按三维总分（tree+grain+vegetable）作次级排序键，多维度强的标的排前，避免任取。
 
 ---

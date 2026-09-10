@@ -100,6 +100,23 @@ class TestPortfolioBacktest:
         assert result.total_performance["total_return"] == 0.0
         assert len(result.individual_results) == 0
 
+    def test_aggregate_annual_return_weighted(self) -> None:
+        """V513: 组合年化收益 = 各标的年化收益加权，不再简化等于总收益。"""
+
+        class _FakeResult:
+            def __init__(self, perf: dict) -> None:
+                self.performance = perf
+
+        engine = PortfolioBacktestEngine(SimpleBuyStrategy, stocks=[], total_cash=100000)
+        results = {
+            "SZ000001": _FakeResult({"total_return": 0.5, "annual_return": 0.2}),
+            "SZ000002": _FakeResult({"total_return": 0.5, "annual_return": 0.1}),
+        }
+        alloc = {"SZ000001": 50000.0, "SZ000002": 50000.0}
+        out = engine._aggregate_performance(results, alloc)
+        assert out["total_return"] == 0.5
+        assert abs(out["annual_return"] - 0.15) < 1e-9  # (0.2+0.1)/2
+
     def test_to_dict_serializable(self) -> None:
         """结果应可序列化为字典."""
         stocks = [StockData("000001", "SZ", _make_df(100))]

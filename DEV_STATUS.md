@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 组合年化收益加权（V513）✅ 完成
+
+- portfolio_engine `_aggregate_performance` annual_return 由「简化等于 total_return」改为各标的年化收益资金加权；补加权年化回归测试
+
 ## 自选池选股同分排序优化（V512）✅ 完成
 
 - run_screen 排序与 scan_market（V511）对齐，同分按三维总分次级排序
