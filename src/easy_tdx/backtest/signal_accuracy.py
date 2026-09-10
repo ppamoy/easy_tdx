@@ -335,13 +335,18 @@ def _signal_type_stats(
             stats["avg_return"] = float(np.mean(-fwd))
             stats["median_return"] = float(np.median(-fwd))
         base = baseline[h]
-        stats["baseline_hit_rate"] = base["hit_rate"]
-        stats["baseline_avg_return"] = base["avg_return"]
-        stats["excess_hit_rate"] = (
-            float(stats["hit_rate"] - base["hit_rate"]) if stats["count"] else 0.0
-        )
+        # V503: 卖出基准对齐下跌方向（同 compute_signal_accuracy 的 V502 修复）
+        if direction == "SELL":
+            base_hit = 1.0 - float(base["hit_rate"])
+            base_ret = -float(base["avg_return"])
+        else:
+            base_hit = float(base["hit_rate"])
+            base_ret = float(base["avg_return"])
+        stats["baseline_hit_rate"] = base_hit
+        stats["baseline_avg_return"] = base_ret
+        stats["excess_hit_rate"] = float(stats["hit_rate"] - base_hit) if stats["count"] else 0.0
         stats["excess_avg_return"] = (
-            float(stats["avg_return"] - base["avg_return"]) if stats["count"] else 0.0
+            float(stats["avg_return"] - base_ret) if stats["count"] else 0.0
         )
         out["horizons"][str(h)] = stats
     out["verdict"] = _signal_type_verdict(out)

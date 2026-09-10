@@ -245,6 +245,20 @@ class TestSignalAccuracyByType:
         assert h5["hit_rate"] == pytest.approx(1.0)
         assert sell1["direction"] == "SELL"
 
+    def test_sell_type_baseline_aligned_to_downside(self) -> None:
+        """V503: 卖点类型的基准对齐下跌方向（随机空仓避跌命中 = 1 - P(涨)）。
+
+        下跌市里随机空仓避跌命中率 ≈ 1.0，卖点 100% 命中的超额应 ≈ 0。
+        """
+        closes = [100 - i * 0.5 for i in range(80)]
+        signals = [{"type": "1sell", "bar_index": 10}, {"type": "1sell", "bar_index": 30}]
+        rep = compute_signal_accuracy_by_type(closes, signals)
+        sell1 = rep["by_type"]["1sell"]
+        h5 = sell1["horizons"]["5"]
+        assert h5["hit_rate"] == pytest.approx(1.0)
+        assert h5["baseline_hit_rate"] == pytest.approx(1.0, abs=0.05)
+        assert abs(h5["excess_hit_rate"]) < 0.1
+
     def test_sell_signal_hit_uses_downside(self) -> None:
         # 卖点命中定义 = 未来下跌；上涨则 miss
         closes = [100 + i for i in range(40)]
@@ -278,4 +292,7 @@ class TestSignalAccuracyByType:
         closes = [100 - i for i in range(60)]
         signals = [{"type": "3sell", "bar_index": 10}]
         rep = compute_signal_accuracy_by_type(closes, signals)
-        assert "显著优于随机" in rep["by_type"]["3sell"]["verdict"]
+        # V503: 下跌市里卖点 100% 命中但与随机空仓相当（非「显著优于随机」）
+        verdict = rep["by_type"]["3sell"]["verdict"]
+        assert "卖出点" in verdict
+        assert "随机" in verdict
