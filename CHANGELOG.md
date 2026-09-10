@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**在线 advice CSV 补持有期列（V500）**：online advice --output csv 汇总行补 `avg_holding_bars`、逐笔明细补 `holding_bars`，与 table/md 明细及离线 CSV 对齐（V483-V485 落 simulator 后在线 CSV 漏同步）。
+
+---
+
 **基本面数据透出补全（V499）**：单标财务指标 API（/fundamental/indicator）字段补 `bps`（每股净资产，此前 indicator_values 已算但路由未透出），并抽为 `_INDICATOR_COLS` 常量便于维护；`screen_stock` indicators 补 `ocf_ps`（每股经营现金流，分红能力代理，此前同样被丢弃）。补 cols 契约 + bps/ocf_ps 输出测试。
 
 ---
