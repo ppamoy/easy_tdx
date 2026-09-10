@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**自选池选股同分排序优化（V512）**：fundamental/pipeline `run_screen` 排序与 scan_market（V511）对齐——同分时按三维总分（tree+grain+vegetable）作次级排序键，多维度强的标的排前，避免任取。
+
+---
+
 **全市场扫描同分排序优化（V511）**：fundamental/pipeline `scan_market` 排序在同分（如多只「粮型」都 100 分）时增加三维总分（tree+grain+vegetable）作次级键，让「多维度都强」的标的排前，避免仅按代码顺序任取 top_n（实测全市场扫描 top10 从任意粮型股变为中际旭创/新易盛等三维满分龙头）；补同分排序回归测试。
 
 ---

@@ -383,7 +383,14 @@ def run_screen(
                 )
             results.append(d)
     season = detect_season_for_date(target, client=client)
-    results.sort(key=lambda r: r["scores"].get(r["category"], 0), reverse=True)
+    # V512: 同分时按三维总分作次级排序（与 scan_market 的 V511 一致）
+    results.sort(
+        key=lambda r: (
+            r["scores"].get(r["category"], 0),
+            sum(float(v) for v in r["scores"].values()),
+        ),
+        reverse=True,
+    )
     return {
         "date": str(target),
         "pool_size": len(pool),
