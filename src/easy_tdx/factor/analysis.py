@@ -36,6 +36,9 @@ class FactorAnalyzer:
         return_col: str = "forward_5d",
         n_quantiles: int = 5,
     ) -> None:
+        # V531: 分位数至少 2（1 分位/非正数无意义，pd.qcut 会报错或退化）
+        if n_quantiles < 2:
+            raise ValueError(f"n_quantiles 至少为 2，当前 {n_quantiles}")
         self._factor_col = factor_col
         self._return_col = return_col
         self._n_quantiles = n_quantiles

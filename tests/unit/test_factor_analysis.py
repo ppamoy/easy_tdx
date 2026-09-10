@@ -46,6 +46,14 @@ class TestFactorReport:
 
 
 class TestFactorAnalyzerIC:
+    def test_invalid_n_quantiles_raises(self):
+        """V531: n_quantiles < 2 应显式报错。"""
+        import pytest
+
+        fd, rd = _make_factor_and_return(ic=0.1)
+        with pytest.raises(ValueError, match="n_quantiles"):
+            FactorAnalyzer(fd, rd, factor_col="test_factor", return_col="forward_5d", n_quantiles=1)
+
     def test_compute_ic_returns_series(self):
         fd, rd = _make_factor_and_return(ic=0.1)
         analyzer = FactorAnalyzer(fd, rd, factor_col="test_factor", return_col="forward_5d")

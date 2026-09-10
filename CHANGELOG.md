@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**因子分析分位数校验（V531）**：factor/analysis `FactorAnalyzer` 校验 `n_quantiles >= 2`（1 分位/非正数无意义，pd.qcut 会报错或退化）；补非法分位数报错测试。
+
+---
+
 **screen_stock ROE 年化透出（V530）**：fundamental/screener `screen_stock` 的 indicators.roe 改为报告期年化后透出（与 score_tree 打分口径一致），前端不再显示被低估的单季 ROE、与「高ROE」分类判断不再矛盾；补年化 ROE 回归测试。
 
 ---
