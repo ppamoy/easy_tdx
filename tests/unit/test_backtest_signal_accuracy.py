@@ -140,6 +140,25 @@ class TestComputeSignalAccuracy:
         assert h5["hit_rate"] == pytest.approx(1.0)
         assert h5["avg_return"] > 0  # 卖出回避了下跌，折算正收益
 
+    def test_sell_baseline_aligned_to_downside(self) -> None:
+        """V502: 卖出基准应对齐到下跌方向（随机空仓避跌命中 = 1 - P(上涨)）。
+
+        单调下跌市里，随机空仓的避跌命中率 ≈ 1.0（几乎所有窗口都下跌），
+        因此卖点 100% 命中相对基准的超额应 ≈ 0，而非旧实现的 1.0。
+        """
+        closes = [100 - i * 1.0 for i in range(60)]
+        df = _make_df(closes)
+        trades = _trades([], sell_dts=[20240116])
+        report = compute_signal_accuracy(df, trades)
+        sell = report["sell"]
+        assert sell is not None
+        h5 = sell["horizons"]["5"]
+        assert h5["hit_rate"] == pytest.approx(1.0)
+        assert h5["baseline_hit_rate"] == pytest.approx(1.0, abs=0.05)
+        assert abs(h5["excess_hit_rate"]) < 0.1
+        # 随机空仓在下跌市折算正收益 → 卖出基准收益应为正
+        assert h5["baseline_avg_return"] > 0
+
     def test_benchmark_buy_hold_and_alpha(self) -> None:
         closes = [100 + i for i in range(50)]
         df = _make_df(closes)

@@ -201,18 +201,26 @@ def compute_signal_accuracy(
             # V459: 方向对齐后的盈亏比（BUY 用 fwd，SELL 用 -fwd）
             aligned = -fwd if direction == "SELL" else fwd
             stats["profit_factor"] = _profit_factor(aligned)
-            if direction == "SELL" and len(fwd) > 0:
-                # 卖出方向：下跌为命中
+            if direction == "SELL":
+                # 卖出方向：下跌为命中。随机基准也对齐到下跌方向——
+                # 随机空仓「避跌命中」= 随机下跌概率 = 1 - P(上涨)，
+                # 随机空仓平均收益 = -随机买入平均收益（V502 修复：旧实现误用
+                # 上涨概率作基准，在单边市里高估/低估卖点择时价值）。
                 stats["hit_rate"] = float(np.mean(fwd < 0))
                 stats["avg_return"] = float(np.mean(-fwd))
                 stats["median_return"] = float(np.median(-fwd))
-            stats["baseline_hit_rate"] = base["hit_rate"]
-            stats["baseline_avg_return"] = base["avg_return"]
+                base_hit = 1.0 - float(base["hit_rate"])
+                base_ret = -float(base["avg_return"])
+            else:
+                base_hit = float(base["hit_rate"])
+                base_ret = float(base["avg_return"])
+            stats["baseline_hit_rate"] = base_hit
+            stats["baseline_avg_return"] = base_ret
             stats["excess_hit_rate"] = (
-                float(stats["hit_rate"] - base["hit_rate"]) if stats["count"] else 0.0
+                float(stats["hit_rate"] - base_hit) if stats["count"] else 0.0
             )
             stats["excess_avg_return"] = (
-                float(stats["avg_return"] - base["avg_return"]) if stats["count"] else 0.0
+                float(stats["avg_return"] - base_ret) if stats["count"] else 0.0
             )
             result["horizons"][str(h)] = stats
         return result
