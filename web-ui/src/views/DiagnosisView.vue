@@ -533,6 +533,20 @@ onMounted(() => {
             >
             <span class="sep">·</span>
             <span>{{ diagnosis.date }}</span>
+            <template v-if="diagnosis.valuation?.pe != null || diagnosis.valuation?.pb != null">
+              <span class="sep">·</span>
+              <span v-if="diagnosis.valuation?.pe != null"
+                >PE <b>{{ diagnosis.valuation.pe }}</b></span
+              >
+              <span
+                class="sep"
+                v-if="diagnosis.valuation?.pe != null && diagnosis.valuation?.pb != null"
+                >·</span
+              >
+              <span v-if="diagnosis.valuation?.pb != null"
+                >PB <b>{{ diagnosis.valuation.pb }}</b></span
+              >
+            </template>
           </div>
         </div>
       </div>

@@ -3065,6 +3065,11 @@ export interface DiagnosisResult {
   action_label: string
   action_color: string
   reason: string
+  // V525: 基本面估值（PE/PB，无缓存财报时为 null）
+  valuation?: {
+    pe: number | null
+    pb: number | null
+  } | null
   // V76: 四维验证摘要（条件236-239）
   v76_summary?: {
     structure_integrity: 'strong' | 'moderate' | 'weak' | 'invalid' | null

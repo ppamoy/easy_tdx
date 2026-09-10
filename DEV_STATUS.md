@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 诊断页估值展示（V526）✅ 完成
+
+- 前端 DiagnosisView meta-info 补「PE」「PB」，types.ts 补 DiagnosisResult.valuation 字段
+
 ## 诊断页估值（V525）✅ 完成
 
 - diagnosis 路由新增 `_fetch_diagnosis_valuation`（离线取缓存财报帧算 PE/PB），诊断响应补 `valuation` 字段

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**诊断页估值展示（V526）**：前端 DiagnosisView 的 meta-info 补「PE」「PB」两项（诊断响应 V525 的 valuation 落地），types.ts 补 DiagnosisResult.valuation 字段——诊断页技术面（缠论）与基本面（估值）同框。
+
+---
+
 **诊断页估值（V525）**：diagnosis 路由新增 `_fetch_diagnosis_valuation`——从本地缓存 gpcw 帧取最近一期财报算 PE/PB（EPS 按报告期年化，离线优先、无缓存返回 None 不阻断），诊断响应补 `valuation` 字段；实测茅台 PE=18.9/PB=6.7、五粮液 PE=24.4/PB=3.6、宁德 PE=9.5/PB=2.2。
 
 ---
