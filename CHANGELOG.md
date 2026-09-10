@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**V102 决策支持 ATR 窗口修复（V494）**：mmd_v102.py `_calc_decision_support_enhanced` 的止损 ATR 原误取 K 线窗口「最前 14 根」（历史早期波动），改为「最近 14 根」——止损宽度现在反映当前波动率（ATR 止损的本意）；补 ATR 窗口回归测试（前静后烈场景止损应取近期宽幅）。
+
+---
+
 **树型选股变量命名修正（V493）**：fundamental/screener.py `score_tree` 中取营收的变量由误导性命名 `assets` 改为 `revenue`，与「营收体量大」打分语义一致（纯重构，行为不变）。
 
 ---

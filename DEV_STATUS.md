@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## V102 决策支持 ATR 窗口修复（V494）✅ 完成
+
+- mmd_v102.py `_calc_decision_support_enhanced` 止损 ATR 由「最前 14 根」改为「最近 14 根」，止损宽度反映当前波动率；补 ATR 窗口回归测试
+
 ## 树型选股变量命名修正（V493）✅ 完成
 
 - fundamental/screener.py `score_tree` 营收变量 `assets`→`revenue`（纯重构）

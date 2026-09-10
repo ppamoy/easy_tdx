@@ -173,6 +173,24 @@ class TestDecisionSupportEnhanced:
 
         assert "非3买/3卖信号" in result.get("action_recommendation", "")
 
+    def test_atr_uses_recent_window(self):
+        """V494: 止损 ATR 应取最近 14 根（反映当前波动），而非窗口最前 14 根。"""
+        mmd = create_mock_mmd(MMDType.BUY_3, 29)
+        mmd.bi.low = 80.0  # 笔低点足够低，让 ATR 项主导止损
+        mmd.zs = MagicMock()
+        mmd.zs.zg = 110.0
+        mmd.zs.zd = 100.0
+        closes = [100.0] * 30
+        # 前 16 根平静（TR≈1），后 14 根剧烈（TR≈5）
+        highs = [100.5] * 16 + [102.5] * 14
+        lows = [99.5] * 16 + [97.5] * 14
+
+        result = _calc_decision_support_enhanced(mmd, closes, highs, lows, None, None)
+
+        # 最近 ATR≈5 → stop = max(80*0.98, 100 - 5*2) = max(78.4, 90.0) = 90.0
+        # 若误取最早 14 根（ATR≈1）→ stop = max(78.4, 98.0) = 98.0
+        assert result["stop_loss"] == pytest.approx(90.0, abs=0.5)
+
 
 class TestHistoricalPatternMatching:
     """测试历史模式匹配（条件267）。"""

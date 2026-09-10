@@ -280,11 +280,12 @@ def _calc_decision_support_enhanced(
         bi_high = mmd.bi.high if mmd.bi else current_price
         latest_close = closes[-1]
 
-        # 计算 ATR
+        # 计算 ATR（最近 14 根，反映当前波动率；V494 修复：旧实现误取窗口最前 14 根）
         atr = 0.0
-        if highs and lows and len(closes) >= 14:
+        if highs and lows and len(closes) >= 2:
+            lookback = min(14, len(closes) - 1)
             tr_list = []
-            for i in range(1, min(15, len(closes))):
+            for i in range(len(closes) - lookback, len(closes)):
                 high = highs[i]
                 low = lows[i]
                 prev_close = closes[i - 1]
