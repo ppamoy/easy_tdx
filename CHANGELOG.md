@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+**量价相关性因子（V496）**：factor/builtin/volume.py 新增 `vol_price_corr`（20 日收益率与成交量滚动相关系数，正值=上涨放量/下跌缩量的健康量价配合），补齐 A 股选股「量价背离」监测维度；补注册 + 有界性 + 同向趋势方向性测试。
+
+---
+
+**价值类因子落地（V495）**：factor/builtin/value.py 的 `pe_ratio`/`pb_ratio` 由死占位（恒 NaN）改为真实可算——df 携带 `eps`/`bps` 基本面列时按 `close/eps`、`close/bps` 计算，非正分母（亏损/无净资产）置 NaN，未携带列时返回全 NaN（数据缺失语义）；补 PE/PB 计算/缺失/负 eps 测试。
+
+---
+
 **V102 决策支持 ATR 窗口修复（V494）**：mmd_v102.py `_calc_decision_support_enhanced` 的止损 ATR 原误取 K 线窗口「最前 14 根」（历史早期波动），改为「最近 14 根」——止损宽度现在反映当前波动率（ATR 止损的本意）；补 ATR 窗口回归测试（前静后烈场景止损应取近期宽幅）。
 
 ---

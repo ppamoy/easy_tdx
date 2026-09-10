@@ -61,3 +61,17 @@ class AmountMARatio(Factor):
         ma5 = amt.rolling(5).mean()
         ma20 = amt.rolling(20).mean()
         return ma5 / ma20.replace(0, np.nan)
+
+
+@register_factor
+class VolPriceCorr(Factor):
+    name = "vol_price_corr"
+    category = "volume"
+    description = "量价相关性（20 日收益率与成交量的滚动相关系数，正值=上涨放量健康）"
+    inputs = ("close", "vol")
+
+    def compute(self, df: pd.DataFrame) -> pd.Series:
+        ret = df["close"].pct_change()
+        vol = df["vol"]
+        # pandas 滚动相关：窗口内收益率与成交量同步性，捕捉「量价配合/背离」
+        return ret.rolling(20).corr(vol)

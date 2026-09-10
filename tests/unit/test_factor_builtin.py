@@ -59,6 +59,7 @@ class TestAutoRegistration:
         assert "obv_trend" in FACTORY_REGISTRY
         assert "vol_surge" in FACTORY_REGISTRY
         assert "amount_ma_ratio" in FACTORY_REGISTRY
+        assert "vol_price_corr" in FACTORY_REGISTRY
 
     def test_technical_factors_registered(self):
         assert "macd_hist_signal" in FACTORY_REGISTRY
@@ -189,6 +190,76 @@ class TestVolumeCompute:
         df = _make_df()
         result = f.compute(df)
         assert len(result) == len(df)
+
+    def test_vol_price_corr_bounded(self):
+        f = get_factor("vol_price_corr")()
+        df = _make_df()
+        result = f.compute(df)
+        valid = result.dropna()
+        assert (valid >= -1).all()
+        assert (valid <= 1).all()
+        # 前 20 根无窗口数据 → NaN
+        assert np.isnan(result.iloc[18])
+
+    def test_vol_price_corr_confirming_trend_positive(self):
+        """上涨日放量、下跌日缩量 → 量价正相关。"""
+        f = get_factor("vol_price_corr")()
+        rng = np.random.default_rng(0)
+        n = 40
+        ret = rng.normal(0, 0.02, n)
+        close = 10.0 * np.cumprod(1.0 + ret)
+        # 成交量与收益率同向（放量上涨 / 缩量下跌）+ 少量噪声
+        vol = 1_000_000.0 + 20_000_000.0 * ret + rng.normal(0, 200_000.0, n)
+        df = pd.DataFrame({"close": close, "vol": vol})
+        result = f.compute(df)
+        assert result.iloc[-1] > 0
+
+
+# ── Value compute ───────────────────────────────────────────────────
+
+
+class TestValueCompute:
+    def test_pe_missing_eps_returns_nan(self):
+        """V495: df 无 eps 列 → PE 全 NaN（数据缺失而非死占位）。"""
+        f = get_factor("pe_ratio")()
+        df = _make_df()
+        result = f.compute(df)
+        assert result.isna().all()
+
+    def test_pe_computes_from_eps(self):
+        """V495: df 携带 eps 列 → PE = close / eps。"""
+        f = get_factor("pe_ratio")()
+        close = np.array([10.0, 20.0, 30.0])
+        eps = np.array([2.0, 2.0, 5.0])
+        df = pd.DataFrame({"close": close, "eps": eps})
+        result = f.compute(df)
+        assert result.iloc[0] == pytest.approx(5.0)  # 10 / 2
+        assert result.iloc[1] == pytest.approx(10.0)  # 20 / 2
+        assert result.iloc[2] == pytest.approx(6.0)  # 30 / 5
+
+    def test_pe_non_positive_eps_nan(self):
+        """V495: 亏损（eps<=0）或 eps=NaN → PE 置 NaN。"""
+        f = get_factor("pe_ratio")()
+        df = pd.DataFrame({"close": [10.0, 10.0, 10.0], "eps": [0.0, -1.0, np.nan]})
+        result = f.compute(df)
+        assert result.isna().all()
+
+    def test_pb_missing_bps_returns_nan(self):
+        """V495: df 无 bps 列 → PB 全 NaN。"""
+        f = get_factor("pb_ratio")()
+        df = _make_df()
+        result = f.compute(df)
+        assert result.isna().all()
+
+    def test_pb_computes_from_bps(self):
+        """V495: df 携带 bps 列 → PB = close / bps。"""
+        f = get_factor("pb_ratio")()
+        close = np.array([10.0, 20.0])
+        bps = np.array([5.0, 8.0])
+        df = pd.DataFrame({"close": close, "bps": bps})
+        result = f.compute(df)
+        assert result.iloc[0] == pytest.approx(2.0)  # 10 / 5
+        assert result.iloc[1] == pytest.approx(2.5)  # 20 / 8
 
 
 # ── Technical compute ──────────────────────────────────────────────
