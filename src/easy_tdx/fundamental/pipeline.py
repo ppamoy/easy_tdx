@@ -171,12 +171,39 @@ def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, A
     return out
 
 
-def _valuation(ind: dict[str, Any], close: float | None) -> dict[str, float | None]:
-    """V497: 用目标日收盘价 + 每股收益/净资产计算 PE/PB 估值。
+def _annualize_eps(eps: float, report_date: Any) -> float:
+    """V504: 按报告期月数把单期 EPS 年化为全年口径（动态市盈率）。
+
+    通达信专业财务的「基本每股收益」是年初至今累计值：一季报只含 3 个月、
+    中报 6 个月、三季报 9 个月、年报 12 个月。直接用一季报 EPS 算 PE 会
+    系统性高估（如 Q1 EPS=1 的股票 PE 被算成 4 倍真实值）。
+
+    年化系数：3 月(*4)、6 月(*2)、9 月(*4/3)、12 月(*1)；无法解析报告期
+    时按年报处理（不放大，避免过度外推）。
+    """
+    month: int | None = None
+    if report_date is not None:
+        try:
+            month = pd.Timestamp(report_date).month
+        except (ValueError, TypeError):
+            month = None
+    factor = 1.0
+    if month is not None:
+        factor = {3: 4.0, 6: 2.0, 9: 4.0 / 3.0, 12: 1.0}.get(month, 1.0)
+    return eps * factor
+
+
+def _valuation(
+    ind: dict[str, Any],
+    close: float | None,
+    report_date: Any = None,
+) -> dict[str, float | None]:
+    """V497/V504: 用目标日收盘价 + 每股收益/净资产计算 PE/PB 估值。
 
     Args:
         ind: ``screen_stock`` 输出的 indicators（含 eps/bps）。
         close: 目标日收盘价（``subsequent_performance`` 返回的 ``as_of_close``）。
+        report_date: 报告期（date/str/None），用于把单期 EPS 年化（动态市盈率）。
 
     Returns:
         ``{"pe": float|None, "pb": float|None}``；无价格/亏损/无净资产时对应项为 None。
@@ -187,7 +214,8 @@ def _valuation(ind: dict[str, Any], close: float | None) -> dict[str, float | No
     eps = ind.get("eps")
     bps = ind.get("bps")
     if eps is not None and float(eps) > 0:
-        out["pe"] = round(float(close) / float(eps), 2)
+        eps_ann = _annualize_eps(float(eps), report_date)
+        out["pe"] = round(float(close) / eps_ann, 2)
     if bps is not None and float(bps) > 0:
         out["pb"] = round(float(close) / float(bps), 2)
     return out
@@ -349,8 +377,10 @@ def run_screen(
             if with_performance:
                 perf = subsequent_performance(sr.market, sr.code, target, client=client)
                 d["performance"] = perf
-                # V497: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产
-                d["valuation"] = _valuation(d["indicators"], perf.get("as_of_close"))
+                # V497/V504: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产，EPS 按报告期年化
+                d["valuation"] = _valuation(
+                    d["indicators"], perf.get("as_of_close"), sr.report_date
+                )
             results.append(d)
     season = detect_season_for_date(target, client=client)
     results.sort(key=lambda r: r["scores"].get(r["category"], 0), reverse=True)
@@ -501,8 +531,10 @@ def scan_market(
                 d["market"], d["code"], target, client=client, horizons=horizons
             )
             d["performance"] = perf
-            # V497: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产
-            d["valuation"] = _valuation(d["indicators"], perf.get("as_of_close"))
+            # V497/V504: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产，EPS 按报告期年化
+            d["valuation"] = _valuation(
+                d["indicators"], perf.get("as_of_close"), d.get("report_date")
+            )
 
     base_out.update(
         {

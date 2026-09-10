@@ -200,6 +200,41 @@ class TestValuation:
         assert v["pe"] == 15.0
         assert v["pb"] is None
 
+    def test_pe_annualized_q1(self):
+        """V504: 一季报 EPS 年化（*4）→ 动态市盈率。"""
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=1.0, bps=10.0), 40.0, report_date="2026-03-31")
+        assert v["pe"] == 10.0  # 40 / (1.0 * 4)
+
+    def test_pe_annualized_h1(self):
+        """V504: 中报 EPS 年化（*2）。"""
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=2.0, bps=10.0), 40.0, report_date="2026-06-30")
+        assert v["pe"] == 10.0  # 40 / (2.0 * 2)
+
+    def test_pe_annualized_q3(self):
+        """V504: 三季报 EPS 年化（*4/3）。"""
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=3.0, bps=10.0), 40.0, report_date="2026-09-30")
+        assert v["pe"] == 10.0  # 40 / (3.0 * 4/3)
+
+    def test_pe_annual_report_no_scaling(self):
+        """V504: 年报 EPS 不放大。"""
+        from easy_tdx.fundamental.pipeline import _valuation
+
+        v = _valuation(self._ind(eps=4.0, bps=10.0), 40.0, report_date="2026-12-31")
+        assert v["pe"] == 10.0  # 40 / 4.0
+
+    def test_annualize_eps_unparseable(self):
+        """V504: 报告期无法解析 → 按年报处理（不放大）。"""
+        from easy_tdx.fundamental.pipeline import _annualize_eps
+
+        assert _annualize_eps(2.0, None) == 2.0
+        assert _annualize_eps(2.0, "not-a-date") == 2.0
+
 
 class TestSeason:
     def _make_bars(self, up: bool = True, n: int = 120) -> tuple[list, list]:
