@@ -162,15 +162,15 @@ class PortfolioBacktestEngine:
             result = engine.run(stock.df)
             individual_results[key] = result
 
-        # 汇总整体绩效
-        total_perf = self._aggregate_performance(individual_results, allocations)
+        # 生成组合整体净值曲线（各标的按日期对齐求和）
+        combined_equity = self._build_combined_equity(individual_results, allocations)
+
+        # 汇总整体绩效（基于合并净值曲线算完整指标）
+        total_perf = self._aggregate_performance(individual_results, allocations, combined_equity)
 
         # 计算资金占比
         total_alloc = sum(allocations.values())
         equity_pct = {k: v / total_alloc if total_alloc > 0 else 0 for k, v in allocations.items()}
-
-        # 生成组合整体净值曲线（各标的按日期对齐求和）
-        combined_equity = self._build_combined_equity(individual_results, allocations)
 
         return PortfolioResult(
             total_performance=total_perf,
@@ -183,37 +183,45 @@ class PortfolioBacktestEngine:
         self,
         results: dict[str, BacktestResult],
         allocations: dict[str, float],
+        combined_equity: pd.DataFrame,
     ) -> dict[str, float]:
         """汇总所有标的的绩效为组合整体绩效。
 
-        使用资金加权方式计算组合收益率。
+        V515: 与多策略引擎对齐——把合并净值曲线和所有标的成交汇总喂给
+        PerformanceAnalyzer，得到与单标的回测同口径的完整指标（夏普/回撤/
+        胜率/盈亏比等），而非此前仅 total_return/annual_return 4 个字段。
 
         Args:
             results: 各标的回测结果
             allocations: 各标的资金分配
+            combined_equity: 合并净值曲线（_build_combined_equity 输出）
 
         Returns:
-            组合整体绩效指标
+            组合整体绩效指标（含 PerformanceAnalyzer 的 19 项 + total_stocks/total_cash）
         """
+        from easy_tdx.backtest.performance import PerformanceAnalyzer
+
         total_cash = sum(allocations.values())
-        if total_cash == 0:
-            return {"total_return": 0.0, "annual_return": 0.0}
-
-        # 资金加权收益率（总收益 + 年化收益各自加权，年化不再简化等于总收益）
-        weighted_return = 0.0
-        weighted_annual = 0.0
-        for key, result in results.items():
-            alloc = allocations.get(key, 0)
-            weight = alloc / total_cash
-            weighted_return += weight * result.performance.get("total_return", 0.0)
-            weighted_annual += weight * result.performance.get("annual_return", 0.0)
-
-        return {
-            "total_return": weighted_return,
-            "annual_return": weighted_annual,
-            "total_stocks": len(results),
+        base: dict[str, float] = {
+            "total_stocks": float(len(results)),
             "total_cash": total_cash,
         }
+        if not results or len(combined_equity) < 2:
+            base.update({"total_return": 0.0, "annual_return": 0.0})
+            return base
+
+        trade_frames = [r.trades for r in results.values() if len(r.trades) > 0]
+        all_trades = (
+            pd.concat(trade_frames, ignore_index=True)
+            if trade_frames
+            else pd.DataFrame(columns=["direction", "pnl", "rejected"])
+        )
+
+        analyzer = PerformanceAnalyzer(equity_curve=combined_equity, trades=all_trades)
+        metrics = analyzer.compute()
+        metrics["total_stocks"] = float(len(results))
+        metrics["total_cash"] = total_cash
+        return metrics
 
     def _build_combined_equity(
         self,

@@ -100,22 +100,32 @@ class TestPortfolioBacktest:
         assert result.total_performance["total_return"] == 0.0
         assert len(result.individual_results) == 0
 
-    def test_aggregate_annual_return_weighted(self) -> None:
-        """V513: 组合年化收益 = 各标的年化收益加权，不再简化等于总收益。"""
+    def test_aggregate_performance_full_metrics(self) -> None:
+        """V515: 组合绩效基于合并净值曲线算完整指标（夏普/回撤/胜率等）。"""
 
         class _FakeResult:
-            def __init__(self, perf: dict) -> None:
-                self.performance = perf
+            def __init__(self) -> None:
+                self.trades = pd.DataFrame(columns=["direction", "pnl", "rejected"])
 
         engine = PortfolioBacktestEngine(SimpleBuyStrategy, stocks=[], total_cash=100000)
-        results = {
-            "SZ000001": _FakeResult({"total_return": 0.5, "annual_return": 0.2}),
-            "SZ000002": _FakeResult({"total_return": 0.5, "annual_return": 0.1}),
-        }
+        results = {"SZ000001": _FakeResult(), "SZ000002": _FakeResult()}
         alloc = {"SZ000001": 50000.0, "SZ000002": 50000.0}
-        out = engine._aggregate_performance(results, alloc)
-        assert out["total_return"] == 0.5
-        assert abs(out["annual_return"] - 0.15) < 1e-9  # (0.2+0.1)/2
+        # 合并净值曲线：单调上涨（无回撤）
+        ce = pd.DataFrame(
+            {
+                "total": [100000.0, 101000.0, 102000.0, 103000.0],
+                "drawdown": [0.0, 0.0, 0.0, 0.0],
+                "drawdown_pct": [0.0, 0.0, 0.0, 0.0],
+            }
+        )
+        out = engine._aggregate_performance(results, alloc, ce)
+        assert out["total_return"] > 0
+        assert "sharpe" in out
+        assert "max_drawdown" in out
+        assert "win_rate" in out
+        assert "profit_factor" in out
+        assert out["total_stocks"] == 2
+        assert out["total_cash"] == 100000
 
     def test_to_dict_serializable(self) -> None:
         """结果应可序列化为字典."""

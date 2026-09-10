@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**组合绩效完整指标（V515）**：portfolio_engine `_aggregate_performance` 由「仅 total_return/annual_return/total_stocks/total_cash 4 字段」升级为与多策略引擎对齐——基于合并净值曲线 + 汇总成交喂给 PerformanceAnalyzer，得到与单标的回测同口径的完整 19 项指标（夏普/最大回撤/胜率/盈亏比等）；组合页可展示完整绩效。补完整指标回归测试。
+
+---
+
 **超额命中率 0 值显示修复（V514）**：前端 `fmtAccSigned` 对 0 值原显示 `+0.0%`（误导为正超额），改为中性 `0.0%`（仅正值显式加 `+`）——「与随机相当」不再被误读为优于随机；补 0 值边界测试。
 
 ---
