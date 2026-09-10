@@ -138,6 +138,23 @@ class TestScreener:
         sc, _ = score_vegetable(row, pool_size=1)
         assert sc >= 60
 
+    def test_tree_roe_annualized(self):
+        """V507: 一季报 ROE 年化后参与树型打分（高ROE 不被低估）。"""
+        from easy_tdx.fundamental.screener import _annualize_pct
+
+        # Q1 报告期：roe=8% → 年化 32% → 判「极强」（30 分），而非「不足」（4 分）
+        row = _row(roe=8.0)
+        sc, details = score_tree(row, pool_size=1)
+        roe_detail = next(d for d in details if "ROE" in d.reason)
+        assert roe_detail.score == 30
+        assert sc >= 60
+        # 年报报告期不放大
+        assert _annualize_pct(10.0, date(2026, 3, 31)) == 40.0
+        assert _annualize_pct(10.0, date(2026, 6, 30)) == 20.0
+        assert _annualize_pct(10.0, date(2026, 12, 31)) == 10.0
+        assert _annualize_pct(10.0, None) == 10.0
+        assert _annualize_pct(None, date(2026, 3, 31)) is None
+
     def test_screen_stock_returns_category(self):
         # 高 ROE + 高增长 + 高毛利 → 最可能是 tree
         row = _row(roe=30.0, rev_yoy=25.0, np_yoy=30.0)
@@ -511,7 +528,8 @@ class TestScanMarket:
             return {
                 "code": code,
                 "market": market,
-                "report_date": date(2026, 3, 31),
+                # V507 起 ROE 按报告期年化，故用年报报告期（roe 值为全年口径）
+                "report_date": date(2025, 12, 31),
                 "disclosure_date": dd,
                 **ind,
             }

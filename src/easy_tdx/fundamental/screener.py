@@ -88,6 +88,35 @@ def _pct(v: Any) -> float | None:
         return None
 
 
+def _annualize_pct(v: float | None, report_date: Any) -> float | None:
+    """V507: 把年初至今累计比率按报告期月数年化（ROE 等）。
+
+    通达信「净资产收益率」与 EPS 同为年初至今累计值：一季报只含 3 个月、
+    中报 6 个月、三季报 9 个月。直接用一季报 ROE 判「高ROE」会系统性低估
+    （如茅台 2026Q1 ROE 10% 实际全年约 33%）。
+
+    年化系数：3 月(*4)、6 月(*2)、9 月(*4/3)、12 月(*1)；无法解析报告期
+    按年报处理（不放大，避免过度外推）。
+    """
+    if v is None:
+        return None
+    month: int | None = None
+    if report_date is not None:
+        if hasattr(report_date, "month"):
+            month = int(report_date.month)
+        else:
+            try:
+                from datetime import datetime as _dtm
+
+                month = _dtm.fromisoformat(str(report_date)).month
+            except (ValueError, TypeError):
+                month = None
+    factor = 1.0
+    if month is not None:
+        factor = {3: 4.0, 6: 2.0, 9: 4.0 / 3.0, 12: 1.0}.get(month, 1.0)
+    return float(v) * factor
+
+
 def _contrib(score: float, max_score: float, reason: str) -> ScoreDetail:
     return ScoreDetail(name=reason.split("：")[0][:12], score=score, max=max_score, reason=reason)
 
@@ -97,7 +126,7 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     total = 0.0
     details: list[ScoreDetail] = []
 
-    roe = _pct(row.get("roe"))
+    roe = _annualize_pct(_pct(row.get("roe")), row.get("report_date"))
     gross = _pct(row.get("gross_margin"))
     rev_yoy = _pct(row.get("rev_yoy"))
     np_yoy = _pct(row.get("np_yoy"))
