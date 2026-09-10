@@ -129,7 +129,8 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         details.append(_contrib(0, 10, "亏损/无净利润：不满足树条件"))
     if revenue is not None and revenue > 1e10:
         total += 10
-        details.append(_contrib(10, 10, f"营收体量大（{revenue / 1e8:.0f} 亿）"))
+        # V543: 营收为年化口径（V522），明示「年化」避免与单季营收混淆
+        details.append(_contrib(10, 10, f"营收体量大（年化 {revenue / 1e8:.0f} 亿）"))
     else:
         details.append(_contrib(0, 10, "营收规模偏小"))
 

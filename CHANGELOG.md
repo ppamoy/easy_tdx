@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树型营收体量明示年化（V543）**：fundamental/screener `score_tree` 的「营收体量大」明细明示「年化」口径（V522 年化后），避免与单季营收混淆。
+
+---
+
 **IC 自相关守卫统一（V542）**：factor/analysis `full_report` 的 autocorr 守卫统一用有效截面（valid_ic），与 ic_mean/ic_std（V536）口径一致。
 
 ---
