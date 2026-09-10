@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**基本面页补每股指标与估值列（V501）**：FundamentalView 的选股结果表与全市场扫描表统一补「每股净资产(bps)」「每股现金流(ocf_ps)」两列；扫描表在「附带后续表现」时同步补「PE」「PB」两列（与选股表 V497 对齐），把后端 V497/V499 透出的每股指标与估值完整呈现在前端。
+
+---
+
 **在线 advice CSV 补持有期列（V500）**：online advice --output csv 汇总行补 `avg_holding_bars`、逐笔明细补 `holding_bars`，与 table/md 明细及离线 CSV 对齐（V483-V485 落 simulator 后在线 CSV 漏同步）。
 
 ---

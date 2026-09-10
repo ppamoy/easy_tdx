@@ -421,12 +421,14 @@ onMounted(() => {
               <th>分类</th>
               <th>报告期</th>
               <th>EPS</th>
+              <th>每股净资产</th>
               <th>ROE%</th>
               <th>毛利率%</th>
               <th>净利率%</th>
               <th>负债率%</th>
               <th>营收同比%</th>
               <th>净利同比%</th>
+              <th>每股现金流</th>
               <th>PE</th>
               <th>PB</th>
               <th>+20日%</th>
@@ -451,6 +453,7 @@ onMounted(() => {
               </td>
               <td>{{ r.report_date }}</td>
               <td>{{ fmt(r.indicators.eps) }}</td>
+              <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe) }}</td>
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
               <td>{{ fmt(r.indicators.net_margin) }}</td>
@@ -461,6 +464,7 @@ onMounted(() => {
               <td :style="{ color: colorBy(r.indicators.np_yoy) }">
                 {{ fmt(r.indicators.np_yoy) }}
               </td>
+              <td>{{ fmt(r.indicators.ocf_ps) }}</td>
               <td>{{ fmtVal(r.valuation?.pe) }}</td>
               <td>{{ fmtVal(r.valuation?.pb) }}</td>
               <td :style="{ color: colorBy(r.performance.ret_20d) }">
@@ -737,12 +741,16 @@ onMounted(() => {
               <th>数据源</th>
               <th>报告期</th>
               <th>EPS</th>
+              <th>每股净资产</th>
               <th>ROE%</th>
               <th>毛利率%</th>
               <th>净利率%</th>
               <th>负债率%</th>
               <th>营收同比%</th>
               <th>净利同比%</th>
+              <th>每股现金流</th>
+              <th v-if="scanWithPerf">PE</th>
+              <th v-if="scanWithPerf">PB</th>
               <th v-if="scanWithPerf">+20日%</th>
               <th v-if="scanWithPerf">+60日%</th>
               <th v-if="scanWithPerf">+250日%</th>
@@ -771,6 +779,7 @@ onMounted(() => {
               </td>
               <td>{{ r.report_date }}</td>
               <td>{{ fmt(r.indicators.eps) }}</td>
+              <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe) }}</td>
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
               <td>{{ fmt(r.indicators.net_margin) }}</td>
@@ -781,6 +790,9 @@ onMounted(() => {
               <td :style="{ color: colorBy(r.indicators.np_yoy) }">
                 {{ fmt(r.indicators.np_yoy) }}
               </td>
+              <td>{{ fmt(r.indicators.ocf_ps) }}</td>
+              <td v-if="scanWithPerf">{{ fmtVal(r.valuation?.pe) }}</td>
+              <td v-if="scanWithPerf">{{ fmtVal(r.valuation?.pb) }}</td>
               <td v-if="scanWithPerf" :style="{ color: colorBy(r.performance?.ret_20d) }">
                 {{ fmt(r.performance?.ret_20d) }}
               </td>
