@@ -131,7 +131,10 @@ class FactorAnalyzer:
         ic_mean = float(ic_series.mean()) if len(ic_series) > 0 else 0.0
         ic_std = float(ic_series.std()) if len(ic_series) > 1 else 0.0
         ir = ic_mean / ic_std if ic_std > 0 else 0.0
-        ic_positive_rate = float((ic_series > 0).mean()) if len(ic_series) > 0 else 0.0
+        # V523: IC 为正占比应只统计有效截面（dropna），旧实现 (ic_series > 0).mean()
+        # 把 NaN 截面（样本不足）误当作「非正」，系统性低估 IC 为正占比。
+        valid_ic = ic_series.dropna()
+        ic_positive_rate = float((valid_ic > 0).mean()) if len(valid_ic) > 0 else 0.0
 
         quantile_means = qr.mean()
         quantile_returns = {

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**IC 为正占比排除 NaN（V523）**：factor/analysis `full_report` 的 `ic_positive_rate` 原用 `(ic_series > 0).mean()`，把 NaN 截面（样本不足）误当作「非正」，系统性低估 IC 为正占比；改为 `dropna()` 后只统计有效截面。补 NaN 截面回归测试。
+
+---
+
 **树型营收年化（V522）**：fundamental/screener `score_tree` 的「营收体量大」判据改为用报告期年化后的营收（同 V504/V507 口径），避免一季报单季营收低估龙头规模；补营收年化回归测试。
 
 ---

@@ -99,6 +99,18 @@ class TestFactorAnalyzerReport:
         report = analyzer.full_report()
         assert report.ic_positive_rate > 0.5
 
+    def test_ic_positive_rate_excludes_nan(self, monkeypatch):
+        """V523: ic_positive_rate 只统计有效截面（NaN 截面不算「非正」）。"""
+        fd, rd = _make_factor_and_return(ic=0.3)
+        analyzer = FactorAnalyzer(fd, rd, factor_col="test_factor", return_col="forward_5d")
+        # 模拟部分截面样本不足（IC=NaN）
+        monkeypatch.setattr(
+            analyzer, "compute_ic", lambda *a, **k: pd.Series([0.1, float("nan"), 0.2, 0.3])
+        )
+        report = analyzer.full_report()
+        # 3 个有效截面全部为正 → 1.0（而非把 NaN 当非正算成 0.75）
+        assert report.ic_positive_rate == 1.0
+
     def test_top_minus_bottom_uses_top_quantile(self):
         """V518: top_minus_bottom 用最高分位 q{n_quantiles}，而非硬编码 q5。"""
         fd, rd = _make_factor_and_return(n_dates=50, n_stocks=30, ic=0.2)

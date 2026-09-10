@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## IC 为正占比排除 NaN（V523）✅ 完成
+
+- factor/analysis `full_report` ic_positive_rate 由「NaN 算非正」改为 dropna 后只统计有效截面；补 NaN 截面回归测试
+
 ## 树型营收年化（V522）✅ 完成
 
 - fundamental/screener `score_tree`「营收体量大」判据用报告期年化营收（同 V504/V507 口径）；补营收年化回归测试
