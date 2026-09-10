@@ -190,7 +190,8 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     # V539: 分红能力用「每股经营现金流」更直接（每股分红基础），缺省回退总量口径
     ocf = row.get("ocf_ps") if row.get("ocf_ps") is not None else row.get("ocf")
     debt = _pct(row.get("debt_ratio"))
-    eps = row.get("eps")
+    # V544: 每股收益年化后展示（分红能力按年计，一季报单季 EPS 会低估年度分红能力）
+    eps = _annualize(_pct(row.get("eps")), row.get("report_date"))
     np_yoy = _pct(row.get("np_yoy"))
 
     if np is not None and np > 0:
@@ -228,7 +229,7 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
 
     if eps is not None and eps > 0:
         total += 20
-        details.append(_contrib(20, 20, f"每股收益 {eps:.2f} 元（有分红能力）"))
+        details.append(_contrib(20, 20, f"每股收益（年化）{eps:.2f} 元（有分红能力）"))
     else:
         details.append(_contrib(0, 20, "EPS 非正"))
 

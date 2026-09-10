@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**粮型每股收益年化展示（V544）**：fundamental/screener `score_grain` 的「每股收益」改为年化后展示（分红能力按年计，一季报单季 EPS 会低估年度分红能力），明细明示「年化」；补年化 EPS 回归测试。
+
+---
+
 **树型营收体量明示年化（V543）**：fundamental/screener `score_tree` 的「营收体量大」明细明示「年化」口径（V522 年化后），避免与单季营收混淆。
 
 ---

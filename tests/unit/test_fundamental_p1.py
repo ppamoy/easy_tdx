@@ -141,6 +141,15 @@ class TestScreener:
         assert "每股" in ocf_detail.reason
         assert ocf_detail.score == 20
 
+    def test_grain_eps_annualized(self):
+        """V544: 粮型每股收益年化展示（分红能力按年计）。"""
+        row = _row(**{"基本每股收益": 2.0})
+        _, details = score_grain(row, pool_size=1)
+        eps_detail = next(d for d in details if "每股收益" in d.reason)
+        assert eps_detail.score == 20
+        assert "年化" in eps_detail.reason
+        assert "8.00" in eps_detail.reason  # 2.0 * 4（一季报年化）
+
     def test_vegetable_high_growth(self):
         row = _row(rev_yoy=40.0, np_yoy=60.0, net_margin=12.0)
         sc, _ = score_vegetable(row, pool_size=1)
