@@ -164,6 +164,22 @@ class TestCombinedEquity:
         assert {"datetime", "total", "drawdown", "drawdown_pct"} <= cols
         assert result.combined_equity["total"].iloc[0] > 0
 
+    def test_combined_equity_drawdown_non_negative(self) -> None:
+        """V510: 组合净值的 drawdown 应为非负（peak - total），与单标的口径一致。"""
+        stocks = [
+            StockData("000001", "SZ", _make_df(100, seed=42)),
+            StockData("600000", "SH", _make_df(100, seed=99)),
+        ]
+        engine = PortfolioBacktestEngine(
+            strategy=SimpleBuyStrategy,
+            stocks=stocks,
+            total_cash=200000,
+        )
+        result = engine.run()
+        ce = result.combined_equity
+        assert (ce["drawdown"] >= 0).all()
+        assert (ce["drawdown_pct"] >= 0).all()
+
     def test_combined_equity_date_alignment(self) -> None:
         """日期范围不同的标的应正确对齐（forward-fill）."""
         stocks = [

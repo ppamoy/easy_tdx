@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**组合净值回撤符号修复（V510）**：portfolio_engine `_build_combined_equity` 的 `drawdown` 原为 `total - peak`（负数）且 `drawdown_pct` 除以初始资金，与 PortfolioTracker 的 `peak - total`（正数、除以运行峰值）口径不一致；改为与单标的口径一致（正数 + 除以运行峰值）。补组合净值 drawdown 非负回归测试。
+
+---
+
 **引擎 bar 索引取位置修复（V509）**：engine `_find_bar_index` 原用 `.idxmax()` 返回 label，当 df.index 非默认 RangeIndex 时 label != position，ExecutionModel（TWAP/VWAP/Limit）路径会取错 bar；改为 `.argmax()` 返回位置索引（与 orders.py `_find_bar_index` 的既有修复一致）。补非默认 index 回归测试。
 
 ---

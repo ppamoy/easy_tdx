@@ -256,12 +256,11 @@ class PortfolioBacktestEngine:
         aligned = aligned.ffill().fillna(0)
         total = aligned.sum(axis=1)
 
-        # 计算回撤
+        # 计算回撤（与 PortfolioTracker.equity_curve 同口径：正数 = 距峰值跌幅，
+        # 百分比 = drawdown / 运行峰值；peak=0 时记 0）
         peak = total.cummax()
-        drawdown = total - peak
-        # drawdown_pct：以初始总资金为基准（peak 的首个值），避免除零
-        initial = peak.iloc[0] if len(peak) > 0 and peak.iloc[0] != 0 else 1.0
-        drawdown_pct = drawdown / initial
+        drawdown = peak - total
+        drawdown_pct = drawdown / peak.where(peak != 0, 1.0)
 
         return pd.DataFrame(
             {
