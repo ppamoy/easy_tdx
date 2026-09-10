@@ -99,6 +99,17 @@ class TestFactorAnalyzerReport:
         report = analyzer.full_report()
         assert report.ic_positive_rate > 0.5
 
+    def test_top_minus_bottom_uses_top_quantile(self):
+        """V518: top_minus_bottom 用最高分位 q{n_quantiles}，而非硬编码 q5。"""
+        fd, rd = _make_factor_and_return(n_dates=50, n_stocks=30, ic=0.2)
+        analyzer = FactorAnalyzer(
+            fd, rd, factor_col="test_factor", return_col="forward_5d", n_quantiles=10
+        )
+        report = analyzer.full_report()
+        assert len(report.quantile_returns) == 10
+        expected = report.quantile_returns["q10"] - report.quantile_returns["q1"]
+        assert abs(report.top_minus_bottom - expected) < 1e-9
+
 
 class TestFactorAnalyzerDecay:
     def test_decay_returns_dataframe(self):

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**因子分层收益顶底修复（V518）**：factor/analysis `full_report` 的 `top_minus_bottom` 原硬编码 `q5 - q1`，当 `n_quantiles != 5`（如 10 分位）时把中位层 q5 误当顶层；改为用最高分位 `q{n_quantiles} - q1`。补 10 分位回归测试。
+
+---
+
 **年化逻辑抽共享（V517）**：fundamental 的年化逻辑（按报告期月数把年初至今累计值年化，EPS/ROE 共用）抽取为 `indicators.annualize_ytd` 共享纯函数，`pipeline._annualize_eps`（V504 PE）与 `screener._annualize_pct`（V507 ROE）改为委托，消除两处重复实现。
 
 ---

@@ -137,7 +137,11 @@ class FactorAnalyzer:
         quantile_returns = {
             f"q{i + 1}": float(quantile_means.iloc[i]) for i in range(len(quantile_means))
         }
-        top_minus_bottom = quantile_returns.get("q5", 0.0) - quantile_returns.get("q1", 0.0)
+        # V518: 顶部层用最高分位 q{n_quantiles}，而非硬编码 q5——
+        # 当 n_quantiles != 5（如 10 分位）时旧实现把 q5 当中位误当顶层。
+        top_minus_bottom = quantile_returns.get(
+            f"q{self._n_quantiles}", 0.0
+        ) - quantile_returns.get("q1", 0.0)
 
         turnover = self.compute_turnover()
         autocorr = float(ic_series.autocorr(lag=1)) if len(ic_series) > 1 else 0.0
