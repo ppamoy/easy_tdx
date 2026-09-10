@@ -321,11 +321,12 @@ class PerformanceAnalyzer:
     def _compute_max_dd_duration(self, total: NDArray, drawdown: NDArray) -> int:
         """计算最大回撤持续时间。
 
-        找到最大回撤点，然后计算从回撤前的高点到该点的 bar 数。
+        找到最大回撤点（谷底），然后计算从回撤前的高点（历史峰值最近一次
+        出现处，即该轮回撤的起点）到谷底的 bar 数。
 
         Args:
             total: 总权益数组
-            drawdown: 回撤数组
+            drawdown: 回撤数组（峰值 - 权益）
 
         Returns:
             最大回撤持续时间（bar 数）
@@ -340,13 +341,12 @@ class PerformanceAnalyzer:
         if max_dd_value == 0:
             return 0
 
-        # 找到回撤前的高点
-        peak_idx: int = max_dd_idx
-        for i in range(max_dd_idx - 1, -1, -1):
-            if total[i] > total[max_dd_idx]:
-                peak_idx = i
-                break
-
+        # 回撤起点 = 谷底之前最近一次达到历史峰值的 bar。
+        # 旧实现（从谷底往前找第一个 total[i] > total[谷底]）会把「跌破谷底
+        # 水位线」误判为回撤起点，严重低估持续时间（峰值后一路阴跌时，
+        # 实际持续 4 根被算成 1 根）。
+        peak_val = float(np.max(total[: max_dd_idx + 1]))
+        peak_idx: int = int(np.where(total[: max_dd_idx + 1] == peak_val)[0][-1])
         return int(max_dd_idx - peak_idx)
 
     @staticmethod

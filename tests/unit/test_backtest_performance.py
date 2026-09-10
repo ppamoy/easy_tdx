@@ -434,6 +434,22 @@ def test_max_dd_duration() -> None:
     assert metrics["max_dd_duration"] == 0
 
 
+def test_max_dd_duration_peak_to_trough() -> None:
+    """V506: 回撤持续时间 = 从峰值到谷底的 bar 数（非「跌破谷底水位线」）。"""
+    # 峰值 idx1(120) 后一路回撤到 idx5(95)：持续 4 根
+    total = np.array([100.0, 120.0, 110.0, 105.0, 100.0, 95.0])
+    peak = np.maximum.accumulate(total)
+    drawdown = peak - total
+    duration = PerformanceAnalyzer._compute_max_dd_duration(None, total, drawdown)
+    assert duration == 4
+
+    # 多个峰值：取最近一次达到历史峰值处作为回撤起点
+    total2 = np.array([100.0, 120.0, 110.0, 120.0, 110.0, 95.0])
+    peak2 = np.maximum.accumulate(total2)
+    dd2 = peak2 - total2
+    assert PerformanceAnalyzer._compute_max_dd_duration(None, total2, dd2) == 2
+
+
 def test_sortino() -> None:
     """测试索提诺比率计算。"""
     equity = _make_equity_curve(n=252, total_return=0.1)
