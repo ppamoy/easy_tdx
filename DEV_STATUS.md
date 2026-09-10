@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 在线 advice table 补平均持有（V508）✅ 完成
+
+- online advice --output table 汇总补「平均持有 N 根」，与 CSV/md/离线对齐
+
 ## 树型 ROE 年化（V507）✅ 完成
 
 - fundamental/screener `score_tree` ROE 按报告期月数年化（同 V504 EPS 口径），一季报高ROE龙头不再被低估；实测茅台 10.06%→40.2% 后由粮型正确改判树型；补 ROE 年化打分 + `_annualize_pct` 测试

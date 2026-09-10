@@ -816,6 +816,7 @@ class TestOnlineAdviceOutput:
         assert "标的 SZ000001 | 建议 2 笔" in res.output
         assert "胜率 50%" in res.output
         assert "平均 +1.00%" in res.output
+        assert "平均持有 3.5 根" in res.output  # V508: 汇总补平均持有根数
         assert "出场分布: 止损 50%" in res.output
         assert "止盈 50%" in res.output
         assert "100.00" in res.output  # fake advice entry_price 100.0

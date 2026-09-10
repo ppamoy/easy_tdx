@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**在线 advice table 补平均持有（V508）**：online advice --output table 汇总行补「平均持有 N 根」，与 CSV（V500）、md 明细及离线输出对齐。
+
+---
+
 **树型 ROE 年化（V507）**：fundamental/screener `score_tree` 的 ROE 按报告期月数年化（同 V504 的 EPS 口径：一季报 *4、中报 *2、三季报 *4/3、年报 *1），避免一季报单期 ROE 系统性低估「高ROE」龙头——实测贵州茅台 2026Q1 ROE 10.06% 年化 40.2% 后由「粮型」正确改判「树型」；补 ROE 年化打分 + `_annualize_pct` 测试。
 
 ---
