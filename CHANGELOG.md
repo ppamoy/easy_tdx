@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**年化函数更名（V537）**：fundamental/screener 的 `_annualize_pct` 更名为 `_annualize`（该函数同时用于 ROE 百分数与营收绝对值，「pct」命名有误导），保留旧名作别名兼容。
+
+---
+
 **IC 派生指标统一 dropna（V536）**：factor/analysis `full_report` 的 `ic_mean`/`ic_std` 原用总长度作守卫（「1 有效 + N 个 NaN」时 ic_std 被算成 NaN），统一改为 dropna 后只统计有效截面；补单有效截面回归测试。
 
 ---

@@ -88,14 +88,20 @@ def _pct(v: Any) -> float | None:
         return None
 
 
-def _annualize_pct(v: float | None, report_date: Any) -> float | None:
-    """V507/V517: 把年初至今累计比率按报告期月数年化（ROE 等）。
+def _annualize(v: float | None, report_date: Any) -> float | None:
+    """V507/V517/V537: 把年初至今累计值按报告期月数年化（ROE/营收等）。
 
     委托给 ``indicators.annualize_ytd`` 共享实现（V517 消除与 pipeline 的重复）。
+    V537 由 ``_annualize_pct`` 更名——该函数同时用于 ROE（百分数）与营收（绝对值），
+    「pct」命名有误导。
     """
     from easy_tdx.fundamental.indicators import annualize_ytd
 
     return annualize_ytd(v, report_date)
+
+
+# V537: 保留旧名作为别名，兼容历史导入
+_annualize_pct = _annualize
 
 
 def _contrib(score: float, max_score: float, reason: str) -> ScoreDetail:
@@ -107,14 +113,14 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     total = 0.0
     details: list[ScoreDetail] = []
 
-    roe = _annualize_pct(_pct(row.get("roe")), row.get("report_date"))
+    roe = _annualize(_pct(row.get("roe")), row.get("report_date"))
     gross = _pct(row.get("gross_margin"))
     rev_yoy = _pct(row.get("rev_yoy"))
     np_yoy = _pct(row.get("np_yoy"))
     np = row.get("net_profit")
     # V522: 营收同为年初至今累计值，一季报按报告期年化后再判「体量大」，
     # 避免用单季营收低估龙头规模（如年营收 40 亿的公司 Q1 只 10 亿被误判「偏小」）
-    revenue = _annualize_pct(_pct(row.get("revenue")), row.get("report_date"))
+    revenue = _annualize(_pct(row.get("revenue")), row.get("report_date"))
 
     if np is not None and np > 0:
         total += 10
@@ -301,7 +307,7 @@ def screen_stock(
         "bps": row.get("bps"),
         # V530: ROE 年化后透出，与 score_tree 打分口径一致（一季报不再显示被低估的
         # 单季 ROE），前端展示与分类「高ROE」判断不再矛盾
-        "roe": _annualize_pct(_pct(row.get("roe")), row.get("report_date")),
+        "roe": _annualize(_pct(row.get("roe")), row.get("report_date")),
         "gross_margin": row.get("gross_margin"),
         "net_margin": row.get("net_margin"),
         "debt_ratio": row.get("debt_ratio"),
