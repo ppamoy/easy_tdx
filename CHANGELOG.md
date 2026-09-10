@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**IC 方法校验前置（V528）**：factor/analysis `compute_ic` 增加方法校验（非 spearman/pearson 显式报错，不再静默回退 pearson），scipy 可用性检查移出循环（原每截面重复 import）；补未知方法报错测试。
+
+---
+
 **因子引擎兼容 date 列（V527）**：factor/engine `compute_cross_section`/`compute_forward_returns` 原硬编码 `datetime` 列，喂入 get_security_bars 日线（返回 `date`）会 KeyError；改为兼容 `date` 列（与回测引擎的「date → datetime」派生一致）。补 date 列回归测试。
 
 ---

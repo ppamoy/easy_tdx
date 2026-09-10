@@ -47,6 +47,17 @@ class FactorAnalyzer:
 
     def compute_ic(self, method: str = "spearman") -> pd.Series:
         """逐截面计算 Rank IC。"""
+        # V528: 方法校验前置 + scipy 可用性检查移出循环（原每截面重复 import，
+        # 且拼写错误的方法名会静默回退 pearson）。
+        if method not in ("spearman", "pearson"):
+            raise ValueError(f"未知 IC 方法: {method!r}（可选: spearman, pearson）")
+        if method == "spearman":
+            try:
+                import scipy  # noqa: F401  # pandas spearman lazy import
+            except ImportError as e:
+                raise ImportError(
+                    "Rank IC (spearman) 需要 scipy，请执行 `pip install easy-tdx[science]`"
+                ) from e
         dates = sorted(self._merged["date"].unique())
         ic_values: list[float] = []
         for date in dates:
@@ -55,16 +66,7 @@ class FactorAnalyzer:
             if len(valid) < 5:
                 ic_values.append(np.nan)
                 continue
-            if method == "spearman":
-                try:
-                    import scipy  # noqa: F401  # pandas spearman lazy import
-                except ImportError as e:
-                    raise ImportError(
-                        "Rank IC (spearman) 需要 scipy，请执行 `pip install easy-tdx[science]`"
-                    ) from e
-                corr = valid[self._factor_col].corr(valid[self._return_col], method="spearman")
-            else:
-                corr = valid[self._factor_col].corr(valid[self._return_col], method="pearson")
+            corr = valid[self._factor_col].corr(valid[self._return_col], method=method)
             ic_values.append(corr)
         return pd.Series(ic_values, index=dates, name="IC")
 

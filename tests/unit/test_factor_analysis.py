@@ -65,6 +65,15 @@ class TestFactorAnalyzerIC:
         ic_series = analyzer.compute_ic()
         assert abs(ic_series.mean()) < 0.15
 
+    def test_compute_ic_unknown_method_raises(self):
+        """V528: 拼写错误的方法名应显式报错，而非静默回退 pearson。"""
+        import pytest
+
+        fd, rd = _make_factor_and_return(ic=0.1)
+        analyzer = FactorAnalyzer(fd, rd, factor_col="test_factor", return_col="forward_5d")
+        with pytest.raises(ValueError, match="未知 IC 方法"):
+            analyzer.compute_ic(method="kendall")
+
 
 class TestFactorAnalyzerQuantile:
     def test_quantile_returns(self):
