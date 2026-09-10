@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+**缠论页估值展示（V535）**：前端 ChanlunView 的市场状态面板补「PE」「PB」（复用 V534 后端 valuation），与诊断页估值（V526）同源同口径。
+
+---
+
+**缠论页估值（V534）**：chanlun 路由 `chanlun_analyze` 响应补 `valuation`（复用诊断页 `_fetch_diagnosis_valuation` 离线取缓存财报帧算 PE/PB，无缓存为 None 不阻断）。
+
+---
+
 **分层顶底收益丢分位修复（V533）**：factor/analysis `full_report` 的 `top_minus_bottom` 在 qcut 因重复值丢弃分位时（q{n_quantiles} 为 NaN）原返回 NaN；改为回退到实际存在的最高/最低非 NaN 分位。补丢分位回归测试。
 
 ---

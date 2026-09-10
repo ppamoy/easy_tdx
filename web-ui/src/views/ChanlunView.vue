@@ -156,6 +156,9 @@ interface ChanlunBoll {
 
 const boll = ref<ChanlunBoll | null>(null)
 
+// V535: 基本面估值（PE/PB，诊断/缠论同源，无缓存财报时为 null）
+const valuation = ref<{ pe: number | null; pb: number | null } | null>(null)
+
 // 多级别分析结果
 const multiLevelResult = ref<any>(null)
 
@@ -747,6 +750,7 @@ async function analyze() {
         throw new Error((err as { detail?: string }).detail ?? `HTTP ${resp.status}`)
       }
       data = await resp.json()
+      valuation.value = data.valuation ?? null
 
       // 3. 转换数据格式（单级别也完整映射中枢/买卖点/分型/背驰，避免图表只显示笔和线段）
       // BOLL数据
@@ -1171,6 +1175,11 @@ onUnmounted(() => {
         </span>
         <span class="advice-trend" :style="{ color: marketState.trendColor }">
           趋势: {{ marketState.trend }}
+        </span>
+        <span v-if="valuation?.pe != null || valuation?.pb != null" class="advice-trend">
+          <template v-if="valuation?.pe != null">PE {{ valuation.pe }}</template>
+          <template v-if="valuation?.pe != null && valuation?.pb != null"> · </template>
+          <template v-if="valuation?.pb != null">PB {{ valuation.pb }}</template>
         </span>
       </div>
       <div class="advice-body">

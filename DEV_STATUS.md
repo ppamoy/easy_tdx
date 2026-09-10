@@ -3,6 +3,14 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 缠论页估值展示（V535）✅ 完成
+
+- 前端 ChanlunView 市场状态面板补「PE」「PB」（与诊断页同源同口径）
+
+## 缠论页估值（V534）✅ 完成
+
+- chanlun 路由 `chanlun_analyze` 响应补 `valuation`（复用诊断页离线取数 helper，无缓存为 None）
+
 ## 分层顶底收益丢分位修复（V533）✅ 完成
 
 - factor/analysis `full_report` top_minus_bottom 在 qcut 丢分位时回退到实际非 NaN 分位（不再返回 NaN）；补丢分位回归测试

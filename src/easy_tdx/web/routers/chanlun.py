@@ -409,6 +409,15 @@ async def chanlun_analyze(
         # 准确度验证是附加信息，失败不应阻断主分析结果
         d["signal_accuracy"] = None
 
+    # V534: 基本面估值（PE/PB），复用诊断页的离线取数 helper（无缓存时为 None）
+    try:
+        from easy_tdx.web.routers.diagnosis import _fetch_diagnosis_valuation
+
+        latest_close = float(result.klines[-1].close) if result.klines else 0.0
+        d["valuation"] = _fetch_diagnosis_valuation(req.market, req.code, latest_close)
+    except Exception:  # noqa: BLE001 — 估值失败不阻断缠论分析
+        d["valuation"] = None
+
     return d
 
 
