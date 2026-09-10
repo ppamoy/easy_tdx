@@ -523,7 +523,12 @@ def scan_market(
         d["data_source"] = str(row.get("data_source", "gpcw"))
         scored.append(d)
 
-    scored.sort(key=lambda r: r["score"], reverse=True)
+    # V511: 同分（如多只「粮型」都 100 分）时按三维总分作次级排序，
+    # 让「多维度都强」的标的排前，避免仅按代码顺序任取 top_n。
+    scored.sort(
+        key=lambda r: (r["score"], sum(float(v) for v in r["scores"].values())),
+        reverse=True,
+    )
     kept = scored[:top_n]
     if with_performance:
         for d in kept:

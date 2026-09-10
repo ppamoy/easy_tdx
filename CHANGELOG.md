@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**全市场扫描同分排序优化（V511）**：fundamental/pipeline `scan_market` 排序在同分（如多只「粮型」都 100 分）时增加三维总分（tree+grain+vegetable）作次级键，让「多维度都强」的标的排前，避免仅按代码顺序任取 top_n（实测全市场扫描 top10 从任意粮型股变为中际旭创/新易盛等三维满分龙头）；补同分排序回归测试。
+
+---
+
 **组合净值回撤符号修复（V510）**：portfolio_engine `_build_combined_equity` 的 `drawdown` 原为 `total - peak`（负数）且 `drawdown_pct` 除以初始资金，与 PortfolioTracker 的 `peak - total`（正数、除以运行峰值）口径不一致；改为与单标的口径一致（正数 + 除以运行峰值）。补组合净值 drawdown 非负回归测试。
 
 ---

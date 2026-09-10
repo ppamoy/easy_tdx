@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 全市场扫描同分排序优化（V511）✅ 完成
+
+- scan_market 同分时按三维总分作次级排序，多维度强的标的排前，避免任取 top_n；补同分排序回归测试
+
 ## 组合净值回撤符号修复（V510）✅ 完成
 
 - portfolio_engine `_build_combined_equity` drawdown 由负数（total-peak）改为正数（peak-total）并除以运行峰值，与单标口径一致；补非负回归测试

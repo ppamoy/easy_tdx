@@ -584,6 +584,49 @@ class TestScanMarket:
         assert out["results"]
         assert all(r["category"] == "vegetable" for r in out["results"])
 
+    def test_scan_tiebreak_by_total_score(self, monkeypatch):
+        """V511: 同分时按三维总分排序，多维度强的排前。"""
+        import pandas as pd
+
+        from easy_tdx.fundamental import pipeline
+        from easy_tdx.fundamental.indicators import indicator_values
+
+        def _mk(code, roe, rev_yoy, np_yoy):
+            ind = indicator_values(
+                {
+                    "基本每股收益": 2.0,
+                    "净资产收益率": roe,
+                    "其中：营业收入": 100.0,
+                    "其中：营业成本": 60.0,
+                    "归属于母公司所有者的净利润": 20.0,
+                    "资产总计": 200.0,
+                    "负债合计": 80.0,
+                    "经营活动产生的现金流量净额": 25.0,
+                    "营业收入增长率(%)": rev_yoy,
+                    "净利润增长率(%)": np_yoy,
+                }
+            )
+            return {
+                "code": code,
+                "market": "SZ",
+                "report_date": date(2025, 12, 31),
+                "disclosure_date": date(2026, 4, 25),
+                **ind,
+            }
+
+        # 两者 grain 都 100 分，但 A 高ROE+高增长（三维总分更高），B 低ROE+负增长
+        a = _mk("000001", 30.0, 30.0, 30.0)
+        b = _mk("000002", 2.0, -10.0, -10.0)
+        frame = pd.DataFrame([b, a])  # 故意把强的放后面
+
+        monkeypatch.setattr(pipeline, "pick_report_zips", lambda *a, **k: ["gpcwX.zip"])
+        monkeypatch.setattr(pipeline, "load_all_periods_frame", lambda *a, **k: frame)
+        monkeypatch.setattr(pipeline, "detect_season_for_date", lambda *a, **k: None)
+
+        out = pipeline.scan_market(date(2026, 5, 1), top_n=10, with_performance=False)
+        codes = [r["code"] for r in out["results"]]
+        assert codes[0] == "000001"  # 三维总分高的排前
+
     def test_scan_empty_records_warns(self, monkeypatch):
         from easy_tdx.fundamental import pipeline
 
