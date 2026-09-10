@@ -472,7 +472,6 @@ async def verify_screening(
     date_str = str(req.get("date", ""))
     symbols = req.get("symbols") or []
     selected = req.get("selected") or []
-    market = str(req.get("market", "SZ")).upper()[:2]
 
     if not date_str or not symbols:
         return {"error": "请提供选股日期和扫描池股票列表", "horizons": {}, "verdict": ""}
@@ -486,7 +485,11 @@ async def verify_screening(
         if ":" in sym:
             m, c = sym.split(":", 1)
         elif len(sym) == 6:
-            m = "SH" if sym.startswith("6") else market
+            # V532: 6 位裸代码用统一市场推断（与前端 detectMarket / sina / gpcw
+            # 口径一致），不再「6→SH 其余→market」误判北交所/9 开头
+            from easy_tdx.fundamental.indicators import _market_from_code
+
+            m = _market_from_code(sym)
             c = sym
         else:
             m = sym[:2].upper()

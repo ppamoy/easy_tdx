@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**选股验证符号规范化统一市场推断（V532）**：web/routers/screening `_norm` 的 6 位裸代码市场推断由「6→SH 其余→请求 market」改为复用 `_market_from_code`（与前端 detectMarket / sina / gpcw 口径一致），北交所/9 开头不再被误判。
+
+---
+
 **因子分析分位数校验（V531）**：factor/analysis `FactorAnalyzer` 校验 `n_quantiles >= 2`（1 分位/非正数无意义，pd.qcut 会报错或退化）；补非法分位数报错测试。
 
 ---
