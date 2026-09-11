@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**菜型维度权重命名（V573）**：fundamental/screener `score_vegetable` 的营收/净利同比满分（35）、净利率满分（20）、现金流满分（10）抽为命名常量 `_VEG_REV_FULL/_VEG_NP_FULL/_VEG_MARGIN_FULL/_VEG_OCF_WEIGHT`，去魔法数字——树/粮/菜三分类评分权重全部命名。
+
+---
+
 **粮型核心权重命名（V572）**：fundamental/screener `score_grain` 的盈利/现金流/每股收益三项各 20 分抽为 `_GRAIN_CORE_WEIGHT`、负债满分 25 分抽为 `_GRAIN_DEBT_WEIGHT`，去魔法数字（与 V569/V571 一起把粮型权重全部命名）。
 
 ---

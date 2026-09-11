@@ -64,6 +64,12 @@ _GRAIN_NPYOY_WEIGHT = 15.0
 _GRAIN_CORE_WEIGHT = 20.0
 _GRAIN_DEBT_WEIGHT = 25.0
 
+# V573: 菜型各维度满分权重（营收/净利同比 35、净利率 20、现金流 10）
+_VEG_REV_FULL = 35.0
+_VEG_NP_FULL = 35.0
+_VEG_MARGIN_FULL = 20.0
+_VEG_OCF_WEIGHT = 10.0
+
 
 @dataclass
 class ScoreDetail:
@@ -302,45 +308,57 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
     np = row.get("net_profit")
 
     if rev_yoy is not None and rev_yoy >= _REV_HIGH:
-        total += 35
-        details.append(_contrib(35, 35, f"营收同比 {rev_yoy:.1f}%≥{_REV_HIGH:.0f}%（高景气）"))
+        total += _VEG_REV_FULL
+        details.append(
+            _contrib(
+                _VEG_REV_FULL, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%≥{_REV_HIGH:.0f}%（高景气）"
+            )
+        )
     elif rev_yoy is not None and rev_yoy >= _REV_MED:
         total += 22
-        details.append(_contrib(22, 35, f"营收同比 {rev_yoy:.1f}%≥{_REV_MED:.0f}%"))
+        details.append(_contrib(22, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%≥{_REV_MED:.0f}%"))
     elif rev_yoy is not None and rev_yoy >= 0:
         total += 10
-        details.append(_contrib(10, 35, f"营收同比 {rev_yoy:.1f}%（温和）"))
+        details.append(_contrib(10, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%（温和）"))
     else:
-        details.append(_contrib(0, 35, "营收负增长/缺失"))
+        details.append(_contrib(0, _VEG_REV_FULL, "营收负增长/缺失"))
 
     if np_yoy is not None and np_yoy >= _NP_BOOM:
-        total += 35
-        details.append(_contrib(35, 35, f"净利同比 {np_yoy:.1f}%≥{_NP_BOOM:.0f}%（爆发）"))
+        total += _VEG_NP_FULL
+        details.append(
+            _contrib(_VEG_NP_FULL, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%≥{_NP_BOOM:.0f}%（爆发）")
+        )
     elif np_yoy is not None and np_yoy >= _NP_FAST:
         total += 20
-        details.append(_contrib(20, 35, f"净利同比 {np_yoy:.1f}%（较快）"))
+        details.append(_contrib(20, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%（较快）"))
     elif np_yoy is not None and np_yoy >= 0:
         # V555: 区分「正增长但不够高」与「负增长」（原两者同判 0 分）
         total += 5
-        details.append(_contrib(5, 35, f"净利同比 {np_yoy:.1f}%（正增长）"))
+        details.append(_contrib(5, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%（正增长）"))
     else:
-        details.append(_contrib(0, 35, "净利负增长/缺失"))
+        details.append(_contrib(0, _VEG_NP_FULL, "净利负增长/缺失"))
 
     if np is not None and np > 0 and net_margin is not None and net_margin > 0:
-        total += 20
-        details.append(_contrib(20, 20, f"盈利且净利率 {net_margin:.1f}%（符合菜的基本面）"))
+        total += _VEG_MARGIN_FULL
+        details.append(
+            _contrib(
+                _VEG_MARGIN_FULL,
+                _VEG_MARGIN_FULL,
+                f"盈利且净利率 {net_margin:.1f}%（符合菜的基本面）",
+            )
+        )
     elif np is not None and np > 0:
         total += 10
-        details.append(_contrib(10, 20, "盈利但净利率未披露/极低"))
+        details.append(_contrib(10, _VEG_MARGIN_FULL, "盈利但净利率未披露/极低"))
     else:
-        details.append(_contrib(0, 20, "亏损：需要更高增速来证明"))
+        details.append(_contrib(0, _VEG_MARGIN_FULL, "亏损：需要更高增速来证明"))
 
     ocf = row.get("ocf_ps") if row.get("ocf_ps") is not None else row.get("ocf")
     if ocf is not None and ocf > 0:
-        total += 10
-        details.append(_contrib(10, 10, "每股经营现金流为正"))
+        total += _VEG_OCF_WEIGHT
+        details.append(_contrib(_VEG_OCF_WEIGHT, _VEG_OCF_WEIGHT, "每股经营现金流为正"))
     else:
-        details.append(_contrib(0, 10, "每股经营现金流非正"))
+        details.append(_contrib(0, _VEG_OCF_WEIGHT, "每股经营现金流非正"))
 
     return min(total, 100), details
 
