@@ -359,10 +359,12 @@ class MacClient:
             fields = PresetField.BASIC + PresetField.VOLUME
         all_quotes: list[MacQuoteField] = []
         fetched = 0
-        page_size = min(count, _BOARD_MEMBERS_PAGE_SIZE)
         offset = start
 
         while fetched < count:
+            # V553: 最后一批不超过剩余量（原固定 min(count,80) 会在 count 非 80
+            # 整数倍时多取，如 count=100 会取到 160）
+            page_size = min(count - fetched, _BOARD_MEMBERS_PAGE_SIZE)
             batch = self._execute(
                 BoardMembersQuotesCmd(
                     board_code=int(category),

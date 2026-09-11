@@ -42,6 +42,21 @@ class TestMacGetMethods2:
         df = c.get_board_list(count=10)
         assert isinstance(df, pd.DataFrame)
 
+    def test_stock_quotes_list_last_batch_page_size(self) -> None:
+        """V553: count 非 80 整数倍时最后一批 page_size 不超过剩余量（不超取）。"""
+        calls: list[int] = []
+
+        def fake_execute(cmd):
+            calls.append(cmd._page_size)
+            return [
+                SimpleNamespace(market="SH", code="600000", name="x", fields={})
+            ] * cmd._page_size
+
+        c = _client([])
+        c._execute = MagicMock(side_effect=fake_execute)
+        c.get_stock_quotes_list(0, count=100)
+        assert calls == [80, 20]
+
     def test_file_meta(self) -> None:
         c = _client([])
         assert isinstance(c.get_file_meta("gpcw.zip"), pd.DataFrame)

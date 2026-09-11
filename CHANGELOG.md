@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**分类报价分页末批修正（V553）**：mac/client `get_stock_quotes_list` 的分页原固定 `page_size=min(count,80)`，count 非 80 整数倍时最后一批会超取（如 count=100 取到 160）；改为循环内按剩余量取 `min(count-fetched,80)`（与 get_board_list 一致）。补末批 page_size 回归测试。
+
+---
+
 **年化营收展示（V552）**：前端 FundamentalView 新增「年化营收」列（以亿显示，V551 透出的 `revenue_annualized` 落地），选股页补上「龙头规模」维度。
 
 ---
