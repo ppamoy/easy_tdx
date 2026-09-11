@@ -115,6 +115,9 @@ class FactorAnalyzer:
             sub = self._merged[self._merged["date"] == date]
             valid = sub[[self._factor_col, "code"]].dropna()
             if len(valid) < n_top:
+                # V575: 样本不足的日期重置 prev_top，避免下一日与「跨多日的陈旧集合」计算
+                # 换手率（原实现继续沿用上一有效日的 prev_top，会高估换手）
+                prev_top = set()
                 continue
             top = set(valid.nlargest(n_top, self._factor_col)["code"].tolist())
             if prev_top:

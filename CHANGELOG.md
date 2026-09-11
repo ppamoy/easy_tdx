@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**换手率跳过日期重置（V575）**：factor/analysis `compute_turnover` 在样本不足的日期重置 `prev_top`，避免下一日与「跨多日的陈旧集合」计算换手（原实现沿用上一有效日的 prev_top 会高估换手）。
+
+---
+
 **树型维度权重命名（V574）**：fundamental/screener `score_tree` 的盈利/营收体量（10）、ROE（30）、毛利率（20）满分抽为命名常量 `_TREE_PROFIT_WEIGHT/_TREE_REVENUE_WEIGHT/_TREE_ROE_WEIGHT/_TREE_GROSS_WEIGHT`——至此 V561-V574 把树/粮/菜三分类评分逻辑的阈值与权重全部语义化命名，`screener.py` 评分函数彻底无魔法数字。
 
 ---
