@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 衰减分析默认 lag 命名（V582）✅ 完成
+
+- factor/analysis `compute_decay` 默认最大 lag（10）抽为命名常量 `_DEFAULT_MAX_LAG`（analysis 模块魔法数字全部命名）
+
 ## IC 自相关 lag 命名（V581）✅ 完成
 
 - factor/analysis `full_report` 一阶自相关 lag（1）抽为命名常量 `_AUTOCORR_LAG`（去魔法数字）

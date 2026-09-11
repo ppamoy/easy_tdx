@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**衰减分析默认 lag 命名（V582）**：factor/analysis `compute_decay` 的默认最大 lag（10）抽为命名常量 `_DEFAULT_MAX_LAG`，去魔法数字（与 V567/V570/V581 一起把 analysis 模块的魔法数字全部命名）。
+
+---
+
 **IC 自相关 lag 命名（V581）**：factor/analysis `full_report` 的一阶自相关 lag（1）抽为命名常量 `_AUTOCORR_LAG`，去魔法数字。
 
 ---

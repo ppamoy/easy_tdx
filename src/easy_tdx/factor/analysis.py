@@ -17,6 +17,9 @@ _MIN_TURNOVER_TOP = 5
 # V581: 一阶自相关 lag（衡量 IC 持续性）
 _AUTOCORR_LAG = 1
 
+# V582: 衰减分析默认最大 lag（IC 自相关算到 10 阶）
+_DEFAULT_MAX_LAG = 10
+
 
 @dataclass
 class FactorReport:
@@ -130,7 +133,7 @@ class FactorAnalyzer:
             return 0.0
         return 1.0 - float(np.mean(overlaps))
 
-    def compute_decay(self, max_lag: int = 10) -> pd.DataFrame:
+    def compute_decay(self, max_lag: int = _DEFAULT_MAX_LAG) -> pd.DataFrame:
         """因子衰减分析。"""
         ic_series = self.compute_ic()
         # V546: 守卫统一用有效截面（dropna），与 V536/V542 口径一致
