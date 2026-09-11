@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -72,9 +74,11 @@ def merge_fundamentals(
             sub = sub.sort_values("report_date") if "report_date" in sub.columns else sub
             eps = sub["eps"].iloc[-1] if "eps" in sub.columns else None
             bps = sub["bps"].iloc[-1] if "bps" in sub.columns else None
+            rpt = sub["report_date"].iloc[-1] if "report_date" in sub.columns else None
             df2 = df.copy()
             df2["eps"] = eps
             df2["bps"] = bps
+            df2["report_date"] = rpt
             out[code] = df2
             continue
 
@@ -83,22 +87,30 @@ def merge_fundamentals(
         eps_vals = sub["eps"].to_numpy(dtype=float) if "eps" in sub.columns else None
         bps_vals = sub["bps"].to_numpy(dtype=float) if "bps" in sub.columns else None
         disc_dates = pd.to_datetime(sub["disclosure_date"]).to_numpy()
+        # V548: 透出源财报的报告期，便于核对 point-in-time 取数是否命中预期报告期
+        rpt_vals = (
+            pd.to_datetime(sub["report_date"]).to_numpy() if "report_date" in sub.columns else None
+        )
         dt_col = "datetime" if "datetime" in df.columns else "date"
         df_dates = pd.to_datetime(df[dt_col]).to_numpy()
         eps_series: list[float | None] = []
         bps_series: list[float | None] = []
+        rpt_series: list[Any] = []
         for dt in df_dates:
             mask = disc_dates <= dt
             if mask.any():
                 idx = int(mask.nonzero()[0][-1])
                 eps_series.append(float(eps_vals[idx]) if eps_vals is not None else None)
                 bps_series.append(float(bps_vals[idx]) if bps_vals is not None else None)
+                rpt_series.append(rpt_vals[idx] if rpt_vals is not None else None)
             else:
                 eps_series.append(None)
                 bps_series.append(None)
+                rpt_series.append(None)
         df2 = df.copy()
         df2["eps"] = eps_series
         df2["bps"] = bps_series
+        df2["report_date"] = rpt_series
         out[code] = df2
     return out
 

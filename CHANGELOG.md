@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**因子合并透出报告期（V548）**：factor/engine `merge_fundamentals` 在追加 eps/bps 的同时透出 `report_date`（源财报报告期），便于核对 point-in-time 取数是否命中预期报告期；补报告期断言。
+
+---
+
 **树型 ROE 明细明示年化（V547）**：fundamental/screener `score_tree` 的 ROE 明细改为「年化ROE」（V507 年化后），与营收（V543）/EPS（V544）的年化明示口径一致；补明示断言。
 
 ---

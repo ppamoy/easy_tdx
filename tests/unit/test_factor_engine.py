@@ -300,4 +300,8 @@ class TestMergeFundamentals:
         assert pd.isna(out["eps"].iloc[0])  # 4/01 未披露任何财报
         assert out["eps"].iloc[1] == 2.0  # 5/01 已披露一季报
         assert out["eps"].iloc[2] == 5.0  # 8/20 已披露中报
+        # V548: 透出源财报报告期
+        assert pd.isna(out["report_date"].iloc[0])
+        assert out["report_date"].iloc[1] == pd.Timestamp("2026-03-31")
+        assert out["report_date"].iloc[2] == pd.Timestamp("2026-06-30")
         assert out["bps"].iloc[2] == 20.0
