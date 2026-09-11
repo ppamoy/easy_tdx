@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 异步分类报价分页末批修正（V554）✅ 完成
+
+- AsyncMacClient `get_stock_quotes_list` 同步 V553 修正（循环内按剩余量取，不超取）
+
 ## 分类报价分页末批修正（V553）✅ 完成
 
 - mac/client `get_stock_quotes_list` 分页改为循环内按剩余量取（count 非 80 整数倍不再超取）；补末批 page_size 回归测试

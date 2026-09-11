@@ -1399,10 +1399,11 @@ class AsyncMacClient(AsyncHeartbeatMixin):
             fields = PresetField.BASIC + PresetField.VOLUME
         all_quotes: list[MacQuoteField] = []
         fetched = 0
-        page_size = min(count, _BOARD_MEMBERS_PAGE_SIZE)
         offset = start
 
         while fetched < count:
+            # V554: 与同步版一致——最后一批不超过剩余量（count 非 80 整数倍不超取）
+            page_size = min(count - fetched, _BOARD_MEMBERS_PAGE_SIZE)
             batch = await self._execute(
                 BoardMembersQuotesCmd(
                     board_code=int(category),
