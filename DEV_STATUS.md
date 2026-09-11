@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 菜型净利正增长档位（V555）✅ 完成
+
+- fundamental/screener `score_vegetable` 净利同比新增「正增长」档位（区分正增长/负增长）；补正增长回归测试
+
 ## 异步分类报价分页末批修正（V554）✅ 完成
 
 - AsyncMacClient `get_stock_quotes_list` 同步 V553 修正（循环内按剩余量取，不超取）

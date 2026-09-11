@@ -265,8 +265,12 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
     elif np_yoy is not None and np_yoy >= 10:
         total += 20
         details.append(_contrib(20, 35, f"净利同比 {np_yoy:.1f}%（较快）"))
+    elif np_yoy is not None and np_yoy >= 0:
+        # V555: 区分「正增长但不够高」与「负增长」（原两者同判 0 分）
+        total += 5
+        details.append(_contrib(5, 35, f"净利同比 {np_yoy:.1f}%（正增长）"))
     else:
-        details.append(_contrib(0, 35, "净利未见高增长"))
+        details.append(_contrib(0, 35, "净利负增长/缺失"))
 
     if np is not None and np > 0 and net_margin is not None and net_margin > 0:
         total += 20

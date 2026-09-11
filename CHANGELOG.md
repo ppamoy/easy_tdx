@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**菜型净利正增长档位（V555）**：fundamental/screener `score_vegetable` 的净利同比新增「正增长（0~10%，5 分）」档位，区分「正增长但不够高」与「负增长」（原两者同判 0 分），与营收同比的 4 档结构对称；补正增长回归测试。
+
+---
+
 **异步分类报价分页末批修正（V554）**：AsyncMacClient `get_stock_quotes_list` 同步 V553 修正——分页改为循环内按剩余量取，count 非 80 整数倍不再超取。
 
 ---

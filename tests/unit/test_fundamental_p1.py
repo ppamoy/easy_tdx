@@ -155,6 +155,14 @@ class TestScreener:
         sc, _ = score_vegetable(row, pool_size=1)
         assert sc >= 60
 
+    def test_vegetable_positive_low_growth(self):
+        """V555: 净利同比 0~10% 为「正增长」（5 分），负增长为 0 分。"""
+        row = _row(**{"净利润增长率(%)": 5.0})
+        _, details = score_vegetable(row, pool_size=1)
+        np_detail = next(d for d in details if "净利" in d.reason)
+        assert np_detail.score == 5
+        assert "正增长" in np_detail.reason
+
     def test_tree_roe_annualized(self):
         """V507: 一季报 ROE 年化后参与树型打分（高ROE 不被低估）。"""
         from easy_tdx.fundamental.screener import _annualize_pct
