@@ -132,7 +132,9 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         # V543: 营收为年化口径（V522），明示「年化」避免与单季营收混淆
         details.append(_contrib(10, 10, f"营收体量大（年化 {revenue / 1e8:.0f} 亿）"))
     else:
-        details.append(_contrib(0, 10, "营收规模偏小"))
+        # V556: 「偏小」也给出年化营收数值，便于用户理解为何被判「偏小」
+        rev_suffix = f"（年化 {revenue / 1e8:.0f} 亿）" if revenue is not None else ""
+        details.append(_contrib(0, 10, f"营收规模偏小{rev_suffix}"))
 
     if roe is not None:
         # V547: ROE 为年化口径（V507），明示「年化」避免与单季 ROE 混淆
