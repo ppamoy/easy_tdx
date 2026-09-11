@@ -54,6 +54,9 @@ _NP_FAST = 10.0
 # V566: 粮型「净利同比」下滑容忍阈值（%）——≥-10% 视为「未大幅下滑」
 _NP_DECLINE_TOL = -10.0
 
+# V569: 树型「增长」权重——营收/净利同比各自为正各计 15 分（合计满 30）
+_TREE_GROWTH_WEIGHT = 15.0
+
 
 @dataclass
 class ScoreDetail:
@@ -182,10 +185,10 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         g += 1
     if np_yoy is not None and np_yoy > 0:
         g += 1
-    total += g * 15
+    total += g * _TREE_GROWTH_WEIGHT
     details.append(
         _contrib(
-            g * 15,
+            g * _TREE_GROWTH_WEIGHT,
             30,
             f"增长：营收同比{rev_yoy if rev_yoy is not None else 0:.1f}% / "
             f"净利同比{np_yoy if np_yoy is not None else 0:.1f}%",

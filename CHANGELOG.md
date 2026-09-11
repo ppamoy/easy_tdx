@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树型增长权重命名（V569）**：fundamental/screener `score_tree` 的增长权重（15/维度）抽为命名常量 `_TREE_GROWTH_WEIGHT`，去魔法数字（与 V561-V567 一起把评分阈值/权重全部命名）。
+
+---
+
 **实时订阅回调泄漏修复（V568）**：realtime EventBus 新增 `unsubscribe_all`（从全局订阅列表移除回调），web 实时 WebSocket 关闭时改用它清理 `subscribe_all` 注册的全局回调——原 `unsubscribe(symbol)` 只清 per-symbol 列表，全局回调残留导致事件持续回调 + 每次连接累积泄漏；补 unsubscribe_all 回归测试。
 
 ---
