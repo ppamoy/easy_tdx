@@ -195,7 +195,9 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
             _contrib(_TREE_PROFIT_WEIGHT, _TREE_PROFIT_WEIGHT, "盈利为正（树的第一要义）")
         )
     else:
-        details.append(_contrib(0, _TREE_PROFIT_WEIGHT, "亏损/无净利润：不满足树条件"))
+        # V587: 区分「亏损」与「无净利润数据」（与 V584-V586 标签细分一致）
+        label = "无净利润数据" if np is None else "亏损：不满足树条件"
+        details.append(_contrib(0, _TREE_PROFIT_WEIGHT, label))
     if revenue is not None and revenue > _TREE_REVENUE_MIN:
         total += _TREE_REVENUE_WEIGHT
         # V543: 营收为年化口径（V522），明示「年化」避免与单季营收混淆
@@ -310,7 +312,9 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         total += _GRAIN_CORE_WEIGHT
         details.append(_contrib(_GRAIN_CORE_WEIGHT, _GRAIN_CORE_WEIGHT, "净利润为正（粮的基础）"))
     else:
-        details.append(_contrib(0, _GRAIN_CORE_WEIGHT, "亏损：不满足粮条件"))
+        # V587: 区分「亏损」与「无净利润数据」
+        label = "无净利润数据" if np is None else "亏损：不满足粮条件"
+        details.append(_contrib(0, _GRAIN_CORE_WEIGHT, label))
     if np_yoy is not None and np_yoy >= _NP_DECLINE_TOL:
         total += _GRAIN_NPYOY_WEIGHT
         details.append(
@@ -442,7 +446,9 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
                 _contrib(_VEG_MARGIN_POS, _VEG_MARGIN_FULL, f"盈利但净利率 {net_margin:.1f}% 极低")
             )
     else:
-        details.append(_contrib(0, _VEG_MARGIN_FULL, "亏损：需要更高增速来证明"))
+        # V587: 区分「亏损」与「无净利润数据」
+        label = "无净利润数据" if np is None else "亏损：需要更高增速来证明"
+        details.append(_contrib(0, _VEG_MARGIN_FULL, label))
 
     ocf = row.get("ocf_ps") if row.get("ocf_ps") is not None else row.get("ocf")
     if ocf is not None and ocf > 0:
