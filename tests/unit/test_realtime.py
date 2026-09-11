@@ -74,6 +74,16 @@ class TestEventBus:
 
         assert bus.subscriber_count == 0
 
+    def test_unsubscribe_all(self) -> None:
+        """V568: unsubscribe_all 应移除全局订阅回调."""
+        bus = EventBus()
+        handler = lambda e: None  # noqa: E731
+        bus.subscribe_all(handler)
+
+        assert bus.subscriber_count == 1
+        bus.unsubscribe_all(handler)
+        assert bus.subscriber_count == 0
+
     @pytest.mark.asyncio
     async def test_publish_to_specific_subscriber(self) -> None:
         """发布事件应通知特定订阅者."""

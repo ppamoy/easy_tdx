@@ -107,6 +107,16 @@ class EventBus:
         if symbol in self._subscribers:
             self._subscribers[symbol] = [h for h in self._subscribers[symbol] if h != handler]
 
+    def unsubscribe_all(self, handler: EventHandler) -> None:
+        """V568: 从全局订阅列表移除回调（对应 subscribe_all）。
+
+        移除所有等于 handler 的全局订阅；并顺带清理各标的订阅列表中残留的
+        同一回调（防止 subscribe_all 与 subscribe 混用时残留）。
+        """
+        self._global_subscribers = [h for h in self._global_subscribers if h != handler]
+        for symbol in list(self._subscribers):
+            self._subscribers[symbol] = [h for h in self._subscribers[symbol] if h != handler]
+
     async def publish(self, event: MarketEvent) -> None:
         """发布事件到所有匹配的订阅者。
 

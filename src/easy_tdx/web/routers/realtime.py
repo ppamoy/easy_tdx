@@ -99,5 +99,7 @@ async def realtime_websocket(websocket: WebSocket, symbol: str) -> None:
         logger.exception("WebSocket error for %s", symbol)
     finally:
         if event_bus is not None:
-            event_bus.unsubscribe(symbol.upper(), _on_event)
+            # V568: 用 unsubscribe_all 移除全局订阅（subscribe_all 注册的），
+            # 原 unsubscribe(symbol) 只清 per-symbol 列表，全局回调会残留泄漏
+            event_bus.unsubscribe_all(_on_event)
         logger.info("WebSocket connection closed: %s", symbol)
