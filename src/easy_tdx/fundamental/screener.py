@@ -83,6 +83,16 @@ _VEG_NP_FAST_W = 20.0
 _VEG_NP_POS_W = 5.0
 _VEG_MARGIN_POS = 10.0
 
+# V578: 树型 ROE/毛利率档位子权重 与 粮型负债档位子权重
+_TREE_ROE_GOOD_W = 24.0
+_TREE_ROE_MED_W = 15.0
+_TREE_ROE_LOW_W = 4.0
+_TREE_GROSS_MED_W = 14.0
+_TREE_GROSS_LOW_W = 5.0
+_GRAIN_DEBT_MED_W = 17.0
+_GRAIN_DEBT_HIGH_W = 8.0
+_GRAIN_DEBT_OVER_W = 2.0
+
 
 @dataclass
 class ScoreDetail:
@@ -209,19 +219,27 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
                 )
             )
         elif roe >= _ROE_GOOD:
-            total += 24
+            total += _TREE_ROE_GOOD_W
             details.append(
-                _contrib(24, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%≥{_ROE_GOOD:.0f}%（优秀）")
+                _contrib(
+                    _TREE_ROE_GOOD_W,
+                    _TREE_ROE_WEIGHT,
+                    f"年化ROE {roe:.1f}%≥{_ROE_GOOD:.0f}%（优秀）",
+                )
             )
         elif roe >= _ROE_MED:
-            total += 15
+            total += _TREE_ROE_MED_W
             details.append(
-                _contrib(15, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%≥{_ROE_MED:.0f}%（中等）")
+                _contrib(
+                    _TREE_ROE_MED_W, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%≥{_ROE_MED:.0f}%（中等）"
+                )
             )
         else:
-            total += 4
+            total += _TREE_ROE_LOW_W
             details.append(
-                _contrib(4, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%<{_ROE_MED:.0f}%（不足）")
+                _contrib(
+                    _TREE_ROE_LOW_W, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%<{_ROE_MED:.0f}%（不足）"
+                )
             )
     else:
         details.append(_contrib(0, _TREE_ROE_WEIGHT, "无 ROE 数据"))
@@ -252,14 +270,18 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
                 )
             )
         elif gross >= _GROSS_MED:
-            total += 14
+            total += _TREE_GROSS_MED_W
             details.append(
-                _contrib(14, _TREE_GROSS_WEIGHT, f"毛利率 {gross:.1f}%≥{_GROSS_MED:.0f}%")
+                _contrib(
+                    _TREE_GROSS_MED_W, _TREE_GROSS_WEIGHT, f"毛利率 {gross:.1f}%≥{_GROSS_MED:.0f}%"
+                )
             )
         else:
-            total += 5
+            total += _TREE_GROSS_LOW_W
             details.append(
-                _contrib(5, _TREE_GROSS_WEIGHT, f"毛利率 {gross:.1f}%<{_GROSS_MED:.0f}%")
+                _contrib(
+                    _TREE_GROSS_LOW_W, _TREE_GROSS_WEIGHT, f"毛利率 {gross:.1f}%<{_GROSS_MED:.0f}%"
+                )
             )
     else:
         details.append(_contrib(0, _TREE_GROSS_WEIGHT, "无毛利率数据"))
@@ -304,14 +326,22 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
                 )
             )
         elif debt <= _DEBT_MED:
-            total += 17
-            details.append(_contrib(17, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（中等）"))
+            total += _GRAIN_DEBT_MED_W
+            details.append(
+                _contrib(_GRAIN_DEBT_MED_W, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（中等）")
+            )
         elif debt <= _DEBT_HIGH:
-            total += 8
-            details.append(_contrib(8, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（偏高）"))
+            total += _GRAIN_DEBT_HIGH_W
+            details.append(
+                _contrib(_GRAIN_DEBT_HIGH_W, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（偏高）")
+            )
         else:
-            total += 2
-            details.append(_contrib(2, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（高杠杆）"))
+            total += _GRAIN_DEBT_OVER_W
+            details.append(
+                _contrib(
+                    _GRAIN_DEBT_OVER_W, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（高杠杆）"
+                )
+            )
     else:
         details.append(_contrib(0, _GRAIN_DEBT_WEIGHT, "无负债数据"))
 

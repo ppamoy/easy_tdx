@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树/粮档位子权重命名（V578）**：fundamental/screener `score_tree` 的 ROE/毛利率档位子权重（24/15/4、14/5）与 `score_grain` 的负债档位子权重（17/8/2）抽为命名常量——至此树/粮/菜三分类评分逻辑的阈值与权重（含全部子档）彻底语义化命名，评分函数完全无魔法数字。
+
+---
+
 **菜型档位子权重命名（V577）**：fundamental/screener `score_vegetable` 的各档位子权重（22/10/20/5/10）抽为命名常量 `_VEG_REV_FAST/_VEG_REV_MILD/_VEG_NP_FAST_W/_VEG_NP_POS_W/_VEG_MARGIN_POS`——至此树/粮/菜三分类评分逻辑的全部阈值与权重（含子档）语义化命名，评分函数彻底无魔法数字。
 
 ---
