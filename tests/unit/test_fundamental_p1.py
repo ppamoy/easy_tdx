@@ -232,7 +232,7 @@ class TestScreener:
         assert res.indicators["eps_annualized"] == 6.0  # 1.5 * 4
         assert res.indicators["revenue_annualized"] == 400.0  # 100.0 * 4
         assert res.indicators["net_profit_annualized"] == 80.0  # 20.0 * 4
-        assert str(res.indicators["report_date"]) == "2026-03-31"  # V560 透出报告期
+        assert res.indicators["report_date"] == "2026-03-31"  # V560/V565 透出报告期（字符串）
 
 
 class TestValuation:

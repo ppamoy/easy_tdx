@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**indicators 报告期转字符串（V565）**：fundamental/screener `screen_stock` 的 `indicators.report_date` 改为字符串透出（与 as_dict 外层 report_date 口径一致，避免 date 对象直接 JSON 序列化）。
+
+---
+
 **菜型同比阈值命名（V564）**：fundamental/screener `score_vegetable` 的营收/净利同比档位阈值（20/10、30/10）抽为命名常量 `_REV_HIGH/_REV_MED/_NP_BOOM/_NP_FAST`，去魔法数字——与 V561-V563 一起把树/粮/菜三分类评分阈值全部命名。
 
 ---
