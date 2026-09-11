@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**粮型核心权重命名（V572）**：fundamental/screener `score_grain` 的盈利/现金流/每股收益三项各 20 分抽为 `_GRAIN_CORE_WEIGHT`、负债满分 25 分抽为 `_GRAIN_DEBT_WEIGHT`，去魔法数字（与 V569/V571 一起把粮型权重全部命名）。
+
+---
+
 **粮型净利同比权重命名（V571）**：fundamental/screener `score_grain` 的净利同比权重（15）抽为命名常量 `_GRAIN_NPYOY_WEIGHT`，去魔法数字（与 V569 树型增长权重命名对称）。
 
 ---

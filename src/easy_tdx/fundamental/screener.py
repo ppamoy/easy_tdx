@@ -60,6 +60,10 @@ _TREE_GROWTH_WEIGHT = 15.0
 # V571: 粮型「净利同比」权重——未大幅下滑计 15 分
 _GRAIN_NPYOY_WEIGHT = 15.0
 
+# V572: 粮型核心维度权重（盈利/现金流/每股收益 各 20 分）与负债维度满分（25 分）
+_GRAIN_CORE_WEIGHT = 20.0
+_GRAIN_DEBT_WEIGHT = 25.0
+
 
 @dataclass
 class ScoreDetail:
@@ -228,10 +232,10 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     np_yoy = _pct(row.get("np_yoy"))
 
     if np is not None and np > 0:
-        total += 20
-        details.append(_contrib(20, 20, "净利润为正（粮的基础）"))
+        total += _GRAIN_CORE_WEIGHT
+        details.append(_contrib(_GRAIN_CORE_WEIGHT, _GRAIN_CORE_WEIGHT, "净利润为正（粮的基础）"))
     else:
-        details.append(_contrib(0, 20, "亏损：不满足粮条件"))
+        details.append(_contrib(0, _GRAIN_CORE_WEIGHT, "亏损：不满足粮条件"))
     if np_yoy is not None and np_yoy >= _NP_DECLINE_TOL:
         total += _GRAIN_NPYOY_WEIGHT
         details.append(
@@ -242,31 +246,47 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
 
     if debt is not None:
         if debt <= _DEBT_LOW:
-            total += 25
-            details.append(_contrib(25, 25, f"资产负债率 {debt:.1f}%≤{_DEBT_LOW:.0f}%（低杠杆）"))
+            total += _GRAIN_DEBT_WEIGHT
+            details.append(
+                _contrib(
+                    _GRAIN_DEBT_WEIGHT,
+                    _GRAIN_DEBT_WEIGHT,
+                    f"资产负债率 {debt:.1f}%≤{_DEBT_LOW:.0f}%（低杠杆）",
+                )
+            )
         elif debt <= _DEBT_MED:
             total += 17
-            details.append(_contrib(17, 25, f"资产负债率 {debt:.1f}%（中等）"))
+            details.append(_contrib(17, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（中等）"))
         elif debt <= _DEBT_HIGH:
             total += 8
-            details.append(_contrib(8, 25, f"资产负债率 {debt:.1f}%（偏高）"))
+            details.append(_contrib(8, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（偏高）"))
         else:
             total += 2
-            details.append(_contrib(2, 25, f"资产负债率 {debt:.1f}%（高杠杆）"))
+            details.append(_contrib(2, _GRAIN_DEBT_WEIGHT, f"资产负债率 {debt:.1f}%（高杠杆）"))
     else:
-        details.append(_contrib(0, 25, "无负债数据"))
+        details.append(_contrib(0, _GRAIN_DEBT_WEIGHT, "无负债数据"))
 
     if ocf is not None and ocf > 0:
-        total += 20
-        details.append(_contrib(20, 20, "每股经营现金流为正（可持续分红的基础）"))
+        total += _GRAIN_CORE_WEIGHT
+        details.append(
+            _contrib(
+                _GRAIN_CORE_WEIGHT, _GRAIN_CORE_WEIGHT, "每股经营现金流为正（可持续分红的基础）"
+            )
+        )
     else:
-        details.append(_contrib(0, 20, "每股经营现金流为负/缺失"))
+        details.append(_contrib(0, _GRAIN_CORE_WEIGHT, "每股经营现金流为负/缺失"))
 
     if eps is not None and eps > 0:
-        total += 20
-        details.append(_contrib(20, 20, f"每股收益（年化）{eps:.2f} 元（有分红能力）"))
+        total += _GRAIN_CORE_WEIGHT
+        details.append(
+            _contrib(
+                _GRAIN_CORE_WEIGHT,
+                _GRAIN_CORE_WEIGHT,
+                f"每股收益（年化）{eps:.2f} 元（有分红能力）",
+            )
+        )
     else:
-        details.append(_contrib(0, 20, "EPS 非正"))
+        details.append(_contrib(0, _GRAIN_CORE_WEIGHT, "EPS 非正"))
 
     return min(total, 100), details
 

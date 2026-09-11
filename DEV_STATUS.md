@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 粮型核心权重命名（V572）✅ 完成
+
+- fundamental/screener `score_grain` 盈利/现金流/EPS 三项各 20 分抽为 `_GRAIN_CORE_WEIGHT`、负债满分 25 分抽为 `_GRAIN_DEBT_WEIGHT`（粮型权重全部命名）
+
 ## 粮型净利同比权重命名（V571）✅ 完成
 
 - fundamental/screener `score_grain` 净利同比权重（15）抽为命名常量 `_GRAIN_NPYOY_WEIGHT`（与 V569 对称）
