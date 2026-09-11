@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**回放收益率单位注释（V576）**：backtest/advice_simulator `simulate_advice_trade` 注释明确 `return_pct/mae_pct/mfe_pct` 为百分比（-5.0 = -5%）、非小数，与回测引擎 total_return（小数）单位区分，防误用。
+
+---
+
 **换手率跳过日期重置（V575）**：factor/analysis `compute_turnover` 在样本不足的日期重置 `prev_top`，避免下一日与「跨多日的陈旧集合」计算换手（原实现沿用上一有效日的 prev_top 会高估换手）。
 
 ---

@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 回放收益率单位注释（V576）✅ 完成
+
+- backtest/advice_simulator 注释明确 return_pct/mae_pct/mfe_pct 为百分比（非小数），与回测引擎 total_return 单位区分
+
 ## 换手率跳过日期重置（V575）✅ 完成
 
 - factor/analysis `compute_turnover` 样本不足日期重置 prev_top（避免跨多日陈旧集合高估换手）

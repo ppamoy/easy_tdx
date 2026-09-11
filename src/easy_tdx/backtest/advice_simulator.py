@@ -144,6 +144,8 @@ def simulate_advice_trade(
     else:
         mae_pct = round(-(mae_price - entry_price) / entry_price * 100.0, 2)
         mfe_pct = round(-(mfe_price - entry_price) / entry_price * 100.0, 2)
+    # V576: return_pct/mae_pct/mfe_pct 均为百分比（如 -5.0 = -5%），非小数——
+    # 与回测引擎的 total_return（小数）单位不同，前端回放面板直接加「%」展示
     return {
         "exit_idx": exit_idx,
         "exit_price": round(exit_price, 4),
