@@ -8,6 +8,9 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+# V567: 截面有效样本下限——相关性至少需 5 对，不足记 NaN
+_MIN_IC_SAMPLES = 5
+
 
 @dataclass
 class FactorReport:
@@ -66,7 +69,8 @@ class FactorAnalyzer:
         for date in dates:
             sub = self._merged[self._merged["date"] == date]
             valid = sub[[self._factor_col, self._return_col]].dropna()
-            if len(valid) < 5:
+            # V567: 截面有效样本不足 5 个时 IC 无统计意义，记 NaN（相关性至少需 5 对）
+            if len(valid) < _MIN_IC_SAMPLES:
                 ic_values.append(np.nan)
                 continue
             corr = valid[self._factor_col].corr(valid[self._return_col], method=method)

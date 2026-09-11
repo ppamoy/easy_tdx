@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**IC 样本下限命名（V567）**：factor/analysis `compute_ic` 的截面有效样本下限（5）抽为命名常量 `_MIN_IC_SAMPLES`，去魔法数字并注释统计含义。
+
+---
+
 **粮型净利下滑容忍阈值命名（V566）**：fundamental/screener `score_grain` 的净利同比下滑容忍阈值（-10%）抽为命名常量 `_NP_DECLINE_TOL`，去魔法数字（与 V561-V565 一起把评分阈值全部命名）。
 
 ---
