@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**粮型净利同比权重命名（V571）**：fundamental/screener `score_grain` 的净利同比权重（15）抽为命名常量 `_GRAIN_NPYOY_WEIGHT`，去魔法数字（与 V569 树型增长权重命名对称）。
+
+---
+
 **换手率 top-N 下限命名（V570）**：factor/analysis `compute_turnover` 的 top-N 下限（5）抽为命名常量 `_MIN_TURNOVER_TOP`，去魔法数字并注释稳定性含义。
 
 ---

@@ -57,6 +57,9 @@ _NP_DECLINE_TOL = -10.0
 # V569: 树型「增长」权重——营收/净利同比各自为正各计 15 分（合计满 30）
 _TREE_GROWTH_WEIGHT = 15.0
 
+# V571: 粮型「净利同比」权重——未大幅下滑计 15 分
+_GRAIN_NPYOY_WEIGHT = 15.0
+
 
 @dataclass
 class ScoreDetail:
@@ -230,10 +233,12 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     else:
         details.append(_contrib(0, 20, "亏损：不满足粮条件"))
     if np_yoy is not None and np_yoy >= _NP_DECLINE_TOL:
-        total += 15
-        details.append(_contrib(15, 15, f"净利同比 {np_yoy:.1f}% 未大幅下滑"))
+        total += _GRAIN_NPYOY_WEIGHT
+        details.append(
+            _contrib(_GRAIN_NPYOY_WEIGHT, _GRAIN_NPYOY_WEIGHT, f"净利同比 {np_yoy:.1f}% 未大幅下滑")
+        )
     else:
-        details.append(_contrib(0, 15, "净利大幅下滑/缺失"))
+        details.append(_contrib(0, _GRAIN_NPYOY_WEIGHT, "净利大幅下滑/缺失"))
 
     if debt is not None:
         if debt <= _DEBT_LOW:
