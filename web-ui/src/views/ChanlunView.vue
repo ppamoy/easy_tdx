@@ -1178,7 +1178,7 @@ onUnmounted(() => {
           趋势: {{ marketState.trend }}
         </span>
         <span v-if="valuation?.pe != null || valuation?.pb != null" class="advice-trend">
-          <template v-if="valuation?.pe != null">PE {{ valuation.pe }}</template>
+          <template v-if="valuation?.pe != null">动态PE {{ valuation.pe }}</template>
           <template v-if="valuation?.pe != null && valuation?.pb != null"> · </template>
           <template v-if="valuation?.pb != null">PB {{ valuation.pb }}</template>
         </span>

@@ -536,7 +536,7 @@ onMounted(() => {
             <template v-if="diagnosis.valuation?.pe != null || diagnosis.valuation?.pb != null">
               <span class="sep">·</span>
               <span v-if="diagnosis.valuation?.pe != null"
-                >PE <b>{{ diagnosis.valuation.pe }}</b></span
+                >动态PE <b>{{ diagnosis.valuation.pe }}</b></span
               >
               <span
                 class="sep"
