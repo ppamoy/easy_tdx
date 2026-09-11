@@ -70,6 +70,12 @@ _VEG_NP_FULL = 35.0
 _VEG_MARGIN_FULL = 20.0
 _VEG_OCF_WEIGHT = 10.0
 
+# V574: 树型各维度满分权重（盈利/营收体量 10、ROE 30、毛利率 20）
+_TREE_PROFIT_WEIGHT = 10.0
+_TREE_REVENUE_WEIGHT = 10.0
+_TREE_ROE_WEIGHT = 30.0
+_TREE_GROSS_WEIGHT = 20.0
+
 
 @dataclass
 class ScoreDetail:
@@ -163,35 +169,55 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     revenue = _annualize(_pct(row.get("revenue")), row.get("report_date"))
 
     if np is not None and np > 0:
-        total += 10
-        details.append(_contrib(10, 10, "盈利为正（树的第一要义）"))
+        total += _TREE_PROFIT_WEIGHT
+        details.append(
+            _contrib(_TREE_PROFIT_WEIGHT, _TREE_PROFIT_WEIGHT, "盈利为正（树的第一要义）")
+        )
     else:
-        details.append(_contrib(0, 10, "亏损/无净利润：不满足树条件"))
+        details.append(_contrib(0, _TREE_PROFIT_WEIGHT, "亏损/无净利润：不满足树条件"))
     if revenue is not None and revenue > _TREE_REVENUE_MIN:
-        total += 10
+        total += _TREE_REVENUE_WEIGHT
         # V543: 营收为年化口径（V522），明示「年化」避免与单季营收混淆
-        details.append(_contrib(10, 10, f"营收体量大（年化 {revenue / 1e8:.0f} 亿）"))
+        details.append(
+            _contrib(
+                _TREE_REVENUE_WEIGHT,
+                _TREE_REVENUE_WEIGHT,
+                f"营收体量大（年化 {revenue / 1e8:.0f} 亿）",
+            )
+        )
     else:
         # V556: 「偏小」也给出年化营收数值，便于用户理解为何被判「偏小」
         rev_suffix = f"（年化 {revenue / 1e8:.0f} 亿）" if revenue is not None else ""
-        details.append(_contrib(0, 10, f"营收规模偏小{rev_suffix}"))
+        details.append(_contrib(0, _TREE_REVENUE_WEIGHT, f"营收规模偏小{rev_suffix}"))
 
     if roe is not None:
         # V547: ROE 为年化口径（V507），明示「年化」避免与单季 ROE 混淆
         if roe >= _ROE_EXCELLENT:
-            total += 30
-            details.append(_contrib(30, 30, f"年化ROE {roe:.1f}%≥{_ROE_EXCELLENT:.0f}%（极强）"))
+            total += _TREE_ROE_WEIGHT
+            details.append(
+                _contrib(
+                    _TREE_ROE_WEIGHT,
+                    _TREE_ROE_WEIGHT,
+                    f"年化ROE {roe:.1f}%≥{_ROE_EXCELLENT:.0f}%（极强）",
+                )
+            )
         elif roe >= _ROE_GOOD:
             total += 24
-            details.append(_contrib(24, 30, f"年化ROE {roe:.1f}%≥{_ROE_GOOD:.0f}%（优秀）"))
+            details.append(
+                _contrib(24, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%≥{_ROE_GOOD:.0f}%（优秀）")
+            )
         elif roe >= _ROE_MED:
             total += 15
-            details.append(_contrib(15, 30, f"年化ROE {roe:.1f}%≥{_ROE_MED:.0f}%（中等）"))
+            details.append(
+                _contrib(15, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%≥{_ROE_MED:.0f}%（中等）")
+            )
         else:
             total += 4
-            details.append(_contrib(4, 30, f"年化ROE {roe:.1f}%<{_ROE_MED:.0f}%（不足）"))
+            details.append(
+                _contrib(4, _TREE_ROE_WEIGHT, f"年化ROE {roe:.1f}%<{_ROE_MED:.0f}%（不足）")
+            )
     else:
-        details.append(_contrib(0, 30, "无 ROE 数据"))
+        details.append(_contrib(0, _TREE_ROE_WEIGHT, "无 ROE 数据"))
 
     g = 0.0
     if rev_yoy is not None and rev_yoy > 0:
@@ -202,7 +228,7 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     details.append(
         _contrib(
             g * _TREE_GROWTH_WEIGHT,
-            30,
+            2 * _TREE_GROWTH_WEIGHT,
             f"增长：营收同比{rev_yoy if rev_yoy is not None else 0:.1f}% / "
             f"净利同比{np_yoy if np_yoy is not None else 0:.1f}%",
         )
@@ -210,16 +236,26 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
 
     if gross is not None:
         if gross >= _GROSS_MOAT:
-            total += 20
-            details.append(_contrib(20, 20, f"毛利率 {gross:.1f}%≥{_GROSS_MOAT:.0f}%（强护城河）"))
+            total += _TREE_GROSS_WEIGHT
+            details.append(
+                _contrib(
+                    _TREE_GROSS_WEIGHT,
+                    _TREE_GROSS_WEIGHT,
+                    f"毛利率 {gross:.1f}%≥{_GROSS_MOAT:.0f}%（强护城河）",
+                )
+            )
         elif gross >= _GROSS_MED:
             total += 14
-            details.append(_contrib(14, 20, f"毛利率 {gross:.1f}%≥{_GROSS_MED:.0f}%"))
+            details.append(
+                _contrib(14, _TREE_GROSS_WEIGHT, f"毛利率 {gross:.1f}%≥{_GROSS_MED:.0f}%")
+            )
         else:
             total += 5
-            details.append(_contrib(5, 20, f"毛利率 {gross:.1f}%<{_GROSS_MED:.0f}%"))
+            details.append(
+                _contrib(5, _TREE_GROSS_WEIGHT, f"毛利率 {gross:.1f}%<{_GROSS_MED:.0f}%")
+            )
     else:
-        details.append(_contrib(0, 20, "无毛利率数据"))
+        details.append(_contrib(0, _TREE_GROSS_WEIGHT, "无毛利率数据"))
 
     return min(total, 100), details
 

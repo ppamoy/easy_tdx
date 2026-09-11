@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树型维度权重命名（V574）**：fundamental/screener `score_tree` 的盈利/营收体量（10）、ROE（30）、毛利率（20）满分抽为命名常量 `_TREE_PROFIT_WEIGHT/_TREE_REVENUE_WEIGHT/_TREE_ROE_WEIGHT/_TREE_GROSS_WEIGHT`——至此 V561-V574 把树/粮/菜三分类评分逻辑的阈值与权重全部语义化命名，`screener.py` 评分函数彻底无魔法数字。
+
+---
+
 **菜型维度权重命名（V573）**：fundamental/screener `score_vegetable` 的营收/净利同比满分（35）、净利率满分（20）、现金流满分（10）抽为命名常量 `_VEG_REV_FULL/_VEG_NP_FULL/_VEG_MARGIN_FULL/_VEG_OCF_WEIGHT`，去魔法数字——树/粮/菜三分类评分权重全部命名。
 
 ---
