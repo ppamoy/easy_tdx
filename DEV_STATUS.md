@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 粮型负债率阈值命名（V561）✅ 完成
+
+- fundamental/screener `score_grain` 资产负债率档位阈值抽为命名常量（去魔法数字）
+
 ## indicators 透出报告期（V560）✅ 完成
 
 - fundamental/screener `screen_stock` indicators 新增 `report_date`（年化字段的取数上下文）；补报告期断言

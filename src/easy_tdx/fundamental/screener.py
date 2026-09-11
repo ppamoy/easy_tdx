@@ -30,6 +30,11 @@ CATEGORY_DESCS = {
     VEGETABLE: "高景气高增长 + 高弹性：波段收益",
 }
 
+# V561: 粮型「资产负债率」档位阈值（%）——低杠杆 / 中等 / 偏高 / 高杠杆
+_DEBT_LOW = 40.0
+_DEBT_MED = 60.0
+_DEBT_HIGH = 75.0
+
 
 @dataclass
 class ScoreDetail:
@@ -209,13 +214,13 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         details.append(_contrib(0, 15, "净利大幅下滑/缺失"))
 
     if debt is not None:
-        if debt <= 40:
+        if debt <= _DEBT_LOW:
             total += 25
-            details.append(_contrib(25, 25, f"资产负债率 {debt:.1f}%≤40%（低杠杆）"))
-        elif debt <= 60:
+            details.append(_contrib(25, 25, f"资产负债率 {debt:.1f}%≤{_DEBT_LOW:.0f}%（低杠杆）"))
+        elif debt <= _DEBT_MED:
             total += 17
             details.append(_contrib(17, 25, f"资产负债率 {debt:.1f}%（中等）"))
-        elif debt <= 75:
+        elif debt <= _DEBT_HIGH:
             total += 8
             details.append(_contrib(8, 25, f"资产负债率 {debt:.1f}%（偏高）"))
         else:

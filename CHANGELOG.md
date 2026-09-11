@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**粮型负债率阈值命名（V561）**：fundamental/screener `score_grain` 的资产负债率档位阈值（40/60/75）抽为模块级命名常量 `_DEBT_LOW/_DEBT_MED/_DEBT_HIGH`，去魔法数字。
+
+---
+
 **indicators 透出报告期（V560）**：fundamental/screener `screen_stock` indicators 新增 `report_date`（作为「年化」字段的取数上下文）；补报告期断言。
 
 ---
