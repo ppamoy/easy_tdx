@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**粮型净利下滑容忍阈值命名（V566）**：fundamental/screener `score_grain` 的净利同比下滑容忍阈值（-10%）抽为命名常量 `_NP_DECLINE_TOL`，去魔法数字（与 V561-V565 一起把评分阈值全部命名）。
+
+---
+
 **indicators 报告期转字符串（V565）**：fundamental/screener `screen_stock` 的 `indicators.report_date` 改为字符串透出（与 as_dict 外层 report_date 口径一致，避免 date 对象直接 JSON 序列化）。
 
 ---

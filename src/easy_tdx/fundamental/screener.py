@@ -51,6 +51,9 @@ _REV_MED = 10.0
 _NP_BOOM = 30.0
 _NP_FAST = 10.0
 
+# V566: 粮型「净利同比」下滑容忍阈值（%）——≥-10% 视为「未大幅下滑」
+_NP_DECLINE_TOL = -10.0
+
 
 @dataclass
 class ScoreDetail:
@@ -223,7 +226,7 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         details.append(_contrib(20, 20, "净利润为正（粮的基础）"))
     else:
         details.append(_contrib(0, 20, "亏损：不满足粮条件"))
-    if np_yoy is not None and np_yoy >= -10:
+    if np_yoy is not None and np_yoy >= _NP_DECLINE_TOL:
         total += 15
         details.append(_contrib(15, 15, f"净利同比 {np_yoy:.1f}% 未大幅下滑"))
     else:

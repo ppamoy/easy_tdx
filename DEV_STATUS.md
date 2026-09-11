@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 粮型净利下滑容忍阈值命名（V566）✅ 完成
+
+- fundamental/screener `score_grain` 净利同比下滑容忍阈值（-10%）抽为命名常量（去魔法数字）
+
 ## indicators 报告期转字符串（V565）✅ 完成
 
 - fundamental/screener `screen_stock` 的 `indicators.report_date` 改为字符串透出（与 as_dict 外层口径一致）
