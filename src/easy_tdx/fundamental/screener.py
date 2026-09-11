@@ -315,6 +315,8 @@ def screen_stock(
     category = max(scores, key=lambda k: (scores[k], -_order[k]))
 
     ind = {
+        # V560: 透出报告期，作为「年化」字段的取数上下文（一季报年化因子 ×4 的依据）
+        "report_date": row.get("report_date"),
         "eps": row.get("eps"),
         # V545: 年化 EPS 单独透出供前端展示（分红/估值按年计），保留原始 eps 供 PE 计算
         "eps_annualized": _annualize(_pct(row.get("eps")), row.get("report_date")),

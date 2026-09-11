@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**indicators 透出报告期（V560）**：fundamental/screener `screen_stock` indicators 新增 `report_date`（作为「年化」字段的取数上下文）；补报告期断言。
+
+---
+
 **年化净利展示 + 选股验证表修列（V559）**：前端 FundamentalView 新增「年化净利」列（V558 透出的 `net_profit_annualized` 落地）；同时修复「选股验证」期表被 V552 误加的估值单元格（该表只列后续收益，多出「年化营收」单元格导致列错位）。
 
 ---
