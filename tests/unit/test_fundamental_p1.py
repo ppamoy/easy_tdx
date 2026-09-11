@@ -217,11 +217,12 @@ class TestScreener:
         assert res.indicators["ocf_ps"] == 0.8
 
     def test_screen_stock_roe_annualized(self):
-        """V530: screen_stock 的 indicators.roe 为年化后（与打分口径一致）。"""
+        """V530/V557: screen_stock 的 roe 为原始值，roe_annualized 为年化后。"""
         row = _row(**{"净资产收益率": 8.0})  # Q1 报告期
         res = screen_stock(row, pool_size=1)
         assert res is not None
-        assert res.indicators["roe"] == 32.0  # 8.0 * 4（一季报年化）
+        assert res.indicators["roe"] == 8.0  # V557: 原始值
+        assert res.indicators["roe_annualized"] == 32.0  # 8.0 * 4（一季报年化）
 
     def test_screen_stock_annualized_fields(self):
         """V545/V551: screen_stock indicators 含年化 eps/revenue。"""

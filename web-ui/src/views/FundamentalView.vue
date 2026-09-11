@@ -462,7 +462,7 @@ onMounted(() => {
               <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
               <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
-              <td>{{ fmt(r.indicators.roe) }}</td>
+              <td>{{ fmt(r.indicators.roe_annualized) }}</td>
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
               <td>{{ fmt(r.indicators.net_margin) }}</td>
               <td>{{ fmt(r.indicators.debt_ratio) }}</td>
@@ -791,7 +791,7 @@ onMounted(() => {
               <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
               <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
-              <td>{{ fmt(r.indicators.roe) }}</td>
+              <td>{{ fmt(r.indicators.roe_annualized) }}</td>
               <td>{{ fmt(r.indicators.gross_margin) }}</td>
               <td>{{ fmt(r.indicators.net_margin) }}</td>
               <td>{{ fmt(r.indicators.debt_ratio) }}</td>

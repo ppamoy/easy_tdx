@@ -319,9 +319,11 @@ def screen_stock(
         # V545: 年化 EPS 单独透出供前端展示（分红/估值按年计），保留原始 eps 供 PE 计算
         "eps_annualized": _annualize(_pct(row.get("eps")), row.get("report_date")),
         "bps": row.get("bps"),
-        # V530: ROE 年化后透出，与 score_tree 打分口径一致（一季报不再显示被低估的
-        # 单季 ROE），前端展示与分类「高ROE」判断不再矛盾
-        "roe": _annualize(_pct(row.get("roe")), row.get("report_date")),
+        # V557: roe 还原为原始值（与 eps/revenue 一致），年化 ROE 走 roe_annualized
+        "roe": row.get("roe"),
+        # V530/V557: 年化 ROE 透出，与 score_tree 打分口径一致（一季报不再显示被低估的
+        # 单季 ROE）；前端展示与分类「高ROE」判断不再矛盾
+        "roe_annualized": _annualize(_pct(row.get("roe")), row.get("report_date")),
         "gross_margin": row.get("gross_margin"),
         "net_margin": row.get("net_margin"),
         "debt_ratio": row.get("debt_ratio"),

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**ROE 透出还原原始值（V557）**：fundamental/screener `screen_stock` 的 `indicators.roe` 还原为原始值（与 eps/revenue 一致），年化 ROE 走新字段 `roe_annualized`；前端 FundamentalView「ROE%」列改用 `roe_annualized`（显示不变，API 更一致）。
+
+---
+
 **树型营收偏小明示数值（V556）**：fundamental/screener `score_tree` 的「营收规模偏小」明细也给出年化营收数值，便于用户理解为何被判「偏小」（原只写「营收规模偏小」无具体值）。
 
 ---
