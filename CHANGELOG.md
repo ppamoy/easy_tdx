@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**营收亿换算与满分上限命名（V580）**：fundamental/screener 的营收「亿」换算（1e8）与评分满分上限（100）抽为命名常量 `_YI/_MAX_SCORE`——至此 `screener.py` 评分逻辑的阈值、权重、换算、满分上限全部语义化命名，无任何魔法数字。
+
+---
+
 **估值 PE 明示动态口径（V579）**：前端 DiagnosisView/ChanlunView 的「PE」标签改为「动态PE」——估值用年化 EPS（V504）计算，明示「动态市盈率」避免与静态/TTM PE 混淆。
 
 ---

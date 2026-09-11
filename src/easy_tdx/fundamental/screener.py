@@ -93,6 +93,10 @@ _GRAIN_DEBT_MED_W = 17.0
 _GRAIN_DEBT_HIGH_W = 8.0
 _GRAIN_DEBT_OVER_W = 2.0
 
+# V580: 营收「亿」换算（元 → 亿）与评分满分上限
+_YI = 1e8
+_MAX_SCORE = 100.0
+
 
 @dataclass
 class ScoreDetail:
@@ -199,12 +203,12 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
             _contrib(
                 _TREE_REVENUE_WEIGHT,
                 _TREE_REVENUE_WEIGHT,
-                f"营收体量大（年化 {revenue / 1e8:.0f} 亿）",
+                f"营收体量大（年化 {revenue / _YI:.0f} 亿）",
             )
         )
     else:
         # V556: 「偏小」也给出年化营收数值，便于用户理解为何被判「偏小」
-        rev_suffix = f"（年化 {revenue / 1e8:.0f} 亿）" if revenue is not None else ""
+        rev_suffix = f"（年化 {revenue / _YI:.0f} 亿）" if revenue is not None else ""
         details.append(_contrib(0, _TREE_REVENUE_WEIGHT, f"营收规模偏小{rev_suffix}"))
 
     if roe is not None:
@@ -286,7 +290,7 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     else:
         details.append(_contrib(0, _TREE_GROSS_WEIGHT, "无毛利率数据"))
 
-    return min(total, 100), details
+    return min(total, _MAX_SCORE), details
 
 
 def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
@@ -367,7 +371,7 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     else:
         details.append(_contrib(0, _GRAIN_CORE_WEIGHT, "EPS 非正"))
 
-    return min(total, 100), details
+    return min(total, _MAX_SCORE), details
 
 
 def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
@@ -435,7 +439,7 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
     else:
         details.append(_contrib(0, _VEG_OCF_WEIGHT, "每股经营现金流非正"))
 
-    return min(total, 100), details
+    return min(total, _MAX_SCORE), details
 
 
 def screen_stock(
