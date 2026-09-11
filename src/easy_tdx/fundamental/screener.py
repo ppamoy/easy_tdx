@@ -76,6 +76,13 @@ _TREE_REVENUE_WEIGHT = 10.0
 _TREE_ROE_WEIGHT = 30.0
 _TREE_GROSS_WEIGHT = 20.0
 
+# V577: 菜型各档位子权重（较快/温和/正增长等）
+_VEG_REV_FAST = 22.0
+_VEG_REV_MILD = 10.0
+_VEG_NP_FAST_W = 20.0
+_VEG_NP_POS_W = 5.0
+_VEG_MARGIN_POS = 10.0
+
 
 @dataclass
 class ScoreDetail:
@@ -351,11 +358,13 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
             )
         )
     elif rev_yoy is not None and rev_yoy >= _REV_MED:
-        total += 22
-        details.append(_contrib(22, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%≥{_REV_MED:.0f}%"))
+        total += _VEG_REV_FAST
+        details.append(
+            _contrib(_VEG_REV_FAST, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%≥{_REV_MED:.0f}%")
+        )
     elif rev_yoy is not None and rev_yoy >= 0:
-        total += 10
-        details.append(_contrib(10, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%（温和）"))
+        total += _VEG_REV_MILD
+        details.append(_contrib(_VEG_REV_MILD, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%（温和）"))
     else:
         details.append(_contrib(0, _VEG_REV_FULL, "营收负增长/缺失"))
 
@@ -365,12 +374,12 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
             _contrib(_VEG_NP_FULL, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%≥{_NP_BOOM:.0f}%（爆发）")
         )
     elif np_yoy is not None and np_yoy >= _NP_FAST:
-        total += 20
-        details.append(_contrib(20, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%（较快）"))
+        total += _VEG_NP_FAST_W
+        details.append(_contrib(_VEG_NP_FAST_W, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%（较快）"))
     elif np_yoy is not None and np_yoy >= 0:
         # V555: 区分「正增长但不够高」与「负增长」（原两者同判 0 分）
-        total += 5
-        details.append(_contrib(5, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%（正增长）"))
+        total += _VEG_NP_POS_W
+        details.append(_contrib(_VEG_NP_POS_W, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%（正增长）"))
     else:
         details.append(_contrib(0, _VEG_NP_FULL, "净利负增长/缺失"))
 
@@ -384,8 +393,8 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
             )
         )
     elif np is not None and np > 0:
-        total += 10
-        details.append(_contrib(10, _VEG_MARGIN_FULL, "盈利但净利率未披露/极低"))
+        total += _VEG_MARGIN_POS
+        details.append(_contrib(_VEG_MARGIN_POS, _VEG_MARGIN_FULL, "盈利但净利率未披露/极低"))
     else:
         details.append(_contrib(0, _VEG_MARGIN_FULL, "亏损：需要更高增速来证明"))
 

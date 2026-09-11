@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 菜型档位子权重命名（V577）✅ 完成
+
+- fundamental/screener `score_vegetable` 各档位子权重（22/10/20/5/10）抽为命名常量——三分类评分阈值与权重（含子档）全部命名，评分函数无魔法数字
+
 ## 回放收益率单位注释（V576）✅ 完成
 
 - backtest/advice_simulator 注释明确 return_pct/mae_pct/mfe_pct 为百分比（非小数），与回测引擎 total_return 单位区分
