@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 树型营收/毛利率阈值命名（V563）✅ 完成
+
+- fundamental/screener `score_tree` 营收体量阈值（100亿）与毛利率档位阈值抽为命名常量（去魔法数字）
+
 ## 树型 ROE 阈值命名（V562）✅ 完成
 
 - fundamental/screener `score_tree` ROE 档位阈值抽为命名常量（去魔法数字，与 V561 对称）

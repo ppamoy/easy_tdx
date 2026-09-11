@@ -40,6 +40,11 @@ _ROE_EXCELLENT = 20.0
 _ROE_GOOD = 15.0
 _ROE_MED = 10.0
 
+# V563: 树型「营收体量」阈值（年化元）与「毛利率」档位阈值（%）
+_TREE_REVENUE_MIN = 1e10  # 100 亿
+_GROSS_MOAT = 40.0
+_GROSS_MED = 25.0
+
 
 @dataclass
 class ScoreDetail:
@@ -137,7 +142,7 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
         details.append(_contrib(10, 10, "盈利为正（树的第一要义）"))
     else:
         details.append(_contrib(0, 10, "亏损/无净利润：不满足树条件"))
-    if revenue is not None and revenue > 1e10:
+    if revenue is not None and revenue > _TREE_REVENUE_MIN:
         total += 10
         # V543: 营收为年化口径（V522），明示「年化」避免与单季营收混淆
         details.append(_contrib(10, 10, f"营收体量大（年化 {revenue / 1e8:.0f} 亿）"))
@@ -179,15 +184,15 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
     )
 
     if gross is not None:
-        if gross >= 40:
+        if gross >= _GROSS_MOAT:
             total += 20
-            details.append(_contrib(20, 20, f"毛利率 {gross:.1f}%≥40%（强护城河）"))
-        elif gross >= 25:
+            details.append(_contrib(20, 20, f"毛利率 {gross:.1f}%≥{_GROSS_MOAT:.0f}%（强护城河）"))
+        elif gross >= _GROSS_MED:
             total += 14
-            details.append(_contrib(14, 20, f"毛利率 {gross:.1f}%≥25%"))
+            details.append(_contrib(14, 20, f"毛利率 {gross:.1f}%≥{_GROSS_MED:.0f}%"))
         else:
             total += 5
-            details.append(_contrib(5, 20, f"毛利率 {gross:.1f}%<25%"))
+            details.append(_contrib(5, 20, f"毛利率 {gross:.1f}%<{_GROSS_MED:.0f}%"))
     else:
         details.append(_contrib(0, 20, "无毛利率数据"))
 

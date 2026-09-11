@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树型营收/毛利率阈值命名（V563）**：fundamental/screener `score_tree` 的营收体量阈值（100亿）与毛利率档位阈值（40/25）抽为命名常量 `_TREE_REVENUE_MIN/_GROSS_MOAT/_GROSS_MED`，去魔法数字（与 V561/V562 对称）。
+
+---
+
 **树型 ROE 阈值命名（V562）**：fundamental/screener `score_tree` 的 ROE 档位阈值（20/15/10）抽为命名常量 `_ROE_EXCELLENT/_ROE_GOOD/_ROE_MED`，去魔法数字（与 V561 负债率阈值命名对称）。
 
 ---
