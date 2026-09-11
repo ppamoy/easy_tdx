@@ -205,6 +205,7 @@ def _valuation(
     if eps is not None and float(eps) > 0:
         eps_ann = _annualize_eps(float(eps), report_date)
         out["pe"] = round(float(close) / eps_ann, 2)
+    # V588: PB 用每股净资产（point-in-time，非累计值），不年化——与动态 PE（年化 EPS）区分
     if bps is not None and float(bps) > 0:
         out["pb"] = round(float(close) / float(bps), 2)
     return out
