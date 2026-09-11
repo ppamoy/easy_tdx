@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**换手率 top-N 下限命名（V570）**：factor/analysis `compute_turnover` 的 top-N 下限（5）抽为命名常量 `_MIN_TURNOVER_TOP`，去魔法数字并注释稳定性含义。
+
+---
+
 **树型增长权重命名（V569）**：fundamental/screener `score_tree` 的增长权重（15/维度）抽为命名常量 `_TREE_GROWTH_WEIGHT`，去魔法数字（与 V561-V567 一起把评分阈值/权重全部命名）。
 
 ---

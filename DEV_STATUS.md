@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 换手率 top-N 下限命名（V570）✅ 完成
+
+- factor/analysis `compute_turnover` top-N 下限（5）抽为命名常量 `_MIN_TURNOVER_TOP`（去魔法数字）
+
 ## 树型增长权重命名（V569）✅ 完成
 
 - fundamental/screener `score_tree` 增长权重（15/维度）抽为命名常量 `_TREE_GROWTH_WEIGHT`（去魔法数字）

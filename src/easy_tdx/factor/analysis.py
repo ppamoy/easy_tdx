@@ -11,6 +11,9 @@ import pandas as pd
 # V567: 截面有效样本下限——相关性至少需 5 对，不足记 NaN
 _MIN_IC_SAMPLES = 5
 
+# V570: 换手率 top-N 下限——集合重叠至少需 5 只才稳定
+_MIN_TURNOVER_TOP = 5
+
 
 @dataclass
 class FactorReport:
@@ -104,7 +107,8 @@ class FactorAnalyzer:
         dates = sorted(self._merged["date"].unique())
         if len(dates) < 2:
             return 0.0
-        n_top = max(self._n_quantiles, 5)
+        # V570: 换手率 top-N 至少取 5 只（过少对集合重叠不稳定），大于 n_quantiles 时按分位数
+        n_top = max(self._n_quantiles, _MIN_TURNOVER_TOP)
         overlaps: list[float] = []
         prev_top: set[str] = set()
         for date in dates:
