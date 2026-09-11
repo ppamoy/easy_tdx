@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**菜型负增长/缺失标签细分（V585）**：fundamental/screener `score_vegetable` 的「营收负增长/缺失」「净利负增长/缺失」标签拆分为「负增长」与「数据缺失」两态（与 V584 净利率标签细分一致）。
+
+---
+
 **菜型净利率标签细分（V584）**：fundamental/screener `score_vegetable` 的「盈利但净利率未披露/极低」标签拆分为「未披露」与「极低」两态（原合并为一个标签，含义含糊）。
 
 ---

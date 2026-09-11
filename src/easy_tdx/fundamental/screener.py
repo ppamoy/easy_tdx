@@ -400,7 +400,9 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
         total += _VEG_REV_MILD
         details.append(_contrib(_VEG_REV_MILD, _VEG_REV_FULL, f"营收同比 {rev_yoy:.1f}%（温和）"))
     else:
-        details.append(_contrib(0, _VEG_REV_FULL, "营收负增长/缺失"))
+        # V585: 区分「负增长」与「数据缺失」（与 V584 净利率标签细分一致）
+        label = "营收数据缺失" if rev_yoy is None else f"营收同比 {rev_yoy:.1f}%（负增长）"
+        details.append(_contrib(0, _VEG_REV_FULL, label))
 
     if np_yoy is not None and np_yoy >= _NP_BOOM:
         total += _VEG_NP_FULL
@@ -415,7 +417,9 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
         total += _VEG_NP_POS_W
         details.append(_contrib(_VEG_NP_POS_W, _VEG_NP_FULL, f"净利同比 {np_yoy:.1f}%（正增长）"))
     else:
-        details.append(_contrib(0, _VEG_NP_FULL, "净利负增长/缺失"))
+        # V585: 区分「负增长」与「数据缺失」（与 V584 净利率标签细分一致）
+        label = "净利数据缺失" if np_yoy is None else f"净利同比 {np_yoy:.1f}%（负增长）"
+        details.append(_contrib(0, _VEG_NP_FULL, label))
 
     if np is not None and np > 0 and net_margin is not None and net_margin > 0:
         total += _VEG_MARGIN_FULL
