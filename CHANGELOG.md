@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**年化净利展示 + 选股验证表修列（V559）**：前端 FundamentalView 新增「年化净利」列（V558 透出的 `net_profit_annualized` 落地）；同时修复「选股验证」期表被 V552 误加的估值单元格（该表只列后续收益，多出「年化营收」单元格导致列错位）。
+
+---
+
 **净利润年化透出（V558）**：fundamental/screener `screen_stock` indicators 新增 `net_profit_annualized`（净利润同为年初至今累计值，与 eps/revenue/roe 年化透出对称）；补年化字段断言。
 
 ---

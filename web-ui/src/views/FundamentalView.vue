@@ -427,6 +427,7 @@ onMounted(() => {
               <th>分类</th>
               <th>报告期</th>
               <th>年化营收</th>
+              <th>年化净利</th>
               <th>年化EPS</th>
               <th>每股净资产</th>
               <th>ROE%</th>
@@ -460,6 +461,7 @@ onMounted(() => {
               </td>
               <td>{{ r.report_date }}</td>
               <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
+              <td>{{ fmtYi(r.indicators.net_profit_annualized) }}</td>
               <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe_annualized) }}</td>
@@ -653,7 +655,6 @@ onMounted(() => {
                   </span>
                 </td>
                 <td>{{ r.report_date }}</td>
-                <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
                 <td :style="{ color: colorBy(r.performance.ret_20d) }">
                   {{ fmt(r.performance.ret_20d) }}
                 </td>
@@ -750,6 +751,7 @@ onMounted(() => {
               <th>数据源</th>
               <th>报告期</th>
               <th>年化营收</th>
+              <th>年化净利</th>
               <th>年化EPS</th>
               <th>每股净资产</th>
               <th>ROE%</th>
@@ -789,6 +791,7 @@ onMounted(() => {
               </td>
               <td>{{ r.report_date }}</td>
               <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
+              <td>{{ fmtYi(r.indicators.net_profit_annualized) }}</td>
               <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe_annualized) }}</td>

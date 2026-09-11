@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 年化净利展示 + 选股验证表修列（V559）✅ 完成
+
+- 前端 FundamentalView 新增「年化净利」列；修复「选股验证」期表被 V552 误加的估值单元格（列错位）
+
 ## 净利润年化透出（V558）✅ 完成
 
 - fundamental/screener `screen_stock` indicators 新增 `net_profit_annualized`（与 eps/revenue/roe 年化透出对称）；补年化字段断言
