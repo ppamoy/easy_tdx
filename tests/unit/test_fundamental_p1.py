@@ -215,6 +215,14 @@ class TestScreener:
         assert res is not None
         assert res.indicators["roe"] == 32.0  # 8.0 * 4（一季报年化）
 
+    def test_screen_stock_annualized_fields(self):
+        """V545/V551: screen_stock indicators 含年化 eps/revenue。"""
+        row = _row()  # Q1 报告期：eps=1.5、营收=100.0
+        res = screen_stock(row, pool_size=1)
+        assert res is not None
+        assert res.indicators["eps_annualized"] == 6.0  # 1.5 * 4
+        assert res.indicators["revenue_annualized"] == 400.0  # 100.0 * 4
+
 
 class TestValuation:
     """V497: 基本面估值（PE/PB）计算。"""

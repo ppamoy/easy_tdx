@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**营收年化透出（V551）**：fundamental/screener `screen_stock` indicators 新增 `revenue_annualized`（年化营收，与 eps_annualized 对称，一季报营收为年初至今累计值）；补年化字段回归测试。
+
+---
+
 **寻优跳过退化网格点（V550）**：backtest/optimizer `ParamGridOptimizer.run` 跳过「0 交易」的网格点（参数退化，如 fast==slow 的均线交叉），避免「0 交易 0 收益」被当作最优、淹没真实策略表现；补退化网格点回归测试。
 
 ---
