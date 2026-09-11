@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**菜型净利率标签细分（V584）**：fundamental/screener `score_vegetable` 的「盈利但净利率未披露/极低」标签拆分为「未披露」与「极低」两态（原合并为一个标签，含义含糊）。
+
+---
+
 **indicators 双字段约定注释（V583）**：fundamental/screener `screen_stock` 的 `ind` 字典补头部注释，说明「raw + annualized」双字段约定（年初至今累计值同时透出原始/年化，前端用年化、PE 计算用原始）。
 
 ---

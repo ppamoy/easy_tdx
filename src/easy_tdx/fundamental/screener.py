@@ -428,7 +428,13 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
         )
     elif np is not None and np > 0:
         total += _VEG_MARGIN_POS
-        details.append(_contrib(_VEG_MARGIN_POS, _VEG_MARGIN_FULL, "盈利但净利率未披露/极低"))
+        # V584: 区分「未披露」与「极低」（原合并为一个标签，含义含糊）
+        if net_margin is None:
+            details.append(_contrib(_VEG_MARGIN_POS, _VEG_MARGIN_FULL, "盈利但净利率未披露"))
+        else:
+            details.append(
+                _contrib(_VEG_MARGIN_POS, _VEG_MARGIN_FULL, f"盈利但净利率 {net_margin:.1f}% 极低")
+            )
     else:
         details.append(_contrib(0, _VEG_MARGIN_FULL, "亏损：需要更高增速来证明"))
 

@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 菜型净利率标签细分（V584）✅ 完成
+
+- fundamental/screener `score_vegetable`「盈利但净利率未披露/极低」标签拆分为「未披露」与「极低」两态（含义更清晰）
+
 ## indicators 双字段约定注释（V583）✅ 完成
 
 - fundamental/screener `screen_stock` 的 `ind` 字典补头部注释，说明「raw + annualized」双字段约定
