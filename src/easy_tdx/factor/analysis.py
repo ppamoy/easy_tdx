@@ -14,6 +14,9 @@ _MIN_IC_SAMPLES = 5
 # V570: 换手率 top-N 下限——集合重叠至少需 5 只才稳定
 _MIN_TURNOVER_TOP = 5
 
+# V581: 一阶自相关 lag（衡量 IC 持续性）
+_AUTOCORR_LAG = 1
+
 
 @dataclass
 class FactorReport:
@@ -175,7 +178,10 @@ class FactorAnalyzer:
         turnover = self.compute_turnover()
         # V542: autocorr 守卫统一用有效截面（valid_ic），与 ic_mean/ic_std（V536）
         # 口径一致——旧实现用 ic_series 总长度 + isnan 兜底，语义等价但口径不一。
-        autocorr = float(valid_ic.autocorr(lag=1)) if len(valid_ic) > 1 else 0.0
+        # V581: 一阶自相关（lag=1）衡量 IC 的持续性
+        autocorr = (
+            float(valid_ic.autocorr(lag=_AUTOCORR_LAG)) if len(valid_ic) > _AUTOCORR_LAG else 0.0
+        )
 
         return FactorReport(
             name=self._factor_col,
