@@ -463,6 +463,8 @@ def screen_stock(
     _order = {TREE: 0, GRAIN: 1, VEGETABLE: 2}
     category = max(scores, key=lambda k: (scores[k], -_order[k]))
 
+    # V583: indicators 采用「raw + annualized」双字段约定——年初至今累计值
+    # （eps/revenue/roe/net_profit）同时透出原始值与年化值，前端展示用年化、PE 计算用原始。
     ind = {
         # V560/V565: 透出报告期，作为「年化」字段的取数上下文（一季报年化因子 ×4 的依据）；
         # 转为字符串与 as_dict 外层 report_date 口径一致（避免 date 对象直接 JSON 序列化）

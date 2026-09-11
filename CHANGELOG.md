@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**indicators 双字段约定注释（V583）**：fundamental/screener `screen_stock` 的 `ind` 字典补头部注释，说明「raw + annualized」双字段约定（年初至今累计值同时透出原始/年化，前端用年化、PE 计算用原始）。
+
+---
+
 **衰减分析默认 lag 命名（V582）**：factor/analysis `compute_decay` 的默认最大 lag（10）抽为命名常量 `_DEFAULT_MAX_LAG`，去魔法数字（与 V567/V570/V581 一起把 analysis 模块的魔法数字全部命名）。
 
 ---
