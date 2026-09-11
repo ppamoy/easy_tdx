@@ -45,6 +45,12 @@ _TREE_REVENUE_MIN = 1e10  # 100 亿
 _GROSS_MOAT = 40.0
 _GROSS_MED = 25.0
 
+# V564: 菜型「营收/净利同比」档位阈值（%）
+_REV_HIGH = 20.0
+_REV_MED = 10.0
+_NP_BOOM = 30.0
+_NP_FAST = 10.0
+
 
 @dataclass
 class ScoreDetail:
@@ -264,22 +270,22 @@ def score_vegetable(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]
     net_margin = _pct(row.get("net_margin"))
     np = row.get("net_profit")
 
-    if rev_yoy is not None and rev_yoy >= 20:
+    if rev_yoy is not None and rev_yoy >= _REV_HIGH:
         total += 35
-        details.append(_contrib(35, 35, f"营收同比 {rev_yoy:.1f}%≥20%（高景气）"))
-    elif rev_yoy is not None and rev_yoy >= 10:
+        details.append(_contrib(35, 35, f"营收同比 {rev_yoy:.1f}%≥{_REV_HIGH:.0f}%（高景气）"))
+    elif rev_yoy is not None and rev_yoy >= _REV_MED:
         total += 22
-        details.append(_contrib(22, 35, f"营收同比 {rev_yoy:.1f}%≥10%"))
+        details.append(_contrib(22, 35, f"营收同比 {rev_yoy:.1f}%≥{_REV_MED:.0f}%"))
     elif rev_yoy is not None and rev_yoy >= 0:
         total += 10
         details.append(_contrib(10, 35, f"营收同比 {rev_yoy:.1f}%（温和）"))
     else:
         details.append(_contrib(0, 35, "营收负增长/缺失"))
 
-    if np_yoy is not None and np_yoy >= 30:
+    if np_yoy is not None and np_yoy >= _NP_BOOM:
         total += 35
-        details.append(_contrib(35, 35, f"净利同比 {np_yoy:.1f}%≥30%（爆发）"))
-    elif np_yoy is not None and np_yoy >= 10:
+        details.append(_contrib(35, 35, f"净利同比 {np_yoy:.1f}%≥{_NP_BOOM:.0f}%（爆发）"))
+    elif np_yoy is not None and np_yoy >= _NP_FAST:
         total += 20
         details.append(_contrib(20, 35, f"净利同比 {np_yoy:.1f}%（较快）"))
     elif np_yoy is not None and np_yoy >= 0:

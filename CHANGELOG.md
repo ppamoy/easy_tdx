@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**菜型同比阈值命名（V564）**：fundamental/screener `score_vegetable` 的营收/净利同比档位阈值（20/10、30/10）抽为命名常量 `_REV_HIGH/_REV_MED/_NP_BOOM/_NP_FAST`，去魔法数字——与 V561-V563 一起把树/粮/菜三分类评分阈值全部命名。
+
+---
+
 **树型营收/毛利率阈值命名（V563）**：fundamental/screener `score_tree` 的营收体量阈值（100亿）与毛利率档位阈值（40/25）抽为命名常量 `_TREE_REVENUE_MIN/_GROSS_MOAT/_GROSS_MED`，去魔法数字（与 V561/V562 对称）。
 
 ---
