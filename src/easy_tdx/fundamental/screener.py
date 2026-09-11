@@ -317,7 +317,9 @@ def score_grain(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
             _contrib(_GRAIN_NPYOY_WEIGHT, _GRAIN_NPYOY_WEIGHT, f"净利同比 {np_yoy:.1f}% 未大幅下滑")
         )
     else:
-        details.append(_contrib(0, _GRAIN_NPYOY_WEIGHT, "净利大幅下滑/缺失"))
+        # V586: 区分「大幅下滑」与「数据缺失」（与 V585 标签细分一致）
+        label = "净利数据缺失" if np_yoy is None else f"净利同比 {np_yoy:.1f}%（大幅下滑）"
+        details.append(_contrib(0, _GRAIN_NPYOY_WEIGHT, label))
 
     if debt is not None:
         if debt <= _DEBT_LOW:
