@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**寻优跳过退化网格点（V550）**：backtest/optimizer `ParamGridOptimizer.run` 跳过「0 交易」的网格点（参数退化，如 fast==slow 的均线交叉），避免「0 交易 0 收益」被当作最优、淹没真实策略表现；补退化网格点回归测试。
+
+---
+
 **分类同分显式优先级（V549）**：fundamental/screener `screen_stock` 的分类裁决改为显式「树 > 粮 > 菜」同分优先级，不再依赖 dict 插入顺序（行为不变、更健壮）。
 
 ---

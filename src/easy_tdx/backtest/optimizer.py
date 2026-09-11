@@ -250,13 +250,19 @@ class ParamGridOptimizer:
                         trust_grade = str(mt.get("grade", ""))
                 except Exception:  # noqa: BLE001
                     pass
+                total_trades = int(perf.get("total_trades", 0))
+                # V550: 无交易的网格点（参数退化，如 fast==slow 的均线交叉）跳过，
+                # 避免「0 交易 0 收益」被当作最优、淹没真实策略表现
+                if total_trades == 0:
+                    logger.warning("网格点 %s 无交易，跳过（参数可能退化）", params)
+                    continue
                 results.append(
                     GridPointResult(
                         params=params,
                         total_return=perf.get("total_return", 0.0),
                         sharpe=perf.get("sharpe", 0.0),
                         max_drawdown=perf.get("max_drawdown", 0.0),
-                        total_trades=int(perf.get("total_trades", 0)),
+                        total_trades=total_trades,
                         win_rate=perf.get("win_rate", 0.0),
                         profit_factor=perf.get("profit_factor", 0.0),
                         hit_rate=hit_rate,

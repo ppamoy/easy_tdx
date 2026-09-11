@@ -79,7 +79,19 @@ class TestParamGridOptimizer:
         assert result.heatmap["y_name"] == "slow"
         assert len(result.heatmap["x"]) == 3
         assert len(result.heatmap["y"]) == 3
-        assert len(result.heatmap["data"]) == 9  # 3×3
+        # V550: fast==slow 的无交易网格点被跳过，3×3=9 中少 1 个退化点
+        assert len(result.heatmap["data"]) == 8
+
+    def test_skip_degenerate_zero_trade(self) -> None:
+        """V550: fast==slow 的无交易网格点被跳过，不被当作最优。"""
+        opt = ParamGridOptimizer(
+            strategy_name="ma_cross",
+            param_grid={"fast": [20], "slow": [20]},  # 退化组合：均线相同，永不交叉
+            df=_make_df(),
+        )
+        result = opt.run()
+        assert len(result.results) == 0
+        assert result.best is None
 
     def test_no_heatmap_for_single_param(self) -> None:
         """1 参数时 heatmap 应为 None。"""
