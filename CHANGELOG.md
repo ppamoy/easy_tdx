@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**树型 ROE 阈值命名（V562）**：fundamental/screener `score_tree` 的 ROE 档位阈值（20/15/10）抽为命名常量 `_ROE_EXCELLENT/_ROE_GOOD/_ROE_MED`，去魔法数字（与 V561 负债率阈值命名对称）。
+
+---
+
 **粮型负债率阈值命名（V561）**：fundamental/screener `score_grain` 的资产负债率档位阈值（40/60/75）抽为模块级命名常量 `_DEBT_LOW/_DEBT_MED/_DEBT_HIGH`，去魔法数字。
 
 ---

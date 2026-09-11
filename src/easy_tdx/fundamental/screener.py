@@ -35,6 +35,11 @@ _DEBT_LOW = 40.0
 _DEBT_MED = 60.0
 _DEBT_HIGH = 75.0
 
+# V562: 树型「ROE」档位阈值（%）——极强 / 优秀 / 中等 / 不足
+_ROE_EXCELLENT = 20.0
+_ROE_GOOD = 15.0
+_ROE_MED = 10.0
+
 
 @dataclass
 class ScoreDetail:
@@ -143,18 +148,18 @@ def score_tree(row: Any, pool_size: int) -> tuple[float, list[ScoreDetail]]:
 
     if roe is not None:
         # V547: ROE 为年化口径（V507），明示「年化」避免与单季 ROE 混淆
-        if roe >= 20:
+        if roe >= _ROE_EXCELLENT:
             total += 30
-            details.append(_contrib(30, 30, f"年化ROE {roe:.1f}%≥20%（极强）"))
-        elif roe >= 15:
+            details.append(_contrib(30, 30, f"年化ROE {roe:.1f}%≥{_ROE_EXCELLENT:.0f}%（极强）"))
+        elif roe >= _ROE_GOOD:
             total += 24
-            details.append(_contrib(24, 30, f"年化ROE {roe:.1f}%≥15%（优秀）"))
-        elif roe >= 10:
+            details.append(_contrib(24, 30, f"年化ROE {roe:.1f}%≥{_ROE_GOOD:.0f}%（优秀）"))
+        elif roe >= _ROE_MED:
             total += 15
-            details.append(_contrib(15, 30, f"年化ROE {roe:.1f}%≥10%（中等）"))
+            details.append(_contrib(15, 30, f"年化ROE {roe:.1f}%≥{_ROE_MED:.0f}%（中等）"))
         else:
             total += 4
-            details.append(_contrib(4, 30, f"年化ROE {roe:.1f}%<10%（不足）"))
+            details.append(_contrib(4, 30, f"年化ROE {roe:.1f}%<{_ROE_MED:.0f}%（不足）"))
     else:
         details.append(_contrib(0, 30, "无 ROE 数据"))
 
