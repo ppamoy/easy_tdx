@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**年化营收展示（V552）**：前端 FundamentalView 新增「年化营收」列（以亿显示，V551 透出的 `revenue_annualized` 落地），选股页补上「龙头规模」维度。
+
+---
+
 **营收年化透出（V551）**：fundamental/screener `screen_stock` indicators 新增 `revenue_annualized`（年化营收，与 eps_annualized 对称，一季报营收为年初至今累计值）；补年化字段回归测试。
 
 ---

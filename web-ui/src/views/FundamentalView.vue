@@ -228,6 +228,12 @@ function fmtVal(v: any) {
   return Number(v).toFixed(2)
 }
 
+/** 金额以「亿」显示（年化营收等）。 */
+function fmtYi(v: any) {
+  if (v === null || v === undefined || Number.isNaN(v)) return '-'
+  return (Number(v) / 1e8).toFixed(1) + '亿'
+}
+
 function pct(v: any) {
   if (v === null || v === undefined || Number.isNaN(v)) return '-'
   return (v * 100).toFixed(0) + '%'
@@ -420,6 +426,7 @@ onMounted(() => {
               <th>代码</th>
               <th>分类</th>
               <th>报告期</th>
+              <th>年化营收</th>
               <th>年化EPS</th>
               <th>每股净资产</th>
               <th>ROE%</th>
@@ -452,6 +459,7 @@ onMounted(() => {
                 </span>
               </td>
               <td>{{ r.report_date }}</td>
+              <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
               <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe) }}</td>
@@ -645,6 +653,7 @@ onMounted(() => {
                   </span>
                 </td>
                 <td>{{ r.report_date }}</td>
+                <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
                 <td :style="{ color: colorBy(r.performance.ret_20d) }">
                   {{ fmt(r.performance.ret_20d) }}
                 </td>
@@ -740,6 +749,7 @@ onMounted(() => {
               <th>得分</th>
               <th>数据源</th>
               <th>报告期</th>
+              <th>年化营收</th>
               <th>年化EPS</th>
               <th>每股净资产</th>
               <th>ROE%</th>
@@ -778,6 +788,7 @@ onMounted(() => {
                 }}</span>
               </td>
               <td>{{ r.report_date }}</td>
+              <td>{{ fmtYi(r.indicators.revenue_annualized) }}</td>
               <td>{{ fmt(r.indicators.eps_annualized) }}</td>
               <td>{{ fmt(r.indicators.bps) }}</td>
               <td>{{ fmt(r.indicators.roe) }}</td>
