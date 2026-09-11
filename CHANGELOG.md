@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**分类同分显式优先级（V549）**：fundamental/screener `screen_stock` 的分类裁决改为显式「树 > 粮 > 菜」同分优先级，不再依赖 dict 插入顺序（行为不变、更健壮）。
+
+---
+
 **因子合并透出报告期（V548）**：factor/engine `merge_fundamentals` 在追加 eps/bps 的同时透出 `report_date`（源财报报告期），便于核对 point-in-time 取数是否命中预期报告期；补报告期断言。
 
 ---

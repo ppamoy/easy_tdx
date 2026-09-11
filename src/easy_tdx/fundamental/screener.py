@@ -304,7 +304,9 @@ def screen_stock(
     s_grain, d_grain = score_grain(row, pool_size)
     s_veg, d_veg = score_vegetable(row, pool_size)
     scores = {TREE: s_tree, GRAIN: s_grain, VEGETABLE: s_veg}
-    category = max(scores, key=lambda k: scores[k])
+    # V549: 同分显式优先「树」>「粮」>「菜」，不依赖 dict 插入顺序
+    _order = {TREE: 0, GRAIN: 1, VEGETABLE: 2}
+    category = max(scores, key=lambda k: (scores[k], -_order[k]))
 
     ind = {
         "eps": row.get("eps"),
