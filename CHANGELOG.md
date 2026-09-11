@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**净利润年化透出（V558）**：fundamental/screener `screen_stock` indicators 新增 `net_profit_annualized`（净利润同为年初至今累计值，与 eps/revenue/roe 年化透出对称）；补年化字段断言。
+
+---
+
 **ROE 透出还原原始值（V557）**：fundamental/screener `screen_stock` 的 `indicators.roe` 还原为原始值（与 eps/revenue 一致），年化 ROE 走新字段 `roe_annualized`；前端 FundamentalView「ROE%」列改用 `roe_annualized`（显示不变，API 更一致）。
 
 ---

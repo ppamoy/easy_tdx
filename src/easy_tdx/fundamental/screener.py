@@ -330,6 +330,8 @@ def screen_stock(
         "rev_yoy": row.get("rev_yoy"),
         "np_yoy": row.get("np_yoy"),
         "net_profit": row.get("net_profit"),
+        # V558: 净利润同为年初至今累计值，年化单独透出（与 eps/revenue/roe 对称）
+        "net_profit_annualized": _annualize(_pct(row.get("net_profit")), row.get("report_date")),
         "revenue": row.get("revenue"),
         # V551: 营收年化单独透出（与 eps_annualized 对称，一季报营收为累计值）
         "revenue_annualized": _annualize(_pct(row.get("revenue")), row.get("report_date")),
