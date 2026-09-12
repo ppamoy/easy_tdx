@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**估值 PE/PB 口径注释（V589）**：前端 ChanlunView 的 valuation 补注释，明确 pe 为动态市盈率（年化 EPS）、pb 为静态市净率（每股净资产 point-in-time），与 V579 动态PE 标签 / V588 后端口径注释对齐。
+
+---
+
 **估值 PB 口径注释（V588）**：fundamental/pipeline `_valuation` 注释明确 PB 用每股净资产（point-in-time，非累计值）不年化，与动态 PE（年化 EPS）区分。
 
 ---

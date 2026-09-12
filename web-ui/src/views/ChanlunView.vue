@@ -157,6 +157,7 @@ interface ChanlunBoll {
 const boll = ref<ChanlunBoll | null>(null)
 
 // V535: 基本面估值（PE/PB，诊断/缠论同源，无缓存财报时为 null）
+// V589: pe 为动态市盈率（年化 EPS 计算），pb 为静态市净率（每股净资产 point-in-time，不年化）
 const valuation = ref<{ pe: number | null; pb: number | null } | null>(null)
 
 // 多级别分析结果

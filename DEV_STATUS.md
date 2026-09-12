@@ -3,6 +3,10 @@
 ## 项目概述
 **easy_tdx** 是一个基于 Python + Vue.js 的通达信 TCP 协议行情客户端，核心功能为缠论技术分析（笔/线段/中枢/买卖点/背驰）和回测验证。
 
+## 估值 PE/PB 口径注释（V589）✅ 完成
+
+- 前端 ChanlunView valuation 补注释，明确 pe 动态（年化 EPS）/ pb 静态（每股净资产 point-in-time），与 V579/V588 对齐
+
 ## 估值 PB 口径注释（V588）✅ 完成
 
 - fundamental/pipeline `_valuation` 注释明确 PB 用每股净资产（point-in-time）不年化，与动态 PE（年化 EPS）区分
