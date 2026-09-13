@@ -180,6 +180,10 @@ class ChanlunResult:
                     "date": self._fmt_dt(self._fx_anchor_datetime(mmd.bi.end)) if mmd.bi else None,
                     # 买卖点锚定的原始K线索引（触发笔终点极值来源）
                     "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
+                    # 买卖点锚定价格（触发笔终点分型极值）：买点=底分型低点，
+                    # 卖点=顶分型高点。前端标注必须用该值，不能用 bars 的
+                    # low/high 乘偏移，否则标注不会精确落在触发笔端点极值上。
+                    "anchor_val": round(mmd.bi.end.val, 2) if mmd.bi else None,
                     "msg": mmd.msg,
                     "confidence": round(mmd.confidence, 2),
                     "quality": {
@@ -249,6 +253,22 @@ class ChanlunResult:
                     ),
                     "prev_date": (
                         self._fmt_dt(self._fx_anchor_datetime(bc.prev.end)) if bc.prev else None
+                    ),
+                    # 背驰锚定价格/索引：主图标注落在触发笔终点分型极值上，
+                    # 副图仍展示 MACD 柱依据，主副图可对照核对。
+                    "anchor_val": (
+                        round(bc.curr.end.val, 2)
+                        if bc.curr
+                        else round(bc.prev.end.val, 2)
+                        if bc.prev
+                        else None
+                    ),
+                    "anchor_bar_index": (
+                        bc.curr.end.bar_index
+                        if bc.curr
+                        else bc.prev.end.bar_index
+                        if bc.prev
+                        else None
                     ),
                     "msg": bc.msg,
                 }

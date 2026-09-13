@@ -1,6 +1,9 @@
 <script setup lang="ts">
-// 根组件：顶部标题栏 + 路由出口 + 全局自选股面板。
-import { onMounted, onUnmounted } from 'vue'
+// 根组件：顶部标题栏 + 三大主导航 + 路由出口 + 全局自选股面板。
+// v590：主导航收敛为「回测 / 选股 / 缠论测试学习」，其余页面软隐藏，
+// 服务器设置收敛到页脚齿轮入口。
+import { computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import WatchlistPanel from './components/WatchlistPanel.vue'
 
 // 快捷键：Ctrl+Shift+W 切换自选股面板
@@ -12,6 +15,13 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+// 软隐藏旧页：主导航收敛后仍保留 URL 直达，但给非核心页一个非阻断提示。
+const route = useRoute()
+const CORE_PATHS = ['/', '/stock-pick', '/learn']
+const isSoftHidden = computed(
+  () => !CORE_PATHS.some((p) => route.path === p || route.path.startsWith(p)),
+)
+
 onMounted(() => document.addEventListener('keydown', handleKeydown))
 onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 </script>
@@ -19,26 +29,22 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>easy-tdx 回测</h1>
+      <h1>easy-tdx</h1>
       <nav class="app-nav">
-        <RouterLink to="/" active-class="active">单标的回测</RouterLink>
-        <RouterLink to="/chanlun" active-class="active">缠论分析</RouterLink>
-        <RouterLink to="/train" active-class="active">缠论学习</RouterLink>
-        <RouterLink to="/changying" active-class="active">长赢投资</RouterLink>
-        <RouterLink to="/screening" active-class="active">动态选股</RouterLink>
-        <RouterLink to="/fundamental" active-class="active">长赢选股</RouterLink>
-        <RouterLink to="/portfolio" active-class="active">组合回测</RouterLink>
-        <RouterLink to="/optimize" active-class="active">参数寻优</RouterLink>
-        <RouterLink to="/compare" active-class="active">结果对比</RouterLink>
-        <RouterLink to="/strategies" active-class="active">策略库</RouterLink>
-        <RouterLink to="/settings" active-class="active">服务器设置</RouterLink>
-        <RouterLink to="/monitor" active-class="active">信号监控</RouterLink>
-        <RouterLink to="/diagnosis" active-class="active">技术诊断</RouterLink>
+        <RouterLink to="/" active-class="active">回测</RouterLink>
+        <RouterLink to="/stock-pick" active-class="active">选股</RouterLink>
+        <RouterLink to="/learn" active-class="active">缠论测试学习</RouterLink>
       </nav>
     </header>
     <main class="app-main">
+      <div v-if="isSoftHidden" class="soft-hidden-banner">
+        该页已移出主导航，请从「回测 / 选股 / 缠论测试学习」使用核心功能
+      </div>
       <RouterView />
     </main>
+    <footer class="app-footer">
+      <RouterLink to="/settings" class="settings-link" title="服务器设置">⚙ 服务器设置</RouterLink>
+    </footer>
     <WatchlistPanel />
   </div>
 </template>
@@ -85,5 +91,30 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
 .app-main {
   flex: 1;
   overflow: auto;
+}
+.soft-hidden-banner {
+  margin: 8px 20px 0;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 4px;
+}
+.app-footer {
+  flex-shrink: 0;
+  padding: 4px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-panel);
+  display: flex;
+  justify-content: flex-end;
+}
+.settings-link {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 12px;
+}
+.settings-link:hover {
+  color: var(--accent);
 }
 </style>

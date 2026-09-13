@@ -25,6 +25,7 @@ import StrategiesView from '../StrategiesView.vue'
 import TrainView from '../TrainView.vue'
 import SignalVerifyView from '../SignalVerifyView.vue'
 import LearnView from '../LearnView.vue'
+import StockPickView from '../StockPickView.vue'
 
 vi.mock('../../api', () => {
   const fn = vi.fn(async () => undefined)
@@ -52,6 +53,8 @@ vi.mock('../../api', () => {
     fetchDiagnosis: fn,
     fetchAdviceSimulate: fn,
     fetchMultiStockComparison: fn,
+    stockPickScreen: fn,
+    stockPickTiming: fn,
   }
 })
 
@@ -94,6 +97,7 @@ const VIEWS = [
   TrainView,
   SignalVerifyView,
   LearnView,
+  StockPickView,
 ] as const
 
 describe('视图冒烟测试', () => {

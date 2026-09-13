@@ -310,8 +310,10 @@ def find_bis(
             pending_opposite = current_fx
             continue
 
-        # v90: 分型稳定性校验（可选）
-        if config.bi_type != "simple" and cklines is not None:
+        # v90: 分型稳定性校验（默认关闭——静默丢弃待确认分型会把真实极值
+        # 转折点跳过，导致笔画不到最高/最低点。仅当 config.bi_fractal_confirm=True
+        # 时才作为硬门槛，否则只保留极值、不丢点）。
+        if config.bi_type != "simple" and cklines is not None and config.bi_fractal_confirm:
             if not _check_fractal_stability(current_fx, cklines, direction):
                 # 分型未得到后续K线确认，暂不形成笔
                 pending_opposite = current_fx

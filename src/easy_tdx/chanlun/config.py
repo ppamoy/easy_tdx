@@ -17,6 +17,10 @@ class ChanlunConfig:
     bi_type: str = "new"
     # 是否跳过弱笔（价格变动 < 0.1% 的笔）
     bi_weak_skip: bool = False
+    # 是否强制要求端点分型在后续K线得到确认后方可成笔。
+    # 默认 False：即使分型暂未确认也保留真实转折点，避免静默丢弃极值导致
+    # 笔/线段画不到最高/最低点（用户反馈的精度问题核心）。
+    bi_fractal_confirm: bool = False
 
     # ── 中枢配置 ────────────────────────────────────────────────────────
     # "standard" 标准中枢，"dn" 段内中枢
@@ -47,6 +51,7 @@ class ChanlunConfig:
         return {
             "bi_type": self.bi_type,
             "bi_weak_skip": self.bi_weak_skip,
+            "bi_fractal_confirm": self.bi_fractal_confirm,
             "zs_type": self.zs_type,
             "zs_min_lines": self.zs_min_lines,
             "zs_qujian": self.zs_qujian,

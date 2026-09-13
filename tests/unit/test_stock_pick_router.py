@@ -1,0 +1,63 @@
+"""选股两步流路由纯函数测试（v590）。"""
+
+from __future__ import annotations
+
+from datetime import date
+
+import pandas as pd
+
+from easy_tdx.web.routers.stock_pick import (
+    _default_pool,
+    _df_to_bars,
+    _run_timing_one,
+    _verdict,
+)
+
+
+class _FakeMmd:
+    def __init__(self, value: str, confidence: float) -> None:
+        self.mmd_type = type("T", (), {"value": value})()
+        self.confidence = confidence
+
+
+def test_default_pool_hot() -> None:
+    pool = _default_pool(["SZ", "SH"])
+    assert len(pool) == 30
+    assert {"market": "SH", "code": "600519"} in pool
+
+
+def test_verdict_buy_sell_wait() -> None:
+    assert _verdict([])["action"] == "观望"
+    assert _verdict([_FakeMmd("1buy", 0.9)])["action"] == "买入"
+    assert _verdict([_FakeMmd("3sell", 0.7)])["action"] == "卖出"
+
+
+def test_df_to_bars_contract() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range("2025-01-02", periods=2, freq="B"),
+            "open": [10, 10],
+            "close": [11, 11],
+            "high": [11.5, 11.5],
+            "low": [9.5, 9.5],
+            "vol": [100, 100],
+        }
+    )
+    bars = _df_to_bars(df)
+    assert bars[0]["datetime"].startswith("2025-01-02")
+    assert bars[0]["high"] == 11.5
+
+
+def test_run_timing_one_short_window() -> None:
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range("2025-01-02", periods=10, freq="B"),
+            "open": [10] * 10,
+            "close": [10] * 10,
+            "high": [10.5] * 10,
+            "low": [9.5] * 10,
+            "vol": [100] * 10,
+        }
+    )
+    out = _run_timing_one(df, "SH:600519", "SH", "600519", date(2025, 1, 20))
+    assert "error" in out and "不足" in out["error"]

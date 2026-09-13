@@ -215,6 +215,7 @@ def _create_app(
     from easy_tdx.web.routers.screening import router as screening_router
     from easy_tdx.web.routers.server import router as server_router
     from easy_tdx.web.routers.sina import router as sina_router
+    from easy_tdx.web.routers.stock_pick import router as stock_pick_router
     from easy_tdx.web.routers.strategies import router as strategies_router
 
     app.include_router(market_router, prefix="/api/v1")
@@ -245,6 +246,8 @@ def _create_app(
     app.include_router(server_router, prefix="/api/v1")
     # 选股路由
     app.include_router(screening_router, prefix="/api/v1")
+    # v590 选股两步流（长盈基本面 + 缠论择时）
+    app.include_router(stock_pick_router, prefix="/api/v1")
     # 信号监控路由
     from easy_tdx.web.routers.monitor import router as monitor_router
 

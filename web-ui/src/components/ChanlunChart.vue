@@ -97,6 +97,8 @@ interface ChanlunMmd {
   msg: string
   /** 触发笔终点极值锚定的原始K线索引 */
   bar_index?: number
+  /** 触发笔终点分型极值价（买点=底分型低点，卖点=顶分型高点），标注必须用该值 */
+  anchor_val?: number | null
 }
 
 interface ChanlunFx {
@@ -114,6 +116,9 @@ interface ChanlunBc {
   msg: string
   /** 背驰锚定K线索引 */
   bar_index?: number
+  /** 背驰触发笔终点分型极值价与索引，用于主图标注 */
+  anchor_val?: number | null
+  anchor_bar_index?: number | null
 }
 
 const container = ref<HTMLDivElement>()
@@ -342,10 +347,19 @@ function buildOption(): echarts.EChartsCoreOption {
       const idx = findAnchorIndex(keyIndex, m.bar_index, m.date!, revealLimit)
       if (idx === -1) return null
       const isBuy = m.type.includes('buy')
-      const priceOffset = isBuy ? -0.005 : 0.005
-      const price = isBuy
-        ? props.bars[idx].low * (1 + priceOffset)
-        : props.bars[idx].high * (1 - priceOffset)
+      // 精确锚定：优先用后端 anchor_val（触发笔终点分型极值），
+      // 使买卖点标注精确落在笔端点的最高/最低点，而不是 bars 的
+      // low/high 乘偏移（旧逻辑会与极值错位）。
+      let price: number
+      if (m.anchor_val !== undefined && m.anchor_val !== null && Number.isFinite(m.anchor_val)) {
+        price = m.anchor_val
+      } else {
+        // 老数据回退：仅作视觉避让，不参与精度判定
+        const priceOffset = isBuy ? -0.005 : 0.005
+        price = isBuy
+          ? props.bars[idx].low * (1 + priceOffset)
+          : props.bars[idx].high * (1 - priceOffset)
+      }
 
       // 根据买卖点类型选择图标和颜色
       const isType1 = m.type.startsWith('1')
@@ -407,6 +421,29 @@ function buildOption(): echarts.EChartsCoreOption {
     })
     .filter(Boolean)
 
+  // ── 背驰主图标注 ──
+  // 在 K 线主图的触发笔终点分型极值上再标一个「背」，与副图 MACD 柱对照。
+  const bcPricePoints = (props.bcs ?? [])
+    .filter((bc) => bc.bc && bc.anchor_bar_index != null && bc.anchor_val != null)
+    .map((bc) => {
+      const idx = findAnchorIndex(keyIndex, bc.anchor_bar_index!, bc.date!, revealLimit)
+      if (idx === -1) return null
+      return {
+        coord: [idx, bc.anchor_val],
+        itemStyle: { color: '#ff9500' },
+        symbol: 'roundRect',
+        symbolSize: [12, 8],
+        label: {
+          show: true,
+          formatter: '背',
+          color: '#ff9500',
+          fontSize: 9,
+          position: 'top' as const,
+        },
+      }
+    })
+    .filter(Boolean)
+
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -452,7 +489,7 @@ function buildOption(): echarts.EChartsCoreOption {
         ...(props.zss.length ? ['中枢'] : []),
         ...(props.fxs && props.fxs.length ? ['分型'] : []),
         ...(props.mmds.length ? ['买卖点'] : []),
-        ...(props.bcs && props.bcs.some((bc) => bc.bc) ? ['背驰'] : []),
+        ...(props.bcs && props.bcs.some((bc) => bc.bc) ? ['背驰', '背驰(主图)'] : []),
         ...(macdHist.length ? ['MACD', 'DIF', 'DEA'] : []),
       ],
       top: 2,
@@ -644,6 +681,27 @@ function buildOption(): echarts.EChartsCoreOption {
           show: true,
           formatter: (params: any) => (bcPoints as any[])[params.dataIndex]?.label.formatter,
           color: (params: any) => (bcPoints as any[])[params.dataIndex]?.label.color,
+          fontSize: 9,
+          position: 'top',
+        },
+        labelLayout: { hideOverlap: true },
+      },
+      // 背驰主图标注（落在触发笔终点分型极值上，与副图对照）
+      {
+        name: '背驰(主图)',
+        type: 'scatter',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: (bcPricePoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
+        symbol: (bcPricePoints as any[]).map((p) => p.symbol),
+        symbolSize: (bcPricePoints as any[]).map((p) => p.symbolSize),
+        itemStyle: {
+          color: (params: any) => (bcPricePoints as any[])[params.dataIndex]?.itemStyle.color,
+        },
+        label: {
+          show: true,
+          formatter: (params: any) => (bcPricePoints as any[])[params.dataIndex]?.label.formatter,
+          color: (params: any) => (bcPricePoints as any[])[params.dataIndex]?.label.color,
           fontSize: 9,
           position: 'top',
         },

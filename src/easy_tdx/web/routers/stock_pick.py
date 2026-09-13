@@ -1,0 +1,289 @@
+"""选股两步流 API 路由（v590）。
+
+第一步 /stock-pick/screen：长盈基本面选股池（树粮菜 + 评分明细）。
+   - 复用 easy_tdx.fundamental.pipeline.run_screen（point-in-time，无未来函数）。
+   - pool 由请求传入；缺省用内置热门池（与 screening 一致）。
+第二步 /stock-pick/timing：对池内标的做截至目标日的缠论择时。
+   - 复用 web/routers/chanlun.fetch_qfq_klines（QFQ 前复权，与图表同一价格体系）。
+   - 把 K 线按目标日截断后跑 ChanlunAnalyser，输出完整结构 + 择时结论。
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+from datetime import date
+from typing import Any
+
+import pandas as pd
+from fastapi import APIRouter, Depends, HTTPException
+
+from easy_tdx.web.deps import get_client, get_mac_client_optional
+
+router = APIRouter(tags=["stock-pick"])
+logger = logging.getLogger(__name__)
+
+# 默认热门标的池（市场 → 代码列表），与 screening 保持一致；可被请求 pool 覆盖。
+HOT_STOCKS: dict[str, list[str]] = {
+    "SZ": [
+        "000001", "000002", "000063", "000100", "000333", "000568", "000651",
+        "000725", "000858", "002594", "300059", "300015", "300014", "300012", "300750",
+    ],
+    "SH": [
+        "600000", "600004", "600009", "600010", "600011", "600016", "600028",
+        "600030", "600036", "600048", "600519", "601318", "601398", "600887", "600900",
+    ],
+}
+
+
+def _default_pool(markets: list[str]) -> list[dict[str, str]]:
+    out: list[dict[str, str]] = []
+    for m in markets or ["SZ", "SH"]:
+        m2 = str(m).upper()[:2]
+        for code in HOT_STOCKS.get(m2, []):
+            out.append({"market": m2, "code": code})
+    return out
+
+
+@router.post("/stock-pick/screen")
+async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
+    """第一步：长盈基本面选股池。
+
+    请求体：{"date": "2026-05-01", "markets": ["SH","SZ"], "stock_type": "all",
+             "pool": [{"market":"SH","code":"600519"}], "top_n": 30}
+    返回：按质量分排序的树粮菜标的池（含评分明细）。
+    """
+    from easy_tdx.fundamental.pipeline import run_screen
+
+    date_str = str(req.get("date", ""))
+    if not date_str:
+        raise HTTPException(status_code=400, detail="缺少 date")
+    try:
+        target = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD") from None
+
+    markets = req.get("markets") or ["SZ", "SH"]
+    norm_markets = [str(m).upper()[:2] for m in markets if str(m).upper()[:2] in ("SH", "SZ")]
+    pool_raw = req.get("pool") or _default_pool(norm_markets)
+    if not pool_raw:
+        raise HTTPException(status_code=400, detail="pool 为空")
+    norm_pool = [
+        {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
+        for p in pool_raw
+        if p.get("code")
+    ]
+    stock_type = str(req.get("stock_type", "all"))
+    if stock_type not in ("all", "tree", "grain", "vegetable"):
+        stock_type = "all"
+    pool_scope = str(req.get("pool_scope", "pool"))
+    top_n = max(1, min(int(req.get("top_n", 50)), 200))
+
+    def _run() -> dict[str, Any]:
+        # 全市场路径：复用 fundamental.pipeline.scan_market（同步扫描，
+        # 前端以 loading + 分批 top_n 呈现；进度轮询版留待 task_runner 集成）。
+        if pool_scope == "full":
+            from easy_tdx.fundamental.pipeline import scan_market
+
+            out = scan_market(
+                target,
+                markets=tuple(norm_markets),
+                stock_type=stock_type,
+                top_n=top_n,
+                min_score=float(req.get("min_score", 15.0)),
+                with_performance=bool(req.get("with_performance", True)),
+                sina_pool=norm_pool,
+            )
+            full_rows: list[dict[str, Any]] = []
+            for r in out.get("results") or []:
+                full_rows.append(
+                    {
+                        "symbol": f"{r.get('market', '')}:{r.get('code', '')}",
+                        "market": r.get("market", ""),
+                        "code": r.get("code", ""),
+                        "category": r.get("category", ""),
+                        "quality_score": r.get("quality_score", 0),
+                        "detail": r.get("detail") or {},
+                        "post_performance": r.get("post_performance"),
+                    }
+                )
+            full_rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
+            return {"date": date_str, "total": len(full_rows), "results": full_rows}
+
+        out = run_screen(target, norm_pool)
+        results = out.get("results") or []
+        if stock_type != "all":
+            results = [r for r in results if r["category"] == stock_type]
+        # 统一字段：symbol = market:code，评分降序
+        rows: list[dict[str, Any]] = []
+        for r in results:
+            rows.append(
+                {
+                    "symbol": f"{r.get('market', '')}:{r.get('code', '')}",
+                    "market": r.get("market", ""),
+                    "code": r.get("code", ""),
+                    "category": r.get("category", ""),
+                    "quality_score": r.get("quality_score", 0),
+                    "detail": r.get("detail") or {},
+                    "post_performance": r.get("post_performance"),
+                }
+            )
+        rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
+        return {"date": date_str, "total": len(rows), "results": rows}
+
+    try:
+        return await asyncio.to_thread(_run)
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        logger.exception("stock-pick screen 失败")
+        raise HTTPException(status_code=500, detail=f"stock-pick screen 失败: {e}") from e
+
+
+async def _fetch_window(
+    mac_client: Any,
+    tdx_client: Any,
+    market: str,
+    code: str,
+    count: int,
+) -> pd.DataFrame:
+    from easy_tdx.web.routers.chanlun import fetch_qfq_klines
+
+    return await fetch_qfq_klines(
+        mac_client, tdx_client, market, code, "DAY", start=0, count=count
+    )
+
+
+def _df_to_bars(df: pd.DataFrame) -> list[dict[str, Any]]:
+    col = "date" if "date" in df.columns else "datetime"
+    bars: list[dict[str, Any]] = []
+    for _i, row in df.iterrows():
+        dt = row[col]
+        bars.append(
+            {
+                "datetime": str(dt)[:19].replace(" ", "T"),
+                "open": round(float(row["open"]), 3),
+                "close": round(float(row["close"]), 3),
+                "high": round(float(row["high"]), 3),
+                "low": round(float(row["low"]), 3),
+                "vol": float(row.get("vol", 0) or 0),
+                "amount": float(row.get("amount", 0) or 0),
+            }
+        )
+    return bars
+
+
+def _verdict(mmds: list[Any]) -> dict[str, Any]:
+    """根据最新三类买卖点给出择时结论（可解释、非黑盒）。"""
+    if not mmds:
+        return {"action": "观望", "reason": "截至目标日无高置信缠论买卖点信号"}
+    last = mmds[-1]
+    typ = last.mmd_type.value
+    conf = last.confidence or 0
+    if "buy" in typ:
+        action = "买入"
+        reason = f"最新信号 {typ}（置信度 {conf:.0%}），可考虑分批建仓"
+    elif "sell" in typ:
+        action = "卖出"
+        reason = f"最新信号 {typ}（置信度 {conf:.0%}），建议减仓/离场"
+    else:
+        action = "观望"
+        reason = f"最新信号 {typ}（置信度 {conf:.0%}），观察确认"
+    return {"action": action, "signal": typ, "confidence": round(conf, 2), "reason": reason}
+
+
+def _run_timing_one(
+    df: pd.DataFrame, symbol: str, market: str, code: str, target: date
+) -> dict[str, Any]:
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    if df is None or df.empty:
+        return {"symbol": symbol, "error": "无K线数据"}
+    col = "date" if "date" in df.columns else "datetime"
+    ts = pd.to_datetime(df[col])
+    df = df[ts.dt.normalize() <= pd.Timestamp(target)].reset_index(drop=True)
+    if df.empty or len(df) < 30:
+        return {
+            "symbol": symbol,
+            "error": f"截至 {target} 的 K 线不足（<30 根，实际 {len(df)})",
+        }
+
+    freq = "daily"
+    analyser = ChanlunAnalyser(code=symbol, frequency=freq)
+    result = analyser.process_klines(df)
+    d = result.to_dict()
+    # 补充分型列表（与 /chanlun/analyze 契约一致）供前端标注
+    d["fractals"] = [
+        {
+            "fx_type": fx.fx_type.value,
+            "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
+            "val": round(fx.val, 2),
+            "index": fx.index,
+            "bar_index": fx.bar_index,
+        }
+        for fx in result.fractals
+    ]
+    v = _verdict(result.mmds)
+    return {
+        "symbol": symbol,
+        "market": market,
+        "code": code,
+        "date": str(target),
+        "bars": _df_to_bars(df),
+        "bis": d["bis"],
+        "xds": d["xds"],
+        "zss": d["zss"],
+        "mmds": d["mmds"],
+        "bcs": d["bcs"],
+        "fractals": d["fractals"],
+        "verdict": v,
+        "structure": {
+            "bi_count": result.bi_count if hasattr(result, "bi_count") else len(result.bis),
+            "zs_count": len(result.zss),
+            "mmd_count": len(result.mmds),
+            "bc_count": len(result.bcs),
+        },
+    }
+
+
+@router.post("/stock-pick/timing")
+async def stock_pick_timing(
+    req: dict[str, Any],
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
+    """第二步：缠论择时（截至目标日的前复权 K 线）。
+
+    请求体：{"date":"2026-05-01","symbols":[{"market":"SH","code":"600519"}],"count":400}
+    返回每只标的的完整缠论结构 + 择时结论，前端可直接喂给 ChanlunChart。
+    """
+    date_str = str(req.get("date", ""))
+    if not date_str:
+        raise HTTPException(status_code=400, detail="缺少 date")
+    try:
+        target = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD") from None
+
+    symbols_raw = req.get("symbols") or []
+    if not symbols_raw:
+        raise HTTPException(status_code=400, detail="symbols 不能为空")
+    symbols: list[dict[str, str]] = [
+        {"market": str(s.get("market", "SZ")).upper()[:2], "code": str(s["code"]).zfill(6)}
+        for s in symbols_raw
+        if s.get("code")
+    ]
+    count = max(60, min(int(req.get("count", 400)), 1600))
+
+    # 并发取数 + 分析（串行依赖单连接，简单起见 per-symbol 串行，快于全市场）
+    results: list[dict[str, Any]] = []
+    for sym in symbols:
+        market, code = sym["market"], sym["code"]
+        symbol = f"{market}:{code}"
+        try:
+            df = await _fetch_window(mac_client, client, market, code, count)
+            results.append(_run_timing_one(df, symbol, market, code, target))
+        except Exception as e:  # noqa: BLE001
+            logger.warning("stock-pick timing %s 失败: %s", symbol, e)
+            results.append({"symbol": symbol, "market": market, "code": code, "error": str(e)})
+    return {"date": date_str, "results": results}

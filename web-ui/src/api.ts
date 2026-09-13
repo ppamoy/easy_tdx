@@ -362,3 +362,69 @@ export async function fetchMultiStockComparison(
   if (!resp.ok) await throwError(resp)
   return (await resp.json()) as MultiStockComparisonResponse
 }
+
+// ── v590 选股两步流 ────────────────────────────────────────────────────
+export interface StockPickPoolItem {
+  symbol: string
+  market: string
+  code: string
+  category: string
+  quality_score: number
+  detail?: Record<string, unknown>
+  post_performance?: unknown
+}
+
+export interface StockPickScreenResult {
+  date: string
+  total: number
+  results: StockPickPoolItem[]
+}
+
+export interface StockPickTimingResult {
+  symbol: string
+  market?: string
+  code?: string
+  date?: string
+  error?: string
+  bars?: Bar[]
+  bis?: unknown[]
+  xds?: unknown[]
+  zss?: unknown[]
+  mmds?: unknown[]
+  bcs?: unknown[]
+  fractals?: unknown[]
+  verdict?: { action: string; signal?: string; confidence?: number; reason?: string }
+  structure?: { bi_count: number; zs_count: number; mmd_count: number; bc_count: number }
+}
+
+/** 第一步：长盈基本面选股池（point-in-time）。 */
+export async function stockPickScreen(req: {
+  date: string
+  markets?: string[]
+  pool?: { market: string; code: string }[]
+  stock_type?: string
+  top_n?: number
+}): Promise<StockPickScreenResult> {
+  const resp = await fetch(BASE + '/stock-pick/screen', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as StockPickScreenResult
+}
+
+/** 第二步：缠论择时（截至目标日的前复权 K 线 + 缠论结构 + 结论）。 */
+export async function stockPickTiming(req: {
+  date: string
+  symbols: { market: string; code: string }[]
+  count?: number
+}): Promise<{ date: string; results: StockPickTimingResult[] }> {
+  const resp = await fetch(BASE + '/stock-pick/timing', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as { date: string; results: StockPickTimingResult[] }
+}
