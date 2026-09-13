@@ -81,6 +81,24 @@ def test_mmd_and_bc_anchor_fields_present_and_aligned() -> None:
         assert b["anchor_val"] in (bar["high"], bar["low"]), f"背驰未锚定极值 {b}"
 
 
+def test_config_bi_fractal_confirm_true_keeps_endpoint_geometry() -> None:
+    df = _downtrend_df()
+    res = ChanlunAnalyser(
+        "SZ000001", "daily", ChanlunConfig(bi_fractal_confirm=True)
+    ).process_klines(df)
+    d = res.to_dict()
+    bars = df.to_dict(orient="records")
+    for bi in d["bis"]:
+        si, ei = bi["start_index"], bi["end_index"]
+        sb, eb = bars[si], bars[ei]
+        if bi["direction"] == "up":
+            assert sb["low"] == bi["start_val"], f"confirm=True 起点未锚定极值 {bi}"
+            assert eb["high"] == bi["end_val"], f"confirm=True 终点未锚定极值 {bi}"
+        else:
+            assert sb["high"] == bi["start_val"], f"confirm=True 起点未锚定极值 {bi}"
+            assert eb["low"] == bi["end_val"], f"confirm=True 终点未锚定极值 {bi}"
+
+
 def test_config_bi_fractal_confirm_toggle_runs() -> None:
     df = _downtrend_df()
     ok = ChanlunAnalyser(
