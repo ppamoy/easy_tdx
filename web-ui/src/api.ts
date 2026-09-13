@@ -393,6 +393,7 @@ export interface StockPickTimingResult {
   mmds?: unknown[]
   bcs?: unknown[]
   fractals?: unknown[]
+  macd?: { dif: number[]; dea: number[]; hist: number[] }
   verdict?: { action: string; signal?: string; confidence?: number; reason?: string }
   structure?: { bi_count: number; zs_count: number; mmd_count: number; bc_count: number }
 }

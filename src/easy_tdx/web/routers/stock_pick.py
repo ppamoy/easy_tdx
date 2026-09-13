@@ -236,6 +236,9 @@ def _run_timing_one(
         "mmds": d["mmds"],
         "bcs": d["bcs"],
         "fractals": d["fractals"],
+        # MACD 序列（dif/dea/hist 与 bars 一一对应），前端 ChanlunChart 副图展示，
+        # 便于用户核对背驰的 MACD 面积依据。
+        "macd": d["macd"],
         "verdict": v,
         "structure": {
             "bi_count": result.bi_count if hasattr(result, "bi_count") else len(result.bis),

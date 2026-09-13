@@ -167,6 +167,7 @@ async function runTiming(item: StockPickPoolItem) {
             :mmds="(timingResult.mmds as any) ?? []"
             :fxs="(timingResult.fractals as any) ?? []"
             :bcs="(timingResult.bcs as any) ?? []"
+            :macd="(timingResult.macd as any) ?? undefined"
             frequency="daily"
             compact
           />
