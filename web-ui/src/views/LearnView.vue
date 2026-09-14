@@ -6,6 +6,7 @@ import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import ChanlunView from './ChanlunView.vue'
 import SignalVerifyView from './SignalVerifyView.vue'
+import BeginnerGuide from '../components/BeginnerGuide.vue'
 import TheoryLessons from '../components/TheoryLessons.vue'
 import ProgressDashboard from '../components/ProgressDashboard.vue'
 import MistakesReview from '../components/MistakesReview.vue'
@@ -23,6 +24,7 @@ const tab = ref<Tab>(initial)
 
 <template>
   <div class="learn-view">
+    <BeginnerGuide />
     <div class="learn-tabs">
       <button :class="['tab', { active: tab === 'analysis' }]" @click="tab = 'analysis'">
         📈 看图分析

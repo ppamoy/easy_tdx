@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**新手第一课引导层（V595）**：
+- 新增 BeginnerGuide 组件：三句话讲清「先长盈选好公司 → 再缠论找买卖点 → 后看信号可信度」，附树粮菜/中枢/背驰/三类买卖点人话术语表。
+- 选股页顶部 + 缠论测试学习页顶部接入，可一键隐藏（localStorage 持久化）。
+- 测试：新增 BeginnerGuide 测试；前端 vitest 61 passed。
+
+
 **缠论信号可信度（V594）**：
 - 选股择时结果新增 signal_quality：用标的自身历史窗口内的买卖点做前瞻命中率验证，给小白一个「这类买卖点历史上准不准」的可信度提示。
 - 前端择时详情卡展示「信号可信度」一句结论。
@@ -859,19 +865,3 @@
 ---
 
 **质量加固续章十六（V399q）—— mac unusual 全类型分支测试**：
-
-- **V399q** mac/commands/unusual.py _describe_unusual 全部异动类型分支测试（+14 用例）。
-
----
-
-**质量加固续章十五（V399p）—— mac 协议编解码测试五**：
-
-- **V399p** mac/commands/symbol_tick_chart.py + symbol_quotes.py + board_members_quotes.py 协议编解码测试（+7 用例）。
-
----
-
-**质量加固续章十四（V399o）—— mac 协议编解码测试四**：
-
-- **V399o** mac/commands/symbol_transaction.py + file_query.py 协议编解码测试（+8 用例）。
-
----

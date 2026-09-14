@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 选股两步流（v590）：Step1 长盈基本面选股池 → Step2 缠论择时。
 import { ref } from 'vue'
+import BeginnerGuide from '../components/BeginnerGuide.vue'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import {
   formatError,
@@ -95,6 +96,7 @@ async function runTiming(item: StockPickPoolItem) {
 <template>
   <section class="stock-pick-view">
     <h2>选股（长盈基本面 → 缠论择时）</h2>
+    <BeginnerGuide />
 
     <div class="controls">
       <label>

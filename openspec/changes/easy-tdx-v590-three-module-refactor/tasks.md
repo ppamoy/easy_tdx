@@ -104,6 +104,13 @@
 - [x] **9.2** 前端择时详情卡展示「信号可信度」结论
 - [x] **9.3** 全量 tests/unit 3267 passed、前端 vitest 59 passed
 
+
+## Phase 10: 新手第一课引导层（V595）
+
+- [x] **10.1** 新增 BeginnerGuide.vue（三步动线 + 人话术语表 + 可隐藏持久化）
+- [x] **10.2** 选股页 / 缠论测试学习页顶部接入
+- [x] **10.3** 新增 BeginnerGuide vitest；前端 vitest 61 passed、build 通过
+
 ## 依赖与验证
 
 - 依赖：Phase 2 路由先于 Phase 3/4 页面落地；Phase 1 精度修复与 Phase 3 择时共用 ChanlunAnalyser。
