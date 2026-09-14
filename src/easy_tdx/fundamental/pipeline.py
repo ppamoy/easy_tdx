@@ -171,31 +171,78 @@ def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, A
     return out
 
 
-def _as_of_close(
+def _market_quote(
     market: str,
     code: str,
     target: date,
     *,
     client: TdxClient | None = None,
-) -> float | None:
-    """目标日收盘价（用于计算市值门槛）。"""
+) -> dict[str, Any]:
+    """目标日收盘价 + 流通股本（用于计算市值门槛）。
+
+    V597：优先走 MAC 主机（快且能取到真实日线 + float_shares 流通股本万股），
+    失败再回退标准 TDX（只给收盘价，不给股本）。这样凌晨批量算市值不会
+    因为标准主机「空K线 + 每次约6秒」而超时。
+    """
+    # 1) MAC 主机
+    try:
+        from easy_tdx.mac.client import MacClient
+        from easy_tdx.mac.enums import Adjust, Period
+        from easy_tdx.models.enums import Market
+
+        mk = int(Market[market.upper()].value)
+        df = MacClient().get_stock_kline(
+            mk, code, Period.DAILY, start=0, count=400, adjust=Adjust.QFQ
+        )
+        if df is not None and not df.empty:
+            col = "date" if "date" in df.columns else "datetime"
+            ts = pd.to_datetime(df[col]).dt.normalize()
+            df2 = df[ts <= pd.Timestamp(target)]
+            if not df2.empty:
+                row = df2.iloc[-1]
+                return {
+                    "close": float(row["close"]),
+                    "float_shares": (
+                        float(row["float_shares"]) if "float_shares" in df2.columns else None
+                    ),
+                }
+    except Exception as e:  # noqa: BLE001
+        logger.warning("MAC 取 %s%s 目标日行情失败，回退标准TDX: %s", market, code, e)
+
+    # 2) 标准 TDX 回退（无股本字段）
     from easy_tdx.models.enums import KlineCategory, Market
 
     if client is None:
         client = TdxClient()
-    mk = Market[market.upper()] if isinstance(market, str) else market
+    mk_std = Market[market.upper()] if isinstance(market, str) else market
     try:
-        df = client.get_security_bars(mk, code, KlineCategory.DAY, 0, 400)
-    except Exception as e:
-        logger.warning("获取 %s%s 目标日收盘失败: %s", market, code, e)
+        df_std = client.get_security_bars(mk_std, code, KlineCategory.DAY, 0, 400)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("标准TDX 取 %s%s 目标日收盘失败: %s", market, code, e)
+        return {"close": None, "float_shares": None}
+    return {
+        "close": _returns_at(df_std, target, ()).get("as_of_close"),
+        "float_shares": None,
+    }
+
+
+def _total_mcap_yi(indicators: dict[str, Any], quote: dict[str, Any]) -> float | None:
+    """总市值（亿元）= 总股本 × 目标日收盘价。
+
+    股本优先级：
+    1. gpcw 的 total_shares（总股本，若财报解析出）；
+    2. MAC 的 float_shares（流通股本，单位万股，乘 1e4 转为股）——全流通大票
+       两者接近，作为 gpcw 缺股本时的可用近似。
+    """
+    close = quote.get("close")
+    if close is None or float(close) <= 0:
         return None
-    return _returns_at(df, target, ()).get("as_of_close")
-
-
-def _total_mcap_yi(indicators: dict[str, Any], close: float | None) -> float | None:
-    """总市值（亿元）= 总股本 × 目标日收盘价。"""
     shares = indicators.get("total_shares")
-    if shares is None or close is None or float(close) <= 0:
+    if shares is None:
+        fs = quote.get("float_shares")
+        if fs is not None:
+            shares = float(fs) * 1e4
+    if shares is None:
         return None
     try:
         return float(shares) * float(close) / 1e8
@@ -411,22 +458,19 @@ def run_screen(
             if require_profit and not _profitable(sr.indicators):
                 continue
             d = sr.as_dict()
+            # V597: 市值门槛独立于后续表现，用 MAC 取目标日收盘价
+            if min_mcap_yi is not None:
+                quote = _market_quote(sr.market, sr.code, target)
+                mcap = _total_mcap_yi(d.get("indicators", {}), quote)
+                d["total_mcap_yi"] = mcap
+                if mcap is None or mcap < min_mcap_yi:
+                    continue
             if with_performance:
                 perf = subsequent_performance(sr.market, sr.code, target, client=client)
                 d["performance"] = perf
                 # V497/V504: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产，EPS 按报告期年化
                 d["valuation"] = _valuation(
                     d["indicators"], perf.get("as_of_close"), sr.report_date
-                )
-                # V591: 市值门槛（总股本 × 目标日收盘价），低于阈值直接排除
-                if min_mcap_yi is not None:
-                    mcap = _total_mcap_yi(
-                        d.get("indicators", {}), (perf or {}).get("as_of_close")
-                    )
-                    if mcap is None or mcap < min_mcap_yi:
-                        continue
-                d["total_mcap_yi"] = (
-                    mcap if (min_mcap_yi is not None and mcap is not None) else None
                 )
             results.append(d)
     season = detect_season_for_date(target, client=client)
@@ -596,8 +640,21 @@ def scan_market(
     else:
         window_n = min(len(scored), top_n)
     window = scored[:window_n]
-    if with_performance:
+
+    # V597: 市值门槛用 MAC 取目标日收盘价（快且能取到），独立于后续表现。
+    if min_mcap_yi is not None:
         for d in window:
+            quote = _market_quote(d["market"], d["code"], target)
+            mcap = _total_mcap_yi(d.get("indicators", {}), quote)
+            d["total_mcap_yi"] = mcap
+            d["_mcap_excluded"] = mcap is None or mcap < min_mcap_yi
+        kept = [d for d in window if not d.get("_mcap_excluded")][:top_n]
+    else:
+        kept = window[:top_n]
+
+    # 后续表现/估值只对最终 top_n 计算，且不阻塞选股主流程。
+    if with_performance:
+        for d in kept:
             perf = subsequent_performance(
                 d["market"], d["code"], target, client=client, horizons=horizons
             )
@@ -606,16 +663,6 @@ def scan_market(
             d["valuation"] = _valuation(
                 d["indicators"], perf.get("as_of_close"), d.get("report_date")
             )
-            close = (perf or {}).get("as_of_close")
-            if min_mcap_yi is not None:
-                mcap = _total_mcap_yi(d.get("indicators", {}), close)
-                d["total_mcap_yi"] = mcap
-                if mcap is None or mcap < min_mcap_yi:
-                    d["_mcap_excluded"] = True
-    if min_mcap_yi is not None:
-        kept = [d for d in window if not d.get("_mcap_excluded")][:top_n]
-    else:
-        kept = window[:top_n]
 
     base_out.update(
         {

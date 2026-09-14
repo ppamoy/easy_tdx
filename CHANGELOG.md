@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**选股/市值取价切到 MAC 主机 + 100亿过滤真正生效（V597）**：
+- 定位：标准 TDX 行情主机对日线返回「空K线」（每只约 6s），gpcw 财报里无总股本，导致选股接口 90s 超时、100亿市值过滤名存实亡。
+- 修复：pipeline 新增 _market_quote（MAC 取目标日收盘价 + 流通股本 float_shares，约 0.2s/只）；市值 = 总股本(gpcw 若可得) × 收盘价，缺总股本时回退流通股本(万股×1e4)×收盘价。
+- 选股接口在线路径关闭后续表现回看、默认开启盈利硬门槛 + 100亿过滤；实测 run_screen 过滤后 21 只全部市值 ≥100亿，耗时约 12s（剩余为四季指数取数）。
+- 修了在线路径质量分恒为 0 的 bug（正确取 scores[category]）。
+
+
 **缠论信号真实行情验证（V596）**：
 - 用真实 TDX 日线对 4 只大盘股做缠论买卖点前瞻命中率验证，新增 docs/CHANLUN_SIGNAL_VALIDATION.md。
 - 结论：1buy 在 4 只样本上均跑赢随机基准（命中 56%-67%，超额 +1.5%~+19.2%，PF 1.22-2.68）；卖点避跌命中更高；二类点样本少需谨慎。
@@ -847,15 +854,3 @@
 ---
 
 **质量加固续章二十（V399u）—— symbol_bar/tick_chart 解析测试**：
-
-- **V399u** mac/commands/symbol_bar.py + symbol_tick_chart.py 解析测试（+3 用例）。
-
----
-
-**质量加固续章十九（V399t）—— cmd_verify 校验分支测试**：
-
-- **V399t** cli/cmd_verify.py verify 命令的 --params 非法 JSON / 未知策略分支测试（+2 用例）。
-
----
-
-**质量加固续章十八（V399s）—— transport recv + tick_chart 编解码测试**：

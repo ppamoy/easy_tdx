@@ -172,9 +172,12 @@ def _refresh(
         stock_type="all",
         top_n=top_n,
         min_score=min_score,
-        with_performance=True,
+        # V597: 池构建只需要评分 + 市值，不需要后续表现（后续表现会逐只打标准主机，
+        # 慢且取不到）；择时在第二步用 MAC 单独算。
+        with_performance=False,
         client=client,
         min_mcap_yi=min_mcap_yi,
+        require_profit=True,
     )
     results = out.get("results") or []
     # 统一字段，前端直接消费
