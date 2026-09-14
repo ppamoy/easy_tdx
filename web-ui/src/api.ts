@@ -397,6 +397,15 @@ export interface StockPickTimingResult {
   fractals?: unknown[]
   macd?: { dif: number[]; dea: number[]; hist: number[] }
   verdict?: { action: string; signal?: string; confidence?: number; reason?: string }
+  novice_advice?: {
+    explanation: string
+    entry: number | null
+    stop: number | null
+    target: number | null
+    position_note: string
+    signal?: string
+    direction?: string
+  }
   structure?: { bi_count: number; zs_count: number; mmd_count: number; bc_count: number }
 }
 

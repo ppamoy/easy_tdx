@@ -9,6 +9,7 @@ import pandas as pd
 from easy_tdx.web.routers.stock_pick import (
     _default_pool,
     _df_to_bars,
+    _novice_advice,
     _run_timing_one,
     _verdict,
 )
@@ -46,6 +47,50 @@ def test_df_to_bars_contract() -> None:
     bars = _df_to_bars(df)
     assert bars[0]["datetime"].startswith("2025-01-02")
     assert bars[0]["high"] == 11.5
+
+
+class _FakeBi:
+    def __init__(self, end_val: float, bar_index: int) -> None:
+        self.end = type("FX", (), {"val": end_val, "bar_index": bar_index})()
+
+
+class _K:
+    def __init__(self, close: float, high: float, low: float) -> None:
+        self.close = close
+        self.high = high
+        self.low = low
+
+
+class _FakeResult:
+    def __init__(self) -> None:
+        self.mmds = []
+        self.klines = [_K(10.0 + i * 0.1, 10.2 + i * 0.1, 9.9 + i * 0.1) for i in range(20)]
+
+    def with_buy(self) -> _FakeResult:
+        mmd = type(
+            "M",
+            (),
+            {"mmd_type": type("T", (), {"value": "1buy"})(), "bi": _FakeBi(10.5, 10), "zs": None},
+        )()
+        self.mmds = [mmd]
+        return self
+
+
+def test_novice_advice_buy_gives_entry_stop_target() -> None:
+    res = _FakeResult().with_buy()
+    out = _novice_advice(res, {"signal": "1buy"})
+    assert out["direction"] == "buy"
+    assert out["entry"] is not None
+    assert out["stop"] is not None
+    assert out["target"] is not None
+    assert "1buy" in out["explanation"]
+    assert "小仓位" in out["position_note"]
+
+
+def test_novice_advice_empty_is_wait() -> None:
+    out = _novice_advice(_FakeResult(), {"signal": None})
+    assert "观望" in out["explanation"]
+    assert out["entry"] is None
 
 
 def test_run_timing_one_short_window() -> None:

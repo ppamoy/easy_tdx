@@ -82,6 +82,14 @@
 - [x] **6.6** pytest：test_changying_pool.py 6 passed；fundamental/stock_pick 回归；全量 tests/unit 3264 passed
 - [x] **6.7** 前端 StockPickView 展示数据来源（本地沉淀池/在线扫描 + 更新日期）
 
+
+## Phase 7: 面向小白的可解释性增强（V592）
+
+- [x] **7.1** screener 输出 novice_summary（一句话结论/第一步怎么看/风险点/风险等级）
+- [x] **7.2** stock-pick timing 输出 novice_advice（参考入场/止损/目标 + 人话 + 仓位提示）
+- [x] **7.3** 前端选股详情卡展示三档价位与操作建议
+- [x] **7.4** pytest：novice_advice 用例；全量 tests/unit 3266 passed；前端 vitest 59 passed
+
 ## 依赖与验证
 
 - 依赖：Phase 2 路由先于 Phase 3/4 页面落地；Phase 1 精度修复与 Phase 3 择时共用 ChanlunAnalyser。

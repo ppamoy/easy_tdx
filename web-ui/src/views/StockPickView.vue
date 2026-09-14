@@ -164,6 +164,15 @@ async function runTiming(item: StockPickPoolItem) {
             <strong>{{ timingResult.verdict.action }}</strong>
             <span>{{ timingResult.verdict.signal }} · {{ (timingResult.verdict.confidence ?? 0) * 100 }}%</span>
             <p>{{ timingResult.verdict.reason }}</p>
+            <div v-if="timingResult.novice_advice" class="novice-advice">
+              <p>{{ timingResult.novice_advice.explanation }}</p>
+              <div class="levels">
+                <span>参考入场：{{ timingResult.novice_advice.entry ?? '—' }}</span>
+                <span>止损：{{ timingResult.novice_advice.stop ?? '—' }}</span>
+                <span>目标：{{ timingResult.novice_advice.target ?? '—' }}</span>
+              </div>
+              <p class="position-note">{{ timingResult.novice_advice.position_note }}</p>
+            </div>
           </div>
           <ChanlunChart
             v-if="timingResult.bars?.length"
@@ -267,6 +276,25 @@ tr.active td {
 .verdict strong {
   font-size: 18px;
   margin-right: 10px;
+}
+.novice-advice {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.15);
+}
+.novice-advice p {
+  margin: 4px 0;
+  color: var(--text);
+}
+.levels {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: #e5e7eb;
+}
+.position-note {
+  color: #fbbf24;
 }
 .verdict p {
   margin: 6px 0 0;

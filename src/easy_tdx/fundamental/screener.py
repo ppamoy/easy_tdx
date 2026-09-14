@@ -98,6 +98,53 @@ _YI = 1e8
 _MAX_SCORE = 100.0
 
 
+# V592: 面向股票小白的「人话」结论 + 风险提示（不改变打分，只做可解释性）。
+_CATEGORY_PLAIN = {
+    TREE: "龙头护城河型：盈利稳、ROE高、体量大，适合做长期底仓，波动相对小、需要耐心拿住",
+    GRAIN: "稳健收益型：盈利稳、负债低、现金流好，适合求稳、厌恶大幅回撤的投资者",
+    VEGETABLE: "高景气成长型：营收净利高增长、弹性大，但波动也大，适合波段操作、要能盯盘",
+}
+
+_CATEGORY_FIRST_STEP = {
+    TREE: "先看它是不是行业龙头、ROE是否长期高于15%",
+    GRAIN: "先看它负债是否低于40%、经营现金流是否持续为正",
+    VEGETABLE: "先看它营收/净利同比是否连续两个报告期高增长",
+}
+
+
+def _risk_flags(sr: ScreenResult) -> list[str]:
+    """从指标中提取小白能看懂的硬风险点。"""
+    flags: list[str] = []
+    ind = sr.indicators
+    np = ind.get("net_profit")
+    if np is None:
+        flags.append("没有净利润数据（信息不透明）")
+    elif float(np) <= 0:
+        flags.append("最近报告期亏损")
+    debt = ind.get("debt_ratio")
+    if debt is not None and float(debt) > 60:
+        flags.append("资产负债率偏高（超过60%）")
+    ocf_ps = ind.get("ocf_ps") if ind.get("ocf_ps") is not None else ind.get("ocf")
+    if ocf_ps is not None and float(ocf_ps) <= 0:
+        flags.append("每股经营现金流非正")
+    return flags
+
+
+def build_novice_summary(sr: ScreenResult) -> dict[str, Any]:
+    """生成面向小白的一句话结论 + 第一步怎么看 + 风险提示。"""
+    flags = _risk_flags(sr)
+    top = sr.scores.get(sr.category, 0)
+    return {
+        "category": sr.category,
+        "label": sr.label(),
+        "score": round(top, 1),
+        "plain": _CATEGORY_PLAIN.get(sr.category, ""),
+        "first_step": _CATEGORY_FIRST_STEP.get(sr.category, ""),
+        "risk_flags": flags,
+        "risk_level": "高" if flags else "低",
+    }
+
+
 @dataclass
 class ScoreDetail:
     """单维打分明细。"""
@@ -142,6 +189,8 @@ class ScreenResult:
             "details": {k: [d.as_dict() for d in ds] for k, ds in self.details.items()},
             "report_date": str(self.report_date) if self.report_date else None,
             "indicators": self.indicators,
+            # V592: 面向小白的一句话结论/第一步怎么看/风险提示
+            "novice_summary": build_novice_summary(self),
         }
 
 

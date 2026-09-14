@@ -208,6 +208,65 @@ def _df_to_bars(df: pd.DataFrame) -> list[dict[str, Any]]:
     return bars
 
 
+def _novice_advice(result: Any, verdict: dict[str, Any]) -> dict[str, Any]:
+    """把缠论信号翻译成小白能照做的择时建议（入场/止损/目标 + 人话）。"""
+    mmds = result.mmds
+    if not mmds:
+        return {
+            "explanation": "暂无明显缠论买卖点，建议观望，等结构清晰再动手",
+            "entry": None,
+            "stop": None,
+            "target": None,
+            "position_note": "空仓等待也是一种操作",
+        }
+    last = mmds[-1]
+    is_buy = "buy" in last.mmd_type.value
+    bi = last.bi
+    idx = bi.end.bar_index if bi else None
+    closes = [float(k.close) for k in result.klines]
+    highs = [float(k.high) for k in result.klines]
+    lows = [float(k.low) for k in result.klines]
+
+    def _r(v: Any) -> float | None:
+        return round(float(v), 2) if v is not None else None
+
+    entry = (
+        _r(closes[idx])
+        if idx is not None and 0 <= idx < len(closes)
+        else _r(bi.end.val if bi else None)
+    )
+    zs = last.zs
+    if is_buy:
+        lo = lows[max(0, (idx or 0) - 10) : (idx or 0) + 1]
+        stop = _r(min(lo)) if lo else _r(zs.zd if zs else None)
+        hi = highs[max(0, (idx or 0) - 60) : (idx or 0) + 1]
+        target = _r(max(hi)) if hi else _r(zs.zg if zs else None)
+        explanation = (
+            f"出现{last.mmd_type.value}买点：参考买入价 {entry}；"
+            f"若跌破 {stop} 先离场，目标先看 {target} 附近。"
+        )
+        position_note = "新手建议小仓位试仓，确认上涨再加，不要一次满仓"
+    else:
+        hi = highs[max(0, (idx or 0) - 10) : (idx or 0) + 1]
+        stop = _r(max(hi)) if hi else _r(zs.zg if zs else None)
+        lo = lows[max(0, (idx or 0) - 60) : (idx or 0) + 1]
+        target = _r(min(lo)) if lo else _r(zs.zd if zs else None)
+        explanation = (
+            f"出现{last.mmd_type.value}卖点：参考卖出价 {entry}；"
+            f"若重新站上 {stop} 说明转强，可等回落到 {target} 附近。"
+        )
+        position_note = "新手建议先减仓落袋，不要因小涨就追回"
+    return {
+        "explanation": explanation,
+        "entry": entry,
+        "stop": stop,
+        "target": target,
+        "position_note": position_note,
+        "signal": verdict.get("signal"),
+        "direction": "buy" if is_buy else "sell",
+    }
+
+
 def _verdict(mmds: list[Any]) -> dict[str, Any]:
     """根据最新三类买卖点给出择时结论（可解释、非黑盒）。"""
     if not mmds:
@@ -259,6 +318,7 @@ def _run_timing_one(
         for fx in result.fractals
     ]
     v = _verdict(result.mmds)
+    novice = _novice_advice(result, v)
     return {
         "symbol": symbol,
         "market": market,
@@ -275,6 +335,8 @@ def _run_timing_one(
         # 便于用户核对背驰的 MACD 面积依据。
         "macd": d["macd"],
         "verdict": v,
+        # V592: 面向小白的择时建议（入场/止损/目标 + 人话说明 + 仓位提示）
+        "novice_advice": novice,
         "structure": {
             "bi_count": result.bi_count if hasattr(result, "bi_count") else len(result.bis),
             "zs_count": len(result.zss),

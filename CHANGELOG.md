@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**面向小白的长盈/缠论可解释性增强（V592）**：
+- 长盈选股每只标的输出 novice_summary：一句话结论（树/粮/菜什么意思）、第一步怎么看、硬风险点（亏损/高负债/负现金流）与风险等级。
+- 缠论择时输出 novice_advice：把买卖点翻译成「参考入场/止损/目标 + 人话说明 + 仓位提示」，小白能照做。
+- 选股页详情卡片展示入场/止损/目标三档价位与操作建议。
+- 测试：test_stock_pick_router 新增 novice_advice 用例；全量 tests/unit 3266 passed、前端 vitest 59 passed。
+
+
 **长盈选股离线沉淀 + 市值门槛（V591）**：
 - 长盈选股增加市值硬门槛：总市值（总股本 × 目标日收盘价）< 100 亿的标的直接排除（pipeline.min_mcap_yi，默认 100）。
 - 新增本地沉淀：fundamental/changying_pool.py 的 ChangyingStore（SQLite ~/.easy_tdx/changying_pool.db）+ refresh_changying_pool（凌晨用 TDX 在线数据排序检索后落盘）+ load_changying_pool（白天读取）。
@@ -885,24 +892,3 @@
 - **V399i** web/routers/backtest.py 的 _ohlcv_to_df/_filter_df_by_date/_now 纯函数测试（+8 用例）。
 
 ---
-
-**质量加固续章八（V399g/h）—— 协议编解码 + 板块名解析测试**：
-
-- **V399g** mac/commands/unusual.py 协议编解码（_describe_unusual 全类型分支 + UnusualCmd，+9 用例）。
-- **V399h** cli/cmd_company.py 分块读取/板块名解析（_read_full_section/_resolve_filename，+6 用例）。
-
----
-
-**质量加固续章七（V399f）—— cli/cmd_offline 纯函数测试**：
-
-- **V399f** 补 cli/cmd_offline.py 的 _df_to_bars/_is_index_code/_watch_signal_row/_is_within_since_days/_fmt_opt_price/_render_watch_report/_advice_batch_one 纯函数测试（+10 用例）。
-
----
-
-**质量加固续章五（V399c）—— fundamental/pipeline 纯函数测试**：
-
-- **V399c** 补 fundamental/pipeline.py 的 _returns_at/_sina_frame/_summarize_periods 纯函数测试（+6 用例），并修正 diagnosis 的 _calc_volume_profile 显式导入。
-
----
-
-**质量加固续章四（V399b）—— mmd.py 第五阶段拆分（V41-V65 全部迁出）**：
