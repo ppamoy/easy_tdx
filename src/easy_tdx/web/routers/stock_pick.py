@@ -341,6 +341,23 @@ def _run_timing_one(
     ]
     v = _verdict(result.mmds)
     novice = _novice_advice(result, v)
+    # V594: 用这只标的自己历史窗口内的信号做前瞻命中率验证，
+    # 给小白一个「这类买卖点历史上准不准」的可信度提示。
+    from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type
+
+    closes_for_sa = [float(k.close) for k in result.klines]
+    mmd_signals = [
+        {
+            "type": mmd.mmd_type.value,
+            "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
+        }
+        for mmd in result.mmds
+    ]
+    sa = compute_signal_accuracy_by_type(closes_for_sa, mmd_signals)
+    signal_quality = {
+        "summary": sa.get("summary"),
+        "ranking": sa.get("ranking", [])[:5],
+    }
     return {
         "symbol": symbol,
         "market": market,
@@ -359,6 +376,8 @@ def _run_timing_one(
         "verdict": v,
         # V592: 面向小白的择时建议（入场/止损/目标 + 人话说明 + 仓位提示）
         "novice_advice": novice,
+        # V594: 信号类型前瞻命中率（哪类买卖点历史上更靠谱）
+        "signal_quality": signal_quality,
         "structure": {
             "bi_count": result.bi_count if hasattr(result, "bi_count") else len(result.bis),
             "zs_count": len(result.zss),

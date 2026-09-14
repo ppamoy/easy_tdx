@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**缠论信号可信度（V594）**：
+- 选股择时结果新增 signal_quality：用标的自身历史窗口内的买卖点做前瞻命中率验证，给小白一个「这类买卖点历史上准不准」的可信度提示。
+- 前端择时详情卡展示「信号可信度」一句结论。
+- 复用既有 compute_signal_accuracy_by_type（随机入场基准 + 盈亏比），不改算法。
+- 测试：全量 tests/unit 3267 passed、前端 vitest 59 passed。
+
+
 **小白保护：长盈盈利硬门槛 + 缠论低置信度降级（V593）**：
 - 长盈选股/全市场扫描新增 require_profit（默认开启）：净利润非正的标的直接排除，避免把亏损股推荐给新手。
 - 缠论择时新增置信度保护：信号置信度 < 60% 时结论降级为「观望」，不再给出买卖建议；novice_advice 同步改为「先观察」。
@@ -868,17 +875,3 @@
 - **V399o** mac/commands/symbol_transaction.py + file_query.py 协议编解码测试（+8 用例）。
 
 ---
-
-**质量加固续章十三（V399n）—— mac 协议编解码测试三**：
-
-- **V399n** mac/commands/board_list.py + symbol_info.py + goods_list.py 协议编解码测试（+9 用例）。
-
----
-
-**质量加固续章十二（V399m）—— mac 协议编解码测试二**：
-
-- **V399m** mac/commands/symbol_capital_flow.py + symbol_auction.py + chart_sampling.py 协议编解码测试（+9 用例）。
-
----
-
-**质量加固续章十一（V399k/l）—— mac 协议编解码测试**：

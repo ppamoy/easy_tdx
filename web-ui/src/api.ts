@@ -406,6 +406,10 @@ export interface StockPickTimingResult {
     signal?: string
     direction?: string
   }
+  signal_quality?: {
+    summary?: string
+    ranking?: { type: string; direction: string; signals: number; excess_hit_rate: number; avg_return: number; hit_rate: number; profit_factor: number; verdict: string }[]
+  }
   structure?: { bi_count: number; zs_count: number; mmd_count: number; bc_count: number }
 }
 

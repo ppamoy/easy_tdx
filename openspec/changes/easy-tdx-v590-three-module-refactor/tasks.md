@@ -97,6 +97,13 @@
 - [x] **8.2** stock_pick _verdict 置信度 < 60% 降级为观望；_novice_advice 同步「先观察」
 - [x] **8.3** 新增低置信度降级用例；全量 tests/unit 3267 passed
 
+
+## Phase 9: 缠论信号可信度（V594）
+
+- [x] **9.1** stock-pick timing 输出 signal_quality（复用 compute_signal_accuracy_by_type 做前瞻命中率）
+- [x] **9.2** 前端择时详情卡展示「信号可信度」结论
+- [x] **9.3** 全量 tests/unit 3267 passed、前端 vitest 59 passed
+
 ## 依赖与验证
 
 - 依赖：Phase 2 路由先于 Phase 3/4 页面落地；Phase 1 精度修复与 Phase 3 择时共用 ChanlunAnalyser。

@@ -173,6 +173,9 @@ async function runTiming(item: StockPickPoolItem) {
               </div>
               <p class="position-note">{{ timingResult.novice_advice.position_note }}</p>
             </div>
+            <div v-if="timingResult.signal_quality?.summary" class="signal-quality">
+              <p>📊 信号可信度：{{ timingResult.signal_quality.summary }}</p>
+            </div>
           </div>
           <ChanlunChart
             v-if="timingResult.bars?.length"
@@ -295,6 +298,13 @@ tr.active td {
 }
 .position-note {
   color: #fbbf24;
+}
+.signal-quality {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.15);
+  font-size: 12px;
+  color: #94a3b8;
 }
 .verdict p {
   margin: 6px 0 0;
