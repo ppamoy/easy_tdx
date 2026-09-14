@@ -340,57 +340,72 @@ function buildOption(): echarts.EChartsCoreOption {
       ]
     })
 
-  // ── 买卖点的 MarkPoint ──
-  const mmdMarkPoints = props.mmds
-    .filter((m) => m.date != null)
+  // ── 买卖点的 MarkPoint（v598：改用图标区分类型，不再用文字标注）──
+  const MMD_SYMBOL: Record<string, string> = {
+    '1buy': 'triangle', // ▲ 一类买
+    '2buy': 'circle', // ● 二类买
+    '2buy_s': 'rect', // ■ 类二买
+    '3buy': 'diamond', // ◆ 三类买
+    '1sell': 'triangle', // ▼ 一类卖（卖点系列整体旋转 180°）
+    '2sell': 'circle', // ● 二类卖
+    '2sell_s': 'roundRect', // ▬ 类二卖
+    '3sell': 'diamond', // ◆ 三类卖
+  }
+  const MMD_COLOR: Record<string, string> = {
+    '1buy': '#22c55e',
+    '2buy': '#4ade80',
+    '2buy_s': '#86efac',
+    '3buy': '#bbf7d0',
+    '1sell': '#ef4444',
+    '2sell': '#f87171',
+    '2sell_s': '#fca5a5',
+    '3sell': '#fecaca',
+  }
+  const MMD_SIZE: Record<string, number> = {
+    '1buy': 18,
+    '1sell': 18,
+    '3buy': 12,
+    '3sell': 12,
+  }
+  const mmdBuyPoints = props.mmds
+    .filter((m) => m.date != null && m.type.includes('buy'))
     .map((m) => {
       const idx = findAnchorIndex(keyIndex, m.bar_index, m.date!, revealLimit)
       if (idx === -1) return null
-      const isBuy = m.type.includes('buy')
-      // 精确锚定：优先用后端 anchor_val（触发笔终点分型极值），
-      // 使买卖点标注精确落在笔端点的最高/最低点，而不是 bars 的
-      // low/high 乘偏移（旧逻辑会与极值错位）。
       let price: number
       if (m.anchor_val !== undefined && m.anchor_val !== null && Number.isFinite(m.anchor_val)) {
         price = m.anchor_val
       } else {
-        // 老数据回退：仅作视觉避让，不参与精度判定
-        const priceOffset = isBuy ? -0.005 : 0.005
-        price = isBuy
-          ? props.bars[idx].low * (1 + priceOffset)
-          : props.bars[idx].high * (1 - priceOffset)
+        price = props.bars[idx].low * (1 - 0.005)
       }
-
-      // 根据买卖点类型选择图标和颜色
-      const isType1 = m.type.startsWith('1')
-      const isType3 = m.type.startsWith('3')
-      const symbolSize = isType1 ? 18 : isType3 ? 14 : 12
-      const color = isBuy
-        ? isType1
-          ? '#22c55e'
-          : isType3
-            ? '#86efac'
-            : '#4ade80'
-        : isType1
-          ? '#ef4444'
-          : isType3
-            ? '#fca5a5'
-            : '#f87171'
-      const symbol = isBuy ? 'triangle' : 'pin'
-
       return {
         name: m.type,
         coord: [idx, price],
-        itemStyle: { color },
-        symbol,
-        symbolSize,
-        label: {
-          show: true,
-          formatter: m.type,
-          color,
-          fontSize: 10,
-          position: isBuy ? 'bottom' : 'top',
-        },
+        itemStyle: { color: MMD_COLOR[m.type] ?? '#22c55e' },
+        symbol: MMD_SYMBOL[m.type] ?? 'circle',
+        symbolSize: MMD_SIZE[m.type] ?? 14,
+        label: { show: false },
+      }
+    })
+    .filter(Boolean)
+  const mmdSellPoints = props.mmds
+    .filter((m) => m.date != null && !m.type.includes('buy'))
+    .map((m) => {
+      const idx = findAnchorIndex(keyIndex, m.bar_index, m.date!, revealLimit)
+      if (idx === -1) return null
+      let price: number
+      if (m.anchor_val !== undefined && m.anchor_val !== null && Number.isFinite(m.anchor_val)) {
+        price = m.anchor_val
+      } else {
+        price = props.bars[idx].high * (1 + 0.005)
+      }
+      return {
+        name: m.type,
+        coord: [idx, price],
+        itemStyle: { color: MMD_COLOR[m.type] ?? '#ef4444' },
+        symbol: MMD_SYMBOL[m.type] ?? 'circle',
+        symbolSize: MMD_SIZE[m.type] ?? 14,
+        label: { show: false },
       }
     })
     .filter(Boolean)
@@ -464,8 +479,8 @@ function buildOption(): echarts.EChartsCoreOption {
             html += `<div>${p.marker} 线段[${p.seriesIndex ?? ''}]</div>`
           } else if (p.seriesName === '分型') {
             html += `<div>${p.marker} ${p.name === '顶' ? '顶分型' : '底分型'}</div>`
-          } else if (p.seriesName === '买卖点') {
-            html += `<div>${p.marker} ${p.name}: ${p.data?.label?.formatter ?? ''}</div>`
+          } else if (p.seriesName === '买点' || p.seriesName === '卖点') {
+            html += `<div>${p.marker} ${p.name}</div>`
           } else if (p.seriesName === '背驰') {
             html += `<div>${p.marker} 背驰</div>`
           } else if (p.seriesName === 'MACD') {
@@ -488,7 +503,8 @@ function buildOption(): echarts.EChartsCoreOption {
         ...(props.xds.length ? ['线段(实线)'] : []),
         ...(props.zss.length ? ['中枢'] : []),
         ...(props.fxs && props.fxs.length ? ['分型'] : []),
-        ...(props.mmds.length ? ['买卖点'] : []),
+        ...(mmdBuyPoints.length ? ['买点'] : []),
+        ...(mmdSellPoints.length ? ['卖点'] : []),
         ...(props.bcs && props.bcs.some((bc) => bc.bc) ? ['背驰', '背驰(主图)'] : []),
         ...(macdHist.length ? ['MACD', 'DIF', 'DEA'] : []),
       ],
@@ -642,26 +658,35 @@ function buildOption(): echarts.EChartsCoreOption {
         },
         labelLayout: { hideOverlap: true },
       },
-      // 买卖点（根据类型使用不同颜色和大小）
+      // 买点（v598：图标区分类型，无文字标注）
       {
-        name: '买卖点',
+        name: '买点',
         type: 'scatter',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: (mmdMarkPoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
-        symbol: (mmdMarkPoints as any[]).map((p) => p.symbol),
-        symbolSize: (mmdMarkPoints as any[]).map((p) => p.symbolSize),
+        data: (mmdBuyPoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
+        symbol: (mmdBuyPoints as any[]).map((p) => p.symbol),
+        symbolSize: (mmdBuyPoints as any[]).map((p) => p.symbolSize),
         itemStyle: {
-          color: (params: any) => (mmdMarkPoints as any[])[params.dataIndex]?.itemStyle.color,
+          color: (params: any) => (mmdBuyPoints as any[])[params.dataIndex]?.itemStyle.color,
         },
-        label: {
-          show: true,
-          formatter: (params: any) => (mmdMarkPoints as any[])[params.dataIndex]?.label.formatter,
-          color: (params: any) => (mmdMarkPoints as any[])[params.dataIndex]?.label.color,
-          fontSize: 10,
-          position: (params: any) =>
-            (mmdMarkPoints as any[])[params.dataIndex]?.label.position ?? 'top',
+        label: { show: false },
+        labelLayout: { hideOverlap: true },
+      },
+      // 卖点（v598：整体旋转 180°，triangle 变为向下三角，circle/diamond 对称不受影响）
+      {
+        name: '卖点',
+        type: 'scatter',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        symbolRotate: 180,
+        data: (mmdSellPoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
+        symbol: (mmdSellPoints as any[]).map((p) => p.symbol),
+        symbolSize: (mmdSellPoints as any[]).map((p) => p.symbolSize),
+        itemStyle: {
+          color: (params: any) => (mmdSellPoints as any[])[params.dataIndex]?.itemStyle.color,
         },
+        label: { show: false },
         labelLayout: { hideOverlap: true },
       },
       // 背驰标记（画在 MACD 副图上：背驰本质是某笔 MACD 面积较前笔缩小，
@@ -780,15 +805,68 @@ watch(
 </script>
 
 <template>
-  <div ref="container" class="chanlun-chart"></div>
+  <div class="chanlun-layout">
+    <div ref="container" class="chanlun-chart"></div>
+    <aside v-if="props.mmds.length" class="mmd-legend">
+      <div class="mmd-legend-title">买卖点图例</div>
+      <div class="mmd-legend-item"><span class="ic buy-1">▲</span> 一类买点 (1buy)</div>
+      <div class="mmd-legend-item"><span class="ic buy-2">●</span> 二类买点 (2buy)</div>
+      <div class="mmd-legend-item"><span class="ic buy-2s">■</span> 类二买 (2buy_s)</div>
+      <div class="mmd-legend-item"><span class="ic buy-3">◆</span> 三类买点 (3buy)</div>
+      <div class="mmd-legend-item"><span class="ic sell-1">▼</span> 一类卖点 (1sell)</div>
+      <div class="mmd-legend-item"><span class="ic sell-2">●</span> 二类卖点 (2sell)</div>
+      <div class="mmd-legend-item"><span class="ic sell-2s">▬</span> 类二卖 (2sell_s)</div>
+      <div class="mmd-legend-item"><span class="ic sell-3">◆</span> 三类卖点 (3sell)</div>
+    </aside>
+  </div>
 </template>
 
 <style scoped>
-.chanlun-chart {
+.chanlun-layout {
+  display: flex;
+  gap: 8px;
   width: 100%;
+}
+.chanlun-chart {
+  flex: 1;
+  min-width: 0;
   /* 双面板：主图（K线+缠论结构）+ MACD 副图，560 太矮导致所有元素挤在一起 */
   height: 760px;
 }
+.mmd-legend {
+  flex-shrink: 0;
+  width: 132px;
+  padding: 8px;
+  border: 1px solid #2a2e3a;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #cbd5e1;
+  align-self: flex-start;
+}
+.mmd-legend-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #e5e7eb;
+}
+.mmd-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.9;
+}
+.ic {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+}
+.buy-1 { color: #22c55e; }
+.buy-2 { color: #4ade80; }
+.buy-2s { color: #86efac; }
+.buy-3 { color: #bbf7d0; }
+.sell-1 { color: #ef4444; }
+.sell-2 { color: #f87171; }
+.sell-2s { color: #fca5a5; }
+.sell-3 { color: #fecaca; }
 
 /* 响应式高度：在小屏幕上缩小图表高度 */
 @media (max-width: 768px) {

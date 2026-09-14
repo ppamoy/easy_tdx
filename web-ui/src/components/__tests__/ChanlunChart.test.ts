@@ -101,8 +101,12 @@ describe('ChanlunChart 结构渲染', () => {
     const zs = findSeries('中枢')
     expect(zs?.markArea?.data).toHaveLength(1)
 
-    const mmd = findSeries('买卖点')
-    expect(mmd?.data).toHaveLength(2)
+    const buyMmd = findSeries('买点')
+    expect(buyMmd?.data).toHaveLength(1)
+    expect(buyMmd?.symbol[0]).toBe('triangle') // 1buy → ▲
+    const sellMmd = findSeries('卖点')
+    expect(sellMmd?.data).toHaveLength(1)
+    expect(sellMmd?.symbolRotate).toBe(180) // 1sell → ▼
 
     const bcSub = findSeries('背驰')
     expect(bcSub?.data).toHaveLength(1)
