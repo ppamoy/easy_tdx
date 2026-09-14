@@ -45,6 +45,35 @@ def _default_pool(markets: list[str]) -> list[dict[str, str]]:
     return out
 
 
+def _normalize_result_row(r: dict[str, Any]) -> dict[str, Any]:
+    """把 run_screen/scan_market 的结果行统一成前端要的字段。
+
+    修复：旧实现从 r.get("quality_score") 取分，但 run_screen/scan_market
+    输出的是 scores[category]，导致在线路径质量分恒为 0。
+    """
+    category = str(r.get("category", ""))
+    scores = r.get("scores") if isinstance(r.get("scores"), dict) else {}
+    quality = r.get("score")
+    if quality is None:
+        quality = scores.get(category, 0)
+    return {
+        "symbol": f"{r.get('market', '')}:{r.get('code', '')}",
+        "market": r.get("market", ""),
+        "code": r.get("code", ""),
+        "category": category,
+        "quality_score": quality,
+        "total_mcap_yi": r.get("total_mcap_yi"),
+        "detail": {
+            "scores": scores,
+            "details": r.get("details") or {},
+            "indicators": r.get("indicators") or {},
+            "novice_summary": r.get("novice_summary"),
+        },
+        "post_performance": r.get("post_performance"),
+        "data_source": r.get("data_source"),
+    }
+
+
 @router.post("/stock-pick/screen")
 async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
     """第一步：长盈基本面选股池。
@@ -126,43 +155,32 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
                 stock_type=stock_type,
                 top_n=top_n,
                 min_score=float(req.get("min_score", 15.0)),
-                with_performance=bool(req.get("with_performance", True)),
+                # 默认不做后续表现回看：避免逐只取行情（标准 TDX 行情慢/空）
+                # 把选股接口拖到 90s 超时。市值门槛走 min_mcap_yi 仍生效。
+                with_performance=bool(req.get("with_performance", False)),
                 sina_pool=norm_pool,
+                min_mcap_yi=100.0,
+                require_profit=True,
             )
-            full_rows: list[dict[str, Any]] = []
-            for r in out.get("results") or []:
-                full_rows.append(
-                    {
-                        "symbol": f"{r.get('market', '')}:{r.get('code', '')}",
-                        "market": r.get("market", ""),
-                        "code": r.get("code", ""),
-                        "category": r.get("category", ""),
-                        "quality_score": r.get("quality_score", 0),
-                        "detail": r.get("detail") or {},
-                        "post_performance": r.get("post_performance"),
-                    }
-                )
+            full_rows: list[dict[str, Any]] = [
+                _normalize_result_row(r) for r in out.get("results") or []
+            ]
             full_rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
             return {"date": date_str, "total": len(full_rows), "results": full_rows}
 
-        out = run_screen(target, norm_pool)
+        out = run_screen(
+            target,
+            norm_pool,
+            # 同 full 路径：关闭后续表现回看避免行情取数拖慢选股；
+            # 盈利硬门槛 + 市值门槛照常生效。
+            with_performance=False,
+            min_mcap_yi=100.0,
+            require_profit=True,
+        )
         results = out.get("results") or []
         if stock_type != "all":
             results = [r for r in results if r["category"] == stock_type]
-        # 统一字段：symbol = market:code，评分降序
-        rows: list[dict[str, Any]] = []
-        for r in results:
-            rows.append(
-                {
-                    "symbol": f"{r.get('market', '')}:{r.get('code', '')}",
-                    "market": r.get("market", ""),
-                    "code": r.get("code", ""),
-                    "category": r.get("category", ""),
-                    "quality_score": r.get("quality_score", 0),
-                    "detail": r.get("detail") or {},
-                    "post_performance": r.get("post_performance"),
-                }
-            )
+        rows: list[dict[str, Any]] = [_normalize_result_row(r) for r in results]
         rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
         return {"date": date_str, "total": len(rows), "results": rows}
 
