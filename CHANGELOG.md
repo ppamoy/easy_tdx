@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+**长盈选股离线沉淀 + 市值门槛（V591）**：
+- 长盈选股增加市值硬门槛：总市值（总股本 × 目标日收盘价）< 100 亿的标的直接排除（pipeline.min_mcap_yi，默认 100）。
+- 新增本地沉淀：fundamental/changying_pool.py 的 ChangyingStore（SQLite ~/.easy_tdx/changying_pool.db）+ refresh_changying_pool（凌晨用 TDX 在线数据排序检索后落盘）+ load_changying_pool（白天读取）。
+- 新增 CLI easy-tdx changying-refresh（cron 0 0 * * *）+ easy-tdx serve --changying-scheduler（服务内每天 00:00 后台刷新，默认开启）。
+- /stock-pick/screen 白天优先读本地沉淀池（source=local + updated_at），本地为空回退在线；前端选股页展示「本地沉淀池/在线扫描」来源。
+- 财务指标框架文档 docs/CHANGYING_POOL_DESIGN.md：树粮菜三维打分 + 20 只排序规则 + 硬性门槛清单。
+- 测试：test_changying_pool.py 6 passed；全量 tests/unit 3264 passed、前端 vitest 59 passed。
+
+
 **网站重构：回测 / 选股 / 缠论测试学习 三大模块 + 缠论画图精度（V590）**：
 - 主导航收敛为「回测 / 选股 / 缠论测试学习」三项；其余页面软隐藏（URL 直达仍可用，页面顶部给非阻断提示），服务器设置移入页脚齿轮。
 - 新增选股两步流 /stock-pick：用户选时间 → 长盈基本面选股池（树粮菜 + 评分 + 明细）→ 缠论择时（买卖点/背驰/中枢 + 结论）；/api/v1/stock-pick/screen 支持热门池/自定义池/全市场，/api/v1/stock-pick/timing 输出截至目标日的前复权缠论结构。
@@ -897,17 +906,3 @@
 ---
 
 **质量加固续章四（V399b）—— mmd.py 第五阶段拆分（V41-V65 全部迁出）**：
-
-- **V399b** mmd.py 拆分第五步：V44 条件簇（13 个 _calc_* 函数）+ _calc_confidence 及其共享辅助闭包（8 个函数）迁入 mmd_conditions.py，mmd.py 从 15605 行降到 14001 行；V41-V65 版本化条件簇至此全部迁出，mmd.py 顶层惰性再导出保持兼容。
-
----
-
-**质量加固续章三（V399）—— mmd.py 第四阶段拆分**：
-
-- **V399** mmd.py 拆分第四步：5 个叶子辅助函数（_calc_atr/_calc_rsi/_calc_adx_strength/_calc_ma_slope/_calc_volume_profile）+ V41/V42/V48/V51 四个条件簇（17 个 _calc_* 函数）迁入 mmd_conditions.py，mmd.py 17328→15607 行；另补 cmd_run_all 纯函数 + fundamental/indicators 纯函数测试（+13 用例）。
-
----
-
-**质量加固续章二（V397-V398）—— mmd.py 第三阶段拆分 + 覆盖率冲过 70% 门槛**：
-
-- **V397** mmd.py 拆分第三步：V49-V65 自包含条件簇（条件137-195 的 95 个 _calc_* 函数约 9500 行）迁入 mmd_conditions.py，mmd.py 从 26693 行降到 17328 行；mmd_conditions.py 补充 ATR/KDJ/RSI/numpy/MMDType/BI/ZS 依赖，顶层惰性再导出保兼容——29k 行 god-module 三阶段累计瘦身约 1.2 万行。

@@ -68,6 +68,20 @@
 - [x] **5.5** 更新 README/CHANGELOG
   ✅ DONE: CHANGELOG.md 追加 V590；README.md 新增「Web 三大模块」说明。
 
+
+## Phase 6: 长盈选股离线沉淀 + 市值门槛 + 指标规划（V591 用户追加）
+
+> 用户追加需求：长盈选股应在凌晨空闲时用 TDX 在线数据排序检索并沉淀本地；
+> 市值低于 100 亿排除；规划财务指标挑出 20 只长盈标的。
+
+- [x] **6.1** 设计文档 docs/CHANGYING_POOL_DESIGN.md：硬性门槛 / 树粮菜指标框架 / 20只排序规则 / 凌晨管线 / 存储与调度
+- [x] **6.2** screener 透出 total_shares/circ_a；pipeline 新增 min_mcap_yi 市值过滤（总市值=总股本×目标日收盘价）
+- [x] **6.3** 新增 fundamental/changying_pool.py：ChangyingStore(SQLite ~/.easy_tdx/changying_pool.db) + refresh_changying_pool + load_changying_pool
+- [x] **6.4** 新增 CLI easy-tdx changying-refresh（供 cron 0 0 * * * 调用）+ easy-tdx serve --changying-scheduler 凌晨定时器
+- [x] **6.5** /stock-pick/screen 白天优先读本地沉淀池（source=local + updated_at），本地为空回退在线
+- [x] **6.6** pytest：test_changying_pool.py 6 passed；fundamental/stock_pick 回归；全量 tests/unit 3264 passed
+- [x] **6.7** 前端 StockPickView 展示数据来源（本地沉淀池/在线扫描 + 更新日期）
+
 ## 依赖与验证
 
 - 依赖：Phase 2 路由先于 Phase 3/4 页面落地；Phase 1 精度修复与 Phase 3 择时共用 ChanlunAnalyser。

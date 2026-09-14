@@ -17,6 +17,8 @@ const poolText = ref('') // 自定义池（每行 600519 / 000001；空则用热
 const screening = ref(false)
 const timing = ref(false)
 const pool = ref<StockPickPoolItem[]>([])
+const screenSource = ref<string>('')
+const screenUpdatedAt = ref<string>('')
 const selected = ref<StockPickPoolItem | null>(null)
 const timingResult = ref<StockPickTimingResult | null>(null)
 const error = ref('')
@@ -59,6 +61,8 @@ async function runScreen() {
     }
     const res = await stockPickScreen(req)
     pool.value = res.results
+    screenSource.value = (res as any).source ?? 'online'
+    screenUpdatedAt.value = (res as any).updated_at ?? ''
     if (!res.results.length) error.value = '该时间/池内暂无符合长盈模型的标的'
   } catch (e) {
     error.value = formatError(e)
@@ -123,6 +127,9 @@ async function runTiming(item: StockPickPoolItem) {
     <div class="layout">
       <div class="pool-panel">
         <h3>基本面标的池（{{ pool.length }}）</h3>
+        <p v-if="screenSource" class="source-note">
+          数据来源：{{ screenSource === 'local' ? '本地沉淀池' : '在线扫描' }}<template v-if="screenUpdatedAt"> · 更新于 {{ screenUpdatedAt.slice(0, 10) }}</template>
+        </p>
         <table v-if="pool.length">
           <thead>
             <tr>
@@ -267,5 +274,10 @@ tr.active td {
 }
 .hint {
   color: var(--text-dim);
+}
+.source-note {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 4px 0;
 }
 </style>

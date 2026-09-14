@@ -79,6 +79,41 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
     pool_scope = str(req.get("pool_scope", "pool"))
     top_n = max(1, min(int(req.get("top_n", 50)), 200))
 
+    # V591: 白天优先读本地沉淀池（凌晨 changying-refresh 生成），避免反复打 TDX。
+    from easy_tdx.fundamental.changying_pool import load_changying_pool
+
+    local = await asyncio.to_thread(load_changying_pool)
+    if local and local.get("results"):
+        local_rows: list[dict[str, Any]] = [
+            {
+                "symbol": r["symbol"],
+                "market": r["market"],
+                "code": r["code"],
+                "category": r["category"],
+                "quality_score": r.get("score", 0),
+                "total_mcap_yi": r.get("total_mcap_yi"),
+                "detail": {
+                    "scores": r.get("scores", {}),
+                    "details": r.get("details", {}),
+                    "indicators": r.get("indicators", {}),
+                },
+                "post_performance": None,
+                "data_source": r.get("data_source"),
+            }
+            for r in local["results"]
+        ]
+        if stock_type != "all":
+            local_rows = [r for r in local_rows if r["category"] == stock_type]
+        if norm_markets:
+            local_rows = [r for r in local_rows if r["market"] in norm_markets]
+        return {
+            "date": local.get("date", date_str),
+            "total": len(local_rows),
+            "results": local_rows,
+            "source": "local",
+            "updated_at": local.get("updated_at"),
+        }
+
     def _run() -> dict[str, Any]:
         # 全市场路径：复用 fundamental.pipeline.scan_market（同步扫描，
         # 前端以 loading + 分批 top_n 呈现；进度轮询版留待 task_runner 集成）。

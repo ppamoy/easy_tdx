@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import threading
+import time
 import webbrowser
+from datetime import date, datetime, timedelta
 
 import click
 
@@ -19,6 +21,11 @@ import click
     default=True,
     help="启动后自动打开浏览器（默认开启，PyInstaller 打包后老人双击即用）",
 )
+@click.option(
+    "--changying-scheduler/--no-changying-scheduler",
+    default=True,
+    help="每天凌晨 0 点后台刷新长盈标的池（默认开启）",
+)
 def serve(
     host: str,
     port: int,
@@ -26,6 +33,7 @@ def serve(
     tdx_port: int | None,
     reload: bool,
     open_browser: bool,
+    changying_scheduler: bool,
 ) -> None:
     """启动 Web API 服务器（需要安装 easy-tdx[web]）。"""
     try:
@@ -46,6 +54,13 @@ def serve(
         # 1.5 秒通常足够本地端口就绪；uvicorn 启动慢的机器可适当延长。
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
 
+    if changying_scheduler and not reload:
+        threading.Thread(
+            target=_changying_scheduler_loop,
+            daemon=True,
+            name="changying-scheduler",
+        ).start()
+
     if reload:
         uvicorn.run(
             "easy_tdx.web:app_factory",
@@ -59,3 +74,28 @@ def serve(
 
         app = create_app(host=tdx_host, port=tdx_port)
         uvicorn.run(app, host=host, port=port)
+
+
+def _changying_scheduler_loop() -> None:
+    """每天凌晨 0 点刷新长盈标的池（守护线程，失败仅打印告警）。"""
+    import logging
+
+    logger = logging.getLogger("changying-scheduler")
+    from easy_tdx.fundamental.changying_pool import refresh_changying_pool
+
+    while True:
+        now = datetime.now()
+        next_run = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        if next_run <= now:
+            next_run += timedelta(days=1)
+        sleep_seconds = max(1.0, (next_run - now).total_seconds())
+        time.sleep(sleep_seconds)
+        try:
+            out = refresh_changying_pool(date.today())
+            logger.info(
+                "长盈标的池刷新完成 count=%s date=%s",
+                out.get("count"),
+                out.get("date"),
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.warning("长盈标的池刷新失败: %s", e)

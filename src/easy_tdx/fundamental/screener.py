@@ -509,6 +509,10 @@ def screen_stock(
         "revenue_annualized": _annualize(_pct(row.get("revenue")), row.get("report_date")),
         "ocf": row.get("ocf"),
         "ocf_ps": row.get("ocf_ps"),
+        # V591: 透出总股本/流通股本（股），用于计算总市值/流通市值门槛
+        # （市值 = 股本 × 目标日收盘价，前端展示、选股池过滤共用）。
+        "total_shares": row.get("total_shares"),
+        "circ_a": row.get("circ_a"),
     }
     return ScreenResult(
         code=code,

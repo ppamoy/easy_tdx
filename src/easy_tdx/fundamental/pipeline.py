@@ -171,6 +171,38 @@ def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, A
     return out
 
 
+def _as_of_close(
+    market: str,
+    code: str,
+    target: date,
+    *,
+    client: TdxClient | None = None,
+) -> float | None:
+    """目标日收盘价（用于计算市值门槛）。"""
+    from easy_tdx.models.enums import KlineCategory, Market
+
+    if client is None:
+        client = TdxClient()
+    mk = Market[market.upper()] if isinstance(market, str) else market
+    try:
+        df = client.get_security_bars(mk, code, KlineCategory.DAY, 0, 400)
+    except Exception as e:
+        logger.warning("获取 %s%s 目标日收盘失败: %s", market, code, e)
+        return None
+    return _returns_at(df, target, ()).get("as_of_close")
+
+
+def _total_mcap_yi(indicators: dict[str, Any], close: float | None) -> float | None:
+    """总市值（亿元）= 总股本 × 目标日收盘价。"""
+    shares = indicators.get("total_shares")
+    if shares is None or close is None or float(close) <= 0:
+        return None
+    try:
+        return float(shares) * float(close) / 1e8
+    except (TypeError, ValueError):
+        return None
+
+
 def _annualize_eps(eps: float, report_date: Any) -> float:
     """V504/V517: 按报告期月数把单期 EPS 年化为全年口径（动态市盈率）。
 
@@ -350,6 +382,7 @@ def run_screen(
     client: TdxClient | None = None,
     zips: list[str] | None = None,
     with_performance: bool = True,
+    min_mcap_yi: float | None = None,
 ) -> dict[str, Any]:
     """整条 P1 管线：指标 → 分类 → 后续表现。
 
@@ -370,6 +403,16 @@ def run_screen(
                 # V497/V504: 估值（PE/PB）用目标日收盘价 + 每股收益/净资产，EPS 按报告期年化
                 d["valuation"] = _valuation(
                     d["indicators"], perf.get("as_of_close"), sr.report_date
+                )
+                # V591: 市值门槛（总股本 × 目标日收盘价），低于阈值直接排除
+                if min_mcap_yi is not None:
+                    mcap = _total_mcap_yi(
+                        d.get("indicators", {}), (perf or {}).get("as_of_close")
+                    )
+                    if mcap is None or mcap < min_mcap_yi:
+                        continue
+                d["total_mcap_yi"] = (
+                    mcap if (min_mcap_yi is not None and mcap is not None) else None
                 )
             results.append(d)
     season = detect_season_for_date(target, client=client)
@@ -424,6 +467,7 @@ def scan_market(
     client: TdxClient | None = None,
     horizons: tuple[int, ...] = (20, 60, 250),
     sina_pool: list[dict[str, str]] | None = None,
+    min_mcap_yi: float | None = None,
 ) -> dict[str, Any]:
     """P2 全市场扫描：对目标日期 tdx 财报覆盖的全部股票做树粮菜打分并排序。
 
@@ -526,9 +570,17 @@ def scan_market(
         key=lambda r: (r["score"], sum(float(v) for v in r["scores"].values())),
         reverse=True,
     )
-    kept = scored[:top_n]
+
+    # V591: 市值门槛需要候选池内每只的目标日收盘价。为避免全市场逐只取行情，
+    # 先按得分取一个扩大候选窗口（top_n 的 5 倍，至少 100），只对这个窗口
+    # 取价算市值，过滤后截取最终 top_n。凌晨批量跑，压力可控。
+    if min_mcap_yi is not None:
+        window_n = max(min(len(scored), top_n * 5), min(len(scored), 100))
+    else:
+        window_n = min(len(scored), top_n)
+    window = scored[:window_n]
     if with_performance:
-        for d in kept:
+        for d in window:
             perf = subsequent_performance(
                 d["market"], d["code"], target, client=client, horizons=horizons
             )
@@ -537,6 +589,16 @@ def scan_market(
             d["valuation"] = _valuation(
                 d["indicators"], perf.get("as_of_close"), d.get("report_date")
             )
+            close = (perf or {}).get("as_of_close")
+            if min_mcap_yi is not None:
+                mcap = _total_mcap_yi(d.get("indicators", {}), close)
+                d["total_mcap_yi"] = mcap
+                if mcap is None or mcap < min_mcap_yi:
+                    d["_mcap_excluded"] = True
+    if min_mcap_yi is not None:
+        kept = [d for d in window if not d.get("_mcap_excluded")][:top_n]
+    else:
+        kept = window[:top_n]
 
     base_out.update(
         {

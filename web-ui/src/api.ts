@@ -378,6 +378,8 @@ export interface StockPickScreenResult {
   date: string
   total: number
   results: StockPickPoolItem[]
+  source?: 'local' | 'online'
+  updated_at?: string
 }
 
 export interface StockPickTimingResult {
