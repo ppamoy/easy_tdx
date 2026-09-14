@@ -111,6 +111,12 @@
 - [x] **10.2** 选股页 / 缠论测试学习页顶部接入
 - [x] **10.3** 新增 BeginnerGuide vitest；前端 vitest 61 passed、build 通过
 
+
+## Phase 11: 缠论信号真实行情验证（V596）
+
+- [x] **11.1** 用真实 TDX 日线对 600519/000001/600036/601318 跑 ChanlunAnalyser + 前瞻命中率
+- [x] **11.2** 输出 docs/CHANLUN_SIGNAL_VALIDATION.md（结论：1buy 均跑赢随机，卖点避跌命中高，样本局限注明）
+
 ## 依赖与验证
 
 - 依赖：Phase 2 路由先于 Phase 3/4 页面落地；Phase 1 精度修复与 Phase 3 择时共用 ChanlunAnalyser。

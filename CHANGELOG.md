@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**缠论信号真实行情验证（V596）**：
+- 用真实 TDX 日线对 4 只大盘股做缠论买卖点前瞻命中率验证，新增 docs/CHANLUN_SIGNAL_VALIDATION.md。
+- 结论：1buy 在 4 只样本上均跑赢随机基准（命中 56%-67%，超额 +1.5%~+19.2%，PF 1.22-2.68）；卖点避跌命中更高；二类点样本少需谨慎。
+- 该证据支撑「缠论择时对新手有正向参考价值」，并提示样本局限。
+
+
 **新手第一课引导层（V595）**：
 - 新增 BeginnerGuide 组件：三句话讲清「先长盈选好公司 → 再缠论找买卖点 → 后看信号可信度」，附树粮菜/中枢/背驰/三类买卖点人话术语表。
 - 选股页顶部 + 缠论测试学习页顶部接入，可一键隐藏（localStorage 持久化）。
@@ -853,15 +859,3 @@
 ---
 
 **质量加固续章十八（V399s）—— transport recv + tick_chart 编解码测试**：
-
-- **V399s** ex/transport/sync _recv_exact_sock + mac/commands/symbol_tick_chart 编解码测试（+5 用例）。
-
----
-
-**质量加固续章十七（V399r）—— symbol_quotes 字段位图 + unusual 文本段测试**：
-
-- **V399r** mac/commands/symbol_quotes.py 字段位图解析路径 + unusual.py 名称文本段测试（+2 用例）。
-
----
-
-**质量加固续章十六（V399q）—— mac unusual 全类型分支测试**：
