@@ -33,6 +33,12 @@ def test_verdict_buy_sell_wait() -> None:
     assert _verdict([_FakeMmd("3sell", 0.7)])["action"] == "卖出"
 
 
+def test_verdict_low_confidence_downgrades_to_wait() -> None:
+    v = _verdict([_FakeMmd("1buy", 0.45)])
+    assert v["action"] == "观望"
+    assert "置信度偏低" in v["reason"]
+
+
 def test_df_to_bars_contract() -> None:
     df = pd.DataFrame(
         {
@@ -78,7 +84,7 @@ class _FakeResult:
 
 def test_novice_advice_buy_gives_entry_stop_target() -> None:
     res = _FakeResult().with_buy()
-    out = _novice_advice(res, {"signal": "1buy"})
+    out = _novice_advice(res, {"signal": "1buy", "action": "买入"})
     assert out["direction"] == "buy"
     assert out["entry"] is not None
     assert out["stop"] is not None

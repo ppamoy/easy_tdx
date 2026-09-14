@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**小白保护：长盈盈利硬门槛 + 缠论低置信度降级（V593）**：
+- 长盈选股/全市场扫描新增 require_profit（默认开启）：净利润非正的标的直接排除，避免把亏损股推荐给新手。
+- 缠论择时新增置信度保护：信号置信度 < 60% 时结论降级为「观望」，不再给出买卖建议；novice_advice 同步改为「先观察」。
+- 测试：新增低置信度降级用例；全量 tests/unit 3267 passed。
+
+
 **面向小白的长盈/缠论可解释性增强（V592）**：
 - 长盈选股每只标的输出 novice_summary：一句话结论（树/粮/菜什么意思）、第一步怎么看、硬风险点（亏损/高负债/负现金流）与风险等级。
 - 缠论择时输出 novice_advice：把买卖点翻译成「参考入场/止损/目标 + 人话说明 + 仓位提示」，小白能照做。
@@ -876,19 +882,3 @@
 ---
 
 **质量加固续章十一（V399k/l）—— mac 协议编解码测试**：
-
-- **V399k/l** mac/commands/server_info.py + symbol_belong_board.py 协议编解码测试（+9 用例）。
-
----
-
-**质量加固续章十（V399j）—— diagnosis 路由纯函数测试**：
-
-- **V399j** web/routers/diagnosis.py 纯函数测试（_to_json_safe/_detect_divergence/_calculate_position_recommendation/_get_position_notes/_calc_volume_profile_for_diagnosis，+13 用例）。
-
----
-
-**质量加固续章九（V399i）—— backtest 路由纯函数测试**：
-
-- **V399i** web/routers/backtest.py 的 _ohlcv_to_df/_filter_df_by_date/_now 纯函数测试（+8 用例）。
-
----

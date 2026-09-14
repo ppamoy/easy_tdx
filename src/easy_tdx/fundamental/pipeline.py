@@ -203,6 +203,17 @@ def _total_mcap_yi(indicators: dict[str, Any], close: float | None) -> float | N
         return None
 
 
+def _profitable(indicators: dict[str, Any]) -> bool:
+    """净利润为正才进入长盈池（小白安全第一，亏损股直接排除）。"""
+    np = indicators.get("net_profit")
+    if np is None:
+        return False
+    try:
+        return float(np) > 0
+    except (TypeError, ValueError):
+        return False
+
+
 def _annualize_eps(eps: float, report_date: Any) -> float:
     """V504/V517: 按报告期月数把单期 EPS 年化为全年口径（动态市盈率）。
 
@@ -383,6 +394,7 @@ def run_screen(
     zips: list[str] | None = None,
     with_performance: bool = True,
     min_mcap_yi: float | None = None,
+    require_profit: bool = True,
 ) -> dict[str, Any]:
     """整条 P1 管线：指标 → 分类 → 后续表现。
 
@@ -395,6 +407,8 @@ def run_screen(
         for _, row in frame.iterrows():
             sr = screen_stock(row, pool_size=len(pool))
             if sr is None:
+                continue
+            if require_profit and not _profitable(sr.indicators):
                 continue
             d = sr.as_dict()
             if with_performance:
@@ -468,6 +482,7 @@ def scan_market(
     horizons: tuple[int, ...] = (20, 60, 250),
     sina_pool: list[dict[str, str]] | None = None,
     min_mcap_yi: float | None = None,
+    require_profit: bool = True,
 ) -> dict[str, Any]:
     """P2 全市场扫描：对目标日期 tdx 财报覆盖的全部股票做树粮菜打分并排序。
 
@@ -552,6 +567,8 @@ def scan_market(
     for _, row in picked.iterrows():
         sr = screen_stock(row, pool_size=pool_size)
         if sr is None:
+            continue
+        if require_profit and not _profitable(sr.indicators):
             continue
         sc = sr.scores.get(sr.category, 0)
         if sc < min_score:

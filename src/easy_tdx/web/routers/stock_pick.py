@@ -220,6 +220,17 @@ def _novice_advice(result: Any, verdict: dict[str, Any]) -> dict[str, Any]:
             "position_note": "空仓等待也是一种操作",
         }
     last = mmds[-1]
+    # 小白保护：低置信度已降级观望，不给具体入场价，避免误导。
+    if verdict.get("action") == "观望":
+        return {
+            "explanation": "当前信号置信度偏低，先观察，等更明确的买卖点再动手",
+            "entry": None,
+            "stop": None,
+            "target": None,
+            "position_note": "别因为一个模糊信号就进场，空仓等待也是操作",
+            "signal": verdict.get("signal"),
+            "direction": None,
+        }
     is_buy = "buy" in last.mmd_type.value
     bi = last.bi
     idx = bi.end.bar_index if bi else None
@@ -267,13 +278,24 @@ def _novice_advice(result: Any, verdict: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+# 小白保护阈值：低于该置信度的信号不直接给买卖建议，先观察。
+_MIN_CONF = 0.6
+
+
 def _verdict(mmds: list[Any]) -> dict[str, Any]:
-    """根据最新三类买卖点给出择时结论（可解释、非黑盒）。"""
+    """根据最新三类买卖点给出择时结论（可解释、非黑盒、低置信度降级观望）。"""
     if not mmds:
-        return {"action": "观望", "reason": "截至目标日无高置信缠论买卖点信号"}
+        return {"action": "观望", "reason": "截至目标日无缠论买卖点信号"}
     last = mmds[-1]
     typ = last.mmd_type.value
     conf = last.confidence or 0
+    if conf < _MIN_CONF:
+        return {
+            "action": "观望",
+            "signal": typ,
+            "confidence": round(conf, 2),
+            "reason": f"信号置信度偏低（{conf:.0%}），建议先观察，等更明确的买卖点",
+        }
     if "buy" in typ:
         action = "买入"
         reason = f"最新信号 {typ}（置信度 {conf:.0%}），可考虑分批建仓"

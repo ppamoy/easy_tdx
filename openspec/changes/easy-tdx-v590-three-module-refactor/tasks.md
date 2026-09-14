@@ -90,6 +90,13 @@
 - [x] **7.3** 前端选股详情卡展示三档价位与操作建议
 - [x] **7.4** pytest：novice_advice 用例；全量 tests/unit 3266 passed；前端 vitest 59 passed
 
+
+## Phase 8: 小白保护——盈利硬门槛 + 低置信度降级（V593）
+
+- [x] **8.1** pipeline run_screen/scan_market 新增 require_profit（默认 True），亏损股不进长盈池
+- [x] **8.2** stock_pick _verdict 置信度 < 60% 降级为观望；_novice_advice 同步「先观察」
+- [x] **8.3** 新增低置信度降级用例；全量 tests/unit 3267 passed
+
 ## 依赖与验证
 
 - 依赖：Phase 2 路由先于 Phase 3/4 页面落地；Phase 1 精度修复与 Phase 3 择时共用 ChanlunAnalyser。
