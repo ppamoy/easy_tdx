@@ -130,6 +130,11 @@ def test_timing_response_novice_fields() -> None:
     assert out["novice_advice"] is not None
     assert out["novice_advice"]["explanation"]
     assert out["signal_quality"]["summary"]
+    # structure 计数与快照一致
+    assert out["structure"]["bi_count"] == 27
+    assert out["structure"]["zs_count"] == 3
+    assert out["structure"]["mmd_count"] == 4
+    assert out["structure"]["bc_count"] == 1
 
 
 def test_bi_end_to_end(result) -> None:

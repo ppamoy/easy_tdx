@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**择时结构计数一致性金标（V630）**：
+- test_chanlun_real_golden.py 的择时输出断言锁定 structure 计数（bi27/zs3/mmd4/bc1）与快照一致。
+- 全量 tests/unit 3361 passed。
+
+
 **Point-in-time 取财报金标（V629）**：
 - test_changying_golden.py 新增 pick_report 金标：只用披露日 <= 目标日的财报（不偷看未来）、缺失披露日用报告期近似。
 - 全量 tests/unit 3361 passed。
@@ -790,9 +795,5 @@
 
 - **V447** _calc_stock_quality 集成测试（验证 V102 评级 + 风险回报比 + 买入方向加分）
 - **V448** _pass_screening 选股门槛测试（无信号/低质量不通过）
-
----
-
-**advice table 输出补充指标（V446）**：advice --output table 格式汇总补 profit_factor、逐笔明细补 MAE%/MFE% 列，与 CSV/Markdown 格式对齐。
 
 ---
