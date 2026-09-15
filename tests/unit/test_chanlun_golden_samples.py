@@ -277,6 +277,26 @@ def test_pz_beichi_rejects_opposite_direction() -> None:
     assert all(bc.bc_type != BCType.PZ for bc in bcs)
 
 
+# ── 趋势背驰语义金标 ─────────────────────────────────────────────────
+
+def test_qs_beichi_exit_stroke_after_zs() -> None:
+    """趋势背驰：离开笔 = 中枢最后一条线之后的那一笔，两段同向且创新低/力度衰减。"""
+    bi0 = _mk_bi(0, "up", 22.0, 18.0)
+    bi1 = _mk_bi(1, "down", 21.0, 17.0)
+    bi2 = _mk_bi(2, "up", 20.0, 16.0)
+    bi3 = _mk_bi(3, "down", 19.0, 15.0)
+    bi4 = _mk_bi(4, "down", 14.0, 10.0)  # 前中枢离开笔（向下）
+    bi5 = _mk_bi(5, "up", 16.0, 12.0)
+    bi6 = _mk_bi(6, "down", 15.0, 11.0)
+    bi7 = _mk_bi(7, "up", 14.0, 10.0)
+    bi8 = _mk_bi(8, "down", 11.0, 9.0)  # 后中枢离开笔（向下，创新低，力度小）
+    bis = [bi0, bi1, bi2, bi3, bi4, bi5, bi6, bi7, bi8]
+    prev_zs = ZS(lines=[bi1, bi2, bi3], zg=20.0, zd=16.0, gg=21.0, dd=15.0, done=True)
+    curr_zs = ZS(lines=[bi5, bi6, bi7], zg=15.0, zd=11.0, gg=16.0, dd=10.0, done=True)
+    bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None)
+    assert any(bc.bc_type == BCType.QS for bc in bcs)
+
+
 # ── 线段方向校验金标 ──────────────────────────────────────────────────
 
 def test_valid_segment_end_direction() -> None:
