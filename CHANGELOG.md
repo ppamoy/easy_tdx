@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**背驰金标：力度衰减 + 锚点对齐（V606）**：
+- 真实行情金标新增背驰断言：每个背驰的 curr/prev 力度必须 < 前笔 80%，且背驰锚点落在触发笔端点极值上（与图上「背」标注一致）。
+- 全量 tests/unit 3308 passed。
+
+
 **中枢语义金标 + 文档修正（V605）**：
 - 修正 zs.py 注释：zg=上沿=min(high)、zd=下沿=max(low)（旧注释把两者写反）。
 - 金标新增中枢语义断言：zg==min(high)、zd==max(low)、gg==max(high)、dd==min(low)、zg>zd，锁定中枢口径。
@@ -786,11 +791,3 @@
 - **V413** client.py get_fund_flow/get_history_fund_flow/get_minute_time_data 编排测试（+4 用例）。
 
 ---
-
-**质量加固续章三十八（V412）—— mac qfq 重算 + 逐笔分页测试**：
-
-- **V412** mac/client.py _local_recompute_qfq 降级 + get_transactions 分页测试（+3 用例）。
-
----
-
-**质量加固续章三十七（V411）—— mac get_board_change_ranking 测试**：

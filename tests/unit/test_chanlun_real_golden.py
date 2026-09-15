@@ -67,6 +67,23 @@ def test_zs_semantics(result) -> None:
             assert zs.dd == min(line.low for line in zs.lines), f"dd 应为 min(low) {zs}"
 
 
+def test_beichi_force_ratio_and_anchor(result) -> None:
+    from easy_tdx.chanlun.mmd_conditions import _calc_bi_force
+
+    closes = [k.close for k in result.klines]
+    klines = result.klines
+    for bc in result.bcs:
+        curr, prev = bc.curr, bc.prev
+        cf = _calc_bi_force(curr, closes, curr.index)
+        pf = _calc_bi_force(prev, closes, prev.index)
+        if pf > 0 and cf > 0:
+            assert cf < pf * 0.8, f"背驰力度未衰减 {bc.msg}"
+        anchor = bc.curr.end if bc.curr else None
+        if anchor is not None:
+            bar = klines[anchor.bar_index]
+            assert anchor.val in (bar.high, bar.low), f"背驰锚点未落极值 {bc.msg}"
+
+
 def test_bi_end_to_end(result) -> None:
     for i in range(len(result.bis) - 1):
         prev, nxt = result.bis[i], result.bis[i + 1]

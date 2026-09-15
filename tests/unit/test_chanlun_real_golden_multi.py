@@ -71,6 +71,24 @@ def test_zs_semantics(case) -> None:
             assert zs.dd == min(line.low for line in zs.lines)
 
 
+def test_beichi_force_ratio_and_anchor(case) -> None:
+    from easy_tdx.chanlun.mmd_conditions import _calc_bi_force
+
+    res, _ = case
+    closes = [k.close for k in res.klines]
+    klines = res.klines
+    for bc in res.bcs:
+        curr, prev = bc.curr, bc.prev
+        cf = _calc_bi_force(curr, closes, curr.index)
+        pf = _calc_bi_force(prev, closes, prev.index)
+        if pf > 0 and cf > 0:
+            assert cf < pf * 0.8, bc.msg
+        anchor = bc.curr.end if bc.curr else None
+        if anchor is not None:
+            bar = klines[anchor.bar_index]
+            assert anchor.val in (bar.high, bar.low), bc.msg
+
+
 def test_bi_end_to_end(case) -> None:
     res, _ = case
     for i in range(len(res.bis) - 1):
