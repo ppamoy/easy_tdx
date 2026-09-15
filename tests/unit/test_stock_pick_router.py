@@ -89,6 +89,8 @@ def test_novice_advice_buy_gives_entry_stop_target() -> None:
     assert out["entry"] is not None
     assert out["stop"] is not None
     assert out["target"] is not None
+    # 买点三档价必须有序：止损 < 入场 < 目标
+    assert out["stop"] < out["entry"] < out["target"], out
     assert "1buy" in out["explanation"]
     assert "小仓位" in out["position_note"]
 
