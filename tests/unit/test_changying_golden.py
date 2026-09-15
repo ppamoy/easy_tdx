@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import pandas as pd
+
+from easy_tdx.fundamental.indicators import pick_report
 from easy_tdx.fundamental.pipeline import _profitable, _total_mcap_yi, _valuation
 from easy_tdx.fundamental.screener import screen_stock
 from easy_tdx.fundamental.season import detect_season
@@ -182,6 +185,48 @@ def test_valuation_annualized_pe() -> None:
 def test_valuation_loss_or_no_close() -> None:
     assert _valuation({"eps": -1.0, "bps": 10.0}, 40.0, "2025-12-31")["pe"] is None
     assert _valuation({"eps": 2.0, "bps": 10.0}, None, "2025-12-31")["pe"] is None
+
+
+# ── Point-in-time 取财报金标 ──────────────────────────────────────────
+
+def test_pick_report_point_in_time_no_future() -> None:
+    """只用披露日 <= 目标日的财报，不偷看未来。"""
+    frame = pd.DataFrame(
+        [
+            {
+                "code": "600001",
+                "market": "SH",
+                "report_date": date(2025, 3, 31),
+                "disclosure_date": date(2025, 4, 25),
+            },
+            {
+                "code": "600001",
+                "market": "SH",
+                "report_date": date(2025, 6, 30),
+                "disclosure_date": date(2025, 8, 25),
+            },
+        ]
+    )
+    row = pick_report(frame, "600001", date(2025, 7, 1), market="SH")
+    assert row is not None
+    assert row["report_date"] == date(2025, 3, 31)
+
+
+def test_pick_report_missing_disclosure_fallback() -> None:
+    """缺失披露日时用报告期近似（<= 目标日且相差 <=100 天）。"""
+    frame = pd.DataFrame(
+        [
+            {
+                "code": "600001",
+                "market": "SH",
+                "report_date": date(2025, 3, 31),
+                "disclosure_date": None,
+            }
+        ]
+    )
+    row = pick_report(frame, "600001", date(2025, 5, 1), market="SH")
+    assert row is not None
+    assert row["report_date"] == date(2025, 3, 31)
 
 
 def test_profitable_golden() -> None:

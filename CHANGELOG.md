@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**Point-in-time 取财报金标（V629）**：
+- test_changying_golden.py 新增 pick_report 金标：只用披露日 <= 目标日的财报（不偷看未来）、缺失披露日用报告期近似。
+- 全量 tests/unit 3361 passed。
+
+
 **树粮菜同分优先级金标（V628）**：
 - test_changying_golden.py 新增同分 tiebreak 金标：树/粮同 100 分时优先判树（树>粮>菜）。
 - 全量 tests/unit 3359 passed。
@@ -789,9 +794,5 @@
 ---
 
 **advice table 输出补充指标（V446）**：advice --output table 格式汇总补 profit_factor、逐笔明细补 MAE%/MFE% 列，与 CSV/Markdown 格式对齐。
-
----
-
-**信号排名加盈亏比（V445）**：compute_signal_accuracy_by_type 的 ranking 条目加 profit_factor，前端排名表直接用 rank.profit_factor（不再间接查 by_type），前后端契约自包含。
 
 ---
