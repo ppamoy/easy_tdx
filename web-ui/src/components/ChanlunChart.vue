@@ -807,16 +807,26 @@ watch(
 <template>
   <div class="chanlun-layout">
     <div ref="container" class="chanlun-chart"></div>
-    <aside v-if="props.mmds.length" class="mmd-legend">
+    <aside
+      v-if="props.mmds.length || (props.bcs && props.bcs.some((b) => b.bc))"
+      class="mmd-legend"
+    >
       <div class="mmd-legend-title">买卖点图例</div>
-      <div class="mmd-legend-item"><span class="ic buy-1">▲</span> 一类买点 (1buy)</div>
-      <div class="mmd-legend-item"><span class="ic buy-2">●</span> 二类买点 (2buy)</div>
-      <div class="mmd-legend-item"><span class="ic buy-2s">■</span> 类二买 (2buy_s)</div>
-      <div class="mmd-legend-item"><span class="ic buy-3">◆</span> 三类买点 (3buy)</div>
-      <div class="mmd-legend-item"><span class="ic sell-1">▼</span> 一类卖点 (1sell)</div>
-      <div class="mmd-legend-item"><span class="ic sell-2">●</span> 二类卖点 (2sell)</div>
-      <div class="mmd-legend-item"><span class="ic sell-2s">▬</span> 类二卖 (2sell_s)</div>
-      <div class="mmd-legend-item"><span class="ic sell-3">◆</span> 三类卖点 (3sell)</div>
+      <template v-if="props.mmds.length">
+        <div class="mmd-legend-item"><span class="ic buy-1">▲</span> 一类买点 (1buy)</div>
+        <div class="mmd-legend-item"><span class="ic buy-2">●</span> 二类买点 (2buy)</div>
+        <div class="mmd-legend-item"><span class="ic buy-2s">■</span> 类二买 (2buy_s)</div>
+        <div class="mmd-legend-item"><span class="ic buy-3">◆</span> 三类买点 (3buy)</div>
+        <div class="mmd-legend-item"><span class="ic sell-1">▼</span> 一类卖点 (1sell)</div>
+        <div class="mmd-legend-item"><span class="ic sell-2">●</span> 二类卖点 (2sell)</div>
+        <div class="mmd-legend-item"><span class="ic sell-2s">▬</span> 类二卖 (2sell_s)</div>
+        <div class="mmd-legend-item"><span class="ic sell-3">◆</span> 三类卖点 (3sell)</div>
+      </template>
+      <template v-if="props.bcs && props.bcs.some((b) => b.bc)">
+        <div class="legend-sep"></div>
+        <div class="mmd-legend-item"><span class="ic bc">▭</span> 背驰(主图)</div>
+        <div class="mmd-legend-item"><span class="ic bc-sub">▭</span> 背驰(副图 MACD)</div>
+      </template>
     </aside>
   </div>
 </template>
@@ -867,6 +877,13 @@ watch(
 .sell-2 { color: #f87171; }
 .sell-2s { color: #fca5a5; }
 .sell-3 { color: #fecaca; }
+.bc { color: #ff9500; }
+.bc-sub { color: #ff9500; opacity: 0.8; }
+.legend-sep {
+  height: 1px;
+  background: #2a2e3a;
+  margin: 6px 0;
+}
 
 /* 响应式高度：在小屏幕上缩小图表高度 */
 @media (max-width: 768px) {

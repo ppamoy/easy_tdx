@@ -17,6 +17,12 @@ from __future__ import annotations
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import BI, XD, Direction
 
+# 线段划分多义性的确定性取舍规则（V602）：
+# 当同一段走势存在多个合法线段结束候选时，统一取「最早确认」的那个
+# （特征序列分型/笔破坏确认首次成立的位置）。这保证同样数据、同样参数
+# 永远得到同一划分，避免多义性导致的结果抖动。
+XD_TIEBREAK_EARLIEST = True
+
 
 def _feature_included(a: BI, b: BI) -> bool:
     """判断两支特征笔是否存在包含关系（互为包含）。"""
@@ -84,6 +90,20 @@ def _merged_feature_fx(
     return mid[2] < left[2] and mid[2] < right[2]
 
 
+def _valid_segment_end(
+    bis: list[BI],
+    start: int,
+    cand_end: int,
+    seg_dir: Direction,
+) -> bool:
+    """校验候选线段终点与方向一致（向上段终点高于起点、向下段反之）。"""
+    seg_start_val = bis[start].start.val
+    seg_end_val = bis[cand_end].end.val
+    if seg_dir == Direction.UP:
+        return seg_end_val > seg_start_val
+    return seg_end_val < seg_start_val
+
+
 def find_xds(
     bis: list[BI],
     config: ChanlunConfig | None = None,
@@ -144,17 +164,9 @@ def find_xds(
                         mid_orig_idx = merged[-2][0][0]
 
                     if mid_orig_idx is not None:
-                        # 线段终点 = 特征分型「中间元素」的第一支原始特征笔的
-                        # 前一支同向笔（笔首尾相连，即线段转折点）。
                         cand_end = mid_orig_idx - 1
-                        seg_start_val = bis[start].start.val
-                        seg_end_val = bis[cand_end].end.val
-                        seg_ok = (
-                            seg_end_val > seg_start_val
-                            if seg_dir == Direction.UP
-                            else seg_end_val < seg_start_val
-                        )
-                        if seg_ok:
+                        if _valid_segment_end(bis, start, cand_end, seg_dir):
+                            # 确定性取舍：首次成立即结束（XD_TIEBREAK_EARLIEST）
                             end = cand_end
                             break
             j += 1
@@ -175,14 +187,7 @@ def find_xds(
                         range(start, len(bis)),
                         key=lambda i: (bis[i].end.val, i),
                     )
-                seg_start_val = bis[start].start.val
-                seg_end_val = bis[cand_end].end.val
-                seg_ok = (
-                    seg_end_val > seg_start_val
-                    if seg_dir == Direction.UP
-                    else seg_end_val < seg_start_val
-                )
-                if seg_ok:
+                if _valid_segment_end(bis, start, cand_end, seg_dir):
                     xds.append(_create_xd_from_bis(bis, start, cand_end, len(xds), seg_dir))
             start = len(bis)
 

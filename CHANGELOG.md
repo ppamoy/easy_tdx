@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**线段多义性确定性取舍 + 金标样本 + 图例补背驰（V602）**：
+- find_xds 明确「最早确认优先」的确定性取舍规则（XD_TIEBREAK_EARLIEST），抽 _valid_segment_end 去重，保证同数据同参数结果稳定。
+- 新增 tests/unit/test_chanlun_golden_samples.py：特征序列包含/分型/线段方向/背驰创新高门槛等 8 个手工标注金标回归。
+- ChanlunChart 侧边图例增加「背驰(主图)/背驰(副图 MACD)」条目，有买卖点或背驰即显示图例。
+- 测试：全量 tests/unit 3275 passed；前端 vitest 61 passed、build 通过。
+
+
 **线段划分补特征序列缺口 + 笔破坏确认（V601）**：
 - find_xds 增加特征序列第一/第二元素「缺口」检测；有缺口时线段结束需第 4 个特征元素跌破/升破分型极值（笔破坏确认），无缺口走标准分型。
 - 全量 tests/unit 3267 passed。
@@ -810,11 +817,3 @@
 - **V405** client.py get_security_quotes/get_block_info/get_report_file/get_price_limits 编排路径测试（+6 用例）。
 
 ---
-
-**质量加固续章三十（V404）—— client get_* 编排路径测试**：
-
-- **V404** client.py get_security_count/list/xdxr/finance/company/market_stat 编排路径测试（+8 用例）。
-
----
-
-**质量加固续章二十九（V403）—— client _execute 韧性路径测试**：
