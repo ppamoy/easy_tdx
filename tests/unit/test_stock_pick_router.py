@@ -82,6 +82,12 @@ class _FakeResult:
         return self
 
 
+def test_verdict_confidence_boundary() -> None:
+    # 置信度阈值 _MIN_CONF=0.6：恰为 0.6 给建议，0.59 降级观望
+    assert _verdict([_FakeMmd("1buy", 0.6)])["action"] == "买入"
+    assert _verdict([_FakeMmd("1buy", 0.59)])["action"] == "观望"
+
+
 def test_novice_advice_buy_gives_entry_stop_target() -> None:
     res = _FakeResult().with_buy()
     out = _novice_advice(res, {"signal": "1buy", "action": "买入"})

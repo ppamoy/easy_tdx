@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**择时置信度阈值边界金标（V627）**：
+- 锁定 _MIN_CONF=0.6 边界：置信度 0.6 给买卖建议、0.59 降级观望。
+- 全量 tests/unit 3358 passed。
+
+
 **to_dict 序列化金标（V626）**：
 - 多周期快照新增 to_dict 序列化断言：不崩溃、含 bis/mmds/bcs，分钟级日期含时分，锁定 V623 字符串日期归一化。
 - 全量 tests/unit 3357 passed。
@@ -783,13 +788,5 @@
 ---
 
 **信号排名加盈亏比（V445）**：compute_signal_accuracy_by_type 的 ranking 条目加 profit_factor，前端排名表直接用 rank.profit_factor（不再间接查 by_type），前后端契约自包含。
-
----
-
-**多持有期敏感性分析（V444）**：新增 simulate_advice_hold_sweep，同一批建议用不同 max_hold（3/5/10/20）模拟，返回各持有期的表现对比，帮助评估建议对持有期的敏感性、选择合适止盈/到期窗口。
-
----
-
-**缠论页准确度验证加盈亏比列（V443）**：缠论分析页「买卖点准确度验证」排名表加盈亏比列（复用 V430 的 profit_factor），与回测页准确度面板对齐。
 
 ---
