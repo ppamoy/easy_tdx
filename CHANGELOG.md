@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**金标快照扩到多标的/多周期（V604）**：
+- 新增 600519 日线、000333 日线、000001 周线三份真实行情金标快照 + test_chanlun_real_golden_multi.py，锁计数与几何不变量。
+- 全量 tests/unit 3300 passed。
+
+
 **真实行情金标快照 + 趋势背驰离开笔语义修正（V603）**：
 - 新增 tests/fixtures/chanlun_000001_daily.json（SZ000001 真实日线 160 根）+ test_chanlun_real_golden.py，锁定笔/线段/中枢/买卖点/背驰计数与几何不变量。
 - 金标暴露出趋势背驰 bug：旧实现把「中枢内部最后一条线」当「离开笔」；改为中枢最后一条线之后的那一笔，并要求两段离开笔方向都与趋势一致。该 bug 此前会误报趋势背驰。
@@ -789,21 +794,3 @@
 ---
 
 **质量加固续章三十六（V410）—— mac K线分页编排测试**：
-
-- **V410** mac/client.py _fetch_kline_pages 分页 + get_stock_kline/get_stock_kline_with_indicators 测试（+4 用例）。
-
----
-
-**质量加固续章三十五（V409）—— mac get_board_ranking 测试**：
-
-- **V409** mac/client.py get_board_ranking 非法 sort_by/空板块/完整聚合 + get_stock_quotes 测试（+4 用例）。
-
----
-
-**质量加固续章三十四（V408）—— mac client get_* 编排路径测试三**：
-
-- **V408** mac/client.py tick_chart/board_members/board_summary/transactions 编排路径测试（+5 用例）。
-
----
-
-**质量加固续章三十三（V407）—— mac client get_* 编排路径测试二**：
