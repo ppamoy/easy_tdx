@@ -36,6 +36,10 @@ def _df_to_klines(df: pd.DataFrame) -> list[Kline]:
         dt = getattr(row, "datetime", None) or getattr(row, "date", None)
         if dt is None:
             continue
+        # V623: 字符串日期（如 JSON 载入的 DataFrame）归一化为时间对象，
+        # 否则后续 _fmt_dt 调 strftime 会因 str 无该方法而崩溃。
+        if isinstance(dt, str):
+            dt = pd.to_datetime(dt)
         row_any: Any = row  # avoid pandas-stubs vs bare pandas type mismatch
         vol = getattr(row, "vol", 0.0) or 0.0
         klines.append(

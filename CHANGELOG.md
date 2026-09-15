@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**字符串日期归一化修复 + 择时小白字段金标（V623）**：
+- 修复 ChanlunAnalyser 对 JSON 载入的 DataFrame（字符串日期）调用 to_dict 时 strftime 崩溃；_df_to_klines 将字符串日期归一化为时间对象。
+- 新增真实行情择时输出金标：_run_timing_one 必须返回 verdict / novice_advice / signal_quality 三个小白字段。
+- 全量 tests/unit 3349 passed。
+
+
 **小白风险点识别金标（V622）**：
 - test_changying_golden.py 新增 novice_summary 风险点金标：亏损/高负债/负现金流都应进入 risk_flags 且 risk_level=高。
 - 全量 tests/unit 3348 passed。
@@ -781,13 +787,5 @@
 ---
 
 **建议模拟单笔加最大有利偏移（V440）**：simulate_advice_trade 结果在 MAE 之外再加 mfe_pct（最大有利偏移 MFE，方向对齐后的最大浮盈百分比），与 MAE 对称——MFE 大但 return_pct 小说明止盈过早。
-
----
-
-**建议模拟单笔加最大不利偏移（V439）**：simulate_advice_trade 结果加 mae_pct（最大不利偏移 MAE，方向对齐后的最大浮亏百分比），与 profit_factor（收益）互补，评估止损设置是否合理。
-
----
-
-**选股页展示风险回报比（V438）**：选股结果卡片在 V102 评级与操作建议之外展示风险回报比 RR。
 
 ---

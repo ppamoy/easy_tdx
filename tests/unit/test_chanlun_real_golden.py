@@ -8,6 +8,7 @@ fixture，锁定当前（已按缠论原文修正后的）缠论结构：笔/线
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -15,6 +16,7 @@ import pytest
 
 from easy_tdx.chanlun import ChanlunAnalyser
 from easy_tdx.chanlun.types import Direction
+from easy_tdx.web.routers.stock_pick import _run_timing_one
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "chanlun_000001_daily.json"
 
@@ -117,6 +119,17 @@ def test_mmd_second_type_structure(result) -> None:
             assert any(
                 o.bi.high > m.bi.high and o.bi.index < m.bi.index for o in ones_sell
             ), m.msg
+
+
+def test_timing_response_novice_fields() -> None:
+    """择时输出必须包含 verdict / novice_advice / signal_quality 三个小白字段。"""
+    df = _load_df()
+    out = _run_timing_one(df, "SZ:000001", "SZ", "000001", date(2025, 9, 8))
+    assert "error" not in out
+    assert out["verdict"]["action"] in ("买入", "卖出", "观望")
+    assert out["novice_advice"] is not None
+    assert out["novice_advice"]["explanation"]
+    assert out["signal_quality"]["summary"]
 
 
 def test_bi_end_to_end(result) -> None:
