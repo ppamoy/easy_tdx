@@ -116,6 +116,32 @@ def test_total_mcap_yi_golden() -> None:
     assert _total_mcap_yi({}, {"close": None, "float_shares": None}) is None
 
 
+def test_novice_summary_risk_flags() -> None:
+    """风险点识别：亏损、高负债、负现金流都应进入 risk_flags 且 risk_level=高。"""
+    row = {
+        "code": "600003",
+        "market": "SH",
+        "report_date": "2025-12-31",
+        "net_profit": -1e9,
+        "revenue": 1e10,
+        "roe": 5.0,
+        "gross_margin": 20.0,
+        "rev_yoy": 0.0,
+        "np_yoy": 0.0,
+        "debt_ratio": 70.0,
+        "ocf_ps": -1.0,
+        "eps": -0.5,
+        "net_margin": -10.0,
+    }
+    sr = screen_stock(row, pool_size=1)
+    assert sr is not None
+    ns = sr.as_dict()["novice_summary"]
+    assert ns["risk_level"] == "高"
+    assert "最近报告期亏损" in ns["risk_flags"]
+    assert "资产负债率偏高（超过60%）" in ns["risk_flags"]
+    assert "每股经营现金流非正" in ns["risk_flags"]
+
+
 def test_profitable_golden() -> None:
     assert _profitable({"net_profit": 1.0}) is True
     assert _profitable({"net_profit": 0.0}) is False
