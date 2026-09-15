@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**全市场选股复合逻辑金标（V611）**：
+- 新增 tests/unit/test_scan_market_golden.py：注入固定候选集，锁定 scan_market 的「盈利硬门槛 → 评分排序 → 市值门槛 → 截断 top_n」复合逻辑。
+- 全量 tests/unit 3325 passed。
+
+
 **选股挑20只输出路径金标（V610）**：
 - 新增 tests/unit/test_selection_golden.py：锁定 stock_pick 结果行归一化（质量分正确取 scores[category]）、score 字段优先级、长盈池本地存储按分数降序。
 - 全量 tests/unit 3324 passed。
@@ -780,5 +785,3 @@
 ---
 
 **买卖点实证复盘（V418-V419）—— 缠论学习页面需求与 Phase 7 落地**：
-
-- **V418** OpenSpec 需求梳理：7 能力域（理论教学/可视化/难度分级/错误归因/进度/排行榜/实证复盘）+ 45 项任务，提交于 openspec/changes/easy-tdx-chanlun-learning/
