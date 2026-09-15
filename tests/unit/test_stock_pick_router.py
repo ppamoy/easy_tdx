@@ -31,6 +31,9 @@ def test_verdict_buy_sell_wait() -> None:
     assert _verdict([])["action"] == "观望"
     assert _verdict([_FakeMmd("1buy", 0.9)])["action"] == "买入"
     assert _verdict([_FakeMmd("3sell", 0.7)])["action"] == "卖出"
+    # 类二买/类二卖 也应按类型名中的 buy/sell 正确判定方向
+    assert _verdict([_FakeMmd("2buy_s", 0.9)])["action"] == "买入"
+    assert _verdict([_FakeMmd("2sell_s", 0.9)])["action"] == "卖出"
 
 
 def test_verdict_low_confidence_downgrades_to_wait() -> None:

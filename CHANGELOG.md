@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**类二买卖点方向判定金标（V631）**：
+- 扩展择时结论金标：2buy_s/2sell_s 按类型名中的 buy/sell 正确判为买入/卖出。
+- 全量 tests/unit 3361 passed。
+
+
 **择时结构计数一致性金标（V630）**：
 - test_chanlun_real_golden.py 的择时输出断言锁定 structure 计数（bi27/zs3/mmd4/bc1）与快照一致。
 - 全量 tests/unit 3361 passed。
@@ -792,8 +797,3 @@
 ---
 
 **选股逻辑测试覆盖（V447-V448）**：
-
-- **V447** _calc_stock_quality 集成测试（验证 V102 评级 + 风险回报比 + 买入方向加分）
-- **V448** _pass_screening 选股门槛测试（无信号/低质量不通过）
-
----
