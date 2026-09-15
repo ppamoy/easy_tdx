@@ -55,6 +55,18 @@ def test_bi_endpoints_on_extremes(result) -> None:
             assert bi.end.val == eb.low, f"向下笔终点未落低点 {bi}"
 
 
+def test_zs_semantics(result) -> None:
+    for zs in result.zss:
+        assert zs.zg > zs.zd, f"中枢上沿应高于下沿 {zs}"
+        assert zs.gg >= zs.zg, f"gg 应 >= zg {zs}"
+        assert zs.dd <= zs.zd, f"dd 应 <= zd {zs}"
+        if zs.lines:
+            assert zs.zg == min(line.high for line in zs.lines), f"zg 应为 min(high) {zs}"
+            assert zs.zd == max(line.low for line in zs.lines), f"zd 应为 max(low) {zs}"
+            assert zs.gg == max(line.high for line in zs.lines), f"gg 应为 max(high) {zs}"
+            assert zs.dd == min(line.low for line in zs.lines), f"dd 应为 min(low) {zs}"
+
+
 def test_bi_end_to_end(result) -> None:
     for i in range(len(result.bis) - 1):
         prev, nxt = result.bis[i], result.bis[i + 1]

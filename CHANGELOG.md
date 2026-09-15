@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**中枢语义金标 + 文档修正（V605）**：
+- 修正 zs.py 注释：zg=上沿=min(high)、zd=下沿=max(low)（旧注释把两者写反）。
+- 金标新增中枢语义断言：zg==min(high)、zd==max(low)、gg==max(high)、dd==min(low)、zg>zd，锁定中枢口径。
+- 全量 tests/unit 3304 passed。
+
+
 **金标快照扩到多标的/多周期（V604）**：
 - 新增 600519 日线、000333 日线、000001 周线三份真实行情金标快照 + test_chanlun_real_golden_multi.py，锁计数与几何不变量。
 - 全量 tests/unit 3300 passed。
@@ -788,9 +794,3 @@
 ---
 
 **质量加固续章三十七（V411）—— mac get_board_change_ranking 测试**：
-
-- **V411** mac/client.py get_board_change_ranking 非法 days/空板块/完整排行测试（+3 用例）。
-
----
-
-**质量加固续章三十六（V410）—— mac K线分页编排测试**：

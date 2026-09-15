@@ -58,6 +58,19 @@ def test_bi_endpoints_on_extremes(case) -> None:
             assert bi.end.val == eb.low
 
 
+def test_zs_semantics(case) -> None:
+    res, _ = case
+    for zs in res.zss:
+        assert zs.zg > zs.zd
+        assert zs.gg >= zs.zg
+        assert zs.dd <= zs.zd
+        if zs.lines:
+            assert zs.zg == min(line.high for line in zs.lines)
+            assert zs.zd == max(line.low for line in zs.lines)
+            assert zs.gg == max(line.high for line in zs.lines)
+            assert zs.dd == min(line.low for line in zs.lines)
+
+
 def test_bi_end_to_end(case) -> None:
     res, _ = case
     for i in range(len(res.bis) - 1):
