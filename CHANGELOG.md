@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**中枢计算金标（V615）**：
+- test_chanlun_golden_samples.py 新增 find_zss 金标：四笔重叠成中枢、离开笔关闭，锁定 zg=min(high)/zd=max(low)/gg/dd/line_count/done。
+- 全量 tests/unit 3331 passed。
+
+
 **笔计算金标（V614）**：
 - test_chanlun_golden_samples.py 新增 find_bis 金标：交替分型生成 4 笔（方向/端点正确）、更极端顶分型替换并延伸上一笔终点。
 - 全量 tests/unit 3330 passed。
@@ -787,6 +792,3 @@
 ---
 
 **缠论学习页面（V420-V426）—— OpenSpec change easy-tdx-chanlun-learning 七能力域落地**：
-
-- **V420** 理论教学：6 篇缠论概念（分型/笔/线段/中枢/三类买卖点/背驰）+ LessonCard/TheoryLessons/LearnView + /learn 路由
-- **V421** 难度分级 + 随机标的：训练候选点按置信度过滤（easy/medium/hard，seed 复现）+ 🎲 随机标的

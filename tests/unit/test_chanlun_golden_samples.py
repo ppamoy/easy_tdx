@@ -20,6 +20,7 @@ from easy_tdx.chanlun.xd import (
     _valid_segment_end,
     find_xds,
 )
+from easy_tdx.chanlun.zs import find_zss
 
 
 def _mk_bi(
@@ -220,6 +221,28 @@ def test_find_bis_more_extreme_top_replaces() -> None:
     assert bis[0].end.val == 20.0  # 更极端顶替换
     assert bis[1].direction == Direction.DOWN
     assert bis[1].end.val == 13.0
+
+
+# ── 中枢计算金标 ─────────────────────────────────────────────────────
+
+def test_find_zss_golden() -> None:
+    """四笔重叠形成中枢、离开笔关闭中枢：应得到 1 个中枢，zg=11 zd=9 gg=12 dd=8。"""
+    bis = [
+        _mk_bi(0, "up", 12.0, 8.0),
+        _mk_bi(1, "down", 11.0, 9.0),
+        _mk_bi(2, "up", 12.0, 8.0),
+        _mk_bi(3, "down", 11.0, 9.0),
+        _mk_bi(4, "up", 20.0, 15.0),  # 离开中枢，触发关闭
+    ]
+    zss = find_zss(bis, ChanlunConfig())
+    assert len(zss) == 1
+    zs = zss[0]
+    assert zs.line_count == 4
+    assert zs.zg == 11.0  # min(high) = 上沿
+    assert zs.zd == 9.0  # max(low) = 下沿
+    assert zs.gg == 12.0
+    assert zs.dd == 8.0
+    assert zs.done is True
 
 
 # ── 线段方向校验金标 ──────────────────────────────────────────────────
