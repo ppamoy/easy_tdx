@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**长盈选股模型金标（V609）**：
+- 新增 tests/unit/test_changying_golden.py：手工标注树/粮/菜三个财报行，锁定三维打分与分类结论；并锁定市值（总股本/流通股本回退）与盈利硬门槛纯函数口径。
+- 全量 tests/unit 3321 passed。
+
+
 **二类买卖点结构金标（V608）**：
 - 真实行情金标新增二类买卖点结构校验：2买/类2买 = 一买后回踩不创新低（存在更早、更低的一买低点）；2卖/类2卖 = 一卖后反抽不创新高。
 - 全量 tests/unit 3316 passed。
@@ -774,12 +779,3 @@
 - **V418** OpenSpec 需求梳理：7 能力域（理论教学/可视化/难度分级/错误归因/进度/排行榜/实证复盘）+ 45 项任务，提交于 openspec/changes/easy-tdx-chanlun-learning/
 - **V419** 买卖点实证复盘落地：后端 verify 路由（预置 20 只大市值标的池 + prerun 缓存 + list/detail + mmd.zs_index 同级别中枢关联）+ 前端 SignalVerifyView（左列表+右单标的详情，买卖点后逐根 K 线揭示，同级别中枢）
 - **V419** ChanlunChart 新增 singleZsIndex prop（同级别中枢过滤）+ reveal 逐根游标复用
-- **质量**：后端 pytest +7（verify 契约）、前端 vitest 43 passed、vue-tsc + vite build 通过、ruff/mypy 归零
-
----
-
-**质量加固续章四十二（V416）—— backtest _optimize_one_strategy 测试**：
-
-- **V416** web/routers/backtest.py _optimize_one_strategy 未知策略/完整寻优测试（+2 用例）。
-
----
