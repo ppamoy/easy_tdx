@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**3类买卖点 ATR 门槛改为增强项（V633）**：
+- 3买/3卖 的 ATR 支撑/阻力由硬阻断改为增强提示——缠论 3类买卖点核心是「回踩不破中枢上沿/反抽不破中枢下沿」，ATR 贴近程度只是质量加分，旧实现把它当硬门槛导致 3类点几乎从不触发。
+- 全量 tests/unit 3361 passed。
+
+
 **类二买卖点方向判定金标（V631）**：
 - 扩展择时结论金标：2buy_s/2sell_s 按类型名中的 buy/sell 正确判为买入/卖出。
 - 全量 tests/unit 3361 passed。
@@ -791,9 +796,3 @@
 **offline advice-batch 汇总补指标（V450）**：advice-batch 的 md 汇总加盈亏比，json/table/csv 输出加 summary_profit_factor/summary_avg_mae_pct/summary_avg_mfe_pct 字段。
 
 ---
-
-**offline advice JSON 补盈亏比（V449）**：offline advice 单标的 JSON 汇总补 profit_factor，与 CSV/Markdown/table 格式对齐。
-
----
-
-**选股逻辑测试覆盖（V447-V448）**：

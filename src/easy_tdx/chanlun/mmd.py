@@ -2901,8 +2901,7 @@ def _find_third_type_mmds(
                     atr_support_ok, atr_support_reason = _check_atr_support_zone(
                         bi.low, zs.zg, zs.zd, MMDType.BUY_3, closes, highs, lows, bi.end.k.k_index
                     )
-                    if not atr_support_ok:
-                        continue  # 回踩位置不在ATR支撑区域内，可能是假突破
+                    # V632: ATR 支撑改为增强项，不阻断 3买（核心是回踩不破中枢上沿）
                     if atr_support_ok:
                         extra_parts.append("ATR支撑✅")
 
@@ -3233,8 +3232,7 @@ def _find_third_type_mmds(
                     atr_resist_ok, atr_resist_reason = _check_atr_support_zone(
                         bi.high, zs.zg, zs.zd, MMDType.SELL_3, closes, highs, lows, bi.end.k.k_index
                     )
-                    if not atr_resist_ok:
-                        continue  # 反弹位置不在ATR阻力区域内
+                    # V632: ATR 阻力改为增强项，不阻断 3卖（核心是反抽不破中枢下沿）
                     if atr_resist_ok:
                         extra_parts_sell.append("ATR阻力✅")
 
