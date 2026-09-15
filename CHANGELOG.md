@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**择时建议越界/缺触发笔加固（V625）**：
+- _novice_advice 对缺触发笔的信号不再给具体价位（改为观望），并夹紧索引避免止损/目标取到错误窗口。
+- 新增缺触发笔单元测试。
+- 全量 tests/unit 3353 passed。
+
+
 **估值 PE/PB 金标（V624）**：
 - test_changying_golden.py 新增估值金标：PE/PB 计算、一季报 EPS 年化动态 PE、亏损/无价时 PE 为 None。
 - 全量 tests/unit 3352 passed。
@@ -784,9 +790,5 @@
 ---
 
 **建议批量汇总加平均 MAE/MFE（V442）**：summarize_batch 跨标的聚合结果加 avg_mae_pct / avg_mfe_pct（平均最大不利/有利偏移），与单笔 MAE/MFE 对齐，提供跨标的风险/盈利潜力汇总。
-
----
-
-**建议模拟 CLI 输出补充指标（V441）**：advice --output csv/md 输出补充 profit_factor（汇总）、mae_pct/mfe_pct（逐笔明细），与 V435/V439/V440 新增字段对齐。
 
 ---

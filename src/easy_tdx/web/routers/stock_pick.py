@@ -251,10 +251,23 @@ def _novice_advice(result: Any, verdict: dict[str, Any]) -> dict[str, Any]:
         }
     is_buy = "buy" in last.mmd_type.value
     bi = last.bi
-    idx = bi.end.bar_index if bi else None
+    # V625: 信号缺少触发笔时不给具体价位（避免 entry=None 且止损/目标取错窗口）。
+    if bi is None:
+        return {
+            "explanation": "该信号缺少触发笔，暂不给具体价位，建议观望",
+            "entry": None,
+            "stop": None,
+            "target": None,
+            "position_note": "结构不完整，先观察",
+            "signal": verdict.get("signal"),
+            "direction": None,
+        }
+    idx = bi.end.bar_index
     closes = [float(k.close) for k in result.klines]
     highs = [float(k.high) for k in result.klines]
     lows = [float(k.low) for k in result.klines]
+    # 把索引夹在有效范围内，避免越界导致止损/目标取到错误窗口。
+    idx = max(0, min(idx, len(closes) - 1))
 
     def _r(v: Any) -> float | None:
         return round(float(v), 2) if v is not None else None

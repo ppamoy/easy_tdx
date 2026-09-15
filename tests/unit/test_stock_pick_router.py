@@ -95,6 +95,16 @@ def test_novice_advice_buy_gives_entry_stop_target() -> None:
     assert "小仓位" in out["position_note"]
 
 
+def test_novice_advice_missing_bi_gives_wait() -> None:
+    res = _FakeResult()
+    res.mmds = [
+        type("M", (), {"mmd_type": type("T", (), {"value": "1buy"})(), "bi": None, "zs": None})()
+    ]
+    out = _novice_advice(res, {"signal": "1buy", "action": "买入"})
+    assert out["entry"] is None
+    assert "缺少触发笔" in out["explanation"]
+
+
 def test_novice_advice_empty_is_wait() -> None:
     out = _novice_advice(_FakeResult(), {"signal": None})
     assert "观望" in out["explanation"]
