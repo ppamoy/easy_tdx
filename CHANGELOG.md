@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**真实行情金标快照 + 趋势背驰离开笔语义修正（V603）**：
+- 新增 tests/fixtures/chanlun_000001_daily.json（SZ000001 真实日线 160 根）+ test_chanlun_real_golden.py，锁定笔/线段/中枢/买卖点/背驰计数与几何不变量。
+- 金标暴露出趋势背驰 bug：旧实现把「中枢内部最后一条线」当「离开笔」；改为中枢最后一条线之后的那一笔，并要求两段离开笔方向都与趋势一致。该 bug 此前会误报趋势背驰。
+- 全量 tests/unit 3282 passed。
+
+
 **线段多义性确定性取舍 + 金标样本 + 图例补背驰（V602）**：
 - find_xds 明确「最早确认优先」的确定性取舍规则（XD_TIEBREAK_EARLIEST），抽 _valid_segment_end 去重，保证同数据同参数结果稳定。
 - 新增 tests/unit/test_chanlun_golden_samples.py：特征序列包含/分型/线段方向/背驰创新高门槛等 8 个手工标注金标回归。
@@ -801,19 +807,3 @@
 ---
 
 **质量加固续章三十三（V407）—— mac client get_* 编排路径测试二**：
-
-- **V407** mac/client.py chart_sampling/board_list/file_meta/download_file/goods_list 编排路径测试（+7 用例）。
-
----
-
-**质量加固续章三十二（V406）—— mac client get_* 编排路径测试**：
-
-- **V406** mac/client.py get_symbol_info/belong_board/capital_flow/auction/unusual/server_info/kline_offset 编排路径测试（+7 用例）。
-
----
-
-**质量加固续章三十一（V405）—— client get_* 编排路径测试二**：
-
-- **V405** client.py get_security_quotes/get_block_info/get_report_file/get_price_limits 编排路径测试（+6 用例）。
-
----

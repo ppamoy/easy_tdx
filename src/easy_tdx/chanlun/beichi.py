@@ -171,14 +171,25 @@ def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
         if not (is_down_trend or is_up_trend):
             continue
 
-        # 比较离开两中枢的笔
-        prev_exit = prev_zs.lines[-1]
-        curr_exit = curr_zs.lines[-1]
-
-        # 确保离开笔方向与趋势一致
-        if is_down_trend and prev_exit.direction.value != "down":
+        # 离开笔 = 中枢最后一条线之后的那一笔（真正的离开段），
+        # 不是中枢内部最后一条线本身（旧实现语义错误）。
+        if not prev_zs.lines or not curr_zs.lines:
             continue
-        if is_up_trend and prev_exit.direction.value != "up":
+        if prev_zs.lines[-1].index + 1 >= len(bis):
+            continue
+        if curr_zs.lines[-1].index + 1 >= len(bis):
+            continue
+        prev_exit = bis[prev_zs.lines[-1].index + 1]
+        curr_exit = bis[curr_zs.lines[-1].index + 1]
+
+        # 两段离开笔方向都必须与趋势一致
+        if is_down_trend and (
+            prev_exit.direction != Direction.DOWN or curr_exit.direction != Direction.DOWN
+        ):
+            continue
+        if is_up_trend and (
+            prev_exit.direction != Direction.UP or curr_exit.direction != Direction.UP
+        ):
             continue
 
         # 缠论原文：趋势背驰必须创新高/新低——后一中枢的离开笔
