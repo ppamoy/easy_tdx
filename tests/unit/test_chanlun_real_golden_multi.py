@@ -89,6 +89,24 @@ def test_beichi_force_ratio_and_anchor(case) -> None:
             assert anchor.val in (bar.high, bar.low), bc.msg
 
 
+def test_mmd_structure_position(case) -> None:
+    res, _ = case
+    for m in res.mmds:
+        t = m.mmd_type.value
+        if t == "1buy":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.low < m.zs.zd, m.msg
+        elif t == "1sell":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.high > m.zs.zg, m.msg
+        elif t == "3buy":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.low > m.zs.zg * 1.005, m.msg
+        elif t == "3sell":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.high < m.zs.zd * 0.995, m.msg
+
+
 def test_bi_end_to_end(case) -> None:
     res, _ = case
     for i in range(len(res.bis) - 1):

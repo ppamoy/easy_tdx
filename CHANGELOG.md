@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**买卖点结构位置金标（V607）**：
+- 真实行情金标新增三类买卖点结构校验：1买创新低(低于中枢下沿)、1卖创新高(高于中枢上沿)、3买回踩不破中枢上沿(zg×1.005)、3卖反抽不破中枢下沿(zd×0.995)。
+- 全量 tests/unit 3312 passed。
+
+
 **背驰金标：力度衰减 + 锚点对齐（V606）**：
 - 真实行情金标新增背驰断言：每个背驰的 curr/prev 力度必须 < 前笔 80%，且背驰锚点落在触发笔端点极值上（与图上「背」标注一致）。
 - 全量 tests/unit 3308 passed。
@@ -781,13 +786,3 @@
 ---
 
 **质量加固续章四十（V414）—— backtest _run_backtest 测试**：
-
-- **V414** web/routers/backtest.py _run_backtest 未知策略/完整运行测试（+2 用例）。
-
----
-
-**质量加固续章三十九（V413）—— client fund_flow/minute 编排测试**：
-
-- **V413** client.py get_fund_flow/get_history_fund_flow/get_minute_time_data 编排测试（+4 用例）。
-
----

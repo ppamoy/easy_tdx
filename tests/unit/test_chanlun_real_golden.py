@@ -84,6 +84,25 @@ def test_beichi_force_ratio_and_anchor(result) -> None:
             assert anchor.val in (bar.high, bar.low), f"背驰锚点未落极值 {bc.msg}"
 
 
+def test_mmd_structure_position(result) -> None:
+    """买卖点结构位置：1买在下跌背驰创新低(低于中枢下沿)、1卖创新高(高于中枢上沿)、
+    3买回踩不破中枢上沿、3卖反抽不破中枢下沿。"""
+    for m in result.mmds:
+        t = m.mmd_type.value
+        if t == "1buy":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.low < m.zs.zd, m.msg
+        elif t == "1sell":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.high > m.zs.zg, m.msg
+        elif t == "3buy":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.low > m.zs.zg * 1.005, m.msg
+        elif t == "3sell":
+            assert m.bi is not None and m.zs is not None, m.msg
+            assert m.bi.high < m.zs.zd * 0.995, m.msg
+
+
 def test_bi_end_to_end(result) -> None:
     for i in range(len(result.bis) - 1):
         prev, nxt = result.bis[i], result.bis[i + 1]
