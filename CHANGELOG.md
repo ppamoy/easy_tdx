@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**分型识别金标（V612）**：
+- test_chanlun_golden_samples.py 新增分型识别金标：一段明显顶/底分型序列应恰好识别出 1 顶 1 底，锁定 find_fractals 的极值与 bar_index 锚定。
+- 全量 tests/unit 3326 passed。
+
+
 **全市场选股复合逻辑金标（V611）**：
 - 新增 tests/unit/test_scan_market_golden.py：注入固定候选集，锁定 scan_market 的「盈利硬门槛 → 评分排序 → 市值门槛 → 截断 top_n」复合逻辑。
 - 全量 tests/unit 3325 passed。
@@ -780,8 +785,3 @@
 - **V424** 学习进度 + 排行榜增强：train_score 加 difficulty 维度 + 掌握度矩阵 + 排行榜难度筛选/分组汇总
 - **V425** 成绩趋势：progress 返回最近 N 次，前端命中率条形图
 - **V426** 错题集：答错自动入集 + 学习中心错题复习列表
-- **质量**：后端 pytest 3121 passed（+21）、前端 vitest 47 passed、vue-tsc + vite build、ruff/mypy/prettier 全绿
-
----
-
-**买卖点实证复盘（V418-V419）—— 缠论学习页面需求与 Phase 7 落地**：

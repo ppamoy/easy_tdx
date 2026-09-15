@@ -10,7 +10,8 @@ from datetime import datetime
 
 from easy_tdx.chanlun.beichi import check_bi_beichi
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.types import BI, FX, BCType, Direction, FXType
+from easy_tdx.chanlun.fractal import find_fractals
+from easy_tdx.chanlun.types import BI, FX, BCType, CLKline, Direction, FXType
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
     _merged_feature_fx,
@@ -51,6 +52,46 @@ def _mk_bi(
         high=high,
         low=low,
     )
+
+
+def _mk_clkline(index: int, high: float, low: float) -> CLKline:
+    return CLKline(
+        k_index=index,
+        date=datetime.now(),
+        open=low,
+        close=high,
+        high=high,
+        low=low,
+        amount=0.0,
+        index=index,
+        merged_count=1,
+        direction="",
+        klines=[],
+        high_k_index=index,
+        low_k_index=index,
+    )
+
+
+# ── 分型识别金标 ──────────────────────────────────────────────────────
+
+def test_fractal_golden() -> None:
+    """一段明显顶分型 + 底分型的序列，应恰好识别出 1 个顶分型 + 1 个底分型。"""
+    cklines = [
+        _mk_clkline(0, 10.0, 8.0),
+        _mk_clkline(1, 12.0, 9.0),
+        _mk_clkline(2, 14.0, 10.0),  # 顶分型中间
+        _mk_clkline(3, 13.0, 9.0),
+        _mk_clkline(4, 12.0, 8.0),  # 底分型中间
+        _mk_clkline(5, 11.0, 9.0),
+    ]
+    fxs = find_fractals(cklines, ChanlunConfig())
+    assert len(fxs) == 2
+    assert fxs[0].fx_type == FXType.DING
+    assert fxs[0].val == 14.0
+    assert fxs[0].bar_index == 2
+    assert fxs[1].fx_type == FXType.DI
+    assert fxs[1].val == 8.0
+    assert fxs[1].bar_index == 4
 
 
 # ── 特征序列包含处理金标 ──────────────────────────────────────────────
