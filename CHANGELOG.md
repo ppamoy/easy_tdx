@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**树粮菜同分优先级金标（V628）**：
+- test_changying_golden.py 新增同分 tiebreak 金标：树/粮同 100 分时优先判树（树>粮>菜）。
+- 全量 tests/unit 3359 passed。
+
+
 **择时置信度阈值边界金标（V627）**：
 - 锁定 _MIN_CONF=0.6 边界：置信度 0.6 给买卖建议、0.59 降级观望。
 - 全量 tests/unit 3358 passed。

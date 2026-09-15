@@ -70,6 +70,29 @@ def test_tree_golden() -> None:
     assert d["novice_summary"]["risk_level"] == "低"
 
 
+def test_screen_stock_tiebreak_tree_priority() -> None:
+    """树/粮同分 100 时，同分优先树（树>粮>菜）。"""
+    row = {
+        "code": "600004",
+        "market": "SH",
+        "report_date": "2025-12-31",
+        "net_profit": 3e9,
+        "revenue": 2e10,
+        "roe": 25.0,
+        "gross_margin": 45.0,
+        "rev_yoy": 15.0,
+        "np_yoy": 20.0,
+        "debt_ratio": 30.0,
+        "ocf_ps": 1.5,
+        "eps": 2.0,
+        "net_margin": 10.0,
+    }
+    sr = screen_stock(row, pool_size=1)
+    assert sr is not None
+    assert sr.scores == {"tree": 100.0, "grain": 100.0, "vegetable": 72.0}
+    assert sr.category == "tree"  # 同分优先树
+
+
 def test_grain_golden() -> None:
     sr = screen_stock(GRAIN_ROW, pool_size=1)
     assert sr is not None
