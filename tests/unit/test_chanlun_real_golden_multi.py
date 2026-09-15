@@ -107,6 +107,22 @@ def test_mmd_structure_position(case) -> None:
             assert m.bi.high < m.zs.zd * 0.995, m.msg
 
 
+def test_mmd_second_type_structure(case) -> None:
+    res, _ = case
+    ones_buy = [m for m in res.mmds if m.mmd_type.value == "1buy" and m.bi is not None]
+    ones_sell = [m for m in res.mmds if m.mmd_type.value == "1sell" and m.bi is not None]
+    for m in res.mmds:
+        t = m.mmd_type.value
+        if t in ("2buy", "2buy_s") and m.bi is not None:
+            assert any(
+                o.bi.low < m.bi.low and o.bi.index < m.bi.index for o in ones_buy
+            ), m.msg
+        elif t in ("2sell", "2sell_s") and m.bi is not None:
+            assert any(
+                o.bi.high > m.bi.high and o.bi.index < m.bi.index for o in ones_sell
+            ), m.msg
+
+
 def test_bi_end_to_end(case) -> None:
     res, _ = case
     for i in range(len(res.bis) - 1):

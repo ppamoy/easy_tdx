@@ -103,6 +103,22 @@ def test_mmd_structure_position(result) -> None:
             assert m.bi.high < m.zs.zd * 0.995, m.msg
 
 
+def test_mmd_second_type_structure(result) -> None:
+    """二类买卖点结构：2买/类2买 = 一买后回踩不创新低；2卖/类2卖 = 一卖后反抽不创新高。"""
+    ones_buy = [m for m in result.mmds if m.mmd_type.value == "1buy" and m.bi is not None]
+    ones_sell = [m for m in result.mmds if m.mmd_type.value == "1sell" and m.bi is not None]
+    for m in result.mmds:
+        t = m.mmd_type.value
+        if t in ("2buy", "2buy_s") and m.bi is not None:
+            assert any(
+                o.bi.low < m.bi.low and o.bi.index < m.bi.index for o in ones_buy
+            ), m.msg
+        elif t in ("2sell", "2sell_s") and m.bi is not None:
+            assert any(
+                o.bi.high > m.bi.high and o.bi.index < m.bi.index for o in ones_sell
+            ), m.msg
+
+
 def test_bi_end_to_end(result) -> None:
     for i in range(len(result.bis) - 1):
         prev, nxt = result.bis[i], result.bis[i + 1]

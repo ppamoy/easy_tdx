@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**二类买卖点结构金标（V608）**：
+- 真实行情金标新增二类买卖点结构校验：2买/类2买 = 一买后回踩不创新低（存在更早、更低的一买低点）；2卖/类2卖 = 一卖后反抽不创新高。
+- 全量 tests/unit 3316 passed。
+
+
 **买卖点结构位置金标（V607）**：
 - 真实行情金标新增三类买卖点结构校验：1买创新低(低于中枢下沿)、1卖创新高(高于中枢上沿)、3买回踩不破中枢上沿(zg×1.005)、3卖反抽不破中枢下沿(zd×0.995)。
 - 全量 tests/unit 3312 passed。
@@ -778,11 +783,3 @@
 - **V416** web/routers/backtest.py _optimize_one_strategy 未知策略/完整寻优测试（+2 用例）。
 
 ---
-
-**质量加固续章四十一（V415）—— backtest _run_optimize 测试**：
-
-- **V415** web/routers/backtest.py _run_optimize 网格寻优/Walk-Forward 测试（+2 用例）。
-
----
-
-**质量加固续章四十（V414）—— backtest _run_backtest 测试**：
