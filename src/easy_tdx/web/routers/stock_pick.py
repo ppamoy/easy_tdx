@@ -410,7 +410,7 @@ def _run_timing_one(
         # V594: 信号类型前瞻命中率（哪类买卖点历史上更靠谱）
         "signal_quality": signal_quality,
         "structure": {
-            "bi_count": result.bi_count if hasattr(result, "bi_count") else len(result.bis),
+            "bi_count": len(result.bis),
             "zs_count": len(result.zss),
             "mmd_count": len(result.mmds),
             "bc_count": len(result.bcs),
