@@ -9,6 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from easy_tdx.chanlun.beichi import check_bi_beichi
+from easy_tdx.chanlun.bi import find_bis
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
@@ -157,6 +158,68 @@ def test_merged_feature_fx_up_top() -> None:
 def test_merged_feature_fx_down_bottom() -> None:
     merged = [([0], 20.0, 12.0), ([1], 18.0, 8.0), ([2], 19.0, 10.0)]
     assert _merged_feature_fx(merged, Direction.DOWN) is True
+
+
+def _mk_fx(fx_type: FXType, val: float, index: int, bar_index: int) -> FX:
+    k = CLKline(
+        k_index=index * 10,
+        date=datetime.now(),
+        open=val,
+        close=val,
+        high=val,
+        low=val,
+        amount=0.0,
+        index=index,
+        merged_count=1,
+        direction="",
+        klines=[],
+        high_k_index=index * 10,
+        low_k_index=index * 10,
+    )
+    return FX(
+        fx_type=fx_type,
+        k=k,
+        klines=[k],
+        val=val,
+        index=index,
+        done=True,
+        bar_index=bar_index,
+    )
+
+
+# ── 笔计算金标 ────────────────────────────────────────────────────────
+
+def test_find_bis_simple_golden() -> None:
+    fxs = [
+        _mk_fx(FXType.DI, 10.0, 0, 0),
+        _mk_fx(FXType.DING, 15.0, 1, 1),
+        _mk_fx(FXType.DI, 12.0, 2, 2),
+        _mk_fx(FXType.DING, 18.0, 3, 3),
+        _mk_fx(FXType.DI, 11.0, 4, 4),
+    ]
+    bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))
+    assert len(bis) == 4
+    assert bis[0].direction == Direction.UP
+    assert bis[0].start.val == 10.0 and bis[0].end.val == 15.0
+    assert bis[1].direction == Direction.DOWN and bis[1].end.val == 12.0
+    assert bis[2].direction == Direction.UP and bis[2].end.val == 18.0
+    assert bis[3].direction == Direction.DOWN and bis[3].end.val == 11.0
+
+
+def test_find_bis_more_extreme_top_replaces() -> None:
+    # 更极端的顶分型应替换并延伸上一笔终点
+    fxs = [
+        _mk_fx(FXType.DI, 10.0, 0, 0),
+        _mk_fx(FXType.DING, 15.0, 1, 1),
+        _mk_fx(FXType.DING, 20.0, 2, 2),
+        _mk_fx(FXType.DI, 13.0, 3, 3),
+    ]
+    bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))
+    assert len(bis) == 2
+    assert bis[0].direction == Direction.UP
+    assert bis[0].end.val == 20.0  # 更极端顶替换
+    assert bis[1].direction == Direction.DOWN
+    assert bis[1].end.val == 13.0
 
 
 # ── 线段方向校验金标 ──────────────────────────────────────────────────
