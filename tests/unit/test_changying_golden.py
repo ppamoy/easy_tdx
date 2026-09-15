@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
-from easy_tdx.fundamental.pipeline import _profitable, _total_mcap_yi
+from easy_tdx.fundamental.pipeline import _profitable, _total_mcap_yi, _valuation
 from easy_tdx.fundamental.screener import screen_stock
 from easy_tdx.fundamental.season import detect_season
 
@@ -140,6 +140,25 @@ def test_novice_summary_risk_flags() -> None:
     assert "最近报告期亏损" in ns["risk_flags"]
     assert "资产负债率偏高（超过60%）" in ns["risk_flags"]
     assert "每股经营现金流非正" in ns["risk_flags"]
+
+
+# ── 估值 PE/PB 金标 ──────────────────────────────────────────────────
+
+def test_valuation_pe_pb_golden() -> None:
+    out = _valuation({"eps": 2.0, "bps": 10.0}, 40.0, "2025-12-31")
+    assert out["pe"] == 20.0
+    assert out["pb"] == 4.0
+
+
+def test_valuation_annualized_pe() -> None:
+    # 一季报 EPS 年化 ×4：动态 PE = 40 / (2*4) = 5
+    out = _valuation({"eps": 2.0, "bps": 10.0}, 40.0, "2025-03-31")
+    assert out["pe"] == 5.0
+
+
+def test_valuation_loss_or_no_close() -> None:
+    assert _valuation({"eps": -1.0, "bps": 10.0}, 40.0, "2025-12-31")["pe"] is None
+    assert _valuation({"eps": 2.0, "bps": 10.0}, None, "2025-12-31")["pe"] is None
 
 
 def test_profitable_golden() -> None:
