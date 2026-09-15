@@ -11,7 +11,8 @@ from datetime import datetime
 from easy_tdx.chanlun.beichi import check_bi_beichi
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
-from easy_tdx.chanlun.types import BI, FX, BCType, CLKline, Direction, FXType
+from easy_tdx.chanlun.kline_merge import merge_klines
+from easy_tdx.chanlun.types import BI, FX, BCType, CLKline, Direction, FXType, Kline
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
     _merged_feature_fx,
@@ -70,6 +71,41 @@ def _mk_clkline(index: int, high: float, low: float) -> CLKline:
         high_k_index=index,
         low_k_index=index,
     )
+
+
+def _mk_kline(index: int, high: float, low: float) -> Kline:
+    return Kline(
+        index=index,
+        date=datetime.now(),
+        open=low,
+        close=high,
+        high=high,
+        low=low,
+        amount=1000.0,
+    )
+
+
+# ── K线包含处理金标 ──────────────────────────────────────────────────
+
+def test_merge_klines_up_inclusion_high_high() -> None:
+    klines = [_mk_kline(0, 10.0, 8.0), _mk_kline(1, 12.0, 9.0), _mk_kline(2, 11.0, 9.5)]
+    merged = merge_klines(klines)
+    assert len(merged) == 2
+    assert merged[0].high == 10.0 and merged[0].low == 8.0
+    # 向上合并取高高：high=max(12,11)=12，low=max(9,9.5)=9.5
+    assert merged[1].high == 12.0
+    assert merged[1].low == 9.5
+    assert merged[1].merged_count == 2
+
+
+def test_merge_klines_down_inclusion_low_low() -> None:
+    klines = [_mk_kline(0, 10.0, 8.0), _mk_kline(1, 9.0, 7.0), _mk_kline(2, 8.5, 7.5)]
+    merged = merge_klines(klines)
+    assert len(merged) == 2
+    # 向下合并取低低：high=min(9,8.5)=8.5，low=min(7,7.5)=7
+    assert merged[1].high == 8.5
+    assert merged[1].low == 7.0
+    assert merged[1].merged_count == 2
 
 
 # ── 分型识别金标 ──────────────────────────────────────────────────────
