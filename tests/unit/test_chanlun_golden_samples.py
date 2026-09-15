@@ -13,7 +13,7 @@ from easy_tdx.chanlun.bi import find_bis
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
-from easy_tdx.chanlun.types import BI, FX, BCType, CLKline, Direction, FXType, Kline
+from easy_tdx.chanlun.types import BI, FX, ZS, BCType, CLKline, Direction, FXType, Kline
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
     _merged_feature_fx,
@@ -243,6 +243,38 @@ def test_find_zss_golden() -> None:
     assert zs.gg == 12.0
     assert zs.dd == 8.0
     assert zs.done is True
+
+
+# ── 盘整背驰语义金标 ─────────────────────────────────────────────────
+
+def _mk_zs(lines) -> ZS:
+    return ZS(lines=lines, zg=17.0, zd=13.0, gg=18.0, dd=12.0, direction="", index=0, done=True)
+
+
+def test_pz_beichi_enter_exit_same_direction() -> None:
+    """盘整背驰：进入笔与离开笔同向、离开力度衰减才成立。"""
+    bi0 = _mk_bi(0, "down", 20.0, 10.0)  # 进入（向下），力度 10
+    bi1 = _mk_bi(1, "up", 18.0, 12.0)
+    bi2 = _mk_bi(2, "down", 17.0, 13.0)
+    bi3 = _mk_bi(3, "up", 18.0, 12.0)
+    bi4 = _mk_bi(4, "down", 15.0, 14.0)  # 离开（向下），力度 1 < 8
+    bis = [bi0, bi1, bi2, bi3, bi4]
+    zs = _mk_zs([bi1, bi2, bi3])
+    bcs = check_bi_beichi(bis, [zs], closes=None)
+    assert any(bc.bc_type == BCType.PZ for bc in bcs)
+
+
+def test_pz_beichi_rejects_opposite_direction() -> None:
+    """盘整背驰：进入笔向下、离开笔向上（方向相反）不应判为盘整背驰。"""
+    bi0 = _mk_bi(0, "down", 20.0, 10.0)
+    bi1 = _mk_bi(1, "up", 18.0, 12.0)
+    bi2 = _mk_bi(2, "down", 17.0, 13.0)
+    bi3 = _mk_bi(3, "up", 18.0, 12.0)
+    bi4 = _mk_bi(4, "up", 16.0, 14.0)  # 离开方向向上，与进入相反
+    bis = [bi0, bi1, bi2, bi3, bi4]
+    zs = _mk_zs([bi1, bi2, bi3])
+    bcs = check_bi_beichi(bis, [zs], closes=None)
+    assert all(bc.bc_type != BCType.PZ for bc in bcs)
 
 
 # ── 线段方向校验金标 ──────────────────────────────────────────────────
