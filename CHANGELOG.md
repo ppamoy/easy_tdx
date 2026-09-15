@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**选股挑20只输出路径金标（V610）**：
+- 新增 tests/unit/test_selection_golden.py：锁定 stock_pick 结果行归一化（质量分正确取 scores[category]）、score 字段优先级、长盈池本地存储按分数降序。
+- 全量 tests/unit 3324 passed。
+
+
 **长盈选股模型金标（V609）**：
 - 新增 tests/unit/test_changying_golden.py：手工标注树/粮/菜三个财报行，锁定三维打分与分类结论；并锁定市值（总股本/流通股本回退）与盈利硬门槛纯函数口径。
 - 全量 tests/unit 3321 passed。
@@ -777,5 +782,3 @@
 **买卖点实证复盘（V418-V419）—— 缠论学习页面需求与 Phase 7 落地**：
 
 - **V418** OpenSpec 需求梳理：7 能力域（理论教学/可视化/难度分级/错误归因/进度/排行榜/实证复盘）+ 45 项任务，提交于 openspec/changes/easy-tdx-chanlun-learning/
-- **V419** 买卖点实证复盘落地：后端 verify 路由（预置 20 只大市值标的池 + prerun 缓存 + list/detail + mmd.zs_index 同级别中枢关联）+ 前端 SignalVerifyView（左列表+右单标的详情，买卖点后逐根 K 线揭示，同级别中枢）
-- **V419** ChanlunChart 新增 singleZsIndex prop（同级别中枢过滤）+ reveal 逐根游标复用
