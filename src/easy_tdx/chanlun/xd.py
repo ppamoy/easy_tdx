@@ -1,16 +1,15 @@
-"""线段计算（标准缠论特征序列版）。
+"""线段计算（缠论特征序列版，含包含处理）。
 
 线段定义：
-- 由至少3笔构成
-- 特征序列：相对当前线段方向的"反向笔"，构成特征K线序列
-- 特征序列分型：线段结束的判定（向上线段出现顶分型结束，向下线段出现底分型结束）
-- 相邻线段共享转折点（前一段的结束笔即后一段的起始笔），因此方向自然交替
+- 由至少 3 笔构成。
+- 特征序列：与当前线段方向相反的那些笔。
+- 特征序列需先做「包含处理」（与 K 线包含处理同构），再判断顶/底分型。
+- 向上线段：特征序列（向下笔）出现顶分型 → 线段结束。
+- 向下线段：特征序列（向上笔）出现底分型 → 线段结束。
+- 相邻线段共享转折点，方向自然交替。
 
-标准算法（缠论新笔/老笔通用）：
-1. 线段方向 = 起始笔方向
-2. 特征序列 = 与线段方向相反的笔
-3. 当特征序列出现分型（顶分型结束向上线段 / 底分型结束向下线段）时，线段结束
-4. 下一线段从结束笔开始（共享转折点），方向与上一段相反
+说明：这是「特征序列 + 包含处理」的标准简化实现，未覆盖缠论原文中
+线段划分的「笔破坏」与「多义性」全部情形；复杂走势仍可能比严格缠论更长/更粗。
 """
 
 from __future__ import annotations
@@ -19,16 +18,77 @@ from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import BI, XD, Direction
 
 
+def _feature_included(a: BI, b: BI) -> bool:
+    """判断两支特征笔是否存在包含关系（互为包含）。"""
+    return (a.high >= b.high and a.low <= b.low) or (
+        b.high >= a.high and b.low <= a.low
+    )
+
+
+def _merge_feature_sequence(
+    features: list[tuple[int, BI]],
+) -> list[tuple[list[int], float, float]]:
+    """对特征序列做包含处理。
+
+    返回 [(原始笔索引列表, 合并后 high, 合并后 low)]，与 K 线包含处理同构：
+    - 向上合并取「高高」；
+    - 向下合并取「低低」。
+    """
+    if not features:
+        return []
+
+    merged: list[tuple[list[int], float, float]] = [
+        ([features[0][0]], features[0][1].high, features[0][1].low)
+    ]
+
+    for idx, bi in features[1:]:
+        prev_idx, prev_high, prev_low = merged[-1]
+        included = (bi.high >= prev_high and bi.low <= prev_low) or (
+            prev_high >= bi.high and prev_low <= bi.low
+        )
+        if included:
+            # 合并方向：与 K 线包含处理一致，看前一未合并元素的方向
+            if len(merged) >= 2 and prev_high > merged[-2][1]:
+                direction = "up"
+            elif len(merged) >= 2 and prev_high < merged[-2][1]:
+                direction = "down"
+            else:
+                direction = "up"
+            if direction == "up":
+                nh = max(prev_high, bi.high)
+                nl = max(prev_low, bi.low)
+            else:
+                nh = min(prev_high, bi.high)
+                nl = min(prev_low, bi.low)
+            merged[-1] = (prev_idx + [idx], nh, nl)
+        else:
+            merged.append(([idx], bi.high, bi.low))
+
+    return merged
+
+
+def _merged_feature_fx(
+    merged: list[tuple[list[int], float, float]],
+    seg_dir: Direction,
+) -> bool:
+    """判断包含处理后的特征序列最近三元素是否形成线段结束分型。"""
+    if len(merged) < 3:
+        return False
+    left = merged[-3]
+    mid = merged[-2]
+    right = merged[-1]
+    if seg_dir == Direction.UP:
+        # 向上线段：向下特征序列，中间元素高点最高 → 顶分型
+        return mid[1] > left[1] and mid[1] > right[1]
+    # 向下线段：向上特征序列，中间元素低点最低 → 底分型
+    return mid[2] < left[2] and mid[2] < right[2]
+
+
 def find_xds(
     bis: list[BI],
     config: ChanlunConfig | None = None,
 ) -> list[XD]:
-    """从笔列表中计算线段（特征序列法，方向交替）。
-
-    线段划分规则：
-    - 向上线段：特征序列为向下笔，出现顶分型时结束
-    - 向下线段：特征序列为向上笔，出现底分型时结束
-    - 相邻线段共享转折点（结束笔即下一段起始笔）
+    """从笔列表中计算线段（特征序列 + 包含处理，方向交替）。
 
     Args:
         bis: 笔列表（方向交替排列）
@@ -45,68 +105,43 @@ def find_xds(
 
     xds: list[XD] = []
 
-    # 从第一笔开始划分，线段方向由起始笔方向决定
     start = 0
     while start < len(bis):
         seg_dir = bis[start].direction
-
-        # 特征序列：与线段方向相反的笔
-        # features 记录 (bi_index, bi)，用于分型判定
         features: list[tuple[int, BI]] = []
         end: int | None = None
 
         j = start + 1
         while j < len(bis):
             if bis[j].direction != seg_dir:
-                # 反向笔加入特征序列
                 features.append((j, bis[j]))
-                # 最近3个特征笔形成分型 → 线段结束
-                if len(features) >= 3 and _feature_fx_end_segment(features, seg_dir):
-                    # 线段的终点 = 特征分型「中间元素」所在笔（features[-2]）的起点分型。
-                    # 由于笔是首尾相连的，中间特征笔的起点 == 它前一支笔（同向笔）的终点，
-                    # 因此线段包含 [start, mid_idx-1]，终点分型即 bis[mid_idx-1].end。
-                    # 此前实现取 features[-1]（分型右笔）导致：
-                    #   向上线段终点落到「向下笔的结束分型」（底分型），
-                    #   且下一段 start=end 使相邻线段共享一整支笔而非转折点。
-                    mid_idx = features[-2][0]
-                    cand_end = mid_idx - 1
-                    # 端点价格方向校验（与笔一致）：线段方向必须与端点分型价格一致。
-                    # 若向上线段终点（顶分型）低于起点（底分型），说明起点极值已被
-                    # 趋势穿越（长下跌中的弱反弹），此处不是真正的线段转折点，
-                    # 继续延伸，避免画出「向下走的向上线段」。
-                    seg_start_val = bis[start].start.val
-                    seg_end_val = bis[cand_end].end.val
-                    seg_ok = (
-                        seg_end_val > seg_start_val
-                        if seg_dir == Direction.UP
-                        else seg_end_val < seg_start_val
-                    )
-                    if seg_ok:
-                        end = cand_end
-                        break
+                if len(features) >= 3:
+                    merged = _merge_feature_sequence(features)
+                    if _merged_feature_fx(merged, seg_dir):
+                        # 线段终点 = 特征分型「中间元素」的第一支原始特征笔的
+                        # 前一支同向笔。笔首尾相连，中间特征笔起点 == 前一同向笔
+                        # 终点，即线段转折点。
+                        mid_idx = merged[-2][0][0]
+                        cand_end = mid_idx - 1
+                        seg_start_val = bis[start].start.val
+                        seg_end_val = bis[cand_end].end.val
+                        seg_ok = (
+                            seg_end_val > seg_start_val
+                            if seg_dir == Direction.UP
+                            else seg_end_val < seg_start_val
+                        )
+                        if seg_ok:
+                            end = cand_end
+                            break
             j += 1
 
         if end is not None:
-            # 线段 [start, end]（end 为特征分型中间元素的前一支同向笔，
-            # 其终点分型 == 中间特征笔的起点，即线段转折点/顶底分型）。
-            # 下一段从中间特征笔开始：起点分型与上一段终点分型是同一个
-            # （共享转折点），且方向自动交替。
             xds.append(_create_xd_from_bis(bis, start, end, len(xds), seg_dir))
             start = end + 1
         else:
-            # 未形成分型：若剩余笔数足以成段则收尾，否则结束。
-            # 缠论线段至少由 3 笔构成；且线段方向必须与首尾端点价格走势一致
-            # （向上线段终点高于起点、向下线段终点低于起点），否则该“段”是
-            # 方向标注与价格走势矛盾的伪线段，画出来没有参考价值。
-            #
-            # 关键：线段端点分型类型必须与线段方向匹配 —— 向上线段的终点必须是
-            # 顶分型（取剩余笔中最高顶），向下线段的终点必须是底分型（取剩余笔中
-            # 最低底）。旧实现直接取 bis[-1].end（最新分型），当收尾处于反向笔
-            # 中时会把「向下线段」画到顶分型上（或向上线段画到底分型上），端点
-            # 类型与方向矛盾，视觉上无参考价值。
+            # 收尾：剩余笔数足够时，向上段取剩余笔中最高顶、向下段取最低底。
             if len(bis) - start >= 3:
                 if seg_dir == Direction.UP:
-                    # 最高顶分型；相同价位取最后出现（延续到最远，保持首尾相连）
                     cand_end = max(
                         range(start, len(bis)),
                         key=lambda i: (bis[i].end.val, i),
@@ -134,29 +169,18 @@ def _feature_fx_end_segment(
     features: list[tuple[int, BI]],
     seg_dir: Direction,
 ) -> bool:
-    """判断最近3个特征K线是否形成线段结束分型。
+    """判断最近 3 个特征笔是否形成线段结束分型（无包含处理的原始版本）。
 
-    向上线段结束：特征序列（向下笔）形成顶分型 —— 中间特征笔的高点最高
-    向下线段结束：特征序列（向上笔）形成底分型 —— 中间特征笔的低点最低
-
-    v87 改进：增加严格的高低点比较，避免平局情况导致误判。
-    v89 改进：增加"中间元素必须严格高于/低于两边"的校验，防止平局分型。
+    保留用于直接单测；find_xds 实际走 _merge_feature_sequence + _merged_feature_fx。
     """
     if len(features) < 3:
         return False
-
     (_, left) = features[-3]
     (_, mid) = features[-2]
     (_, right) = features[-1]
-
     if seg_dir == Direction.UP:
-        # 向上线段：向下笔特征序列，顶分型结束
-        # 严格检查：中间笔的高点必须严格大于两边（不允许平局）
         return mid.high > left.high and mid.high > right.high
-    else:
-        # 向下线段：向上笔特征序列，底分型结束
-        # 严格检查：中间笔的低点必须严格小于两边（不允许平局）
-        return mid.low < left.low and mid.low < right.low
+    return mid.low < left.low and mid.low < right.low
 
 
 def _create_xd_from_bis(
@@ -169,10 +193,8 @@ def _create_xd_from_bis(
     """从笔列表创建线段对象。"""
     start_bi = bis[start_bi_idx]
     end_bi = bis[end_bi_idx]
-
     high = max(bi.high for bi in bis[start_bi_idx : end_bi_idx + 1])
     low = min(bi.low for bi in bis[start_bi_idx : end_bi_idx + 1])
-
     return XD(
         start=start_bi.start,
         end=end_bi.end,

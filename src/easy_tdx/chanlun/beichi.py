@@ -107,40 +107,48 @@ def _check_bi_level_beichi(bis: list[BI], closes: list[float] | None) -> list[BC
 
 
 def _check_pz_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -> list[BC]:
-    """检查盘整背驰。
+    """检查盘整背驰（缠论原文口径）。
 
-    中枢内最后一笔 vs 进入中枢的第一笔
+    盘整背驰 = 离开中枢的那一笔，与进入中枢的那一笔同向，且力度衰竭：
+    - 进入笔：中枢第一笔之前的那一笔（b 段）
+    - 离开笔：中枢最后一笔之后的那一笔（c 段）
+    两者方向相同（上涨盘整同为向上、下跌盘整同为向下），离开笔力度 < 进入笔 80%。
     """
     bcs: list[BC] = []
 
     for zs in zss:
-        if zs.line_count < 3:
+        if zs.line_count < 3 or not zs.lines:
             continue
 
-        # 中枢内最后一笔 vs 进入中枢的第一笔
-        first_bi = zs.lines[0]
-        last_bi = zs.lines[-1]
+        first = zs.lines[0]
+        last = zs.lines[-1]
+        # 进入笔 = 中枢前一笔，离开笔 = 中枢后一笔
+        if first.index <= 0 or last.index + 1 >= len(bis):
+            continue
+        enter = bis[first.index - 1]
+        exit_ = bis[last.index + 1]
 
-        if first_bi.direction == last_bi.direction:
-            first_force = _calc_bi_force(first_bi, closes, first_bi.index)
-            last_force = _calc_bi_force(last_bi, closes, last_bi.index)
+        if enter.direction != exit_.direction:
+            continue
 
-            # 严格标准
-            if first_force > 0 and last_force < first_force * 0.8 and last_force > 0:
-                bcs.append(
-                    BC(
-                        bc_type=BCType.PZ,
-                        bc=True,
-                        zs=zs,
-                        curr=last_bi,
-                        prev=first_bi,
-                        msg=(
-                            f"盘整背驰: 中枢[{zs.index}] 内末笔力度={last_force:.2f} "
-                            f"< 首笔力度={first_force:.2f} "
-                            f"(比率={last_force / first_force:.2f})"
-                        ),
-                    )
+        enter_force = _calc_bi_force(enter, closes, enter.index)
+        exit_force = _calc_bi_force(exit_, closes, exit_.index)
+
+        if enter_force > 0 and exit_force < enter_force * 0.8 and exit_force > 0:
+            bcs.append(
+                BC(
+                    bc_type=BCType.PZ,
+                    bc=True,
+                    zs=zs,
+                    curr=exit_,
+                    prev=enter,
+                    msg=(
+                        f"盘整背驰: 中枢[{zs.index}] 离开笔力度={exit_force:.2f} "
+                        f"< 进入笔力度={enter_force:.2f} "
+                        f"(比率={exit_force / enter_force:.2f})"
+                    ),
                 )
+            )
 
     return bcs
 

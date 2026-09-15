@@ -343,6 +343,18 @@ async def chanlun_analyze(
         req.count,
     )
 
+    # V599: 按可选日期范围截断，让缠论分析与前端 K 线图窗口精确对齐
+    # （回测页用 start_date/end_date 截取 K 线，这里用同一范围分析）。
+    if req.start_date or req.end_date:
+        col = "date" if "date" in df.columns else "datetime"
+        ts = pd.to_datetime(df[col]).dt.normalize()
+        mask = pd.Series(True, index=df.index)
+        if req.start_date:
+            mask &= ts >= pd.Timestamp(req.start_date)
+        if req.end_date:
+            mask &= ts <= pd.Timestamp(req.end_date)
+        df = df[mask].reset_index(drop=True)
+
     # 2. Run chanlun analysis
     symbol = f"{req.market}{req.code}"
     frequency_map: dict[str, str] = {

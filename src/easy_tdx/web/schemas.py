@@ -85,6 +85,10 @@ class ChanlunRequest(BaseModel):
     category: str = Field(default="DAY", description="K线周期")
     count: int = Field(default=800, ge=1, le=800)
     start: int = Field(default=0, ge=0)
+    # V599: 可选日期范围，用于让缠论分析与前端 K 线图窗口精确对齐。
+    # 前端回测页按 start_date/end_date 截取 K 线，这里同样截断分析窗口。
+    start_date: str | None = Field(default=None, description="起始日期 YYYY-MM-DD（闭区间）")
+    end_date: str | None = Field(default=None, description="结束日期 YYYY-MM-DD（闭区间）")
 
 
 class ComputeIndicatorsRequest(BaseModel):

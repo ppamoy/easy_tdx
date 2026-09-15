@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**盘整背驰/线段/回测窗口对齐三连修（V600）**：
+- 盘整背驰改为缠论原文口径：离开中枢笔 vs 进入中枢笔（同向），力度 < 80% 才算，不再用「中枢首末同向笔」。
+- 线段划分重写：特征序列先做包含处理（高高/低低合并）再判分型；SZ000001 线段数从 12 变为 6（更贴近严格缠论，段更长更少）。
+- 回测页窗口对齐：/chanlun/analyze 支持 start_date/end_date，BacktestView 传入与 K 线图相同的日期范围，消除图上K线与缠论叠加层错位。
+- 测试：全量 tests/unit 3267 passed；前端 vitest 61 passed、build 通过。
+
+
 **背驰判定对齐缠论原文：创新高/新低门槛（V599）**：
 - beichi.py 的笔背驰、趋势背驰补上「必须先创新高（向上）/新低（向下）」门槛，与 mmd._is_strong_beichi 保持一致，去掉未创新极值的误报。
 - 实测 SZ000001（2025-01-12 至今）背驰标注从 12 个降到 6 个，剩余均满足创新极值。
@@ -820,17 +827,5 @@
 **质量加固续章二十七（V401）—— mmd.py 第五阶段拆分（V13-V40）**：
 
 - **V401** V13-V40 自包含条件簇（104 函数）+ MMDQuality 迁入 mmd_conditions.py，mmd.py 14000→5960 行，顶层 __all__ 惰性再导出。
-
----
-
-**质量加固续章二十六（V400）—— cmd_verify 校验 + scanner 测试**：
-
-- **V400** cli/cmd_verify.py verify-multi/verify-portfolio 校验分支 + screen/scanner.py 策略文件定位测试（+8 用例）。
-
----
-
-**质量加固续章二十五（V399z）—— cmd_run_all _load_strategy_class 测试，覆盖率越过 72%**：
-
-- **V399z** cli/cmd_run_all.py _load_strategy_class 测试（+4 用例）。
 
 ---

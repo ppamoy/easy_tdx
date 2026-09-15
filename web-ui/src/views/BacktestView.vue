@@ -219,6 +219,8 @@ async function runChanlunAnalysis() {
         category: categoryMap[category.value] ?? 'DAY',
         count: Math.min(store.ohlcv.length, 800),
         start: 0,
+        start_date: startDate.value || undefined,
+        end_date: endDate.value || undefined,
       }),
     })
     if (!resp.ok) {
