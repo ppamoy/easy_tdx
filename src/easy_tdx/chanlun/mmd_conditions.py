@@ -16171,8 +16171,10 @@ def _calc_bi_force(
     if closes is None or len(closes) == 0:
         return abs(bi.high - bi.low)
 
-    start_idx = bi.start.k.k_index
-    end_idx = bi.end.k.k_index
+    # V617: 用分型极值来源的原始 K 线索引（bar_index）而非合并 K 线的
+    # 最后一根索引（k.k_index），使 MACD 力度窗口精确覆盖笔的极值区间。
+    start_idx = bi.start.bar_index
+    end_idx = bi.end.bar_index
 
     if start_idx < 0 or end_idx >= len(closes):
         return abs(bi.high - bi.low)

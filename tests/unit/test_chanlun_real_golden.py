@@ -39,7 +39,7 @@ def test_counts_locked(result) -> None:
     assert len(result.xds) == 3
     assert len(result.zss) == 3
     assert len(result.mmds) == 4
-    assert len(result.bcs) == 0  # 修复趋势背驰离开笔语义后，此段无合格趋势背驰
+    assert len(result.bcs) == 1  # V617 MACD 力度窗口用极值 bar_index 后，此段出现 1 个笔背驰
 
 
 def test_bi_endpoints_on_extremes(result) -> None:
