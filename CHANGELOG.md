@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**背驰判定对齐缠论原文：创新高/新低门槛（V599）**：
+- beichi.py 的笔背驰、趋势背驰补上「必须先创新高（向上）/新低（向下）」门槛，与 mmd._is_strong_beichi 保持一致，去掉未创新极值的误报。
+- 实测 SZ000001（2025-01-12 至今）背驰标注从 12 个降到 6 个，剩余均满足创新极值。
+- 测试：全量 tests/unit 3267 passed。
+
+
 **选股/市值取价切到 MAC 主机 + 100亿过滤真正生效（V597）**：
 - 定位：标准 TDX 行情主机对日线返回「空K线」（每只约 6s），gpcw 财报里无总股本，导致选股接口 90s 超时、100亿市值过滤名存实亡。
 - 修复：pipeline 新增 _market_quote（MAC 取目标日收盘价 + 流通股本 float_shares，约 0.2s/只）；市值 = 总股本(gpcw 若可得) × 收盘价，缺总股本时回退流通股本(万股×1e4)×收盘价。
@@ -828,29 +834,3 @@
 - **V399z** cli/cmd_run_all.py _load_strategy_class 测试（+4 用例）。
 
 ---
-
-**质量加固续章二十四（V399y）—— unusual 截断记录边界测试**：
-
-- **V399y** mac/commands/unusual.py 截断记录边界测试（+1 用例）。
-
----
-
-**质量加固续章二十三（V399x）—— mac 零星边界测试**：
-
-- **V399x** mac/commands 零星边界测试（kline_offset/auction/belong_board，+4 用例）。
-
----
-
-**质量加固续章二十二（V399w）—— mac 最后残余路径测试**：
-
-- **V399w** mac/commands 最后残余路径测试（+4 用例）。
-
----
-
-**质量加固续章二十一（V399v）—— mac 残余边界测试**：
-
-- **V399v** mac/commands 残余边界测试（symbol_bar 分时/非法日期 + unusual 0x0B/0x14 子分支，+4 用例）。
-
----
-
-**质量加固续章二十（V399u）—— symbol_bar/tick_chart 解析测试**：

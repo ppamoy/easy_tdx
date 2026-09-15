@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.mmd_conditions import _calc_bi_force
-from easy_tdx.chanlun.types import BC, BI, ZS, BCType
+from easy_tdx.chanlun.types import BC, BI, ZS, BCType, Direction
 
 
 def check_bi_beichi(
@@ -75,6 +75,13 @@ def _check_bi_level_beichi(bis: list[BI], closes: list[float] | None) -> list[BC
         for j in range(i - 1, -1, -1):
             prev = bis[j]
             if prev.direction == curr.direction:
+                # 缠论原文：笔背驰必须先创新高（向上笔）/新低（向下笔），
+                # 否则只是普通回调/反抽，不能叫背驰。
+                if curr.direction == Direction.UP and curr.high <= prev.high:
+                    break
+                if curr.direction == Direction.DOWN and curr.low >= prev.low:
+                    break
+
                 curr_force = _calc_bi_force(curr, closes, i)
                 prev_force = _calc_bi_force(prev, closes, j)
 
@@ -164,6 +171,13 @@ def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
         if is_down_trend and prev_exit.direction.value != "down":
             continue
         if is_up_trend and prev_exit.direction.value != "up":
+            continue
+
+        # 缠论原文：趋势背驰必须创新高/新低——后一中枢的离开笔
+        # 要超过前一中枢离开笔的极值，否则只是中枢震荡/扩展。
+        if is_up_trend and curr_exit.high <= prev_exit.high:
+            continue
+        if is_down_trend and curr_exit.low >= prev_exit.low:
             continue
 
         prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
