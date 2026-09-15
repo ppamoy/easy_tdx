@@ -131,15 +131,17 @@ def detect_season(
         if n >= 60 and cs[-60]
         else ((cs[-1] - cs[0]) / cs[0] if cs[0] else 0)
     )
+    # 注意顺序：先判强跌（<-0.25 → -2）再判缓跌（<-0.08 → -1），
+    # 否则 -2 分支永远不可达（旧实现把 -1 放在前面，强跌只会得 -1）。
     price_score = (
         2
         if trend_60 > 0.25
         else 1
         if trend_60 > 0.08
-        else -1
-        if trend_60 < -0.08
         else -2
         if trend_60 < -0.25
+        else -1
+        if trend_60 < -0.08
         else 0
     )
 

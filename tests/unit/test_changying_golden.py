@@ -6,8 +6,11 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from easy_tdx.fundamental.pipeline import _profitable, _total_mcap_yi
 from easy_tdx.fundamental.screener import screen_stock
+from easy_tdx.fundamental.season import detect_season
 
 TREE_ROW = {
     "code": "600001",
@@ -79,6 +82,30 @@ def test_vegetable_golden() -> None:
     assert sr is not None
     assert sr.category == "vegetable"
     assert sr.scores == {"tree": 49.0, "grain": 80.0, "vegetable": 100.0}
+
+
+# ── 四季周期金标 ──────────────────────────────────────────────────────
+
+def _season(cs, vols=None):
+    dates = [date(2024, 1, 1) + timedelta(days=i) for i in range(len(cs))]
+    return detect_season(dates, cs, dates[-1], volumes=vols)
+
+
+def test_season_summer_golden() -> None:
+    sr = _season([100 + i * 0.6 for i in range(80)])
+    assert sr.season == "summer"
+
+
+def test_season_winter_golden() -> None:
+    # 持续下跌 + 持续缩量 → 冬季；且强跌的 price_score 必须为 -2（锁 V616 修复）
+    sr = _season([100 - i * 0.6 for i in range(80)], vols=[1000 - i * 10 for i in range(80)])
+    assert sr.season == "winter"
+    assert sr.signals["price_score"] == -2
+
+
+def test_season_unknown_short_data() -> None:
+    sr = _season([100 + i * 0.1 for i in range(30)])
+    assert sr.season == "unknown"
 
 
 def test_total_mcap_yi_golden() -> None:

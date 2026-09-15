@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**四季判断修复 + 金标（V616）**：
+- 修复 season.py price_score 分支顺序 bug：旧实现把「缓跌(-1)」排在「强跌(-2)」之前，导致强跌永远只拿 -1、-2 分支不可达；修正后强跌正确得 -2。
+- 新增四季金标：summer/winter/unknown + 强跌 price_score==-2。
+- 全量 tests/unit 3334 passed。
+
+
 **中枢计算金标（V615）**：
 - test_chanlun_golden_samples.py 新增 find_zss 金标：四笔重叠成中枢、离开笔关闭，锁定 zg=min(high)/zd=max(low)/gg/dd/line_count/done。
 - 全量 tests/unit 3331 passed。
@@ -786,9 +792,3 @@
 - **V431** 缠论准确度面板展示盈亏比列
 
 ---
-
-**买卖点实证复盘在线回退（V427）**：verify 预跑数据源离线 .day 无数据时，自动回退在线 TDX 客户端（复用 fetch_qfq_klines QFQ 前复权），保证无本地 vipdoc 数据也能预跑 20 只标的。
-
----
-
-**缠论学习页面（V420-V426）—— OpenSpec change easy-tdx-chanlun-learning 七能力域落地**：
