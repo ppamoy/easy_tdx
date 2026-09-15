@@ -112,17 +112,41 @@ def find_xds(
         end: int | None = None
 
         j = start + 1
+        has_gap = False
         while j < len(bis):
             if bis[j].direction != seg_dir:
                 features.append((j, bis[j]))
+                # 特征序列第一、第二元素之间是否有缺口（区间不重叠）
+                if len(features) == 2:
+                    a = features[0][1]
+                    b = features[1][1]
+                    has_gap = not (min(a.high, b.high) > max(a.low, b.low))
+
                 if len(features) >= 3:
                     merged = _merge_feature_sequence(features)
-                    if _merged_feature_fx(merged, seg_dir):
+                    mid_orig_idx: int | None = None
+                    if has_gap and len(merged) >= 4:
+                        # 特征序列有缺口：线段结束需要「笔破坏」确认——
+                        # 顶/底分型之后出现的第 4 个特征元素跌破/升破分型极值。
+                        left, mid, right = merged[-4], merged[-3], merged[-2]
+                        confirm = merged[-1]
+                        if seg_dir == Direction.UP:
+                            top_ok = mid[1] > left[1] and mid[1] > right[1]
+                            top_low = min(left[2], mid[2], right[2])
+                            if top_ok and confirm[2] < top_low:
+                                mid_orig_idx = mid[0][0]
+                        else:
+                            bottom_ok = mid[2] < left[2] and mid[2] < right[2]
+                            bottom_high = max(left[1], mid[1], right[1])
+                            if bottom_ok and confirm[1] > bottom_high:
+                                mid_orig_idx = mid[0][0]
+                    elif not has_gap and _merged_feature_fx(merged, seg_dir):
+                        mid_orig_idx = merged[-2][0][0]
+
+                    if mid_orig_idx is not None:
                         # 线段终点 = 特征分型「中间元素」的第一支原始特征笔的
-                        # 前一支同向笔。笔首尾相连，中间特征笔起点 == 前一同向笔
-                        # 终点，即线段转折点。
-                        mid_idx = merged[-2][0][0]
-                        cand_end = mid_idx - 1
+                        # 前一支同向笔（笔首尾相连，即线段转折点）。
+                        cand_end = mid_orig_idx - 1
                         seg_start_val = bis[start].start.val
                         seg_end_val = bis[cand_end].end.val
                         seg_ok = (
