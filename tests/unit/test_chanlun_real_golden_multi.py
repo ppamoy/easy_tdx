@@ -45,6 +45,15 @@ def test_counts_locked(case) -> None:
     assert len(res.bcs) == exp_bc
 
 
+def test_to_dict_serializes(case) -> None:
+    """to_dict 序列化不崩溃；分钟级日期应含时分（V623 字符串日期归一化）。"""
+    res, _ = case
+    d = res.to_dict()
+    assert "bis" in d and "mmds" in d and "bcs" in d
+    if res.frequency == "30min":
+        assert any(":" in bi["start_date"] for bi in d["bis"])
+
+
 def test_bi_endpoints_on_extremes(case) -> None:
     res, _ = case
     klines = res.klines
