@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**分型严格遵循缠论原文：双维度（V640）**：
+- 修复 find_fractals：缠论原文顶分型 = 中间K线高点最高 **且** 低点也最高；底分型 = 低点最低 **且** 高点也最低。旧实现只检查单一维度，会把「高点最高但低点不是最高」的K线误判为顶分型。
+- 新增双维度分型金标；旧合成测试数据按双维度修正。
+- 全量 tests/unit 3363 passed。
+
+
 **2类买卖点技术过滤器改为增强项（V639）**：
 - 2买/2卖 的成交量、MACD力度、RSI 三个非缠论原文硬门槛改为增强信息，不再一票否决；2类点核心保持「1买后回踩不创新低 / 1卖后反抽不创新高 + 时间窗口 + 去重」。
 - 全量 tests/unit 3362 passed。
@@ -761,13 +767,5 @@
 ---
 
 **多空分组测试（V467）**：simulate_advice_batch 测试补 long/short 分组正确性（2 long + 1 short → long_stats.count=2, short_stats.count=1）。
-
----
-
-**advice 输出补中位数（V466）**：advice CSV/JSON 输出补 median_return，与 V461/V463 后端中位数对齐。
-
----
-
-**建议模拟多空分开统计（V465）**：simulate_advice_batch 加 long_stats/short_stats（买点/卖点信号分别的笔数、胜率、平均收益），揭示模型多空不对称表现。
 
 ---

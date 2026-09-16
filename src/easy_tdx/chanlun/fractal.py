@@ -55,14 +55,35 @@ def find_fractals(
         mid = cklines[i + 1]
         right = cklines[i + 2]
 
+        # 缠论原文（62课）：顶分型 = 中间K线高点最高 且 低点也最高；
+        # 底分型 = 中间K线低点最低 且 高点也最低。旧实现只检查单一维度，
+        # 会把「高点最高但低点不是最高」的K线误判为顶分型。
         if config.fx_strict:
-            # 严格模式：中间 K 线的高/低必须严格大于/小于两边
-            is_ding = mid.high > left.high and mid.high > right.high
-            is_di = mid.low < left.low and mid.low < right.low
+            is_ding = (
+                mid.high > left.high
+                and mid.high > right.high
+                and mid.low > left.low
+                and mid.low > right.low
+            )
+            is_di = (
+                mid.low < left.low
+                and mid.low < right.low
+                and mid.high < left.high
+                and mid.high < right.high
+            )
         else:
-            # 非严格模式：允许等于
-            is_ding = mid.high >= left.high and mid.high >= right.high
-            is_di = mid.low <= left.low and mid.low <= right.low
+            is_ding = (
+                mid.high >= left.high
+                and mid.high >= right.high
+                and mid.low >= left.low
+                and mid.low >= right.low
+            )
+            is_di = (
+                mid.low <= left.low
+                and mid.low <= right.low
+                and mid.high <= left.high
+                and mid.high <= right.high
+            )
 
         if is_ding and is_di:
             # 同时满足顶底分型条件（如十字星），跳过

@@ -110,6 +110,17 @@ def test_merge_klines_down_inclusion_low_low() -> None:
     assert merged[1].merged_count == 2
 
 
+def test_fractal_dual_dimension_requires_high_and_low() -> None:
+    """缠论原文：顶分型要求中间K线高点最高且低点也最高（双维度）。"""
+    cklines = [
+        _mk_clkline(0, 10.0, 9.0),
+        _mk_clkline(1, 12.0, 7.0),  # 高点最高但低点最低 → 不是顶分型
+        _mk_clkline(2, 11.0, 8.0),
+    ]
+    fxs = find_fractals(cklines, ChanlunConfig())
+    assert len(fxs) == 0
+
+
 # ── 分型识别金标 ──────────────────────────────────────────────────────
 
 def test_fractal_golden() -> None:
@@ -120,7 +131,7 @@ def test_fractal_golden() -> None:
         _mk_clkline(2, 14.0, 10.0),  # 顶分型中间
         _mk_clkline(3, 13.0, 9.0),
         _mk_clkline(4, 12.0, 8.0),  # 底分型中间
-        _mk_clkline(5, 11.0, 9.0),
+        _mk_clkline(5, 13.0, 9.0),  # 高点须高于中间K线高点（双维度）
     ]
     fxs = find_fractals(cklines, ChanlunConfig())
     assert len(fxs) == 2
