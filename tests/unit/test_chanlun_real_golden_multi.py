@@ -19,10 +19,10 @@ FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 
 # (fixture 文件名, frequency, 期望计数 bi/xd/zs/mmd/bc)
 CASES = [
-    ("chanlun_600519_daily.json", "daily", (15, 1, 4, 2, 1)),
-    ("chanlun_000333_daily.json", "daily", (15, 1, 2, 0, 1)),
-    ("chanlun_000001_weekly.json", "weekly", (15, 2, 3, 2, 2)),
-    ("chanlun_000001_30min.json", "30min", (13, 1, 3, 0, 1)),
+    ("chanlun_600519_daily.json", "daily", (15, 1, 4, 5, 1)),
+    ("chanlun_000333_daily.json", "daily", (15, 1, 2, 1, 1)),
+    ("chanlun_000001_weekly.json", "weekly", (15, 2, 3, 3, 2)),
+    ("chanlun_000001_30min.json", "30min", (13, 1, 3, 2, 1)),
 ]
 
 
@@ -111,10 +111,10 @@ def test_mmd_structure_position(case) -> None:
             assert m.bi.high > m.zs.zg, m.msg
         elif t == "3buy":
             assert m.bi is not None and m.zs is not None, m.msg
-            assert m.bi.low > m.zs.zg * 1.005, m.msg
+            assert m.bi.low > m.zs.zg, m.msg
         elif t == "3sell":
             assert m.bi is not None and m.zs is not None, m.msg
-            assert m.bi.high < m.zs.zd * 0.995, m.msg
+            assert m.bi.high < m.zs.zd, m.msg
 
 
 def test_mmd_second_type_structure(case) -> None:

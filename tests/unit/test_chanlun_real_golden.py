@@ -40,7 +40,7 @@ def test_counts_locked(result) -> None:
     assert len(result.bis) == 14  # V635 严格笔（顶底至少1根独立K线）后
     assert len(result.xds) == 2
     assert len(result.zss) == 3
-    assert len(result.mmds) == 2
+    assert len(result.mmds) == 3
     assert len(result.bcs) == 1  # V617 MACD 力度窗口用极值 bar_index 后，此段出现 1 个笔背驰
 
 
@@ -99,10 +99,10 @@ def test_mmd_structure_position(result) -> None:
             assert m.bi.high > m.zs.zg, m.msg
         elif t == "3buy":
             assert m.bi is not None and m.zs is not None, m.msg
-            assert m.bi.low > m.zs.zg * 1.005, m.msg
+            assert m.bi.low > m.zs.zg, m.msg
         elif t == "3sell":
             assert m.bi is not None and m.zs is not None, m.msg
-            assert m.bi.high < m.zs.zd * 0.995, m.msg
+            assert m.bi.high < m.zs.zd, m.msg
 
 
 def test_mmd_second_type_structure(result) -> None:
@@ -133,7 +133,7 @@ def test_timing_response_novice_fields() -> None:
     # structure 计数与快照一致
     assert out["structure"]["bi_count"] == 14
     assert out["structure"]["zs_count"] == 3
-    assert out["structure"]["mmd_count"] == 2
+    assert out["structure"]["mmd_count"] == 3
     assert out["structure"]["bc_count"] == 1
 
 

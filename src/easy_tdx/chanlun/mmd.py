@@ -2581,6 +2581,82 @@ def _check_pullback_volume_v2(
 
 # ── V15 新增函数 ─────────────────────────────────────────────────────────────
 
+def _find_third_type_mmds_original(
+    bis: list[BI],
+    zss: list[ZS],
+    first_type_mmds: list[MMD],
+) -> list[MMD]:
+    """严格缠论原文的三类买卖点。
+
+    3买 = 中枢形成后，向上突破中枢上沿(zg)，其后回踩不破 zg（回踩低点即 3买）。
+    3卖 = 中枢形成后，向下跌破中枢下沿(zd)，其后反抽不破 zd（反抽高点即 3卖）。
+    不引入 RSI/KDJ/BOLL/量能/MACD零轴等技术过滤（这些是增强项，非原文）。
+    """
+    mmds: list[MMD] = []
+    existing: set[int] = {m.bi.end.k.k_index for m in first_type_mmds if m.bi}
+
+    for zs in zss:
+        if zs.line_count < 3:
+            continue
+        zs_end = zs.end.k.k_index if zs.end else 0
+
+        # 3买：向上突破笔 + 其后回踩不破 zg 的向下笔
+        break_up = None
+        for bi in bis:
+            if bi.start.k.k_index > zs_end and bi.direction.value == "up" and bi.high > zs.zg:
+                break_up = bi
+                break
+        if break_up is not None:
+            for bi in bis[bis.index(break_up) + 1 :]:
+                if bi.direction.value != "down":
+                    continue
+                if bi.low <= zs.zg:
+                    break  # 回踩破了上沿，不是 3买
+                if bi.end.k.k_index - break_up.end.k.k_index > 15:
+                    break
+                if bi.end.k.k_index in existing:
+                    continue
+                mmds.append(
+                    MMD(
+                        mmd_type=MMDType.BUY_3,
+                        zs=zs,
+                        bi=bi,
+                        msg=f"3买: 突破中枢上沿后回踩不破，低点={bi.low:.2f} > zg={zs.zg:.2f}",
+                    )
+                )
+                existing.add(bi.end.k.k_index)
+                break
+
+        # 3卖：向下跌破笔 + 其后反抽不破 zd 的向上笔
+        break_down = None
+        for bi in bis:
+            if bi.start.k.k_index > zs_end and bi.direction.value == "down" and bi.low < zs.zd:
+                break_down = bi
+                break
+        if break_down is not None:
+            for bi in bis[bis.index(break_down) + 1 :]:
+                if bi.direction.value != "up":
+                    continue
+                if bi.high >= zs.zd:
+                    break  # 反抽破了上沿，不是 3卖
+                if bi.end.k.k_index - break_down.end.k.k_index > 15:
+                    break
+                if bi.end.k.k_index in existing:
+                    continue
+                mmds.append(
+                    MMD(
+                        mmd_type=MMDType.SELL_3,
+                        zs=zs,
+                        bi=bi,
+                        msg=f"3卖: 跌破中枢下沿后反抽不破，高点={bi.high:.2f} < zd={zs.zd:.2f}",
+                    )
+                )
+                existing.add(bi.end.k.k_index)
+                break
+
+    return mmds
+
+
 
 def _find_third_type_mmds(
     bis: list[BI],
@@ -2609,6 +2685,12 @@ def _find_third_type_mmds(
     mmds: list[MMD] = []
 
     # 构建已有买卖点的位置集合，用于避免重复
+    # V637: 默认严格遵循缠论原文（不做技术指标增强过滤），
+    # 走精简的 3买/3卖 检测；仅当 config.mmd_3rd_type_technical=True 时
+    # 才启用下方 RSI/KDJ/BOLL/量能/MACD零轴等增强过滤。
+    if not config.mmd_3rd_type_technical:
+        return _find_third_type_mmds_original(bis, zss, first_type_mmds)
+
     existing_mmd_positions: set[int] = set()
     for m in first_type_mmds:
         if m.bi:

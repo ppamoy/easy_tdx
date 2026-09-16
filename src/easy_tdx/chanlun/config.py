@@ -42,6 +42,11 @@ class ChanlunConfig:
     # 是否支持笔破坏
     xd_bi_pohuai: bool = False
 
+    # 3类买卖点是否启用「技术指标增强过滤」（RSI/KDJ/BOLL/量能/MACD零轴等）。
+    # 默认 False：严格遵循缠论原文，3买=突破中枢上沿+回踩不破、3卖=跌破下沿+反抽不破，
+    # 技术指标只作增强信息；True 时启用旧版增强过滤（信号更稀疏）。
+    mmd_3rd_type_technical: bool = False
+
     # ── MACD 配置 ───────────────────────────────────────────────────────
     macd_fast: int = 12
     macd_slow: int = 26
