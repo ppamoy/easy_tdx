@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**特征序列向下包含取低低金标（V641）**：
+- 补上线段特征序列包含处理的「低低」方向金标：向下特征序列包含时 high=min、low=min，锁定缠论原文包含处理双向规则。
+- 全量 tests/unit 3364 passed。
+
+
 **分型严格遵循缠论原文：双维度（V640）**：
 - 修复 find_fractals：缠论原文顶分型 = 中间K线高点最高 **且** 低点也最高；底分型 = 低点最低 **且** 高点也最低。旧实现只检查单一维度，会把「高点最高但低点不是最高」的K线误判为顶分型。
 - 新增双维度分型金标；旧合成测试数据按双维度修正。
@@ -755,17 +760,5 @@
 - **V470** simulate_advice_batch docstring 补 median_return/profit_factor/long_stats/short_stats
 - **V471** summarize_batch docstring 补 median_return/avg_mae/avg_mfe
 - **V472** fmtPf 补 Infinity/NaN 边界测试
-
----
-
-**盈亏比 999 边界测试（V469）**：grading 补测试——profit_factor=999（仅盈利无亏损）评分应为满分 100（interpolate 取最高锚点分）。
-
----
-
-**信号准确度面板加中位/盈亏比（V468）**：SignalAccuracyPanel（回测页信号准确度，buy/sell 方向）表格加中位收益与盈亏比列（复用 fmtPct/fmtPf）。
-
----
-
-**多空分组测试（V467）**：simulate_advice_batch 测试补 long/short 分组正确性（2 long + 1 short → long_stats.count=2, short_stats.count=1）。
 
 ---

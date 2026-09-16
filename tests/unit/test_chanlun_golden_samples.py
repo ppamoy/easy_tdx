@@ -160,6 +160,18 @@ def test_merge_feature_sequence_inclusion_high_high() -> None:
     assert merged[0][2] == 10.5  # 低取较高
 
 
+def test_merge_feature_sequence_down_inclusion_low_low() -> None:
+    """缠论特征序列包含处理：向下特征序列取「低低」。"""
+    f1 = _mk_bi(0, "down", 14.0, 12.0)
+    f2 = _mk_bi(1, "down", 12.0, 10.0)
+    f3 = _mk_bi(2, "down", 11.5, 11.0)  # 被 f2 包含
+    merged = _merge_feature_sequence([(0, f1), (1, f2), (2, f3)])
+    assert len(merged) == 2
+    # 向下特征序列取低低：high=min(12,11.5)、low=min(10,11)
+    assert merged[1][1] == 11.5
+    assert merged[1][2] == 10.0
+
+
 # ── 特征序列分型金标 ──────────────────────────────────────────────────
 
 def test_merged_feature_fx_up_top() -> None:
