@@ -154,6 +154,19 @@ def test_xd_direction_and_pivot(case) -> None:
         assert res.xds[i].end.val == res.xds[i + 1].start.val
 
 
+def test_xd_endpoints_anchor_on_fractal_extremes(case) -> None:
+    """线段端点必为特征序列分型点的极值，落在 [low, high] 区间内。"""
+    res, _ = case
+    for xd in res.xds:
+        assert xd.low <= xd.start.val <= xd.high, f"线段起点越界 {xd}"
+        assert xd.low <= xd.end.val <= xd.high, f"线段终点越界 {xd}"
+        # 向上线段终点高于起点、向下线段终点低于起点
+        if xd.direction == Direction.UP:
+            assert xd.end.val > xd.start.val
+        else:
+            assert xd.end.val < xd.start.val
+
+
 def test_beichi_new_extreme_gate(case) -> None:
     res, _ = case
     for bc in res.bcs:

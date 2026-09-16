@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**线段端点极值锚定金标（V649）**：
+- 多周期快照新增线段端点金标：线段端点必为特征序列分型点的极值，落在 [low, high] 区间内，且方向一致（向上终点>起点、向下终点<起点），锁定画图端点锚定。
+- 全量 tests/unit 3377 passed。
+
+
 **中枢进入/离开段显式建模（V648）**：
 - ZS 新增 enter_bi/exit_bi 字段：缠论原文中枢 = 进入段 + 重叠段 + 离开段，find_zss 显式记录两端（进入中枢前一笔 / 离开中枢后一笔），to_dict 输出 enter_bi_index/exit_bi_index 供画图与背驰标注使用。
 - 新增 enter/exit 记录金标。
@@ -738,13 +743,5 @@
 ---
 
 **平均持有期断言（V486）**：summarize_batch 测试补 avg_holding_bars 断言（3+2+5）/3 = 3.33。
-
----
-
-**建议模拟批量加平均持有期（V485）**：simulate_advice_batch 单标的批量结果也加 avg_holding_bars（与 V484 的 summarize_batch 对齐）。
-
----
-
-**建议批量汇总加平均持有期（V484）**：summarize_batch 加 avg_holding_bars（平均持有根数），与 V483 单笔 holding_bars 对齐。
 
 ---
