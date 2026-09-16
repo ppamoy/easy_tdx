@@ -13,7 +13,11 @@ from easy_tdx.chanlun.bi import find_bis
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
-from easy_tdx.chanlun.mmd import _reference_zs_for_bi
+from easy_tdx.chanlun.mmd import (
+    _has_meaningful_pullback,
+    _has_meaningful_rebound,
+    _reference_zs_for_bi,
+)
 from easy_tdx.chanlun.mmd_conditions import _calc_trend_strength
 from easy_tdx.chanlun.types import BI, FX, ZS, BCType, CLKline, Direction, FXType, Kline
 from easy_tdx.chanlun.xd import (
@@ -298,6 +302,22 @@ def test_find_bis_more_extreme_top_replaces() -> None:
     assert bis[0].end.val == 20.0  # 更极端顶替换
     assert bis[1].direction == Direction.DOWN
     assert bis[1].end.val == 13.0
+
+
+# ── 1买/1卖 结构去重启发式金标（工程启发式，非缠论原文）────────────
+
+def test_has_meaningful_rebound_3pct() -> None:
+    assert _has_meaningful_rebound(103.0, 100.0)  # 3% 反弹 → True
+    assert not _has_meaningful_rebound(102.0, 100.0)  # 2% → False
+    assert not _has_meaningful_rebound(99.0, 100.0)  # 未反弹 → False
+    assert _has_meaningful_rebound(100.0, None)  # 首次无前值 → True
+
+
+def test_has_meaningful_pullback_3pct() -> None:
+    assert _has_meaningful_pullback(97.0, 100.0)  # 3% 回落 → True
+    assert not _has_meaningful_pullback(98.0, 100.0)  # 2% → False
+    assert not _has_meaningful_pullback(101.0, 100.0)  # 未回落 → False
+    assert _has_meaningful_pullback(100.0, None)  # 首次无前值 → True
 
 
 # ── 1买/1卖 趋势强度金标 ────────────────────────────────────────────

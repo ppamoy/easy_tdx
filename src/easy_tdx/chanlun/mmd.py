@@ -1921,6 +1921,33 @@ def find_mmds_sorted(
     mmds = find_mmds(bis, zss, closes, config, volumes, macd_data, volatility, highs, lows)
     return sort_mmds_by_priority(mmds)
 
+# ── 信号稀疏化启发式（工程去重，非缠论原文规则）────────────────────────
+# 缠论原文 1买 = 趋势背驰点、1卖对称，本身不要求「相邻信号间隔几笔」或
+# 「反弹百分之几」；这些阈值只是避免同一底部/顶部反复标注的工程启发式。
+_MIN_1ST_GAP_BIS = 5
+_MIN_REBOUND_RATIO = 0.03
+
+
+def _has_meaningful_rebound(rebound_high: float, last_1st_low: float | None) -> bool:
+    """前一次 1买/1卖 之后是否出现有意义反弹/回落（>=3%，工程启发式）。"""
+    if last_1st_low is None or last_1st_low <= 0:
+        return True
+    return (
+        rebound_high > last_1st_low
+        and (rebound_high - last_1st_low) / last_1st_low >= _MIN_REBOUND_RATIO
+    )
+
+
+
+def _has_meaningful_pullback(pullback_low: float, last_1st_high: float | None) -> bool:
+    """前一次 1卖 之后是否出现有意义回落（>=3%，工程启发式）。"""
+    if last_1st_high is None or last_1st_high <= 0:
+        return True
+    return (
+        pullback_low < last_1st_high
+        and (last_1st_high - pullback_low) / last_1st_high >= _MIN_REBOUND_RATIO
+    )
+
 
 def _reference_zs_for_bi(zss: list[ZS], bi: BI) -> ZS | None:
     """返回笔所对应的"同期参考中枢"：在笔开始前最后一个已完成的（或最近的）中枢。
@@ -2015,15 +2042,12 @@ def _find_first_type_mmds(
             continue
         if bi.low >= ref_zs.zd:
             continue
-        # 最小笔间距：相邻 1买 至少隔 5 笔，过滤同段反复的假底
-        if bi.index - last_1buy_bi_idx < 5:
+        # 最小笔间距：相邻 1买 至少隔 _MIN_1ST_GAP_BIS 笔（工程启发式，非原文）
+        if bi.index - last_1buy_bi_idx < _MIN_1ST_GAP_BIS:
             continue
-        # 结构去重：前一次 1买 后必须出现 ≥3% 的有意义反弹，
-        # 才认定开启新的下跌腿；否则是同一底部的反复下探
+        # 结构去重：前一次 1买 后必须出现有意义反弹（工程启发式，非原文）
         if last_1buy_low is not None and last_1buy_bi_idx >= 0:
-            if rebound_high <= last_1buy_low:
-                continue
-            if (rebound_high - last_1buy_low) / last_1buy_low < 0.03:
+            if not _has_meaningful_rebound(rebound_high, last_1buy_low):
                 continue
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(bi, bis, zss, closes, threshold):
@@ -2085,15 +2109,12 @@ def _find_first_type_mmds(
             continue
         if bi.high <= ref_zs.zg:
             continue
-        # 最小笔间距
-        if abs(bi.index - last_1sell_bi_idx) < 5:
+        # 最小笔间距（工程启发式，非原文）
+        if abs(bi.index - last_1sell_bi_idx) < _MIN_1ST_GAP_BIS:
             continue
-        # 结构去重：前一次 1卖 后必须出现 ≥3% 的有意义回落，
-        # 才认定开启新的上升腿；否则是同一顶部的反复创新高
+        # 结构去重：前一次 1卖 后必须出现有意义回落（工程启发式，非原文）
         if last_1sell_high is not None and last_1sell_bi_idx >= 0:
-            if pullback_low >= last_1sell_high:
-                continue
-            if (last_1sell_high - pullback_low) / last_1sell_high < 0.03:
+            if not _has_meaningful_pullback(pullback_low, last_1sell_high):
                 continue
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(bi, bis, zss, closes, threshold, direction="up"):
