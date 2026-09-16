@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from easy_tdx.chanlun.beichi import check_bi_beichi
+from easy_tdx.chanlun.beichi import _check_pz_beichi, check_bi_beichi
 from easy_tdx.chanlun.bi import find_bis
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
@@ -447,6 +447,18 @@ def test_find_xds_gap_no_confirmation_continues() -> None:
 
 def _mk_zs(lines) -> ZS:
     return ZS(lines=lines, zg=17.0, zd=13.0, gg=18.0, dd=12.0, direction="", index=0, done=True)
+
+
+def test_pz_beichi_bounds_no_crash_when_zs_at_end() -> None:
+    """中枢最后一笔是最后一笔时，离开笔越界 → 不崩溃且不产出背驰。"""
+    bis = [
+        _mk_bi(0, "down", 10.0, 6.0),
+        _mk_bi(1, "up", 10.0, 6.0),
+        _mk_bi(2, "down", 9.0, 5.0),
+    ]
+    zs = ZS(lines=bis, zg=9.0, zd=5.0, gg=10.0, dd=5.0, direction="", index=0, done=True)
+    bcs = _check_pz_beichi(bis, [zs], closes=None)
+    assert bcs == []
 
 
 def test_pz_beichi_enter_exit_same_direction() -> None:

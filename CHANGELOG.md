@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**盘整背驰离开笔越界防御金标（V647）**：
+- 新增金标：中枢最后一笔是最后一笔时，离开笔索引越界 → 不崩溃且不产出背驰，锁定 _check_pz_beichi 的边界守卫。
+- 全量 tests/unit 3372 passed。
+
+
 **1买/1卖 去重启发式可配置（V646）**：
 - 新增 ChanlunConfig.mmd_1st_dedup（默认 True）；设为 False 时关闭「相邻间隔5笔 + 3%反弹/回落」去重，严格按缠论原文（趋势背驰点即可）生成信号。
 - 新增配置默认值金标。
@@ -743,13 +748,5 @@
 ---
 
 **hold-sweep 输出补中位数（V482）**：advice --hold-sweep 各持有期对比补 median_return，与单标的批量统计对齐。
-
----
-
-**成交量序列测试（V481）**：execution._volume_series 纯函数补测试（vol 优先、volume 回退、缺失返回 None）。
-
----
-
-**fmtPct/fmtAcc 边界测试（V480）**：前端格式函数补 NaN/Infinity 边界测试（与 fmtPf V472 一致，均返回占位符）。
 
 ---
