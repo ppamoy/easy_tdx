@@ -304,6 +304,12 @@ def test_find_bis_more_extreme_top_replaces() -> None:
     assert bis[1].end.val == 13.0
 
 
+def test_mmd_1st_dedup_config_default() -> None:
+    """1买/1卖 去重启发式默认开启，可关闭以得到严格原文（不去重）模式。"""
+    assert ChanlunConfig().mmd_1st_dedup is True
+    assert ChanlunConfig(mmd_1st_dedup=False).mmd_1st_dedup is False
+
+
 # ── 1买/1卖 结构去重启发式金标（工程启发式，非缠论原文）────────────
 
 def test_has_meaningful_rebound_3pct() -> None:

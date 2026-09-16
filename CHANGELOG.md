@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**1买/1卖 去重启发式可配置（V646）**：
+- 新增 ChanlunConfig.mmd_1st_dedup（默认 True）；设为 False 时关闭「相邻间隔5笔 + 3%反弹/回落」去重，严格按缠论原文（趋势背驰点即可）生成信号。
+- 新增配置默认值金标。
+- 全量 tests/unit 3371 passed。
+
+
 **背驰创新低对称金标（V645）**：
 - 补上笔背驰「创新低」的对称金标：向下笔创新低且力度衰减 → 标背驰；未创新低不标。与已有「创新高」金标形成双向锁定。
 - 全量 tests/unit 3370 passed。
@@ -745,13 +751,5 @@
 ---
 
 **fmtPct/fmtAcc 边界测试（V480）**：前端格式函数补 NaN/Infinity 边界测试（与 fmtPf V472 一致，均返回占位符）。
-
----
-
-**advice-batch 汇总补中位数（V479）**：offline advice-batch 输出补 summary_median_return，与单标的 JSON 对齐。
-
----
-
-**advice table 汇总补中位/盈亏比（V478）**：advice --output table 汇总行补中位数收益与盈亏比，与 CSV/JSON 对齐。
 
 ---

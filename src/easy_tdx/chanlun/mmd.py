@@ -2043,12 +2043,13 @@ def _find_first_type_mmds(
         if bi.low >= ref_zs.zd:
             continue
         # 最小笔间距：相邻 1买 至少隔 _MIN_1ST_GAP_BIS 笔（工程启发式，非原文）
-        if bi.index - last_1buy_bi_idx < _MIN_1ST_GAP_BIS:
-            continue
-        # 结构去重：前一次 1买 后必须出现有意义反弹（工程启发式，非原文）
-        if last_1buy_low is not None and last_1buy_bi_idx >= 0:
-            if not _has_meaningful_rebound(rebound_high, last_1buy_low):
+        if config.mmd_1st_dedup:
+            if bi.index - last_1buy_bi_idx < _MIN_1ST_GAP_BIS:
                 continue
+            # 结构去重：前一次 1买 后必须出现有意义反弹（工程启发式，非原文）
+            if last_1buy_low is not None and last_1buy_bi_idx >= 0:
+                if not _has_meaningful_rebound(rebound_high, last_1buy_low):
+                    continue
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(bi, bis, zss, closes, threshold):
             strength = _get_beichi_strength(bi, bis, zss, closes)
@@ -2110,12 +2111,13 @@ def _find_first_type_mmds(
         if bi.high <= ref_zs.zg:
             continue
         # 最小笔间距（工程启发式，非原文）
-        if abs(bi.index - last_1sell_bi_idx) < _MIN_1ST_GAP_BIS:
-            continue
-        # 结构去重：前一次 1卖 后必须出现有意义回落（工程启发式，非原文）
-        if last_1sell_high is not None and last_1sell_bi_idx >= 0:
-            if not _has_meaningful_pullback(pullback_low, last_1sell_high):
+        if config.mmd_1st_dedup:
+            if abs(bi.index - last_1sell_bi_idx) < _MIN_1ST_GAP_BIS:
                 continue
+            # 结构去重：前一次 1卖 后必须出现有意义回落（工程启发式，非原文）
+            if last_1sell_high is not None and last_1sell_bi_idx >= 0:
+                if not _has_meaningful_pullback(pullback_low, last_1sell_high):
+                    continue
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(bi, bis, zss, closes, threshold, direction="up"):
             strength = _get_beichi_strength(bi, bis, zss, closes, direction="up")
