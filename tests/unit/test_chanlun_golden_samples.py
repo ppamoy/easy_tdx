@@ -14,6 +14,7 @@ from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
 from easy_tdx.chanlun.mmd import _reference_zs_for_bi
+from easy_tdx.chanlun.mmd_conditions import _calc_trend_strength
 from easy_tdx.chanlun.types import BI, FX, ZS, BCType, CLKline, Direction, FXType, Kline
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
@@ -297,6 +298,25 @@ def test_find_bis_more_extreme_top_replaces() -> None:
     assert bis[0].end.val == 20.0  # 更极端顶替换
     assert bis[1].direction == Direction.DOWN
     assert bis[1].end.val == 13.0
+
+
+# ── 1买/1卖 趋势强度金标 ────────────────────────────────────────────
+
+def _mk_zs_val(zg: float, zd: float) -> ZS:
+    return ZS(
+        lines=[], zg=zg, zd=zd, gg=zg + 1.0, dd=zd - 1.0, direction="",
+        index=0, done=True, start=None, end=None,
+    )
+
+
+def test_trend_strength_requires_two_same_direction_zs() -> None:
+    """缠论趋势背驰需要趋势（至少两个同向中枢）；不同向/单中枢趋势强度为 0。"""
+    # 两个同向（都在下降）→ >0
+    assert _calc_trend_strength([_mk_zs_val(10.0, 8.0), _mk_zs_val(8.0, 6.0)]) > 0
+    # 不同向（一升一降）→ 0
+    assert _calc_trend_strength([_mk_zs_val(10.0, 8.0), _mk_zs_val(12.0, 7.0)]) == 0
+    # 单中枢 → 0
+    assert _calc_trend_strength([_mk_zs_val(10.0, 8.0)]) == 0
 
 
 # ── 1买/1卖 同期参考中枢金标（无未来函数）──────────────────────────
