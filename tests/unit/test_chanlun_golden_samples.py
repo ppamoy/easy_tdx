@@ -546,6 +546,28 @@ def test_beichi_requires_new_high_for_up() -> None:
     assert any(bc.bc_type == BCType.BI for bc in bcs)
 
 
+def test_beichi_requires_new_low_for_down() -> None:
+    # bi0 向下力度大、bi2 向下创新低但力度小 → 应标背驰
+    bis = [
+        _mk_bi(0, "down", 10.0, 6.0),  # force=4
+        _mk_bi(1, "up", 10.0, 6.0),
+        _mk_bi(2, "down", 8.5, 5.5),  # 创新低(5.5<6)，force=3 < 4*0.8
+    ]
+    bcs = check_bi_beichi(bis, [], closes=None)
+    assert any(bc.bc_type == BCType.BI for bc in bcs)
+
+
+def test_beichi_rejects_no_new_low() -> None:
+    # bi2 未创新低（low=6.5 > bi0.low=6），即使力度小也不标背驰
+    bis = [
+        _mk_bi(0, "down", 10.0, 6.0),
+        _mk_bi(1, "up", 10.0, 6.0),
+        _mk_bi(2, "down", 9.5, 6.5),  # 未创新低
+    ]
+    bcs = check_bi_beichi(bis, [], closes=None)
+    assert all(bc.bc_type != BCType.BI for bc in bcs)
+
+
 def test_beichi_rejects_no_new_high() -> None:
     # bi2 未创新高（high=9.5 < bi0.high=10），即使力度小也不标背驰
     bis = [
