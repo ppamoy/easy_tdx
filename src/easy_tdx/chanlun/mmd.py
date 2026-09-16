@@ -2686,24 +2686,23 @@ def _find_third_type_mmds(
             break_force = _calc_bi_force(break_bi_up, closes, break_bi_up.index)
 
             # V8: 条件A - 突破笔必须有足够力度（波动率自适应阈值）
-            if first_bi_force > 0 and break_force < first_bi_force * vol_adjusted_force_ratio:
-                continue
+            # V636: 突破力度非缠论原文硬门槛，不再一票否决
+            _ = (first_bi_force, break_force, vol_adjusted_force_ratio)
 
             # V8: 条件B - 突破后价格应该站稳中枢上方（自适应）
             break_price_ratio = (break_bi_up.high - zs.zg) / (zs.zg - zs.zd) if zs.zg > zs.zd else 0
-            if break_price_ratio < 0.4:  # V8: 最低要求40%
-                continue
+            _ = break_price_ratio  # V636: 突破站稳比例非原文硬门槛，不再阻断
 
             # V8: 条件C - 成交量确认（自适应倍数）
             if volumes is not None:
-                if not _check_breakout_volume(
+                # V636: 突破量能非原文硬门槛，不再阻断
+                _check_breakout_volume(
                     volumes,
                     break_bi_up.start.k.k_index,
                     break_bi_up.end.k.k_index,
                     avg_vol_20,
                     min_ratio=vol_adjusted_vol_ratio,
-                ):
-                    continue
+                )
 
             # 在突破笔之后找回调笔
             for bi in bis[bis.index(break_bi_up) + 1 :]:
@@ -3009,30 +3008,25 @@ def _find_third_type_mmds(
         if break_bi_down:
             # V8: 条件A - 跌破笔必须有足够力度（波动率自适应）
             break_force_down = _calc_bi_force(break_bi_down, closes, break_bi_down.index)
-            if (
-                len(zs.lines) >= 2
-                and break_force_down
-                < _calc_bi_force(zs.lines[0], closes, zs.lines[0].index) * vol_adjusted_force_ratio
-            ):
-                continue
+            # V636: 跌破力度非缠论原文硬门槛，不再一票否决
+            _ = (break_force_down, vol_adjusted_force_ratio)
 
             # V8: 条件B - 跌破后价格应该站稳中枢下方（自适应）
             breakdown_price_ratio = (
                 (zs.zd - break_bi_down.low) / (zs.zg - zs.zd) if zs.zg > zs.zd else 0
             )
-            if breakdown_price_ratio < 0.4:  # V8: 最低要求40%
-                continue
+            _ = breakdown_price_ratio  # V636: 跌破站稳比例非原文硬门槛，不再阻断
 
             # V8: 条件C - 成交量确认 - 跌破时应显著放量（自适应倍数）
             if volumes is not None:
-                if not _check_breakout_volume(
+                # V636: 跌破量能非原文硬门槛，不再阻断
+                _check_breakout_volume(
                     volumes,
                     break_bi_down.start.k.k_index,
                     break_bi_down.end.k.k_index,
                     avg_vol_20,
                     min_ratio=vol_adjusted_vol_ratio,
-                ):
-                    continue
+                )
 
             # 在跌破笔之后找反弹笔
             for bi in bis[bis.index(break_bi_down) + 1 :]:
