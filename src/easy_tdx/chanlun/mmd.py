@@ -2234,31 +2234,26 @@ def _find_second_type_mmds(
                     if too_close:
                         continue
 
-                    # V8: 成交量确认（回调缩量，基准用1买附近的局部均量）
+                    # V639: 回调缩量非缠论原文硬门槛，改为增强信息，不再阻断
                     if volumes is not None:
-                        vol_ok = _check_pullback_volume_v2(
+                        _check_pullback_volume_v2(
                             volumes,
                             bi.start.k.k_index,
                             bi.end.k.k_index,
                             _calc_local_avg_volume(volumes, buy_1_end_k, 20),
                             max_ratio=0.85,
                         )
-                        if not vol_ok:
-                            continue
 
-                    # V8: MACD确认（回调笔力度 < 离开笔力度）
+                    # V639: MACD力度非缠论原文硬门槛，改为增强信息，不再阻断
                     if closes is not None:
                         bi_force = _calc_bi_force(bi, closes, bi.index)
                         leave_force = _calc_bi_force(leave_bi_up, closes, leave_bi_up.index)
-                        if leave_force > 0 and bi_force > leave_force * 0.6:
-                            continue
+                        _ = (bi_force, leave_force)
 
-                    # V9: RSI确认 - 2买时RSI应处于超卖区域或中性偏强（< 50 或 刚转强）
-                    rsi_val = 50.0  # V9: 默认中性值
+                    # V639: RSI非缠论原文硬门槛，改为增强信息，不再阻断
+                    rsi_val = 50.0
                     if closes is not None:
                         rsi_val = _calc_rsi(closes, bi.end.k.k_index)
-                        if rsi_val > 70:  # 超买区域，不构成好的买点
-                            continue
 
                     # V13: 成交量剖面支撑确认（提升2买准确度）
                     vol_profile_bonus = False
@@ -2367,9 +2362,9 @@ def _find_second_type_mmds(
                     if too_close:
                         continue
 
-                    # V8: 成交量确认（反弹缩量，基准用1卖附近的局部均量）
+                    # V639: 反弹缩量非缠论原文硬门槛，改为增强信息，不再阻断
                     if volumes is not None:
-                        vol_ok = _check_pullback_volume_v2(
+                        _check_pullback_volume_v2(
                             volumes,
                             bi.start.k.k_index,
                             bi.end.k.k_index,
@@ -2377,22 +2372,17 @@ def _find_second_type_mmds(
                             max_ratio=0.85,
                             is_pullback=False,
                         )
-                        if not vol_ok:
-                            continue
 
-                    # V8: MACD确认（反弹笔力度 < 离开笔力度）
+                    # V639: MACD力度非缠论原文硬门槛，改为增强信息，不再阻断
                     if closes is not None:
                         bi_force = _calc_bi_force(bi, closes, bi.index)
                         leave_force = _calc_bi_force(leave_bi_down, closes, leave_bi_down.index)
-                        if leave_force > 0 and bi_force > leave_force * 0.6:
-                            continue
+                        _ = (bi_force, leave_force)
 
-                    # V9: RSI确认 - 2卖时RSI应处于超买区域或中性偏弱（> 50 或 刚转弱）
-                    rsi_val = 50.0  # V9: 默认中性值
+                    # V639: RSI非缠论原文硬门槛，改为增强信息，不再阻断
+                    rsi_val = 50.0
                     if closes is not None:
                         rsi_val = _calc_rsi(closes, bi.end.k.k_index)
-                        if rsi_val < 30:  # 超卖区域，不构成好的卖点
-                            continue
 
                     # V13: 成交量剖面阻力确认（提升2卖准确度）
                     vol_profile_bonus_sell = False

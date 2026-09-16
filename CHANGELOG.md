@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**2类买卖点技术过滤器改为增强项（V639）**：
+- 2买/2卖 的成交量、MACD力度、RSI 三个非缠论原文硬门槛改为增强信息，不再一票否决；2类点核心保持「1买后回踩不创新低 / 1卖后反抽不创新高 + 时间窗口 + 去重」。
+- 全量 tests/unit 3362 passed。
+
+
 **中枢区间严格遵循缠论原文：延伸不改变 zg/zd（V638）**：
 - 修复 find_zss：中枢区间 ZG/ZD 由「前三个连续次级别走势」的重叠确定，第4笔及以后的延伸不再改变 ZG/ZD，只更新极值 GG/DD（旧实现把延伸也纳入区间，导致 zg/zd 随延伸漂移）。
 - 新增中枢延伸金标（第4笔区间略扩但 zg/zd 保持前三个值）；金标 zs_semantics 同步改为前三个走势口径。
@@ -764,17 +769,5 @@
 ---
 
 **建议模拟多空分开统计（V465）**：simulate_advice_batch 加 long_stats/short_stats（买点/卖点信号分别的笔数、胜率、平均收益），揭示模型多空不对称表现。
-
----
-
-**建议模拟中位数断言（V464）**：simulate_advice_batch 测试字段循环补 median_return。
-
----
-
-**建议模拟批量加中位数收益（V463）**：simulate_advice_batch 单标的批量结果也加 median_return（与 V461 的 summarize_batch 对齐），比均值稳健。
-
----
-
-**中位数收益断言（V462）**：summarize_batch 测试补 median_return 断言（sorted [-2,1,3] → 1.0）。
 
 ---
