@@ -188,6 +188,58 @@ def _mk_fx(fx_type: FXType, val: float, index: int, bar_index: int) -> FX:
     )
 
 
+def _mk_fx3(fx_type: FXType, val: float, kidx: list[int]) -> FX:
+    klines = []
+    for ki in kidx:
+        klines.append(
+            CLKline(
+                k_index=ki,
+                date=datetime.now(),
+                open=val,
+                close=val,
+                high=val,
+                low=val,
+                amount=0.0,
+                index=ki,
+                merged_count=1,
+                direction="",
+                klines=[],
+                high_k_index=ki,
+                low_k_index=ki,
+            )
+        )
+    return FX(
+        fx_type=fx_type,
+        k=klines[1],
+        klines=klines,
+        val=val,
+        index=0,
+        done=True,
+        bar_index=kidx[1],
+    )
+
+
+def test_find_bis_new_bi_requires_independent_kline() -> None:
+    """缠论新笔：顶底之间至少 1 根独立K线。顶[0,1,2] 底[4,5,6] → 成立。"""
+    fxs = [
+        _mk_fx3(FXType.DING, 20.0, [0, 1, 2]),
+        _mk_fx3(FXType.DI, 10.0, [4, 5, 6]),
+    ]
+    bis = find_bis(fxs, ChanlunConfig(bi_type="new"))
+    assert len(bis) == 1
+    assert bis[0].direction == Direction.DOWN
+
+
+def test_find_bis_new_bi_rejects_adjacent_fractals() -> None:
+    """缠论新笔：顶[0,1,2] 底[3,4,5] 无独立K线 → 不成立。"""
+    fxs = [
+        _mk_fx3(FXType.DING, 20.0, [0, 1, 2]),
+        _mk_fx3(FXType.DI, 10.0, [3, 4, 5]),
+    ]
+    bis = find_bis(fxs, ChanlunConfig(bi_type="new"))
+    assert len(bis) == 0
+
+
 # ── 笔计算金标 ────────────────────────────────────────────────────────
 
 def test_find_bis_simple_golden() -> None:
@@ -256,7 +308,7 @@ def _gap_bis(f4_low: float):
         _mk_bi(4, "up", 14.0, 12.0, start_val=13.0, end_val=14.0),
         _mk_bi(5, "down", 14.0, 12.0, start_val=14.0, end_val=12.0),  # F3 [12,14]
         _mk_bi(6, "up", 13.0, 11.0, start_val=12.0, end_val=13.0),
-        _mk_bi(7, "down", 13.0, f4_low, start_val=13.0, end_val=10.0),  # F4（high<F3.high 避免包含）
+        _mk_bi(7, "down", 13.0, f4_low, start_val=13.0, end_val=10.0),  # F4
     ]
 
 

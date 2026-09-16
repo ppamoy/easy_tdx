@@ -123,7 +123,7 @@ class TestFractalTrapRegression:
         fxs = find_fractals(cks)
         assert len(fxs) >= 6, f"应产生至少6个分型，实际 {len(fxs)}"
 
-        bis = find_bis(fxs)
+        bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))
         assert len(bis) >= 2, f"密集交替分型场景应产出至少2笔，实际只有 {len(bis)} 笔"
 
         # 验证方向交替
@@ -150,7 +150,7 @@ class TestFullPipeline:
         ]
         merged = merge_klines(klines)
         fxs = find_fractals(merged)
-        bis = find_bis(fxs)
+        bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))
         assert len(bis) >= 1, "应产出至少1笔"
 
         # 验证笔方向交替

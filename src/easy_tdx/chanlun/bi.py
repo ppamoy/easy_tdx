@@ -42,10 +42,15 @@ def _can_form_bi(
     if start.fx_type == end.fx_type:
         return False
 
-    # 分型之间缠论 K 线的间距
-    # 分型由三根 K 线组成：[left, mid, right]
-    # 独立 K 线数 = end.left.index - start.right.index + 1（如果 >0）
-    # 防御性检查：确保索引有效
+    # 分型之间缠论 K 线的间距。
+    # 分型由三根缠论K线组成：[left, mid, right]。
+    # 缠论原文：顶底之间至少有 1 根「既不属于顶分型、也不属于底分型」的独立K线
+    # （新笔）/ 3 根（老笔）。
+    # 设顶分型中间K线 index=i、底分型中间K线 index=j，则独立K线数 = j - i - 3。
+    # 新笔：j - i >= 4；老笔：j - i >= 6。
+    # 本函数用 right/left 索引：gap = end_left - start_right + 1 = j - i - 1。
+    # 故 新笔 gap >= 3，老笔 gap >= 5（旧实现 gap>=1/gap>=3 过于宽松，
+    # 会把「共享K线/相邻」的分型误当成笔）。
     if not start.klines or not end.klines:
         return False
 
@@ -58,11 +63,11 @@ def _can_form_bi(
         gap = 0
 
     if config.bi_type == "new":
-        # 新笔：至少1根独立K线
-        return gap >= 1
-    elif config.bi_type == "old":
-        # 老笔：至少3根缠论K线在分型之间
+        # 新笔：至少1根独立缠论K线
         return gap >= 3
+    elif config.bi_type == "old":
+        # 老笔：至少3根独立缠论K线
+        return gap >= 5
     else:
         # simple：只要顶底交替即可
         return True

@@ -37,10 +37,10 @@ def test_fixture_loads(result) -> None:
 
 
 def test_counts_locked(result) -> None:
-    assert len(result.bis) == 27
-    assert len(result.xds) == 3
+    assert len(result.bis) == 14  # V635 严格笔（顶底至少1根独立K线）后
+    assert len(result.xds) == 2
     assert len(result.zss) == 3
-    assert len(result.mmds) == 4
+    assert len(result.mmds) == 2
     assert len(result.bcs) == 1  # V617 MACD 力度窗口用极值 bar_index 后，此段出现 1 个笔背驰
 
 
@@ -131,9 +131,9 @@ def test_timing_response_novice_fields() -> None:
     assert out["novice_advice"]["explanation"]
     assert out["signal_quality"]["summary"]
     # structure 计数与快照一致
-    assert out["structure"]["bi_count"] == 27
+    assert out["structure"]["bi_count"] == 14
     assert out["structure"]["zs_count"] == 3
-    assert out["structure"]["mmd_count"] == 4
+    assert out["structure"]["mmd_count"] == 2
     assert out["structure"]["bc_count"] == 1
 
 
