@@ -13,6 +13,7 @@ from easy_tdx.chanlun.bi import find_bis
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
+from easy_tdx.chanlun.mmd import _reference_zs_for_bi
 from easy_tdx.chanlun.types import BI, FX, ZS, BCType, CLKline, Direction, FXType, Kline
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
@@ -296,6 +297,49 @@ def test_find_bis_more_extreme_top_replaces() -> None:
     assert bis[0].end.val == 20.0  # 更极端顶替换
     assert bis[1].direction == Direction.DOWN
     assert bis[1].end.val == 13.0
+
+
+# ── 1买/1卖 同期参考中枢金标（无未来函数）──────────────────────────
+
+def _mk_fx_ref(kidx: int) -> FX:
+    k = CLKline(
+        k_index=kidx,
+        date=datetime.now(),
+        open=1.0,
+        close=1.0,
+        high=1.0,
+        low=1.0,
+        amount=0.0,
+        index=kidx,
+        merged_count=1,
+        direction="",
+        klines=[],
+        high_k_index=kidx,
+        low_k_index=kidx,
+    )
+    return FX(fx_type=FXType.DI, k=k, klines=[], val=1.0, index=0, done=True, bar_index=kidx)
+
+
+def test_reference_zs_point_in_time_no_future() -> None:
+    """一买/一卖只能参考「笔发生前已结束」的中枢，不能偷看未来中枢。"""
+    zs0 = ZS(
+        lines=[], zg=10.0, zd=5.0, gg=11.0, dd=4.0, direction="",
+        index=0, done=True, start=None, end=_mk_fx_ref(10),
+    )
+    zs1 = ZS(
+        lines=[], zg=9.0, zd=4.0, gg=10.0, dd=3.0, direction="",
+        index=1, done=True, start=None, end=_mk_fx_ref(20),
+    )
+    bi = BI(
+        start=_mk_fx_ref(15),
+        end=_mk_fx_ref(25),
+        direction=Direction.DOWN,
+        index=0,
+        high=12.0,
+        low=8.0,
+    )
+    ref = _reference_zs_for_bi([zs0, zs1], bi)
+    assert ref is zs0  # 只取 end=10 < 笔起点15 的中枢，不取未来 zs1
 
 
 # ── 中枢计算金标 ─────────────────────────────────────────────────────

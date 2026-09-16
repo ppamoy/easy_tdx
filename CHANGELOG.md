@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**1买/1卖 同期参考中枢无未来函数金标（V642）**：
+- 新增金标：_reference_zs_for_bi 只取「笔发生前已结束」的中枢，不偷看未来中枢，锁定 1买/1卖 的 point-in-time 正确性。
+- 全量 tests/unit 3365 passed。
+
+
 **特征序列向下包含取低低金标（V641）**：
 - 补上线段特征序列包含处理的「低低」方向金标：向下特征序列包含时 high=min、low=min，锁定缠论原文包含处理双向规则。
 - 全量 tests/unit 3364 passed。
@@ -756,9 +761,3 @@
 ---
 
 **文档与边界测试（V470-V472）**：
-
-- **V470** simulate_advice_batch docstring 补 median_return/profit_factor/long_stats/short_stats
-- **V471** summarize_batch docstring 补 median_return/avg_mae/avg_mfe
-- **V472** fmtPf 补 Infinity/NaN 边界测试
-
----
