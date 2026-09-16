@@ -161,6 +161,9 @@ class ZS:
     quality_score: float = 0.0  # 综合质量评分 0-1
     grade: str = ""  # 质量等级: strong/medium/weak
     width_pct: float = 0.0  # 中枢宽度百分比
+    # 缠论原文：中枢由「进入段 + 至少3段重叠 + 离开段」构成，显式记录两端
+    enter_bi: BI | XD | None = None  # 进入中枢前的那一笔/线段
+    exit_bi: BI | XD | None = None  # 离开中枢后的那一笔/线段
 
     def add_line(self, line: BI | XD) -> None:
         self.lines.append(line)

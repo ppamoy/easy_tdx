@@ -154,6 +154,9 @@ class ChanlunResult:
                     "start_index": zs.start.bar_index if zs.start else None,
                     "end_index": zs.end.bar_index if zs.end else None,
                     "done": zs.done,
+                    # 缠论原文：中枢的进入段/离开段（用于背驰与画图标注）
+                    "enter_bi_index": zs.enter_bi.index if zs.enter_bi else None,
+                    "exit_bi_index": zs.exit_bi.index if zs.exit_bi else None,
                     # v89: 中枢质量评分
                     "quality_score": (
                         round(zs.quality_score, 2) if hasattr(zs, "quality_score") else None

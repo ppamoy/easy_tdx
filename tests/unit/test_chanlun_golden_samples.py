@@ -507,6 +507,24 @@ def test_qs_beichi_exit_stroke_after_zs() -> None:
     assert any(bc.bc_type == BCType.QS for bc in bcs)
 
 
+def test_find_zss_records_enter_exit_bi() -> None:
+    """缠论原文：中枢由进入段 + 重叠段 + 离开段构成，find_zss 显式记录两端。"""
+    bis = [
+        _mk_bi(0, "down", 30.0, 20.0),  # 进入中枢前
+        _mk_bi(1, "up", 15.0, 8.0),
+        _mk_bi(2, "down", 14.0, 7.0),
+        _mk_bi(3, "up", 13.0, 6.0),
+        _mk_bi(4, "down", 7.0, 5.0),  # 离开中枢后
+    ]
+    zss = find_zss(bis, ChanlunConfig())
+    assert len(zss) == 1
+    zs = zss[0]
+    assert zs.enter_bi is bis[0]
+    assert zs.exit_bi is bis[4]
+    assert zs.zg == 13.0
+    assert zs.zd == 8.0
+
+
 def test_find_zss_extension_keeps_zg_zd() -> None:
     """缠论原文：中枢区间由前三个走势确定，第4笔延伸不改变 zg/zd，只更新 gg/dd。"""
     bis = [

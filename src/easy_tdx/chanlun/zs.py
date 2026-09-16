@@ -346,4 +346,16 @@ def find_zss(
                     zs.width_pct = quality["width_pct"]
                     zss.append(zs)
 
+    # 缠论原文：中枢 = 进入段 + 重叠段 + 离开段。显式记录两端，
+    # 便于背驰/前端直接使用「进入笔/离开笔」而不必再隐式索引。
+    for zs in zss:
+        if not zs.lines:
+            continue
+        first = zs.lines[0]
+        last = zs.lines[-1]
+        if first.index > 0:
+            zs.enter_bi = bis[first.index - 1]
+        if last.index + 1 < len(bis):
+            zs.exit_bi = bis[last.index + 1]
+
     return zss

@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**中枢进入/离开段显式建模（V648）**：
+- ZS 新增 enter_bi/exit_bi 字段：缠论原文中枢 = 进入段 + 重叠段 + 离开段，find_zss 显式记录两端（进入中枢前一笔 / 离开中枢后一笔），to_dict 输出 enter_bi_index/exit_bi_index 供画图与背驰标注使用。
+- 新增 enter/exit 记录金标。
+- 全量 tests/unit 3373 passed。
+
+
 **盘整背驰离开笔越界防御金标（V647）**：
 - 新增金标：中枢最后一笔是最后一笔时，离开笔索引越界 → 不崩溃且不产出背驰，锁定 _check_pz_beichi 的边界守卫。
 - 全量 tests/unit 3372 passed。
@@ -740,13 +746,5 @@
 ---
 
 **建议批量汇总加平均持有期（V484）**：summarize_batch 加 avg_holding_bars（平均持有根数），与 V483 单笔 holding_bars 对齐。
-
----
-
-**建议模拟持有根数（V483）**：simulate_advice_trade 单笔结果加 holding_bars（实际持有根数），便于统计平均持有期。
-
----
-
-**hold-sweep 输出补中位数（V482）**：advice --hold-sweep 各持有期对比补 median_return，与单标的批量统计对齐。
 
 ---
