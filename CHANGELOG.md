@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**线段多义性确定性取舍金标 + Phase13 归档（V650）**：
+- 新增金标：XD_TIEBREAK_EARLIEST=True（取最早确认），同一输入永远同一线段划分。
+- OpenSpec tasks.md 记录 Phase 13（V634-V649 严格原文修正全清单）。
+- 全量 tests/unit 3378 passed。
+
+
 **线段端点极值锚定金标（V649）**：
 - 多周期快照新增线段端点金标：线段端点必为特征序列分型点的极值，落在 [low, high] 区间内，且方向一致（向上终点>起点、向下终点<起点），锁定画图端点锚定。
 - 全量 tests/unit 3377 passed。
@@ -735,13 +741,5 @@
 ---
 
 **advice table 明细补持有（V488）**：advice --output table 明细表补持有根数列，与 V487 md 明细对齐。
-
----
-
-**offline advice md 明细补列（V487）**：offline advice --output md 明细表补持有根数/MAE%/MFE% 列，与 CSV/table 格式对齐。
-
----
-
-**平均持有期断言（V486）**：summarize_batch 测试补 avg_holding_bars 断言（3+2+5）/3 = 3.33。
 
 ---

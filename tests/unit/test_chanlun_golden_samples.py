@@ -544,6 +544,20 @@ def test_find_zss_extension_keeps_zg_zd() -> None:
     assert zs.line_count == 4
 
 
+def test_xd_tiebreak_earliest_is_deterministic() -> None:
+    """缠论线段多义性：确定性取舍取「最早确认」，且同一输入永远同一划分。"""
+    from easy_tdx.chanlun.xd import XD_TIEBREAK_EARLIEST
+
+    assert XD_TIEBREAK_EARLIEST is True
+    bis = _gap_bis(10.0)
+    a = [(x.start.val, x.end.val, x.direction.value) for x in find_xds(bis, ChanlunConfig())]
+    b = [
+        (x.start.val, x.end.val, x.direction.value)
+        for x in find_xds(list(bis), ChanlunConfig())
+    ]
+    assert a == b
+
+
 # ── 线段方向校验金标 ──────────────────────────────────────────────────
 
 def test_valid_segment_end_direction() -> None:
