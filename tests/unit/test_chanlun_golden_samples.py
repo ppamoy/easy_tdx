@@ -382,6 +382,25 @@ def test_qs_beichi_exit_stroke_after_zs() -> None:
     assert any(bc.bc_type == BCType.QS for bc in bcs)
 
 
+def test_find_zss_extension_keeps_zg_zd() -> None:
+    """缠论原文：中枢区间由前三个走势确定，第4笔延伸不改变 zg/zd，只更新 gg/dd。"""
+    bis = [
+        _mk_bi(0, "up", 12.0, 8.0),
+        _mk_bi(1, "down", 11.0, 9.0),
+        _mk_bi(2, "up", 12.0, 8.0),
+        _mk_bi(3, "down", 11.5, 9.5),  # 第4笔延伸，旧逻辑会把 zd 抬到 9.5
+        _mk_bi(4, "up", 20.0, 15.0),
+    ]
+    zss = find_zss(bis, ChanlunConfig())
+    assert len(zss) == 1
+    zs = zss[0]
+    assert zs.zg == 11.0  # 前三个走势确定，延伸不改变
+    assert zs.zd == 9.0
+    assert zs.gg == 12.0
+    assert zs.dd == 8.0
+    assert zs.line_count == 4
+
+
 # ── 线段方向校验金标 ──────────────────────────────────────────────────
 
 def test_valid_segment_end_direction() -> None:

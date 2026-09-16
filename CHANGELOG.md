@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**中枢区间严格遵循缠论原文：延伸不改变 zg/zd（V638）**：
+- 修复 find_zss：中枢区间 ZG/ZD 由「前三个连续次级别走势」的重叠确定，第4笔及以后的延伸不再改变 ZG/ZD，只更新极值 GG/DD（旧实现把延伸也纳入区间，导致 zg/zd 随延伸漂移）。
+- 新增中枢延伸金标（第4笔区间略扩但 zg/zd 保持前三个值）；金标 zs_semantics 同步改为前三个走势口径。
+- 全量 tests/unit 3362 passed。
+
+
 **3类买卖点默认严格遵循缠论原文（V637）**：
 - 新增 ChanlunConfig.mmd_3rd_type_technical（默认 False）：3买=突破中枢上沿后回踩不破、3卖=跌破下沿后反抽不破，不再叠加 RSI/KDJ/BOLL/量能/MACD零轴等技术过滤（这些非缠论原文，之前导致 3类点几乎不触发）。
 - 新增 _find_third_type_mmds_original 原文实现；真实行情复测 3buy/3sell 正常触发（如 600519 日线 8 个、300750 日线 9 个）。
@@ -770,17 +776,5 @@
 ---
 
 **中位数收益断言（V462）**：summarize_batch 测试补 median_return 断言（sorted [-2,1,3] → 1.0）。
-
----
-
-**建议批量汇总加中位数收益（V461）**：summarize_batch 加 median_return（中位数收益，比均值稳健、不受极值影响）。
-
----
-
-**advice 持有期敏感性 CLI（V460）**：advice 命令加 --hold-sweep 选项，对同一批建议用 3/5/10/20 根 max_hold 模拟并输出多持有期对比 JSON（各持有期的胜率/平均收益/盈亏比）。
-
----
-
-**非按类型信号准确度加盈亏比（V459）**：compute_signal_accuracy（回测页信号准确度，buy/sell 方向）的统计也加 profit_factor，与 V430 的按类型版本对齐。
 
 ---

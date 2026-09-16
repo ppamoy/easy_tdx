@@ -62,9 +62,12 @@ def test_zs_semantics(result) -> None:
         assert zs.zg > zs.zd, f"中枢上沿应高于下沿 {zs}"
         assert zs.gg >= zs.zg, f"gg 应 >= zg {zs}"
         assert zs.dd <= zs.zd, f"dd 应 <= zd {zs}"
+        # 缠论原文：zg/zd 由前三个走势确定，gg/dd 为全部走势极值
+        if len(zs.lines) >= 3:
+            first3 = zs.lines[:3]
+            assert zs.zg == min(line.high for line in first3), f"zg 应为前三个 min(high) {zs}"
+            assert zs.zd == max(line.low for line in first3), f"zd 应为前三个 max(low) {zs}"
         if zs.lines:
-            assert zs.zg == min(line.high for line in zs.lines), f"zg 应为 min(high) {zs}"
-            assert zs.zd == max(line.low for line in zs.lines), f"zd 应为 max(low) {zs}"
             assert zs.gg == max(line.high for line in zs.lines), f"gg 应为 max(high) {zs}"
             assert zs.dd == min(line.low for line in zs.lines), f"dd 应为 min(low) {zs}"
 

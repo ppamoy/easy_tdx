@@ -258,8 +258,11 @@ def find_zss(
 
             # 有足够重叠，加入中枢候选
             candidate_lines.append(bi)
-            zg_candidate = overlap_high
-            zd_candidate = overlap_low
+            # 缠论原文：中枢区间由「前三个连续次级别走势」的重叠确定；
+            # 之后的中枢延伸（第4笔及以后）不改变 ZG/ZD，只更新极值 GG/DD。
+            if len(candidate_lines) <= config.zs_min_lines:
+                zg_candidate = overlap_high
+                zd_candidate = overlap_low
             gg_candidate = max(gg_candidate, bi.high)
             dd_candidate = min(dd_candidate, bi.low)
             candidate_end = bi.end

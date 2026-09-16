@@ -74,9 +74,11 @@ def test_zs_semantics(case) -> None:
         assert zs.zg > zs.zd
         assert zs.gg >= zs.zg
         assert zs.dd <= zs.zd
+        if len(zs.lines) >= 3:
+            first3 = zs.lines[:3]
+            assert zs.zg == min(line.high for line in first3)
+            assert zs.zd == max(line.low for line in first3)
         if zs.lines:
-            assert zs.zg == min(line.high for line in zs.lines)
-            assert zs.zd == max(line.low for line in zs.lines)
             assert zs.gg == max(line.high for line in zs.lines)
             assert zs.dd == min(line.low for line in zs.lines)
 
