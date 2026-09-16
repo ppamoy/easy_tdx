@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**线段「特征序列缺口 + 笔破坏确认」金标（V634）**：
+- 新增缠论 77 课规则金标：特征序列有缺口时，第4特征元素跌破顶/底分型极值才确认线段结束（2段）；未跌破则线段继续（1段）。
+- 全量 tests/unit 3363 passed。
+
+
 **3类买卖点 ATR 门槛改为增强项（V633）**：
 - 3买/3卖 的 ATR 支撑/阻力由硬阻断改为增强提示——缠论 3类买卖点核心是「回踩不破中枢上沿/反抽不破中枢下沿」，ATR 贴近程度只是质量加分，旧实现把它当硬门槛导致 3类点几乎从不触发。
 - 全量 tests/unit 3361 passed。
@@ -786,13 +791,5 @@
 ---
 
 **选股方向判断回归测试（V452）**：_get_latest_mmd 补测试——类二买 2buy_s 应取 low（回归 V429 修复）、3sell 取 high、无信号返回 None。
-
----
-
-**实证复盘页列表状态指示（V451）**：买卖点实证复盘页左列表加预跑状态指示（ready=绿✓ / failed=红✗ / pending=灰…），配合 V427 在线回退，让用户一目了然哪些标的已预跑、哪些无数据。
-
----
-
-**offline advice-batch 汇总补指标（V450）**：advice-batch 的 md 汇总加盈亏比，json/table/csv 输出加 summary_profit_factor/summary_avg_mae_pct/summary_avg_mfe_pct 字段。
 
 ---

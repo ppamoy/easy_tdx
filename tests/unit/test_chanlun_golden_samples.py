@@ -245,6 +245,39 @@ def test_find_zss_golden() -> None:
     assert zs.done is True
 
 
+# ── 线段特征序列缺口 + 笔破坏确认金标（缠论 77 课）──────────────────
+
+def _gap_bis(f4_low: float):
+    return [
+        _mk_bi(0, "up", 12.0, 9.0, start_val=10.0, end_val=12.0),
+        _mk_bi(1, "down", 12.0, 11.0, start_val=12.0, end_val=11.0),  # F1 [11,12]
+        _mk_bi(2, "up", 15.0, 10.0, start_val=11.0, end_val=15.0),
+        _mk_bi(3, "down", 15.0, 13.0, start_val=15.0, end_val=13.0),  # F2 [13,15] 与 F1 有缺口
+        _mk_bi(4, "up", 14.0, 12.0, start_val=13.0, end_val=14.0),
+        _mk_bi(5, "down", 14.0, 12.0, start_val=14.0, end_val=12.0),  # F3 [12,14]
+        _mk_bi(6, "up", 13.0, 11.0, start_val=12.0, end_val=13.0),
+        _mk_bi(7, "down", 13.0, f4_low, start_val=13.0, end_val=10.0),  # F4（high<F3.high 避免包含）
+    ]
+
+
+def test_find_xds_gap_bi_destruction_confirmed() -> None:
+    """特征序列有缺口 + 第4元素跌破顶分型最低点 → 线段在顶分型处结束（2 段）。"""
+    xds = find_xds(_gap_bis(10.0), ChanlunConfig())
+    assert len(xds) == 2
+    assert xds[0].direction == Direction.UP
+    assert xds[0].start.val == 10.0
+    assert xds[0].end.val == 15.0
+    assert xds[1].direction == Direction.DOWN
+
+
+def test_find_xds_gap_no_confirmation_continues() -> None:
+    """特征序列有缺口但第4元素不跌破 → 线段继续（1 段收尾）。"""
+    xds = find_xds(_gap_bis(12.0), ChanlunConfig())
+    assert len(xds) == 1
+    assert xds[0].direction == Direction.UP
+    assert xds[0].end.val == 15.0
+
+
 # ── 盘整背驰语义金标 ─────────────────────────────────────────────────
 
 def _mk_zs(lines) -> ZS:
