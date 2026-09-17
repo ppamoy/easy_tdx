@@ -115,13 +115,9 @@ def test_mmd_second_type_structure(result) -> None:
     for m in result.mmds:
         t = m.mmd_type.value
         if t in ("2buy", "2buy_s") and m.bi is not None:
-            assert any(
-                o.bi.low < m.bi.low and o.bi.index < m.bi.index for o in ones_buy
-            ), m.msg
+            assert any(o.bi.low < m.bi.low and o.bi.index < m.bi.index for o in ones_buy), m.msg
         elif t in ("2sell", "2sell_s") and m.bi is not None:
-            assert any(
-                o.bi.high > m.bi.high and o.bi.index < m.bi.index for o in ones_sell
-            ), m.msg
+            assert any(o.bi.high > m.bi.high and o.bi.index < m.bi.index for o in ones_sell), m.msg
 
 
 def test_timing_response_novice_fields() -> None:

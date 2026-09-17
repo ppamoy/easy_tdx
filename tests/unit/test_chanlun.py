@@ -755,9 +755,13 @@ class TestChanlunAnalyser:
                 "vol": [1000] * n,
             }
         )
-        d = ChanlunAnalyser(
-            code="SZ000001", frequency="DAILY", config=ChanlunConfig(bi_type="simple")
-        ).process_klines(df).to_dict()
+        d = (
+            ChanlunAnalyser(
+                code="SZ000001", frequency="DAILY", config=ChanlunConfig(bi_type="simple")
+            )
+            .process_klines(df)
+            .to_dict()
+        )
 
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):

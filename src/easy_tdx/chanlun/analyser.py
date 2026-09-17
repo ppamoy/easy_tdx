@@ -7,6 +7,7 @@ K线合并 → 分型识别 → 笔计算 → 中枢计算 → 线段 → 买卖
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -20,7 +21,8 @@ from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
 from easy_tdx.chanlun.macd import calc_macd  # noqa: F401
 from easy_tdx.chanlun.mmd import find_mmds_v44  # noqa: F401
-from easy_tdx.chanlun.types import BC, BI, FX, MMD, XD, ZS, CLKline, Kline
+from easy_tdx.chanlun.recursive import compute_recursive_level
+from easy_tdx.chanlun.types import BC, BI, FX, MMD, XD, ZS, CLKline, Kline, Line
 from easy_tdx.chanlun.xd import find_xds  # noqa: F401
 from easy_tdx.chanlun.zs import find_zss
 from easy_tdx.MyTT import BOLL
@@ -72,6 +74,11 @@ class ChanlunResult:
     bcs: list[BC] = field(default_factory=list)
     macd: dict[str, list[float]] = field(default_factory=dict)
     boll: Any = None  # BOLLResult or None
+    # 多级别递归：Level 1 = 以线段为「高级别笔」的线段中枢/线段/买卖点/背驰
+    xds_l1: list[XD] = field(default_factory=list)
+    zss_l1: list[ZS] = field(default_factory=list)
+    mmds_l1: list[MMD] = field(default_factory=list)
+    bcs_l1: list[BC] = field(default_factory=list)
 
     def _fmt_dt(self, dt: datetime) -> str:
         """按 frequency 自适应格式化日期。
@@ -96,6 +103,97 @@ class ChanlunResult:
             if k.index == fx.bar_index:
                 return k.date
         return fx.k.date
+
+    def _line_dict(self, line: Line) -> dict[str, Any]:
+        """序列化笔/线段（两者同为 Line 子类，字段一致）。"""
+        return {
+            "index": line.index,
+            "direction": line.direction.value,
+            "start_date": self._fmt_dt(self._fx_anchor_datetime(line.start)),
+            "end_date": self._fmt_dt(self._fx_anchor_datetime(line.end)),
+            "high": round(line.high, 2),
+            "low": round(line.low, 2),
+            "start_val": round(line.start.val, 2),
+            "end_val": round(line.end.val, 2),
+            "start_index": line.start.bar_index,
+            "end_index": line.end.bar_index,
+        }
+
+    def _zs_dict(self, zs: ZS) -> dict[str, Any]:
+        return {
+            "index": zs.index,
+            "zg": round(zs.zg, 2),
+            "zd": round(zs.zd, 2),
+            "gg": round(zs.gg, 2),
+            "dd": round(zs.dd, 2),
+            "line_count": zs.line_count,
+            "start_date": (self._fmt_dt(self._fx_anchor_datetime(zs.start)) if zs.start else None),
+            "end_date": self._fmt_dt(self._fx_anchor_datetime(zs.end)) if zs.end else None,
+            "start_index": zs.start.bar_index if zs.start else None,
+            "end_index": zs.end.bar_index if zs.end else None,
+            "done": zs.done,
+            "enter_bi_index": zs.enter_bi.index if zs.enter_bi else None,
+            "exit_bi_index": zs.exit_bi.index if zs.exit_bi else None,
+        }
+
+    def _mmd_dict_core(self, mmd: MMD) -> dict[str, Any]:
+        return {
+            "type": mmd.mmd_type.value,
+            "date": self._fmt_dt(self._fx_anchor_datetime(mmd.bi.end)) if mmd.bi else None,
+            "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
+            "anchor_val": round(mmd.bi.end.val, 2) if mmd.bi else None,
+            "msg": mmd.msg,
+            "confidence": round(mmd.confidence, 2),
+        }
+
+    def _bc_dict_core(self, bc: BC) -> dict[str, Any]:
+        return {
+            "type": bc.bc_type.value,
+            "bc": bc.bc,
+            "date": (
+                self._fmt_dt(self._fx_anchor_datetime(bc.curr.end))
+                if bc.curr
+                else self._fmt_dt(self._fx_anchor_datetime(bc.prev.end))
+                if bc.prev
+                else None
+            ),
+            "anchor_val": (
+                round(bc.curr.end.val, 2)
+                if bc.curr
+                else round(bc.prev.end.val, 2)
+                if bc.prev
+                else None
+            ),
+            "anchor_bar_index": (
+                bc.curr.end.bar_index if bc.curr else bc.prev.end.bar_index if bc.prev else None
+            ),
+            "msg": bc.msg,
+        }
+
+    def _level_payload(
+        self,
+        name: str,
+        lines: Sequence[Line],
+        xds: list[XD],
+        zss: list[ZS],
+        mmds: list[MMD],
+        bcs: list[BC],
+    ) -> dict[str, Any]:
+        """序列化一个分析级别：笔/线段、中枢、买卖点、背驰。"""
+        return {
+            "name": name,
+            "bi_count": len(lines),
+            "xd_count": len(xds),
+            "zs_count": len(zss),
+            "mmd_count": len(mmds),
+            "bc_count": len(bcs),
+            # 本级「笔」序列；线段级别中这些笔是低级别线段（xd 复用 line 字段）。
+            "bis": [self._line_dict(line) for line in lines],
+            "xds": [self._line_dict(xd) for xd in xds],
+            "zss": [self._zs_dict(zs) for zs in zss],
+            "mmds": [self._mmd_dict_core(m) for m in mmds],
+            "bcs": [self._bc_dict_core(bc) for bc in bcs],
+        }
 
     def to_dict(self) -> dict[str, Any]:
         """将结果转为可序列化的字典（用于 JSON 输出）。"""
@@ -281,6 +379,22 @@ class ChanlunResult:
                 }
                 for bc in self.bcs
             ],
+            "levels": {
+                # 笔级别 = 单级别基础结果（本级别笔 → 线段 → 中枢 → 背驰 → 买卖点）
+                "bi": self._level_payload(
+                    "笔级别", self.bis, self.xds, self.zss, self.mmds, self.bcs
+                ),
+                # 线段级别 = 以低级别线段作为高级别「笔」，递归计算高级别线段/
+                # 线段中枢/背驰/三类买卖点。
+                "xd": self._level_payload(
+                    "线段级别",
+                    self.xds,
+                    self.xds_l1,
+                    self.zss_l1,
+                    self.mmds_l1,
+                    self.bcs_l1,
+                ),
+            },
         }
 
 
@@ -408,6 +522,24 @@ class ChanlunAnalyser:
         # Step 9: 背驰判断（传入收盘价用于MACD面积计算）
         bcs = check_bi_beichi(bis, zss, closes=closes, config=self._config)
         self._result.bcs = bcs
+
+        # Step 10: 多级别递归（Level 1 = 以低级别线段作为高级别的「笔」）。
+        # 缠论递归：本级别线段 → 更高级别笔 → 更高级别线段/中枢/背驰/买卖点。
+        if self._config.multi_level and len(xds) >= 3:
+            recursive = compute_recursive_level(
+                xds,
+                closes=closes,
+                volumes=volumes,
+                macd_data=self._result.macd,
+                volatility=volatility,
+                highs=highs,
+                lows=lows,
+                config=self._config,
+            )
+            self._result.xds_l1 = recursive.xds
+            self._result.zss_l1 = recursive.zss
+            self._result.mmds_l1 = recursive.mmds
+            self._result.bcs_l1 = recursive.bcs
 
         return self._result
 

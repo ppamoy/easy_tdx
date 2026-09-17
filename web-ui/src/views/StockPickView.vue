@@ -130,7 +130,8 @@ async function runTiming(item: StockPickPoolItem) {
       <div class="pool-panel">
         <h3>基本面标的池（{{ pool.length }}）</h3>
         <p v-if="screenSource" class="source-note">
-          数据来源：{{ screenSource === 'local' ? '本地沉淀池' : '在线扫描' }}<template v-if="screenUpdatedAt"> · 更新于 {{ screenUpdatedAt.slice(0, 10) }}</template>
+          数据来源：{{ screenSource === 'local' ? '本地沉淀池' : '在线扫描'
+          }}<template v-if="screenUpdatedAt"> · 更新于 {{ screenUpdatedAt.slice(0, 10) }}</template>
         </p>
         <table v-if="pool.length">
           <thead>
@@ -164,7 +165,10 @@ async function runTiming(item: StockPickPoolItem) {
         <template v-if="timingResult">
           <div v-if="timingResult.verdict" class="verdict">
             <strong>{{ timingResult.verdict.action }}</strong>
-            <span>{{ timingResult.verdict.signal }} · {{ (timingResult.verdict.confidence ?? 0) * 100 }}%</span>
+            <span
+              >{{ timingResult.verdict.signal }} ·
+              {{ (timingResult.verdict.confidence ?? 0) * 100 }}%</span
+            >
             <p>{{ timingResult.verdict.reason }}</p>
             <div v-if="timingResult.novice_advice" class="novice-advice">
               <p>{{ timingResult.novice_advice.explanation }}</p>
@@ -181,7 +185,7 @@ async function runTiming(item: StockPickPoolItem) {
           </div>
           <ChanlunChart
             v-if="timingResult.bars?.length"
-            :bars="(timingResult.bars as any)"
+            :bars="timingResult.bars as any"
             :bis="(timingResult.bis as any) ?? []"
             :xds="(timingResult.xds as any) ?? []"
             :zss="(timingResult.zss as any) ?? []"

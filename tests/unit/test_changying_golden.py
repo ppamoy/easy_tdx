@@ -112,6 +112,7 @@ def test_vegetable_golden() -> None:
 
 # ── 四季周期金标 ──────────────────────────────────────────────────────
 
+
 def _season(cs, vols=None):
     dates = [date(2024, 1, 1) + timedelta(days=i) for i in range(len(cs))]
     return detect_season(dates, cs, dates[-1], volumes=vols)
@@ -170,6 +171,7 @@ def test_novice_summary_risk_flags() -> None:
 
 # ── 估值 PE/PB 金标 ──────────────────────────────────────────────────
 
+
 def test_valuation_pe_pb_golden() -> None:
     out = _valuation({"eps": 2.0, "bps": 10.0}, 40.0, "2025-12-31")
     assert out["pe"] == 20.0
@@ -188,6 +190,7 @@ def test_valuation_loss_or_no_close() -> None:
 
 
 # ── Point-in-time 取财报金标 ──────────────────────────────────────────
+
 
 def test_pick_report_point_in_time_no_future() -> None:
     """只用披露日 <= 目标日的财报，不偷看未来。"""

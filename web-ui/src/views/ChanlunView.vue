@@ -125,6 +125,8 @@ interface ChanlunBc {
   date: string | null
   msg: string
   bar_index?: number
+  anchor_val?: number | null
+  anchor_bar_index?: number | null
 }
 
 const bars = ref<Bar[]>([])
@@ -156,12 +158,121 @@ interface ChanlunBoll {
 
 const boll = ref<ChanlunBoll | null>(null)
 
+// ── 级别切换：把顶层笔级别或 levels.xd 线段级别映射到图表/择时数组 ──
+function mapBis(raw: any[]): ChanlunBi[] {
+  return (raw ?? []).map((b: any) => ({
+    index: b.index,
+    direction: b.direction,
+    start_date: b.start_date,
+    end_date: b.end_date,
+    high: b.high,
+    low: b.low,
+    start_val: b.start_val,
+    end_val: b.end_val,
+    start_index: b.start_index,
+    end_index: b.end_index,
+    done: b.done ?? true,
+  }))
+}
+
+function mapXds(raw: any[]): ChanlunXd[] {
+  return (raw ?? []).map((x: any) => ({
+    index: x.index,
+    direction: x.direction,
+    start_date: x.start_date,
+    end_date: x.end_date,
+    high: x.high,
+    low: x.low,
+    start_val: x.start_val,
+    end_val: x.end_val,
+    start_index: x.start_index,
+    end_index: x.end_index,
+  }))
+}
+
+function mapZss(raw: any[]): ChanlunZs[] {
+  return (raw ?? []).map((z: any) => ({
+    index: z.index,
+    zg: z.zg,
+    zd: z.zd,
+    gg: z.gg,
+    dd: z.dd,
+    line_count: z.line_count,
+    start_date: z.start_date,
+    end_date: z.end_date,
+    start_index: z.start_index,
+    end_index: z.end_index,
+    done: z.done,
+  }))
+}
+
+function mapMmds(raw: any[]): ChanlunMmd[] {
+  return (raw ?? []).map((m: any) => ({
+    type: m.type,
+    date: m.date,
+    msg: m.msg,
+    confidence: m.confidence ?? 0,
+    bar_index: m.bar_index,
+    quality: m.quality
+      ? {
+          grade: m.quality.grade ?? null,
+          score: m.quality.score ?? null,
+          reasons: m.quality.reasons ?? null,
+        }
+      : null,
+    v102_multi_signal_correlation: m.v102_multi_signal_correlation ?? null,
+    v102_signal_quality: m.v102_signal_quality ?? null,
+    v102_decision_support: m.v102_decision_support ?? null,
+    v102_pattern_match: m.v102_pattern_match ?? null,
+  }))
+}
+
+function mapBcs(raw: any[]): ChanlunBc[] {
+  return (raw ?? []).map((bc: any) => ({
+    type: bc.type,
+    bc: bc.bc,
+    date: bc.date ?? bc.curr_date,
+    msg: bc.msg,
+    bar_index: bc.bar_index ?? bc.anchor_bar_index,
+    anchor_val: bc.anchor_val,
+    anchor_bar_index: bc.anchor_bar_index,
+  }))
+}
+
+function applyAnalysisLevel(level: AnalysisLevel, data: any) {
+  if (level === 'xd' && data?.levels?.xd) {
+    const xdLevel = data.levels.xd
+    // 高级别「笔」= 低级别线段；本级别不再叠加更高级别线段，避免双线重叠。
+    bis.value = mapBis(xdLevel.bis)
+    xds.value = []
+    zss.value = mapZss(xdLevel.zss)
+    mmds.value = mapMmds(xdLevel.mmds)
+    bcs.value = mapBcs(xdLevel.bcs)
+    return
+  }
+
+  bis.value = mapBis(data?.bis)
+  xds.value = mapXds(data?.xds)
+  zss.value = mapZss(data?.zss)
+  mmds.value = mapMmds(data?.mmds)
+  bcs.value = mapBcs(data?.bcs)
+}
+
+function onAnalysisLevelChange() {
+  if (rawResult.value) applyAnalysisLevel(analysisLevel.value, rawResult.value)
+}
+
 // V535: 基本面估值（PE/PB，诊断/缠论同源，无缓存财报时为 null）
 // V589: pe 为动态市盈率（年化 EPS 计算），pb 为静态市净率（每股净资产 point-in-time，不年化）
 const valuation = ref<{ pe: number | null; pb: number | null } | null>(null)
 
 // 多级别分析结果
 const multiLevelResult = ref<any>(null)
+
+// 递归级别切换：bi=笔级别，xd=线段级别（以低级别线段作为高级别笔）
+type AnalysisLevel = 'bi' | 'xd'
+const analysisLevel = ref<AnalysisLevel>('bi')
+const rawResult = ref<any>(null)
 
 // 统计信息
 const stats = computed(() => {
@@ -652,63 +763,9 @@ async function analyze() {
       data = await resp.json()
       // 使用高级别结果
       const hr = data.high_level?.result ?? data
-      bis.value = (hr.bis ?? []).map((b: any) => ({
-        index: b.index,
-        direction: b.direction,
-        start_date: b.start_date,
-        end_date: b.end_date,
-        high: b.high,
-        low: b.low,
-        start_val: b.start_val,
-        end_val: b.end_val,
-        start_index: b.start_index,
-        end_index: b.end_index,
-        done: b.done,
-      }))
-      xds.value = (hr.xds ?? []).map((x: any) => ({
-        index: x.index,
-        direction: x.direction,
-        start_date: x.start_date,
-        end_date: x.end_date,
-        high: x.high,
-        low: x.low,
-        start_val: x.start_val,
-        end_val: x.end_val,
-        start_index: x.start_index,
-        end_index: x.end_index,
-      }))
-      zss.value = (hr.zss ?? []).map((z: any) => ({
-        index: z.index,
-        zg: z.zg,
-        zd: z.zd,
-        gg: z.gg,
-        dd: z.dd,
-        line_count: z.line_count,
-        start_date: z.start_date,
-        end_date: z.end_date,
-        start_index: z.start_index,
-        end_index: z.end_index,
-        done: z.done,
-      }))
-      mmds.value = (hr.mmds ?? []).map((m: any) => ({
-        type: m.type,
-        date: m.date,
-        msg: m.msg,
-        confidence: m.confidence ?? 0,
-        bar_index: m.bar_index,
-        quality: m.quality
-          ? {
-              grade: m.quality.grade ?? null,
-              score: m.quality.score ?? null,
-              reasons: m.quality.reasons ?? null,
-            }
-          : null,
-        // V102 缠论决策支持（条件264-267）
-        v102_multi_signal_correlation: m.v102_multi_signal_correlation ?? null,
-        v102_signal_quality: m.v102_signal_quality ?? null,
-        v102_decision_support: m.v102_decision_support ?? null,
-        v102_pattern_match: m.v102_pattern_match ?? null,
-      }))
+      rawResult.value = hr
+      analysisLevel.value = 'bi'
+      applyAnalysisLevel('bi', hr)
       // BOLL数据
       if (hr.boll) {
         boll.value = hr.boll
@@ -718,13 +775,6 @@ async function analyze() {
         date: f.date,
         val: f.val,
         bar_index: f.bar_index,
-      }))
-      bcs.value = (hr.bcs ?? []).map((bc: any) => ({
-        type: bc.type,
-        bc: bc.bc,
-        date: bc.date ?? bc.curr_date,
-        msg: bc.msg,
-        bar_index: bc.bar_index,
       }))
       macd.value = hr.macd && hr.macd.dif?.length ? hr.macd : null
       signalAccuracy.value = hr.signal_accuracy ?? null
@@ -759,75 +809,14 @@ async function analyze() {
       if (data.boll) {
         boll.value = data.boll
       }
-      bis.value = (data.bis ?? []).map((b: any) => ({
-        index: b.index,
-        direction: b.direction,
-        start_date: b.start_date,
-        end_date: b.end_date,
-        high: b.high,
-        low: b.low,
-        start_val: b.start_val,
-        end_val: b.end_val,
-        start_index: b.start_index,
-        end_index: b.end_index,
-        done: b.done,
-      }))
-      xds.value = (data.xds ?? []).map((x: any) => ({
-        index: x.index,
-        direction: x.direction,
-        start_date: x.start_date,
-        end_date: x.end_date,
-        high: x.high,
-        low: x.low,
-        start_val: x.start_val,
-        end_val: x.end_val,
-        start_index: x.start_index,
-        end_index: x.end_index,
-      }))
-      zss.value = (data.zss ?? []).map((z: any) => ({
-        index: z.index,
-        zg: z.zg,
-        zd: z.zd,
-        gg: z.gg,
-        dd: z.dd,
-        line_count: z.line_count,
-        start_date: z.start_date,
-        end_date: z.end_date,
-        start_index: z.start_index,
-        end_index: z.end_index,
-        done: z.done,
-      }))
-      mmds.value = (data.mmds ?? []).map((m: any) => ({
-        type: m.type,
-        date: m.date,
-        msg: m.msg,
-        confidence: m.confidence ?? 0,
-        bar_index: m.bar_index,
-        quality: m.quality
-          ? {
-              grade: m.quality.grade ?? null,
-              score: m.quality.score ?? null,
-              reasons: m.quality.reasons ?? null,
-            }
-          : null,
-        // V102 缠论决策支持（条件264-267）
-        v102_multi_signal_correlation: m.v102_multi_signal_correlation ?? null,
-        v102_signal_quality: m.v102_signal_quality ?? null,
-        v102_decision_support: m.v102_decision_support ?? null,
-        v102_pattern_match: m.v102_pattern_match ?? null,
-      }))
+      rawResult.value = data
+      analysisLevel.value = 'bi'
+      applyAnalysisLevel('bi', data)
       fxs.value = (data.fractals ?? []).map((f: any) => ({
         type: f.fx_type,
         date: f.date,
         val: f.val,
         bar_index: f.bar_index,
-      }))
-      bcs.value = (data.bcs ?? []).map((bc: any) => ({
-        type: bc.type,
-        bc: bc.bc,
-        date: bc.date ?? bc.curr_date,
-        msg: bc.msg,
-        bar_index: bc.bar_index,
       }))
       macd.value = data.macd && data.macd.dif?.length ? data.macd : null
       signalAccuracy.value = data.signal_accuracy ?? null
@@ -1042,6 +1031,13 @@ onUnmounted(() => {
           <option value="MIN_15">15分钟</option>
           <option value="MIN_30" selected>30分钟</option>
           <option value="MIN_60">60分钟</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>分析级别</label>
+        <select v-model="analysisLevel" @change="onAnalysisLevelChange">
+          <option value="bi">笔级别</option>
+          <option value="xd">线段级别</option>
         </select>
       </div>
       <button class="primary analyze-btn" :disabled="loading" @click="analyze">

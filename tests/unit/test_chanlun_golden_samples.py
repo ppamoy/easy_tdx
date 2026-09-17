@@ -95,6 +95,7 @@ def _mk_kline(index: int, high: float, low: float) -> Kline:
 
 # ── K线包含处理金标 ──────────────────────────────────────────────────
 
+
 def test_merge_klines_up_inclusion_high_high() -> None:
     klines = [_mk_kline(0, 10.0, 8.0), _mk_kline(1, 12.0, 9.0), _mk_kline(2, 11.0, 9.5)]
     merged = merge_klines(klines)
@@ -129,6 +130,7 @@ def test_fractal_dual_dimension_requires_high_and_low() -> None:
 
 # ── 分型识别金标 ──────────────────────────────────────────────────────
 
+
 def test_fractal_golden() -> None:
     """一段明显顶分型 + 底分型的序列，应恰好识别出 1 个顶分型 + 1 个底分型。"""
     cklines = [
@@ -150,6 +152,7 @@ def test_fractal_golden() -> None:
 
 
 # ── 特征序列包含处理金标 ──────────────────────────────────────────────
+
 
 def test_merge_feature_sequence_no_inclusion() -> None:
     features = [(0, _mk_bi(0, "down", 12, 10)), (1, _mk_bi(1, "down", 11, 9))]
@@ -179,6 +182,7 @@ def test_merge_feature_sequence_down_inclusion_low_low() -> None:
 
 
 # ── 特征序列分型金标 ──────────────────────────────────────────────────
+
 
 def test_merged_feature_fx_up_top() -> None:
     merged = [([0], 12.0, 10.0), ([1], 14.0, 11.0), ([2], 13.0, 9.0)]
@@ -271,6 +275,7 @@ def test_find_bis_new_bi_rejects_adjacent_fractals() -> None:
 
 # ── 笔计算金标 ────────────────────────────────────────────────────────
 
+
 def test_find_bis_simple_golden() -> None:
     fxs = [
         _mk_fx(FXType.DI, 10.0, 0, 0),
@@ -312,6 +317,7 @@ def test_mmd_1st_dedup_config_default() -> None:
 
 # ── 1买/1卖 结构去重启发式金标（工程启发式，非缠论原文）────────────
 
+
 def test_has_meaningful_rebound_3pct() -> None:
     assert _has_meaningful_rebound(103.0, 100.0)  # 3% 反弹 → True
     assert not _has_meaningful_rebound(102.0, 100.0)  # 2% → False
@@ -328,10 +334,19 @@ def test_has_meaningful_pullback_3pct() -> None:
 
 # ── 1买/1卖 趋势强度金标 ────────────────────────────────────────────
 
+
 def _mk_zs_val(zg: float, zd: float) -> ZS:
     return ZS(
-        lines=[], zg=zg, zd=zd, gg=zg + 1.0, dd=zd - 1.0, direction="",
-        index=0, done=True, start=None, end=None,
+        lines=[],
+        zg=zg,
+        zd=zd,
+        gg=zg + 1.0,
+        dd=zd - 1.0,
+        direction="",
+        index=0,
+        done=True,
+        start=None,
+        end=None,
     )
 
 
@@ -346,6 +361,7 @@ def test_trend_strength_requires_two_same_direction_zs() -> None:
 
 
 # ── 1买/1卖 同期参考中枢金标（无未来函数）──────────────────────────
+
 
 def _mk_fx_ref(kidx: int) -> FX:
     k = CLKline(
@@ -369,12 +385,28 @@ def _mk_fx_ref(kidx: int) -> FX:
 def test_reference_zs_point_in_time_no_future() -> None:
     """一买/一卖只能参考「笔发生前已结束」的中枢，不能偷看未来中枢。"""
     zs0 = ZS(
-        lines=[], zg=10.0, zd=5.0, gg=11.0, dd=4.0, direction="",
-        index=0, done=True, start=None, end=_mk_fx_ref(10),
+        lines=[],
+        zg=10.0,
+        zd=5.0,
+        gg=11.0,
+        dd=4.0,
+        direction="",
+        index=0,
+        done=True,
+        start=None,
+        end=_mk_fx_ref(10),
     )
     zs1 = ZS(
-        lines=[], zg=9.0, zd=4.0, gg=10.0, dd=3.0, direction="",
-        index=1, done=True, start=None, end=_mk_fx_ref(20),
+        lines=[],
+        zg=9.0,
+        zd=4.0,
+        gg=10.0,
+        dd=3.0,
+        direction="",
+        index=1,
+        done=True,
+        start=None,
+        end=_mk_fx_ref(20),
     )
     bi = BI(
         start=_mk_fx_ref(15),
@@ -389,6 +421,7 @@ def test_reference_zs_point_in_time_no_future() -> None:
 
 
 # ── 中枢计算金标 ─────────────────────────────────────────────────────
+
 
 def test_find_zss_golden() -> None:
     """四笔重叠形成中枢、离开笔关闭中枢：应得到 1 个中枢，zg=11 zd=9 gg=12 dd=8。"""
@@ -411,6 +444,7 @@ def test_find_zss_golden() -> None:
 
 
 # ── 线段特征序列缺口 + 笔破坏确认金标（缠论 77 课）──────────────────
+
 
 def _gap_bis(f4_low: float):
     return [
@@ -444,6 +478,7 @@ def test_find_xds_gap_no_confirmation_continues() -> None:
 
 
 # ── 盘整背驰语义金标 ─────────────────────────────────────────────────
+
 
 def _mk_zs(lines) -> ZS:
     return ZS(lines=lines, zg=17.0, zd=13.0, gg=18.0, dd=12.0, direction="", index=0, done=True)
@@ -488,6 +523,7 @@ def test_pz_beichi_rejects_opposite_direction() -> None:
 
 
 # ── 趋势背驰语义金标 ─────────────────────────────────────────────────
+
 
 def test_qs_beichi_exit_stroke_after_zs() -> None:
     """趋势背驰：离开笔 = 中枢最后一条线之后的那一笔，两段同向且创新低/力度衰减。"""
@@ -551,14 +587,12 @@ def test_xd_tiebreak_earliest_is_deterministic() -> None:
     assert XD_TIEBREAK_EARLIEST is True
     bis = _gap_bis(10.0)
     a = [(x.start.val, x.end.val, x.direction.value) for x in find_xds(bis, ChanlunConfig())]
-    b = [
-        (x.start.val, x.end.val, x.direction.value)
-        for x in find_xds(list(bis), ChanlunConfig())
-    ]
+    b = [(x.start.val, x.end.val, x.direction.value) for x in find_xds(list(bis), ChanlunConfig())]
     assert a == b
 
 
 # ── 线段方向校验金标 ──────────────────────────────────────────────────
+
 
 def test_valid_segment_end_direction() -> None:
     bis = [
@@ -572,6 +606,7 @@ def test_valid_segment_end_direction() -> None:
 
 # ── 线段划分金标 ──────────────────────────────────────────────────────
 
+
 def test_find_xds_three_bis_one_segment() -> None:
     bis = [
         _mk_bi(0, "up", 12, 9, start_val=10, end_val=12),
@@ -584,6 +619,7 @@ def test_find_xds_three_bis_one_segment() -> None:
 
 
 # ── 背驰金标（创新高/新低门槛）───────────────────────────────────────
+
 
 def test_beichi_requires_new_high_for_up() -> None:
     # bi0 向上力度大、bi2 向上创新高但力度小 → 应标背驰

@@ -1921,6 +1921,7 @@ def find_mmds_sorted(
     mmds = find_mmds(bis, zss, closes, config, volumes, macd_data, volatility, highs, lows)
     return sort_mmds_by_priority(mmds)
 
+
 # ── 信号稀疏化启发式（工程去重，非缠论原文规则）────────────────────────
 # 缠论原文 1买 = 趋势背驰点、1卖对称，本身不要求「相邻信号间隔几笔」或
 # 「反弹百分之几」；这些阈值只是避免同一底部/顶部反复标注的工程启发式。
@@ -1936,7 +1937,6 @@ def _has_meaningful_rebound(rebound_high: float, last_1st_low: float | None) -> 
         rebound_high > last_1st_low
         and (rebound_high - last_1st_low) / last_1st_low >= _MIN_REBOUND_RATIO
     )
-
 
 
 def _has_meaningful_pullback(pullback_low: float, last_1st_high: float | None) -> bool:
@@ -2594,6 +2594,7 @@ def _check_pullback_volume_v2(
 
 # ── V15 新增函数 ─────────────────────────────────────────────────────────────
 
+
 def _find_third_type_mmds_original(
     bis: list[BI],
     zss: list[ZS],
@@ -2668,7 +2669,6 @@ def _find_third_type_mmds_original(
                 break
 
     return mmds
-
 
 
 def _find_third_type_mmds(

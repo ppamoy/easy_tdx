@@ -13,6 +13,10 @@
 
 from easy_tdx.chanlun.analyser import ChanlunAnalyser, ChanlunResult  # noqa: F401
 from easy_tdx.chanlun.config import ChanlunConfig  # noqa: F401
+from easy_tdx.chanlun.recursive import (  # noqa: F401
+    RecursiveLevelResult,
+    compute_recursive_level,
+)
 from easy_tdx.chanlun.types import (  # noqa: F401
     BC,
     BI,
@@ -32,6 +36,8 @@ __all__ = [
     "ChanlunAnalyser",
     "ChanlunConfig",
     "ChanlunResult",
+    "RecursiveLevelResult",
+    "compute_recursive_level",
     "BC",
     "BCType",
     "BI",

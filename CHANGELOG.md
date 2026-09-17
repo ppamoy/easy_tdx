@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**缠论多级别递归分析（V651）**：
+- 新增 `chanlun/recursive.py`：以低级别线段（XD）作为高级别「笔」，复用线段/中枢/背驰/买卖点算法递归计算高级别线段、线段中枢、背驰与三类买卖点。
+- `ChanlunResult.to_dict()` 输出 `levels.bi`（笔级别）与 `levels.xd`（线段级别）两层结构，前端按级别切换画图与择时信号。
+- Web ChanlunView 新增「分析级别」切换器：笔级别 / 线段级别。
+- 新增金标 `tests/unit/test_chanlun_recursive.py`：锁定人造线段序列的递归计数与几何不变量，以及真实行情两层序列化。
+- 全量 tests/unit 3383 passed。
+
 **线段多义性确定性取舍金标 + Phase13 归档（V650）**：
 - 新增金标：XD_TIEBREAK_EARLIEST=True（取最早确认），同一输入永远同一线段划分。
 - OpenSpec tasks.md 记录 Phase 13（V634-V649 严格原文修正全清单）。

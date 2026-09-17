@@ -434,4 +434,3 @@ class TestVolumeSeries:
 
     def test_missing_returns_none(self) -> None:
         assert _volume_series(pd.DataFrame({"close": [1.0]})) is None
-

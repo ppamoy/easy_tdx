@@ -26,12 +26,38 @@ logger = logging.getLogger(__name__)
 # 默认热门标的池（市场 → 代码列表），与 screening 保持一致；可被请求 pool 覆盖。
 HOT_STOCKS: dict[str, list[str]] = {
     "SZ": [
-        "000001", "000002", "000063", "000100", "000333", "000568", "000651",
-        "000725", "000858", "002594", "300059", "300015", "300014", "300012", "300750",
+        "000001",
+        "000002",
+        "000063",
+        "000100",
+        "000333",
+        "000568",
+        "000651",
+        "000725",
+        "000858",
+        "002594",
+        "300059",
+        "300015",
+        "300014",
+        "300012",
+        "300750",
     ],
     "SH": [
-        "600000", "600004", "600009", "600010", "600011", "600016", "600028",
-        "600030", "600036", "600048", "600519", "601318", "601398", "600887", "600900",
+        "600000",
+        "600004",
+        "600009",
+        "600010",
+        "600011",
+        "600016",
+        "600028",
+        "600030",
+        "600036",
+        "600048",
+        "600519",
+        "601318",
+        "601398",
+        "600887",
+        "600900",
     ],
 }
 
@@ -52,7 +78,8 @@ def _normalize_result_row(r: dict[str, Any]) -> dict[str, Any]:
     输出的是 scores[category]，导致在线路径质量分恒为 0。
     """
     category = str(r.get("category", ""))
-    scores = r.get("scores") if isinstance(r.get("scores"), dict) else {}
+    raw_scores = r.get("scores")
+    scores: dict[str, Any] = raw_scores if isinstance(raw_scores, dict) else {}
     quality = r.get("score")
     if quality is None:
         quality = scores.get(category, 0)
@@ -202,9 +229,7 @@ async def _fetch_window(
 ) -> pd.DataFrame:
     from easy_tdx.web.routers.chanlun import fetch_qfq_klines
 
-    return await fetch_qfq_klines(
-        mac_client, tdx_client, market, code, "DAY", start=0, count=count
-    )
+    return await fetch_qfq_klines(mac_client, tdx_client, market, code, "DAY", start=0, count=count)
 
 
 def _df_to_bars(df: pd.DataFrame) -> list[dict[str, Any]]:

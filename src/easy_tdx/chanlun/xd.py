@@ -26,9 +26,7 @@ XD_TIEBREAK_EARLIEST = True
 
 def _feature_included(a: BI, b: BI) -> bool:
     """判断两支特征笔是否存在包含关系（互为包含）。"""
-    return (a.high >= b.high and a.low <= b.low) or (
-        b.high >= a.high and b.low <= a.low
-    )
+    return (a.high >= b.high and a.low <= b.low) or (b.high >= a.high and b.low <= a.low)
 
 
 def _merge_feature_sequence(

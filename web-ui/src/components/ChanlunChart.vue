@@ -869,16 +869,37 @@ watch(
   width: 14px;
   text-align: center;
 }
-.buy-1 { color: #22c55e; }
-.buy-2 { color: #4ade80; }
-.buy-2s { color: #86efac; }
-.buy-3 { color: #bbf7d0; }
-.sell-1 { color: #ef4444; }
-.sell-2 { color: #f87171; }
-.sell-2s { color: #fca5a5; }
-.sell-3 { color: #fecaca; }
-.bc { color: #ff9500; }
-.bc-sub { color: #ff9500; opacity: 0.8; }
+.buy-1 {
+  color: #22c55e;
+}
+.buy-2 {
+  color: #4ade80;
+}
+.buy-2s {
+  color: #86efac;
+}
+.buy-3 {
+  color: #bbf7d0;
+}
+.sell-1 {
+  color: #ef4444;
+}
+.sell-2 {
+  color: #f87171;
+}
+.sell-2s {
+  color: #fca5a5;
+}
+.sell-3 {
+  color: #fecaca;
+}
+.bc {
+  color: #ff9500;
+}
+.bc-sub {
+  color: #ff9500;
+  opacity: 0.8;
+}
 .legend-sep {
   height: 1px;
   background: #2a2e3a;

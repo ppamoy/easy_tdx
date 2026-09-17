@@ -74,4 +74,3 @@ class TestBuildVerdict:
 
         v = _build_verdict([{"label": "A"}], 0.5, 0.4, 0.1, overfit=False)
         assert "稳健性尚可" in v
-

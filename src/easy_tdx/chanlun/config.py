@@ -42,6 +42,10 @@ class ChanlunConfig:
     # 是否支持笔破坏
     xd_bi_pohuai: bool = False
 
+    # 是否启用多级别递归：Level 1 = 以低级别线段作为高级别的「笔」，
+    # 计算高级别线段/线段中枢/背驰/三类买卖点。
+    multi_level: bool = True
+
     # 1买/1卖 是否启用「结构去重启发式」（相邻间隔5笔 + 3%反弹/回落）。
     # 默认 True；设为 False 时严格按缠论原文（趋势背驰点即可），不去重。
     mmd_1st_dedup: bool = True

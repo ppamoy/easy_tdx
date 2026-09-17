@@ -54,10 +54,18 @@ describe('StockPickView 两步流', () => {
       ],
     })
     const wrapper = shallowMount(StockPickView)
-    const item = { symbol: 'SH:600519', market: 'SH', code: '600519', category: 'tree', quality_score: 88.5 }
+    const item = {
+      symbol: 'SH:600519',
+      market: 'SH',
+      code: '600519',
+      category: 'tree',
+      quality_score: 88.5,
+    }
     await (wrapper.vm as unknown as { runTiming: (i: unknown) => Promise<void> }).runTiming(item)
     await flushPromises()
-    const timing = (wrapper.vm as unknown as { timingResult: { verdict: { action: string } } | null }).timingResult
+    const timing = (
+      wrapper.vm as unknown as { timingResult: { verdict: { action: string } } | null }
+    ).timingResult
     expect(timing?.verdict.action).toBe('买入')
   })
 })
