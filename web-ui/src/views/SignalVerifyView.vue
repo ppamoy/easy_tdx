@@ -67,6 +67,7 @@ const currentCode = ref('')
 const loading = ref(false)
 const prerunning = ref(false)
 const error = ref('')
+const category = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
 
 // 详情数据
 const bars = ref<Bar[]>([])
@@ -132,7 +133,9 @@ async function selectStock(code: string) {
   selectedMmdIdx.value = -1
   revealCursor.value = undefined
   try {
-    const resp = await fetch(`/api/v1/verify/signals/detail?code=${code}`)
+    const resp = await fetch(
+      `/api/v1/verify/signals/detail?code=${code}&category=${category.value}`,
+    )
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const d = await resp.json()
     if (d.error) throw new Error(d.error)
@@ -160,6 +163,12 @@ async function selectStock(code: string) {
     error.value = formatError(e)
   } finally {
     loading.value = false
+  }
+}
+
+async function onCategoryChange() {
+  if (currentCode.value) {
+    await selectStock(currentCode.value)
   }
 }
 
@@ -247,6 +256,14 @@ onMounted(() => {
           <div class="detail-head">
             <button class="ghost" @click="prevStock">◀ 上一只</button>
             <span class="detail-title">{{ name }}（{{ market }}{{ currentCode }}）</span>
+            <select v-model="category" class="period-select" @change="onCategoryChange">
+              <option value="DAY">日线</option>
+              <option value="WEEK">周线</option>
+              <option value="MIN_5">5分钟</option>
+              <option value="MIN_15">15分钟</option>
+              <option value="MIN_30">30分钟</option>
+              <option value="MIN_60">60分钟</option>
+            </select>
             <button class="ghost" @click="nextStock">下一只 ▶</button>
           </div>
 
@@ -259,7 +276,7 @@ onMounted(() => {
               :zss="zss as any"
               :mmds="mmds as any"
               :fxs="fxs as any"
-              :frequency="'DAY'"
+              :frequency="category"
               :reveal-index="revealCursor"
               :single-zs-index="singleZsIndex"
             />
@@ -395,6 +412,14 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   flex: 1;
+}
+.period-select {
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #2a2e3a;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 .loading,
 .empty {

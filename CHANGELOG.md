@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**缠论图表周期级别选择（V652）**：
+- ScreeningView 与 SignalVerifyView 的缠论图表新增周期选择器（日线/周线/5/15/30/60分钟）。
+- `/verify/signals/detail` 支持 `category` 参数：日线走预跑缓存，分钟级别走在线取数并现场分析。
+- 新增 verify 路由周期契约测试。
+
 **缠论多级别递归分析（V651）**：
 - 新增 `chanlun/recursive.py`：以低级别线段（XD）作为高级别「笔」，复用线段/中枢/背驰/买卖点算法递归计算高级别线段、线段中枢、背驰与三类买卖点。
 - `ChanlunResult.to_dict()` 输出 `levels.bi`（笔级别）与 `levels.xd`（线段级别）两层结构，前端按级别切换画图与择时信号。

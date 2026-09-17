@@ -82,6 +82,7 @@ const chanlunFxs = ref<any[]>([])
 const chanlunBcs = ref<any[]>([])
 const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 const chanlunLoading = ref(false)
+const chanlunCategory = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
 
 // 回测结果
 interface BacktestResult {
@@ -848,7 +849,7 @@ async function selectStock(stock: StockResult) {
   // 获取K线数据
   try {
     const resp = await fetch(
-      `/api/v1/bars?market=${stock.market}&code=${stock.code}&category=DAY&count=500&start=0`,
+      `/api/v1/bars?market=${stock.market}&code=${stock.code}&category=${chanlunCategory.value}&count=500&start=0`,
     )
 
     if (!resp.ok) {
@@ -874,6 +875,12 @@ async function selectStock(stock: StockResult) {
   await runChanlunAnalysis(stock)
 }
 
+async function onChanlunCategoryChange() {
+  if (selectedStock.value) {
+    await selectStock(selectedStock.value)
+  }
+}
+
 async function runChanlunAnalysis(stock: StockResult) {
   chanlunLoading.value = true
 
@@ -884,7 +891,7 @@ async function runChanlunAnalysis(stock: StockResult) {
       body: JSON.stringify({
         market: stock.market,
         code: stock.code,
-        category: 'DAY',
+        category: chanlunCategory.value,
         count: bars.value.length,
         start: 0,
       }),
@@ -925,7 +932,7 @@ async function runBacktest() {
         strategy: 'changying_chanlun',
         ohlcv: bars.value,
         symbol: selectedStock.value.symbol,
-        category: 'DAY',
+        category: chanlunCategory.value,
         count: bars.value.length,
         params: {
           use_season_filter: true,
@@ -1393,6 +1400,19 @@ onMounted(() => {
           <div class="hint-text">{{ getActionExplanation(selectedStock) }}</div>
         </div>
 
+        <!-- 缠论周期选择 -->
+        <div class="detail-field">
+          <label>缠论周期</label>
+          <select v-model="chanlunCategory" @change="onChanlunCategoryChange">
+            <option value="DAY">日线</option>
+            <option value="WEEK">周线</option>
+            <option value="MIN_5">5分钟</option>
+            <option value="MIN_15">15分钟</option>
+            <option value="MIN_30">30分钟</option>
+            <option value="MIN_60">60分钟</option>
+          </select>
+        </div>
+
         <!-- K线图 -->
         <div v-if="!chanlunLoading && bars.length > 0" class="chart-area">
           <ChanlunChart
@@ -1404,7 +1424,7 @@ onMounted(() => {
             :fxs="chanlunFxs"
             :bcs="chanlunBcs"
             :macd="chanlunMacd ?? undefined"
-            :frequency="'DAY'"
+            :frequency="chanlunCategory"
           />
         </div>
         <div v-else-if="chanlunLoading" class="chart-placeholder">正在分析缠论结构…</div>
@@ -1868,6 +1888,28 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
+}
+
+.detail-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-field label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.detail-field select {
+  background: var(--bg-soft, #0f172a);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .chart-area {

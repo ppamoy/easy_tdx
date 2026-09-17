@@ -92,6 +92,8 @@ async def _fetch_online_df(
     client: Any | None,
     market: str,
     code: str,
+    category: str = "DAY",
+    count: int = 400,
 ) -> pd.DataFrame | None:
     """V427: 在线 TDX 客户端回退取数（离线 .day 无数据时）。
 
@@ -103,18 +105,18 @@ async def _fetch_online_df(
     try:
         from easy_tdx.web.routers.chanlun import fetch_qfq_klines
 
-        df = await fetch_qfq_klines(mac_client, client, market, code, "DAY", 0, 400)
+        df = await fetch_qfq_klines(mac_client, client, market, code, category, 0, count)
         return df if df is not None and not df.empty else None
     except Exception as exc:  # noqa: BLE001
-        logger.warning("在线取数 %s%s 失败: %s", market, code, exc)
+        logger.warning("在线取数 %s%s(%s) 失败: %s", market, code, category, exc)
         return None
 
 
-def _analyze(df: pd.DataFrame, market: str, code: str) -> dict[str, Any]:
+def _analyze(df: pd.DataFrame, market: str, code: str, frequency: str = "daily") -> dict[str, Any]:
     """跑缠论分析并序列化（含 mmd.zs_index 关联同级别中枢）。"""
     from easy_tdx.chanlun import ChanlunAnalyser
 
-    analyser = ChanlunAnalyser(code=f"{market}{code}", frequency="daily")
+    analyser = ChanlunAnalyser(code=f"{market}{code}", frequency=frequency)
     result = analyser.process_klines(df)
     d = result.to_dict()
     # K 线（前端图表需要；与 /bars 同列契约）
@@ -150,6 +152,46 @@ def _analyze(df: pd.DataFrame, market: str, code: str) -> dict[str, Any]:
         for fx in result.fractals
     ]
     return d
+
+
+_FREQ_BY_CATEGORY = {
+    "DAY": "daily",
+    "WEEK": "weekly",
+    "MIN_5": "5min",
+    "MIN_15": "15min",
+    "MIN_30": "30min",
+    "MIN_60": "60min",
+}
+
+
+async def _detail_for_category(
+    item: dict[str, str],
+    category: str,
+    client: Any | None,
+    mac_client: Any | None,
+) -> dict[str, Any]:
+    """按指定周期现场取数并分析（用于非日线周期，不写入预跑缓存）。"""
+    market = item["market"]
+    code = item["code"]
+    frequency = _FREQ_BY_CATEGORY.get(category, "daily")
+    count = 400 if category in ("DAY", "WEEK") else 800
+    df = await _fetch_online_df(mac_client, client, market, code, category, count)
+    if df is None or len(df) < 100:
+        return {
+            "code": code,
+            "name": item["name"],
+            "market": market,
+            "error": f"无 {category} 在线数据",
+        }
+    result = await asyncio.to_thread(_analyze, df, market, code, frequency)
+    return {
+        "code": code,
+        "name": item["name"],
+        "market": market,
+        "mmd_count": len(result["mmds"]),
+        "zs_count": len(result["zss"]),
+        **result,
+    }
 
 
 _prerun_cache: dict[str, dict[str, Any]] = {}
@@ -245,14 +287,22 @@ async def list_signals() -> dict[str, Any]:
 @router.get("/verify/signals/detail")
 async def detail_signals(
     code: str,
+    category: str = "DAY",
     client: Any = Depends(get_client),
     mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
-    """单标的详情：买卖点 + 同级别中枢 + 基础 K 线。"""
+    """单标的详情：买卖点 + 同级别中枢 + 基础 K 线。
+
+    日线优先使用预跑缓存；其它周期现场取数分析，便于前端切换级别。
+    """
+    item = next((i for i in VERIFY_POOL if i["code"] == code), None)
+    if item is None:
+        return {"error": f"未知标的 {code}"}
+
+    if category.upper() != "DAY":
+        return await _detail_for_category(item, category.upper(), client, mac_client)
+
     if code not in _prerun_cache:
-        item = next((i for i in VERIFY_POOL if i["code"] == code), None)
-        if item is None:
-            return {"error": f"未知标的 {code}"}
         # 未预跑则现场分析（含在线回退）
         entry = await _prerun_one(item, client, mac_client)
         if "error" in entry:

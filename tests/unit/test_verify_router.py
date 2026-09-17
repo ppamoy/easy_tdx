@@ -97,6 +97,12 @@ class TestAnalyze:
         for mmd in result["mmds"]:
             assert "zs_index" in mmd
 
+    def test_frequency_passthrough(self) -> None:
+        """周期参数传入分析器后仍能正常序列化（分钟级也不抛错）。"""
+        result = _analyze(_df(), "SH", "600000", frequency="30min")
+        assert "bars" in result
+        assert len(result["bars"]) == len(_df())
+
 
 class TestRoutes:
     @pytest.fixture()
@@ -120,5 +126,14 @@ class TestRoutes:
 
     def test_detail_unknown(self, client: TestClient) -> None:
         r = client.get("/api/v1/verify/signals/detail", params={"code": "999999"})
+        assert r.status_code == 200
+        assert "error" in r.json()
+
+    def test_detail_non_day_needs_online_client(self, client: TestClient) -> None:
+        """非日线周期走现场取数；测试环境无在线客户端时应返回数据不足错误。"""
+        r = client.get(
+            "/api/v1/verify/signals/detail",
+            params={"code": "600519", "category": "MIN_30"},
+        )
         assert r.status_code == 200
         assert "error" in r.json()
