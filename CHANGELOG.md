@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**统计面板级别标签（V681）**：
+- ChanlunView 统计面板新增「级别」项，明确当前为笔级别或线段级别。
+
 **递归空态金标补全（V680）**：
 - 扩展 test_chanlun_recursive.py：不足 3 根线段时递归 zsds/qsds 也为空。
 

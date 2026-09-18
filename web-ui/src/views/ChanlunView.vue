@@ -280,6 +280,8 @@ type AnalysisLevel = 'bi' | 'xd'
 const analysisLevel = ref<AnalysisLevel>('bi')
 const rawResult = ref<any>(null)
 
+const analysisLevelLabel = computed(() => (analysisLevel.value === 'bi' ? '笔级别' : '线段级别'))
+
 // 统计信息
 const stats = computed(() => {
   const buy1 = mmds.value.filter((m) => m.type === '1buy')
@@ -1137,6 +1139,10 @@ onUnmounted(() => {
       <div class="stat-item">
         <span class="stat-label">K线</span>
         <span class="stat-value">{{ stats.klineCount }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">级别</span>
+        <span class="stat-value" style="color: #60b4ff">{{ analysisLevelLabel }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-label">笔</span>
