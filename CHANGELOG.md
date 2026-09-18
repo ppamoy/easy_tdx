@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**走势段/趋势段统计展示（V657）**：
+- to_dict 新增 zsd_count / qsd_count 顶层计数。
+- ChanlunView 统计面板新增「走势段」「趋势段」数量展示。
+- 金标测试锁定计数与数组一致性。
+
 **线段级别走势段/趋势段（V656）**：
 - ChanlunResult 新增 zsds_l1/qsds_l1：递归线段级别的走势段/趋势段。
 - levels.xd payload 输出递归走势段/趋势段；ChanlunView 线段级别图表同步展示。

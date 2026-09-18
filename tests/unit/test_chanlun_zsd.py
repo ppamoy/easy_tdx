@@ -112,6 +112,8 @@ def test_analyser_serializes_zsds_qsds() -> None:
     d = result.to_dict()
 
     assert "zsds" in d and "qsds" in d
+    assert d["zsd_count"] == len(result.zsds)
+    assert d["qsd_count"] == len(result.qsds)
     assert len(d["zsds"]) == len(result.zsds)
     assert len(d["qsds"]) == len(result.qsds)
     assert d["zsds"][0]["direction"] == result.zsds[0].direction.value

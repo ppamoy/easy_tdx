@@ -218,6 +218,8 @@ class ChanlunResult:
             "bi_count": len(self.bis),
             "zs_count": len(self.zss),
             "xd_count": len(self.xds),
+            "zsd_count": len(self.zsds),
+            "qsd_count": len(self.qsds),
             "mmd_count": len(self.mmds),
             "bc_count": len(self.bcs),
             # MACD 序列（dif/dea/hist 与 K 线一一对应）。

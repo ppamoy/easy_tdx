@@ -303,6 +303,8 @@ const stats = computed(() => {
     klineCount: bars.value.length,
     biCount: bis.value.length,
     xdCount: xds.value.length,
+    zsdCount: zsds.value.length,
+    qsdCount: qsds.value.length,
     zsCount: zss.value.length,
     mmdCount: mmds.value.length,
     buy1Count: buy1.length,
@@ -1140,6 +1142,14 @@ onUnmounted(() => {
       <div class="stat-item">
         <span class="stat-label">线段</span>
         <span class="stat-value" style="color: #c878ff">{{ stats.xdCount }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">走势段</span>
+        <span class="stat-value" style="color: #86efac">{{ stats.zsdCount }}</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">趋势段</span>
+        <span class="stat-value" style="color: #fca5a5">{{ stats.qsdCount }}</span>
       </div>
       <div class="stat-item">
         <span class="stat-label">中枢</span>
