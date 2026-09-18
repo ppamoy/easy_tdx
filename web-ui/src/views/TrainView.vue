@@ -157,6 +157,8 @@ const bcs = ref<ChanlunBc[]>([])
 const zsds = ref<ChanlunXd[]>([])
 const qsds = ref<ChanlunXd[]>([])
 const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
+const analysisLevel = ref<'bi' | 'xd'>('bi')
+const rawDetail = ref<any>(null)
 const candidates = ref<Candidate[]>([])
 const outcomes = ref<MmdOutcome[]>([])
 
@@ -194,6 +196,50 @@ function randomStock() {
   startTraining()
 }
 
+function applyAnalysisLevel(level: 'bi' | 'xd', data: any) {
+  if (level === 'xd' && data?.levels?.xd) {
+    const xdLevel = data.levels.xd
+    bis.value = xdLevel.bis ?? []
+    xds.value = []
+    zsds.value = xdLevel.zsds ?? []
+    qsds.value = xdLevel.qsds ?? []
+    zss.value = xdLevel.zss ?? []
+    mmds.value = (xdLevel.mmds ?? []).map((m: any) => ({
+      type: m.type,
+      date: m.date,
+      msg: m.msg,
+      confidence: m.confidence ?? 0,
+      v102_signal_quality: m.v102_signal_quality ?? null,
+      v102_decision_support: m.v102_decision_support ?? null,
+      v102_pattern_match: m.v102_pattern_match ?? null,
+    }))
+    bcs.value = xdLevel.bcs ?? []
+    return
+  }
+
+  bis.value = data?.bis ?? []
+  xds.value = data?.xds ?? []
+  zsds.value = data?.zsds ?? []
+  qsds.value = data?.qsds ?? []
+  zss.value = data?.zss ?? []
+  mmds.value = (data?.mmds ?? []).map((m: any) => ({
+    type: m.type,
+    date: m.date,
+    msg: m.msg,
+    confidence: m.confidence ?? 0,
+    v102_signal_quality: m.v102_signal_quality ?? null,
+    v102_decision_support: m.v102_decision_support ?? null,
+    v102_pattern_match: m.v102_pattern_match ?? null,
+  }))
+  bcs.value = data?.bcs ?? []
+}
+
+function onAnalysisLevelChange() {
+  if (rawDetail.value) {
+    applyAnalysisLevel(analysisLevel.value, rawDetail.value)
+  }
+}
+
 async function startTraining() {
   loading.value = true
   error.value = ''
@@ -219,32 +265,14 @@ async function startTraining() {
     const d = await resp.json()
     if (d.error) throw new Error(d.error)
     bars.value = d.bars ?? []
-    bis.value = (d.bis ?? []).map((b: any) => ({ ...b }))
-    xds.value = (d.xds ?? []).map((x: any) => ({ ...x }))
-    zsds.value = (d.zsds ?? []).map((z: any) => ({ ...z }))
-    qsds.value = (d.qsds ?? []).map((q: any) => ({ ...q }))
-    zss.value = (d.zss ?? []).map((z: any) => ({ ...z }))
-    mmds.value = (d.mmds ?? []).map((m: any) => ({
-      type: m.type,
-      date: m.date,
-      msg: m.msg,
-      confidence: m.confidence ?? 0,
-      // V102 缠论决策支持（条件264-267）
-      v102_signal_quality: m.v102_signal_quality ?? null,
-      v102_decision_support: m.v102_decision_support ?? null,
-      v102_pattern_match: m.v102_pattern_match ?? null,
-    }))
+    rawDetail.value = d
+    analysisLevel.value = 'bi'
+    applyAnalysisLevel('bi', d)
     fxs.value = (d.fractals ?? []).map((f: any) => ({
       type: f.fx_type,
       date: f.date,
       val: f.val,
       bar_index: f.bar_index,
-    }))
-    bcs.value = (d.bcs ?? []).map((bc: any) => ({
-      type: bc.type,
-      bc: bc.bc,
-      date: bc.date ?? bc.curr_date,
-      msg: bc.msg,
     }))
     macd.value = d.macd && d.macd.dif?.length ? d.macd : null
     candidates.value = d.candidates ?? []
@@ -574,6 +602,13 @@ onMounted(() => {
           <option value="easy">简单（高置信度信号）</option>
           <option value="medium">中等（全部信号）</option>
           <option value="hard">困难（低置信度 + 干扰项）</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>分析级别</label>
+        <select v-model="analysisLevel" @change="onAnalysisLevelChange">
+          <option value="bi">笔级别</option>
+          <option value="xd">线段级别</option>
         </select>
       </div>
       <button class="primary" :disabled="loading" @click="startTraining">
