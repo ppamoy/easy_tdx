@@ -104,6 +104,12 @@ def test_find_zsds_empty_and_single() -> None:
     assert single[0].end.val == 110.0
 
 
+def test_find_qsds_empty_and_single() -> None:
+    """趋势段至少需要 2 根线段；空输入/单线段均返回空。"""
+    assert find_qsds([]) == []
+    assert find_qsds(_make_xds()[:1]) == []
+
+
 def test_analyser_serializes_zsds_qsds() -> None:
     """真实行情管道输出 zsds/qsds，且数量与线段数一致（每根线段各成一段）。"""
     rows = json.loads((FIXTURE_DIR / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
