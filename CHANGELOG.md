@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**背驰边界金标与走势段 tooltip（V654）**：
+- 新增 tests/unit/test_chanlun_beichi_edges.py：锁定盘整/趋势背驰的防御分支（无趋势、缺 lines、离开笔越界、未创新极值）。
+- ChanlunChart tooltip 增加走势段/趋势段提示，画图交互更完整。
+- 前端 ChanlunChart 测试覆盖走势段/趋势段独立 series。
+
 **走势段/趋势段模型与画图（V653）**：
 - 修复 zsd.py 趋势段判断：改用起止分型极值比较，移除对不存在的 k.h/k.l 字段的依赖。
 - ChanlunAnalyser 管道新增 zsds/qsds 输出（由线段合并的走势段/趋势段），并序列化到 to_dict()。

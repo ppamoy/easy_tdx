@@ -529,6 +529,10 @@ function buildOption(): echarts.EChartsCoreOption {
             html += `<div>${p.marker} 笔[${p.seriesIndex ?? ''}]</div>`
           } else if (p.seriesName === '线段(实线)') {
             html += `<div>${p.marker} 线段[${p.seriesIndex ?? ''}]</div>`
+          } else if (p.seriesName === '走势段(粗实线)') {
+            html += `<div>${p.marker} 走势段</div>`
+          } else if (p.seriesName === '趋势段(粗虚线)') {
+            html += `<div>${p.marker} 趋势段</div>`
           } else if (p.seriesName === '分型') {
             html += `<div>${p.marker} ${p.name === '顶' ? '顶分型' : '底分型'}</div>`
           } else if (p.seriesName === '买点' || p.seriesName === '卖点') {
