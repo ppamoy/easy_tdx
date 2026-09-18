@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**走势段/趋势段空 series 优化（V666）**：
+- ChanlunChart 仅在存在走势段/趋势段数据时创建对应 series，避免空图例。
+- 前端测试锁定无数据时不创建空 series。
+
 **递归层级计数金标（V665）**：
 - 扩展 test_chanlun_recursive.py：锁定 levels.bi / levels.xd 的 zsd_count/qsd_count。
 

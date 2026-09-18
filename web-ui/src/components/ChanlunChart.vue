@@ -675,38 +675,46 @@ function buildOption(): echarts.EChartsCoreOption {
           data: xdMarkLines,
         },
       },
-      // 走势段（粗实线）
-      {
-        name: '走势段(粗实线)',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: [],
-        symbol: 'none',
-        lineStyle: { width: 0 },
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          label: { show: false },
-          data: zsdMarkLines,
-        },
-      },
-      // 趋势段（粗虚线）
-      {
-        name: '趋势段(粗虚线)',
-        type: 'line',
-        xAxisIndex: 0,
-        yAxisIndex: 0,
-        data: [],
-        symbol: 'none',
-        lineStyle: { width: 0 },
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          label: { show: false },
-          data: qsdMarkLines,
-        },
-      },
+      // 走势段（粗实线）：无数据时不创建空 series，避免图例/ tooltip 出现空项
+      ...(zsdMarkLines.length
+        ? [
+            {
+              name: '走势段(粗实线)',
+              type: 'line',
+              xAxisIndex: 0,
+              yAxisIndex: 0,
+              data: [],
+              symbol: 'none',
+              lineStyle: { width: 0 },
+              markLine: {
+                silent: true,
+                symbol: 'none',
+                label: { show: false },
+                data: zsdMarkLines,
+              },
+            },
+          ]
+        : []),
+      // 趋势段（粗虚线）：无数据时不创建空 series
+      ...(qsdMarkLines.length
+        ? [
+            {
+              name: '趋势段(粗虚线)',
+              type: 'line',
+              xAxisIndex: 0,
+              yAxisIndex: 0,
+              data: [],
+              symbol: 'none',
+              lineStyle: { width: 0 },
+              markLine: {
+                silent: true,
+                symbol: 'none',
+                label: { show: false },
+                data: qsdMarkLines,
+              },
+            },
+          ]
+        : []),
       // 中枢区域
       {
         name: '中枢',

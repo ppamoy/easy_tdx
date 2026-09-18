@@ -204,6 +204,10 @@ describe('ChanlunChart 结构渲染', () => {
     const bcMain = findSeries('背驰(主图)')
     expect(bcMain).toBeTruthy()
     expect(bcMain?.data).toHaveLength(1)
+
+    // 未提供走势段/趋势段数据时，不创建空 series
+    expect(findSeries('走势段(粗实线)')).toBeUndefined()
+    expect(findSeries('趋势段(粗虚线)')).toBeUndefined()
   })
 
   test('走势段/趋势段以独立 series 渲染', () => {
