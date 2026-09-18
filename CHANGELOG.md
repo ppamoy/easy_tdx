@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**配置序列化字段覆盖金标（V675）**：
+- 扩展 test_chanlun_config.py：锁定 to_dict 覆盖所有 dataclass 字段。
+
 **分析器空态金标（V674）**：
 - 新增 tests/unit/test_chanlun_analyser_edges.py：空 K 线输入不崩溃、返回完整 levels 空结构。
 

@@ -34,3 +34,12 @@ def test_custom_config_to_dict_roundtrip_switches() -> None:
     assert d["mmd_3rd_type_technical"] is True
     assert d["bi_type"] == "old"
     assert d["zs_min_lines"] == 4
+
+
+def test_config_to_dict_covers_all_dataclass_fields() -> None:
+    """to_dict 必须覆盖所有 dataclass 字段，避免新增配置后序列化遗漏。"""
+    from dataclasses import fields
+
+    config = ChanlunConfig()
+    d = config.to_dict()
+    assert [f.name for f in fields(config) if f.name not in d] == []
