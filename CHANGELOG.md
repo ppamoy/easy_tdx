@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**中枢计算边界金标（V660）**：
+- 新增 tests/unit/test_chanlun_zs_edges.py：锁定中枢区间有效性、重叠比例、关闭条件、质量评分等边界。
+
 **笔计算边界金标（V659）**：
 - 新增 tests/unit/test_chanlun_bi_edges.py：锁定笔规则纯函数的边界行为。
 - 覆盖新/老/simple 笔 gap、弱笔阈值、端点一致性、价格方向、分型稳定性。
