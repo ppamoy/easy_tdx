@@ -931,10 +931,13 @@ function exportAnalysis() {
     kline_count: bars.value.length,
     bis: bis.value,
     xds: xds.value,
+    zsds: zsds.value,
+    qsds: qsds.value,
     zss: zss.value,
     mmds: mmds.value,
     fractals: fxs.value,
     divergences: bcs.value,
+    analysis_level: analysisLevel.value,
     market_state: marketState.value,
   }
   // 下载 JSON

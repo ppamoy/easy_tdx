@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**导出与图例增强（V661）**：
+- ChanlunView 导出 JSON 增加 zsds/qsds/analysis_level。
+- ChanlunChart 前端测试锁定走势段/趋势段 legend 显示。
+
 **中枢计算边界金标（V660）**：
 - 新增 tests/unit/test_chanlun_zs_edges.py：锁定中枢区间有效性、重叠比例、关闭条件、质量评分等边界。
 

@@ -252,5 +252,7 @@ describe('ChanlunChart 结构渲染', () => {
     expect(zsd?.markLine?.data).toHaveLength(1)
     const qsd = findSeries('趋势段(粗虚线)')
     expect(qsd?.markLine?.data).toHaveLength(1)
+    expect(lastOption.legend.data).toContain('走势段(粗实线)')
+    expect(lastOption.legend.data).toContain('趋势段(粗虚线)')
   })
 })
