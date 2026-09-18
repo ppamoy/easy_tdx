@@ -68,6 +68,8 @@ const loading = ref(false)
 const prerunning = ref(false)
 const error = ref('')
 const category = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
+const analysisLevel = ref<'bi' | 'xd'>('bi')
+const rawDetail = ref<any>(null)
 
 // 详情数据
 const bars = ref<Bar[]>([])
@@ -128,6 +130,46 @@ async function loadList() {
   }
 }
 
+function applyAnalysisLevel(level: 'bi' | 'xd', data: any) {
+  if (level === 'xd' && data?.levels?.xd) {
+    const xdLevel = data.levels.xd
+    bis.value = xdLevel.bis ?? []
+    xds.value = []
+    zsds.value = xdLevel.zsds ?? []
+    qsds.value = xdLevel.qsds ?? []
+    zss.value = xdLevel.zss ?? []
+    mmds.value = (xdLevel.mmds ?? []).map((m: any) => ({
+      type: m.type,
+      date: m.date,
+      bar_index: m.bar_index ?? null,
+      msg: m.msg ?? '',
+      confidence: m.confidence ?? 0,
+      zs_index: m.zs_index ?? null,
+    }))
+    return
+  }
+
+  bis.value = data?.bis ?? []
+  xds.value = data?.xds ?? []
+  zsds.value = data?.zsds ?? []
+  qsds.value = data?.qsds ?? []
+  zss.value = data?.zss ?? []
+  mmds.value = (data?.mmds ?? []).map((m: any) => ({
+    type: m.type,
+    date: m.date,
+    bar_index: m.bar_index ?? null,
+    msg: m.msg ?? '',
+    confidence: m.confidence ?? 0,
+    zs_index: m.zs_index ?? null,
+  }))
+}
+
+function onAnalysisLevelChange() {
+  if (rawDetail.value) {
+    applyAnalysisLevel(analysisLevel.value, rawDetail.value)
+  }
+}
+
 async function selectStock(code: string) {
   currentCode.value = code
   loading.value = true
@@ -144,19 +186,9 @@ async function selectStock(code: string) {
     name.value = d.name ?? ''
     market.value = d.market ?? ''
     bars.value = d.bars ?? []
-    bis.value = d.bis ?? []
-    xds.value = d.xds ?? []
-    zsds.value = d.zsds ?? []
-    qsds.value = d.qsds ?? []
-    zss.value = d.zss ?? []
-    mmds.value = (d.mmds ?? []).map((m: any) => ({
-      type: m.type,
-      date: m.date,
-      bar_index: m.bar_index ?? null,
-      msg: m.msg ?? '',
-      confidence: m.confidence ?? 0,
-      zs_index: m.zs_index ?? null,
-    }))
+    rawDetail.value = d
+    analysisLevel.value = 'bi'
+    applyAnalysisLevel('bi', d)
     fxs.value = (d.fractals ?? []).map((f: any) => ({
       fx_type: f.fx_type,
       date: f.date,
@@ -267,6 +299,10 @@ onMounted(() => {
               <option value="MIN_15">15分钟</option>
               <option value="MIN_30">30分钟</option>
               <option value="MIN_60">60分钟</option>
+            </select>
+            <select v-model="analysisLevel" class="period-select" @change="onAnalysisLevelChange">
+              <option value="bi">笔级别</option>
+              <option value="xd">线段级别</option>
             </select>
             <button class="ghost" @click="nextStock">下一只 ▶</button>
           </div>
