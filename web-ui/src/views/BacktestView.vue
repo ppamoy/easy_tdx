@@ -74,6 +74,8 @@ const chanlunBcs = ref<any[]>([])
 const chanlunZsds = ref<any[]>([])
 const chanlunQsds = ref<any[]>([])
 const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
+const chanlunLevel = ref<'bi' | 'xd'>('bi')
+const chanlunRaw = ref<any>(null)
 
 // 成交价模式（精简为 开盘价/收盘价）
 const EXECUTIONS: { value: ExecutionMode; label: string }[] = [
@@ -195,6 +197,34 @@ async function onRun() {
   }
 }
 
+function applyChanlunLevel(level: 'bi' | 'xd', data: any) {
+  if (level === 'xd' && data?.levels?.xd) {
+    const xdLevel = data.levels.xd
+    chanlunBis.value = xdLevel.bis ?? []
+    chanlunXds.value = []
+    chanlunZsds.value = xdLevel.zsds ?? []
+    chanlunQsds.value = xdLevel.qsds ?? []
+    chanlunZss.value = xdLevel.zss ?? []
+    chanlunMmds.value = xdLevel.mmds ?? []
+    chanlunBcs.value = xdLevel.bcs ?? []
+    return
+  }
+
+  chanlunBis.value = data?.bis ?? []
+  chanlunXds.value = data?.xds ?? []
+  chanlunZsds.value = data?.zsds ?? []
+  chanlunQsds.value = data?.qsds ?? []
+  chanlunZss.value = data?.zss ?? []
+  chanlunMmds.value = data?.mmds ?? []
+  chanlunBcs.value = data?.bcs ?? []
+}
+
+function onChanlunLevelChange() {
+  if (chanlunRaw.value) {
+    applyChanlunLevel(chanlunLevel.value, chanlunRaw.value)
+  }
+}
+
 // 缠论分析
 async function runChanlunAnalysis() {
   chanlunLoading.value = true
@@ -240,14 +270,10 @@ async function runChanlunAnalysis() {
       throw new Error(msg)
     }
     const data = await resp.json()
-    chanlunBis.value = data.bis ?? []
-    chanlunXds.value = data.xds ?? []
-    chanlunZss.value = data.zss ?? []
-    chanlunMmds.value = data.mmds ?? []
+    chanlunRaw.value = data
+    chanlunLevel.value = 'bi'
+    applyChanlunLevel('bi', data)
     chanlunFxs.value = data.fractals ?? []
-    chanlunBcs.value = data.bcs ?? []
-    chanlunZsds.value = data.zsds ?? []
-    chanlunQsds.value = data.qsds ?? []
     chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -1154,6 +1180,13 @@ async function onSave() {
             K线 + 买卖点
             <span v-if="strategy === 'chanlun'" class="chanlun-badge">缠论</span>
           </h3>
+          <div v-if="strategy === 'chanlun'" class="chanlun-level-switch">
+            <label>分析级别</label>
+            <select v-model="chanlunLevel" @change="onChanlunLevelChange">
+              <option value="bi">笔级别</option>
+              <option value="xd">线段级别</option>
+            </select>
+          </div>
           <!-- 缠论策略：显示缠论结构图 -->
           <ChanlunChart
             v-if="isChanlunStrategy && !chanlunLoading && bars.length > 0"
@@ -1650,6 +1683,22 @@ async function onSave() {
   border: 1px solid rgba(200, 120, 255, 0.3);
   border-radius: 4px;
   vertical-align: middle;
+}
+.chanlun-level-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.chanlun-level-switch select {
+  background: var(--bg-soft, #0f172a);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
 }
 .chanlun-loading {
   display: flex;
