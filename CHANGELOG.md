@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**分析器空态金标（V674）**：
+- 新增 tests/unit/test_chanlun_analyser_edges.py：空 K 线输入不崩溃、返回完整 levels 空结构。
+
 **走势段/趋势段紧凑模式线宽（V673）**：
 - ChanlunChart 在 compact 模式下走势段/趋势段线宽降为 2px，减少视觉噪声。
 - 前端测试锁定 compact 线宽。
