@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**ChanlunConfig 序列化补全（V658）**：
+- to_dict 增加 multi_level / mmd_1st_dedup / mmd_3rd_type_technical。
+- 新增配置序列化金标测试，锁定模型开关默认值与自定义值。
+
 **走势段/趋势段统计展示（V657）**：
 - to_dict 新增 zsd_count / qsd_count 顶层计数。
 - ChanlunView 统计面板新增「走势段」「趋势段」数量展示。
