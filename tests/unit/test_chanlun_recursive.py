@@ -160,6 +160,8 @@ def test_to_dict_outputs_two_levels() -> None:
     assert bi_level["zs_count"] == d["zs_count"]
     assert bi_level["mmd_count"] == d["mmd_count"]
     assert bi_level["bc_count"] == d["bc_count"]
+    assert bi_level["zsd_count"] == d["zsd_count"]
+    assert bi_level["qsd_count"] == d["qsd_count"]
     assert len(bi_level["bis"]) == d["bi_count"]
     assert len(bi_level["xds"]) == d["xd_count"]
 
@@ -168,6 +170,8 @@ def test_to_dict_outputs_two_levels() -> None:
     # 高级别「笔」= 本级别线段；fixture 只有 2 根线段，不足以递归出更高级别线段
     assert xd_level["bi_count"] == d["xd_count"]
     assert xd_level["xd_count"] == 0
+    assert xd_level["zsd_count"] == 0
+    assert xd_level["qsd_count"] == 0
     assert xd_level["zss"] == []
     assert xd_level["mmds"] == []
     assert xd_level["bcs"] == []

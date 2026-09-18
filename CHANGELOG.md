@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**递归层级计数金标（V665）**：
+- 扩展 test_chanlun_recursive.py：锁定 levels.bi / levels.xd 的 zsd_count/qsd_count。
+
 **递归结果内聚走势段/趋势段（V664）**：
 - RecursiveLevelResult 增加 zsds/qsds，compute_recursive_level 直接返回递归走势段/趋势段。
 - analyser 递归分支直接复用该结果，减少重复计算。
