@@ -5,11 +5,12 @@
 
 from __future__ import annotations
 
-from easy_tdx.chanlun.macd import calc_macd, calc_macd_force
+from easy_tdx.chanlun.macd import _calc_ema, calc_macd, calc_macd_force
 
 
 def test_calc_macd_empty_returns_empty_lists() -> None:
     assert calc_macd([]) == {"dif": [], "dea": [], "hist": []}
+    assert _calc_ema([], 12) == []
 
 
 def test_calc_macd_output_length_matches_input() -> None:

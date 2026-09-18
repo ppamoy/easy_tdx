@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**EMA 空态金标（V686）**：
+- 扩展 test_chanlun_macd_edges.py：锁定 _calc_ema 空输入返回空列表。
+
 **趋势段创新低金标（V685）**：
 - 新增 _is_trending 向下趋势段必须创新低的边界金标。
 
