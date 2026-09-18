@@ -139,9 +139,11 @@ def test_recursive_level_insufficient_lines_returns_empty() -> None:
     """少于 3 根低级别线段时返回空结果，不抛异常。"""
     result = compute_recursive_level([])
     assert result.xds == [] and result.zss == [] and result.mmds == [] and result.bcs == []
+    assert result.zsds == [] and result.qsds == []
 
     result = compute_recursive_level(_make_xds()[:2])
     assert result.xds == [] and result.zss == [] and result.mmds == [] and result.bcs == []
+    assert result.zsds == [] and result.qsds == []
 
 
 def test_to_dict_outputs_two_levels() -> None:

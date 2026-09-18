@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**递归空态金标补全（V680）**：
+- 扩展 test_chanlun_recursive.py：不足 3 根线段时递归 zsds/qsds 也为空。
+
 **MACD 计算边界金标（V679）**：
 - 新增 tests/unit/test_chanlun_macd_edges.py：空序列、输出长度、力度区间越界回退。
 
