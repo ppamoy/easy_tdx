@@ -19,6 +19,7 @@ from easy_tdx.chanlun.mmd import find_mmds_v44
 from easy_tdx.chanlun.types import BC, BI, MMD, XD, ZS
 from easy_tdx.chanlun.xd import find_xds
 from easy_tdx.chanlun.zs import find_zss
+from easy_tdx.chanlun.zsd import find_qsds, find_zsds
 
 
 @dataclass
@@ -29,6 +30,8 @@ class RecursiveLevelResult:
     zss: list[ZS] = field(default_factory=list)
     mmds: list[MMD] = field(default_factory=list)
     bcs: list[BC] = field(default_factory=list)
+    zsds: list[XD] = field(default_factory=list)
+    qsds: list[XD] = field(default_factory=list)
 
 
 def compute_recursive_level(
@@ -79,10 +82,14 @@ def compute_recursive_level(
         lows=lows,
     )
     level_bcs = check_bi_beichi(lines, level_zss, closes=closes, config=config)
+    level_zsds = find_zsds(level_xds, config)
+    level_qsds = find_qsds(level_xds, config)
 
     return RecursiveLevelResult(
         xds=level_xds,
         zss=level_zss,
         mmds=level_mmds,
         bcs=level_bcs,
+        zsds=level_zsds,
+        qsds=level_qsds,
     )

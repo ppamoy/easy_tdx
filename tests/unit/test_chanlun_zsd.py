@@ -133,8 +133,8 @@ def test_xd_level_payload_includes_zsds_qsds() -> None:
     result.zss_l1 = rec.zss
     result.mmds_l1 = rec.mmds
     result.bcs_l1 = rec.bcs
-    result.zsds_l1 = find_zsds(rec.xds)
-    result.qsds_l1 = find_qsds(rec.xds)
+    result.zsds_l1 = rec.zsds
+    result.qsds_l1 = rec.qsds
 
     payload = result._level_payload(
         "线段级别",

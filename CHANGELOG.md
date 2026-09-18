@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**递归结果内聚走势段/趋势段（V664）**：
+- RecursiveLevelResult 增加 zsds/qsds，compute_recursive_level 直接返回递归走势段/趋势段。
+- analyser 递归分支直接复用该结果，减少重复计算。
+
 **多级别联立边界金标（V663）**：
 - 新增 tests/unit/test_chanlun_multi_level_edges.py：空态、缺失级别、跨级别查询边界。
 

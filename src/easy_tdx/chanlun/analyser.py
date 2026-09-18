@@ -570,9 +570,8 @@ class ChanlunAnalyser:
             self._result.zss_l1 = recursive.zss
             self._result.mmds_l1 = recursive.mmds
             self._result.bcs_l1 = recursive.bcs
-            # 递归级别的走势段/趋势段，供线段级别画图与择时。
-            self._result.zsds_l1 = find_zsds(self._result.xds_l1, self._config)
-            self._result.qsds_l1 = find_qsds(self._result.xds_l1, self._config)
+            self._result.zsds_l1 = recursive.zsds
+            self._result.qsds_l1 = recursive.qsds
 
         return self._result
 
