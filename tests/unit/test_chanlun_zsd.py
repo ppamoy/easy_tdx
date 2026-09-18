@@ -14,7 +14,7 @@ import pandas as pd
 
 from easy_tdx.chanlun import ChanlunAnalyser
 from easy_tdx.chanlun.types import FX, XD, CLKline, Direction, FXType
-from easy_tdx.chanlun.zsd import find_qsds, find_zsds
+from easy_tdx.chanlun.zsd import _is_trending, find_qsds, find_zsds
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 
@@ -102,6 +102,23 @@ def test_find_zsds_endpoints_share_pivots() -> None:
         assert zsds[i].end.bar_index == zsds[i + 1].start.bar_index
         assert zsds[i].end.val == zsds[i + 1].start.val
         assert zsds[i].direction != zsds[i + 1].direction
+
+
+def test_is_trending_down_requires_new_low() -> None:
+    """向下趋势段必须创新低；终点未创新低时不算趋势。"""
+    zsd = XD(
+        start=_fx(FXType.DING, 100.0, 0),
+        end=_fx(FXType.DI, 110.0, 10),
+        direction=Direction.DOWN,
+        index=0,
+        high=110.0,
+        low=100.0,
+    )
+    assert not _is_trending(zsd, [], 0)
+
+    zsd.end = _fx(FXType.DI, 90.0, 10)
+    zsd.low = 90.0
+    assert _is_trending(zsd, [], 0)
 
 
 def test_find_zsds_empty_and_single() -> None:
