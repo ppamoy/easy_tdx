@@ -154,6 +154,8 @@ const zss = ref<ChanlunZs[]>([])
 const mmds = ref<ChanlunMmd[]>([])
 const fxs = ref<ChanlunFx[]>([])
 const bcs = ref<ChanlunBc[]>([])
+const zsds = ref<ChanlunXd[]>([])
+const qsds = ref<ChanlunXd[]>([])
 const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 const candidates = ref<Candidate[]>([])
 const outcomes = ref<MmdOutcome[]>([])
@@ -219,6 +221,8 @@ async function startTraining() {
     bars.value = d.bars ?? []
     bis.value = (d.bis ?? []).map((b: any) => ({ ...b }))
     xds.value = (d.xds ?? []).map((x: any) => ({ ...x }))
+    zsds.value = (d.zsds ?? []).map((z: any) => ({ ...z }))
+    qsds.value = (d.qsds ?? []).map((q: any) => ({ ...q }))
     zss.value = (d.zss ?? []).map((z: any) => ({ ...z }))
     mmds.value = (d.mmds ?? []).map((m: any) => ({
       type: m.type,
@@ -600,6 +604,8 @@ onMounted(() => {
               :bars="bars"
               :bis="bis"
               :xds="xds"
+              :zsds="zsds"
+              :qsds="qsds"
               :zss="zss"
               :mmds="mmds"
               :fxs="fxs"

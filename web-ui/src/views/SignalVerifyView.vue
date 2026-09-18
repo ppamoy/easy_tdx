@@ -73,6 +73,8 @@ const category = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>(
 const bars = ref<Bar[]>([])
 const bis = ref<BiItem[]>([])
 const xds = ref<XdItem[]>([])
+const zsds = ref<XdItem[]>([])
+const qsds = ref<XdItem[]>([])
 const zss = ref<ZsItem[]>([])
 const mmds = ref<MmdItem[]>([])
 const fxs = ref<FxItem[]>([])
@@ -144,6 +146,8 @@ async function selectStock(code: string) {
     bars.value = d.bars ?? []
     bis.value = d.bis ?? []
     xds.value = d.xds ?? []
+    zsds.value = d.zsds ?? []
+    qsds.value = d.qsds ?? []
     zss.value = d.zss ?? []
     mmds.value = (d.mmds ?? []).map((m: any) => ({
       type: m.type,
@@ -273,6 +277,8 @@ onMounted(() => {
               :bars="bars"
               :bis="bis"
               :xds="xds"
+              :zsds="zsds as any"
+              :qsds="qsds as any"
               :zss="zss as any"
               :mmds="mmds as any"
               :fxs="fxs as any"

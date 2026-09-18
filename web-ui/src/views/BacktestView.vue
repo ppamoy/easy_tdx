@@ -71,6 +71,8 @@ const chanlunZss = ref<any[]>([])
 const chanlunMmds = ref<any[]>([])
 const chanlunFxs = ref<any[]>([])
 const chanlunBcs = ref<any[]>([])
+const chanlunZsds = ref<any[]>([])
+const chanlunQsds = ref<any[]>([])
 const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 
 // 成交价模式（精简为 开盘价/收盘价）
@@ -244,6 +246,8 @@ async function runChanlunAnalysis() {
     chanlunMmds.value = data.mmds ?? []
     chanlunFxs.value = data.fractals ?? []
     chanlunBcs.value = data.bcs ?? []
+    chanlunZsds.value = data.zsds ?? []
+    chanlunQsds.value = data.qsds ?? []
     chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -1156,6 +1160,8 @@ async function onSave() {
             :bars="bars"
             :bis="chanlunBis"
             :xds="chanlunXds"
+            :zsds="chanlunZsds"
+            :qsds="chanlunQsds"
             :zss="chanlunZss"
             :mmds="chanlunMmds"
             :fxs="chanlunFxs"

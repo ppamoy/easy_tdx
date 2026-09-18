@@ -80,6 +80,8 @@ const chanlunZss = ref<any[]>([])
 const chanlunMmds = ref<any[]>([])
 const chanlunFxs = ref<any[]>([])
 const chanlunBcs = ref<any[]>([])
+const chanlunZsds = ref<any[]>([])
+const chanlunQsds = ref<any[]>([])
 const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 const chanlunLoading = ref(false)
 const chanlunCategory = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
@@ -844,6 +846,8 @@ async function selectStock(stock: StockResult) {
   chanlunMmds.value = []
   chanlunFxs.value = []
   chanlunBcs.value = []
+  chanlunZsds.value = []
+  chanlunQsds.value = []
   backtestResult.value = null
 
   // 获取K线数据
@@ -905,6 +909,8 @@ async function runChanlunAnalysis(stock: StockResult) {
 
     chanlunBis.value = data.bis ?? []
     chanlunXds.value = data.xds ?? []
+    chanlunZsds.value = data.zsds ?? []
+    chanlunQsds.value = data.qsds ?? []
     chanlunZss.value = data.zss ?? []
     chanlunMmds.value = data.mmds ?? []
     chanlunFxs.value = data.fractals ?? []
@@ -1419,6 +1425,8 @@ onMounted(() => {
             :bars="bars"
             :bis="chanlunBis"
             :xds="chanlunXds"
+            :zsds="chanlunZsds"
+            :qsds="chanlunQsds"
             :zss="chanlunZss"
             :mmds="chanlunMmds"
             :fxs="chanlunFxs"

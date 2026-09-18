@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**走势段/趋势段接入全部缠论图表（V655）**：
+- BacktestView / ScreeningView / SignalVerifyView / TrainView 均映射并展示 zsds/qsds。
+- 配合 V653/V654，所有 ChanlunChart 使用页统一支持走势段（粗实线）与趋势段（粗虚线）。
+
 **背驰边界金标与走势段 tooltip（V654）**：
 - 新增 tests/unit/test_chanlun_beichi_edges.py：锁定盘整/趋势背驰的防御分支（无趋势、缺 lines、离开笔越界、未创新极值）。
 - ChanlunChart tooltip 增加走势段/趋势段提示，画图交互更完整。
