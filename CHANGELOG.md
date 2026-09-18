@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**分型识别边界金标（V678）**：
+- 新增 tests/unit/test_chanlun_fractal_edges.py：严格/非严格分型、十字星跳过、bar_index 回退。
+
 **走势段独立渲染测试（V677）**：
 - ChanlunChart 测试新增「仅走势段数据」场景，锁定 qsd 不误渲染。
 
