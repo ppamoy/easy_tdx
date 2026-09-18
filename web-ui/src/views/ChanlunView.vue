@@ -935,6 +935,8 @@ function exportAnalysis() {
     xds: xds.value,
     zsds: zsds.value,
     qsds: qsds.value,
+    zsd_count: zsds.value.length,
+    qsd_count: qsds.value.length,
     zss: zss.value,
     mmds: mmds.value,
     fractals: fxs.value,

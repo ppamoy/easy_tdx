@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**导出增加走势段/趋势段计数（V688）**：
+- ChanlunView 导出 JSON 增加 zsd_count / qsd_count。
+
 **MACD 力度有效区间金标（V687）**：
 - 扩展 test_chanlun_macd_edges.py：有效区间力度汇总非负。
 
