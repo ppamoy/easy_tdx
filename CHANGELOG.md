@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**MACD 计算边界金标（V679）**：
+- 新增 tests/unit/test_chanlun_macd_edges.py：空序列、输出长度、力度区间越界回退。
+
 **分型识别边界金标（V678）**：
 - 新增 tests/unit/test_chanlun_fractal_edges.py：严格/非严格分型、十字星跳过、bar_index 回退。
 
