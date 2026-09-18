@@ -261,4 +261,36 @@ describe('ChanlunChart 结构渲染', () => {
     expect(lastOption.legend.data).toContain('走势段(粗实线)')
     expect(lastOption.legend.data).toContain('趋势段(粗虚线)')
   })
+
+  test('仅趋势段数据时只渲染趋势段 series', () => {
+    mount(ChanlunChart, {
+      props: {
+        bars,
+        bis: [],
+        xds: [],
+        qsds: [
+          {
+            index: 0,
+            direction: 'up',
+            start_date: fdate(88),
+            end_date: fdate(130),
+            high: 12.6,
+            low: 8.6,
+            start_val: 8.6,
+            end_val: 12.5,
+            start_index: 88,
+            end_index: 130,
+          },
+        ],
+        zss: [],
+        mmds: [],
+        frequency: 'daily',
+        compact: true,
+      },
+      attachTo: document.body,
+    })
+
+    expect(findSeries('走势段(粗实线)')).toBeUndefined()
+    expect(findSeries('趋势段(粗虚线)')?.markLine?.data).toHaveLength(1)
+  })
 })

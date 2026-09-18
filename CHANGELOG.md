@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**趋势段独立渲染测试（V676）**：
+- ChanlunChart 测试新增「仅趋势段数据」场景，锁定 zsd 不误渲染。
+
 **配置序列化字段覆盖金标（V675）**：
 - 扩展 test_chanlun_config.py：锁定 to_dict 覆盖所有 dataclass 字段。
 
