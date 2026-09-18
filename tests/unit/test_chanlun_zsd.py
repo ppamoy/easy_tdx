@@ -95,6 +95,15 @@ def test_find_qsds_golden() -> None:
     assert [q.direction.value for q in qsds] == ["up", "down", "up"]
 
 
+def test_find_zsds_endpoints_share_pivots() -> None:
+    """相邻走势段首尾相连，端点分型共享。"""
+    zsds = find_zsds(_make_xds())
+    for i in range(len(zsds) - 1):
+        assert zsds[i].end.bar_index == zsds[i + 1].start.bar_index
+        assert zsds[i].end.val == zsds[i + 1].start.val
+        assert zsds[i].direction != zsds[i + 1].direction
+
+
 def test_find_zsds_empty_and_single() -> None:
     """空输入返回空；单线段也返回一个走势段。"""
     assert find_zsds([]) == []
