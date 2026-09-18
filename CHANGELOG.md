@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**走势段/趋势段模型与画图（V653）**：
+- 修复 zsd.py 趋势段判断：改用起止分型极值比较，移除对不存在的 k.h/k.l 字段的依赖。
+- ChanlunAnalyser 管道新增 zsds/qsds 输出（由线段合并的走势段/趋势段），并序列化到 to_dict()。
+- ChanlunChart 新增走势段（粗实线）与趋势段（粗虚线）绘制，ChanlunView 笔级别图表接入。
+- 新增 tests/unit/test_chanlun_zsd.py 金标。
+
 **缠论图表周期级别选择（V652）**：
 - ScreeningView 与 SignalVerifyView 的缠论图表新增周期选择器（日线/周线/5/15/30/60分钟）。
 - `/verify/signals/detail` 支持 `category` 参数：日线走预跑缓存，分钟级别走在线取数并现场分析。

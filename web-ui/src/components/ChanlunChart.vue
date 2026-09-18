@@ -11,6 +11,10 @@ const props = defineProps<{
   bars: Bar[]
   bis: ChanlunBi[]
   xds: ChanlunXd[]
+  /** 走势段（ZSD）：由同向线段合并，粗实线显示。 */
+  zsds?: ChanlunXd[]
+  /** 趋势段（QSD）：具备明确方向的走势段，粗虚线显示。 */
+  qsds?: ChanlunXd[]
   zss: ChanlunZs[]
   mmds: ChanlunMmd[]
   fxs?: ChanlunFx[]
@@ -320,6 +324,54 @@ function buildOption(): echarts.EChartsCoreOption {
       ]
     })
 
+  // ── 走势段（ZSD）的 MarkLine（粗实线） ──
+  const zsdMarkLines = (props.zsds ?? [])
+    .filter((zsd) => {
+      const si = findAnchorIndex(keyIndex, zsd.start_index, zsd.start_date, revealLimit)
+      const ei = findAnchorIndex(keyIndex, zsd.end_index, zsd.end_date, revealLimit)
+      return si !== -1 && ei !== -1
+    })
+    .map((zsd) => {
+      const si = findAnchorIndex(keyIndex, zsd.start_index, zsd.start_date, revealLimit)
+      const ei = findAnchorIndex(keyIndex, zsd.end_index, zsd.end_date, revealLimit)
+      const isUp = zsd.direction === 'up'
+      const lineStyle = {
+        color: isUp ? 'rgba(34,197,94,0.55)' : 'rgba(239,68,68,0.55)',
+        width: 3,
+        type: 'solid' as const,
+      }
+      const startY = zsd.start_val ?? (isUp ? zsd.low : zsd.high)
+      const endY = zsd.end_val ?? (isUp ? zsd.high : zsd.low)
+      return [
+        { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'none' },
+        { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'none' },
+      ]
+    })
+
+  // ── 趋势段（QSD）的 MarkLine（粗虚线） ──
+  const qsdMarkLines = (props.qsds ?? [])
+    .filter((qsd) => {
+      const si = findAnchorIndex(keyIndex, qsd.start_index, qsd.start_date, revealLimit)
+      const ei = findAnchorIndex(keyIndex, qsd.end_index, qsd.end_date, revealLimit)
+      return si !== -1 && ei !== -1
+    })
+    .map((qsd) => {
+      const si = findAnchorIndex(keyIndex, qsd.start_index, qsd.start_date, revealLimit)
+      const ei = findAnchorIndex(keyIndex, qsd.end_index, qsd.end_date, revealLimit)
+      const isUp = qsd.direction === 'up'
+      const lineStyle = {
+        color: isUp ? '#16a34a' : '#dc2626',
+        width: 3,
+        type: 'dashed' as const,
+      }
+      const startY = qsd.start_val ?? (isUp ? qsd.low : qsd.high)
+      const endY = qsd.end_val ?? (isUp ? qsd.high : qsd.low)
+      return [
+        { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'none' },
+        { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'none' },
+      ]
+    })
+
   // ── 中枢的 MarkArea ──
   const zsMarkAreas = props.zss
     .filter((zs) => {
@@ -501,6 +553,8 @@ function buildOption(): echarts.EChartsCoreOption {
         'K线',
         ...(props.bis.length ? ['笔(虚线)'] : []),
         ...(props.xds.length ? ['线段(实线)'] : []),
+        ...((props.zsds?.length ?? 0) > 0 ? ['走势段(粗实线)'] : []),
+        ...((props.qsds?.length ?? 0) > 0 ? ['趋势段(粗虚线)'] : []),
         ...(props.zss.length ? ['中枢'] : []),
         ...(props.fxs && props.fxs.length ? ['分型'] : []),
         ...(mmdBuyPoints.length ? ['买点'] : []),
@@ -615,6 +669,38 @@ function buildOption(): echarts.EChartsCoreOption {
           symbol: ['circle', 'circle'],
           label: { show: false },
           data: xdMarkLines,
+        },
+      },
+      // 走势段（粗实线）
+      {
+        name: '走势段(粗实线)',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: [],
+        symbol: 'none',
+        lineStyle: { width: 0 },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { show: false },
+          data: zsdMarkLines,
+        },
+      },
+      // 趋势段（粗虚线）
+      {
+        name: '趋势段(粗虚线)',
+        type: 'line',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        data: [],
+        symbol: 'none',
+        lineStyle: { width: 0 },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { show: false },
+          data: qsdMarkLines,
         },
       },
       // 中枢区域

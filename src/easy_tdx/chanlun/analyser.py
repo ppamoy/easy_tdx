@@ -25,6 +25,7 @@ from easy_tdx.chanlun.recursive import compute_recursive_level
 from easy_tdx.chanlun.types import BC, BI, FX, MMD, XD, ZS, CLKline, Kline, Line
 from easy_tdx.chanlun.xd import find_xds  # noqa: F401
 from easy_tdx.chanlun.zs import find_zss
+from easy_tdx.chanlun.zsd import find_qsds, find_zsds
 from easy_tdx.MyTT import BOLL
 
 
@@ -79,6 +80,9 @@ class ChanlunResult:
     zss_l1: list[ZS] = field(default_factory=list)
     mmds_l1: list[MMD] = field(default_factory=list)
     bcs_l1: list[BC] = field(default_factory=list)
+    # 走势段/趋势段：由线段（XD）合并得到，供更高级别画图与择时参考。
+    zsds: list[XD] = field(default_factory=list)
+    qsds: list[XD] = field(default_factory=list)
 
     def _fmt_dt(self, dt: datetime) -> str:
         """按 frequency 自适应格式化日期。
@@ -279,6 +283,8 @@ class ChanlunResult:
                 }
                 for xd in self.xds
             ],
+            "zsds": [self._line_dict(zsd) for zsd in self.zsds],
+            "qsds": [self._line_dict(qsd) for qsd in self.qsds],
             "mmds": [
                 {
                     "type": mmd.mmd_type.value,
@@ -474,6 +480,10 @@ class ChanlunAnalyser:
         # Step 7: 线段计算
         xds = find_xds(bis, self._config)
         self._result.xds = xds
+
+        # Step 7.1: 走势段/趋势段（由线段合并，用于更高级别画图与择时）
+        self._result.zsds = find_zsds(xds, self._config)
+        self._result.qsds = find_qsds(xds, self._config)
 
         # Step 7.5: BOLL 指标计算
         if len(closes) >= 20:

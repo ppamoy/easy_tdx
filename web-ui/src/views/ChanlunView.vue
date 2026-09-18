@@ -136,6 +136,8 @@ const zss = ref<ChanlunZs[]>([])
 const mmds = ref<ChanlunMmd[]>([])
 const fxs = ref<ChanlunFx[]>([])
 const bcs = ref<ChanlunBc[]>([])
+const zsds = ref<ChanlunXd[]>([])
+const qsds = ref<ChanlunXd[]>([])
 const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 
 // 买卖点分类准确度验证（由 /chanlun/analyze 返回的 signal_accuracy）
@@ -245,6 +247,8 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
     // 高级别「笔」= 低级别线段；本级别不再叠加更高级别线段，避免双线重叠。
     bis.value = mapBis(xdLevel.bis)
     xds.value = []
+    zsds.value = []
+    qsds.value = []
     zss.value = mapZss(xdLevel.zss)
     mmds.value = mapMmds(xdLevel.mmds)
     bcs.value = mapBcs(xdLevel.bcs)
@@ -253,6 +257,8 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
 
   bis.value = mapBis(data?.bis)
   xds.value = mapXds(data?.xds)
+  zsds.value = mapXds(data?.zsds)
+  qsds.value = mapXds(data?.qsds)
   zss.value = mapZss(data?.zss)
   mmds.value = mapMmds(data?.mmds)
   bcs.value = mapBcs(data?.bcs)
@@ -1288,6 +1294,8 @@ onUnmounted(() => {
         :bars="bars"
         :bis="bis"
         :xds="xds"
+        :zsds="zsds"
+        :qsds="qsds"
         :zss="zss"
         :mmds="mmds"
         :fxs="fxs"

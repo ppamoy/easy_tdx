@@ -128,16 +128,15 @@ def _is_trending(
 
     简化判断：走势段跨越的幅度是否足够大（至少 2 个线段的范围）。
     """
-    # 单线段走势段不构成趋势
-    if zsd.start == zsd.end:
+    # 单线段走势段不构成趋势：起止端点锚定同一根原始 K 线时视为无效。
+    if zsd.start.bar_index == zsd.end.bar_index:
         return False
 
-    # 向上趋势：走势段高点高于起点高点
+    # 向上趋势：走势段终点高于起点；向下趋势：终点低于起点。
     if zsd.direction == Direction.UP:
-        return zsd.high > zsd.start.k.h if hasattr(zsd.start.k, "h") else True
+        return zsd.end.val > zsd.start.val
 
-    # 向下趋势：走势段低点低于起点低点
     if zsd.direction == Direction.DOWN:
-        return zsd.low < zsd.start.k.l if hasattr(zsd.start.k, "l") else True
+        return zsd.end.val < zsd.start.val
 
     return True
