@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**笔计算边界金标（V659）**：
+- 新增 tests/unit/test_chanlun_bi_edges.py：锁定笔规则纯函数的边界行为。
+- 覆盖新/老/simple 笔 gap、弱笔阈值、端点一致性、价格方向、分型稳定性。
+
 **ChanlunConfig 序列化补全（V658）**：
 - to_dict 增加 multi_level / mmd_1st_dedup / mmd_3rd_type_technical。
 - 新增配置序列化金标测试，锁定模型开关默认值与自定义值。
