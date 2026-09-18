@@ -337,7 +337,7 @@ function buildOption(): echarts.EChartsCoreOption {
       const isUp = zsd.direction === 'up'
       const lineStyle = {
         color: isUp ? 'rgba(34,197,94,0.55)' : 'rgba(239,68,68,0.55)',
-        width: 3,
+        width: props.compact ? 2 : 3,
         type: 'solid' as const,
       }
       const startY = zsd.start_val ?? (isUp ? zsd.low : zsd.high)
@@ -361,7 +361,7 @@ function buildOption(): echarts.EChartsCoreOption {
       const isUp = qsd.direction === 'up'
       const lineStyle = {
         color: isUp ? '#16a34a' : '#dc2626',
-        width: 3,
+        width: props.compact ? 2 : 3,
         type: 'dashed' as const,
       }
       const startY = qsd.start_val ?? (isUp ? qsd.low : qsd.high)

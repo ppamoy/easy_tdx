@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**走势段/趋势段紧凑模式线宽（V673）**：
+- ChanlunChart 在 compact 模式下走势段/趋势段线宽降为 2px，减少视觉噪声。
+- 前端测试锁定 compact 线宽。
+
 **走势段/趋势段空态金标（V672）**：
 - 扩展 test_chanlun_zsd.py：锁定 find_qsds 空输入/单线段返回空。
 
