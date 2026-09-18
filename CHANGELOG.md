@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**买卖点力度计算边界金标（V667）**：
+- 新增 tests/unit/test_chanlun_mmd_edges.py：锁定 _calc_bi_force 无收盘价/端点越界/有效收盘价场景。
+
 **走势段/趋势段空 series 优化（V666）**：
 - ChanlunChart 仅在存在走势段/趋势段数据时创建对应 series，避免空图例。
 - 前端测试锁定无数据时不创建空 series。
