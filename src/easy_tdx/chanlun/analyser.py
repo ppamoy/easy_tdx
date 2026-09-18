@@ -80,6 +80,9 @@ class ChanlunResult:
     zss_l1: list[ZS] = field(default_factory=list)
     mmds_l1: list[MMD] = field(default_factory=list)
     bcs_l1: list[BC] = field(default_factory=list)
+    # 递归级别的走势段/趋势段（以线段级别的「线段」再合并）。
+    zsds_l1: list[XD] = field(default_factory=list)
+    qsds_l1: list[XD] = field(default_factory=list)
     # 走势段/趋势段：由线段（XD）合并得到，供更高级别画图与择时参考。
     zsds: list[XD] = field(default_factory=list)
     qsds: list[XD] = field(default_factory=list)
@@ -182,8 +185,10 @@ class ChanlunResult:
         zss: list[ZS],
         mmds: list[MMD],
         bcs: list[BC],
+        zsds: list[XD],
+        qsds: list[XD],
     ) -> dict[str, Any]:
-        """序列化一个分析级别：笔/线段、中枢、买卖点、背驰。"""
+        """序列化一个分析级别：笔/线段、中枢、买卖点、背驰、走势段/趋势段。"""
         return {
             "name": name,
             "bi_count": len(lines),
@@ -197,6 +202,8 @@ class ChanlunResult:
             "zss": [self._zs_dict(zs) for zs in zss],
             "mmds": [self._mmd_dict_core(m) for m in mmds],
             "bcs": [self._bc_dict_core(bc) for bc in bcs],
+            "zsds": [self._line_dict(zsd) for zsd in zsds],
+            "qsds": [self._line_dict(qsd) for qsd in qsds],
         }
 
     def to_dict(self) -> dict[str, Any]:
@@ -388,7 +395,14 @@ class ChanlunResult:
             "levels": {
                 # 笔级别 = 单级别基础结果（本级别笔 → 线段 → 中枢 → 背驰 → 买卖点）
                 "bi": self._level_payload(
-                    "笔级别", self.bis, self.xds, self.zss, self.mmds, self.bcs
+                    "笔级别",
+                    self.bis,
+                    self.xds,
+                    self.zss,
+                    self.mmds,
+                    self.bcs,
+                    self.zsds,
+                    self.qsds,
                 ),
                 # 线段级别 = 以低级别线段作为高级别「笔」，递归计算高级别线段/
                 # 线段中枢/背驰/三类买卖点。
@@ -399,6 +413,8 @@ class ChanlunResult:
                     self.zss_l1,
                     self.mmds_l1,
                     self.bcs_l1,
+                    self.zsds_l1,
+                    self.qsds_l1,
                 ),
             },
         }
@@ -550,6 +566,9 @@ class ChanlunAnalyser:
             self._result.zss_l1 = recursive.zss
             self._result.mmds_l1 = recursive.mmds
             self._result.bcs_l1 = recursive.bcs
+            # 递归级别的走势段/趋势段，供线段级别画图与择时。
+            self._result.zsds_l1 = find_zsds(self._result.xds_l1, self._config)
+            self._result.qsds_l1 = find_qsds(self._result.xds_l1, self._config)
 
         return self._result
 

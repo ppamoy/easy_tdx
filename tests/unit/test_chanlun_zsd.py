@@ -116,3 +116,35 @@ def test_analyser_serializes_zsds_qsds() -> None:
     assert len(d["qsds"]) == len(result.qsds)
     assert d["zsds"][0]["direction"] == result.zsds[0].direction.value
     assert d["qsds"][0]["start_index"] == result.qsds[0].start.bar_index
+
+
+def test_xd_level_payload_includes_zsds_qsds() -> None:
+    """线段级别 payload 也包含递归走势段/趋势段序列化。"""
+    from easy_tdx.chanlun.analyser import ChanlunResult
+    from easy_tdx.chanlun.recursive import compute_recursive_level
+
+    xds = _make_xds()
+    rec = compute_recursive_level(xds)
+    result = ChanlunResult(code="000001", frequency="daily")
+    result.xds = xds
+    result.xds_l1 = rec.xds
+    result.zss_l1 = rec.zss
+    result.mmds_l1 = rec.mmds
+    result.bcs_l1 = rec.bcs
+    result.zsds_l1 = find_zsds(rec.xds)
+    result.qsds_l1 = find_qsds(rec.xds)
+
+    payload = result._level_payload(
+        "线段级别",
+        result.xds,
+        result.xds_l1,
+        result.zss_l1,
+        result.mmds_l1,
+        result.bcs_l1,
+        result.zsds_l1,
+        result.qsds_l1,
+    )
+
+    assert len(payload["zsds"]) == len(result.zsds_l1)
+    assert len(payload["qsds"]) == len(result.qsds_l1)
+    assert payload["zsds"][0]["direction"] == result.zsds_l1[0].direction.value

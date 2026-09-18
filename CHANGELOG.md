@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**线段级别走势段/趋势段（V656）**：
+- ChanlunResult 新增 zsds_l1/qsds_l1：递归线段级别的走势段/趋势段。
+- levels.xd payload 输出递归走势段/趋势段；ChanlunView 线段级别图表同步展示。
+- 新增 xd_level payload 金标测试。
+
 **走势段/趋势段接入全部缠论图表（V655）**：
 - BacktestView / ScreeningView / SignalVerifyView / TrainView 均映射并展示 zsds/qsds。
 - 配合 V653/V654，所有 ChanlunChart 使用页统一支持走势段（粗实线）与趋势段（粗虚线）。

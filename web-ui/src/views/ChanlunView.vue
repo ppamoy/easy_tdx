@@ -247,8 +247,8 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
     // 高级别「笔」= 低级别线段；本级别不再叠加更高级别线段，避免双线重叠。
     bis.value = mapBis(xdLevel.bis)
     xds.value = []
-    zsds.value = []
-    qsds.value = []
+    zsds.value = mapXds(xdLevel.zsds)
+    qsds.value = mapXds(xdLevel.qsds)
     zss.value = mapZss(xdLevel.zss)
     mmds.value = mapMmds(xdLevel.mmds)
     bcs.value = mapBcs(xdLevel.bcs)
