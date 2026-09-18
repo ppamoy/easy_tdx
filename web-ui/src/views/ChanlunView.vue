@@ -1145,11 +1145,11 @@ onUnmounted(() => {
         <span class="stat-value" style="color: #60b4ff">{{ analysisLevelLabel }}</span>
       </div>
       <div class="stat-item">
-        <span class="stat-label">笔</span>
+        <span class="stat-label">{{ analysisLevel === 'bi' ? '笔' : '本级段' }}</span>
         <span class="stat-value" style="color: #60b4ff">{{ stats.biCount }}</span>
       </div>
       <div class="stat-item">
-        <span class="stat-label">线段</span>
+        <span class="stat-label">{{ analysisLevel === 'bi' ? '线段' : '递归段' }}</span>
         <span class="stat-value" style="color: #c878ff">{{ stats.xdCount }}</span>
       </div>
       <div class="stat-item">
