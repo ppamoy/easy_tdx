@@ -110,6 +110,24 @@ def test_find_qsds_empty_and_single() -> None:
     assert find_qsds(_make_xds()[:1]) == []
 
 
+def test_find_zsds_group_covers_middle_extremes() -> None:
+    """同向线段组超过 2 根时，走势段区间必须覆盖中间线段的极值。"""
+    endpoints = [100.0, 110.0, 120.0, 130.0]
+    points = [
+        _fx(FXType.DI if i % 2 == 0 else FXType.DING, val, i * 10)
+        for i, val in enumerate(endpoints)
+    ]
+    xds = [
+        XD(start=points[0], end=points[1], direction=Direction.UP, index=0, high=115.0, low=95.0),
+        XD(start=points[1], end=points[2], direction=Direction.UP, index=1, high=135.0, low=85.0),
+        XD(start=points[2], end=points[3], direction=Direction.UP, index=2, high=125.0, low=105.0),
+    ]
+    zsds = find_zsds(xds)
+    assert len(zsds) == 1
+    assert zsds[0].high == 135.0
+    assert zsds[0].low == 85.0
+
+
 def test_analyser_serializes_zsds_qsds() -> None:
     """真实行情管道输出 zsds/qsds，且数量与线段数一致（每根线段各成一段）。"""
     rows = json.loads((FIXTURE_DIR / "chanlun_000001_daily.json").read_text(encoding="utf-8"))

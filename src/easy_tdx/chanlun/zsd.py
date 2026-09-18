@@ -37,25 +37,19 @@ def find_zsds(
         return []
 
     zsds: list[XD] = []
-    current_start = xds[0]
+    group = [xds[0]]
     current_direction = xds[0].direction
 
-    for i in range(1, len(xds)):
-        xd = xds[i]
-
+    for xd in xds[1:]:
         if xd.direction != current_direction:
-            # 方向反转，关闭当前走势段
-            prev_xd = xds[i - 1]
-            zsd = _create_zsd(current_start, prev_xd, current_direction, len(zsds))
-            zsds.append(zsd)
-            current_start = xd
+            zsds.append(_create_zsd(group, current_direction, len(zsds)))
+            group = [xd]
             current_direction = xd.direction
+        else:
+            group.append(xd)
 
-    # 处理最后一个走势段
-    if len(xds) > 0:
-        last_xd = xds[-1]
-        zsd = _create_zsd(current_start, last_xd, current_direction, len(zsds))
-        zsds.append(zsd)
+    if group:
+        zsds.append(_create_zsd(group, current_direction, len(zsds)))
 
     return zsds
 
@@ -100,14 +94,15 @@ def find_qsds(
 
 
 def _create_zsd(
-    start_xd: XD,
-    end_xd: XD,
+    group: list[XD],
     direction: Direction,
     index: int,
 ) -> XD:
-    """从起止线段创建走势段。"""
-    high = max(start_xd.high, end_xd.high)
-    low = min(start_xd.low, end_xd.low)
+    """从一组同向线段创建走势段，区间覆盖组内所有线段。"""
+    start_xd = group[0]
+    end_xd = group[-1]
+    high = max(xd.high for xd in group)
+    low = min(xd.low for xd in group)
 
     return XD(
         start=start_xd.start,
