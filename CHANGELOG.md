@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**多级别联立边界金标（V663）**：
+- 新增 tests/unit/test_chanlun_multi_level_edges.py：空态、缺失级别、跨级别查询边界。
+
 **层级走势段/趋势段计数（V662）**：
 - levels.bi / levels.xd payload 增加 zsd_count / qsd_count。
 - 金标锁定层级 payload 计数与数组一致性。
