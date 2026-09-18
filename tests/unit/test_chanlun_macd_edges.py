@@ -25,3 +25,11 @@ def test_calc_macd_force_out_of_range_returns_zero() -> None:
     closes = [10.0, 10.2, 10.1, 10.5]
     force = calc_macd_force(closes, start_idx=2, end_idx=4)
     assert force == {"hist_sum": 0.0, "hist_up_sum": 0.0, "hist_down_sum": 0.0}
+
+
+def test_calc_macd_force_valid_range_is_nonnegative() -> None:
+    closes = [10.0, 10.2, 10.1, 10.5, 10.4, 10.8, 10.6]
+    force = calc_macd_force(closes, start_idx=1, end_idx=5)
+    assert force["hist_sum"] >= 0.0
+    assert force["hist_up_sum"] >= 0.0
+    assert force["hist_down_sum"] >= 0.0

@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**MACD 力度有效区间金标（V687）**：
+- 扩展 test_chanlun_macd_edges.py：有效区间力度汇总非负。
+
 **EMA 空态金标（V686）**：
 - 扩展 test_chanlun_macd_edges.py：锁定 _calc_ema 空输入返回空列表。
 
