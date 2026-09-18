@@ -196,6 +196,8 @@ class ChanlunResult:
             "zs_count": len(zss),
             "mmd_count": len(mmds),
             "bc_count": len(bcs),
+            "zsd_count": len(zsds),
+            "qsd_count": len(qsds),
             # 本级「笔」序列；线段级别中这些笔是低级别线段（xd 复用 line 字段）。
             "bis": [self._line_dict(line) for line in lines],
             "xds": [self._line_dict(xd) for xd in xds],

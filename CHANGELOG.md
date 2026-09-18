@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**层级走势段/趋势段计数（V662）**：
+- levels.bi / levels.xd payload 增加 zsd_count / qsd_count。
+- 金标锁定层级 payload 计数与数组一致性。
+
 **导出与图例增强（V661）**：
 - ChanlunView 导出 JSON 增加 zsds/qsds/analysis_level。
 - ChanlunChart 前端测试锁定走势段/趋势段 legend 显示。

@@ -149,4 +149,6 @@ def test_xd_level_payload_includes_zsds_qsds() -> None:
 
     assert len(payload["zsds"]) == len(result.zsds_l1)
     assert len(payload["qsds"]) == len(result.qsds_l1)
+    assert payload["zsd_count"] == len(result.zsds_l1)
+    assert payload["qsd_count"] == len(result.qsds_l1)
     assert payload["zsds"][0]["direction"] == result.zsds_l1[0].direction.value
