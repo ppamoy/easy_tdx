@@ -85,6 +85,8 @@ const chanlunQsds = ref<any[]>([])
 const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 const chanlunLoading = ref(false)
 const chanlunCategory = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
+const chanlunLevel = ref<'bi' | 'xd'>('bi')
+const chanlunRaw = ref<any>(null)
 
 // 回测结果
 interface BacktestResult {
@@ -836,6 +838,34 @@ function exportBatchCsv() {
   }, 2500)
 }
 
+function applyChanlunLevel(level: 'bi' | 'xd', data: any) {
+  if (level === 'xd' && data?.levels?.xd) {
+    const xdLevel = data.levels.xd
+    chanlunBis.value = xdLevel.bis ?? []
+    chanlunXds.value = []
+    chanlunZsds.value = xdLevel.zsds ?? []
+    chanlunQsds.value = xdLevel.qsds ?? []
+    chanlunZss.value = xdLevel.zss ?? []
+    chanlunMmds.value = xdLevel.mmds ?? []
+    chanlunBcs.value = xdLevel.bcs ?? []
+    return
+  }
+
+  chanlunBis.value = data?.bis ?? []
+  chanlunXds.value = data?.xds ?? []
+  chanlunZsds.value = data?.zsds ?? []
+  chanlunQsds.value = data?.qsds ?? []
+  chanlunZss.value = data?.zss ?? []
+  chanlunMmds.value = data?.mmds ?? []
+  chanlunBcs.value = data?.bcs ?? []
+}
+
+function onChanlunLevelChange() {
+  if (chanlunRaw.value) {
+    applyChanlunLevel(chanlunLevel.value, chanlunRaw.value)
+  }
+}
+
 // ── 选择股票 ────────────────────────────────────────────────────────────
 async function selectStock(stock: StockResult) {
   selectedStock.value = stock
@@ -907,14 +937,10 @@ async function runChanlunAnalysis(stock: StockResult) {
 
     const data = await resp.json()
 
-    chanlunBis.value = data.bis ?? []
-    chanlunXds.value = data.xds ?? []
-    chanlunZsds.value = data.zsds ?? []
-    chanlunQsds.value = data.qsds ?? []
-    chanlunZss.value = data.zss ?? []
-    chanlunMmds.value = data.mmds ?? []
+    chanlunRaw.value = data
+    chanlunLevel.value = 'bi'
+    applyChanlunLevel('bi', data)
     chanlunFxs.value = data.fractals ?? []
-    chanlunBcs.value = data.bcs ?? []
     chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
   } catch (e) {
     console.error('缠论分析失败:', e)
@@ -1416,6 +1442,13 @@ onMounted(() => {
             <option value="MIN_15">15分钟</option>
             <option value="MIN_30">30分钟</option>
             <option value="MIN_60">60分钟</option>
+          </select>
+        </div>
+        <div class="detail-field">
+          <label>分析级别</label>
+          <select v-model="chanlunLevel" @change="onChanlunLevelChange">
+            <option value="bi">笔级别</option>
+            <option value="xd">线段级别</option>
           </select>
         </div>
 

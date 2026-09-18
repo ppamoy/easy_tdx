@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**选股页分析级别切换（V668）**：
+- ScreeningView 新增「分析级别」切换器：笔级别 / 线段级别。
+- 切换后画图与择时信号同步切换，且无需重新取数。
+
 **买卖点力度计算边界金标（V667）**：
 - 新增 tests/unit/test_chanlun_mmd_edges.py：锁定 _calc_bi_force 无收盘价/端点越界/有效收盘价场景。
 
