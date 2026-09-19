@@ -42,13 +42,15 @@ const props = withDefaults(
     }
     /** 是否显示分型「顶/底」文字标签（默认 false）。 */
     showFractalLabels?: boolean
+    /** 是否显示分型符号（默认 true）。 */
+    showFractals?: boolean
     /**
      * 同级别中枢：只渲染该 index 的中枢（买卖点所属中枢，MMD.zs 引用）。
      * 未传（undefined）时渲染全部中枢。
      */
     singleZsIndex?: number
   }>(),
-  { showZsds: true },
+  { showZsds: true, showFractals: true },
 )
 
 interface ChanlunBi {
@@ -239,28 +241,31 @@ function buildOption(): echarts.EChartsCoreOption {
 
   // ── 分型的 MarkPoint ──
   // 紧凑模式下不显示「顶/底」文字标签，只画小圆点（268 个分型每个都带文字会严重遮挡 K 线）。
-  const fxPoints = (props.fxs ?? [])
-    .map((fx) => {
-      const idx = findAnchorIndex(keyIndex, fx.bar_index, fx.date, revealLimit)
-      if (idx === -1 || idx >= revealLimit) return null
-      // 端点直接锚定在分型极值价上（fx.val），而不是用 K 线高/低偏移：
-      // 用户反馈「端点没在K线极值上」——分型标记必须精确落在极值点。
-      const price = fx.val
-      return {
-        coord: [idx, price],
-        itemStyle: { color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR },
-        symbol: fx.type === 'ding' ? 'triangle' : 'diamond',
-        symbolSize: props.compact ? 5 : 8,
-        label: {
-          show: props.showFractalLabels === true && !props.compact,
-          formatter: fx.type === 'ding' ? '顶' : '底',
-          color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR,
-          fontSize: 9,
-          position: fx.type === 'ding' ? 'top' : 'bottom',
-        },
-      }
-    })
-    .filter(Boolean)
+  const fxPoints =
+    props.showFractals === false
+      ? []
+      : (props.fxs ?? [])
+          .map((fx) => {
+            const idx = findAnchorIndex(keyIndex, fx.bar_index, fx.date, revealLimit)
+            if (idx === -1 || idx >= revealLimit) return null
+            // 端点直接锚定在分型极值价上（fx.val），而不是用 K 线高/低偏移：
+            // 用户反馈「端点没在K线极值上」——分型标记必须精确落在极值点。
+            const price = fx.val
+            return {
+              coord: [idx, price],
+              itemStyle: { color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR },
+              symbol: fx.type === 'ding' ? 'triangle' : 'diamond',
+              symbolSize: props.compact ? 5 : 8,
+              label: {
+                show: props.showFractalLabels === true && !props.compact,
+                formatter: fx.type === 'ding' ? '顶' : '底',
+                color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR,
+                fontSize: 9,
+                position: fx.type === 'ding' ? 'top' : 'bottom',
+              },
+            }
+          })
+          .filter(Boolean)
 
   // ── 笔的 MarkLine（细虚线） ──
   const biMarkLines = props.bis
@@ -571,7 +576,7 @@ function buildOption(): echarts.EChartsCoreOption {
         ...((props.zsds?.length ?? 0) > 0 ? ['走势段(粗实线)'] : []),
         ...((props.qsds?.length ?? 0) > 0 ? ['趋势段(粗虚线)'] : []),
         ...(props.zss.length ? ['中枢'] : []),
-        ...(props.fxs && props.fxs.length ? ['分型'] : []),
+        ...(props.showFractals !== false && props.fxs && props.fxs.length ? ['分型'] : []),
         ...(mmdBuyPoints.length ? ['买点'] : []),
         ...(mmdSellPoints.length ? ['卖点'] : []),
         ...(props.bcs && props.bcs.some((bc) => bc.bc) ? ['背驰', '背驰(主图)'] : []),

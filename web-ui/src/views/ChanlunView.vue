@@ -280,6 +280,7 @@ type AnalysisLevel = 'bi' | 'xd'
 const analysisLevel = ref<AnalysisLevel>('bi')
 const rawResult = ref<any>(null)
 const showZsds = ref(true)
+const showFractals = ref(true)
 
 const analysisLevelLabel = computed(() => (analysisLevel.value === 'bi' ? '笔级别' : '线段级别'))
 
@@ -1059,6 +1060,9 @@ onUnmounted(() => {
       <div class="field-group">
         <label> <input type="checkbox" v-model="showZsds" /> 走势段/趋势段 </label>
       </div>
+      <div class="field-group">
+        <label> <input type="checkbox" v-model="showFractals" /> 分型 </label>
+      </div>
       <button class="primary analyze-btn" :disabled="loading" @click="analyze">
         {{ loading ? '分析中…' : '开始分析' }}
       </button>
@@ -1322,6 +1326,7 @@ onUnmounted(() => {
         :zsds="zsds"
         :qsds="qsds"
         :show-zsds="showZsds"
+        :show-fractals="showFractals"
         :zss="zss"
         :mmds="mmds"
         :fxs="fxs"

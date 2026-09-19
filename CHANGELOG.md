@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**分型显隐开关（V691）**
+- ChanlunChart 新增 showFractals（默认 true），可关闭分型符号绘制。
+- ChanlunView 图表页新增「分型」勾选。
+- 前端测试覆盖 showFractals=false 不渲染分型。
+
 **走势段/趋势段显隐开关（V690）**
 - ChanlunChart 新增 showZsds（默认 true），可关闭走势段/趋势段绘制。
 - ChanlunView 图表页新增「走势段/趋势段」勾选，图表展示更可控。

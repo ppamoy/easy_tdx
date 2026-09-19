@@ -372,4 +372,27 @@ describe('ChanlunChart 结构渲染', () => {
     expect(findSeries('走势段(粗实线)')).toBeUndefined()
     expect(findSeries('趋势段(粗虚线)')).toBeUndefined()
   })
+
+  test('showFractals=false 时不渲染分型 series', () => {
+    mount(ChanlunChart, {
+      props: {
+        bars,
+        bis: [],
+        xds: [],
+        fxs: [
+          { type: 'di', date: fdate(88), val: 8.6, bar_index: 88 },
+          { type: 'ding', date: fdate(150), val: 14.0, bar_index: 150 },
+        ],
+        showFractals: false,
+        zss: [],
+        mmds: [],
+        frequency: 'daily',
+        compact: true,
+      },
+      attachTo: document.body,
+    })
+
+    expect(findSeries('分型')?.data).toHaveLength(0)
+    expect(lastOption.legend.data).not.toContain('分型')
+  })
 })
