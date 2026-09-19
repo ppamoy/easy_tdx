@@ -279,12 +279,21 @@ const multiLevelResult = ref<any>(null)
 type AnalysisLevel = 'bi' | 'xd'
 const analysisLevel = ref<AnalysisLevel>('bi')
 const rawResult = ref<any>(null)
-const showZsds = ref(true)
-const showFractals = ref(true)
-const showMmds = ref(true)
-const showBcs = ref(true)
-const showZss = ref(true)
-const showMmdLabels = ref(false)
+function loadBool(key: string, def: boolean): boolean {
+  try {
+    const v = localStorage.getItem(key)
+    if (v === null) return def
+    return v === '1'
+  } catch {
+    return def
+  }
+}
+const showZsds = ref(loadBool('chanlun.showZsds', true))
+const showFractals = ref(loadBool('chanlun.showFractals', true))
+const showMmds = ref(loadBool('chanlun.showMmds', true))
+const showBcs = ref(loadBool('chanlun.showBcs', true))
+const showZss = ref(loadBool('chanlun.showZss', true))
+const showMmdLabels = ref(loadBool('chanlun.showMmdLabels', false))
 
 const analysisLevelLabel = computed(() => (analysisLevel.value === 'bi' ? '笔级别' : '线段级别'))
 
@@ -1009,7 +1018,7 @@ function stopPricePoll() {
   }
 }
 
-// URL 同步：周期与分析级别保持在 query 中，刷新/分享/归富后可复现
+// URL 同步：周期与分析级别保持在 query 中，刷新/分享/回退后可复现
 const route = useRoute()
 const _qCat = String(route.query.category || '')
 if (['DAY', 'WEEK', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60'].includes(_qCat)) {
@@ -1018,6 +1027,20 @@ if (['DAY', 'WEEK', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60'].includes(_qCat)) {
 if (route.query.level === 'xd') analysisLevel.value = 'xd'
 watch([category, analysisLevel], () => {
   router.replace({ query: { category: category.value, level: analysisLevel.value } })
+})
+
+// 显隐开关偏好持久化：跨会话记住用户设置
+watch([showZsds, showFractals, showMmds, showBcs, showZss, showMmdLabels], () => {
+  try {
+    localStorage.setItem('chanlun.showZsds', showZsds.value ? '1' : '0')
+    localStorage.setItem('chanlun.showFractals', showFractals.value ? '1' : '0')
+    localStorage.setItem('chanlun.showMmds', showMmds.value ? '1' : '0')
+    localStorage.setItem('chanlun.showBcs', showBcs.value ? '1' : '0')
+    localStorage.setItem('chanlun.showZss', showZss.value ? '1' : '0')
+    localStorage.setItem('chanlun.showMmdLabels', showMmdLabels.value ? '1' : '0')
+  } catch {
+    // localStorage 不可用（隐私模式）时忽略持久化失败
+  }
 })
 
 onMounted(() => {

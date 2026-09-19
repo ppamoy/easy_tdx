@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**显隐开关偏好持久化（V700）**
+- ChanlunView 的走势段/分型/买卖点/背迪/中枢/文字标注开关从 localStorage 读取并持久化，跨会话保持用户设置。
+
 **中枢最少段数金标（V699）**
 - 新增 test_chanlun_zs_min_segments.py：锁定缠论原文中枢至少由连续三个次级别走势重叠构成。
 
