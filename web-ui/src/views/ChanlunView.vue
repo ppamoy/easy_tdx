@@ -2,8 +2,8 @@
 // 缠论分析视图：输入标的代码，调用后端缠论分析 API，
 // 在 K 线图上叠加显示笔、线段、中枢、买卖点。
 
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import V102DecisionCard from '../components/V102DecisionCard.vue'
 import { formatError } from '../api'
@@ -1007,6 +1007,17 @@ function stopPricePoll() {
     pricePollInterval = null
   }
 }
+
+// URL 同步：周期与分析级别保持在 query 中，刷新/分享/归富后可复现
+const route = useRoute()
+const _qCat = String(route.query.category || '')
+if (['DAY', 'WEEK', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60'].includes(_qCat)) {
+  category.value = _qCat as typeof category.value
+}
+if (route.query.level === 'xd') analysisLevel.value = 'xd'
+watch([category, analysisLevel], () => {
+  router.replace({ query: { category: category.value, level: analysisLevel.value } })
+})
 
 onMounted(() => {
   analyze()

@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**周期/级别 URL 同步（V696）**
+- ChanlunView 读取 query 中的 category/level 并在切换时回写 URL，刷新/分享可复现图表选项。
+
 **中枢显隐开关（V695）**
 - ChanlunChart 新增 showZss（默认 true），可关闭中枢区域绘制。
 - ChanlunView 图表页新增「中枢」勾选。
