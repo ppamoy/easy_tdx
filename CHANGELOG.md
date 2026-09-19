@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**中枢最少段数金标（V699）**
+- 新增 test_chanlun_zs_min_segments.py：锁定缠论原文中枢至少由连续三个次级别走势重叠构成。
+
 **趋势背驰离开段方向金标（V697）**
 - 新增 test_qs_skip_when_exit_direction_mismatch：趋势背驰离开段方向与趋势不符时不产出背驰（缠论原文）。
 
