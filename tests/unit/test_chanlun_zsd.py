@@ -95,6 +95,20 @@ def test_find_qsds_golden() -> None:
     assert [q.direction.value for q in qsds] == ["up", "down", "up"]
 
 
+def test_qsds_are_subset_of_zsds() -> None:
+    """趋势段必须是某个走势段（端点+方向完全一致），即 QSD ⊆ ZSD。"""
+    qsds = find_qsds(_make_xds())
+    zsds = find_zsds(_make_xds())
+
+    zsd_keys = {
+        (z.direction.value, z.start.val, z.end.val, z.start.bar_index, z.end.bar_index)
+        for z in zsds
+    }
+    for q in qsds:
+        key = (q.direction.value, q.start.val, q.end.val, q.start.bar_index, q.end.bar_index)
+        assert key in zsd_keys
+
+
 def test_find_zsds_endpoints_share_pivots() -> None:
     """相邻走势段首尾相连，端点分型共享。"""
     zsds = find_zsds(_make_xds())
