@@ -134,6 +134,20 @@ def find_xds(
         while j < len(bis):
             if bis[j].direction != seg_dir:
                 features.append((j, bis[j]))
+                # 缠论原文：线段由「至少 3 笔 + 特征序列分型」界定，也可由「笔破坏」结束。
+                # 启用该规则时，反向走势笔一旦越过线段起点的极值（即破坏了线段
+                # 内部结构与方向），线段在破坏笔之前结束；首次确认即定（XD_TIEBREAK_EARLIEST）。
+                if config.xd_bi_pohuai and j >= start + 3:
+                    breakout_feat = bis[j]
+                    cand_end = j - 1
+                    if seg_dir == Direction.UP and breakout_feat.low < bis[start].start.val:
+                        if _valid_segment_end(bis, start, cand_end, seg_dir):
+                            end = cand_end
+                            break
+                    elif seg_dir == Direction.DOWN and breakout_feat.high > bis[start].start.val:
+                        if _valid_segment_end(bis, start, cand_end, seg_dir):
+                            end = cand_end
+                            break
                 # 特征序列第一、第二元素之间是否有缺口（区间不重叠）
                 if len(features) == 2:
                     a = features[0][1]

@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+**线段破坏（缠论hy原文）（V689）**
+- find_xds 接入 config.xd_bi_pohuai：反向走势笔越过线段起点极值时执行笔破坏提前结束。
+- 默认关闭，保持历史结果兼容；新增向上/向下破坏金标。
+
 **导出增加走势段/趋势段计数（V688）**：
 - ChanlunView 导出 JSON 增加 zsd_count / qsd_count。
 
