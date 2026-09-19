@@ -450,4 +450,37 @@ describe('ChanlunChart 结构渲染', () => {
     expect(findSeries('背驰(主图)')?.data).toHaveLength(0)
     expect(lastOption.legend.data).not.toContain('背驰')
   })
+
+  test('showZss=false 时不渲染中枢区域', () => {
+    mount(ChanlunChart, {
+      props: {
+        bars,
+        bis: [],
+        xds: [],
+        zss: [
+          {
+            index: 0,
+            zg: 11.8,
+            zd: 10.8,
+            gg: 12.5,
+            dd: 10.4,
+            line_count: 3,
+            start_date: fdate(100),
+            end_date: fdate(126),
+            start_index: 100,
+            end_index: 126,
+            done: true,
+          },
+        ],
+        showZss: false,
+        mmds: [],
+        frequency: 'daily',
+        compact: true,
+      },
+      attachTo: document.body,
+    })
+
+    expect(findSeries('中枢')?.markArea?.data).toHaveLength(0)
+    expect(lastOption.legend.data).not.toContain('中枢')
+  })
 })

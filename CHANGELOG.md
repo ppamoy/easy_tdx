@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**中枢显隐开关（V695）**
+- ChanlunChart 新增 showZss（默认 true），可关闭中枢区域绘制。
+- ChanlunView 图表页新增「中枢」勾选。
+- 前端测试覆盖 showZss=false 不渲染。
+
 **背迪显隐开关（V694）**
 - ChanlunChart 新增 showBcs（默认 true），可关闭背迪主/副图标注。
 - ChanlunView 图表页新增「背迪」勾选。
