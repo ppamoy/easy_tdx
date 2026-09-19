@@ -138,3 +138,18 @@ def test_qs_skip_when_no_new_low() -> None:
     prev = _zs(0, [bis[0], bis[1], bis[2]], 12.0, 10.0)
     curr = _zs(1, [bis[2], bis[3], bis[4]], 10.0, 9.0)
     assert _check_qs_beichi(bis, [prev, curr], closes=None) == []
+
+
+def test_qs_skip_when_exit_direction_mismatch() -> None:
+    """向上趋势背驰：离开段方向与趋势不符时不产出背驰（缠论原文）。"""
+    bis = [
+        _bi(0, "up", 12.0, 8.0),
+        _bi(1, "down", 11.0, 9.0),
+        _bi(2, "up", 13.0, 10.0),
+        _bi(3, "up", 14.0, 11.0),  # 前一中枢离开段（向上）
+        _bi(4, "up", 13.0, 11.0),
+        _bi(5, "down", 12.0, 10.0),  # 后一中枢离开段方向不符（向下）
+    ]
+    prev = _zs(0, [bis[0], bis[1], bis[2]], 10.0, 8.0)
+    curr = _zs(1, [bis[2], bis[3], bis[4]], 12.0, 10.0)
+    assert _check_qs_beichi(bis, [prev, curr], closes=None) == []

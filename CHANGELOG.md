@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**趋势背迪离开段方向金标（V697）**
+- 新增 test_qs_skip_when_exit_direction_mismatch：盘整趋势背迪离开段方向与趋势不符时不产出背迪（缠论原文）。
+
 **周期/级别 URL 同步（V696）**
 - ChanlunView 读取 query 中的 category/level 并在切换时回写 URL，刷新/分享可复现图表选项。
 
