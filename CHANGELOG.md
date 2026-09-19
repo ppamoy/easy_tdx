@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**买卖点显隐开关（V693）**
+- ChanlunChart 新增 showMmds（默认 true），可关闭买卖点标注绘制。
+- ChanlunView 图表页新增「买卖点」勾选。
+- 前端测试覆盖 showMmds=false 不渲染。
+
 **中枢延伸金标（V692）**
 - 新增 test_chanlun_zs_extension.py：锁定缠论原文中枢由前三次级别走势重叠确定 ZG/ZD，延伸笔只更新 GG/DD。
 

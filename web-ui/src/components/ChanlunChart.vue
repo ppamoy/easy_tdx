@@ -44,13 +44,15 @@ const props = withDefaults(
     showFractalLabels?: boolean
     /** 是否显示分型符号（默认 true）。 */
     showFractals?: boolean
+    /** 是否显示买卖点标注（默认 true）。 */
+    showMmds?: boolean
     /**
      * 同级别中枢：只渲染该 index 的中枢（买卖点所属中枢，MMD.zs 引用）。
      * 未传（undefined）时渲染全部中枢。
      */
     singleZsIndex?: number
   }>(),
-  { showZsds: true, showFractals: true },
+  { showZsds: true, showFractals: true, showMmds: true },
 )
 
 interface ChanlunBi {
@@ -435,48 +437,62 @@ function buildOption(): echarts.EChartsCoreOption {
     '3buy': 12,
     '3sell': 12,
   }
-  const mmdBuyPoints = props.mmds
-    .filter((m) => m.date != null && m.type.includes('buy'))
-    .map((m) => {
-      const idx = findAnchorIndex(keyIndex, m.bar_index, m.date!, revealLimit)
-      if (idx === -1) return null
-      let price: number
-      if (m.anchor_val !== undefined && m.anchor_val !== null && Number.isFinite(m.anchor_val)) {
-        price = m.anchor_val
-      } else {
-        price = props.bars[idx].low * (1 - 0.005)
-      }
-      return {
-        name: m.type,
-        coord: [idx, price],
-        itemStyle: { color: MMD_COLOR[m.type] ?? '#22c55e' },
-        symbol: MMD_SYMBOL[m.type] ?? 'circle',
-        symbolSize: MMD_SIZE[m.type] ?? 14,
-        label: { show: false },
-      }
-    })
-    .filter(Boolean)
-  const mmdSellPoints = props.mmds
-    .filter((m) => m.date != null && !m.type.includes('buy'))
-    .map((m) => {
-      const idx = findAnchorIndex(keyIndex, m.bar_index, m.date!, revealLimit)
-      if (idx === -1) return null
-      let price: number
-      if (m.anchor_val !== undefined && m.anchor_val !== null && Number.isFinite(m.anchor_val)) {
-        price = m.anchor_val
-      } else {
-        price = props.bars[idx].high * (1 + 0.005)
-      }
-      return {
-        name: m.type,
-        coord: [idx, price],
-        itemStyle: { color: MMD_COLOR[m.type] ?? '#ef4444' },
-        symbol: MMD_SYMBOL[m.type] ?? 'circle',
-        symbolSize: MMD_SIZE[m.type] ?? 14,
-        label: { show: false },
-      }
-    })
-    .filter(Boolean)
+  const mmdBuyPoints =
+    props.showMmds === false
+      ? []
+      : props.mmds
+          .filter((m) => m.date != null && m.type.includes('buy'))
+          .map((m) => {
+            const idx = findAnchorIndex(keyIndex, m.bar_index, m.date!, revealLimit)
+            if (idx === -1) return null
+            let price: number
+            if (
+              m.anchor_val !== undefined &&
+              m.anchor_val !== null &&
+              Number.isFinite(m.anchor_val)
+            ) {
+              price = m.anchor_val
+            } else {
+              price = props.bars[idx].low * (1 - 0.005)
+            }
+            return {
+              name: m.type,
+              coord: [idx, price],
+              itemStyle: { color: MMD_COLOR[m.type] ?? '#22c55e' },
+              symbol: MMD_SYMBOL[m.type] ?? 'circle',
+              symbolSize: MMD_SIZE[m.type] ?? 14,
+              label: { show: false },
+            }
+          })
+          .filter(Boolean)
+  const mmdSellPoints =
+    props.showMmds === false
+      ? []
+      : props.mmds
+          .filter((m) => m.date != null && !m.type.includes('buy'))
+          .map((m) => {
+            const idx = findAnchorIndex(keyIndex, m.bar_index, m.date!, revealLimit)
+            if (idx === -1) return null
+            let price: number
+            if (
+              m.anchor_val !== undefined &&
+              m.anchor_val !== null &&
+              Number.isFinite(m.anchor_val)
+            ) {
+              price = m.anchor_val
+            } else {
+              price = props.bars[idx].high * (1 + 0.005)
+            }
+            return {
+              name: m.type,
+              coord: [idx, price],
+              itemStyle: { color: MMD_COLOR[m.type] ?? '#ef4444' },
+              symbol: MMD_SYMBOL[m.type] ?? 'circle',
+              symbolSize: MMD_SIZE[m.type] ?? 14,
+              label: { show: false },
+            }
+          })
+          .filter(Boolean)
 
   // ── 背驰标记 ──
   // 背驰画在 MACD 副图上：y 取该位置 MACD 柱值（无柱数据时退化为 0），

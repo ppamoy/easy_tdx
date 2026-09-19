@@ -395,4 +395,28 @@ describe('ChanlunChart 结构渲染', () => {
     expect(findSeries('分型')?.data).toHaveLength(0)
     expect(lastOption.legend.data).not.toContain('分型')
   })
+
+  test('showMmds=false 时不渲染买卖点', () => {
+    mount(ChanlunChart, {
+      props: {
+        bars,
+        bis: [],
+        xds: [],
+        mmds: [
+          { type: '1buy', date: fdate(95), bar_index: 95, anchor_val: 8.0, msg: 'm' },
+          { type: '1sell', date: fdate(150), bar_index: 150, anchor_val: 14.0, msg: 'm' },
+        ],
+        showMmds: false,
+        zss: [],
+        frequency: 'daily',
+        compact: true,
+      },
+      attachTo: document.body,
+    })
+
+    expect(findSeries('买点')?.data).toHaveLength(0)
+    expect(findSeries('卖点')?.data).toHaveLength(0)
+    expect(lastOption.legend.data).not.toContain('买点')
+    expect(lastOption.legend.data).not.toContain('卖点')
+  })
 })
