@@ -937,6 +937,18 @@ function addToWatchlist() {
   showToast(`${market}${code.value} 已加入自选`, 'success')
 }
 
+// 复制当前带 query 的分享链接
+function copyShareLink() {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => showToast('已复制分享链接'))
+      .catch(() => showToast('复制链接失败'))
+  } else {
+    showToast('复制链接失败')
+  }
+}
+
 // 导出缠论分析结果为 JSON/CSV
 function exportAnalysis() {
   if (bars.value.length === 0) return
@@ -1129,6 +1141,7 @@ onUnmounted(() => {
       <button v-if="!loading && bars.length > 0" class="ghost" @click="exportAnalysis">
         💾 导出分析
       </button>
+      <button class="ghost" @click="copyShareLink">🔗 复制链接</button>
     </div>
 
     <!-- 错误提示 -->
