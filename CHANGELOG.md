@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**SignalVerify 复制链接（V704）**
+- SignalVerifyView 详情头新增「复制链接」按钮，配合 URL 同步生成可分享图表配置。
+
 **复制分享链接（V703）**
 - ChanlunView 顶栏新增「复制链接」按钮，配合 URL 同步将当前图表设置（周期/分析级别）生成可分享链接。
 

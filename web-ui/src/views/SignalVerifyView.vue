@@ -244,6 +244,21 @@ function nextStock() {
   if (idx >= 0 && idx < stocks.value.length - 1) selectStock(stocks.value[idx + 1].code)
 }
 
+function copyShareLink() {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard
+      .writeText(window.location.href)
+      .then(() => {
+        error.value = ''
+      })
+      .catch(() => {
+        error.value = '复制链接失败'
+      })
+  } else {
+    error.value = '复制链接失败'
+  }
+}
+
 function mmdClass(m: MmdItem): string {
   return m.type.includes('buy') ? 'mmd-buy' : 'mmd-sell'
 }
@@ -317,6 +332,7 @@ onMounted(() => {
               <option value="bi">笔级别</option>
               <option value="xd">线段级别</option>
             </select>
+            <button class="ghost" @click="copyShareLink">🔗 复制链接</button>
             <button class="ghost" @click="nextStock">下一只 ▶</button>
           </div>
 
