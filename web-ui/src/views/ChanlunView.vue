@@ -279,6 +279,7 @@ const multiLevelResult = ref<any>(null)
 type AnalysisLevel = 'bi' | 'xd'
 const analysisLevel = ref<AnalysisLevel>('bi')
 const rawResult = ref<any>(null)
+const showZsds = ref(true)
 
 const analysisLevelLabel = computed(() => (analysisLevel.value === 'bi' ? '笔级别' : '线段级别'))
 
@@ -1055,6 +1056,9 @@ onUnmounted(() => {
           <option value="xd">线段级别</option>
         </select>
       </div>
+      <div class="field-group">
+        <label> <input type="checkbox" v-model="showZsds" /> 走势段/趋势段 </label>
+      </div>
       <button class="primary analyze-btn" :disabled="loading" @click="analyze">
         {{ loading ? '分析中…' : '开始分析' }}
       </button>
@@ -1317,6 +1321,7 @@ onUnmounted(() => {
         :xds="xds"
         :zsds="zsds"
         :qsds="qsds"
+        :show-zsds="showZsds"
         :zss="zss"
         :mmds="mmds"
         :fxs="fxs"

@@ -325,4 +325,51 @@ describe('ChanlunChart 结构渲染', () => {
     expect(findSeries('走势段(粗实线)')?.markLine?.data).toHaveLength(1)
     expect(findSeries('趋势段(粗虚线)')).toBeUndefined()
   })
+
+  test('showZsds=false 时不渲染走势段/趋势段', () => {
+    mount(ChanlunChart, {
+      props: {
+        bars,
+        bis: [],
+        xds: [],
+        zsds: [
+          {
+            index: 0,
+            direction: 'up',
+            start_date: fdate(88),
+            end_date: fdate(130),
+            high: 12.6,
+            low: 8.6,
+            start_val: 8.6,
+            end_val: 12.5,
+            start_index: 88,
+            end_index: 130,
+          },
+        ],
+        qsds: [
+          {
+            index: 0,
+            direction: 'down',
+            start_date: fdate(130),
+            end_date: fdate(158),
+            high: 14.0,
+            low: 9.5,
+            start_val: 14.0,
+            end_val: 9.5,
+            start_index: 130,
+            end_index: 158,
+          },
+        ],
+        showZsds: false,
+        zss: [],
+        mmds: [],
+        frequency: 'daily',
+        compact: true,
+      },
+      attachTo: document.body,
+    })
+
+    expect(findSeries('走势段(粗实线)')).toBeUndefined()
+    expect(findSeries('趋势段(粗虚线)')).toBeUndefined()
+  })
 })

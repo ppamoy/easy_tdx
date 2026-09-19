@@ -7,44 +7,49 @@ import echarts, { DOWN_COLOR, UP_COLOR } from '../echarts-setup'
 import { fmt2 } from '../format'
 import type { Bar } from '../types'
 
-const props = defineProps<{
-  bars: Bar[]
-  bis: ChanlunBi[]
-  xds: ChanlunXd[]
-  /** 走势段（ZSD）：由同向线段合并，粗实线显示。 */
-  zsds?: ChanlunXd[]
-  /** 趋势段（QSD）：具备明确方向的走势段，粗虚线显示。 */
-  qsds?: ChanlunXd[]
-  zss: ChanlunZs[]
-  mmds: ChanlunMmd[]
-  fxs?: ChanlunFx[]
-  bcs?: ChanlunBc[]
-  frequency: string
-  /** 揭示游标（训练模式）：只显示前 revealIndex+1 根 K 线及其范围内的叠加层 */
-  revealIndex?: number
-  /**
-   * 紧凑模式（回测页）：分型符号更小，减少视觉噪声。
-   * 分型「顶/底」文字标签一律默认关闭（268 个分型全标文字是图上最乱的部分）。
-   */
-  compact?: boolean
-  /**
-   * MACD 序列（dif/dea/hist，与 bars 一一对应），用于绘制 MACD 副图。
-   * 缠论背驰判断基于笔内 MACD 红绿柱面积（calc_macd_force），
-   * 显示副图让用户能直观核对背驰依据。
-   */
-  macd?: {
-    dif: number[]
-    dea: number[]
-    hist: number[]
-  }
-  /** 是否显示分型「顶/底」文字标签（默认 false）。 */
-  showFractalLabels?: boolean
-  /**
-   * 同级别中枢：只渲染该 index 的中枢（买卖点所属中枢，MMD.zs 引用）。
-   * 未传（undefined）时渲染全部中枢。
-   */
-  singleZsIndex?: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    bars: Bar[]
+    bis: ChanlunBi[]
+    xds: ChanlunXd[]
+    /** 走势段（ZSD）：由同向线段合并，粗实线显示。 */
+    zsds?: ChanlunXd[]
+    /** 趋势段（QSD）：具备明确方向的走势段，粗虚线显示。 */
+    qsds?: ChanlunXd[]
+    /** 是否显示走势段/趋势段（默认 true）。 */
+    showZsds?: boolean
+    zss: ChanlunZs[]
+    mmds: ChanlunMmd[]
+    fxs?: ChanlunFx[]
+    bcs?: ChanlunBc[]
+    frequency: string
+    /** 揭示游标（训练模式）：只显示前 revealIndex+1 根 K 线及其范围内的叠加层 */
+    revealIndex?: number
+    /**
+     * 紧凑模式（回测页）：分型符号更小，减少视觉噪声。
+     * 分型「顶/底」文字标签一律默认关闭（268 个分型全标文字是图上最乱的部分）。
+     */
+    compact?: boolean
+    /**
+     * MACD 序列（dif/dea/hist，与 bars 一一对应），用于绘制 MACD 副图。
+     * 缠论背驰判断基于笔内 MACD 红绿柱面积（calc_macd_force），
+     * 显示副图让用户能直观核对背驰依据。
+     */
+    macd?: {
+      dif: number[]
+      dea: number[]
+      hist: number[]
+    }
+    /** 是否显示分型「顶/底」文字标签（默认 false）。 */
+    showFractalLabels?: boolean
+    /**
+     * 同级别中枢：只渲染该 index 的中枢（买卖点所属中枢，MMD.zs 引用）。
+     * 未传（undefined）时渲染全部中枢。
+     */
+    singleZsIndex?: number
+  }>(),
+  { showZsds: true },
+)
 
 interface ChanlunBi {
   index: number
@@ -325,52 +330,58 @@ function buildOption(): echarts.EChartsCoreOption {
     })
 
   // ── 走势段（ZSD）的 MarkLine（粗实线） ──
-  const zsdMarkLines = (props.zsds ?? [])
-    .filter((zsd) => {
-      const si = findAnchorIndex(keyIndex, zsd.start_index, zsd.start_date, revealLimit)
-      const ei = findAnchorIndex(keyIndex, zsd.end_index, zsd.end_date, revealLimit)
-      return si !== -1 && ei !== -1
-    })
-    .map((zsd) => {
-      const si = findAnchorIndex(keyIndex, zsd.start_index, zsd.start_date, revealLimit)
-      const ei = findAnchorIndex(keyIndex, zsd.end_index, zsd.end_date, revealLimit)
-      const isUp = zsd.direction === 'up'
-      const lineStyle = {
-        color: isUp ? 'rgba(34,197,94,0.55)' : 'rgba(239,68,68,0.55)',
-        width: props.compact ? 2 : 3,
-        type: 'solid' as const,
-      }
-      const startY = zsd.start_val ?? (isUp ? zsd.low : zsd.high)
-      const endY = zsd.end_val ?? (isUp ? zsd.high : zsd.low)
-      return [
-        { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'none' },
-        { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'none' },
-      ]
-    })
+  const zsdMarkLines =
+    props.showZsds === false
+      ? []
+      : (props.zsds ?? [])
+          .filter((zsd) => {
+            const si = findAnchorIndex(keyIndex, zsd.start_index, zsd.start_date, revealLimit)
+            const ei = findAnchorIndex(keyIndex, zsd.end_index, zsd.end_date, revealLimit)
+            return si !== -1 && ei !== -1
+          })
+          .map((zsd) => {
+            const si = findAnchorIndex(keyIndex, zsd.start_index, zsd.start_date, revealLimit)
+            const ei = findAnchorIndex(keyIndex, zsd.end_index, zsd.end_date, revealLimit)
+            const isUp = zsd.direction === 'up'
+            const lineStyle = {
+              color: isUp ? 'rgba(34,197,94,0.55)' : 'rgba(239,68,68,0.55)',
+              width: props.compact ? 2 : 3,
+              type: 'solid' as const,
+            }
+            const startY = zsd.start_val ?? (isUp ? zsd.low : zsd.high)
+            const endY = zsd.end_val ?? (isUp ? zsd.high : zsd.low)
+            return [
+              { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'none' },
+              { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'none' },
+            ]
+          })
 
   // ── 趋势段（QSD）的 MarkLine（粗虚线） ──
-  const qsdMarkLines = (props.qsds ?? [])
-    .filter((qsd) => {
-      const si = findAnchorIndex(keyIndex, qsd.start_index, qsd.start_date, revealLimit)
-      const ei = findAnchorIndex(keyIndex, qsd.end_index, qsd.end_date, revealLimit)
-      return si !== -1 && ei !== -1
-    })
-    .map((qsd) => {
-      const si = findAnchorIndex(keyIndex, qsd.start_index, qsd.start_date, revealLimit)
-      const ei = findAnchorIndex(keyIndex, qsd.end_index, qsd.end_date, revealLimit)
-      const isUp = qsd.direction === 'up'
-      const lineStyle = {
-        color: isUp ? '#16a34a' : '#dc2626',
-        width: props.compact ? 2 : 3,
-        type: 'dashed' as const,
-      }
-      const startY = qsd.start_val ?? (isUp ? qsd.low : qsd.high)
-      const endY = qsd.end_val ?? (isUp ? qsd.high : qsd.low)
-      return [
-        { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'none' },
-        { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'none' },
-      ]
-    })
+  const qsdMarkLines =
+    props.showZsds === false
+      ? []
+      : (props.qsds ?? [])
+          .filter((qsd) => {
+            const si = findAnchorIndex(keyIndex, qsd.start_index, qsd.start_date, revealLimit)
+            const ei = findAnchorIndex(keyIndex, qsd.end_index, qsd.end_date, revealLimit)
+            return si !== -1 && ei !== -1
+          })
+          .map((qsd) => {
+            const si = findAnchorIndex(keyIndex, qsd.start_index, qsd.start_date, revealLimit)
+            const ei = findAnchorIndex(keyIndex, qsd.end_index, qsd.end_date, revealLimit)
+            const isUp = qsd.direction === 'up'
+            const lineStyle = {
+              color: isUp ? '#16a34a' : '#dc2626',
+              width: props.compact ? 2 : 3,
+              type: 'dashed' as const,
+            }
+            const startY = qsd.start_val ?? (isUp ? qsd.low : qsd.high)
+            const endY = qsd.end_val ?? (isUp ? qsd.high : qsd.low)
+            return [
+              { coord: [si, startY], lineStyle, label: { show: false }, symbol: 'none' },
+              { coord: [ei, endY], lineStyle, label: { show: false }, symbol: 'none' },
+            ]
+          })
 
   // ── 中枢的 MarkArea ──
   const zsMarkAreas = props.zss
