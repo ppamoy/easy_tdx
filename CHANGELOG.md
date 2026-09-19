@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**中枢延伸金标（V692）**
+- 新增 test_chanlun_zs_extension.py：锁定缠论原文中枢由前三次级别走势重叠确定 ZG/ZD，延伸笔只更新 GG/DD。
+
 **分型显隐开关（V691）**
 - ChanlunChart 新增 showFractals（默认 true），可关闭分型符号绘制。
 - ChanlunView 图表页新增「分型」勾选。
