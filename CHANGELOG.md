@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**背迪显隐开关（V694）**
+- ChanlunChart 新增 showBcs（默认 true），可关闭背迪主/副图标注。
+- ChanlunView 图表页新增「背迪」勾选。
+- 前端测试覆盖 showBcs=false 不渲染。
+
 **买卖点显隐开关（V693）**
 - ChanlunChart 新增 showMmds（默认 true），可关闭买卖点标注绘制。
 - ChanlunView 图表页新增「买卖点」勾选。

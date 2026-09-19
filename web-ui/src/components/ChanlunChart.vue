@@ -46,13 +46,15 @@ const props = withDefaults(
     showFractals?: boolean
     /** 是否显示买卖点标注（默认 true）。 */
     showMmds?: boolean
+    /** 是否显示背驰标注（默认 true）。 */
+    showBcs?: boolean
     /**
      * 同级别中枢：只渲染该 index 的中枢（买卖点所属中枢，MMD.zs 引用）。
      * 未传（undefined）时渲染全部中枢。
      */
     singleZsIndex?: number
   }>(),
-  { showZsds: true, showFractals: true, showMmds: true },
+  { showZsds: true, showFractals: true, showMmds: true, showBcs: true },
 )
 
 interface ChanlunBi {
@@ -497,51 +499,57 @@ function buildOption(): echarts.EChartsCoreOption {
   // ── 背驰标记 ──
   // 背驰画在 MACD 副图上：y 取该位置 MACD 柱值（无柱数据时退化为 0），
   // 使「背」标记直接落在对应柱子上，直观展示背驰的 MACD 面积依据。
-  const bcPoints = (props.bcs ?? [])
-    .filter((bc) => bc.bc && bc.date != null)
-    .map((bc) => {
-      const idx = findAnchorIndex(keyIndex, bc.bar_index, bc.date!, revealLimit)
-      if (idx === -1) return null
-      const histVal = macdHist[idx]
-      const y = histVal !== undefined && Number.isFinite(histVal) ? histVal : 0
-      return {
-        coord: [idx, y],
-        itemStyle: { color: '#ff9500' },
-        symbol: 'rect',
-        symbolSize: [12, 6],
-        label: {
-          show: true,
-          formatter: '背',
-          color: '#ff9500',
-          fontSize: 9,
-          position: y >= 0 ? 'top' : 'bottom',
-        },
-      }
-    })
-    .filter(Boolean)
+  const bcPoints =
+    props.showBcs === false
+      ? []
+      : (props.bcs ?? [])
+          .filter((bc) => bc.bc && bc.date != null)
+          .map((bc) => {
+            const idx = findAnchorIndex(keyIndex, bc.bar_index, bc.date!, revealLimit)
+            if (idx === -1) return null
+            const histVal = macdHist[idx]
+            const y = histVal !== undefined && Number.isFinite(histVal) ? histVal : 0
+            return {
+              coord: [idx, y],
+              itemStyle: { color: '#ff9500' },
+              symbol: 'rect',
+              symbolSize: [12, 6],
+              label: {
+                show: true,
+                formatter: '背',
+                color: '#ff9500',
+                fontSize: 9,
+                position: y >= 0 ? 'top' : 'bottom',
+              },
+            }
+          })
+          .filter(Boolean)
 
   // ── 背驰主图标注 ──
   // 在 K 线主图的触发笔终点分型极值上再标一个「背」，与副图 MACD 柱对照。
-  const bcPricePoints = (props.bcs ?? [])
-    .filter((bc) => bc.bc && bc.anchor_bar_index != null && bc.anchor_val != null)
-    .map((bc) => {
-      const idx = findAnchorIndex(keyIndex, bc.anchor_bar_index!, bc.date!, revealLimit)
-      if (idx === -1) return null
-      return {
-        coord: [idx, bc.anchor_val],
-        itemStyle: { color: '#ff9500' },
-        symbol: 'roundRect',
-        symbolSize: [12, 8],
-        label: {
-          show: true,
-          formatter: '背',
-          color: '#ff9500',
-          fontSize: 9,
-          position: 'top' as const,
-        },
-      }
-    })
-    .filter(Boolean)
+  const bcPricePoints =
+    props.showBcs === false
+      ? []
+      : (props.bcs ?? [])
+          .filter((bc) => bc.bc && bc.anchor_bar_index != null && bc.anchor_val != null)
+          .map((bc) => {
+            const idx = findAnchorIndex(keyIndex, bc.anchor_bar_index!, bc.date!, revealLimit)
+            if (idx === -1) return null
+            return {
+              coord: [idx, bc.anchor_val],
+              itemStyle: { color: '#ff9500' },
+              symbol: 'roundRect',
+              symbolSize: [12, 8],
+              label: {
+                show: true,
+                formatter: '背',
+                color: '#ff9500',
+                fontSize: 9,
+                position: 'top' as const,
+              },
+            }
+          })
+          .filter(Boolean)
 
   return {
     backgroundColor: 'transparent',
@@ -595,7 +603,9 @@ function buildOption(): echarts.EChartsCoreOption {
         ...(props.showFractals !== false && props.fxs && props.fxs.length ? ['分型'] : []),
         ...(mmdBuyPoints.length ? ['买点'] : []),
         ...(mmdSellPoints.length ? ['卖点'] : []),
-        ...(props.bcs && props.bcs.some((bc) => bc.bc) ? ['背驰', '背驰(主图)'] : []),
+        ...(props.showBcs !== false && props.bcs && props.bcs.some((bc) => bc.bc)
+          ? ['背驰', '背驰(主图)']
+          : []),
         ...(macdHist.length ? ['MACD', 'DIF', 'DEA'] : []),
       ],
       top: 2,
@@ -938,11 +948,14 @@ watch(
   <div class="chanlun-layout">
     <div ref="container" class="chanlun-chart"></div>
     <aside
-      v-if="props.mmds.length || (props.bcs && props.bcs.some((b) => b.bc))"
+      v-if="
+        (props.showMmds !== false && props.mmds.length) ||
+        (props.showBcs !== false && props.bcs && props.bcs.some((b) => b.bc))
+      "
       class="mmd-legend"
     >
       <div class="mmd-legend-title">买卖点图例</div>
-      <template v-if="props.mmds.length">
+      <template v-if="props.showMmds !== false && props.mmds.length">
         <div class="mmd-legend-item"><span class="ic buy-1">▲</span> 一类买点 (1buy)</div>
         <div class="mmd-legend-item"><span class="ic buy-2">●</span> 二类买点 (2buy)</div>
         <div class="mmd-legend-item"><span class="ic buy-2s">■</span> 类二买 (2buy_s)</div>
@@ -952,7 +965,7 @@ watch(
         <div class="mmd-legend-item"><span class="ic sell-2s">▬</span> 类二卖 (2sell_s)</div>
         <div class="mmd-legend-item"><span class="ic sell-3">◆</span> 三类卖点 (3sell)</div>
       </template>
-      <template v-if="props.bcs && props.bcs.some((b) => b.bc)">
+      <template v-if="props.showBcs !== false && props.bcs && props.bcs.some((b) => b.bc)">
         <div class="legend-sep"></div>
         <div class="mmd-legend-item"><span class="ic bc">▭</span> 背驰(主图)</div>
         <div class="mmd-legend-item"><span class="ic bc-sub">▭</span> 背驰(副图 MACD)</div>

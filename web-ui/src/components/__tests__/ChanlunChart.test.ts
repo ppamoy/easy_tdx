@@ -419,4 +419,35 @@ describe('ChanlunChart 结构渲染', () => {
     expect(lastOption.legend.data).not.toContain('买点')
     expect(lastOption.legend.data).not.toContain('卖点')
   })
+
+  test('showBcs=false 时不渲染背驰', () => {
+    mount(ChanlunChart, {
+      props: {
+        bars,
+        bis: [],
+        xds: [],
+        bcs: [
+          {
+            type: 'bi',
+            bc: true,
+            date: fdate(148),
+            bar_index: 148,
+            anchor_val: 12.6,
+            anchor_bar_index: 148,
+            msg: 'm',
+          },
+        ],
+        showBcs: false,
+        zss: [],
+        mmds: [],
+        frequency: 'daily',
+        compact: true,
+      },
+      attachTo: document.body,
+    })
+
+    expect(findSeries('背驰')?.data).toHaveLength(0)
+    expect(findSeries('背驰(主图)')?.data).toHaveLength(0)
+    expect(lastOption.legend.data).not.toContain('背驰')
+  })
 })
