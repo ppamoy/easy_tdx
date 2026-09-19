@@ -4,8 +4,13 @@
 
 ## [Unreleased]
 
-**趋势背迪离开段方向金标（V697）**
-- 新增 test_qs_skip_when_exit_direction_mismatch：盘整趋势背迪离开段方向与趋势不符时不产出背迪（缠论原文）。
+**趋势背驰离开段方向金标（V697）**
+- 新增 test_qs_skip_when_exit_direction_mismatch：趋势背驰离开段方向与趋势不符时不产出背驰（缠论原文）。
+
+**买卖点文字标注开关（V698）**
+- ChanlunChart 新增 showMmdLabels（默认 false），可开启买卖点类型文字标注。
+- ChanlunView 图表页新增「买卖点文字」勾选。
+- 前端测试覆盖 showMmdLabels=true 开启 label。
 
 **周期/级别 URL 同步（V696）**
 - ChanlunView 读取 query 中的 category/level 并在切换时回写 URL，刷新/分享可复现图表选项。

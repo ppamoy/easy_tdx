@@ -50,13 +50,22 @@ const props = withDefaults(
     showBcs?: boolean
     /** 是否显示中枢区域（默认 true）。 */
     showZss?: boolean
+    /** 是否显示买卖点类型文字标注（默认 false）。 */
+    showMmdLabels?: boolean
     /**
      * 同级别中枢：只渲染该 index 的中枢（买卖点所属中枢，MMD.zs 引用）。
      * 未传（undefined）时渲染全部中枢。
      */
     singleZsIndex?: number
   }>(),
-  { showZsds: true, showFractals: true, showMmds: true, showBcs: true, showZss: true },
+  {
+    showZsds: true,
+    showFractals: true,
+    showMmds: true,
+    showBcs: true,
+    showZss: true,
+    showMmdLabels: false,
+  },
 )
 
 interface ChanlunBi {
@@ -809,13 +818,22 @@ function buildOption(): echarts.EChartsCoreOption {
         type: 'scatter',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: (mmdBuyPoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
+        data: (mmdBuyPoints as any[]).map((p) => ({
+          name: p.name,
+          value: [p.coord[0], p.coord[1]],
+        })),
         symbol: (mmdBuyPoints as any[]).map((p) => p.symbol),
         symbolSize: (mmdBuyPoints as any[]).map((p) => p.symbolSize),
         itemStyle: {
           color: (params: any) => (mmdBuyPoints as any[])[params.dataIndex]?.itemStyle.color,
         },
-        label: { show: false },
+        label: {
+          show: props.showMmdLabels === true && !props.compact,
+          formatter: (params: any) => params?.name ?? '',
+          color: '#e2e8f0',
+          fontSize: 9,
+          position: 'top' as const,
+        },
         labelLayout: { hideOverlap: true },
       },
       // 卖点（v598：整体旋转 180°，triangle 变为向下三角，circle/diamond 对称不受影响）
@@ -825,13 +843,22 @@ function buildOption(): echarts.EChartsCoreOption {
         xAxisIndex: 0,
         yAxisIndex: 0,
         symbolRotate: 180,
-        data: (mmdSellPoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
+        data: (mmdSellPoints as any[]).map((p) => ({
+          name: p.name,
+          value: [p.coord[0], p.coord[1]],
+        })),
         symbol: (mmdSellPoints as any[]).map((p) => p.symbol),
         symbolSize: (mmdSellPoints as any[]).map((p) => p.symbolSize),
         itemStyle: {
           color: (params: any) => (mmdSellPoints as any[])[params.dataIndex]?.itemStyle.color,
         },
-        label: { show: false },
+        label: {
+          show: props.showMmdLabels === true && !props.compact,
+          formatter: (params: any) => params?.name ?? '',
+          color: '#e2e8f0',
+          fontSize: 9,
+          position: 'top' as const,
+        },
         labelLayout: { hideOverlap: true },
       },
       // 背驰标记（画在 MACD 副图上：背驰本质是某笔 MACD 面积较前笔缩小，

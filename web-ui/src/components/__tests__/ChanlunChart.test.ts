@@ -483,4 +483,29 @@ describe('ChanlunChart 结构渲染', () => {
     expect(findSeries('中枢')?.markArea?.data).toHaveLength(0)
     expect(lastOption.legend.data).not.toContain('中枢')
   })
+
+  test('showMmdLabels=true 时买卖点 label 开启', () => {
+    mount(ChanlunChart, {
+      props: {
+        bars,
+        bis: [],
+        xds: [],
+        mmds: [
+          { type: '1buy', date: fdate(95), bar_index: 95, anchor_val: 8.0, msg: 'm' },
+          { type: '1sell', date: fdate(150), bar_index: 150, anchor_val: 14.0, msg: 'm' },
+        ],
+        showMmdLabels: true,
+        zss: [],
+        frequency: 'daily',
+      },
+      attachTo: document.body,
+    })
+
+    const buy = findSeries('买点')
+    expect(buy?.label?.show).toBe(true)
+    expect(buy?.data).toHaveLength(1)
+    const sell = findSeries('卖点')
+    expect(sell?.label?.show).toBe(true)
+    expect(sell?.data).toHaveLength(1)
+  })
 })
