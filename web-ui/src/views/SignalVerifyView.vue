@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 买卖点实证复盘页（V419）：后台预跑 20 只大市值标的，逐一呈现（一次一只），
 // 展示买卖点 + 买卖点后逐根 K 线揭示 + 同级别中枢（MMD.zs 引用）。
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import { formatError } from '../api'
 import type { Bar } from '../types'
@@ -246,6 +247,18 @@ function nextStock() {
 function mmdClass(m: MmdItem): string {
   return m.type.includes('buy') ? 'mmd-buy' : 'mmd-sell'
 }
+
+// URL 同步：周期与分析级别保持在 query 中，刷新/分享后可复现
+const route = useRoute()
+const router = useRouter()
+const _qCat = String(route.query.category || '')
+if (['DAY', 'WEEK', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60'].includes(_qCat)) {
+  category.value = _qCat as typeof category.value
+}
+if (route.query.level === 'xd') analysisLevel.value = 'xd'
+watch([category, analysisLevel], () => {
+  router.replace({ query: { category: category.value, level: analysisLevel.value } })
+})
 
 onMounted(() => {
   loadList()
