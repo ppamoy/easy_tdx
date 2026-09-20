@@ -38,7 +38,7 @@ def test_fixture_loads(result) -> None:
 
 def test_counts_locked(result) -> None:
     assert len(result.bis) == 14  # V635 严格笔（顶底至少1根独立K线）后
-    assert len(result.xds) == 2
+    assert len(result.xds) == 3  # V706 笔破坏默认开启后：更早结束 → 3 段
     assert len(result.zss) == 3
     assert len(result.mmds) == 3
     assert len(result.bcs) == 1  # V617 MACD 力度窗口用极值 bar_index 后，此段出现 1 个笔背驰

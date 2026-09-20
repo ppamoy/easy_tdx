@@ -53,15 +53,15 @@ def test_xd_pohuai_up_break_below_start() -> None:
         _bi(5, "down", 118.0, 98.0, 119.0, 98.0),
         _bi(6, "up", 98.0, 125.0, 126.0, 97.0),
     ]
-    default = find_xds(bis, ChanlunConfig())
-    pohuai = find_xds(bis, ChanlunConfig(xd_bi_pohuai=True))
+    default = find_xds(bis, ChanlunConfig())  # 默认开启笔破坏
+    off = find_xds(bis, ChanlunConfig(xd_bi_pohuai=False))
 
-    # 默认按特征序列/收尾继续延长
+    # 默认（笔破坏开启）：跌破 100 起点后即结束，停在破坏笔之前的笔
     assert len(default) == 1
-    assert default[0].end.val == 125.0
-    # 笔破坏：跌破 100 起点后即结束，停在破坏笔之前的笔
-    assert len(pohuai) == 1
-    assert pohuai[0].end.val == 118.0
+    assert default[0].end.val == 118.0
+    # 显式关闭笔破坏：按特征序列/收尾继续延长
+    assert len(off) == 1
+    assert off[0].end.val == 125.0
 
 
 def test_xd_pohuai_down_break_above_start() -> None:
@@ -75,10 +75,10 @@ def test_xd_pohuai_down_break_above_start() -> None:
         _bi(5, "up", 80.0, 105.0, 106.0, 79.0),
         _bi(6, "down", 105.0, 70.0, 106.0, 69.0),
     ]
-    default = find_xds(bis, ChanlunConfig())
-    pohuai = find_xds(bis, ChanlunConfig(xd_bi_pohuai=True))
+    default = find_xds(bis, ChanlunConfig())  # 默认开启笔破坏
+    off = find_xds(bis, ChanlunConfig(xd_bi_pohuai=False))
 
     assert len(default) == 1
-    assert default[0].end.val == 70.0
-    assert len(pohuai) == 1
-    assert pohuai[0].end.val == 80.0
+    assert default[0].end.val == 80.0
+    assert len(off) == 1
+    assert off[0].end.val == 70.0

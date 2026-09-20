@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**笔破坏默认开启 + 金标校准（V707）**
+- config.xd_bi_pohuai 默认 True（线段原文口径）。
+- 受控校准：real_golden_multi 000333 xd 1→4、real_golden 000001 xds 2→3、xd_pohuai 用例改为「默认开启/显式关闭」对比。
+- 隔离特征序列专门用例（recursive, v87）并修正 v87 fake Direction 枚举为辅真。
+
 **线段原文口径：收尾同向端点 + 多义性确定性（V706）**
 - find_xds 收尾只在与线段同向的笔端点中选择，避开反向笔端点分型，端点方向一致且落在笔分型上（line-segment-original-fidelity spec 情景）。
 - 新增 tests/unit/test_chanlun_xd_tail.py 金标。

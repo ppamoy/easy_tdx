@@ -42,7 +42,7 @@ def _make_bi(
     return BI(
         start=start_fx,
         end=end_fx,
-        direction=type("Dir", (), {"value": direction})(),
+        direction=Direction.UP if direction == "up" else Direction.DOWN,
         index=index,
         high=high,
         low=low,
@@ -109,7 +109,8 @@ class TestFindXds:
             _make_bi(2, "down", 12, 8, 14, 7),  # 特征2 (bottom)
             _make_bi(3, "up", 8, 12, 13, 7),  # 同向笔2
         ]
-        config = ChanlunConfig()
+        # 本用例聚焦特征序列分型的基本线段，隔离笔破坏默认开启的影响
+        config = ChanlunConfig(xd_bi_pohuai=False)
         xds = find_xds(bis, config)
         assert len(xds) >= 1
 

@@ -20,7 +20,7 @@ FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 # (fixture 文件名, frequency, 期望计数 bi/xd/zs/mmd/bc)
 CASES = [
     ("chanlun_600519_daily.json", "daily", (15, 1, 4, 5, 1)),
-    ("chanlun_000333_daily.json", "daily", (15, 1, 2, 1, 1)),
+    ("chanlun_000333_daily.json", "daily", (15, 4, 2, 1, 1)),
     ("chanlun_000001_weekly.json", "weekly", (15, 2, 3, 3, 2)),
     ("chanlun_000001_30min.json", "30min", (13, 1, 3, 2, 1)),
 ]

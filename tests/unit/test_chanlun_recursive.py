@@ -14,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 
 from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.recursive import RecursiveLevelResult, compute_recursive_level
 from easy_tdx.chanlun.types import FX, XD, CLKline, Direction, FXType
 
@@ -87,7 +88,7 @@ def _make_xds() -> list[XD]:
 
 def test_recursive_level_golden_counts() -> None:
     """人造线段序列的递归高级别输出必须与金标完全一致。"""
-    result = compute_recursive_level(_make_xds())
+    result = compute_recursive_level(_make_xds(), config=ChanlunConfig(xd_bi_pohuai=False))
 
     assert isinstance(result, RecursiveLevelResult)
     # 高级别线段：先向上 100→112，再向下 112→98
@@ -114,7 +115,7 @@ def test_recursive_level_golden_counts() -> None:
 
 def test_recursive_level_geometry_invariants() -> None:
     """递归线段端点首尾相连、方向交替；中枢区间满足 ZG>ZD。"""
-    result = compute_recursive_level(_make_xds())
+    result = compute_recursive_level(_make_xds(), config=ChanlunConfig(xd_bi_pohuai=False))
 
     for xd in result.xds:
         if xd.direction == Direction.UP:
@@ -137,11 +138,11 @@ def test_recursive_level_geometry_invariants() -> None:
 
 def test_recursive_level_insufficient_lines_returns_empty() -> None:
     """少于 3 根低级别线段时返回空结果，不抛异常。"""
-    result = compute_recursive_level([])
+    result = compute_recursive_level([], config=ChanlunConfig(xd_bi_pohuai=False))
     assert result.xds == [] and result.zss == [] and result.mmds == [] and result.bcs == []
     assert result.zsds == [] and result.qsds == []
 
-    result = compute_recursive_level(_make_xds()[:2])
+    result = compute_recursive_level(_make_xds()[:2], config=ChanlunConfig(xd_bi_pohuai=False))
     assert result.xds == [] and result.zss == [] and result.mmds == [] and result.bcs == []
     assert result.zsds == [] and result.qsds == []
 
@@ -150,7 +151,9 @@ def test_to_dict_outputs_two_levels() -> None:
     """to_dict 输出 bi/xd 两层结构，且与单级别顶层数组一致。"""
     rows = json.loads((FIXTURE_DIR / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
     df = pd.DataFrame(rows)
-    result = ChanlunAnalyser(code="000001", frequency="daily").process_klines(df)
+    result = ChanlunAnalyser(
+        code="000001", frequency="daily", config=ChanlunConfig(xd_bi_pohuai=False)
+    ).process_klines(df)
     d = result.to_dict()
 
     assert set(d["levels"].keys()) == {"bi", "xd"}
