@@ -8,8 +8,9 @@
 - 向下线段：特征序列（向上笔）出现底分型 → 线段结束。
 - 相邻线段共享转折点，方向自然交替。
 
-说明：这是「特征序列 + 包含处理」的标准简化实现，未覆盖缠论原文中
-线段划分的「笔破坏」与「多义性」全部情形；复杂走势仍可能比严格缠论更长/更粗。
+说明：采用缠论原文的确定性取舍（XD_TIEBREAK_EARLIEST）与收尾同向端点规则，
+保证同一输入永远同一次、端点落在特征序列转折点分型上且方向一致。
+笔破坏由 config.xd_bi_pohuai 控制（默认 False，原文口径将随后续 spec 校准）。
 """
 
 from __future__ import annotations
@@ -187,20 +188,24 @@ def find_xds(
             xds.append(_create_xd_from_bis(bis, start, end, len(xds), seg_dir))
             start = end + 1
         else:
-            # 收尾：剩余笔数足够时，向上段取剩余笔中最高顶、向下段取最低底。
+            # 收尾：只在「方向与线段一致的同向笔」端点中选择，避开反向笔端点分型，
+            # 保证端点落在某笔分型上、与线段方向一致，且前段断裂。
             if len(bis) - start >= 3:
-                if seg_dir == Direction.UP:
-                    cand_end = max(
-                        range(start, len(bis)),
-                        key=lambda i: (bis[i].end.val, i),
-                    )
-                else:
-                    cand_end = min(
-                        range(start, len(bis)),
-                        key=lambda i: (bis[i].end.val, i),
-                    )
-                if _valid_segment_end(bis, start, cand_end, seg_dir):
-                    xds.append(_create_xd_from_bis(bis, start, cand_end, len(xds), seg_dir))
+                tail_end: int | None = None
+                best_val = -1.0 if seg_dir == Direction.UP else float("inf")
+                for i in range(start, len(bis)):
+                    if bis[i].direction != seg_dir:
+                        continue
+                    if not _valid_segment_end(bis, start, i, seg_dir):
+                        continue
+                    if seg_dir == Direction.UP and bis[i].end.val > best_val:
+                        best_val = bis[i].end.val
+                        tail_end = i
+                    elif seg_dir == Direction.DOWN and bis[i].end.val < best_val:
+                        best_val = bis[i].end.val
+                        tail_end = i
+                if tail_end is not None:
+                    xds.append(_create_xd_from_bis(bis, start, tail_end, len(xds), seg_dir))
             start = len(bis)
 
     return xds

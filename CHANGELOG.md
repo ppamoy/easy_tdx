@@ -4,7 +4,9 @@
 
 ## [Unreleased]
 
-**能力审计（V705）**
+**线段原文口径：收尾同向端点 + 多义性确定性（V706）**
+- find_xds 收尾只在与线段同向的笔端点中选择，避开反向笔端点分型，端点方向一致且落在笔分型上（line-segment-original-fidelity spec 情景）。
+- 新增 tests/unit/test_chanlun_xd_tail.py 金标。
 - 新增 docs/CAPABILITY_AUDIT.md：交叉核对 openspec 与代码，评估缠论模型/画图与长盈选股+择时+历史验证能力。
 - 结论：长盈选股/择时/历史验证可满足；缠论几何画图精度满足，但结构判定（线段多义性、笔破坏默认、笔类型）仍未达原文完整版，列为明确差距。
 
