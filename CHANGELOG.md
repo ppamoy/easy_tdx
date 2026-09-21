@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+**多级别深度递归（V708）**
+- recursive.py 新增 `compute_recursive_levels(xds, depth, …)`：把第 N-1 级线段当作更高级别「笔」逐级递归，产出第 1~N 级线段/线段中枢/背驰/三类买卖点（`compute_recursive_level` 保留为单级兼容入口）。
+- `ChanlunConfig.recursion_depth`（默认 1，1~8）控制递归深度；深度链受每级线段数量（>=3）约束，会自动提前终止。
+- `to_dict` 输出 `levels.bi / xd / xd_l2 / xd_l3 …`，多级链逐级序列化；`ChanlunResult.recursive_levels` 提供每级结果，`*_l1` 字段保留为 Level-1 快捷入口。
+- Web：`ChanlunRequest` 新增 `recursion_depth`，/chanlun/analyze 用它构造配置；/chanlun/recommend、/chanlun/train 也一致地按请求的 `recursion_depth` 构造分析器（默认 1 无行为变化）；ChanlunView 新增「递归深度」下拉与动态「分析级别」（递归2级/3级…），URL 同步 depth。
+- CLI：`easy-tdx chanlun --recursion-depth N` 支持多级别深度递归，`--table` 输出各递归级别（线段/中枢/买卖点/背驰）计数。
+- 回测：`chanlun` 策略新增 `analysis_level` 参数（0=笔级别信号，默认；1=线段级别，2+=递归更高级别），可对更高级别买卖点信号回溯；`recursion_depth` 按所选级别自动抬高，级别不足时无信号；策略 schema 自动暴露，前端回测参数表单自动渲染。
+- 新增多级递归金标（test_chanlun_recursive.py）：3 级递归链、向后兼容、链式馈给、深度语义、to_dict 多级序列化。
+- 修复：每次 process_klines 重置递归结果（recursive_levels/*_l1），避免追加数据后线段数不足时残留上一次递归结果。
+
 **笔破坏默认开启 + 金标校准（V707）**
 - config.xd_bi_pohuai 默认 True（线段原文口径）。
 - 受控校准：real_golden_multi 000333 xd 1→4、real_golden 000001 xds 2→3、xd_pohuai 用例改为「默认开启/显式关闭」对比。

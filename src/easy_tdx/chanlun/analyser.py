@@ -21,7 +21,10 @@ from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
 from easy_tdx.chanlun.macd import calc_macd  # noqa: F401
 from easy_tdx.chanlun.mmd import find_mmds_v44  # noqa: F401
-from easy_tdx.chanlun.recursive import compute_recursive_level
+from easy_tdx.chanlun.recursive import (
+    RecursiveLevelResult,
+    compute_recursive_levels,
+)
 from easy_tdx.chanlun.types import BC, BI, FX, MMD, XD, ZS, CLKline, Kline, Line
 from easy_tdx.chanlun.xd import find_xds  # noqa: F401
 from easy_tdx.chanlun.zs import find_zss
@@ -83,6 +86,10 @@ class ChanlunResult:
     # 递归级别的走势段/趋势段（以线段级别的「线段」再合并）。
     zsds_l1: list[XD] = field(default_factory=list)
     qsds_l1: list[XD] = field(default_factory=list)
+    # 多级别递归链：recursive_levels[i] = 第 i+1 级递归结果（i=0 即 *_l1）。
+    # 每级把上一级的线段当作更高级别「笔」逐级递归，直到 recursion_depth 或
+    # 该级线段不足 3 根为止。*_l1 字段保留作向后兼容的 Level-1 快捷入口。
+    recursive_levels: list[RecursiveLevelResult] = field(default_factory=list)
     # 走势段/趋势段：由线段（XD）合并得到，供更高级别画图与择时参考。
     zsds: list[XD] = field(default_factory=list)
     qsds: list[XD] = field(default_factory=list)
@@ -207,6 +214,49 @@ class ChanlunResult:
             "zsds": [self._line_dict(zsd) for zsd in zsds],
             "qsds": [self._line_dict(qsd) for qsd in qsds],
         }
+
+    def _recursive_levels_payload(self) -> dict[str, dict[str, Any]]:
+        """序列化多级别递归链：第 1 级为 levels.xd，更高级别为 levels.xd_lN。
+
+        每级的「笔」= 上一级线段（Level 1 的「笔」= 基础线段 self.xds），
+        本级的线段 = 该级递归得到的 XD。Level 1（xd）始终输出；更高级别仅
+        在递归链有结果时输出。
+        """
+        out: dict[str, dict[str, Any]] = {}
+        empty_xds: list[XD] = []
+        empty_zss: list[ZS] = []
+        empty_mmds: list[MMD] = []
+        empty_bcs: list[BC] = []
+        if not self.recursive_levels:
+            out["xd"] = self._level_payload(
+                "线段级别",
+                self.xds,
+                empty_xds,
+                empty_zss,
+                empty_mmds,
+                empty_bcs,
+                empty_xds,
+                empty_xds,
+            )
+            return out
+
+        prev_lines: list[XD] = self.xds
+        for lvl, rl in enumerate(self.recursive_levels):
+            level_no = lvl + 1
+            key = "xd" if level_no == 1 else f"xd_l{level_no}"
+            name = "线段级别" if level_no == 1 else f"递归{level_no}级"
+            out[key] = self._level_payload(
+                name,
+                prev_lines,
+                rl.xds,
+                rl.zss,
+                rl.mmds,
+                rl.bcs,
+                rl.zsds,
+                rl.qsds,
+            )
+            prev_lines = rl.xds
+        return out
 
     def to_dict(self) -> dict[str, Any]:
         """将结果转为可序列化的字典（用于 JSON 输出）。"""
@@ -408,18 +458,7 @@ class ChanlunResult:
                     self.zsds,
                     self.qsds,
                 ),
-                # 线段级别 = 以低级别线段作为高级别「笔」，递归计算高级别线段/
-                # 线段中枢/背驰/三类买卖点。
-                "xd": self._level_payload(
-                    "线段级别",
-                    self.xds,
-                    self.xds_l1,
-                    self.zss_l1,
-                    self.mmds_l1,
-                    self.bcs_l1,
-                    self.zsds_l1,
-                    self.qsds_l1,
-                ),
+                **self._recursive_levels_payload(),
             },
         }
 
@@ -471,6 +510,16 @@ class ChanlunAnalyser:
         # Step 1: DataFrame → Kline 列表
         klines = _df_to_klines(df)
         self._result.klines = klines
+
+        # 重置递归级别结果：每次 process_klines 都重新计算（否则在追加数据后
+        # 若新的线段数不足会残留上一次的递归结果）。
+        self._result.recursive_levels = []
+        self._result.xds_l1 = []
+        self._result.zss_l1 = []
+        self._result.mmds_l1 = []
+        self._result.bcs_l1 = []
+        self._result.zsds_l1 = []
+        self._result.qsds_l1 = []
 
         if not klines:
             return self._result
@@ -555,9 +604,11 @@ class ChanlunAnalyser:
 
         # Step 10: 多级别递归（Level 1 = 以低级别线段作为高级别的「笔」）。
         # 缠论递归：本级别线段 → 更高级别笔 → 更高级别线段/中枢/背驰/买卖点。
+        # recursion_depth>=2 时继续把上一级线段当作更高级别笔逐级递归。
         if self._config.multi_level and len(xds) >= 3:
-            recursive = compute_recursive_level(
+            recursive_levels = compute_recursive_levels(
                 xds,
+                depth=self._config.recursion_depth,
                 closes=closes,
                 volumes=volumes,
                 macd_data=self._result.macd,
@@ -566,12 +617,16 @@ class ChanlunAnalyser:
                 lows=lows,
                 config=self._config,
             )
-            self._result.xds_l1 = recursive.xds
-            self._result.zss_l1 = recursive.zss
-            self._result.mmds_l1 = recursive.mmds
-            self._result.bcs_l1 = recursive.bcs
-            self._result.zsds_l1 = recursive.zsds
-            self._result.qsds_l1 = recursive.qsds
+            self._result.recursive_levels = recursive_levels
+            # Level-1 快捷字段：向后兼容（recursive_levels[0] 即 *_l1）。
+            if recursive_levels:
+                r0 = recursive_levels[0]
+                self._result.xds_l1 = r0.xds
+                self._result.zss_l1 = r0.zss
+                self._result.mmds_l1 = r0.mmds
+                self._result.bcs_l1 = r0.bcs
+                self._result.zsds_l1 = r0.zsds
+                self._result.qsds_l1 = r0.qsds
 
         return self._result
 

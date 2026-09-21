@@ -330,7 +330,7 @@ async def chanlun_analyze(
     自动从 TDX 服务器获取 K 线数据，运行完整缠论计算管道，
     返回笔、中枢、线段、买卖点、背驰、分型等分析结果。
     """
-    from easy_tdx.chanlun import ChanlunAnalyser
+    from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
     # 1. Fetch kline data（QFQ 前复权，与前端 /bars 同一价格体系）
     df = await fetch_qfq_klines(
@@ -369,7 +369,12 @@ async def chanlun_analyze(
         "YEAR": "yearly",
     }
     freq = frequency_map.get(req.category.upper(), req.category)
-    analyser = ChanlunAnalyser(code=symbol, frequency=freq)
+    # V708: 多级别递归深度经前端指定（1=线段级别；标准请求不传时回落 1）。
+    analyser = ChanlunAnalyser(
+        code=symbol,
+        frequency=freq,
+        config=ChanlunConfig(recursion_depth=req.recursion_depth),
+    )
     result = analyser.process_klines(df)
 
     # 3. 返回完整分析结果，包括分型数据和BOLL
@@ -592,7 +597,7 @@ async def chanlun_recommend(
     - 技术指标诊断摘要
     - 综合推荐动作（买入/持有/卖出）及理由
     """
-    from easy_tdx.chanlun import ChanlunAnalyser
+    from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
     from easy_tdx.MyTT import KDJ as MYTT_KDJ
     from easy_tdx.MyTT import MA, MACD
     from easy_tdx.MyTT import RSI as MYTT_RSI
@@ -621,7 +626,9 @@ async def chanlun_recommend(
     latest_date = str(df["date"].iloc[-1])[:10] if "date" in df.columns else ""
 
     # ── 2. 缠论 V4 分析 ──────────────────────────────────────────────
-    analyser = ChanlunAnalyser(code=symbol, frequency="daily")
+    analyser = ChanlunAnalyser(
+        code=symbol, frequency="daily", config=ChanlunConfig(recursion_depth=req.recursion_depth)
+    )
     chanlun_result = analyser.process_klines(df)
     mmds = chanlun_result.mmds
 
@@ -966,7 +973,7 @@ async def chanlun_train_session(
       [{index, date, kind: fractal|mmd, fx_type, signal: null | {type, confidence, grade}}]
     - mmd_outcomes：每个买卖点的信号后 5/10/20 日收益（复盘验证准确率用）
     """
-    from easy_tdx.chanlun import ChanlunAnalyser
+    from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
     # 1. 取行情（QFQ 前复权，与 /bars 同一价格体系）
     df = await fetch_qfq_klines(
@@ -988,7 +995,9 @@ async def chanlun_train_session(
         "YEAR": "yearly",
     }
     freq = frequency_map.get(req.category.upper(), req.category)
-    analyser = ChanlunAnalyser(code=symbol, frequency=freq)
+    analyser = ChanlunAnalyser(
+        code=symbol, frequency=freq, config=ChanlunConfig(recursion_depth=req.recursion_depth)
+    )
     result = analyser.process_klines(df)
 
     # 2. 组装训练会话负载（纯函数，可单测；V421 难度分级 + seed 复现）

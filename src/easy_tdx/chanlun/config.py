@@ -13,7 +13,8 @@ class ChanlunConfig:
     """
 
     # ── 笔配置 ──────────────────────────────────────────────────────────
-    # "new" 新笔（分型之间至少1根独立K线），"old" 老笔（分型之间至少3根），"simple" 简单笔
+    # "new" 新笔（分型之间至少1根独立K线，默认/推荐）、"old" 老笔（至少3根）。
+    # "simple" 为 legacy 简化口径（仅显式配置时启用，不推荐；见 find_bis 告警）。
     bi_type: str = "new"
     # 是否跳过弱笔（价格变动 < 0.1% 的笔）
     bi_weak_skip: bool = False
@@ -42,9 +43,13 @@ class ChanlunConfig:
     # 是否支持笔破坏（线段原文口径，默认开启）
     xd_bi_pohuai: bool = True
 
-    # 是否启用多级别递归：Level 1 = 以低级别线段作为高级别的「笔」，
-    # 计算高级别线段/线段中枢/背驰/三类买卖点。
+    # 是否启用多级别递归：以线段为高级别「笔」，计算高级别线段/线段中枢/背驰/
+    # 三类买卖点。
     multi_level: bool = True
+    # 多级别递归深度：>=1。depth=1 只递归到「线段级别」；depth>=2 会把上一级
+    # 线段继续当作更高级别「笔」逐级递归（第 2 级、第 3 级…）。实际产出的级别
+    # 数受数据（每级线段数量 >= 3）约束，可少于该值，默认 1 保持历史行为。
+    recursion_depth: int = 1
 
     # 1买/1卖 是否启用「结构去重启发式」（相邻间隔5笔 + 3%反弹/回落）。
     # 默认 True；设为 False 时严格按缠论原文（趋势背驰点即可），不去重。
@@ -72,6 +77,7 @@ class ChanlunConfig:
             "bi_qujian": self.bi_qujian,
             "xd_bi_pohuai": self.xd_bi_pohuai,
             "multi_level": self.multi_level,
+            "recursion_depth": self.recursion_depth,
             "mmd_1st_dedup": self.mmd_1st_dedup,
             "mmd_3rd_type_technical": self.mmd_3rd_type_technical,
             "macd_fast": self.macd_fast,

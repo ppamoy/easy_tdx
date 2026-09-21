@@ -26,10 +26,24 @@ v90 改进：
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import BI, FX, Direction, FXType
+
+_logger = logging.getLogger(__name__)
+_warned_simple_legacy = False
+
+
+def _warn_bi_type_simple_legacy() -> None:
+    """对显式使用 simple 笔口径的一次性 legacy 告警。"""
+    global _warned_simple_legacy
+    if not _warned_simple_legacy:
+        _warned_simple_legacy = True
+        _logger.warning(
+            'bi_type="simple" 为 legacy 简化口径（仅显式配置时启用，不推荐）；请使用默认新笔 new 或老笔 old。'
+        )
 
 
 def _can_form_bi(
@@ -69,7 +83,9 @@ def _can_form_bi(
         # 老笔：至少3根独立缠论K线
         return gap >= 5
     else:
-        # simple：只要顶底交替即可
+        # simple：legacy 简化口径，仅当显式配置 bi_type="simple" 时启用，不推荐。
+        _warn_bi_type_simple_legacy()
+        # 只要顶底交替即可
         return True
 
 

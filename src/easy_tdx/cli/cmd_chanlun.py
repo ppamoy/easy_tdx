@@ -24,6 +24,10 @@ import click
 )
 @click.option("--table", "use_table", is_flag=True, help="表格输出")
 @click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
+@click.option(
+    "--recursion-depth", "recursion_depth", default=1, type=int,
+    help="多级别递归深度（>=1，<=8，受每级线段数量约束会自动收敛），默认 1=线段级别",
+)
 def chanlun(
     market: str,
     code: str,
@@ -33,6 +37,7 @@ def chanlun(
     low_level_period: str | None,
     use_table: bool,
     output_fmt: str,
+    recursion_depth: int,
 ) -> None:
     """缠论分析：计算 K 线的笔、中枢等缠论指标。
 
@@ -47,8 +52,11 @@ def chanlun(
       easy-tdx chanlun SZ 000001 --multi-level 30MIN --table
 
       easy-tdx chanlun SZ 000001 --multi-level 5MIN
+
+      easy-tdx chanlun SZ 000001 --recursion-depth 3 --table
     """
     from ..chanlun.analyser import ChanlunAnalyser
+    from ..chanlun.config import ChanlunConfig
     from .conn import get_mac_client
     from .parsers import parse_adjust, parse_market, parse_period
 
@@ -63,7 +71,8 @@ def chanlun(
             adjust=parse_adjust(adjust),
         )
 
-        analyser = ChanlunAnalyser(code=code, frequency=period)
+        config = ChanlunConfig(recursion_depth=max(1, recursion_depth))
+        analyser = ChanlunAnalyser(code=code, frequency=period, config=config)
         result = analyser.process_klines(df)
 
         result_dict = result.to_dict()
@@ -133,6 +142,20 @@ def _print_table(result: dict[str, Any]) -> None:
                 f"  [{xd['index']}] {direction} "
                 f"{xd['start_date']} → {xd['end_date']} "
                 f"h={xd['high']} l={xd['low']}"
+            )
+        click.echo()
+
+    # 多级别深度递归：列出各递归级别（xd / xd_l2 / xd_l3…）的线段/中枢/买卖点计数。
+    levels = result.get("levels") or {}
+    rec_keys = [k for k in levels if k.startswith("xd")]
+    if rec_keys:
+        click.echo("── 递归级别 ──")
+        for k in rec_keys:
+            lv = levels[k]
+            click.echo(
+                f"  {lv.get('name', k)}: "
+                f"线段 {lv.get('xd_count', 0)}  中枢 {lv.get('zs_count', 0)}  "
+                f"买卖点 {lv.get('mmd_count', 0)}  背驰 {lv.get('bc_count', 0)}"
             )
         click.echo()
 

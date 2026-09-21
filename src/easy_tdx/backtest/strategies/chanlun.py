@@ -31,10 +31,16 @@ from easy_tdx.backtest.strategies.registry import (
 @register_strategy(
     name="chanlun",
     label="缠论买卖点",
-    description="基于缠论笔、中枢、买卖点的预计算回测策略。精确日期映射，支持置信度过滤。",
+    description="基于缠论笔、中枢、买卖点的预计算回测策略。精确日期映射，支持置信度过滤，可选递归级别信号（0=笔级别/1=线段级别/2+=更高级别）。",
 )
 class ChanlunStrategy(ParametrizedStrategy):
-    """缠论买卖点策略（精确日期映射版 + 置信度过滤 + 信号追踪）。"""
+    """缠论买卖点策略（精确日期映射版 + 置信度过滤 + 信号追踪）。
+
+    `analysis_level` 选择买卖点信号来源：
+    - 0（默认）= 笔级别（基础级别 result.mmds，历史行为不变）；
+    - N>=1 = 多级别递归第 N 级信号（result.recursive_levels[N-1].mmds，
+      即把更高级别线段当作「笔」识别出的买卖点），级别不存在时无信号。
+    """
 
     params = [
         Param("bi_type", str, default="new", choices=("new", "old", "simple"), label="笔类型"),
@@ -42,6 +48,14 @@ class ChanlunStrategy(ParametrizedStrategy):
         Param("macd_fast", int, default=12, min_value=6, max_value=20, label="MACD 快线"),
         Param("macd_slow", int, default=26, min_value=12, max_value=50, label="MACD 慢线"),
         Param("macd_signal", int, default=9, min_value=5, max_value=15, label="MACD 信号线"),
+        Param(
+            "analysis_level",
+            int,
+            default=0,
+            min_value=0,
+            max_value=8,
+            label="信号分析级别 0=笔/1=线段/2+=递归更高级",
+        ),
         Param("use_3buy", bool, default=True, label="启用三类买点"),
         Param("use_3sell", bool, default=True, label="启用三类卖点"),
         Param("use_2s_signals", bool, default=False, label="启用类二买/类二卖"),
@@ -110,18 +124,43 @@ class ChanlunStrategy(ParametrizedStrategy):
             self._date_to_bar[dt_str] = i
 
         # 预计算缠论
+        analysis_level = max(0, int(self.p.get("analysis_level") or 0))
         config = ChanlunConfig(
             bi_type=self.p["bi_type"],
             zs_min_lines=self.p["zs_min_lines"],
             macd_fast=self.p["macd_fast"],
             macd_slow=self.p["macd_slow"],
             macd_signal=self.p["macd_signal"],
+            # 请求 N 级递归信号时，需保证多级别递归深度 >= N。
+            recursion_depth=max(1, analysis_level),
         )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=config)
         result = analyser.process_klines(df)
 
+        # 选定买卖点信号来源：
+        #  analysis_level=0 → 笔级别（基础 result.mmds，历史行为）；
+        #  analysis_level=N>=1 → 多级别递归第 N 级信号（不存在则该级无信号）。
+        if analysis_level <= 0:
+            src_mmds = result.mmds
+            done_bis: list[Any] = [b for b in result.bis if b.is_done()]
+        else:
+            rec_idx = analysis_level - 1
+            if rec_idx >= len(result.recursive_levels):
+                # 请求的递归级别尚未被计算（数据/深度不足）→ 该级无信号。
+                src_mmds = []
+                done_bis = []
+            else:
+                src_mmds = result.recursive_levels[rec_idx].mmds
+                # 该级别的「笔」= 计算该级递归所用到的线段，用作已完结信号过滤。
+                level_lines = (
+                    result.xds
+                    if rec_idx == 0
+                    else result.recursive_levels[rec_idx - 1].xds
+                )
+                done_bis = [ln for ln in level_lines if ln.is_done()]
+
         # 已完成的笔（用于判断信号是否可见）
-        self._done_bis = [b for b in result.bis if b.is_done()]
+        self._done_bis = done_bis
 
         # 构建信号队列：(bar_idx, mmd_type_str, confidence, v102_advice|None)
         self._chanlun_signals: list[tuple[int, str, float, dict[str, Any] | None]] = []
@@ -130,7 +169,7 @@ class ChanlunStrategy(ParametrizedStrategy):
         use_2s = self.p["use_2s_signals"]
         high_conf_only = self.p["high_conf_only"]
 
-        for mmd in sorted(result.mmds, key=lambda m: m.bi.index if m.bi else 0):
+        for mmd in sorted(src_mmds, key=lambda m: m.bi.index if m.bi else 0):
             if mmd.bi is None:
                 continue
             bi_idx = mmd.bi.index
@@ -164,7 +203,7 @@ class ChanlunStrategy(ParametrizedStrategy):
 
         # v9: 信号类型追踪（供回测准确度分析使用）
         self._signal_traces: dict[str, list[dict[str, Any]]] = {}
-        for mmd in result.mmds:
+        for mmd in src_mmds:
             if mmd.bi is None:
                 continue
             bar_idx = self._bi_end_bar_idx(mmd.bi)

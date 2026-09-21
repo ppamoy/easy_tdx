@@ -391,3 +391,71 @@ class TestV102Advice:
         assert s._v102_active is False
         assert s._v102_sl == 0.0
         assert s._v102_tp == 0.0
+
+
+def _make_multiscale_df(n: int = 2200, seed: int = 2) -> pd.DataFrame:
+    """多层嵌套正弦 + 噪声的 K 线，驱动出多级别递归（L1 递归买卖点非空）。"""
+    import math
+    import random
+
+    rng = random.Random(seed)
+    rows = []
+    for i in range(n):
+        c = round(
+            100 + 90 * math.sin(i / 140) + 70 * math.sin(i / 34) + rng.gauss(0, 0.6)
+            + 20 * math.sin(i / 7),
+            2,
+        )
+        prev = rows[-1]["close"] if rows else c
+        rows.append(
+            {
+                "datetime": pd.Timestamp("2020-01-01") + pd.Timedelta(days=i),
+                "open": prev,
+                "high": max(prev, c) + rng.uniform(0, 0.4),
+                "low": min(prev, c) - rng.uniform(0, 0.4),
+                "close": c,
+                "vol": 1_000_000.0,
+                "amount": 10_000_000.0,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+class TestChanlunStrategyRecursionLevel:
+    """多级别递归作为回测信号来源（analysis_level 参数）。"""
+
+    def test_analysis_level_param_present_default_zero(self) -> None:
+        from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy
+
+        names = {p.name for p in ChanlunStrategy.params}
+        assert "analysis_level" in names
+        # 默认 0 = 笔级别（历史行为）
+        assert ChanlunStrategy().p["analysis_level"] == 0
+
+    def test_analysis_level_one_uses_recursive_signals(self) -> None:
+        """analysis_level=1 以多级别递归第 1 级（线段级别）信号回测。"""
+        df = _make_multiscale_df()
+        engine0 = BacktestEngine(ChanlunStrategy(), cash=100000)
+        engine1 = BacktestEngine(ChanlunStrategy(analysis_level=1), cash=100000)
+
+        res0 = engine0.run(df)
+        res1 = engine1.run(df)
+        assert "total_return" in res0.performance
+        assert "total_return" in res1.performance
+
+        s0 = engine0._last_strategy
+        s1 = engine1._last_strategy
+        assert s0 is not None and s1 is not None
+        # 线段级别信号显著少于笔级别信号（递归信号更稀疏，来自更高级别线段）。
+        assert len(s1._chanlun_signals) < len(s0._chanlun_signals)
+        # 信号仍按时间顺序落在数据范围内。
+        for bar_idx, *_ in s1._chanlun_signals:
+            assert 0 <= bar_idx < len(df)
+
+    def test_analysis_level_beyond_data_returns_empty(self) -> None:
+        """请求不存在的递归级别时无信号，回测不报错。"""
+        df = _make_multiscale_df()
+        engine = BacktestEngine(ChanlunStrategy(analysis_level=8), cash=100000)
+        res = engine.run(df)
+        assert "total_return" in res.performance
+        assert engine._last_strategy._chanlun_signals == []

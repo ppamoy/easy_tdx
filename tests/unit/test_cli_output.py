@@ -138,3 +138,80 @@ def test_render_table_impl_empty_returns_no_data() -> None:
 
     assert _render_table_impl(pd.DataFrame(), 30) == "(无数据)"
     assert _render_table_impl(pd.DataFrame(), None) == "(无数据)"
+
+
+def test_chanlun_table_prints_recursion_levels(capsys: pytest.CaptureFixture[str]) -> None:
+    """V708: CLI 缠论表格打印多级别深度递归各递归级别计数。"""
+    from easy_tdx.cli import cmd_chanlun
+
+    result = {
+        "code": "600000",
+        "frequency": "daily",
+        "kline_count": 100,
+        "ckline_count": 70,
+        "fractal_count": 40,
+        "bi_count": 20,
+        "zs_count": 3,
+        "xd_count": 4,
+        "mmd_count": 5,
+        "bc_count": 2,
+        "bis": [],
+        "zss": [],
+        "xds": [],
+        "mmds": [],
+        "bcs": [],
+        "levels": {
+            "bi": {
+                "name": "笔级别",
+                "xd_count": 4,
+                "zs_count": 3,
+                "mmd_count": 5,
+                "bc_count": 2,
+            },
+            "xd": {
+                "name": "线段级别",
+                "xd_count": 4,
+                "zs_count": 2,
+                "mmd_count": 1,
+                "bc_count": 1,
+            },
+            "xd_l2": {
+                "name": "递归2级",
+                "xd_count": 1,
+                "zs_count": 1,
+                "mmd_count": 0,
+                "bc_count": 0,
+            },
+        },
+    }
+    cmd_chanlun._print_table(result)
+    out = capsys.readouterr().out
+    assert "── 递归级别 ──" in out
+    assert "线段级别: 线段 4  中枢 2  买卖点 1  背驰 1" in out
+    assert "递归2级: 线段 1  中枢 1  买卖点 0  背驰 0" in out
+
+
+def test_chanlun_table_without_levels_is_safe(capsys: pytest.CaptureFixture[str]) -> None:
+    """V708: 无 levels 字段时表格打印不抛错（向后兼容）。"""
+    from easy_tdx.cli import cmd_chanlun
+
+    result = {
+        "code": "600000",
+        "frequency": "daily",
+        "kline_count": 100,
+        "ckline_count": 70,
+        "fractal_count": 40,
+        "bi_count": 20,
+        "zs_count": 3,
+        "xd_count": 4,
+        "mmd_count": 5,
+        "bc_count": 2,
+        "bis": [],
+        "zss": [],
+        "xds": [],
+        "mmds": [],
+        "bcs": [],
+    }
+    cmd_chanlun._print_table(result)
+    out = capsys.readouterr().out
+    assert "── 递归级别 ──" not in out

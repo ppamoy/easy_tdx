@@ -1,21 +1,28 @@
-"""缠论多级别递归金标测试（V651）。
+"""缠论多级别递归金标测试（V651 / 深递归 V708）。
 
 锁定「以低级别线段作为高级别笔」的递归输出：
 - 手工人造线段序列 → 高级别线段/线段中枢/背驰计数与几何不变量；
+- 深度多级别递归（compute_recursive_levels）：多级链逐级把上一级线段当
+  更高级别「笔」递归，验证级别数、链式馈给、端点锚定与各级别几何不变量；
 - 真实行情 fixture → to_dict 输出 bi/xd 两层结构且不破坏单级别序列化。
 """
 
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
 
-from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun import ChanlunAnalyser, ChanlunResult
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.recursive import RecursiveLevelResult, compute_recursive_level
+from easy_tdx.chanlun.recursive import (
+    RecursiveLevelResult,
+    compute_recursive_level,
+    compute_recursive_levels,
+)
 from easy_tdx.chanlun.types import FX, XD, CLKline, Direction, FXType
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
@@ -189,3 +196,132 @@ def test_recursive_module_exported_from_package() -> None:
 
     assert ExportedResult is RecursiveLevelResult
     assert exported_compute is compute_recursive_level
+
+
+def _craft_multiscale_xds(n: int = 1200) -> list[XD]:
+    """构造多层嵌套正弦端点路径的底层线段序列。
+
+    端点 = 300 + 90·sin(i/140) + 70·sin(i/34) + 20·sin(i/7)，方向交替，
+    相邻线段端点共享，保证高阶特征序列能逐级收敛出 3 个递归级别。
+    """
+    es = [
+        round(300 + 90 * math.sin(i / 140) + 70 * math.sin(i / 34) + 20 * math.sin(i / 7), 2)
+        for i in range(n)
+    ]
+    points = [_fx(FXType.DI if i % 2 == 0 else FXType.DING, v, i * 10) for i, v in enumerate(es)]
+    xds: list[XD] = []
+    for i in range(len(points) - 1):
+        d = Direction.UP if i % 2 == 0 else Direction.DOWN
+        hi = max(points[i].val, points[i + 1].val) + 2
+        lo = min(points[i].val, points[i + 1].val) - 2
+        xds.append(
+            XD(
+                start=points[i],
+                end=points[i + 1],
+                direction=d,
+                index=i,
+                high=hi,
+                low=lo,
+            )
+        )
+    return xds
+
+
+def _cfg() -> ChanlunConfig:
+    return ChanlunConfig(xd_bi_pohuai=False)
+
+
+def test_compute_recursive_levels_deep_three_levels() -> None:
+    """深度递归：多级正弦端点 → 3 个递归级别，级别线段数逐级收敛。"""
+    xds = _craft_multiscale_xds()
+    res = compute_recursive_levels(xds, depth=5, config=_cfg())
+
+    assert len(res) == 3
+    # 级别线段数逐级收敛：基础级 → 56 → 6 → 1（数据决定的确定性金标）。
+    assert [len(rl.xds) for rl in res] == [56, 6, 1]
+
+    # 每级几何不变量：端点首尾相连、方向交替、区间合理。
+    for rl in res:
+        for xd in rl.xds:
+            if xd.direction == Direction.UP:
+                assert xd.end.val > xd.start.val
+            else:
+                assert xd.end.val < xd.start.val
+            assert xd.low <= xd.start.val <= xd.high
+            assert xd.low <= xd.end.val <= xd.high
+        for i in range(len(rl.xds) - 1):
+            assert rl.xds[i].end.bar_index == rl.xds[i + 1].start.bar_index
+            assert rl.xds[i].end.val == rl.xds[i + 1].start.val
+            assert rl.xds[i].direction != rl.xds[i + 1].direction
+        for zs in rl.zss:
+            assert zs.zg > zs.zd
+
+
+def test_compute_recursive_levels_backward_compat_level1() -> None:
+    """compute_recursive_level(单级) == compute_recursive_levels(depth=1)[0]。"""
+    xds = _craft_multiscale_xds()
+    one = compute_recursive_level(xds, config=_cfg())
+    deep = compute_recursive_levels(xds, depth=1, config=_cfg())
+    assert len(deep) == 1
+    assert one.xds == deep[0].xds
+    assert one.zss == deep[0].zss
+    assert one.bcs == deep[0].bcs
+
+
+def test_compute_recursive_levels_chain_feed() -> None:
+    """第 N 级复用第 N-1 级线段作为「高级别笔」：链式馈给一致。"""
+    xds = _craft_multiscale_xds()
+    res = compute_recursive_levels(xds, depth=2, config=_cfg())
+    assert len(res) == 2
+
+    # 第 2 级 = 以第 1 级线段为「笔」再递归的结果。
+    independent = compute_recursive_level(res[0].xds, config=_cfg())
+    assert len(independent.xds) == len(res[1].xds)
+    assert [(xd.index, xd.start.val, xd.end.val) for xd in independent.xds] == [
+        (xd.index, xd.start.val, xd.end.val) for xd in res[1].xds
+    ]
+
+
+def test_compute_recursive_levels_depth_semantics() -> None:
+    """depth<1 归一为 1；线段不足时提前终止、返回更少级别。"""
+    xds = _craft_multiscale_xds()
+    assert len(compute_recursive_levels(xds, depth=0, config=_cfg())) == 1
+    assert len(compute_recursive_levels(xds, depth=1, config=_cfg())) == 1
+
+    # 基础线段不足 3 根 → 空链，不抛异常。
+    assert compute_recursive_levels([], config=_cfg()) == []
+    assert compute_recursive_levels(_make_xds()[:2], config=_cfg()) == []
+
+
+def test_compute_recursive_levels_exported_from_package() -> None:
+    """compute_recursive_levels 通过 chanlun 包对外导出。"""
+    from easy_tdx.chanlun import compute_recursive_levels as exported
+
+    assert exported is compute_recursive_levels
+
+
+def test_to_dict_emits_deep_recursion_levels() -> None:
+    """to_dict 输出 levels.bi / xd / xd_l2 / xd_l3：高级别链逐级序列化。
+
+    每级「笔」= 上一级线段（Level 1 的「笔」= result.xds，此处未填充为空），
+    本级的线段 = 该级递归得到的 XD。
+    """
+    xds = _craft_multiscale_xds()
+    res = compute_recursive_levels(xds, depth=3, config=_cfg())
+    assert len(res) == 3
+
+    result = ChanlunResult(code="000001", frequency="daily")
+    result.recursive_levels = res
+    d = result.to_dict()
+
+    assert set(d["levels"].keys()) == {"bi", "xd", "xd_l2", "xd_l3"}
+    assert d["levels"]["xd"]["name"] == "线段级别"
+    assert d["levels"]["xd"]["xd_count"] == len(res[0].xds)
+    # 第 2 级：笔 = 第 1 级线段，线段 = res[1]
+    assert d["levels"]["xd_l2"]["name"] == "递归2级"
+    assert d["levels"]["xd_l2"]["bi_count"] == len(res[0].xds)
+    assert d["levels"]["xd_l2"]["xd_count"] == len(res[1].xds)
+    # 第 3 级：笔 = 第 2 级线段，线段 = res[2]
+    assert d["levels"]["xd_l3"]["name"] == "递归3级"
+    assert d["levels"]["xd_l3"]["bi_count"] == len(res[1].xds)
+    assert d["levels"]["xd_l3"]["xd_count"] == len(res[2].xds)

@@ -1579,6 +1579,30 @@ print(f"背驰: {[b.msg for b in result.bcs]}")
 print(result.to_dict())
 ```
 
+#### 多级别深度递归
+
+以线段为高级别「笔」逐级递归，可同时拿到第 1~N 级线段/线段中枢/背驰/三类买卖点。
+`eval_result.levels` 输出 `bi`（笔级别）、`xd`（线段级别）、`xd_l2 / xd_l3 …`
+（更高递归级别）；`recursion_depth` 控制递归深度（默认 1，<=8，受每级线段数量约束会自动收敛）：
+
+```python
+from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+
+analyser = ChanlunAnalyser(
+    "SH600519", "DAILY", config=ChanlunConfig(recursion_depth=3)
+)
+result = analyser.process_klines(df)
+
+d = result.to_dict()
+print(list(d["levels"].keys()))          # ['bi', 'xd', 'xd_l2', 'xd_l3']
+print(len(result.recursive_levels))      # 实际产出的递归级别数（<= recursion_depth）
+
+# 也可直接调用底层多级递归函数（closes 为空时力度退化为振幅）
+from easy_tdx.chanlun import ChanlunConfig, compute_recursive_levels
+levels = compute_recursive_levels(xds, depth=3, config=ChanlunConfig())
+# levels[i] = 第 i+1 级的 RecursiveLevelResult（xds / zss / mmds / bcs / zsds / qsds）
+```
+
 ### 公告检索（巨潮资讯网）
 
 独立数据源（巨潮资讯网 cninfo），无需连接 TDX 行情服务器即可检索公司公告。

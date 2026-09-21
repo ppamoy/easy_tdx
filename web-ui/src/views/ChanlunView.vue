@@ -242,16 +242,16 @@ function mapBcs(raw: any[]): ChanlunBc[] {
 }
 
 function applyAnalysisLevel(level: AnalysisLevel, data: any) {
-  if (level === 'xd' && data?.levels?.xd) {
-    const xdLevel = data.levels.xd
-    // 高级别「笔」= 低级别线段；本级别不再叠加更高级别线段，避免双线重叠。
-    bis.value = mapBis(xdLevel.bis)
+  if (level !== 'bi' && data?.levels?.[level]) {
+    const lvl = data.levels[level]
+    // 递归级别：高级别「笔」= 上一级线段；本级别不再叠加更高级别线段，避免双线重叠。
+    bis.value = mapBis(lvl.bis)
     xds.value = []
-    zsds.value = mapXds(xdLevel.zsds)
-    qsds.value = mapXds(xdLevel.qsds)
-    zss.value = mapZss(xdLevel.zss)
-    mmds.value = mapMmds(xdLevel.mmds)
-    bcs.value = mapBcs(xdLevel.bcs)
+    zsds.value = mapXds(lvl.zsds)
+    qsds.value = mapXds(lvl.qsds)
+    zss.value = mapZss(lvl.zss)
+    mmds.value = mapMmds(lvl.mmds)
+    bcs.value = mapBcs(lvl.bcs)
     return
   }
 
@@ -262,6 +262,23 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
   zss.value = mapZss(data?.zss)
   mmds.value = mapMmds(data?.mmds)
   bcs.value = mapBcs(data?.bcs)
+}
+
+// 由后端 levels 键推导分析级别选项与展示标签（bi / xd / xd_l2 / xd_l3…）。
+const levelName = (key: string): string => {
+  if (key === 'bi') return '笔级别'
+  if (key === 'xd') return '线段级别'
+  const m = /^xd_l(\d+)$/.exec(key)
+  return m ? `递归${Number(m[1])}级` : key
+}
+
+// 分析完成后根据后端 levels 刷新可选级别，并把当前级别校正到有效值。
+function syncAvailableLevels(data: any) {
+  const keys = Object.keys(data?.levels ?? {})
+  const ordered = keys.filter((k) => k === 'bi' || k.startsWith('xd'))
+  const next: AnalysisLevel[] = ordered.length ? (ordered as AnalysisLevel[]) : ['bi']
+  availableLevels.value = next.map((k) => ({ key: k, label: levelName(k) }))
+  if (!next.includes(analysisLevel.value)) analysisLevel.value = 'bi'
 }
 
 function onAnalysisLevelChange() {
@@ -275,9 +292,16 @@ const valuation = ref<{ pe: number | null; pb: number | null } | null>(null)
 // 多级别分析结果
 const multiLevelResult = ref<any>(null)
 
-// 递归级别切换：bi=笔级别，xd=线段级别（以低级别线段作为高级别笔）
-type AnalysisLevel = 'bi' | 'xd'
+// 递归级别切换：bi=笔级别，xd=线段级别（以低级别线段作为高级别笔），
+// 更高级别（xd_l2、xd_l3…）在 recursion_depth>=2 且数据支持时动态出现。
+type AnalysisLevel = 'bi' | 'xd' | `xd_l${number}`
 const analysisLevel = ref<AnalysisLevel>('bi')
+// 当前分析结果中可用的级别（后端 levels 键，bi + 递归链 xd/xd_l2…）。
+const availableLevels = ref<{ key: AnalysisLevel; label: string }[]>([
+  { key: 'bi', label: '笔级别' },
+])
+// 多级别递归深度（<=8，后端经 ChanlunRequest.recursion_depth 解析）。
+const recursionDepth = ref(1)
 const rawResult = ref<any>(null)
 function loadBool(key: string, def: boolean): boolean {
   try {
@@ -295,7 +319,11 @@ const showBcs = ref(loadBool('chanlun.showBcs', true))
 const showZss = ref(loadBool('chanlun.showZss', true))
 const showMmdLabels = ref(loadBool('chanlun.showMmdLabels', false))
 
-const analysisLevelLabel = computed(() => (analysisLevel.value === 'bi' ? '笔级别' : '线段级别'))
+const analysisLevelLabel = computed(() => {
+  if (analysisLevel.value === 'bi') return '笔级别'
+  const lvl = availableLevels.value.find((x) => x.key === analysisLevel.value)
+  return lvl?.label ?? '线段级别'
+})
 
 // 统计信息
 const stats = computed(() => {
@@ -789,6 +817,7 @@ async function analyze() {
       // 使用高级别结果
       const hr = data.high_level?.result ?? data
       rawResult.value = hr
+      syncAvailableLevels(hr)
       analysisLevel.value = 'bi'
       applyAnalysisLevel('bi', hr)
       // BOLL数据
@@ -820,6 +849,7 @@ async function analyze() {
           category: category.value,
           count: count.value,
           start: 0,
+          recursion_depth: recursionDepth.value,
         }),
       })
       if (!resp.ok) {
@@ -835,6 +865,7 @@ async function analyze() {
         boll.value = data.boll
       }
       rawResult.value = data
+      syncAvailableLevels(data)
       analysisLevel.value = 'bi'
       applyAnalysisLevel('bi', data)
       fxs.value = (data.fractals ?? []).map((f: any) => ({
@@ -1036,9 +1067,15 @@ const _qCat = String(route.query.category || '')
 if (['DAY', 'WEEK', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60'].includes(_qCat)) {
   category.value = _qCat as typeof category.value
 }
-if (route.query.level === 'xd') analysisLevel.value = 'xd'
-watch([category, analysisLevel], () => {
-  router.replace({ query: { category: category.value, level: analysisLevel.value } })
+if (route.query.level === 'xd' || String(route.query.level).startsWith('xd_l')) {
+  analysisLevel.value = String(route.query.level) as AnalysisLevel
+}
+const _qDepth = Number(route.query.depth)
+if (Number.isInteger(_qDepth) && _qDepth >= 1 && _qDepth <= 8) recursionDepth.value = _qDepth
+watch([category, analysisLevel, recursionDepth], () => {
+  router.replace({
+    query: { category: category.value, level: analysisLevel.value, depth: recursionDepth.value },
+  })
 })
 
 // 显隐开关偏好持久化：跨会话记住用户设置
@@ -1103,8 +1140,19 @@ onUnmounted(() => {
       <div class="field-group">
         <label>分析级别</label>
         <select v-model="analysisLevel" @change="onAnalysisLevelChange">
-          <option value="bi">笔级别</option>
-          <option value="xd">线段级别</option>
+          <option v-for="lvl in availableLevels" :key="lvl.key" :value="lvl.key">
+            {{ lvl.label }}
+          </option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>递归深度</label>
+        <select v-model.number="recursionDepth">
+          <option :value="1">1（线段级别）</option>
+          <option :value="2">2</option>
+          <option :value="3">3</option>
+          <option :value="4">4</option>
+          <option :value="5">5</option>
         </select>
       </div>
       <div class="field-group">
