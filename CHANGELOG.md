@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+**选股→择时更高级别确认（V709）**
+- `/stock-pick/timing` 接入多级别递归：`_run_timing_one` 支持 `recursion_depth`（默认 2），返回新增 `recursion`（depth_produced / latest 更高级别买卖点 / alignment 与笔级别同向或背离 / note）与完整 `levels`。
+- `_verdict` 增加 `direction` 字段，便于与递归结构对齐。
+- 前端 StockPickView 显示「更高级别确认」（信号/日期/置信度 + 同向✓/背离⚠），并请求 recursion_depth=2、count=1200 以产出更高级别结构。
+
 **多级别深度递归（V708）**
 - recursive.py 新增 `compute_recursive_levels(xds, depth, …)`：把第 N-1 级线段当作更高级别「笔」逐级递归，产出第 1~N 级线段/线段中枢/背驰/三类买卖点（`compute_recursive_level` 保留为单级兼容入口）。
 - `ChanlunConfig.recursion_depth`（默认 1，1~8）控制递归深度；深度链受每级线段数量（>=3）约束，会自动提前终止。

@@ -341,7 +341,7 @@ _MIN_CONF = 0.6
 def _verdict(mmds: list[Any]) -> dict[str, Any]:
     """根据最新三类买卖点给出择时结论（可解释、非黑盒、低置信度降级观望）。"""
     if not mmds:
-        return {"action": "观望", "reason": "截至目标日无缠论买卖点信号"}
+        return {"action": "观望", "reason": "截至目标日无缠论买卖点信号", "direction": None}
     last = mmds[-1]
     typ = last.mmd_type.value
     conf = last.confidence or 0
@@ -351,23 +351,70 @@ def _verdict(mmds: list[Any]) -> dict[str, Any]:
             "signal": typ,
             "confidence": round(conf, 2),
             "reason": f"信号置信度偏低（{conf:.0%}），建议先观察，等更明确的买卖点",
+            "direction": None,
         }
     if "buy" in typ:
-        action = "买入"
+        action, direction = "买入", "buy"
         reason = f"最新信号 {typ}（置信度 {conf:.0%}），可考虑分批建仓"
     elif "sell" in typ:
-        action = "卖出"
+        action, direction = "卖出", "sell"
         reason = f"最新信号 {typ}（置信度 {conf:.0%}），建议减仓/离场"
     else:
-        action = "观望"
+        action, direction = "观望", None
         reason = f"最新信号 {typ}（置信度 {conf:.0%}），观察确认"
-    return {"action": action, "signal": typ, "confidence": round(conf, 2), "reason": reason}
+    return {
+        "action": action,
+        "signal": typ,
+        "confidence": round(conf, 2),
+        "reason": reason,
+        "direction": direction,
+    }
+
+
+def _recursion_context(result: Any) -> dict[str, Any]:
+    """多级别递归结构确认：返回已产出级别数与其中出现的最高级别买入信号。"""
+    lv = getattr(result, "recursive_levels", [])
+    if not lv:
+        return {
+            "depth_produced": 0,
+            "latest": None,
+            "note": "更高级别结构暂不足，建议结合笔级别信号执行，普通行情可用",
+        }
+    latest: dict[str, Any] | None = None
+    # 从最高级别向低级别找第一个出现的更高级别买卖点信号作佐证。
+    for i in range(len(lv) - 1, -1, -1):
+        mmds = lv[i].mmds
+        if mmds:
+            m = mmds[-1]
+            t = str(m.mmd_type.value)
+            latest = {
+                "level": i + 1,
+                "signal": t,
+                "direction": "buy" if "buy" in t else ("sell" if "sell" in t else "other"),
+                "confidence": round(m.confidence or 0, 2),
+                "date": str(m.bi.end.k.date)[:10] if m.bi else None,
+            }
+            break
+    return {
+        "depth_produced": len(lv),
+        "latest": latest,
+        "note": (
+            f"存在{len(lv)}级递归结构；更高级别最新信号 {latest['signal']}"
+            if latest
+            else f"存在{len(lv)}级递归结构，但暂无更高级别买卖点信号"
+        ),
+    }
 
 
 def _run_timing_one(
-    df: pd.DataFrame, symbol: str, market: str, code: str, target: date
+    df: pd.DataFrame,
+    symbol: str,
+    market: str,
+    code: str,
+    target: date,
+    recursion_depth: int = 2,
 ) -> dict[str, Any]:
-    from easy_tdx.chanlun import ChanlunAnalyser
+    from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
     if df is None or df.empty:
         return {"symbol": symbol, "error": "无K线数据"}
@@ -381,7 +428,8 @@ def _run_timing_one(
         }
 
     freq = "daily"
-    analyser = ChanlunAnalyser(code=symbol, frequency=freq)
+    config = ChanlunConfig(recursion_depth=max(1, int(recursion_depth)))
+    analyser = ChanlunAnalyser(code=symbol, frequency=freq, config=config)
     result = analyser.process_klines(df)
     d = result.to_dict()
     # 补充分型列表（与 /chanlun/analyze 契约一致）供前端标注
@@ -414,6 +462,16 @@ def _run_timing_one(
         "summary": sa.get("summary"),
         "ranking": sa.get("ranking", [])[:5],
     }
+    # V709: 多级别递归结构确认——较高级别的买卖点信号给笔级别结论作佐证。
+    rec = _recursion_context(result)
+    vdir = v.get("direction")
+    if rec.get("latest") and vdir:
+        rec["alignment"] = (
+            "confirm" if rec["latest"]["direction"] == vdir else "conflict"
+        )
+    else:
+        rec["alignment"] = "none"
+    rec["base_direction"] = vdir
     return {
         "symbol": symbol,
         "market": market,
@@ -434,6 +492,10 @@ def _run_timing_one(
         "novice_advice": novice,
         # V594: 信号类型前瞻命中率（哪类买卖点历史上更靠谱）
         "signal_quality": signal_quality,
+        # V709: 多级别递归结构确认（depth_produced/latest/alignment/note）
+        "recursion": rec,
+        # 多级别递归完整 levels（bi / xd / xd_l2 …），前端可切换到更高级别画图
+        "levels": d["levels"],
         "structure": {
             "bi_count": len(result.bis),
             "zs_count": len(result.zss),
@@ -471,6 +533,7 @@ async def stock_pick_timing(
         if s.get("code")
     ]
     count = max(60, min(int(req.get("count", 400)), 1600))
+    recursion_depth = max(1, min(int(req.get("recursion_depth", 2)), 8))
 
     # 并发取数 + 分析（串行依赖单连接，简单起见 per-symbol 串行，快于全市场）
     results: list[dict[str, Any]] = []
@@ -479,7 +542,9 @@ async def stock_pick_timing(
         symbol = f"{market}:{code}"
         try:
             df = await _fetch_window(mac_client, client, market, code, count)
-            results.append(_run_timing_one(df, symbol, market, code, target))
+            results.append(
+                _run_timing_one(df, symbol, market, code, target, recursion_depth=recursion_depth)
+            )
         except Exception as e:  # noqa: BLE001
             logger.warning("stock-pick timing %s 失败: %s", symbol, e)
             results.append({"symbol": symbol, "market": market, "code": code, "error": str(e)})

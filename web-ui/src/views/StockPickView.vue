@@ -81,7 +81,8 @@ async function runTiming(item: StockPickPoolItem) {
     const res = await stockPickTiming({
       date: selectDate.value,
       symbols: [{ market: item.market || 'SH', code: item.code }],
-      count: 500,
+      count: 1200,
+      recursion_depth: 2,
     })
     timingResult.value = res.results[0] ?? null
     if (timingResult.value?.error) error.value = timingResult.value.error
@@ -181,6 +182,23 @@ async function runTiming(item: StockPickPoolItem) {
             </div>
             <div v-if="timingResult.signal_quality?.summary" class="signal-quality">
               <p>📊 信号可信度：{{ timingResult.signal_quality.summary }}</p>
+            </div>
+            <div v-if="timingResult.recursion" class="signal-quality">
+              <p>
+                🪜 更高级别确认：
+                <template v-if="timingResult.recursion.latest">
+                  {{ timingResult.recursion.latest.signal }}（{{ timingResult.recursion.latest.date ?? '—' }} ·
+                  {{ Math.round((timingResult.recursion.latest.confidence ?? 0) * 100) }}%），共
+                  {{ timingResult.recursion.depth_produced }} 级递归
+                  <span v-if="timingResult.recursion.alignment === 'confirm'" class="ok"
+                    >↑ 与笔级别同向</span
+                  >
+                  <span v-else-if="timingResult.recursion.alignment === 'conflict'" class="warn"
+                    >↓ 与笔级别背离</span
+                  >
+                </template>
+                <template v-else>{{ timingResult.recursion.note ?? '更高级别结构暂不足' }}</template>
+              </p>
             </div>
           </div>
           <ChanlunChart
@@ -311,6 +329,14 @@ tr.active td {
   border-top: 1px dashed rgba(255, 255, 255, 0.15);
   font-size: 12px;
   color: #94a3b8;
+}
+.signal-quality .ok {
+  color: #22c55e;
+  font-weight: 600;
+}
+.signal-quality .warn {
+  color: #f59e0b;
+  font-weight: 600;
 }
 .verdict p {
   margin: 6px 0 0;

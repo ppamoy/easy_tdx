@@ -232,7 +232,6 @@ export async function runBacktestWithPolling(
 ): Promise<TaskState> {
   const { task_id } = await submitBacktestTask(req)
   const start = Date.now()
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const state = await fetchTask(task_id)
     onPoll?.(state)
@@ -396,7 +395,7 @@ export interface StockPickTimingResult {
   bcs?: unknown[]
   fractals?: unknown[]
   macd?: { dif: number[]; dea: number[]; hist: number[] }
-  verdict?: { action: string; signal?: string; confidence?: number; reason?: string }
+  verdict?: { action: string; signal?: string; confidence?: number; reason?: string; direction?: string }
   novice_advice?: {
     explanation: string
     entry: number | null
@@ -406,6 +405,14 @@ export interface StockPickTimingResult {
     signal?: string
     direction?: string
   }
+  // V709: 多级别递归结构确认（更高一级买卖点对笔级别结论的佐证）
+  recursion?: {
+    depth_produced: number
+    latest: { level: number; signal: string; direction: string; confidence: number; date?: string } | null
+    alignment?: 'confirm' | 'conflict' | 'none'
+    note?: string
+  }
+  levels?: Record<string, unknown>
   signal_quality?: {
     summary?: string
     ranking?: {
@@ -444,6 +451,7 @@ export async function stockPickTiming(req: {
   date: string
   symbols: { market: string; code: string }[]
   count?: number
+  recursion_depth?: number
 }): Promise<{ date: string; results: StockPickTimingResult[] }> {
   const resp = await fetch(BASE + '/stock-pick/timing', {
     method: 'POST',

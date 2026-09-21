@@ -133,3 +133,52 @@ def test_run_timing_one_short_window() -> None:
     )
     out = _run_timing_one(df, "SH:600519", "SH", "600519", date(2025, 1, 20))
     assert "error" in out and "不足" in out["error"]
+
+
+def test_verdict_includes_direction() -> None:
+    """择时结论携带方向字段，供前端与递归结构对齐。"""
+    assert _verdict([])["direction"] is None
+    assert _verdict([_FakeMmd("1buy", 0.9)])["direction"] == "buy"
+    assert _verdict([_FakeMmd("3sell", 0.7)])["direction"] == "sell"
+    assert _verdict([_FakeMmd("1buy", 0.45)])["direction"] is None  # 低置信度观望
+
+
+class _FakeLevelMmd:
+    def __init__(self, value: str, confidence: float, dt: date) -> None:
+        self.mmd_type = type("T", (), {"value": value})()
+        self.confidence = confidence
+        k = type("K", (), {"date": dt})()
+        self.bi = type("B", (), {"end": type("FX", (), {"k": k})()})()
+
+
+class _FakeRecResult:
+    def __init__(self, levels_mmds: list[list[_FakeLevelMmd]]) -> None:
+        self.recursive_levels = [type("L", (), {"mmds": mmds})() for mmds in levels_mmds]
+
+
+def test_recursion_context_finds_available_signal() -> None:
+    """多级别递归确认：折取最高可用级别的买卖点信号。"""
+    from easy_tdx.web.routers.stock_pick import _recursion_context
+
+    # level1 有、level2 无 → 取 level1；level1 无、level2 有 → 取 level2
+    rc1 = _recursion_context(_FakeRecResult([[_FakeLevelMmd("1buy", 0.66, date(2026, 6, 30))], []]))
+    assert rc1["depth_produced"] == 2
+    assert rc1["latest"]["direction"] == "buy"
+    assert rc1["latest"]["level"] == 1
+    assert rc1["latest"]["date"] == "2026-06-30"
+
+    rc2 = _recursion_context(_FakeRecResult([[], [_FakeLevelMmd("2sell", 0.8, date(2026, 7, 2))]]))
+    assert rc2["latest"]["level"] == 2
+    assert rc2["latest"]["direction"] == "sell"
+
+
+def test_recursion_context_empty() -> None:
+    """无递归级别时返回干净的空上下文，不抛错。"""
+    from easy_tdx.web.routers.stock_pick import _recursion_context
+
+    rc = _recursion_context(type("R", (), {"recursive_levels": []})())
+    assert rc["depth_produced"] == 0
+    assert rc["latest"] is None
+
+    rc2 = _recursion_context(object())
+    assert rc2["depth_produced"] == 0
