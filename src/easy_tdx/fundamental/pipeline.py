@@ -495,7 +495,11 @@ def detect_season_for_date(
     *,
     client: TdxClient | None = None,
 ) -> SeasonResult | None:
-    """用上证指数日线判断 target 当日所处的四季。"""
+    """用上证指数日线判断 target 当日所处的四季。
+
+    标准 TDX 主机不提供指数（返回空）时回退 MAC 协议（同步客户端，
+    与 CLI get_mac_client 同一数据路径）。
+    """
     from easy_tdx.models.enums import KlineCategory, Market
 
     if client is None:
@@ -504,13 +508,40 @@ def detect_season_for_date(
         df = client.get_index_bars(Market.SH, "000001", KlineCategory.DAY, 0, 320)
     except Exception as e:
         logger.warning("获取上证指数失败: %s", e)
-        return None
+        df = None
     if df is None or df.empty:
-        return None
+        # 标准协议不可用/无指数数据 → MAC 回退（真实验证可用）。
+        mdf = _mac_index_bars()
+        if mdf is None or mdf.empty:
+            logger.warning("上证指数（标准/MAC）均无数据，四季判断置空")
+            return None
+        dates = list(pd.to_datetime(mdf["datetime"]).dt.date)
+        closes = [float(x) for x in mdf["close"].tolist()]
+        vols = [float(x) for x in mdf["vol"].tolist()] if "vol" in mdf.columns else None
+        return detect_season(dates, closes, target, volumes=vols)
     dates = list(pd.to_datetime(df["date"]).dt.date)
     closes = [float(x) for x in df["close"].tolist()]
     vols = [float(x) for x in df["vol"].tolist()] if "vol" in df.columns else None
     return detect_season(dates, closes, target, volumes=vols)
+
+
+def _mac_index_bars() -> pd.DataFrame | None:
+    """用同步 MAC 客户端取上证指数日线（标准 TDX 无指数时的回退）。"""
+    try:
+        from easy_tdx.mac.client import MacClient
+        from easy_tdx.mac.enums import Adjust, Period
+
+        client = MacClient.from_best_host()
+        try:
+            client.connect()
+            return client.get_stock_kline(
+                1, "000001", period=Period.DAILY, start=0, count=320, adjust=Adjust.NONE
+            )
+        finally:
+            client.close()
+    except Exception as e:
+        logger.warning("MAC 取上证指数失败: %s", e)
+        return None
 
 
 def scan_market(
