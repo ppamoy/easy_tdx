@@ -227,7 +227,7 @@ async def _fetch_window(
     code: str,
     count: int,
 ) -> pd.DataFrame:
-    from easy_tdx.web.routers.chanlun import fetch_qfq_klines
+    from easy_tdx.web.klines import fetch_qfq_klines
 
     return await fetch_qfq_klines(mac_client, tdx_client, market, code, "DAY", start=0, count=count)
 
@@ -548,4 +548,17 @@ async def stock_pick_timing(
         except Exception as e:  # noqa: BLE001
             logger.warning("stock-pick timing %s 失败: %s", symbol, e)
             results.append({"symbol": symbol, "market": market, "code": code, "error": str(e)})
-    return {"date": date_str, "results": results}
+
+    # V713: 四季判断联动——按目标日给出市场所处季节与仓位建议，前端排行展示。
+    from easy_tdx.fundamental.pipeline import detect_season_for_date
+
+    try:
+        season = await asyncio.to_thread(detect_season_for_date, target)
+    except Exception:  # noqa: BLE001
+        logger.warning("四季判断失败", exc_info=True)
+        season = None
+    return {
+        "date": date_str,
+        "results": results,
+        "season": season.as_dict() if season else None,
+    }

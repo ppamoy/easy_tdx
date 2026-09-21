@@ -429,6 +429,17 @@ export interface StockPickTimingResult {
   structure?: { bi_count: number; zs_count: number; mmd_count: number; bc_count: number }
 }
 
+/** 四季判断（市场所处季节与仓位建议，四季判断联动择时排行）。 */
+export interface SeasonInfo {
+  season: string
+  label: string
+  color?: string
+  description?: string
+  strategy?: string
+  position_range?: [number, number]
+  action?: string
+}
+
 /** 第一步：长盈基本面选股池（point-in-time）。 */
 export async function stockPickScreen(req: {
   date: string
@@ -452,7 +463,7 @@ export async function stockPickTiming(req: {
   symbols: { market: string; code: string }[]
   count?: number
   recursion_depth?: number
-}): Promise<{ date: string; results: StockPickTimingResult[] }> {
+}): Promise<{ date: string; results: StockPickTimingResult[]; season?: SeasonInfo | null }> {
   const resp = await fetch(BASE + '/stock-pick/timing', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

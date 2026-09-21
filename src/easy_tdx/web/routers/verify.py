@@ -103,7 +103,7 @@ async def _fetch_online_df(
     if client is None:
         return None
     try:
-        from easy_tdx.web.routers.chanlun import fetch_qfq_klines
+        from easy_tdx.web.klines import fetch_qfq_klines
 
         df = await fetch_qfq_klines(mac_client, client, market, code, category, 0, count)
         return df if df is not None and not df.empty else None

@@ -7,6 +7,7 @@ import {
   formatError,
   stockPickScreen,
   stockPickTiming,
+  type SeasonInfo,
   type StockPickPoolItem,
   type StockPickTimingResult,
 } from '../api'
@@ -22,6 +23,7 @@ const screenSource = ref<string>('')
 const screenUpdatedAt = ref<string>('')
 const selected = ref<StockPickPoolItem | null>(null)
 const timingResult = ref<StockPickTimingResult | null>(null)
+const season = ref<SeasonInfo | null>(null)
 const error = ref('')
 
 const categoryLabel: Record<string, string> = {
@@ -85,6 +87,7 @@ async function runTiming(item: StockPickPoolItem) {
       recursion_depth: 2,
     })
     timingResult.value = res.results[0] ?? null
+    season.value = res.season ?? null
     if (timingResult.value?.error) error.value = timingResult.value.error
   } catch (e) {
     error.value = formatError(e)
@@ -132,6 +135,7 @@ async function runAllTiming() {
       }))
     rows.sort((a, b) => actionRank[a.action] - actionRank[b.action] || b.confidence - a.confidence)
     timingSummary.value = rows
+    season.value = res.season ?? null
   } catch (e) {
     error.value = formatError(e)
   } finally {
@@ -215,6 +219,16 @@ function pickTiming(row: StockPickTimingResult) {
           <button :disabled="timingAll || !pool.length" @click="runAllTiming">
             {{ timingAll ? '批量择时中…' : `② 一键择时 TOP ${Math.min(pool.length, 20)}` }}
           </button>
+        </div>
+        <div v-if="season" class="season-banner" :style="{ borderColor: season.color ?? '#4ade80' }">
+          <div class="season-head">
+            <strong :style="{ color: season.color ?? '#4ade80' }">{{ season.label }}</strong>
+            <span v-if="season.position_range" class="season-pos"
+              >建议仓位 {{ season.position_range[0] }}%~{{ season.position_range[1] }}%</span
+            >
+          </div>
+          <p v-if="season.description">{{ season.description }}</p>
+          <p v-if="season.strategy" class="season-strategy">策略：{{ season.strategy }}</p>
         </div>
         <div v-if="timingSummary.length" class="timing-summary">
           <h4>📊 择时排行（按可操作性排序）</h4>
@@ -485,5 +499,32 @@ tr.active td {
 .warn {
   color: #f59e0b;
   font-weight: 600;
+}
+.season-banner {
+  margin-top: 12px;
+  border: 1px solid #4ade80;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(74, 222, 128, 0.06);
+}
+.season-banner p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+.season-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.season-head strong {
+  font-size: 14px;
+}
+.season-pos {
+  font-size: 12px;
+  color: #e2e8f0;
+}
+.season-strategy {
+  color: #cbd5e1;
 }
 </style>

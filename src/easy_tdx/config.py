@@ -293,6 +293,20 @@ def save_best_host(host: str) -> None:
     _save(cfg)
 
 
+def get_best_host_validated_at() -> str | None:
+    """返回 best_host 最近一次「数据验证」的时间戳（V713，未验证为 None）。"""
+    cfg = _load()
+    return cfg.get("best_host_validated_at")
+
+
+def save_best_host_validated_at(host: str) -> None:
+    """记录 best_host 通过数据验证的时间戳（V713 数据验证型探测）。"""
+    cfg = _load()
+    cfg["best_host"] = host
+    cfg["best_host_validated_at"] = datetime.now(_SHANGHAI_TZ).isoformat()
+    _save(cfg)
+
+
 def save_best_ex_host(host: str) -> None:
     """保存最佳扩展行情主机到配置文件。"""
     cfg = _load()

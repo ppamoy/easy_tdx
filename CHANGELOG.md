@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+**数据验证型主机探测 + 四季联动择时（V713）**
+- 新增 `host_probe.py`：候选主机**并发取真实 K 线验证**（只测 TCP 连通会选出「连上但返回空行情」的主机），可用优先、原顺序保持、全失败回退原列表；验证结果带 1h TTL（config `best_host_validated_at`）。
+- Web app lifespan 接入：先快速检查缓存主机（可用免全量探测），失败才全量探测候选；无任何主机可用时记录探测时间（TTL 内不重复 30s+ 探测）并沿用缓存主机（各端点有 MAC 回退）。
+- 四季判断联动：`/stock-pick/timing` 返回新增 `season`（label/描述/策略/建议仓位区间），前端择时排行展示四季横幅与仓位建议（春播/夏种/秋收/冬藏）。
+- 新增 test_host_probe.py（TTL 语义 + 并发探测 mock）；stock_pick/screening/host_probe 31 passed；前端 vue-tsc/eslint/vitest 全绿。
+
 **数据可用性根因修复：MAC 回退统一接入（V711）**
 - 根因：标准 TDX 协议 52 个候选主机从本网络全部不可用（拒连 / 连上但返回 0 根空行情 / 挂死），导致只走标准 AsyncTdxClient 的 diagnosis / screening / backtest / monitor 路由全部取不到 K 线（/screening/verify 报「未能取到池内任何股票的行情」、四季判断恒为空）。
 - 修复：新建共享模块 `web/klines.py`（`fetch_qfq_klines` 从 chanlun 路由移入），diagnosis（3 处）/ screening（3 处）/ backtest（`_fetch_bars`+两个翻页函数）/ monitor（扫描循环）统一改为「MAC 优先（QFQ）+ 标准 TdxClient 回退」。

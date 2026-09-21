@@ -71,6 +71,43 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     port = app.state.tdx_port
     timeout = app.state.tdx_timeout
 
+    # V713: 数据验证型主机优选——只测 TCP 连通会选出「连上但返回空行情」的
+    # 主机（实测 52 个候选中 7 个如此）。验证未过期直接用缓存主机；
+    # 先快速检查缓存主机（可用则免全量探测），失败才并发探测候选。
+    try:
+        from easy_tdx.config import get_best_host_validated_at, save_best_host_validated_at
+        from easy_tdx.host_probe import (
+            pick_working_hosts_async,
+            validate_host_data_async,
+            validation_fresh,
+        )
+
+        if not validation_fresh(get_best_host_validated_at()):
+            cached_ok = await validate_host_data_async(host, port, timeout)
+            if cached_ok:
+                save_best_host_validated_at(host)
+                logger.info("缓存主机 %s 通过数据验证，直接使用", host)
+            else:
+                working = await pick_working_hosts_async()
+                if working:
+                    if working[0] != host:
+                        logger.info(
+                            "数据验证型主机优选: %s（原 %s 不返回行情数据）", working[0], host
+                        )
+                        host = working[0]
+                        app.state.tdx_host = host
+                    save_best_host_validated_at(host)
+                else:
+                    # 标记探测已完成（TTL 内不再重复 30s+ 全量探测）。
+                    save_best_host_validated_at(host)
+                    logger.warning(
+                        "无任何候选主机返回行情数据（标准协议可能整体不可用），"
+                        "沿用 %s（各端点有 MAC 回退）",
+                        host,
+                    )
+    except Exception:  # noqa: BLE001
+        logger.warning("数据验证型主机优选失败，沿用缓存主机", exc_info=True)
+
     client = AsyncTdxClient(host=host, port=port, timeout=timeout)
     try:
         await client.connect()
