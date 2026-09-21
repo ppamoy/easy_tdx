@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -177,6 +177,7 @@ def _market_quote(
     target: date,
     *,
     client: TdxClient | None = None,
+    mac_client: Any | None = None,
 ) -> dict[str, Any]:
     """目标日收盘价 + 流通股本（用于计算市值门槛）。
 
@@ -184,14 +185,17 @@ def _market_quote(
     失败再回退标准 TDX（只给收盘价，不给股本）。这样凌晨批量算市值不会
     因为标准主机「空K线 + 每次约6秒」而超时。
     """
-    # 1) MAC 主机
+    # 1) MAC 主机（传入已连接的 mac_client 可复用连接，批量算市值不再逐只建连）
     try:
-        from easy_tdx.mac.client import MacClient
         from easy_tdx.mac.enums import Adjust, Period
         from easy_tdx.models.enums import Market
 
         mk = int(Market[market.upper()].value)
-        df = MacClient().get_stock_kline(
+        if mac_client is None:
+            from easy_tdx.mac.client import MacClient
+
+            mac_client = MacClient()
+        df = mac_client.get_stock_kline(
             mk, code, Period.DAILY, start=0, count=400, adjust=Adjust.QFQ
         )
         if df is not None and not df.empty:
@@ -490,6 +494,11 @@ def run_screen(
     }
 
 
+_SEASON_CACHE: dict[str, tuple[SeasonResult | None, datetime, float]] = {}
+_SEASON_TTL_PAST_HOURS = 24 * 7.0  # 历史日期结果稳定，长缓存
+_SEASON_TTL_TODAY_HOURS = 0.5  # 当日盘中数据会更新，短缓存
+
+
 def detect_season_for_date(
     target: date,
     *,
@@ -499,9 +508,33 @@ def detect_season_for_date(
 
     标准 TDX 主机不提供指数（返回空）时回退 MAC 协议（同步客户端，
     与 CLI get_mac_client 同一数据路径）。
+    V713: 按日期缓存（历史日期稳定长缓存；当日短缓存），重复扫描不再
+    每次花 ~6s 重新取指数。
     """
+    from datetime import datetime as _dt
+
     from easy_tdx.models.enums import KlineCategory, Market
 
+    key = target.isoformat()
+    now = _dt.now()
+    ttl_hours = (
+        _SEASON_TTL_TODAY_HOURS if target >= now.date() else _SEASON_TTL_PAST_HOURS
+    )
+    cached = _SEASON_CACHE.get(key)
+    if cached is not None:
+        result, at, cached_ttl = cached
+        if (now - at).total_seconds() < cached_ttl * 3600:
+            return result
+
+    # V713: MAC 优先（~1.3s，标准协议空响应重试要 ~5s），标准协议回退。
+    mdf = _mac_index_bars()
+    if mdf is not None and not mdf.empty:
+        dates = list(pd.to_datetime(mdf["datetime"]).dt.date)
+        closes = [float(x) for x in mdf["close"].tolist()]
+        vols = [float(x) for x in mdf["vol"].tolist()] if "vol" in mdf.columns else None
+        result = detect_season(dates, closes, target, volumes=vols)
+        _SEASON_CACHE[key] = (result, now, ttl_hours)
+        return result
     if client is None:
         client = TdxClient()
     try:
@@ -510,19 +543,15 @@ def detect_season_for_date(
         logger.warning("获取上证指数失败: %s", e)
         df = None
     if df is None or df.empty:
-        # 标准协议不可用/无指数数据 → MAC 回退（真实验证可用）。
-        mdf = _mac_index_bars()
-        if mdf is None or mdf.empty:
-            logger.warning("上证指数（标准/MAC）均无数据，四季判断置空")
-            return None
-        dates = list(pd.to_datetime(mdf["datetime"]).dt.date)
-        closes = [float(x) for x in mdf["close"].tolist()]
-        vols = [float(x) for x in mdf["vol"].tolist()] if "vol" in mdf.columns else None
-        return detect_season(dates, closes, target, volumes=vols)
+        logger.warning("上证指数（标准/MAC）均无数据，四季判断置空")
+        _SEASON_CACHE[key] = (None, now, ttl_hours)
+        return None
     dates = list(pd.to_datetime(df["date"]).dt.date)
     closes = [float(x) for x in df["close"].tolist()]
     vols = [float(x) for x in df["vol"].tolist()] if "vol" in df.columns else None
-    return detect_season(dates, closes, target, volumes=vols)
+    result = detect_season(dates, closes, target, volumes=vols)
+    _SEASON_CACHE[key] = (result, now, ttl_hours)
+    return result
 
 
 def _mac_index_bars() -> pd.DataFrame | None:
@@ -674,11 +703,18 @@ def scan_market(
 
     # V597: 市值门槛用 MAC 取目标日收盘价（快且能取到），独立于后续表现。
     if min_mcap_yi is not None:
-        for d in window:
+        # V713: 并行取窗口内目标日收盘价（每只 ~0.6s 是服务器延迟，
+        # 50 只串行 ~30s；8 线程并行 ~4s）。每线程各自建 MAC 连接（线程安全）。
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _quote_one(d: dict[str, Any]) -> tuple[dict[str, Any], float | None]:
             quote = _market_quote(d["market"], d["code"], target)
-            mcap = _total_mcap_yi(d.get("indicators", {}), quote)
-            d["total_mcap_yi"] = mcap
-            d["_mcap_excluded"] = mcap is None or mcap < min_mcap_yi
+            return d, _total_mcap_yi(d.get("indicators", {}), quote)
+
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            for d, mcap in executor.map(_quote_one, window):
+                d["total_mcap_yi"] = mcap
+                d["_mcap_excluded"] = mcap is None or mcap < min_mcap_yi
         kept = [d for d in window if not d.get("_mcap_excluded")][:top_n]
     else:
         kept = window[:top_n]
