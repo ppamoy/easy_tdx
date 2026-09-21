@@ -4,6 +4,9 @@
 
 ## [Unreleased]
 
+**选股池一键批量择时排行（V710）**
+- StockPickView 新增「② 一键择时 TOP N」：对选股池统一批量择时，按可操作性（买入→卖出→观望，置信度降序）排行，展示建议/信号/置信/递归同向或背离，可从排行一键查看标的详情缠论图。帮助用户在众多基本面合格标的中快速挑出当前最该开仓/离场的票。
+
 **选股→择时更高级别确认（V709）**
 - `/stock-pick/timing` 接入多级别递归：`_run_timing_one` 支持 `recursion_depth`（默认 2），返回新增 `recursion`（depth_produced / latest 更高级别买卖点 / alignment 与笔级别同向或背离 / note）与完整 `levels`。
 - `_verdict` 增加 `direction` 字段，便于与递归结构对齐。

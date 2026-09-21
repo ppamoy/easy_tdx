@@ -92,6 +92,58 @@ async function runTiming(item: StockPickPoolItem) {
     timing.value = false
   }
 }
+
+// ── 一键批量择时：对选股池全部标的统一择时并按可操作性排序 ──
+type TimingRankRow = StockPickTimingResult & {
+  confidence: number
+  action: string
+  alignLabel: string
+}
+const timingSummary = ref<TimingRankRow[]>([])
+const timingAll = ref(false)
+
+const actionRank: Record<string, number> = { 买入: 0, 卖出: 1, 观望: 2 }
+
+async function runAllTiming() {
+  error.value = ''
+  timingSummary.value = []
+  const batch = (pool.value || []).slice(0, 20)
+  if (!batch.length) return
+  timingAll.value = true
+  try {
+    const res = await stockPickTiming({
+      date: selectDate.value,
+      symbols: batch.map((x) => ({ market: x.market || 'SH', code: x.code.slice(-6) })),
+      count: 1200,
+      recursion_depth: 2,
+    })
+    const rows: TimingRankRow[] = (res.results || [])
+      .filter((r) => r.symbol && !r.error)
+      .map((r) => ({
+        ...r,
+        confidence: r.verdict?.confidence ?? 0,
+        action: r.verdict?.action ?? '观望',
+        alignLabel:
+          r.recursion?.alignment === 'confirm'
+            ? '同向'
+            : r.recursion?.alignment === 'conflict'
+              ? '背离'
+              : '—',
+      }))
+    rows.sort((a, b) => actionRank[a.action] - actionRank[b.action] || b.confidence - a.confidence)
+    timingSummary.value = rows
+  } catch (e) {
+    error.value = formatError(e)
+  } finally {
+    timingAll.value = false
+  }
+}
+
+function pickTiming(row: StockPickTimingResult) {
+  selected.value =
+    pool.value.find((p) => p.code?.slice(-6) === (row.code ?? '').slice(-6)) ?? null
+  timingResult.value = row
+}
 </script>
 
 <template>
@@ -159,6 +211,42 @@ async function runTiming(item: StockPickPoolItem) {
           </tbody>
         </table>
         <p v-else class="hint">选择时间后点击「① 长盈选股」生成基本面标的池。</p>
+        <div class="pool-actions">
+          <button :disabled="timingAll || !pool.length" @click="runAllTiming">
+            {{ timingAll ? '批量择时中…' : `② 一键择时 TOP ${Math.min(pool.length, 20)}` }}
+          </button>
+        </div>
+        <div v-if="timingSummary.length" class="timing-summary">
+          <h4>📊 择时排行（按可操作性排序）</h4>
+          <table>
+            <thead>
+              <tr>
+                <th>标的</th>
+                <th>建议</th>
+                <th>信号</th>
+                <th>置信</th>
+                <th>递归</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="row in timingSummary"
+                :key="row.symbol"
+                :class="{ 'row-buy': row.action === '买入', 'row-sell': row.action === '卖出' }"
+              >
+                <td>{{ row.symbol }}</td>
+                <td>{{ row.action }}</td>
+                <td>{{ row.verdict?.signal ?? '—' }}</td>
+                <td>{{ Math.round(row.confidence * 100) }}%</td>
+                <td :class="{ ok: row.alignLabel === '同向', warn: row.alignLabel === '背离' }">
+                  {{ row.alignLabel }}
+                </td>
+                <td><button class="ghost" @click="pickTiming(row)">详情</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div class="timing-panel">
@@ -349,5 +437,53 @@ tr.active td {
   font-size: 12px;
   color: #94a3b8;
   margin: 4px 0;
+}
+.pool-actions {
+  margin-top: 10px;
+}
+.pool-actions button {
+  width: 100%;
+}
+.timing-summary {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.timing-summary h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+.timing-summary table {
+  width: 100%;
+  font-size: 12px;
+}
+.timing-summary th {
+  color: #94a3b8;
+  font-weight: 500;
+  text-align: left;
+  padding: 4px 6px;
+}
+.timing-summary td {
+  padding: 5px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.timing-summary .row-buy td:first-child {
+  color: #22c55e;
+  font-weight: 600;
+}
+.timing-summary .row-sell td:first-child {
+  color: #f87171;
+  font-weight: 600;
+}
+.ok {
+  color: #22c55e;
+  font-weight: 600;
+}
+.warn {
+  color: #f59e0b;
+  font-weight: 600;
 }
 </style>
