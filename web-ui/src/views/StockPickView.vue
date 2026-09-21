@@ -265,6 +265,15 @@ function pickTiming(row: StockPickTimingResult) {
 
       <div class="timing-panel">
         <h3>缠论择时详情</h3>
+        <div v-if="season" class="season-banner" :style="{ borderColor: season.color ?? '#4ade80' }">
+          <div class="season-head">
+            <strong :style="{ color: season.color ?? '#4ade80' }">{{ season.label }}</strong>
+            <span v-if="season.position_range" class="season-pos"
+              >建议仓位 {{ season.position_range[0] }}%~{{ season.position_range[1] }}%</span
+            >
+          </div>
+          <p v-if="season.action">操作：{{ season.action }}</p>
+        </div>
         <template v-if="timingResult">
           <div v-if="timingResult.verdict" class="verdict">
             <strong>{{ timingResult.verdict.action }}</strong>

@@ -30,6 +30,9 @@ class HostInfo(BaseModel):
     latency_ms: int | None = None  # None = 未测速或不可达
     reachable: bool = False
     is_current: bool = False
+    # V713: 数据可用性（validate_data=True 时探测）——None=未探测；
+    # True=取真实 K 线有数据；False=能连上但返回空行情。
+    has_data: bool | None = None
 
 
 class HostListResponse(BaseModel):
@@ -45,6 +48,8 @@ class ServerTestRequest(BaseModel):
 
     hosts: list[str] | None = None  # None = 测全部候选
     timeout: float = 5.0
+    # V713: 同时探测数据可用性（并发取 5 根日线验证，非空 body 才算可用）
+    validate_data: bool = False
 
 
 class ServerSwitchRequest(BaseModel):
@@ -97,6 +102,16 @@ async def test_hosts(req: ServerTestRequest, request: Request) -> list[HostInfo]
     # ranked 是 [(host, latency_sec)]，已按延迟升序排列，只含可达的
     reachable_map = {h: round(s * 1000) for h, s in ranked}
 
+    # V713: 数据可用性探测（并发取真实 K 线验证，非空 body 才算可用）。
+    has_data_map: dict[str, bool | None] = {}
+    if req.validate_data:
+        from easy_tdx.host_probe import validate_host_data_async
+
+        async def _one(host: str) -> None:
+            has_data_map[host] = await validate_host_data_async(host, port)
+
+        await asyncio.gather(*(_one(h) for h in hosts))
+
     # 按原始 hosts 顺序返回（保持列表稳定），但把可达的排前面
     result = []
     for h in hosts:
@@ -107,11 +122,18 @@ async def test_hosts(req: ServerTestRequest, request: Request) -> list[HostInfo]
                 latency_ms=latency_ms,
                 reachable=latency_ms is not None,
                 is_current=(h == current),
+                has_data=has_data_map.get(h),
             )
         )
 
-    # 可达的排前面（按延迟升序），不可达的排后面
-    result.sort(key=lambda x: (x.reachable is False, x.latency_ms or 999999))
+    # 可达的排前面（按延迟升序），不可达的排后面；有数据的再排前
+    result.sort(
+        key=lambda x: (
+            x.has_data is False,
+            x.reachable is False,
+            x.latency_ms or 999999,
+        )
+    )
     return result
 
 

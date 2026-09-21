@@ -56,6 +56,14 @@ class ChanlunStrategy(ParametrizedStrategy):
             max_value=8,
             label="信号分析级别 0=笔/1=线段/2+=递归更高级",
         ),
+        Param(
+            "position_pct",
+            float,
+            default=1.0,
+            min_value=0.05,
+            max_value=1.0,
+            label="仓位比例(1=全仓,可按四季建议设 0.3~0.5)",
+        ),
         Param("use_3buy", bool, default=True, label="启用三类买点"),
         Param("use_3sell", bool, default=True, label="启用三类卖点"),
         Param("use_2s_signals", bool, default=False, label="启用类二买/类二卖"),
@@ -225,6 +233,25 @@ class ChanlunStrategy(ParametrizedStrategy):
         self._v102_sl: float = 0.0
         self._v102_tp: float = 0.0
 
+    def _do_buy(self) -> None:
+        """按 position_pct 生成买入信号（1=全仓走引擎全仓估算；<1 按现金比例
+        折算 100 股整数手）。四季建议仓位（春播 30%~50% 等）可直接设该参数。"""
+        pct = float(self.p.get("position_pct", 1.0) or 1.0)
+        if pct >= 1.0:
+            self.buy()
+            return
+        price = float(self.data.close[0])
+        if price <= 0 or self._cash <= 0:
+            self.buy()
+            return
+        # 100 股整数手 + 少量余量吸收手续费（引擎实际执行价由 OrderSimulator 定）
+        size = int(self._cash * pct / (price * 1.0005) / 100) * 100
+        if size > 0:
+            self.buy(size=size)
+        else:
+            # 现金不足一手：回退全仓信号（引擎按现金计算能买多少是多少）
+            self.buy()
+
     def _bi_end_bar_idx(self, bi: Any) -> int:
         """获取笔结束分型的日期对应的 bar index。"""
         if bi.end is None:
@@ -278,20 +305,20 @@ class ChanlunStrategy(ParametrizedStrategy):
                     self._position_count = 1
                     self._entry_price = current_price
                     self._record_trade("BUY", current_price, mmd_type, confidence)
-                    self.buy()
+                    self._do_buy()
 
             elif mmd_type in ("2buy_s",) and self.p["use_2s_signals"]:
                 if self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
                     self._record_trade("BUY", current_price, mmd_type, confidence)
-                    self.buy()
+                    self._do_buy()
 
             elif mmd_type == "3buy" and self.p["use_3buy"]:
                 if self._position_count >= 1:
                     self._position_count += 1
                     self._record_trade("BUY", current_price, mmd_type, confidence)
-                    self.buy()
+                    self._do_buy()
                 elif self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
@@ -303,7 +330,7 @@ class ChanlunStrategy(ParametrizedStrategy):
                     else:
                         self._v102_active = False
                     self._record_trade("BUY", current_price, mmd_type, confidence)
-                    self.buy()
+                    self._do_buy()
 
             elif mmd_type in ("1sell", "2sell"):
                 if self._position_count > 0:

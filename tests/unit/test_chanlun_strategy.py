@@ -459,3 +459,34 @@ class TestChanlunStrategyRecursionLevel:
         res = engine.run(df)
         assert "total_return" in res.performance
         assert engine._last_strategy._chanlun_signals == []
+
+
+class TestChanlunStrategyPositionPct:
+    """仓位比例参数（四季建议仓位落到回测仓位管理）。"""
+
+    def test_position_pct_param_present_default_full(self) -> None:
+        from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy
+
+        names = {p.name for p in ChanlunStrategy.params}
+        assert "position_pct" in names
+        assert ChanlunStrategy().p["position_pct"] == 1.0
+
+    def test_position_pct_half_buys_half_size(self) -> None:
+        """position_pct=0.5 买入数量约为全仓的一半（100 股整数手）。"""
+        df = _make_trending_df(300, "up")
+        engine_full = BacktestEngine(ChanlunStrategy(), cash=100000)
+        engine_half = BacktestEngine(ChanlunStrategy(position_pct=0.5), cash=100000)
+
+        res_full = engine_full.run(df)
+        res_half = engine_half.run(df)
+        assert "total_return" in res_full.performance
+        assert "total_return" in res_half.performance
+
+        s_full = engine_full._last_strategy
+        s_half = engine_half._last_strategy
+        assert s_full is not None and s_half is not None
+        # 两者都应发生过买入（趋势数据 + 默认参数）
+        assert s_full._position_size > 0
+        assert s_half._position_size > 0
+        # 半仓买入数量应明显小于全仓（且不超过全仓）
+        assert s_half._position_size < s_full._position_size
