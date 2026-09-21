@@ -32,7 +32,7 @@ from easy_tdx.web.backtest_schemas import (
     TaskSummary,
     serialize_result,
 )
-from easy_tdx.web.deps import get_client
+from easy_tdx.web.deps import get_client, get_mac_client_optional
 from easy_tdx.web.task_runner import get_runner
 
 router = APIRouter(tags=["backtest"])
@@ -77,6 +77,7 @@ async def run_backtest(req: BacktestRequest) -> BacktestResultResponse:
 async def run_backtest_async(
     req: BacktestRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> TaskSubmitResponse:
     """提交后台回测任务，立即返回 task_id。
 
@@ -88,7 +89,7 @@ async def run_backtest_async(
         df = _ohlcv_to_df(req.ohlcv)
         bars_desc = f"{len(df)} 根"
     elif req.symbol is not None:
-        df = await _fetch_bars(client, req.symbol, req.category, req.count)
+        df = await _fetch_bars(client, req.symbol, req.category, req.count, mac_client)
         bars_desc = f"{req.symbol} {req.category}×{req.count}"
     else:
         # BacktestRequest 校验器已保证二者至少其一，此处不可达
@@ -155,6 +156,7 @@ async def get_task(task_id: str) -> TaskStateResponse:
 async def run_portfolio_backtest_async(
     req: PortfolioBacktestRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> TaskSubmitResponse:
     """提交组合（多标的）回测后台任务。
 
@@ -163,7 +165,7 @@ async def run_portfolio_backtest_async(
     """
     # 1. 逐个标的取行情（async 上下文内）
     stock_data_list = await _fetch_portfolio_bars(
-        client, req.stocks, req.category, req.start_date, req.end_date
+        client, req.stocks, req.category, req.start_date, req.end_date, mac_client
     )
     if not stock_data_list:
         raise ValueError("所有标的均未取到有效行情数据")
@@ -192,6 +194,7 @@ async def run_portfolio_backtest_async(
 async def run_multi_strategy_backtest_async(
     req: MultiStrategyBacktestRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> TaskSubmitResponse:
     """提交多策略组合回测后台任务（资金分仓 / 并行制）。
 
@@ -199,7 +202,7 @@ async def run_multi_strategy_backtest_async(
     单个策略取数失败则跳过（不中断整组），全部失败返回 400。结果为
     MultiStrategyResult（结构同 PortfolioResult），通过 GET /backtest/tasks/{task_id} 轮询。
     """
-    slots = await _fetch_multi_strategy_bars(client, req.items)
+    slots = await _fetch_multi_strategy_bars(client, req.items, mac_client)
     if not slots:
         raise ValueError("所有策略槽位均未取到有效行情数据")
 
@@ -220,6 +223,7 @@ async def run_multi_strategy_backtest_async(
 async def run_optimize_async(
     req: OptimizeBacktestRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> TaskSubmitResponse:
     """提交参数网格寻优后台任务。
 
@@ -231,7 +235,7 @@ async def run_optimize_async(
         df = _ohlcv_to_df(req.ohlcv)
         desc_bars = f"{len(df)} 根"
     elif req.symbol is not None:
-        df = await _fetch_bars(client, req.symbol, req.category, 800)
+        df = await _fetch_bars(client, req.symbol, req.category, 800, mac_client)
         desc_bars = f"{req.symbol}"
         if req.start_date or req.end_date:
             df = _filter_df_by_date(df, req.start_date, req.end_date)
@@ -263,6 +267,7 @@ async def run_optimize_async(
 async def run_optimize_all_async(
     req: OptimizeAllBacktestRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> TaskSubmitResponse:
     """提交「一键寻优所有策略」后台任务。
 
@@ -275,7 +280,7 @@ async def run_optimize_all_async(
         df = _ohlcv_to_df(req.ohlcv)
         desc_bars = f"{len(df)} 根"
     elif req.symbol is not None:
-        df = await _fetch_bars(client, req.symbol, req.category, 800)
+        df = await _fetch_bars(client, req.symbol, req.category, 800, mac_client)
         desc_bars = f"{req.symbol}"
         if req.start_date or req.end_date:
             df = _filter_df_by_date(df, req.start_date, req.end_date)
@@ -414,18 +419,18 @@ def _ohlcv_to_df(records: list[dict[str, Any]]) -> pd.DataFrame:
     return df
 
 
-async def _fetch_bars(client: Any, symbol: str, category: str, count: int) -> pd.DataFrame:
-    """按标的取 K 线（async，必须在 event loop 内调用）。"""
-    from easy_tdx.web.convert import category_from_str, market_from_str
+async def _fetch_bars(
+    client: Any, symbol: str, category: str, count: int, mac_client: Any | None = None
+) -> pd.DataFrame:
+    """按标的取 K 线（async，必须在 event loop 内调用）。
 
+    MAC 优先（QFQ，与 /bars 同一价格体系），MAC 不可用或返回空时
+    回退标准 TdxClient。标准 TDX 主机不提供数据时仍可取到行情。
+    """
     market_str, code = symbol.split(":", 1)
-    df = await client.get_security_bars(
-        market_from_str(market_str),
-        code,
-        category_from_str(category),
-        0,
-        count,
-    )
+    from easy_tdx.web.klines import fetch_qfq_klines
+
+    df = await fetch_qfq_klines(mac_client, client, market_str, code, category, 0, count)
     if len(df) == 0:
         raise ValueError(f"标的 {symbol} 未取到任何 K 线数据")
     return df
@@ -592,6 +597,7 @@ async def _fetch_portfolio_bars(
     category: str,
     start_date: str | None,
     end_date: str | None,
+    mac_client: Any | None = None,
 ) -> list[Any]:
     """逐个标的取 K 线并组装 StockData 列表（async，必须在 event loop 内调用）。
 
@@ -599,7 +605,7 @@ async def _fetch_portfolio_bars(
     同逻辑）。单个标的取数失败时跳过（不中断整个组合），全部失败返回空列表。
     """
     from easy_tdx.backtest.portfolio_engine import StockData
-    from easy_tdx.web.convert import category_from_str, market_from_str
+    from easy_tdx.web.klines import fetch_qfq_klines
 
     max_pages = 10  # 翻页上限：10 × 800 = 8000 根
     stock_data_list: list[StockData] = []
@@ -608,10 +614,12 @@ async def _fetch_portfolio_bars(
         frames: list[pd.DataFrame] = []
         for page in range(max_pages):
             try:
-                page_df = await client.get_security_bars(
-                    market_from_str(market_str),
+                page_df = await fetch_qfq_klines(
+                    mac_client,
+                    client,
+                    market_str,
                     code,
-                    category_from_str(category),
+                    category,
                     page * 800,
                     800,
                 )
@@ -658,6 +666,7 @@ async def _fetch_portfolio_bars(
 async def _fetch_multi_strategy_bars(
     client: Any,
     items: list[Any],
+    mac_client: Any | None = None,
 ) -> list[Any]:
     """逐个策略槽位取行情 + 构造策略实例，组装 StrategySlot 列表（async）。
 
@@ -667,7 +676,7 @@ async def _fetch_multi_strategy_bars(
     """
     from easy_tdx.backtest.multi_strategy_engine import StrategySlot
     from easy_tdx.backtest.strategies import get_registry
-    from easy_tdx.web.convert import category_from_str, market_from_str
+    from easy_tdx.web.klines import fetch_qfq_klines
 
     registry = get_registry()
     slots: list[StrategySlot] = []
@@ -682,10 +691,12 @@ async def _fetch_multi_strategy_bars(
         frames: list[pd.DataFrame] = []
         for page in range(10):
             try:
-                page_df = await client.get_security_bars(
-                    market_from_str(market_str),
+                page_df = await fetch_qfq_klines(
+                    mac_client,
+                    client,
+                    market_str,
                     code,
-                    category_from_str(item.category),
+                    item.category,
                     page * 800,
                     800,
                 )

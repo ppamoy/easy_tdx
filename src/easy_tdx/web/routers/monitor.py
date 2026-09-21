@@ -16,8 +16,8 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from easy_tdx.web.convert import category_from_str, market_from_str
-from easy_tdx.web.deps import get_client
+from easy_tdx.web.deps import get_client, get_mac_client_optional
+from easy_tdx.web.klines import fetch_qfq_klines
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +90,9 @@ class SignalMonitor:
         async with self._lock:
             return self._tasks.get(task_id)
 
-    async def check_signals(self, task_id: str, client: Any) -> list[dict[str, Any]]:
+    async def check_signals(
+        self, task_id: str, client: Any, mac_client: Any | None = None
+    ) -> list[dict[str, Any]]:
         """检查监控任务中的股票，返回新信号。"""
         from easy_tdx.chanlun import ChanlunAnalyser
 
@@ -114,10 +116,12 @@ class SignalMonitor:
             market = stock.get("market", "SZ")
             code = stock.get("code", "")
             try:
-                df = await client.get_security_bars(
-                    market_from_str(market),
+                df = await fetch_qfq_klines(
+                    mac_client,
+                    client,
+                    market,
                     code,
-                    category_from_str(task.category),
+                    task.category,
                     0,
                     500,
                 )
@@ -181,7 +185,9 @@ class SignalMonitor:
         task.last_signals = [s for s in task.last_signals if s.get("checked_at", 0) > cutoff]
         return before - len(task.last_signals)
 
-    async def start_periodic_check(self, task_id: str, client: Any) -> None:
+    async def start_periodic_check(
+        self, task_id: str, client: Any, mac_client: Any | None = None
+    ) -> None:
         """启动后台定时检查任务（被 monitor_create 调用）。"""
         task = await self.get_task(task_id)
         if task is None:
@@ -194,7 +200,7 @@ class SignalMonitor:
                     await asyncio.sleep(task.interval_seconds)
                     if task_id not in self._tasks:
                         break  # 任务已被删除
-                    await self.check_signals(task_id, client)
+                    await self.check_signals(task_id, client, mac_client)
                     logger.debug("Periodic check done for task %s", task_id)
                 except asyncio.CancelledError:
                     break
@@ -229,6 +235,7 @@ _monitor = SignalMonitor()
 async def monitor_create(
     req: dict[str, Any],
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """创建信号监控任务（支持后台自动轮询）。
 
@@ -250,7 +257,7 @@ async def monitor_create(
 
     # 如果 interval > 0，启动后台定时检查
     if interval > 0:
-        await _monitor.start_periodic_check(task_id, client)
+        await _monitor.start_periodic_check(task_id, client, mac_client)
 
     return {"task_id": task_id, "stock_count": len(stocks), "interval": interval}
 
@@ -299,6 +306,7 @@ async def monitor_status(task_id: str) -> dict[str, Any]:
 async def monitor_check(
     task_id: str,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """手动触发一次信号检查。"""
     task = await _monitor.get_task(task_id)
@@ -307,7 +315,7 @@ async def monitor_check(
 
     task.running = True
     try:
-        new_signals = await _monitor.check_signals(task_id, client)
+        new_signals = await _monitor.check_signals(task_id, client, mac_client)
     finally:
         task.running = False
 

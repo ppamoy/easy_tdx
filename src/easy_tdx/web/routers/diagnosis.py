@@ -24,8 +24,8 @@ from typing import Any, cast
 import numpy as np
 from fastapi import APIRouter, Depends
 
-from easy_tdx.web.convert import category_from_str, market_from_str
-from easy_tdx.web.deps import get_client
+from easy_tdx.web.deps import get_client, get_mac_client_optional
+from easy_tdx.web.klines import fetch_qfq_klines
 from easy_tdx.web.schemas import AdviceSimulateRequest, StockIdentifier
 
 
@@ -279,6 +279,7 @@ def _detect_candlestick_patterns(
 async def diagnose_stock(
     req: StockIdentifier,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """分析单只股票的技术面，给出买卖建议。
 
@@ -299,11 +300,13 @@ async def diagnose_stock(
     code = req.code
     symbol = f"{market}{code}"
 
-    # 获取日线数据
-    df = await client.get_security_bars(
-        market_from_str(market),
-        code,
-        category_from_str("DAY"),
+    # 获取日线数据（MAC 优先 + QFQ，与 /bars 同一价格体系；标准 TDX 失效时仍可用）
+    df = await fetch_qfq_klines(
+        mac_client,
+        client,
+        req.market,
+        req.code,
+        "DAY",
         0,
         500,
     )
@@ -2735,6 +2738,7 @@ def _collect_v102_advices(
 async def advice_simulate(
     req: AdviceSimulateRequest,
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """V102 建议回放实证：对 3买/3卖 信号生成建议并在历史行情上回放。
 
@@ -2746,10 +2750,12 @@ async def advice_simulate(
     from easy_tdx.chanlun import ChanlunAnalyser  # noqa: PLC0415
 
     symbol = f"{req.market}{req.code}"
-    df = await client.get_security_bars(
-        market_from_str(req.market),
+    df = await fetch_qfq_klines(
+        mac_client,
+        client,
+        req.market,
         req.code,
-        category_from_str(req.category),
+        req.category,
         0,
         req.count,
     )
@@ -2786,6 +2792,7 @@ async def advice_simulate(
 async def multi_stock_comparison(
     stocks: list[StockIdentifier],
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """多股票信号质量对比分析（V64 新增）。
 
@@ -2800,14 +2807,16 @@ async def multi_stock_comparison(
     results: list[dict[str, Any]] = []
     for stock in stocks:
         try:
-            bar_data = client.get_security_bars(
-                market_from_str(stock.market),
+            df = await fetch_qfq_klines(
+                mac_client,
+                client,
+                stock.market,
                 stock.code,
-                category_from_str("DAY"),
+                "DAY",
                 0,
                 500,
             )
-            if not bar_data:
+            if df is None or df.empty:
                 results.append(
                     {
                         "stock_code": stock.code,
@@ -2817,9 +2826,6 @@ async def multi_stock_comparison(
                 )
                 continue
 
-            import pandas as pd
-
-            df = pd.DataFrame(bar_data)
             if len(df) < 100:
                 results.append(
                     {

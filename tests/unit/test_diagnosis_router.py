@@ -47,7 +47,7 @@ async def test_diagnose_no_data() -> None:
         mock_get_client.return_value = mock_client
 
         req = StockIdentifier(market="SZ", code="000001")
-        result = await diagnose_stock(req, mock_client)
+        result = await diagnose_stock(req, mock_client, mac_client=None)
         assert "error" in result
 
 
@@ -131,7 +131,7 @@ async def test_advice_simulate_no_data() -> None:
         mock_get_client.return_value = mock_client
 
         req = AdviceSimulateRequest(market="SZ", code="000001")
-        result = await advice_simulate(req, mock_client)
+        result = await advice_simulate(req, mock_client, mac_client=None)
         assert "error" in result
 
 
@@ -157,7 +157,7 @@ async def test_advice_simulate_insufficient_data() -> None:
         mock_get_client.return_value = mock_client
 
         req = AdviceSimulateRequest(market="SZ", code="000001")
-        result = await advice_simulate(req, mock_client)
+        result = await advice_simulate(req, mock_client, mac_client=None)
         assert "error" in result
 
 
@@ -187,7 +187,7 @@ async def test_advice_simulate_no_3_signals() -> None:
         mock_analyser.return_value.process_klines.return_value = _fake_result([])
 
         req = AdviceSimulateRequest(market="SZ", code="000001")
-        result = await advice_simulate(req, mock_client)
+        result = await advice_simulate(req, mock_client, mac_client=None)
         assert result["advice_count"] == 0
         assert result["report"] is None
         assert "未发现" in result["message"]
@@ -234,7 +234,7 @@ async def test_advice_simulate_full_path() -> None:
         mock_analyser.return_value.process_klines.return_value = result
 
         req = AdviceSimulateRequest(market="SZ", code="000001")
-        resp = await advice_simulate(req, mock_client)
+        resp = await advice_simulate(req, mock_client, mac_client=None)
         assert resp["advice_count"] == 1
         assert resp["report"]["count"] == 1
         assert "avg_return" in resp["report"]

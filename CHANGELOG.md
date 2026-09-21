@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**数据可用性根因修复：MAC 回退统一接入（V711）**
+- 根因：标准 TDX 协议 52 个候选主机从本网络全部不可用（拒连 / 连上但返回 0 根空行情 / 挂死），导致只走标准 AsyncTdxClient 的 diagnosis / screening / backtest / monitor 路由全部取不到 K 线（/screening/verify 报「未能取到池内任何股票的行情」、四季判断恒为空）。
+- 修复：新建共享模块 `web/klines.py`（`fetch_qfq_klines` 从 chanlun 路由移入），diagnosis（3 处）/ screening（3 处）/ backtest（`_fetch_bars`+两个翻页函数）/ monitor（扫描循环）统一改为「MAC 优先（QFQ）+ 标准 TdxClient 回退」。
+- 真实缺陷修复：`/diagnosis/multi-stock` 对 async 客户端漏 `await`（协程被当 DataFrame 用，每只股票都误报「数据不足」）。
+- 线上验证（systemd 重启后）：/screening/verify、/screening/evaluate、/diagnosis/analyze、/diagnosis/multi-stock、/stock-pick/timing（recursion/levels）、/chanlun/analyze（深递归）、backtest strategies（analysis_level）全部真实数据可用。
+- 测试 mock 兼容更新（直接调用端点补 mac_client=None）；全量单测通过。
+
 **选股池一键批量择时排行（V710）**
 - StockPickView 新增「② 一键择时 TOP N」：对选股池统一批量择时，按可操作性（买入→卖出→观望，置信度降序）排行，展示建议/信号/置信/递归同向或背离，可从排行一键查看标的详情缠论图。帮助用户在众多基本面合格标的中快速挑出当前最该开仓/离场的票。
 

@@ -334,7 +334,7 @@ async def test_diagnose_stock_includes_v102_fields() -> None:
         mock_analyser.return_value.process_klines.return_value = result
 
         req = StockIdentifier(market="SZ", code="000001")
-        resp = await diagnose_stock(req, mock_client)
+        resp = await diagnose_stock(req, mock_client, mac_client=None)
 
     assert "error" not in resp
     chan = resp["chanlun"]

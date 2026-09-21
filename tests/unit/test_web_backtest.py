@@ -736,7 +736,7 @@ def test_portfolio_backtest_endpoint(client, monkeypatch):
 
     np.random.seed(3)
 
-    async def fake_fetch(client_arg, stocks, category, start, end):  # noqa: ANN001
+    async def fake_fetch(client_arg, stocks, category, start, end, mac_client=None):  # noqa: ANN001
         result = []
         for sym in stocks:
             mkt, code = sym.split(":")
@@ -796,7 +796,7 @@ def test_portfolio_backtest_bad_strategy(client, monkeypatch):
     import easy_tdx.web.routers.backtest as bt_router
     from easy_tdx.backtest.portfolio_engine import StockData
 
-    async def fake_fetch(client_arg, stocks, category, start, end):  # noqa: ANN001
+    async def fake_fetch(client_arg, stocks, category, start, end, mac_client=None):  # noqa: ANN001
         n = 10
         df = pd.DataFrame(
             {

@@ -16,8 +16,8 @@ from typing import Any
 import pandas as pd
 from fastapi import APIRouter, Depends
 
-from easy_tdx.web.convert import category_from_str, market_from_str
-from easy_tdx.web.deps import get_client
+from easy_tdx.web.deps import get_client, get_mac_client_optional
+from easy_tdx.web.klines import fetch_qfq_klines
 
 router = APIRouter(tags=["screening"])
 logger = logging.getLogger(__name__)
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 async def scan_stocks(
     req: dict[str, Any],
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """扫描股票，根据长赢模型筛选。
 
@@ -75,7 +76,9 @@ async def scan_stocks(
 
     for i, stock in enumerate(stocks[:max_stocks]):
         try:
-            stock_result = await _analyze_stock(client, market, stock, target_date, min_klines)
+            stock_result = await _analyze_stock(
+                client, mac_client, market, stock, target_date, min_klines
+            )
             if stock_result.get("valid"):
                 # 根据长赢模型筛选
                 if _pass_screening(stock_result, stock_type, season_filter):
@@ -109,6 +112,7 @@ async def scan_stocks(
 async def evaluate_stock(
     req: dict[str, Any],
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """评估单只股票的长赢质量。
 
@@ -132,11 +136,13 @@ async def evaluate_stock(
     except ValueError:
         return {"error": "日期格式错误"}
 
-    # 获取数据
-    df = await client.get_security_bars(
-        market_from_str(market),
+    # 获取数据（MAC 优先 + QFQ，标准 TDX 失效时仍可用）
+    df = await fetch_qfq_klines(
+        mac_client,
+        client,
+        market,
         code,
-        category_from_str("DAY"),
+        "DAY",
         0,
         500,
     )
@@ -212,6 +218,7 @@ async def _get_stock_list(client: Any, market: str) -> list[str]:
 
 async def _analyze_stock(
     client: Any,
+    mac_client: Any | None,
     market: str,
     code: str,
     target_date: datetime,
@@ -221,11 +228,13 @@ async def _analyze_stock(
     from easy_tdx.chanlun import ChanlunAnalyser
     from easy_tdx.chanlun.types import MMDType
 
-    # 获取数据
-    df = await client.get_security_bars(
-        market_from_str(market),
+    # 获取数据（MAC 优先 + QFQ，标准 TDX 失效时仍可用）
+    df = await fetch_qfq_klines(
+        mac_client,
+        client,
+        market,
         code,
-        category_from_str("DAY"),
+        "DAY",
         0,
         500,
     )
@@ -466,6 +475,7 @@ def _calc_quality_score(result: Any, target_date: datetime) -> float:
 async def verify_screening(
     req: dict[str, Any],
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     from easy_tdx.backtest.screening_verify import compute_screening_verify
 
@@ -505,8 +515,8 @@ async def verify_screening(
     for sym in symbols_canon:
         m, code = sym.split(":", 1)
         try:
-            df = await client.get_security_bars(
-                market_from_str(m), code, category_from_str("DAY"), 0, 400
+            df = await fetch_qfq_klines(
+                mac_client, client, m, code, "DAY", 0, 400
             )
         except Exception:  # noqa: BLE001
             continue
