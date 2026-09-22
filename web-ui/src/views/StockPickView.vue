@@ -6,6 +6,8 @@ import ChanlunChart from '../components/ChanlunChart.vue'
 import {
   formatError,
   stockPickScreen,
+  stockPickScreenAsync,
+  stockPickScreenTask,
   stockPickTiming,
   type SeasonInfo,
   type StockPickPoolItem,
@@ -25,6 +27,9 @@ const selected = ref<StockPickPoolItem | null>(null)
 const timingResult = ref<StockPickTimingResult | null>(null)
 const season = ref<SeasonInfo | null>(null)
 const error = ref('')
+// V716: 全市场扫描异步任务进度（0~100，null=未在跑）
+const screenProgress = ref<number | null>(null)
+const screenProgressNote = ref('')
 
 const categoryLabel: Record<string, string> = {
   tree: '🌳 树型',
@@ -61,6 +66,25 @@ async function runScreen() {
     }
     if (poolScope.value === 'pool' && custom.length) {
       req.pool = custom.map((c) => ({ market: c.market || 'SH', code: c.code }))
+    }
+    // V716: 全市场扫描走异步任务 + 进度轮询（约 13s，进度条可见）。
+    if (poolScope.value === 'full') {
+      const { task_id } = await stockPickScreenAsync(req)
+      for (;;) {
+        const st = await stockPickScreenTask(task_id)
+        screenProgress.value = st.progress ?? null
+        screenProgressNote.value = st.progress_note ?? ''
+        if (st.status === 'done') {
+          pool.value = st.result?.results ?? []
+          screenSource.value = 'online'
+          screenUpdatedAt.value = ''
+          if (!pool.value.length) error.value = '该时间/市场暂无符合长盈模型的标的'
+          break
+        }
+        if (st.status === 'failed') throw new Error(st.error ?? '选股任务失败')
+        await new Promise((r) => setTimeout(r, 800))
+      }
+      return
     }
     const res = await stockPickScreen(req)
     pool.value = res.results
@@ -101,6 +125,9 @@ type TimingRankRow = StockPickTimingResult & {
   confidence: number
   action: string
   alignLabel: string
+  // 该票历史上最强买点信号的命中率与结论（signal_quality 后验）
+  topHitLabel: string
+  topHitGood: boolean
 }
 const timingSummary = ref<TimingRankRow[]>([])
 const timingAll = ref(false)
@@ -122,17 +149,26 @@ async function runAllTiming() {
     })
     const rows: TimingRankRow[] = (res.results || [])
       .filter((r) => r.symbol && !r.error)
-      .map((r) => ({
-        ...r,
-        confidence: r.verdict?.confidence ?? 0,
-        action: r.verdict?.action ?? '观望',
-        alignLabel:
-          r.recursion?.alignment === 'confirm'
-            ? '同向'
-            : r.recursion?.alignment === 'conflict'
-              ? '背离'
-              : '—',
-      }))
+      .map((r) => {
+        const topBuy = (r.signal_quality?.ranking ?? []).find(
+          (x) => x.direction === 'buy',
+        )
+        return {
+          ...r,
+          confidence: r.verdict?.confidence ?? 0,
+          action: r.verdict?.action ?? '观望',
+          alignLabel:
+            r.recursion?.alignment === 'confirm'
+              ? '同向'
+              : r.recursion?.alignment === 'conflict'
+                ? '背离'
+                : '—',
+          topHitLabel: topBuy
+            ? `${topBuy.type} ${Math.round(topBuy.hit_rate * 100)}%`
+            : '—',
+          topHitGood: Boolean(topBuy && topBuy.hit_rate >= 0.6 && topBuy.excess_hit_rate > 0),
+        }
+      })
     rows.sort((a, b) => actionRank[a.action] - actionRank[b.action] || b.confidence - a.confidence)
     timingSummary.value = rows
     season.value = res.season ?? null
@@ -179,6 +215,12 @@ function pickTiming(row: StockPickTimingResult) {
       <button :disabled="screening" @click="runScreen">
         {{ screening ? '选股中…' : '① 长盈选股' }}
       </button>
+      <div v-if="screening && screenProgress !== null" class="scan-progress">
+        <div class="scan-progress-bar" :style="{ width: `${screenProgress}%` }"></div>
+        <span class="scan-progress-text"
+          >{{ Math.round(screenProgress) }}% {{ screenProgressNote }}</span
+        >
+      </div>
     </div>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -239,6 +281,7 @@ function pickTiming(row: StockPickTimingResult) {
                 <th>建议</th>
                 <th>信号</th>
                 <th>置信</th>
+                <th>历史胜率</th>
                 <th>递归</th>
                 <th></th>
               </tr>
@@ -253,6 +296,7 @@ function pickTiming(row: StockPickTimingResult) {
                 <td>{{ row.action }}</td>
                 <td>{{ row.verdict?.signal ?? '—' }}</td>
                 <td>{{ Math.round(row.confidence * 100) }}%</td>
+                <td :class="{ ok: row.topHitGood }">{{ row.topHitLabel }}</td>
                 <td :class="{ ok: row.alignLabel === '同向', warn: row.alignLabel === '背离' }">
                   {{ row.alignLabel }}
                 </td>
@@ -535,5 +579,23 @@ tr.active td {
 }
 .season-strategy {
   color: #cbd5e1;
+}
+.scan-progress {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.scan-progress-bar {
+  height: 6px;
+  min-width: 4px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #60b4ff, #22c55e);
+  transition: width 0.4s ease;
+}
+.scan-progress-text {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 </style>

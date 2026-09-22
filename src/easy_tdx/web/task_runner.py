@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 import uuid
 from collections import OrderedDict
@@ -54,6 +55,9 @@ class TaskState:
     finished_at: float | None = None
     # 供前端展示的描述（策略名 + 标的等），不参与业务逻辑
     description: str = ""
+    # V716: 任务进度（0~100，None=该任务不报进度）+ 进度说明（轮询可见）
+    progress: float | None = None
+    progress_note: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         """序列化为 JSON 兼容字典（供轮询接口返回）。"""
@@ -67,7 +71,27 @@ class TaskState:
             "finished_at": self.finished_at,
             "description": self.description,
             "elapsed": (self.finished_at or time.time()) - (self.started_at or self.created_at),
+            "progress": self.progress,
+            "progress_note": self.progress_note,
         }
+
+
+# V716: worker 线程内当前任务的 thread-local 引用（report_progress 写入）。
+_TASK_CTX = threading.local()
+
+
+def report_progress(pct: float | None = None, note: str = "") -> None:
+    """worker 线程内调用：更新当前任务的进度（前端轮询可见）。
+
+    非任务线程（如同步调用路径）调用时静默忽略，不影响主流程。
+    """
+    state = getattr(_TASK_CTX, "state", None)
+    if state is None:
+        return
+    if pct is not None:
+        state.progress = max(0.0, min(100.0, float(pct)))
+    if note:
+        state.progress_note = note
 
 
 class BacktestTaskRunner:
@@ -176,6 +200,7 @@ class BacktestTaskRunner:
             state.status = "running"
             state.started_at = time.time()
 
+        _TASK_CTX.state = state
         try:
             result = func()
             with self._lock:
@@ -197,6 +222,9 @@ class BacktestTaskRunner:
                     self._tasks.move_to_end(task_id)
                 except KeyError:
                     pass
+        finally:
+            # 清理 thread-local，避免状态引用泄漏到同线程的下一个任务
+            _TASK_CTX.state = None
 
     def _evict_if_needed_locked(self) -> None:
         """超过上限时丢弃最旧的 non-running 任务（调用方需持锁）。

@@ -457,6 +457,42 @@ export async function stockPickScreen(req: {
   return (await resp.json()) as StockPickScreenResult
 }
 
+/** 第一步异步版：提交长盈选股后台任务（全市场约 13s，进度轮询）。 */
+export async function stockPickScreenAsync(req: {
+  date: string
+  markets?: string[]
+  pool?: { market: string; code: string }[]
+  stock_type?: string
+  pool_scope?: string
+  top_n?: number
+}): Promise<{ task_id: string; description: string }> {
+  const resp = await fetch(BASE + '/stock-pick/screen/async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as { task_id: string; description: string }
+}
+
+/** 轮询选股任务状态（progress 0~100 + 说明 + 结果）。 */
+export interface ScreenTaskState {
+  task_id: string
+  status: 'pending' | 'running' | 'done' | 'failed'
+  result: { date?: string; total?: number; results?: StockPickPoolItem[] } | null
+  error?: string
+  description?: string
+  elapsed?: number
+  progress?: number | null
+  progress_note?: string
+}
+
+export async function stockPickScreenTask(taskId: string): Promise<ScreenTaskState> {
+  const resp = await fetch(BASE + `/stock-pick/screen/task/${taskId}`)
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as ScreenTaskState
+}
+
 /** 第二步：缠论择时（截至目标日的前复权 K 线 + 缠论结构 + 结论）。 */
 export async function stockPickTiming(req: {
   date: string

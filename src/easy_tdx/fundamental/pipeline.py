@@ -16,6 +16,7 @@ from easy_tdx.fundamental.indicators import (
 )
 from easy_tdx.fundamental.screener import screen_stock
 from easy_tdx.fundamental.season import SeasonResult, detect_season
+from easy_tdx.web.task_runner import report_progress
 
 logger = logging.getLogger(__name__)
 
@@ -620,7 +621,9 @@ def scan_market(
         zips = pick_report_zips(target, client=client)
     # V89：全市场记录经 SQLite 指标帧缓存加载，重复扫描不再重复解析 zip
     frame = load_all_periods_frame(zips, client, codes=None, markets=set(markets))
+    report_progress(10.0, "财报数据已加载")
     season = detect_season_for_date(target, client=client)
+    report_progress(20.0, "四季判断完成")
     base_out: dict[str, Any] = {
         "date": str(target),
         "markets": list(markets),
@@ -668,8 +671,15 @@ def scan_market(
     scored: list[dict[str, Any]] = []
     by_category: dict[str, int] = {"tree": 0, "grain": 0, "vegetable": 0}
     pool_size = len(picked)
-    for _, row in picked.iterrows():
-        sr = screen_stock(row, pool_size=pool_size)
+    _score_total = max(1, pool_size)
+    for _score_i, row_data in enumerate(
+        (data for _, data in picked.iterrows())
+    ):
+        if _score_i % max(1, _score_total // 10) == 0:
+            report_progress(
+                20.0 + 40.0 * _score_i / _score_total, f"打分中 {_score_i}/{_score_total}"
+            )
+        sr = screen_stock(row_data, pool_size=pool_size)
         if sr is None:
             continue
         if require_profit and not _profitable(sr.indicators):
@@ -682,7 +692,7 @@ def scan_market(
             continue
         d = sr.as_dict()
         d["score"] = round(sc, 1)
-        d["data_source"] = str(row.get("data_source", "gpcw"))
+        d["data_source"] = str(row_data.get("data_source", "gpcw"))
         scored.append(d)
 
     # V511: 同分（如多只「粮型」都 100 分）时按三维总分作次级排序，
@@ -701,6 +711,7 @@ def scan_market(
         window_n = min(len(scored), top_n)
     window = scored[:window_n]
 
+    report_progress(60.0, "打分完成，并行取市值")
     # V597: 市值门槛用 MAC 取目标日收盘价（快且能取到），独立于后续表现。
     if min_mcap_yi is not None:
         # V713: 并行取窗口内目标日收盘价（每只 ~0.6s 是服务器延迟，
@@ -715,6 +726,7 @@ def scan_market(
             for d, mcap in executor.map(_quote_one, window):
                 d["total_mcap_yi"] = mcap
                 d["_mcap_excluded"] = mcap is None or mcap < min_mcap_yi
+        report_progress(90.0, "市值门槛完成")
         kept = [d for d in window if not d.get("_mcap_excluded")][:top_n]
     else:
         kept = window[:top_n]

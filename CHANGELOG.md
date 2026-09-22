@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+**扫描进度可见 + 异步选股 + 排行历史胜率（V716）**
+- `task_runner` 新增任务进度（`TaskState.progress` 0~100 + `progress_note`，thread-local `report_progress` 上报，非任务线程静默忽略）。
+- `scan_market` 打分阶段实时上报进度（10%/20%/打分中 i/N/60%/90%）；新增 `POST /stock-pick/screen/async`（提交后台选股任务）与 `GET /stock-pick/screen/task/{id}`（轮询进度+结果）。
+- 前端：全市场选股走异步任务 + 进度条（实时显示「打分中 4995/5550」等），批量择时排行新增「历史胜率」列（每票历史上最强买点命中率，≥60% 且超额>0 标绿）。
+- 线上验证：异步选股全流程（进度 56%→60%→done + 10 个真实结果）通过；修复打分循环 row 解包回归。
+- 测试：stock_pick/screening 43 项、web_backtest 50 项、前端 70 项全过。
+
 **四季仓位落到回测 + 主机健康暴露 + 逐票四季横幅（V715）**
 - 回测：`chanlun` 策略新增 `position_pct` 参数（1=全仓，默认；0.3~0.5 可按四季建议仓位设置），按现金比例折算 100 股整数手，不足一手回退引擎全仓估算；schema 自动暴露。
 - Web：`/server/test` 新增 `validate_data` 探测（并发取真实 K 线验证非空 body），`HostInfo.has_data` 区分「能连上但返回空行情」的主机，便于诊断数据缺口。

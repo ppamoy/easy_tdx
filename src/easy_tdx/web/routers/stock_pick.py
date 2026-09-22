@@ -109,7 +109,6 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
              "pool": [{"market":"SH","code":"600519"}], "top_n": 30}
     返回：按质量分排序的树粮菜标的池（含评分明细）。
     """
-    from easy_tdx.fundamental.pipeline import run_screen
 
     date_str = str(req.get("date", ""))
     if not date_str:
@@ -171,45 +170,17 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
         }
 
     def _run() -> dict[str, Any]:
-        # 全市场路径：复用 fundamental.pipeline.scan_market（同步扫描，
-        # 前端以 loading + 分批 top_n 呈现；进度轮询版留待 task_runner 集成）。
-        if pool_scope == "full":
-            from easy_tdx.fundamental.pipeline import scan_market
-
-            out = scan_market(
-                target,
-                markets=tuple(norm_markets),
-                stock_type=stock_type,
-                top_n=top_n,
-                min_score=float(req.get("min_score", 15.0)),
-                # 默认不做后续表现回看：避免逐只取行情（标准 TDX 行情慢/空）
-                # 把选股接口拖到 90s 超时。市值门槛走 min_mcap_yi 仍生效。
-                with_performance=bool(req.get("with_performance", False)),
-                sina_pool=norm_pool,
-                min_mcap_yi=100.0,
-                require_profit=True,
-            )
-            full_rows: list[dict[str, Any]] = [
-                _normalize_result_row(r) for r in out.get("results") or []
-            ]
-            full_rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
-            return {"date": date_str, "total": len(full_rows), "results": full_rows}
-
-        out = run_screen(
+        out = _screen_run_sync(
             target,
+            norm_markets,
             norm_pool,
-            # 同 full 路径：关闭后续表现回看避免行情取数拖慢选股；
-            # 盈利硬门槛 + 市值门槛照常生效。
-            with_performance=False,
-            min_mcap_yi=100.0,
-            require_profit=True,
+            stock_type=stock_type,
+            pool_scope=pool_scope,
+            top_n=top_n,
+            min_score=float(req.get("min_score", 15.0)),
+            with_performance=bool(req.get("with_performance", False)),
         )
-        results = out.get("results") or []
-        if stock_type != "all":
-            results = [r for r in results if r["category"] == stock_type]
-        rows: list[dict[str, Any]] = [_normalize_result_row(r) for r in results]
-        rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
-        return {"date": date_str, "total": len(rows), "results": rows}
+        return {"date": date_str, **out}
 
     try:
         return await asyncio.to_thread(_run)
@@ -369,6 +340,55 @@ def _verdict(mmds: list[Any]) -> dict[str, Any]:
         "reason": reason,
         "direction": direction,
     }
+
+
+def _screen_run_sync(
+    target: date,
+    norm_markets: list[str],
+    norm_pool: list[dict[str, str]],
+    *,
+    stock_type: str = "all",
+    pool_scope: str = "pool",
+    top_n: int = 50,
+    min_score: float = 15.0,
+    with_performance: bool = False,
+) -> dict[str, Any]:
+    """选股扫描（同步，供 worker 线程执行；进度经 report_progress 上报）。"""
+    if pool_scope == "full":
+        from easy_tdx.fundamental.pipeline import scan_market
+
+        out = scan_market(
+            target,
+            markets=tuple(norm_markets),
+            stock_type=stock_type,
+            top_n=top_n,
+            min_score=min_score,
+            with_performance=with_performance,
+            sina_pool=norm_pool,
+            min_mcap_yi=100.0,
+            require_profit=True,
+        )
+        full_rows: list[dict[str, Any]] = [
+            _normalize_result_row(r) for r in out.get("results") or []
+        ]
+        full_rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
+        return {"total": len(full_rows), "results": full_rows}
+
+    from easy_tdx.fundamental.pipeline import run_screen
+
+    out = run_screen(
+        target,
+        norm_pool,
+        with_performance=with_performance,
+        min_mcap_yi=100.0,
+        require_profit=True,
+    )
+    results = out.get("results") or []
+    if stock_type != "all":
+        results = [r for r in results if r["category"] == stock_type]
+    rows: list[dict[str, Any]] = [_normalize_result_row(r) for r in results]
+    rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
+    return {"total": len(rows), "results": rows}
 
 
 def _recursion_context(result: Any) -> dict[str, Any]:
@@ -562,3 +582,67 @@ async def stock_pick_timing(
         "results": results,
         "season": season.as_dict() if season else None,
     }
+
+
+@router.post("/stock-pick/screen/async")
+async def stock_pick_screen_async(req: dict[str, Any]) -> dict[str, Any]:
+    """第一步异步版：提交长盈选股后台任务，立即返回 task_id。
+
+    全市场扫描约 13s，进度经 ``GET /stock-pick/screen/task/{task_id}`` 轮询
+    （progress 0~100 + 说明）。请求体与 /stock-pick/screen 一致。
+    """
+    date_str = str(req.get("date", ""))
+    if not date_str:
+        raise HTTPException(status_code=400, detail="缺少 date")
+    try:
+        target = date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD") from None
+
+    markets = req.get("markets") or ["SZ", "SH"]
+    norm_markets = [str(m).upper()[:2] for m in markets if str(m).upper()[:2] in ("SH", "SZ")]
+    pool_raw = req.get("pool") or _default_pool(norm_markets)
+    if not pool_raw:
+        raise HTTPException(status_code=400, detail="pool 为空")
+    norm_pool = [
+        {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
+        for p in pool_raw
+        if p.get("code")
+    ]
+    stock_type = str(req.get("stock_type", "all"))
+    if stock_type not in ("all", "tree", "grain", "vegetable"):
+        stock_type = "all"
+    pool_scope = str(req.get("pool_scope", "pool"))
+    top_n = max(1, min(int(req.get("top_n", 50)), 200))
+
+    from easy_tdx.web.task_runner import get_runner
+
+    runner = get_runner()
+
+    def _run() -> dict[str, Any]:
+        out = _screen_run_sync(
+            target,
+            norm_markets,
+            norm_pool,
+            stock_type=stock_type,
+            pool_scope=pool_scope,
+            top_n=top_n,
+            min_score=float(req.get("min_score", 15.0)),
+            with_performance=bool(req.get("with_performance", False)),
+        )
+        return {"date": date_str, **out}
+
+    desc = f"长盈选股 {'全市场' if pool_scope == 'full' else '自选池'} {len(norm_pool)} 只"
+    task_id = runner.submit(_run, description=desc)
+    return {"task_id": task_id, "description": desc}
+
+
+@router.get("/stock-pick/screen/task/{task_id}")
+async def stock_pick_screen_task(task_id: str) -> dict[str, Any]:
+    """轮询选股任务状态（progress 0~100 + 说明 + 结果）。"""
+    from easy_tdx.web.task_runner import get_runner
+
+    state = get_runner().peek(task_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"未知任务 '{task_id}'")
+    return state.to_dict()
