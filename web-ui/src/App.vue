@@ -17,7 +17,7 @@ function handleKeydown(e: KeyboardEvent) {
 
 // 软隐藏旧页：主导航收敛后仍保留 URL 直达，但给非核心页一个非阻断提示。
 const route = useRoute()
-const CORE_PATHS = ['/', '/stock-pick', '/learn']
+const CORE_PATHS = ['/', '/stock-pick', '/learn', '/today']
 const isSoftHidden = computed(
   () => !CORE_PATHS.some((p) => route.path === p || route.path.startsWith(p)),
 )
@@ -33,6 +33,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
       <nav class="app-nav">
         <RouterLink to="/" active-class="active">回测</RouterLink>
         <RouterLink to="/stock-pick" active-class="active">选股</RouterLink>
+        <RouterLink to="/today" active-class="active">今日可操作</RouterLink>
         <RouterLink to="/learn" active-class="active">缠论测试学习</RouterLink>
       </nav>
     </header>

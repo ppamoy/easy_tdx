@@ -150,9 +150,7 @@ async function runAllTiming() {
     const rows: TimingRankRow[] = (res.results || [])
       .filter((r) => r.symbol && !r.error)
       .map((r) => {
-        const topBuy = (r.signal_quality?.ranking ?? []).find(
-          (x) => x.direction === 'buy',
-        )
+        const topBuy = r.signal_quality?.best_buy ?? null
         return {
           ...r,
           confidence: r.verdict?.confidence ?? 0,

@@ -425,6 +425,22 @@ export interface StockPickTimingResult {
       profit_factor: number
       verdict: string
     }[]
+    best_buy?: {
+      type: string
+      hit_rate: number
+      excess_hit_rate: number
+      avg_return?: number
+      signals?: number
+      verdict?: string
+    } | null
+    best_sell?: {
+      type: string
+      hit_rate: number
+      excess_hit_rate: number
+      avg_return?: number
+      signals?: number
+      verdict?: string
+    } | null
   }
   structure?: { bi_count: number; zs_count: number; mmd_count: number; bc_count: number }
 }
@@ -457,6 +473,105 @@ export async function stockPickScreen(req: {
   return (await resp.json()) as StockPickScreenResult
 }
 
+/** 「今日可操作」一屏决策看板：提交后台聚合任务（选股+批量择时+四季）。 */
+export interface DashboardAction {
+  symbol: string
+  market?: string
+  code?: string
+  category?: string
+  quality_score?: number | null
+  action: string
+  confidence: number
+  alignLabel: string
+  top_hit_label?: string
+  top_hit_good?: boolean
+  verdict?: { action: string; signal?: string; confidence?: number; reason?: string; direction?: string }
+  novice_advice?: {
+    explanation: string
+    entry: number | null
+    stop: number | null
+    target: number | null
+    position_note: string
+    signal?: string
+    direction?: string
+  }
+  recursion?: {
+    depth_produced: number
+    latest: { level: number; signal: string; direction: string; confidence: number; date?: string } | null
+    alignment?: 'confirm' | 'conflict' | 'none'
+    note?: string
+  }
+  signal_quality?: {
+    summary?: string
+    ranking?: {
+      type: string
+      direction: string
+      signals: number
+      excess_hit_rate: number
+      avg_return: number
+      hit_rate: number
+      profit_factor: number
+      verdict: string
+    }[]
+    best_buy?: {
+      type: string
+      hit_rate: number
+      excess_hit_rate: number
+      avg_return?: number
+      signals?: number
+      verdict?: string
+    } | null
+    best_sell?: {
+      type: string
+      hit_rate: number
+      excess_hit_rate: number
+      avg_return?: number
+      signals?: number
+      verdict?: string
+    } | null
+  }
+  bars?: Bar[]
+  bis?: unknown[]
+  xds?: unknown[]
+  zss?: unknown[]
+  mmds?: unknown[]
+  bcs?: unknown[]
+  fractals?: unknown[]
+  macd?: { dif: number[]; dea: number[]; hist: number[] }
+}
+
+export interface DashboardResult {
+  date: string
+  season?: SeasonInfo | null
+  summary?: { buy: number; sell: number; wait: number; timed: number; pool: number }
+  actions?: DashboardAction[]
+}
+
+export async function stockPickDashboardAsync(req: {
+  date: string
+  markets?: string[]
+  pool?: { market: string; code: string }[]
+  stock_type?: string
+  pool_scope?: string
+  top_n?: number
+  time_n?: number
+  recursion_depth?: number
+}): Promise<{ task_id: string; description: string }> {
+  const resp = await fetch(BASE + '/stock-pick/dashboard/async', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as { task_id: string; description: string }
+}
+
+export async function stockPickDashboardTask(taskId: string): Promise<ScreenTaskState> {
+  const resp = await fetch(BASE + `/stock-pick/dashboard/task/${taskId}`)
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as ScreenTaskState
+}
+
 /** 第一步异步版：提交长盈选股后台任务（全市场约 13s，进度轮询）。 */
 export async function stockPickScreenAsync(req: {
   date: string
@@ -479,7 +594,8 @@ export async function stockPickScreenAsync(req: {
 export interface ScreenTaskState {
   task_id: string
   status: 'pending' | 'running' | 'done' | 'failed'
-  result: { date?: string; total?: number; results?: StockPickPoolItem[] } | null
+  // 选股任务：{date,total,results}；今日看板任务：{date,season,summary,actions}
+  result: Record<string, any> | null
   error?: string
   description?: string
   elapsed?: number

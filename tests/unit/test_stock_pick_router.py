@@ -182,3 +182,43 @@ def test_recursion_context_empty() -> None:
 
     rc2 = _recursion_context(object())
     assert rc2["depth_produced"] == 0
+
+
+def test_dashboard_async_validates_date() -> None:
+    """dashboard 异步端点：缺 date/格式错误 → 400；未知任务 → 404。"""
+    from fastapi.testclient import TestClient
+
+    from easy_tdx.web import create_app
+
+    app = create_app()
+    with TestClient(app) as client:
+        r1 = client.post("/api/v1/stock-pick/dashboard/async", json={})
+        assert r1.status_code == 400
+        r2 = client.post(
+            "/api/v1/stock-pick/dashboard/async", json={"date": "bad-date"}
+        )
+        assert r2.status_code == 400
+        r3 = client.get("/api/v1/stock-pick/dashboard/task/nonexistent")
+        assert r3.status_code == 404
+
+
+def test_dashboard_async_submits_task() -> None:
+    """dashboard 异步端点：合法请求提交任务返回 task_id + 描述。"""
+    from fastapi.testclient import TestClient
+
+    from easy_tdx.web import create_app
+
+    app = create_app()
+    with TestClient(app) as client:
+        r = client.post(
+            "/api/v1/stock-pick/dashboard/async",
+            json={"date": "2026-09-01", "pool_scope": "pool", "top_n": 5, "time_n": 2},
+        )
+        assert r.status_code == 200
+        d = r.json()
+        assert d.get("task_id")
+        assert "今日可操作" in (d.get("description") or "")
+        # 轮询接口可查到该任务（状态为 pending/running/done/failed 之一）
+        st = client.get(f"/api/v1/stock-pick/dashboard/task/{d['task_id']}")
+        assert st.status_code == 200
+        assert st.json().get("status") in ("pending", "running", "done", "failed")

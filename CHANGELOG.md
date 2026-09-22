@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+**「今日可操作」一屏决策看板（V717）**
+- 新增 `POST /stock-pick/dashboard/async` + `GET /stock-pick/dashboard/task/{id}`：一屏聚合选股池 + 逐票批量择时 + 四季仓位（后台任务 + 进度条）。
+- 输出：四季横幅（label/建议仓位区间）+ 汇总（买入/卖出/观望/已择时/池内）+ **行动榜**（按可操作性排序：买入→卖出→观望、置信度降序；每票含信号/置信/历史胜率/递归同向或背离/入场/止损/目标价）+ 同屏下钻缠论图。
+- `signal_quality` 新增 `best_buy`/`best_sell`（全量 by_type 中该方向 5 根超额命中率最高的类型摘要——ranking[:5] 可能全是卖型；修复 direction 大小写比较）。
+- 前端新增 `TodayView`（/today，「今日可操作」主导航入口）：四季横幅 + 汇总条 + 行动榜（入场/止损/目标列）+ 点击下钻 ChanlunChart。
+- 线上验证：进度 75%→85%→done、春季·播种期、买入3/卖出1/观望6、每票真实历史胜率（2buy 100%/3buy 86% 标绿）。
+- 新增 dashboard 端点测试（校验/提交/轮询）；stock_pick 14 项、前端 70 项全过。
+
 **扫描进度可见 + 异步选股 + 排行历史胜率（V716）**
 - `task_runner` 新增任务进度（`TaskState.progress` 0~100 + `progress_note`，thread-local `report_progress` 上报，非任务线程静默忽略）。
 - `scan_market` 打分阶段实时上报进度（10%/20%/打分中 i/N/60%/90%）；新增 `POST /stock-pick/screen/async`（提交后台选股任务）与 `GET /stock-pick/screen/task/{id}`（轮询进度+结果）。

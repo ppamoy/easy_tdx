@@ -13,6 +13,7 @@ import ServerSettingsView from './views/ServerSettingsView.vue'
 import StrategiesView from './views/StrategiesView.vue'
 import LearnView from './views/LearnView.vue'
 import StockPickView from './views/StockPickView.vue'
+import TodayView from './views/TodayView.vue'
 
 // 单标的回测（/）+ 缠论分析（/chanlun）+ 长赢投资（/changying）+ 动态选股（/screening）+ 组合回测（/portfolio）+ 参数寻优（/optimize）+ 结果对比（/compare）+ 策略库（/strategies）+ 服务器设置（/settings）+ 信号监控（/monitor）+ 技术诊断（/diagnosis）。
 const routes = [
@@ -32,6 +33,7 @@ const routes = [
   { path: '/verify', redirect: { path: '/learn', query: { tab: 'verify' } } },
   { path: '/learn', name: 'learn', component: LearnView },
   { path: '/stock-pick', name: 'stock-pick', component: StockPickView },
+  { path: '/today', name: 'today', component: TodayView },
 ]
 
 export const router = createRouter({
