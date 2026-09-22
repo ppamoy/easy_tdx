@@ -2,14 +2,17 @@
 // 今日可操作（V717）：选股池 + 批量择时 + 四季仓位聚合的一屏决策看板。
 // 后台聚合任务（选股→逐票择时→四季→行动榜），进度条 + 按可操作性排序，
 // 点击任意标的在同一屏下钻缠论图。
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import {
   formatError,
+  monitorAlerts,
+  monitorAlertsClear,
   stockPickDashboardAsync,
   stockPickDashboardTask,
   type DashboardAction,
   type DashboardResult,
+  type MonitorAlert,
   type SeasonInfo,
 } from '../api'
 
@@ -23,6 +26,39 @@ const progress = ref<number | null>(null)
 const progressNote = ref('')
 const result = ref<DashboardResult | null>(null)
 const selected = ref<DashboardAction | null>(null)
+// V718: 全局提醒流（信号监控 + 看板自动提醒），15s 轮询
+const alerts = ref<MonitorAlert[]>([])
+const alertSource = ref<'' | 'monitor' | 'dashboard'>('')
+let alertTimer: number | null = null
+
+async function loadAlerts() {
+  try {
+    const res = await monitorAlerts(50, alertSource.value)
+    alerts.value = res.alerts ?? []
+  } catch {
+    // 静默失败（轮询，下一轮重试）
+  }
+}
+
+async function clearAlerts() {
+  try {
+    await monitorAlertsClear()
+    await loadAlerts()
+  } catch (e) {
+    error.value = formatError(e)
+  }
+}
+
+const alertActionClass = (a: string | undefined): string =>
+  a === '买入' ? 'row-buy' : a === '卖出' ? 'row-sell' : ''
+
+onMounted(() => {
+  loadAlerts()
+  alertTimer = window.setInterval(loadAlerts, 15000)
+})
+onUnmounted(() => {
+  if (alertTimer !== null) clearInterval(alertTimer)
+})
 
 const season = computed<SeasonInfo | null>(() => result.value?.season ?? null)
 const summary = computed(() => result.value?.summary)
@@ -204,7 +240,56 @@ function pickRow(row: DashboardAction) {
         <p v-else class="hint">该标的无足够 K 线数据。</p>
       </div>
     </template>
-    <p v-else-if="!loading && !error" class="hint">
+
+    <div class="alerts-panel">
+      <div class="alerts-head">
+        <h3>🔔 自动提醒（信号监控 + 看板）</h3>
+        <div class="alerts-tools">
+          <select v-model="alertSource" @change="loadAlerts">
+            <option value="">全部来源</option>
+            <option value="monitor">信号监控</option>
+            <option value="dashboard">今日看板</option>
+          </select>
+          <button class="ghost" @click="clearAlerts">清空</button>
+        </div>
+      </div>
+      <table v-if="alerts.length">
+        <thead>
+          <tr>
+            <th>来源</th>
+            <th>标的</th>
+            <th>建议</th>
+            <th>信号</th>
+            <th>置信</th>
+            <th>入场</th>
+            <th>止损</th>
+            <th>目标</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="(a, i) in alerts" :key="a.key ?? i" :class="alertActionClass(a.action)">
+            <td>
+              <span class="src-badge" :class="a.source === 'dashboard' ? 'src-dash' : 'src-mon'">
+                {{ a.source === 'dashboard' ? '看板' : '监控' }}
+              </span>
+            </td>
+            <td class="symbol-cell">{{ a.stock ?? '—' }}</td>
+            <td class="action-cell">{{ a.action ?? '—' }}</td>
+            <td>{{ a.type ?? '—' }}</td>
+            <td>{{ a.confidence != null ? Math.round(a.confidence * 100) + '%' : '—' }}</td>
+            <td>{{ a.entry ?? '—' }}</td>
+            <td>{{ a.stop ?? '—' }}</td>
+            <td>{{ a.target ?? '—' }}</td>
+            <td class="msg-cell" :title="a.season_note ?? ''">
+              {{ a.msg ?? '—' }}<span v-if="a.season_note" class="season-inline"> · {{ a.season_note }}</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="hint">暂无提醒——生成今日看板或创建信号监控任务后，买入/卖出信号会自动出现在这里。</p>
+    </div>
+    <p v-if="!result && !loading && !error" class="hint">
       选择日期后点击「生成今日看板」，一屏聚合选股池、批量择时与四季仓位建议。
     </p>
   </section>
@@ -340,5 +425,81 @@ function pickRow(row: DashboardAction) {
 }
 .error {
   color: #f87171;
+}
+.alerts-panel {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.alerts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.alerts-head h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.alerts-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.alerts-panel table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+.alerts-panel th {
+  color: #94a3b8;
+  font-weight: 500;
+  text-align: left;
+  padding: 4px 6px;
+}
+.alerts-panel td {
+  padding: 5px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.alerts-panel .symbol-cell {
+  font-weight: 600;
+  color: #e2e8f0;
+}
+.alerts-panel .row-buy .symbol-cell,
+.alerts-panel .row-buy .action-cell {
+  color: #22c55e;
+  font-weight: 600;
+}
+.alerts-panel .row-sell .symbol-cell,
+.alerts-panel .row-sell .action-cell {
+  color: #f87171;
+  font-weight: 600;
+}
+.alerts-panel .msg-cell {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #94a3b8;
+}
+.season-inline {
+  color: #cbd5e1;
+}
+.src-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.src-mon {
+  background: rgba(96, 180, 255, 0.15);
+  color: #60b4ff;
+}
+.src-dash {
+  background: rgba(200, 120, 255, 0.15);
+  color: #c878ff;
 }
 </style>

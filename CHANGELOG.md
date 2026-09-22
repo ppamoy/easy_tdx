@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+**看板接入信号监控自动提醒（V718）**
+- 新增共享口径模块 `web/actionable.py`（`_verdict`/`_novice_advice`/`_recursion_context`/`season_position_note` 从 stock-pick 移入，stock-pick 再导出保持测试兼容）——看板与监控共用同一「可操作」口径。
+- 新增全局提醒流 `web/alert_store.py`（内存有界 deque，同键去重，来源徽章 monitor/dashboard）。
+- 信号监控 `check_signals` 升级为可操作提醒：每条新信号附带 action（买入/卖出/观望）、入场/止损/目标、递归确认、季节仓位建议，并写入提醒流。
+- 今日看板任务完成后把行动榜的买入/卖出信号自动写入提醒流（source=dashboard）。
+- 新增 `GET /monitor/alerts`（轮询提醒流，支持 source 过滤）+ `POST /monitor/alerts/clear`；修复 `/monitor/alerts` 被 `/monitor/{task_id}` 路由拦截（路由顺序）。
+- 前端 TodayView 新增「自动提醒」面板：15s 轮询、来源过滤、入场/止损/目标列、季节仓位内联提示。
+- 线上验证：看板→4 条买入/卖出提醒（含入场/止损/目标/历史胜率/季节仓位）；监控→19 条提醒（低置信度正确观望）。
+- 新增 test_alert_store.py 5 项；全过；前端 vue-tsc/eslint/vitest 全绿。
+
 **「今日可操作」一屏决策看板（V717）**
 - 新增 `POST /stock-pick/dashboard/async` + `GET /stock-pick/dashboard/task/{id}`：一屏聚合选股池 + 逐票批量择时 + 四季仓位（后台任务 + 进度条）。
 - 输出：四季横幅（label/建议仓位区间）+ 汇总（买入/卖出/观望/已择时/池内）+ **行动榜**（按可操作性排序：买入→卖出→观望、置信度降序；每票含信号/置信/历史胜率/递归同向或背离/入场/止损/目标价）+ 同屏下钻缠论图。

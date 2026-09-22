@@ -473,6 +473,43 @@ export async function stockPickScreen(req: {
   return (await resp.json()) as StockPickScreenResult
 }
 
+/** 全局提醒流（V718）：信号监控 + 今日看板统一写入的自动提醒。 */
+export interface MonitorAlert {
+  ts?: number
+  source?: 'monitor' | 'dashboard'
+  stock?: string
+  type?: string
+  action?: string
+  confidence?: number
+  date?: string
+  msg?: string
+  entry?: number | null
+  stop?: number | null
+  target?: number | null
+  position_note?: string
+  top_hit_label?: string
+  align_label?: string
+  season_note?: string
+  key?: string
+}
+
+export async function monitorAlerts(
+  limit = 50,
+  source = '',
+): Promise<{ alerts: MonitorAlert[]; count: number }> {
+  const q = new URLSearchParams({ limit: String(limit) })
+  if (source) q.set('source', source)
+  const resp = await fetch(BASE + `/monitor/alerts?` + q.toString())
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as { alerts: MonitorAlert[]; count: number }
+}
+
+export async function monitorAlertsClear(): Promise<{ ok: boolean; cleared: number }> {
+  const resp = await fetch(BASE + '/monitor/alerts/clear', { method: 'POST' })
+  if (!resp.ok) await throwError(resp)
+  return (await resp.json()) as { ok: boolean; cleared: number }
+}
+
 /** 「今日可操作」一屏决策看板：提交后台聚合任务（选股+批量择时+四季）。 */
 export interface DashboardAction {
   symbol: string

@@ -16,6 +16,13 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
+from easy_tdx.web.actionable import (
+    _novice_advice,
+    _recursion_context,
+    _verdict,
+    season_position_note,
+)
+from easy_tdx.web.alert_store import push_alert
 from easy_tdx.web.deps import get_client, get_mac_client_optional
 from easy_tdx.web.klines import fetch_qfq_klines
 
@@ -101,6 +108,17 @@ class SignalMonitor:
             return []
 
         new_signals: list[dict[str, Any]] = []
+        # V718: 可操作提醒口径——入场/止损/目标 + 历史胜率 + 递归确认 + 季节仓位
+        season_note = ""
+        try:
+            from datetime import date as _date
+
+            from easy_tdx.fundamental.pipeline import detect_season_for_date
+
+            _season = detect_season_for_date(_date.today())
+            season_note = season_position_note(_season.as_dict() if _season else None)
+        except Exception:  # noqa: BLE001
+            season_note = ""
         freq_map: dict[str, str] = {
             "MIN_1": "1min",
             "MIN_5": "5min",
@@ -131,6 +149,11 @@ class SignalMonitor:
                 analyser = ChanlunAnalyser(code=f"{market}{code}", frequency=freq)
                 result = analyser.process_klines(df)
 
+                # V718: 每票的可操作上下文（建议/递归/历史胜率），与新信号一并提醒
+                verdict = _verdict(result.mmds)
+                advice = _novice_advice(result, verdict)
+                rec = _recursion_context(result)
+
                 # 查找高置信度信号
                 for mmd in result.mmds:
                     if mmd.confidence >= task.confidence_threshold:
@@ -138,6 +161,26 @@ class SignalMonitor:
                         signal_key = f"{mmd.mmd_type.value}_{mmd.bi.end.k.date.strftime('%Y-%m-%d') if mmd.bi and mmd.bi.end else ''}"
                         is_new = not any(s.get("key") == signal_key for s in task.last_signals)
                         if is_new:
+                            alert = {
+                                "stock": f"{market}{code}",
+                                "type": mmd.mmd_type.value,
+                                "date": result._fmt_dt(mmd.bi.end.k.date)
+                                if mmd.bi and mmd.bi.end
+                                else None,
+                                "confidence": round(mmd.confidence, 2),
+                                "msg": mmd.msg,
+                                "key": signal_key,
+                                # V718 可操作提醒：建议/递归/季节仓位
+                                "action": verdict.get("action"),
+                                "entry": advice.get("entry"),
+                                "stop": advice.get("stop"),
+                                "target": advice.get("target"),
+                                "position_note": advice.get("position_note"),
+                                "recursion_latest": rec.get("latest"),
+                                "recursion_alignment": rec.get("alignment"),
+                                "season_note": season_note,
+                            }
+                            push_alert(alert)
                             new_signals.append(
                                 {
                                     "stock": f"{market}{code}",
@@ -280,6 +323,30 @@ async def monitor_list() -> dict[str, Any]:
             }
         )
     return {"tasks": tasks, "count": len(tasks)}
+
+
+@router.get("/monitor/alerts")
+async def monitor_alerts(limit: int = 50, source: str = "") -> dict[str, Any]:
+    """全局提醒流（V718）：信号监控 + 今日看板统一写入的自动提醒。
+
+    - source 为空返回全部；"monitor" 只看监控提醒；"dashboard" 只看看板提醒。
+    - 每条含 action（买入/卖出/观望）、入场/止损/目标、历史胜率、递归确认、
+      季节仓位建议——前端轮询该接口实现自动提醒。
+    """
+    from easy_tdx.web.alert_store import recent_alerts
+
+    items = recent_alerts(limit)
+    if source:
+        items = [a for a in items if a.get("source") == source]
+    return {"alerts": items, "count": len(items)}
+
+
+@router.post("/monitor/alerts/clear")
+async def monitor_alerts_clear() -> dict[str, Any]:
+    """清空提醒流。"""
+    from easy_tdx.web.alert_store import clear_alerts
+
+    return {"ok": True, "cleared": clear_alerts()}
 
 
 @router.get("/monitor/{task_id}")
