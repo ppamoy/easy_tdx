@@ -149,10 +149,16 @@ class SignalMonitor:
                 analyser = ChanlunAnalyser(code=f"{market}{code}", frequency=freq)
                 result = analyser.process_klines(df)
 
-                # V718: 每票的可操作上下文（建议/递归/历史胜率），与新信号一并提醒
-                verdict = _verdict(result.mmds)
-                advice = _novice_advice(result, verdict)
-                rec = _recursion_context(result)
+                # V718: 每票的可操作上下文（建议/递归/历史胜率），与新信号一并提醒。
+                # best-effort：增强失败不影响信号提醒本身（降级为无建议）。
+                try:
+                    verdict = _verdict(result.mmds)
+                    advice = _novice_advice(result, verdict)
+                    rec = _recursion_context(result)
+                except Exception:  # noqa: BLE001
+                    verdict = {}
+                    advice = {}
+                    rec = {}
 
                 # 查找高置信度信号
                 for mmd in result.mmds:
