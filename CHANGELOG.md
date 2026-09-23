@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+**K线图视口保持推平 + 诊断页扩窗可见（V724）**
+- KlineChart（诊断页/回测页使用）同步接入 prepend 视口保持：
+  加载更早后 dataZoom 绝对窗口平移 delta 根，不再跳回默认 60-100
+  （+2 单测，新增 KlineChart.test.ts）。
+- DiagnosisView 修陷：原图表固定 bars.slice(-120)，点「加载更早」
+  后新历史被窗口截掉、无视觉效果（诚实性问题：按钮假动作）。
+  现扩窗后显示全部已加载根数，由 dataZoom（含视口保持）控制
+  浏览范围；「回最新」重置回最近 120 根视图。
+- 验证：前端 87 passed / 12 files，lint 0，tsc 0；
+  后端全量 3605 passed / 6 skipped（V723 后复跑确认无回归）。
+
 **图表扩窗结构对齐 + 视口保持（V723）**
 - 修陷：V722 三个本地拼接视图（TodayView/StockPickView/SignalVerifyView）前置 earlier bars 
   后未平移结构索引，笔/中枢/买卖点/背驰/分型在图上整体右移 N 根错位

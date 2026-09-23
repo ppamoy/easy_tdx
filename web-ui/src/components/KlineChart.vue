@@ -16,10 +16,43 @@ const props = defineProps<{
 const container = ref<HTMLDivElement>()
 let chart: echarts.ECharts | null = null
 
+// V723: prepend（加载更早）时保持 dataZoom 视口不跳变（spec: chart-history-navigation）。
+// 与 ChanlunChart 同一策略：首根变化+长度增加 => 旧绝对窗口平移 delta 根。
+let prevBarsLen = 0
+let prevFirstKey = ''
+let zoomKeep: { start: number; end: number } | null = null
+
 function render() {
   if (!container.value || props.bars.length === 0) return
   chart ??= echarts.init(container.value, 'dark')
-  chart.setOption(buildOption(), true)
+  const firstKey = props.bars[0]?.datetime ?? ''
+  const len = props.bars.length
+  const isPrepend = prevBarsLen > 0 && len > prevBarsLen && firstKey !== prevFirstKey
+  if (isPrepend) {
+    const opt = chart.getOption() as { dataZoom?: { start?: number; end?: number }[] } | undefined
+    const dz = opt?.dataZoom?.[0]
+    if (dz && typeof dz.start === 'number' && typeof dz.end === 'number') {
+      const delta = len - prevBarsLen
+      const a = (dz.start / 100) * prevBarsLen
+      const b = (dz.end / 100) * prevBarsLen
+      zoomKeep = {
+        start: Math.max(0, Math.min(100, ((a + delta) / len) * 100)),
+        end: Math.max(0, Math.min(100, ((b + delta) / len) * 100)),
+      }
+    }
+  }
+  prevBarsLen = len
+  prevFirstKey = firstKey
+  const option = buildOption()
+  if (zoomKeep) {
+    const dzArr = option.dataZoom as { start: number; end: number }[]
+    if (dzArr?.[0]) {
+      dzArr[0].start = zoomKeep.start
+      dzArr[0].end = zoomKeep.end
+    }
+    zoomKeep = null
+  }
+  chart.setOption(option, true)
 }
 
 /** 构建 ECharts 配置。trades 的 datetime 对齐到 K线 index。 */

@@ -245,13 +245,27 @@ const {
   detectMarket: () => market.value,
 })
 
+const expanded = ref(false)
+
+/**
+ * V723: 图表窗口。
+ * 默认只显示最近 120 根（原行为）；点「加载更早」扩窗后显示全部已加载，
+ * 由 dataZoom（含视口保持）控制浏览范围——否则 slice(-120) 会把刚加载的
+ * 更早历史直接截掉，「加载更早」就没有视觉效果了。
+ */
+const chartBars = computed(() => (expanded.value ? bars.value : bars.value.slice(-120)))
+
 async function loadEarlier() {
   const earlier = await fetchEarlier()
-  if (earlier.length) bars.value = [...earlier, ...bars.value]
+  if (earlier.length) {
+    bars.value = [...earlier, ...bars.value]
+    expanded.value = true
+  }
 }
 
 function backToLatest() {
   resetToLatest()
+  expanded.value = false
   loadBars()
 }
 
@@ -13944,7 +13958,7 @@ onMounted(() => {
           <span v-if="earlierError" class="error-msg">{{ earlierError }}</span>
         </div>
         <div class="chart-wrap">
-          <KlineChart :bars="bars.slice(-120)" :trades="[]" />
+          <KlineChart :bars="chartBars" :trades="[]" />
         </div>
       </div>
     </template>
