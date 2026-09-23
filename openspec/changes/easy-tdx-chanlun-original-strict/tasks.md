@@ -13,7 +13,7 @@
 - [x] 2.2 bi-pohuai：config.xd_bi_pohuai 已默认 True（历史轮次完成）；test_chanlun_xd_pohuai 锁定开/关差异
 - [x] 2.3 bi-type：默认 new，simple 标注 legacy（config.py docstring + find_bis 告警 + test_chanlun_config 锁定默认值）
 - [x] 2.4 金标回归：test_chanlun_golden_samples 收尾端点 15.0→13.0（受控更新，理由见测试注释）
-- [ ] 2.5 门禁：ruff/mypy/pytest（全量）/前端 build+vitest 通过
+- [x] 2.5 门禁：ruff 0 / mypy 0 / pytest 全量 3606 passed + 6 skipped / 前端 vue-tsc -b + vite build + vitest 87 passed（+1 simple legacy 告警测试，AuditView TS7053 build 错误一并修复）
 
 ## Phase 3: 提交
-- [ ] 3.1 提交本 change
+- [x] 3.1 提交本 change（V726 归档）

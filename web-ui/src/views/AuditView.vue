@@ -92,7 +92,9 @@ const classRows = computed(() => {
       let win: number | null = null
       // 取最新一个有数据的基期
       for (const b of bases) {
-        const slot = (basesMap as Record<string, StatSlot>)[b]?.[h]
+        const slot = (
+          basesMap as Record<string, Partial<Record<(typeof HORIZONS)[number], StatSlot>>>
+        )[b]?.[h]
         if (slot && slot.n > 0 && slot.p50 !== null) {
           n = slot.n
           p50 = slot.p50

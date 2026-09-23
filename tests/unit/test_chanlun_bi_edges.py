@@ -71,6 +71,30 @@ def test_can_form_bi_new_and_old_gap() -> None:
     assert _can_form_bi(start, new_bad, ChanlunConfig(bi_type="simple")) is True
 
 
+def test_simple_emits_legacy_warning_and_default_is_silent(caplog, monkeypatch) -> None:
+    """bi-type-convergence spec：显式 simple 发 legacy 告警；默认 new 无告警。"""
+    import logging
+
+    from easy_tdx.chanlun import bi as bi_mod
+
+    start = _fx(FXType.DI, 9.0, [_k(0)])
+    end = _fx(FXType.DING, 10.0, [_k(2)])
+
+    # 告警是进程级一次性（_warned_simple_legacy 锁），重置后才能在本测试观测到
+    monkeypatch.setattr(bi_mod, "_warned_simple_legacy", False)
+
+    # Scenario「legacy 标注」：显式 simple 仍可用，但发 legacy 告警
+    with caplog.at_level(logging.WARNING, logger="easy_tdx.chanlun.bi"):
+        assert _can_form_bi(start, end, ChanlunConfig(bi_type="simple")) is True
+        assert any("legacy" in r.message for r in caplog.records)
+
+    # Scenario「默认不含简化口径」：默认 new 不进 simple 分支、无告警
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="easy_tdx.chanlun.bi"):
+        assert _can_form_bi(start, end, ChanlunConfig(bi_type="new")) is True
+        assert not caplog.records
+
+
 def test_is_weak_bi_threshold() -> None:
     assert _is_weak_bi(_fx(FXType.DI, 100.0, [_k(0)]), _fx(FXType.DING, 100.05, [_k(2)]))
     assert not _is_weak_bi(_fx(FXType.DI, 100.0, [_k(0)]), _fx(FXType.DING, 101.0, [_k(2)]))

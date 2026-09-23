@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+**缠论原文口径收敛归档 + 前端 build 门禁修复（V726）**
+- openspec easy-tdx-chanlun-original-strict 全部 12 项任务完成并归档
+  （archive/2026-09-24-easy-tdx-chanlun-original-strict）：线段原文口径
+  + 笔破坏默认开 + 笔类型收敛三张 spec 全部 Scenario 落地。
+- 新增签收测试：显式 bi_type=simple 发 legacy 告警、默认 new 无告警
+  （bi-type-convergence 两个 Scenario，重置进程型告警锁便于观测）。
+- 修复 AuditView.vue TS7053（basesMap 少一层类型索引）：vue-tsc -b +
+  vite build 自 V722 后未跑过，本轮补跑门禁时暴露；现 build 恢复绿。
+- 验证：后端全量 3606 passed / 6 skipped；ruff、mypy、vue-tsc -b、
+  vite build、vitest 87 passed 全绿。
+
 **线段收尾口径收敛：收尾不换取端点（V725）**
 - 修陷（line-segment-original-fidelity「收尾不换取端点」Requirement）：
   find_xds 收尾（数据用尽）时旧实现用 max/min 换出端点，会把未完成段
