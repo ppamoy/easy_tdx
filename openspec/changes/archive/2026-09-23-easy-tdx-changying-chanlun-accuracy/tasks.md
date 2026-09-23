@@ -51,4 +51,4 @@
 - [x] 4.1 CHANGELOG.md 记录本次变更（版本号递增）
 - [x] 4.2 全量验证：pytest 单测全绿 + vue-tsc/eslint/vitest 全绿 +
       openspec validate 通过
-- [ ] 4.3 归档 openspec change（若全部任务完成）
+- [x] 4.3 归档 openspec change（若全部任务完成）——1.1–4.3 全部完成，V722 已提交（e17e24a）后归档
