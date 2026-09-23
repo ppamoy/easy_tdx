@@ -15,6 +15,7 @@ import {
 } from '../api'
 import { useEarlierBars } from '../composables/useEarlierBars'
 import type { Bar, Category } from '../types'
+import { padMacdHead, shiftStructure } from '../utils/shiftStructure'
 
 const selectDate = ref('2025-01-02')
 const markets = ref<string[]>(['SZ', 'SH'])
@@ -47,8 +48,34 @@ const {
 async function loadEarlierTiming() {
   const earlier = await fetchEarlier()
   if (earlier.length && timingResult.value) {
+    const shift = earlier.length
     const merged = [...earlier, ...((timingResult.value.bars as Bar[]) ?? [])]
-    timingResult.value = { ...timingResult.value, bars: merged } as StockPickTimingResult
+    // V723: 本地扩窗不重跑分析，结构索引整体 +shift（含递归 levels）
+    const levels: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(timingResult.value.levels ?? {})) {
+      const lv = v as Record<string, unknown>
+      levels[k] = {
+        ...lv,
+        bis: shiftStructure(lv.bis as any[], shift),
+        xds: shiftStructure(lv.xds as any[], shift),
+        zss: shiftStructure(lv.zss as any[], shift),
+        mmds: shiftStructure(lv.mmds as any[], shift),
+        fractals: shiftStructure(lv.fractals as any[], shift),
+        bcs: shiftStructure(lv.bcs as any[], shift),
+      }
+    }
+    timingResult.value = {
+      ...timingResult.value,
+      bars: merged,
+      bis: shiftStructure(timingResult.value.bis as any[], shift),
+      xds: shiftStructure(timingResult.value.xds as any[], shift),
+      zss: shiftStructure(timingResult.value.zss as any[], shift),
+      mmds: shiftStructure(timingResult.value.mmds as any[], shift),
+      fractals: shiftStructure(timingResult.value.fractals as any[], shift),
+      bcs: shiftStructure(timingResult.value.bcs as any[], shift),
+      macd: padMacdHead(timingResult.value.macd as any, shift),
+      levels,
+    } as StockPickTimingResult
   }
 }
 

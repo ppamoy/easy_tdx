@@ -1,5 +1,18 @@
 ## [Unreleased]
 
+**图表扩窗结构对齐 + 视口保持（V723）**
+- 修陷：V722 三个本地拼接视图（TodayView/StockPickView/SignalVerifyView）前置 earlier bars 
+  后未平移结构索引，笔/中枢/买卖点/背驰/分型在图上整体右移 N 根错位
+  （违反 chart-history-navigation 规格「标注对齐」要求）。
+  新增 utils/shiftStructure.ts（shiftStructure + padMacdHead），三视图统一接入：
+  start_index/end_index/bar_index/anchor_bar_index 整体 +N，MACD 序列前置补 null；
+  SignalVerifyView 逐根揭示游标同步平移，StockPickView 递归 levels 同步平移。
+- 视口保持：ChanlunChart.render 在 prepend（首根变化+长度增加）时捕获旧 dataZoom 
+  绝对窗口并平移 delta 根，修复「加载更早后视口跳回默认 50-100」
+  （spec: 增量加载 MUST 保持视口不跳变）。
+- 测试：新增 test_shiftStructure 7 项 + ChanlunChart 视口保持 2 项
+  （前端 85 passed / 11 files）；后端无改动，基线仍为 3605 passed / 6 skipped。
+
 **准确性审计全链路 + 图表全历史回溯（V722）**
 - 新增统一信号台账 `web/signal_ledger.py`（signal_returns/aggregate_signal_returns/forward_returns）：逐信号逐窗口记录 SignalReturnRecord（方向对齐、零基价 -100%、无指数基准时 benchmark/excess 为 None），面板 `_signal_type_stats` 改为内部同源调用——台账与面板数字必须对得上。
 - 新增审计管道 `audit/accuracy.py` + CLI `audit-accuracy`：长盈三维分层前瞻收益（最近 5 个已过去季末做基期，20/60/250 日窗口，分基期 per_class + per_symbol + PIT 未来函数哨兵 + data_missing 诚实缺失）、缠论 15 只样本台账口径命中率（horizons 5/20）、图表一致性对账（图表异步路径 vs 审计同步路径，末根时间戳+收盘价）。报告落盘 `~/.easy_tdx/audit/accuracy_<date>.json/.md` + latest 指针。

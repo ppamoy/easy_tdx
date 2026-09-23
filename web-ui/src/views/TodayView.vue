@@ -16,6 +16,7 @@ import {
   type SeasonInfo,
 } from '../api'
 import { useEarlierBars } from '../composables/useEarlierBars'
+import { padMacdHead, shiftStructure } from '../utils/shiftStructure'
 import type { Bar, Category } from '../types'
 
 const selectDate = ref(new Date().toISOString().slice(0, 10))
@@ -51,8 +52,20 @@ const {
 async function loadEarlierToday() {
   const earlier = await fetchEarlier()
   if (earlier.length && selected.value) {
+    const shift = earlier.length
     const merged = [...earlier, ...((selected.value.bars as Bar[]) ?? [])]
-    selected.value = { ...selected.value, bars: merged } as DashboardAction
+    // V723: 本地扩窗不重跑分析，结构索引必须整体 +shift，否则图上错位
+    selected.value = {
+      ...selected.value,
+      bars: merged,
+      bis: shiftStructure(selected.value.bis as any[], shift),
+      xds: shiftStructure(selected.value.xds as any[], shift),
+      zss: shiftStructure(selected.value.zss as any[], shift),
+      mmds: shiftStructure(selected.value.mmds as any[], shift),
+      fractals: shiftStructure(selected.value.fractals as any[], shift),
+      bcs: shiftStructure(selected.value.bcs as any[], shift),
+      macd: padMacdHead(selected.value.macd as any, shift),
+    } as DashboardAction
   }
 }
 

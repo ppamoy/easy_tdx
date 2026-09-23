@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'jsdom',
+    // V723: 让组件内 import.meta.env.DEV 分支（调试句柄/测试钩子）在单测可用
+    env: { DEV: true },
     include: ['src/**/*.test.ts'],
     // 组件测试用 DOM 断言，globals 显式关闭，测试文件自行 import { test, expect }。
     globals: false,

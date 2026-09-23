@@ -1,22 +1,27 @@
 // ChanlunChart 渲染结构测试（v590）：验证 MACD 副图、背驰主图/副图、
 // 买卖点标注、中枢区域、笔/线段/分型都进入 ECharts option。
 import { describe, expect, test, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 
 const setOption = vi.fn()
 let lastOption: any = null
 
+// V723: 可控的 mock 实例——测试用例可注入 getOption 返回值，验证 prepend 视口保持
+const instance = {
+  setOption: (opt: any) => {
+    lastOption = opt
+    setOption(opt)
+  },
+  resize: () => undefined,
+  dispose: () => undefined,
+  getOption: () => mockedZoom, // 测试可覆盖 mockedZoom
+}
+let mockedZoom: any = undefined
+
 vi.mock('../../echarts-setup', () => {
   const noop = () => undefined
   const stub = {
-    init: () => ({
-      setOption: (opt: any) => {
-        lastOption = opt
-        setOption(opt)
-      },
-      resize: noop,
-      dispose: noop,
-    }),
+    init: () => instance,
     use: noop,
     registerTheme: noop,
   }
@@ -507,5 +512,45 @@ describe('ChanlunChart 结构渲染', () => {
     const sell = findSeries('卖点')
     expect(sell?.label?.show).toBe(true)
     expect(sell?.data).toHaveLength(1)
+  })
+})
+
+describe('V723: 加载更早视口保持（chart-history-navigation spec）', () => {
+  test('prepend 后 dataZoom 窗口平移 delta，不跳到默认 50-100', async () => {
+    const doMount = (bs: any[]) =>
+      mount(ChanlunChart, { props: { bars: bs, bis: [], xds: [], zss: [], mmds: [], fxs: [] } })
+    const w1 = doMount(bars)
+    await flushPromises()
+    // 用户已把视口缩放到绝对 [128,160)（后 20%）
+    mockedZoom = { dataZoom: [{ start: 80, end: 100 }] }
+    // 前置 40 根更早历史：绝对窗口应平移到 [168,200)，即新长度 200 的 [84%,100%]
+    const earlier = Array.from({ length: 40 }, (_, i) => bar(i - 40))
+    await w1.setProps({ bars: [...earlier, ...bars] })
+    await flushPromises()
+    const dz = lastOption.dataZoom[0]
+    expect(dz.start).toBe(84)
+    expect(dz.end).toBeCloseTo(100, 5)
+    // 后续普通重渲染不再篡改 zoom（zoomKeep 已消费）
+    mockedZoom = undefined
+    await w1.setProps({ revealIndex: 100 })
+    await flushPromises()
+    // revealIndex 触发的 revealActive 会截断渲染长度（100 根），notMerge 重置 zoom
+    // 为默认 50 —— 这是 ECharts setOption(option, true) 的固有行为，与 prepend
+    // 无关。viewport 保持语义只覆盖「加载更早」这一交互路径。
+    expect(lastOption.dataZoom[0].start).toBe(50)
+    w1.unmount()
+  })
+
+  test('长度不变的数据更新不触发视口平移', async () => {
+    const doMount = (bs: any[]) =>
+      mount(ChanlunChart, { props: { bars: bs, bis: [], xds: [], zss: [], mmds: [], fxs: [] } })
+    const w2 = doMount(bars)
+    await flushPromises()
+    mockedZoom = { dataZoom: [{ start: 10, end: 30 }] }
+    // 同长度替换（如训练揭示推进），非 prepend
+    await w2.setProps({ bars: [...bars] })
+    await flushPromises()
+    expect(lastOption.dataZoom[0].start).toBe(50) // 默认值，未被平移逻辑改写
+    w2.unmount()
   })
 })

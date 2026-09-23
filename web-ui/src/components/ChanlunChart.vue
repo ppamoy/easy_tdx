@@ -22,7 +22,7 @@ const props = withDefaults(
     mmds: ChanlunMmd[]
     fxs?: ChanlunFx[]
     bcs?: ChanlunBc[]
-    frequency: string
+    frequency?: string
     /** 揭示游标（训练模式）：只显示前 revealIndex+1 根 K 线及其范围内的叠加层 */
     revealIndex?: number
     /**
@@ -59,6 +59,7 @@ const props = withDefaults(
     singleZsIndex?: number
   }>(),
   {
+    frequency: 'daily',
     showZsds: true,
     showFractals: true,
     showMmds: true,
@@ -202,10 +203,45 @@ function findAnchorIndex(
   return idx >= revealLimit ? -1 : idx
 }
 
+// V723: 前置拼接（加载更早）时保持 dataZoom 视口不跳变（spec: chart-history-navigation
+// 「增量加载 MUST 保持当前 dataZoom 视口不跳变」）。检测方式：首根 datetime 变化
+// 且长度增加 = prepend；此时把旧绝对窗口 [a,b] 平移 delta 根后再换算回百分比。
+// 其余重渲染（训练揭示推进等）维持原有默认缩放行为，不引入 UX 变化。
+let prevBarsLen = 0
+let prevFirstKey = ''
+let zoomKeep: { start: number; end: number } | null = null
+
 function render() {
   if (!container.value || props.bars.length === 0) return
   if (!chart) chart = echarts.init(container.value, 'dark')
-  chart.setOption(buildOption(), true)
+  const firstKey = props.bars[0]?.datetime ?? ''
+  const len = props.bars.length
+  const isPrepend = prevBarsLen > 0 && len > prevBarsLen && firstKey !== prevFirstKey
+  if (isPrepend) {
+    const opt = chart.getOption() as { dataZoom?: { start?: number; end?: number }[] } | undefined
+    const dz = opt?.dataZoom?.[0]
+    if (dz && typeof dz.start === 'number' && typeof dz.end === 'number') {
+      const delta = len - prevBarsLen
+      const a = (dz.start / 100) * prevBarsLen
+      const b = (dz.end / 100) * prevBarsLen
+      zoomKeep = {
+        start: Math.max(0, Math.min(100, ((a + delta) / len) * 100)),
+        end: Math.max(0, Math.min(100, ((b + delta) / len) * 100)),
+      }
+    }
+  }
+  prevBarsLen = len
+  prevFirstKey = firstKey
+  const option = buildOption()
+  if (zoomKeep) {
+    const dzArr = option.dataZoom as { start: number; end: number }[]
+    if (dzArr?.[0]) {
+      dzArr[0].start = zoomKeep.start
+      dzArr[0].end = zoomKeep.end
+    }
+    zoomKeep = null
+  }
+  chart.setOption(option, true)
   // 开发/调试专用：暴露图表实例供 playwright 等浏览器测试检查内部状态
   if (import.meta.env.DEV) {
     ;(window as unknown as Record<string, unknown>).__CHANLUN_CHART__ = chart

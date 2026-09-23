@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import { useEarlierBars } from '../composables/useEarlierBars'
+import { shiftStructure } from '../utils/shiftStructure'
 import { formatError } from '../api'
 import type { Bar } from '../types'
 
@@ -104,7 +105,22 @@ const {
 
 async function loadEarlierVerify() {
   const earlier = await fetchEarlier()
-  if (earlier.length) bars.value = [...earlier, ...bars.value]
+  if (earlier.length) {
+    const shift = earlier.length
+    bars.value = [...earlier, ...bars.value]
+    // V723: 本地扩窗不重跑分析，结构索引整体 +shift。
+    // mmds.bar_index 驱动逐根揭示游标，必须同步平移，否则揭示起点错位。
+    bis.value = shiftStructure(bis.value as any[], shift)
+    xds.value = shiftStructure(xds.value as any[], shift)
+    zsds.value = shiftStructure(zsds.value as any[], shift)
+    qsds.value = shiftStructure(qsds.value as any[], shift)
+    zss.value = shiftStructure(zss.value as any[], shift)
+    mmds.value = shiftStructure(mmds.value as any[], shift)
+    fxs.value = shiftStructure(fxs.value as any[], shift)
+    if (revealCursor.value !== undefined) {
+      revealCursor.value += shift
+    }
+  }
 }
 
 
