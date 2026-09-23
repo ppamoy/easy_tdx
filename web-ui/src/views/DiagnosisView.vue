@@ -216,6 +216,13 @@ async function runDiagnosis() {
   diagnosis.value = null
   try {
     diagnosis.value = await fetchDiagnosis(market.value, c)
+    // V721: D18 后端对无数据标的返回 200+{"error"}，须走错误展示而非渲染空壳
+    const data = diagnosis.value as unknown as Record<string, unknown>
+    if (data && data.error) {
+      error.value = String(data.error)
+      diagnosis.value = null
+      return
+    }
   } catch (e) {
     error.value = formatError(e)
   } finally {

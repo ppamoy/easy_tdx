@@ -25,7 +25,10 @@ import click
 @click.option("--table", "use_table", is_flag=True, help="表格输出")
 @click.option("--output", "output_fmt", type=click.Choice(["json", "table", "csv"]), default="json")
 @click.option(
-    "--recursion-depth", "recursion_depth", default=1, type=int,
+    "--recursion-depth",
+    "recursion_depth",
+    default=1,
+    type=int,
     help="多级别递归深度（>=1，<=8，受每级线段数量约束会自动收敛），默认 1=线段级别",
 )
 def chanlun(

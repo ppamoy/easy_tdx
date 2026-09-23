@@ -402,7 +402,10 @@ def _make_multiscale_df(n: int = 2200, seed: int = 2) -> pd.DataFrame:
     rows = []
     for i in range(n):
         c = round(
-            100 + 90 * math.sin(i / 140) + 70 * math.sin(i / 34) + rng.gauss(0, 0.6)
+            100
+            + 90 * math.sin(i / 140)
+            + 70 * math.sin(i / 34)
+            + rng.gauss(0, 0.6)
             + 20 * math.sin(i / 7),
             2,
         )

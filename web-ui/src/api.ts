@@ -36,8 +36,23 @@ export function formatError(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
+/** 重启窗口内网关/SPA 兜底可能返回 HTML（D16），给出可读提示而非 JSON.parse 报错。 */
+const SERVICE_RESTARTING_MSG = '服务正在重启，请稍候重试'
+
+/** V721: D16 非 JSON 响应防御——content-type 非 application/json 时抛友好错误。 */
+async function parseJson(resp: Response): Promise<unknown> {
+  if (!(resp.headers.get('content-type') ?? '').includes('application/json')) {
+    throw new Error(SERVICE_RESTARTING_MSG)
+  }
+  return resp.json()
+}
+
 /** 把 Response 解析为 ApiError 抛出（后端统一错误格式 {error, detail}）。 */
 async function throwError(resp: Response): Promise<never> {
+  // V721: D16 错误体也先验 content-type，SPA index.html 兜底不再炸出难懂报错
+  if (!(resp.headers.get('content-type') ?? '').includes('application/json')) {
+    throw new Error(`${resp.status} ${resp.statusText}（${SERVICE_RESTARTING_MSG}）`)
+  }
   let detail = `${resp.status} ${resp.statusText}`
   try {
     const body = (await resp.json()) as ApiError
@@ -52,7 +67,7 @@ async function throwError(resp: Response): Promise<never> {
 export async function fetchStrategies(): Promise<StrategiesResponse> {
   const resp = await fetch(`${BASE}/backtest/strategies`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as StrategiesResponse
+  return (await parseJson(resp)) as StrategiesResponse
 }
 
 /**
@@ -83,7 +98,7 @@ export async function fetchBars(
     })
     const resp = await fetch(`${BASE}/bars?${params}`)
     if (!resp.ok) await throwError(resp)
-    const body = (await resp.json()) as { data: Record<string, unknown>[] }
+    const body = (await parseJson(resp)) as { data: Record<string, unknown>[] }
     const pageBars = body.data.map((row) => normalizeBar(row))
     if (pageBars.length === 0) break // 无更多数据
 
@@ -137,7 +152,7 @@ export async function runBacktest(req: BacktestRequest): Promise<BacktestResult>
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as BacktestResult
+  return (await parseJson(resp)) as BacktestResult
 }
 
 /** 提交后台回测任务，返回 task_id。 */
@@ -148,7 +163,7 @@ export async function submitBacktestTask(req: BacktestRequest): Promise<TaskSubm
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as TaskSubmitResponse
+  return (await parseJson(resp)) as TaskSubmitResponse
 }
 
 /** 提交组合回测后台任务，返回 task_id。 */
@@ -161,7 +176,7 @@ export async function submitPortfolioTask(
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as TaskSubmitResponse
+  return (await parseJson(resp)) as TaskSubmitResponse
 }
 
 /** 提交多策略组合回测后台任务（资金分仓），返回 task_id。 */
@@ -174,7 +189,7 @@ export async function submitMultiStrategyTask(
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as TaskSubmitResponse
+  return (await parseJson(resp)) as TaskSubmitResponse
 }
 
 /** 提交参数网格寻优后台任务，返回 task_id。 */
@@ -187,7 +202,7 @@ export async function submitOptimizeTask(
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as TaskSubmitResponse
+  return (await parseJson(resp)) as TaskSubmitResponse
 }
 
 /** 提交「一键寻优所有策略」后台任务，返回 task_id。 */
@@ -200,21 +215,21 @@ export async function submitOptimizeAllTask(
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as TaskSubmitResponse
+  return (await parseJson(resp)) as TaskSubmitResponse
 }
 
 /** 查询后台任务状态（轮询用）。 */
 export async function fetchTask(taskId: string): Promise<TaskState> {
   const resp = await fetch(`${BASE}/backtest/tasks/${taskId}`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as TaskState
+  return (await parseJson(resp)) as TaskState
 }
 
 /** 列出最近任务摘要（供对比页选择）。 */
 export async function fetchTaskList(limit = 20): Promise<TaskListResponse> {
   const resp = await fetch(`${BASE}/backtest/tasks?limit=${limit}`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as TaskListResponse
+  return (await parseJson(resp)) as TaskListResponse
 }
 
 /**
@@ -249,14 +264,14 @@ export async function runBacktestWithPolling(
 export async function fetchSavedStrategies(): Promise<SavedStrategyListResponse> {
   const resp = await fetch(`${BASE}/strategies`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as SavedStrategyListResponse
+  return (await parseJson(resp)) as SavedStrategyListResponse
 }
 
 /** 查看单条已保存策略。 */
 export async function fetchSavedStrategy(id: string): Promise<SavedStrategy> {
   const resp = await fetch(`${BASE}/strategies/${id}`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as SavedStrategy
+  return (await parseJson(resp)) as SavedStrategy
 }
 
 /** 保存一条策略（含当时的标的上下文与成绩快照）。 */
@@ -267,7 +282,7 @@ export async function saveStrategy(req: SavedStrategyCreate): Promise<SavedStrat
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as SavedStrategy
+  return (await parseJson(resp)) as SavedStrategy
 }
 
 /** 删除一条已保存策略。 */
@@ -287,7 +302,7 @@ export async function updateStrategySnapshot(
     body: JSON.stringify({ snapshot }),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as SavedStrategy
+  return (await parseJson(resp)) as SavedStrategy
 }
 
 // ── 服务器设置 ──────────────────────────────────────────────────────────────
@@ -296,7 +311,7 @@ export async function updateStrategySnapshot(
 export async function fetchServerHosts(): Promise<ServerHostListResponse> {
   const resp = await fetch(`${BASE}/server/hosts`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as ServerHostListResponse
+  return (await parseJson(resp)) as ServerHostListResponse
 }
 
 /** 并发测速全部（或指定）host，返回延迟和可达性。 */
@@ -307,7 +322,7 @@ export async function testServerHosts(hosts?: string[]): Promise<ServerHostInfo[
     body: JSON.stringify({ hosts: hosts ?? null }),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as ServerHostInfo[]
+  return (await parseJson(resp)) as ServerHostInfo[]
 }
 
 /** 切换到指定 host（热重连，无需重启服务）。 */
@@ -318,7 +333,7 @@ export async function switchServerHost(host: string): Promise<ServerSwitchResult
     body: JSON.stringify({ host }),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as ServerSwitchResult
+  return (await parseJson(resp)) as ServerSwitchResult
 }
 
 // ── 股票诊断 ──────────────────────────────────────────────────────────────
@@ -327,7 +342,7 @@ export async function switchServerHost(host: string): Promise<ServerSwitchResult
 export async function fetchDiagnosis(market: string, code: string): Promise<DiagnosisResult> {
   const resp = await fetch(`${BASE}/diagnosis/quick?market=${market}&code=${code}`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as DiagnosisResult
+  return (await parseJson(resp)) as DiagnosisResult
 }
 
 /** V102 建议回放实证：对 3买/3卖 信号生成建议并在历史行情回放。 */
@@ -344,7 +359,7 @@ export async function fetchAdviceSimulate(
     body: JSON.stringify({ market, code, category, count, max_hold: maxHold }),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as AdviceSimulateResult
+  return (await parseJson(resp)) as AdviceSimulateResult
 }
 
 // ── V64: 多股票对比分析 ──────────────────────────────────────────────────────
@@ -359,7 +374,7 @@ export async function fetchMultiStockComparison(
     body: JSON.stringify(stocks),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as MultiStockComparisonResponse
+  return (await parseJson(resp)) as MultiStockComparisonResponse
 }
 
 // ── v590 选股两步流 ────────────────────────────────────────────────────
@@ -470,7 +485,7 @@ export async function stockPickScreen(req: {
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as StockPickScreenResult
+  return (await parseJson(resp)) as StockPickScreenResult
 }
 
 /** 全局提醒流（V718）：信号监控 + 今日看板统一写入的自动提醒。 */
@@ -501,13 +516,13 @@ export async function monitorAlerts(
   if (source) q.set('source', source)
   const resp = await fetch(BASE + `/monitor/alerts?` + q.toString())
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as { alerts: MonitorAlert[]; count: number }
+  return (await parseJson(resp)) as { alerts: MonitorAlert[]; count: number }
 }
 
 export async function monitorAlertsClear(): Promise<{ ok: boolean; cleared: number }> {
   const resp = await fetch(BASE + '/monitor/alerts/clear', { method: 'POST' })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as { ok: boolean; cleared: number }
+  return (await parseJson(resp)) as { ok: boolean; cleared: number }
 }
 
 /** 「今日可操作」一屏决策看板：提交后台聚合任务（选股+批量择时+四季）。 */
@@ -600,13 +615,13 @@ export async function stockPickDashboardAsync(req: {
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as { task_id: string; description: string }
+  return (await parseJson(resp)) as { task_id: string; description: string }
 }
 
 export async function stockPickDashboardTask(taskId: string): Promise<ScreenTaskState> {
   const resp = await fetch(BASE + `/stock-pick/dashboard/task/${taskId}`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as ScreenTaskState
+  return (await parseJson(resp)) as ScreenTaskState
 }
 
 /** 第一步异步版：提交长盈选股后台任务（全市场约 13s，进度轮询）。 */
@@ -624,7 +639,7 @@ export async function stockPickScreenAsync(req: {
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as { task_id: string; description: string }
+  return (await parseJson(resp)) as { task_id: string; description: string }
 }
 
 /** 轮询选股任务状态（progress 0~100 + 说明 + 结果）。 */
@@ -643,7 +658,7 @@ export interface ScreenTaskState {
 export async function stockPickScreenTask(taskId: string): Promise<ScreenTaskState> {
   const resp = await fetch(BASE + `/stock-pick/screen/task/${taskId}`)
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as ScreenTaskState
+  return (await parseJson(resp)) as ScreenTaskState
 }
 
 /** 第二步：缠论择时（截至目标日的前复权 K 线 + 缠论结构 + 结论）。 */
@@ -659,5 +674,5 @@ export async function stockPickTiming(req: {
     body: JSON.stringify(req),
   })
   if (!resp.ok) await throwError(resp)
-  return (await resp.json()) as { date: string; results: StockPickTimingResult[] }
+  return (await parseJson(resp)) as { date: string; results: StockPickTimingResult[] }
 }

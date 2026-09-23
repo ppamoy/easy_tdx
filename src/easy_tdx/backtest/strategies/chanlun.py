@@ -161,9 +161,7 @@ class ChanlunStrategy(ParametrizedStrategy):
                 src_mmds = result.recursive_levels[rec_idx].mmds
                 # 该级别的「笔」= 计算该级递归所用到的线段，用作已完结信号过滤。
                 level_lines = (
-                    result.xds
-                    if rec_idx == 0
-                    else result.recursive_levels[rec_idx - 1].xds
+                    result.xds if rec_idx == 0 else result.recursive_levels[rec_idx - 1].xds
                 )
                 done_bis = [ln for ln in level_lines if ln.is_done()]
 

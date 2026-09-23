@@ -194,9 +194,7 @@ def test_dashboard_async_validates_date() -> None:
     with TestClient(app) as client:
         r1 = client.post("/api/v1/stock-pick/dashboard/async", json={})
         assert r1.status_code == 400
-        r2 = client.post(
-            "/api/v1/stock-pick/dashboard/async", json={"date": "bad-date"}
-        )
+        r2 = client.post("/api/v1/stock-pick/dashboard/async", json={"date": "bad-date"})
         assert r2.status_code == 400
         r3 = client.get("/api/v1/stock-pick/dashboard/task/nonexistent")
         assert r3.status_code == 404

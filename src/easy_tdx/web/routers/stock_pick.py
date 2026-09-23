@@ -108,6 +108,20 @@ def _normalize_result_row(r: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _apply_top_n(payload: dict[str, Any], top_n: int) -> dict[str, Any]:
+    """V721: D17 同步 screen 的 top_n 输出截断。
+
+    run_screen 无 top_n 参数、本地沉淀池也不感知请求 top_n，统一在路由层
+    把 results 按 top_n 截断（top_n 在同步池路径为输出上限）；total 随
+    截断后列表同步（它是结果数，非独立统计）。
+    """
+    rows = payload.get("results")
+    if isinstance(rows, list) and len(rows) > top_n:
+        payload["results"] = rows[:top_n]
+    payload["total"] = len(payload.get("results") or [])
+    return payload
+
+
 @router.post("/stock-pick/screen")
 async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
     """第一步：长盈基本面选股池。
@@ -115,6 +129,8 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
     请求体：{"date": "2026-05-01", "markets": ["SH","SZ"], "stock_type": "all",
              "pool": [{"market":"SH","code":"600519"}], "top_n": 30}
     返回：按质量分排序的树粮菜标的池（含评分明细）。
+    top_n 在同步池路径为输出上限（results 按 top_n 截断；全市场 full 路径
+    由 scan_market 内部截断，此处为冗余兜底）。
     """
 
     date_str = str(req.get("date", ""))
@@ -162,13 +178,17 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
             local_rows = [r for r in local_rows if r["category"] == stock_type]
         if norm_markets:
             local_rows = [r for r in local_rows if r["market"] in norm_markets]
-        return {
-            "date": local.get("date", date_str),
-            "total": len(local_rows),
-            "results": local_rows,
-            "source": "local",
-            "updated_at": local.get("updated_at"),
-        }
+        # V721: D17 top_n 输出上限同步作用于本地沉淀池路径
+        return _apply_top_n(
+            {
+                "date": local.get("date", date_str),
+                "total": len(local_rows),
+                "results": local_rows,
+                "source": "local",
+                "updated_at": local.get("updated_at"),
+            },
+            top_n,
+        )
 
     def _run() -> dict[str, Any]:
         out = _screen_run_sync(
@@ -184,7 +204,9 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
         return {"date": date_str, **out}
 
     try:
-        return await asyncio.to_thread(_run)
+        payload = await asyncio.to_thread(_run)
+        # V721: D17 池路径 top_n 截断（run_screen 无 top_n 参数，路由层兜底）
+        return _apply_top_n(payload, top_n)
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001

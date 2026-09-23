@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import AsyncMock, patch
 
 import numpy as np
 import pandas as pd
@@ -577,13 +578,40 @@ def test_sync_backtest_with_inline_data(client, sample_ohlcv):
     assert len(body["equity_curve"]) > 0
 
 
-def test_sync_backtest_rejects_missing_ohlcv(client):
-    """同步回测不给 ohlcv 应返回 400。"""
-    resp = client.post(
-        "/api/v1/backtest/run",
-        json={"strategy": "ma_cross", "symbol": "SZ:000001"},
-    )
+def test_sync_backtest_symbol_fetches_bars(client, sample_ohlcv):
+    """V721: D14——同步回测传 symbol（无内联数据）应后端取行情跑通（200）。
+
+    v721_semantics 验收项 #2：SZ000001 归一后取行情；mock 行情源保证确定性。
+    """
+    from easy_tdx.web.routers import backtest as bt
+
+    df = bt._ohlcv_to_df(sample_ohlcv)  # 与内联路径同一形态（datetime64 + float）
+    with patch.object(bt, "_fetch_bars", new=AsyncMock(return_value=df)):
+        resp = client.post(
+            "/api/v1/backtest/run",
+            json={"strategy": "ma_cross", "params": {}, "symbol": "SZ000001", "count": 60},
+        )
+    assert resp.status_code == 200, resp.text
+    assert "performance" in resp.json()
+
+
+def test_sync_backtest_symbol_fetch_failure_is_400(client):
+    """V721: D14——symbol 取行情失败（无数据源）→ ValueError → 400。"""
+    from easy_tdx.web.routers import backtest as bt
+
+    err = ValueError("标的 SZ:000001 未取到任何 K 线数据")
+    with patch.object(bt, "_fetch_bars", new=AsyncMock(side_effect=err)):
+        resp = client.post(
+            "/api/v1/backtest/run",
+            json={"strategy": "ma_cross", "params": {}, "symbol": "SZ000001", "count": 60},
+        )
     assert resp.status_code == 400
+
+
+def test_sync_backtest_rejects_no_data_source(client):
+    """同步回测既无 ohlcv 也无 symbol → schema 校验 422。"""
+    resp = client.post("/api/v1/backtest/run", json={"strategy": "ma_cross", "params": {}})
+    assert resp.status_code == 422
 
 
 def test_sync_backtest_rejects_bad_strategy(client, sample_ohlcv):

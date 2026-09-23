@@ -271,7 +271,7 @@ async def _analyze_stock(
         "valid": True,
         "code": code,
         "market": market,
-        "symbol": f"{market}{code}",
+        "symbol": f"{market}:{code}",  # V721: D14 统一全站「市场:代码」口径（原 SZ000001）
         "kline_count": len(result.klines),
         "bi_count": len(result.bis),
         "zs_count": len(result.zss),
@@ -516,9 +516,7 @@ async def verify_screening(
     for sym in symbols_canon:
         m, code = sym.split(":", 1)
         try:
-            df = await fetch_qfq_klines(
-                mac_client, client, m, code, "DAY", 0, 400
-            )
+            df = await fetch_qfq_klines(mac_client, client, m, code, "DAY", 0, 400)
         except Exception:  # noqa: BLE001
             continue
         if df is None or len(df) < 2:

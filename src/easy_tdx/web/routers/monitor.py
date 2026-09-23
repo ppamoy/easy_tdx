@@ -333,6 +333,7 @@ async def monitor_list() -> dict[str, Any]:
             {
                 "task_id": task.task_id,
                 "stock_count": len(task.stocks),
+                "stocks": task.stocks,  # V721: D12 list 端点补 stocks，前端 loadTasks 渲染不再 TypeError
                 "category": task.category,
                 "threshold": task.confidence_threshold,
                 "interval": task.interval_seconds,

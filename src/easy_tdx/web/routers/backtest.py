@@ -55,17 +55,31 @@ async def list_strategies() -> StrategySchemaResponse:
 
 
 @router.post("/backtest/run", response_model=BacktestResultResponse)
-async def run_backtest(req: BacktestRequest) -> BacktestResultResponse:
-    """同步回测（仅支持内联 OHLCV 数据）。
+async def run_backtest(
+    req: BacktestRequest,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> BacktestResultResponse:
+    """同步回测（内联 OHLCV 或单标的 symbol 取行情）。
 
-    适用于单标的快速回测（<3s）。需要取行情或长任务请用 ``/backtest/run/async``。
+    两种数据来源（二选一）：
+    - ``ohlcv``：内联数据，适用于前端已有行情的快速回测（<3s）；
+    - ``symbol``：后端按「市场:代码」取行情（MAC 优先，QFQ，与 /bars 同价格
+      体系，TDX 兜底）——symbol 现已归一接受 SZ000001 等宽进形态。
+    取行情失败 → 400（ValueError）。长任务请用 ``/backtest/run/async``。
     """
-    if req.ohlcv is None:
+    if req.ohlcv is not None:
+        df = _ohlcv_to_df(req.ohlcv)
+    elif req.symbol:
+        # V721: D14——同步路径补齐 symbol 取行情（与 async 同一 _fetch_bars），
+        # 使「同步 + 无内联数据」不再固定 400（v721_semantics 验收项 #2）。
+        df = await _fetch_bars(client, req.symbol, req.category, req.count, mac_client)
+    else:
         raise ValueError(
-            "同步回测（/backtest/run）必须提供 ohlcv 内联数据；取行情请用 /backtest/run/async"
+            "同步回测（/backtest/run）必须提供 ohlcv 内联数据或 symbol；"
+            "取行情请直接传 symbol，长任务用 /backtest/run/async"
         )
 
-    df = _ohlcv_to_df(req.ohlcv)
     result_dict = _run_backtest(df, req)
     return BacktestResultResponse(**result_dict)
 

@@ -577,6 +577,84 @@ def c_v720_semantics() -> tuple[bool, str, dict]:
     return True, "；".join(details), {"cases": details}
 
 
+def c_v721_semantics() -> tuple[bool, str, dict]:
+    """V721 语义回归：D12 monitor/list 含 stocks；D14 symbol 宽进严处。"""
+    bad: list[str] = []
+    details: list[str] = []
+    # D12：list 每项须含 stocks 数组（前端刷新路径渲染 task.stocks.length）
+    code, d = _req("GET", f"{API}/monitor/list", timeout=20)
+    items = (d or {}).get("tasks", []) if isinstance(d, dict) else []
+    ok12 = code == 200 and isinstance(items, list)
+    if ok12:
+        # 用最小合法任务验证 stocks 字段存在（创建后立即 stop，不留孤儿）
+        code2, d2 = _req(
+            "POST",
+            f"{API}/monitor/create",
+            body={"stocks": [{"market": "SZ", "code": "000001"}], "interval_seconds": 3600},
+            timeout=20,
+        )
+        ok12 = code2 == 200
+        if ok12:
+            tid = d2.get("task_id")
+            # 先 list 后 stop：stop 会将任务移出列表，顺序反了断言必假
+            code3, d3 = _req("GET", f"{API}/monitor/list", timeout=20)
+            tasks = (d3 or {}).get("tasks", []) if isinstance(d3, dict) else []
+            mine = [t for t in tasks if t.get("task_id") == tid]
+            ok12 = bool(mine) and isinstance(mine[0].get("stocks"), list)
+            details.append(f"list_stocks:{'yes' if ok12 else 'no'}")
+            _req("POST", f"{API}/monitor/{tid}/stop", timeout=20)
+        else:
+            details.append(f"create:{code2}")
+    else:
+        details.append(f"list:{code}")
+    # D14：SZ000001（无冒号）须归一接受；ABC123 / 裸 6 位仍 422
+    code, d = _req(
+        "POST",
+        f"{API}/backtest/run",
+        body={"strategy": "ma_cross", "params": {}, "symbol": "SZ000001", "count": 60},
+        timeout=120,
+    )
+    if code != 200:
+        bad.append(f"backtest SZ000001 → {code}（期望 200 归一）")
+    details.append(f"sym_nonorm:{code}")
+    code, d = _req(
+        "POST",
+        f"{API}/backtest/run",
+        body={"strategy": "ma_cross", "params": {}, "symbol": "ABC123", "count": 60},
+        timeout=60,
+    )
+    if code != 422:
+        bad.append(f"backtest ABC123 → {code}（期望 422）")
+    details.append(f"sym_bad:{code}")
+    code, d = _req(
+        "POST",
+        f"{API}/backtest/run",
+        body={"strategy": "ma_cross", "params": {}, "symbol": "000001", "count": 60},
+        timeout=60,
+    )
+    if code != 422:
+        bad.append(f"backtest 裸代码 → {code}（期望 422）")
+    details.append(f"sym_bare:{code}")
+    # D14：scan 产出 symbol 须为 市场:代码 规范形态（路由挂载于 /api/v1 根，
+    # 非 /stock-pick 前缀）
+    code, d = _req(
+        "POST",
+        f"{API}/screening/scan",
+        body={"date": DATE, "market": "SZ", "min_klines": 100},
+        timeout=120,
+    )
+    if code == 200 and isinstance(d, dict):
+        rows = d.get("qualified") or []
+        syms = [r.get("symbol", "") for r in rows[:3] if isinstance(r, dict)]
+        if syms and not all(":" in s for s in syms):
+            bad.append(f"scan symbol 非规范形态: {syms}")
+        details.append(f"scan_sym:{syms[:1] or '空'}")
+    else:
+        details.append(f"scan:{code}")
+    assert not bad, f"V721 语义回退: {bad}"
+    return True, "；".join(details), {"cases": details}
+
+
 CHECKS = [
     ("openapi_routes", c_openapi_routes),
     ("bars_mac_fallback", c_bars_mac_fallback),
@@ -595,6 +673,7 @@ CHECKS = [
     ("api_unknown_path_404", c_api_unknown_path_404),
     ("error_semantics", c_error_semantics),
     ("v720_semantics", c_v720_semantics),
+    ("v721_semantics", c_v721_semantics),
 ]
 
 DATE = "2026-09-01"

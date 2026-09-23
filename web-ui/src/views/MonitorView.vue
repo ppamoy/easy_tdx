@@ -13,6 +13,7 @@ interface MonitoredStock {
 interface MonitorTask {
   task_id: string
   stocks: MonitoredStock[]
+  stock_count?: number
   category: string
   threshold: number
   last_check: number
@@ -1263,7 +1264,7 @@ onUnmounted(() => {
         <div v-for="task in tasks" :key="task.task_id" class="task-card">
           <div class="task-info">
             <span class="task-id">{{ task.task_id }}</span>
-            <span class="task-stocks">{{ task.stocks.length }} 只股票</span>
+            <span class="task-stocks">{{ task.stocks?.length ?? task.stock_count ?? 0 }} 只股票</span>
             <span class="task-category">{{ task.category }}</span>
             <span class="task-threshold">≥{{ (task.threshold * 100).toFixed(0) }}%</span>
           </div>

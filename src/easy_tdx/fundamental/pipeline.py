@@ -575,9 +575,7 @@ def detect_season_for_date(
 
     key = target.isoformat()
     now = _dt.now()
-    ttl_hours = (
-        _SEASON_TTL_TODAY_HOURS if target >= now.date() else _SEASON_TTL_PAST_HOURS
-    )
+    ttl_hours = _SEASON_TTL_TODAY_HOURS if target >= now.date() else _SEASON_TTL_PAST_HOURS
     cached = _SEASON_CACHE.get(key)
     if cached is not None:
         result, at, cached_ttl = cached
@@ -729,9 +727,7 @@ def scan_market(
     by_category: dict[str, int] = {"tree": 0, "grain": 0, "vegetable": 0}
     pool_size = len(picked)
     _score_total = max(1, pool_size)
-    for _score_i, row_data in enumerate(
-        (data for _, data in picked.iterrows())
-    ):
+    for _score_i, row_data in enumerate((data for _, data in picked.iterrows())):
         if _score_i % max(1, _score_total // 10) == 0:
             report_progress(
                 20.0 + 40.0 * _score_i / _score_total, f"打分中 {_score_i}/{_score_total}"

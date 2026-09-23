@@ -7,9 +7,10 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 __all__ = [
     "BacktestRequest",
@@ -30,6 +31,30 @@ __all__ = [
 
 
 # ── 请求模型 ───────────────────────────────────────────────────────────────────
+
+
+def _normalize_symbol(v: str) -> str:
+    """V721: D14 symbol 宽进严处——``SZ000001``/``sz:000001`` 归一为 ``SZ:000001``。
+
+    与 screening 的 verify 不同，backtest **不推断市场**：``000001`` 这类无市场
+    前缀的裸代码无法无歧义确定市场，``ABC123`` 等非法输入一并拒绝（pydantic
+    ValidationError → FastAPI 422）。
+    """
+    s = v.strip().upper()
+    if ":" in s:
+        market, _, code = s.partition(":")
+    elif len(s) == 8 and s[:2] in ("SZ", "SH", "BJ"):
+        market, code = s[:2], s[2:]
+    else:
+        raise ValueError(f"标的 {v!r} 格式非法：应为 '市场:6位代码'（如 SZ:000001）或 'SZ000001'")
+    if market in ("SZ", "SH", "BJ") and re.fullmatch(r"\d{6}", code):
+        return f"{market}:{code}"
+    raise ValueError(f"标的 {v!r} 格式非法：市场须为 SZ/SH/BJ，代码须为 6 位数字")
+
+
+def _normalize_symbol_optional(v: str | None) -> str | None:
+    """V721: D14 Optional symbol 字段共享归一（None 原样穿透）。"""
+    return None if v is None else _normalize_symbol(v)
 
 
 class BacktestRequest(BaseModel):
@@ -83,9 +108,15 @@ class BacktestRequest(BaseModel):
     # 数据来源 B：按标的取行情
     symbol: str | None = Field(
         default=None,
-        pattern=r"^(SZ|SH|BJ):\d{6}$",
-        description="标的代码，格式 市场:代码，如 SZ:000001",
+        description="标的代码，格式 市场:代码，如 SZ:000001；宽进：SZ000001/sz:000001 归一",
     )
+
+    # V721: D14 宽进严处——接受 SZ000001 / sz:000001 并归一为 SZ:000001
+    @field_validator("symbol")
+    @classmethod
+    def _norm_symbol(cls, v: str | None) -> str | None:
+        return _normalize_symbol_optional(v)
+
     category: Literal["DAY", "WEEK", "MONTH", "MIN_5", "MIN_15", "MIN_30", "MIN_60"] = Field(
         default="DAY", description="K 线周期"
     )
@@ -117,8 +148,16 @@ class PortfolioBacktestRequest(BaseModel):
         ...,
         min_length=1,
         max_length=20,
-        description='标的列表，格式 "市场:代码"，如 ["SZ:000001","SH:600519"]',
+        description='标的列表，格式 "市场:代码"，如 ["SZ:000001","SH:600519"]；'
+        "宽进：SZ000001/sz:000001 逐元素归一",
     )
+
+    # V721: D14 stocks 列表逐元素归一（None 不适用，列表元素必为 str）
+    @field_validator("stocks")
+    @classmethod
+    def _norm_stocks(cls, v: list[str]) -> list[str]:
+        return [_normalize_symbol(s) for s in v]
+
     category: Literal["DAY", "WEEK", "MONTH", "MIN_5", "MIN_15", "MIN_30", "MIN_60"] = Field(
         default="DAY"
     )
@@ -169,7 +208,14 @@ class OptimizeBacktestRequest(BaseModel):
     ohlcv: list[dict[str, Any]] | None = Field(default=None, max_length=2000)
 
     # 数据来源 B：按标的取行情
-    symbol: str | None = Field(default=None, pattern=r"^(SZ|SH|BJ):\d{6}$")
+    symbol: str | None = Field(default=None)  # V721: D14 pattern 移除，见 _norm_symbol
+
+    # V721: D14 宽进严处
+    @field_validator("symbol")
+    @classmethod
+    def _norm_symbol(cls, v: str | None) -> str | None:
+        return _normalize_symbol_optional(v)
+
     category: Literal["DAY", "WEEK", "MONTH", "MIN_5", "MIN_15", "MIN_30", "MIN_60"] = Field(
         default="DAY"
     )
@@ -214,7 +260,14 @@ class OptimizeAllBacktestRequest(BaseModel):
     ohlcv: list[dict[str, Any]] | None = Field(default=None, max_length=2000)
 
     # 数据来源 B：按标的取行情
-    symbol: str | None = Field(default=None, pattern=r"^(SZ|SH|BJ):\d{6}$")
+    symbol: str | None = Field(default=None)  # V721: D14 pattern 移除，见 _norm_symbol
+
+    # V721: D14 宽进严处
+    @field_validator("symbol")
+    @classmethod
+    def _norm_symbol(cls, v: str | None) -> str | None:
+        return _normalize_symbol_optional(v)
+
     category: Literal["DAY", "WEEK", "MONTH", "MIN_5", "MIN_15", "MIN_30", "MIN_60"] = Field(
         default="DAY"
     )
@@ -393,9 +446,16 @@ class MultiStrategyItem(BaseModel):
     params: dict[str, Any] = Field(default_factory=dict)
     symbol: str = Field(
         ...,
-        pattern=r"^(SZ|SH|BJ):\d{6}$",
-        description='标的完整代码，格式 "市场:6位代码"，如 "SH:601088"',
+        description='标的完整代码，格式 "市场:6位代码"，如 "SH:601088"；'
+        "宽进：SH601088/sh:601088 归一",
     )
+
+    # V721: D14 宽进严处
+    @field_validator("symbol")
+    @classmethod
+    def _norm_symbol(cls, v: str) -> str:
+        return _normalize_symbol(v)
+
     category: Literal["DAY", "WEEK", "MONTH", "MIN_5", "MIN_15", "MIN_30", "MIN_60"] = Field(
         default="DAY"
     )

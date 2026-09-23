@@ -48,16 +48,22 @@ async def fetch_qfq_klines(
     cat = category_from_str(category)
     if mac_client is not None:
         period, times = period_times_from_category(cat)
-        df = await mac_client.get_stock_kline(
-            market_value_from_str(market),
-            code,
-            period,
-            start,
-            count,
-            times,
-            adjust=adjust_from_str("QFQ"),
-            bar_time=bar_time,
-        )
+        # V721: D15 MAC 客户端异常同样回退 TDX（此前只对空 df 回退，MAC 故障
+        # 窗口内会直接向上抛异常，screening/scan 静默 200+0 结果）。
+        try:
+            df = await mac_client.get_stock_kline(
+                market_value_from_str(market),
+                code,
+                period,
+                start,
+                count,
+                times,
+                adjust=adjust_from_str("QFQ"),
+                bar_time=bar_time,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _logger.warning("MAC 客户端异常，回退 TDX: %s", exc)
+            df = pd.DataFrame()
         if not df.empty:
             # 与 /bars 相同的列规整：日线及以上 datetime→date，保证 analyser 识别
             daily_plus = int(cat) >= int(KlineCategory.DAY)

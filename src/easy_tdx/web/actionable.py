@@ -164,6 +164,7 @@ def _recursion_context(result: Any) -> dict[str, Any]:
         ),
     }
 
+
 def season_position_note(season: dict[str, Any] | None) -> str:
     """四季仓位建议一句话（season 为 None 时给出中性提示）。"""
     if not season:
