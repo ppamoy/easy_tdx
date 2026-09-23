@@ -15,6 +15,8 @@ import {
   type MonitorAlert,
   type SeasonInfo,
 } from '../api'
+import { useEarlierBars } from '../composables/useEarlierBars'
+import type { Bar, Category } from '../types'
 
 const selectDate = ref(new Date().toISOString().slice(0, 10))
 const poolScope = ref<'pool' | 'full'>('pool')
@@ -29,6 +31,31 @@ const selected = ref<DashboardAction | null>(null)
 // V718: 全局提醒流（信号监控 + 看板自动提醒），15s 轮询
 const alerts = ref<MonitorAlert[]>([])
 const alertSource = ref<'' | 'monitor' | 'dashboard'>('')
+
+// V722: dashboard detail chart full-history backfill (view only; structure stays server-window aligned).
+const {
+  loading: earlierLoading,
+  canLoad: earlierCanLoad,
+  error: earlierError,
+  fetchEarlier,
+} = useEarlierBars({
+  code: () => (selected.value?.symbol ?? '').split(':')[1] ?? '',
+  category: () => 'DAY' as Category,
+  earliest: () => {
+    const b = (selected.value?.bars as Bar[] | undefined) ?? []
+    return b.length ? b[0].datetime.slice(0, 10) : ''
+  },
+  detectMarket: () => (selected.value?.symbol ?? '').split(':')[0] || 'SZ',
+})
+
+async function loadEarlierToday() {
+  const earlier = await fetchEarlier()
+  if (earlier.length && selected.value) {
+    const merged = [...earlier, ...((selected.value.bars as Bar[]) ?? [])]
+    selected.value = { ...selected.value, bars: merged } as DashboardAction
+  }
+}
+
 let alertTimer: number | null = null
 
 async function loadAlerts() {
@@ -220,7 +247,13 @@ function pickRow(row: DashboardAction) {
       </div>
 
       <div v-if="selected" class="detail-panel">
-        <h3>{{ selected.symbol }} 缠论图</h3>
+        <h3>
+          {{ selected.symbol }} 缠论图（{{ (selected.bars ?? []).length }} 根）
+          <button class="btn-mini" :disabled="!earlierCanLoad" @click="loadEarlierToday">
+            {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
+          </button>
+          <span v-if="earlierError" class="hint">{{ earlierError }}</span>
+        </h3>
         <p v-if="selected.novice_advice?.explanation" class="hint">
           {{ selected.novice_advice.explanation }}
         </p>

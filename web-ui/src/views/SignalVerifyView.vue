@@ -4,6 +4,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
+import { useEarlierBars } from '../composables/useEarlierBars'
 import { formatError } from '../api'
 import type { Bar } from '../types'
 
@@ -87,6 +88,25 @@ const market = ref('')
 // 当前选中的买卖点（同级别中枢 + 逐根揭示锚点）
 const selectedMmdIdx = ref(-1)
 const revealCursor = ref<number | undefined>(undefined) // undefined=显示全部
+
+// V722: signal verify chart full-history backfill (view only; server window unchanged).
+const {
+  loading: earlierLoading,
+  canLoad: earlierCanLoad,
+  error: earlierError,
+  fetchEarlier,
+} = useEarlierBars({
+  code: () => currentCode.value,
+  category: () => category.value,
+  earliest: () => (bars.value.length ? bars.value[0].datetime.slice(0, 10) : ''),
+  detectMarket: () => (market.value as 'SZ' | 'SH') || 'SZ',
+})
+
+async function loadEarlierVerify() {
+  const earlier = await fetchEarlier()
+  if (earlier.length) bars.value = [...earlier, ...bars.value]
+}
+
 
 const selectedMmd = computed<MmdItem | null>(() =>
   selectedMmdIdx.value >= 0 ? (mmds.value[selectedMmdIdx.value] ?? null) : null,
@@ -381,6 +401,10 @@ onMounted(() => {
                 <span v-if="revealCursor !== undefined" class="reveal-pos"
                   >已揭示到第 {{ revealCursor + 1 }} / {{ bars.length }} 根</span
                 >
+                <button class="ghost" :disabled="!earlierCanLoad" @click="loadEarlierVerify">
+                  {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
+                </button>
+                <span v-if="earlierError" class="reveal-label">{{ earlierError }}</span>
               </div>
             </div>
           </template>

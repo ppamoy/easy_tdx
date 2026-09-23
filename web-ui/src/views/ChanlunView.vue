@@ -8,7 +8,7 @@ import ChanlunChart from '../components/ChanlunChart.vue'
 import V102DecisionCard from '../components/V102DecisionCard.vue'
 import { formatError } from '../api'
 import type { Bar } from '../types'
-import { fetchBars } from '../api'
+import { fetchBars, loadEarlierBars } from '../api'
 
 const router = useRouter()
 const code = ref('000001')
@@ -771,6 +771,91 @@ const bollConfluence = computed(() => {
   return '中性'
 })
 
+// ── V722: 全历史回溯（加载更早 / 回最新）─────────────────────────
+const loadingEarlier = ref(false)
+/** 当前窗口的起始日期（最早一根），用于增量翻页定位。 */
+const windowEarliest = computed(() =>
+  bars.value.length ? bars.value[0].datetime.slice(0, 10) : '',
+)
+const hasEarlier = ref(false)
+
+async function loadEarlier() {
+  if (loadingEarlier.value || !windowEarliest.value) return
+  loadingEarlier.value = true
+  error.value = ''
+  try {
+    const market = detectMarket(code.value)
+    const earlier = await loadEarlierBars(
+      market,
+      code.value,
+      category.value,
+      windowEarliest.value,
+      800,
+    )
+    if (earlier.length === 0) {
+      hasEarlier.value = false
+      return
+    }
+    // 新窗口 = 更早段 + 原窗口；重新分析保持叠加层全窗口覆盖
+    bars.value = [...earlier, ...bars.value]
+    hasEarlier.value = earlier.length >= 800
+    await reanalyseForWindow()
+  } catch (e) {
+    error.value = formatError(e)
+  } finally {
+    loadingEarlier.value = false
+  }
+}
+
+/** 窗口变化后对完整窗口重跑缠论分析（叠加层覆盖全部已加载 bar）。
+ *
+ * 复用 analyze() 的请求构造但把 count 换成当前窗口长度：直接调单级别
+ * /chanlun/analyze（多级别联立不支持历史扩窗，扩窗后回落单级别视图）。
+ */
+async function reanalyseForWindow() {
+  const market = detectMarket(code.value)
+  const resp = await fetch('/api/v1/chanlun/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      market,
+      code: code.value,
+      category: category.value,
+      count: bars.value.length,
+      start: 0,
+      recursion_depth: recursionDepth.value,
+    }),
+  })
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail ?? `HTTP ${resp.status}`)
+  }
+  const data = await resp.json()
+  valuation.value = data.valuation ?? null
+  if (data.boll) {
+    boll.value = data.boll
+  }
+  rawResult.value = data
+  syncAvailableLevels(data)
+  analysisLevel.value = 'bi'
+  applyAnalysisLevel('bi', data)
+  fxs.value = (data.fractals ?? []).map((f: any) => ({
+    type: f.fx_type,
+    date: f.date,
+    val: f.val,
+    bar_index: f.bar_index,
+  }))
+  macd.value = data.macd && data.macd.dif?.length ? data.macd : null
+  signalAccuracy.value = data.signal_accuracy ?? null
+}
+
+/** 回到最新窗口（恢复 count 根 + 重分析）。 */
+async function backToLatest() {
+  if (loading.value) return
+  hasEarlier.value = true
+  await analyze()
+}
+
 async function analyze() {
   loading.value = true
   error.value = ''
@@ -793,6 +878,7 @@ async function analyze() {
       return
     }
     bars.value = allBars
+    hasEarlier.value = allBars.length >= count.value // 拉满窗口才可能有更早历史
 
     // 2. 调用缠论分析 API
     let data: any
@@ -1123,7 +1209,16 @@ onUnmounted(() => {
       </div>
       <div class="field-group">
         <label>K 线根数</label>
-        <input v-model.number="count" type="number" min="100" max="800" step="100" />
+        <input v-model.number="count" type="number" min="100" max="2000" step="100" />
+      </div>
+      <!-- V722: 全历史回溯 -->
+      <div class="field-group">
+        <button class="btn btn-secondary" :disabled="loadingEarlier || !hasEarlier" @click="loadEarlier">
+          {{ loadingEarlier ? '加载中…' : '加载更早 ⏮' }}
+        </button>
+        <button v-if="bars.length > count" class="btn btn-secondary" :disabled="loading" @click="backToLatest">
+          回最新 ⏭
+        </button>
       </div>
       <div class="field-group">
         <label> <input type="checkbox" v-model="multiLevel" /> 多级别联立 </label>

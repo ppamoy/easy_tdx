@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import EquityChart from '../components/EquityChart.vue'
 import { fetchBars, formatError, saveStrategy } from '../api'
+import { useEarlierBars } from '../composables/useEarlierBars'
 import { fmtPct } from '../format'
 import type { Bar } from '../types'
 
@@ -915,6 +916,61 @@ async function onChanlunCategoryChange() {
   }
 }
 
+// ── V722: 全历史回溯（加载更早 / 回最新）──
+const {
+  loading: earlierLoading,
+  canLoad: earlierCanLoad,
+  error: earlierError,
+  fetchEarlier,
+  resetToLatest,
+} = useEarlierBars({
+  code: () => selectedStock.value?.code ?? '',
+  category: () => chanlunCategory.value,
+  earliest: () => (bars.value.length ? bars.value[0].datetime.slice(0, 10) : ''),
+  detectMarket: () => selectedStock.value?.market ?? 'SZ',
+})
+
+/** 扩窗后按新窗口长度重跑缠论（叠加层覆盖全部已加载 bar）。 */
+async function reanalyseWindow() {
+  if (!selectedStock.value) return
+  const resp = await fetch('/api/v1/chanlun/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      market: selectedStock.value.market,
+      code: selectedStock.value.code,
+      category: chanlunCategory.value,
+      count: bars.value.length,
+      start: 0,
+    }),
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  const data = await resp.json()
+  chanlunRaw.value = data
+  chanlunLevel.value = 'bi'
+  applyChanlunLevel('bi', data)
+  chanlunFxs.value = data.fractals ?? []
+  chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
+}
+
+async function loadEarlier() {
+  const earlier = await fetchEarlier()
+  if (earlier.length) {
+    bars.value = [...earlier, ...bars.value]
+    try {
+      await reanalyseWindow()
+    } catch (e) {
+      error.value = `扩窗重分析失败: ${formatError(e)}`
+    }
+  }
+}
+
+async function backToLatest() {
+  if (!selectedStock.value) return
+  resetToLatest()
+  await selectStock(selectedStock.value)
+}
+
 async function runChanlunAnalysis(stock: StockResult) {
   chanlunLoading.value = true
 
@@ -1454,6 +1510,13 @@ onMounted(() => {
 
         <!-- K线图 -->
         <div v-if="!chanlunLoading && bars.length > 0" class="chart-area">
+          <div class="chart-toolbar">
+            <button class="ghost" :disabled="!earlierCanLoad" @click="loadEarlier">
+              {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
+            </button>
+            <button v-if="bars.length > 500" class="ghost" @click="backToLatest">回最新 ⏭</button>
+            <span v-if="earlierError" class="error-msg">{{ earlierError }}</span>
+          </div>
           <ChanlunChart
             :bars="bars"
             :bis="chanlunBis"

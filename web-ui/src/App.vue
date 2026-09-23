@@ -35,6 +35,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
         <RouterLink to="/stock-pick" active-class="active">选股</RouterLink>
         <RouterLink to="/today" active-class="active">今日可操作</RouterLink>
         <RouterLink to="/learn" active-class="active">缠论测试学习</RouterLink>
+        <RouterLink to="/audit" active-class="active">准确性审计</RouterLink>
       </nav>
     </header>
     <main class="app-main">

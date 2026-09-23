@@ -23,6 +23,7 @@ import StrategyPicker from '../components/StrategyPicker.vue'
 import SymbolPicker from '../components/SymbolPicker.vue'
 import TradeTable from '../components/TradeTable.vue'
 import { fetchBars, formatError, runBacktest, saveStrategy } from '../api'
+import { useEarlierBars } from '../composables/useEarlierBars'
 import { detectMarket } from '../market'
 import { gradePerformance } from '../grading'
 import type { Category, ExecutionMode } from '../types'
@@ -226,6 +227,36 @@ function onChanlunLevelChange() {
 }
 
 // 缠论分析
+// V722: chanlun strategy chart full-history backfill.
+// store.ohlcv is the backtest window (SymbolPicker); loading earlier bars
+// prepends real history and re-runs chanlun analysis over the new window.
+const {
+  loading: earlierLoading,
+  canLoad: earlierCanLoad,
+  error: earlierError,
+  fetchEarlier,
+  resetToLatest: resetEarlier,
+} = useEarlierBars({
+  code: () => code.value,
+  category: () => category.value,
+  earliest: () => (store.ohlcv.length ? store.ohlcv[0].datetime.slice(0, 10) : ''),
+  detectMarket: (c) => detectMarket(c),
+})
+
+async function loadEarlierForChanlun() {
+  const earlier = await fetchEarlier()
+  if (earlier.length) {
+    store.setOhlcv([...earlier, ...store.ohlcv], store.barsSource + ' +earlier')
+    await runChanlunAnalysis()
+  }
+}
+
+async function backToLatestChanlun() {
+  resetEarlier()
+  await symbolPicker.value?.loadBars()
+  await runChanlunAnalysis()
+}
+
 async function runChanlunAnalysis() {
   chanlunLoading.value = true
   chanlunBis.value = []
@@ -249,7 +280,7 @@ async function runChanlunAnalysis() {
         market,
         code: code.value,
         category: categoryMap[category.value] ?? 'DAY',
-        count: Math.min(store.ohlcv.length, 800),
+        count: Math.min(store.ohlcv.length, CHANLUN_MAX_COUNT),
         start: 0,
         start_date: startDate.value || undefined,
         end_date: endDate.value || undefined,
@@ -405,7 +436,9 @@ const isChanlunStrategy = computed(() => {
 // 仅对真正运行缠论分析并填充结构数据的 'chanlun' 策略截断窗口；
 // changying_chanlun 不做缠论结构图（onRun 只对 'chanlun' 调 runChanlunAnalysis），
 // 保持全量 K 线由 KlineChart 展示，避免丢失回测区间。
-const CHANLUN_MAX_COUNT = 800
+// V722: 后端 /chanlun/analyze count 上限已放宽到 8000（fetch_paged_bars 分页），
+// 窗口跟随已加载 K 线；前端上限 2000（>2000 叠加层过密且分析耗时显著上升）。
+const CHANLUN_MAX_COUNT = 2000
 const bars = computed(() => {
   if (strategy.value !== 'chanlun') return store.ohlcv
   return store.ohlcv.length > CHANLUN_MAX_COUNT
@@ -1186,6 +1219,16 @@ async function onSave() {
               <option value="bi">笔级别</option>
               <option value="xd">线段级别</option>
             </select>
+          </div>
+          <!-- V722: 全历史回溯 -->
+          <div v-if="isChanlunStrategy" class="chanlun-history-bar">
+            <button class="ghost" :disabled="!earlierCanLoad" @click="loadEarlierForChanlun">
+              {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
+            </button>
+            <button v-if="store.ohlcv.length > CHANLUN_MAX_COUNT" class="ghost" @click="backToLatestChanlun">
+              回最新 ⏭
+            </button>
+            <span v-if="earlierError" class="chanlun-error-text">{{ earlierError }}</span>
           </div>
           <!-- 缠论策略：显示缠论结构图 -->
           <ChanlunChart

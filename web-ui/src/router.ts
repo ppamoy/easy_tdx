@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import AuditView from './views/AuditView.vue'
 import BacktestView from './views/BacktestView.vue'
 import ChangyingView from './views/ChangyingView.vue'
 import CompareView from './views/CompareView.vue'
@@ -34,6 +35,7 @@ const routes = [
   { path: '/learn', name: 'learn', component: LearnView },
   { path: '/stock-pick', name: 'stock-pick', component: StockPickView },
   { path: '/today', name: 'today', component: TodayView },
+  { path: '/audit', name: 'audit', component: AuditView },
 ]
 
 export const router = createRouter({

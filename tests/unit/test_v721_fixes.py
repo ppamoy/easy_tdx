@@ -328,6 +328,22 @@ class TestD15FetchQfqKlinesFallback:
 
 
 class TestD17SyncScreenTopN:
+    @pytest.fixture(autouse=True)
+    def _isolate_local_pool(self, tmp_path, monkeypatch):
+        """V722: 本地沉淀池路径读真实库（本机 changying-mark 真实跑过后
+        pool 非空），在线 mock 永不触发 → 隔离到空库。"""
+        import easy_tdx.fundamental.changying_pool as pool_mod
+        import easy_tdx.fundamental.marks as marks_mod
+
+        # 回退链第一环 local-full（marks 全量）也必须隔离——本机真实跑过
+        # changying-mark 后 1602 条真实标记会抢先命中，在线 mock 永不触发。
+        monkeypatch.setattr(
+            marks_mod, "_db_path", lambda: tmp_path / "marks.db"
+        )
+        monkeypatch.setattr(
+            pool_mod, "_db_path", lambda: tmp_path / "pool.db"
+        )
+
     def _fake_run_screen_out(self, n: int) -> dict[str, object]:
         return {
             "date": "2025-06-02",

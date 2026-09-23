@@ -79,6 +79,8 @@ async def security_bars(
     adjust: str = Query(
         "QFQ", description="复权: NONE=不复权 / QFQ=前复权(默认) / HFQ=后复权（需 MAC 客户端）"
     ),
+    # V722: lookback > 0 时走服务端循环翻页（图表「往前看」全历史）
+    lookback: int = Query(0, ge=0, le=20000),
     mac_client: Any = Depends(get_mac_client_optional),
     client: Any = Depends(get_client),
 ) -> DataFrameResponse:
@@ -89,6 +91,24 @@ async def security_bars(
     输出契约与旧版一致：日线返回 ``date`` 列，分钟线返回 ``datetime`` 列。
     """
     cat = category_from_str(category)
+    if lookback > 0:
+        # V722: 全历史分页（循环翻页 + 去重 + 升序），与单页契约同列
+        from easy_tdx.web.klines import MAX_LOOKBACK, fetch_paged_bars
+
+        df = await fetch_paged_bars(
+            mac_client,
+            client,
+            market,
+            code,
+            category,
+            lookback=min(lookback, MAX_LOOKBACK),
+            bar_time=bar_time,
+        )
+        resp = _df_resp(df)
+        col = "date" if "date" in df.columns else "datetime"
+        resp.total_returned = int(len(df))
+        resp.earliest_ts = str(df[col].iloc[0])[:10] if len(df) else None
+        return resp
     if mac_client is not None:
         period, times = period_times_from_category(cat)
         df = await mac_client.get_stock_kline(

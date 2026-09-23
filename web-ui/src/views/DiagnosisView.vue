@@ -5,11 +5,12 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchDiagnosis, fetchMultiStockComparison, fetchAdviceSimulate, formatError } from '../api'
-import type { AdviceSimulateResult, DiagnosisResult, MultiStockResult } from '../types'
+import type { AdviceSimulateResult, DiagnosisResult, MultiStockResult, Category } from '../types'
 import KlineChart from '../components/KlineChart.vue'
 import V102DecisionCard from '../components/V102DecisionCard.vue'
 import type { Bar } from '../types'
 import { fetchBars } from '../api'
+import { useEarlierBars } from '../composables/useEarlierBars'
 
 const router = useRouter()
 
@@ -228,6 +229,30 @@ async function runDiagnosis() {
   } finally {
     loading.value = false
   }
+}
+
+// ── V722: 全历史回溯（加载更早 / 回最新）──
+const {
+  loading: earlierLoading,
+  canLoad: earlierCanLoad,
+  error: earlierError,
+  fetchEarlier,
+  resetToLatest,
+} = useEarlierBars({
+  code: () => code.value,
+  category: () => 'DAY' as Category,
+  earliest: () => (bars.value.length ? bars.value[0].datetime.slice(0, 10) : ''),
+  detectMarket: () => market.value,
+})
+
+async function loadEarlier() {
+  const earlier = await fetchEarlier()
+  if (earlier.length) bars.value = [...earlier, ...bars.value]
+}
+
+function backToLatest() {
+  resetToLatest()
+  loadBars()
 }
 
 async function loadBars() {
@@ -13910,7 +13935,14 @@ onMounted(() => {
 
       <!-- K 线图 -->
       <div class="chart-section" v-if="bars.length > 0">
-        <div class="section-title">最近 K 线走势</div>
+        <div class="section-title">
+          最近 K 线走势（已加载 {{ bars.length }} 根）
+          <button class="btn-mini" :disabled="!earlierCanLoad" @click="loadEarlier">
+            {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
+          </button>
+          <button v-if="bars.length > 120" class="btn-mini" @click="backToLatest">回最新 ⏭</button>
+          <span v-if="earlierError" class="error-msg">{{ earlierError }}</span>
+        </div>
         <div class="chart-wrap">
           <KlineChart :bars="bars.slice(-120)" :trades="[]" />
         </div>

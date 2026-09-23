@@ -310,7 +310,11 @@ def _signal_type_stats(
     horizons: tuple[int, ...],
     baseline: dict[int, dict[str, float]],
 ) -> dict[str, Any]:
-    """单个信号类型的前瞻统计。"""
+    """单个信号类型的前瞻统计。
+
+    V722: 前瞻收益计算统一走 web/signal_ledger.py（唯一实现），
+    accuracy 审计与本面板共用同一口径，防止两处各算各的漂移。
+    """
     n_bars = len(closes)
     direction = _classify_direction(sig_type)
     out: dict[str, Any] = {
@@ -319,12 +323,21 @@ def _signal_type_stats(
         "direction": direction,
         "horizons": {},
     }
+    # 统一台账：逐信号逐窗口的前瞻收益记录（方向对齐后）
+    from easy_tdx.web.signal_ledger import signal_returns
+
+    ledger = signal_returns(
+        closes,
+        [
+            {"type": sig_type, "bar_index": idx}
+            for idx in idx_list
+            if idx is not None
+        ],
+        horizons=horizons,
+    )
     for h in horizons:
-        fwd_list: list[float] = []
-        for idx in idx_list:
-            if idx is None or idx < 0 or idx + h >= n_bars:
-                continue
-            fwd_list.append(float(_safe_fwd(closes[idx], closes[idx + h])))
+        recs = [r for r in ledger if r.horizon == h]
+        fwd_list = [float(r.raw_ret_pct) for r in recs]
         fwd = np.asarray(fwd_list, dtype=float)
         stats = _horizon_stats(fwd)
         # V430: 方向对齐后的盈亏比（BUY 用 fwd，SELL 用 -fwd）

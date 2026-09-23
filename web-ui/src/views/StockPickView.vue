@@ -13,6 +13,8 @@ import {
   type StockPickPoolItem,
   type StockPickTimingResult,
 } from '../api'
+import { useEarlierBars } from '../composables/useEarlierBars'
+import type { Bar, Category } from '../types'
 
 const selectDate = ref('2025-01-02')
 const markets = ref<string[]>(['SZ', 'SH'])
@@ -25,6 +27,31 @@ const screenSource = ref<string>('')
 const screenUpdatedAt = ref<string>('')
 const selected = ref<StockPickPoolItem | null>(null)
 const timingResult = ref<StockPickTimingResult | null>(null)
+
+// V722: timing chart full-history backfill (load earlier; server count driven)
+const {
+  loading: earlierLoading,
+  canLoad: earlierCanLoad,
+  error: earlierError,
+  fetchEarlier,
+} = useEarlierBars({
+  code: () => timingResult.value?.code ?? '',
+  category: () => 'DAY' as Category,
+  earliest: () => {
+    const b = timingResult.value?.bars as Bar[] | undefined
+    return b && b.length ? b[0].datetime.slice(0, 10) : ''
+  },
+  detectMarket: () => timingResult.value?.market ?? 'SZ',
+})
+
+async function loadEarlierTiming() {
+  const earlier = await fetchEarlier()
+  if (earlier.length && timingResult.value) {
+    const merged = [...earlier, ...((timingResult.value.bars as Bar[]) ?? [])]
+    timingResult.value = { ...timingResult.value, bars: merged } as StockPickTimingResult
+  }
+}
+
 const season = ref<SeasonInfo | null>(null)
 const error = ref('')
 // V716: 全市场扫描异步任务进度（0~100，null=未在跑）
@@ -354,6 +381,12 @@ function pickTiming(row: StockPickTimingResult) {
               </p>
             </div>
           </div>
+          <div class="timing-toolbar">
+            <span v-if="earlierError" class="hint">{{ earlierError }}</span>
+            <button class="hint-btn" :disabled="!earlierCanLoad" @click="loadEarlierTiming">
+              {{ earlierLoading ? '加载中…' : '加载更早 ⏪' }}
+            </button>
+          </div>
           <ChanlunChart
             v-if="timingResult.bars?.length"
             :bars="timingResult.bars as any"
@@ -376,6 +409,25 @@ function pickTiming(row: StockPickTimingResult) {
 </template>
 
 <style scoped>
+.timing-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.timing-toolbar .hint-btn {
+  font-size: 12px;
+  color: #8a93a6;
+  background: transparent;
+  border: 1px solid var(--border, #2a3040);
+  border-radius: 4px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+.timing-toolbar .hint-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .stock-pick-view {
   padding: 20px;
 }

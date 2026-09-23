@@ -65,9 +65,13 @@ describe('V721 D16：api.ts 非 JSON 响应防御', () => {
 describe('V721 D18：DiagnosisView error 分支', () => {
   // DiagnosisView.vue 体积大，动态 import 放 beforeAll（不计入单用例时钟）
   let DiagnosisView: (typeof import('../DiagnosisView.vue'))['default']
-  beforeAll(async () => {
-    ;({ default: DiagnosisView } = await import('../DiagnosisView.vue'))
-  })
+  beforeAll(
+    async () => {
+      ;({ default: DiagnosisView } = await import('../DiagnosisView.vue'))
+    },
+    // V722: 视图体积 1.5w 行，jsdom 冷 import 在 CI 波动会超 10s 默认值
+    30_000,
+  )
 
   beforeEach(() => {
     vi.clearAllMocks()

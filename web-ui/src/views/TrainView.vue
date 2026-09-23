@@ -594,7 +594,7 @@ onMounted(() => {
       </div>
       <div class="field-group">
         <label>K 线根数</label>
-        <input v-model.number="count" type="number" min="100" max="800" step="100" />
+        <input v-model.number="count" type="number" min="100" max="2000" step="100" />
       </div>
       <div class="field-group">
         <label>难度</label>

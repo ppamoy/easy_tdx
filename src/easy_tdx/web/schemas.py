@@ -83,7 +83,8 @@ class ChanlunRequest(BaseModel):
     market: str = Field(..., pattern=r"^(SZ|SH|BJ)$")
     code: str = Field(..., min_length=6, max_length=6)
     category: str = Field(default="DAY", description="K线周期")
-    count: int = Field(default=800, ge=1, le=800)
+    # V722: 上限 8000（20 年日线），>800 走服务端 fetch_paged_bars 循环翻页。
+    count: int = Field(default=800, ge=1, le=8000)
     # V720: start 加 le=65535——TDX 协议 bar 偏移为 uint16，越界应在参数层 422。
     start: int = Field(default=0, ge=0, le=65535)
     # V708: 多级别递归深度（1=线段级别；>=2 继续把更高级别线段当「笔」递归）。
@@ -116,6 +117,9 @@ class DataFrameResponse(BaseModel):
 
     data: list[dict[str, Any]]
     count: int
+    # V722: 分页取数元信息（仅 /bars?lookback>0 填充；None=未启用分页）
+    total_returned: int | None = None
+    earliest_ts: str | None = None
 
     @classmethod
     def from_dataframe(cls, df: Any) -> DataFrameResponse:

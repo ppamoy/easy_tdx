@@ -64,6 +64,10 @@ class TestChanlunAnalyze:
                 "easy_tdx.web.routers.chanlun.fetch_qfq_klines",
                 new=AsyncMock(return_value=_make_df()),
             ),
+            patch(
+                "easy_tdx.web.routers.chanlun.fetch_paged_bars",
+                new=AsyncMock(return_value=_make_df()),
+            ),
             patch("easy_tdx.chanlun.ChanlunAnalyser") as mk,
         ):
             mk.return_value.process_klines.return_value = result
@@ -85,6 +89,10 @@ class TestChanlunMultiLevel:
         with (
             patch(
                 "easy_tdx.web.routers.chanlun.fetch_qfq_klines",
+                new=AsyncMock(return_value=_make_df()),
+            ),
+            patch(
+                "easy_tdx.web.routers.chanlun.fetch_paged_bars",
                 new=AsyncMock(return_value=_make_df()),
             ),
             patch("easy_tdx.chanlun.ChanlunAnalyser") as mk,
@@ -116,6 +124,10 @@ class TestChanlunRecommend:
                 "easy_tdx.web.routers.chanlun.fetch_qfq_klines",
                 new=AsyncMock(return_value=_make_df()),
             ),
+            patch(
+                "easy_tdx.web.routers.chanlun.fetch_paged_bars",
+                new=AsyncMock(return_value=_make_df()),
+            ),
             patch("easy_tdx.chanlun.ChanlunAnalyser") as mk,
         ):
             mk.return_value.process_klines.return_value = result
@@ -136,6 +148,10 @@ class TestChanlunTrain:
         with (
             patch(
                 "easy_tdx.web.routers.chanlun.fetch_qfq_klines",
+                new=AsyncMock(return_value=_make_df()),
+            ),
+            patch(
+                "easy_tdx.web.routers.chanlun.fetch_paged_bars",
                 new=AsyncMock(return_value=_make_df()),
             ),
             patch("easy_tdx.chanlun.ChanlunAnalyser") as mk,

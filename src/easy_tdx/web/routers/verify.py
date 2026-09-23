@@ -103,9 +103,13 @@ async def _fetch_online_df(
     if client is None:
         return None
     try:
-        from easy_tdx.web.klines import fetch_qfq_klines
+        # V722: count>800 分流服务端循环翻页（QFQ 口径不变）
+        from easy_tdx.web.klines import fetch_paged_bars, fetch_qfq_klines
 
-        df = await fetch_qfq_klines(mac_client, client, market, code, category, 0, count)
+        if count > 800:
+            df = await fetch_paged_bars(mac_client, client, market, code, category, lookback=count)
+        else:
+            df = await fetch_qfq_klines(mac_client, client, market, code, category, 0, count)
         return df if df is not None and not df.empty else None
     except Exception as exc:  # noqa: BLE001
         logger.warning("在线取数 %s%s(%s) 失败: %s", market, code, category, exc)

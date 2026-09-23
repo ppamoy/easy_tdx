@@ -129,6 +129,52 @@ export async function fetchBars(
   return bars
 }
 
+/**
+ * V722: 增量加载更早的历史 K 线（图表「往前看」）。
+ *
+ * 走服务端 /bars?lookback=N 循环翻页取前 earliest 之前的 moreCount 根，
+ * 返回按时间升序的 Bar 数组（不含当前已加载窗口——调用方自行拼接）。
+ * 服务端翻页会自动去重，此处按 earliest 严格过滤旧段。
+ */
+export async function loadEarlierBars(
+  market: string,
+  code: string,
+  category: Category,
+  earliest: string,
+  moreCount: number = 800,
+): Promise<Bar[]> {
+  // 估算需要的总根数：先取 earliest 到最新一页（800），再按起始位置翻页。
+  // 简化策略：直接请求 lookback = 已知最早往前推 moreCount 根，由服务端翻页。
+  // 由于前端不知道 earliest 距今多少根，用迭代翻页（每次 800）直到越过 earliest。
+  const target = earliest.slice(0, 10)
+  const collected: Bar[] = []
+  let page = 0
+  while (page < MAX_PAGES) {
+    const params = new URLSearchParams({
+      market,
+      code,
+      category,
+      count: '800',
+      start: String(page * 800),
+    })
+    const resp = await fetch(`${BASE}/bars?${params}`)
+    if (!resp.ok) await throwError(resp)
+    const body = (await parseJson(resp)) as { data: Record<string, unknown>[] }
+    const pageBars = body.data.map((row) => normalizeBar(row))
+    if (pageBars.length === 0) break
+    collected.push(...pageBars)
+    const oldest = pageBars[pageBars.length - 1].datetime.slice(0, 10)
+    // 已越过目标日期（页面里最早一根 ≤ earliest）→ 收齐
+    if (oldest <= target) break
+    if (pageBars.length < 800) break // 到数据起点
+    page += 1
+  }
+  collected.sort((a, b) => a.datetime.localeCompare(b.datetime))
+  // 只保留 earliest 之前的 moreCount 根（不含 earliest 本身）
+  const earlier = collected.filter((b) => b.datetime.slice(0, 10) < target)
+  return earlier.slice(Math.max(0, earlier.length - moreCount))
+}
+
 /** 把后端 bars 的单条记录归一化为统一 Bar（datetime 字段）。 */
 function normalizeBar(row: Record<string, unknown>): Bar {
   const raw = (row.datetime ?? row.date) as string | undefined

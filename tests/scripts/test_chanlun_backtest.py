@@ -129,7 +129,7 @@ def test_chanlun_strategy_init():
                 },
             )()
 
-    strategy.data = MockData(df)
+    strategy._bind_data(df)  # V722: data 只读 property，走引擎绑定接口
 
     # 运行 init
     strategy.init()
@@ -226,7 +226,7 @@ def test_chanlun_strategy_with_high_conf():
                 },
             )()
 
-    strategy.data = MockData(df)
+    strategy._bind_data(df)  # V722: data 只读 property，走引擎绑定接口
     strategy.init()
 
     # 高置信度过滤后信号数应 <= 不过滤的情况
@@ -319,7 +319,7 @@ def test_signal_traces_structure():
                 },
             )()
 
-    strategy.data = MockData(df)
+    strategy._bind_data(df)  # V722: data 只读 property，走引擎绑定接口
     strategy.init()
 
     traces = strategy.signal_traces

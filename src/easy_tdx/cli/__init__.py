@@ -18,7 +18,7 @@ from .cmd_board import (
     board_summary,
 )
 from .cmd_capital import capital_flow
-from .cmd_changying import changying_refresh
+from .cmd_changying import audit_accuracy, changying_mark, changying_refresh
 from .cmd_chanlun import advice_simulate, chanlun
 from .cmd_company import company_info, company_info_content, finance_info
 from .cmd_ex import ex
@@ -107,4 +107,6 @@ cli.add_command(verify_portfolio)
 cli.add_command(reverify)
 cli.add_command(screen)
 cli.add_command(changying_refresh)
+cli.add_command(changying_mark)
+cli.add_command(audit_accuracy)
 cli.add_command(serve)

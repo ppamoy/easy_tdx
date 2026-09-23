@@ -237,6 +237,7 @@ def _create_app(
     # Mount routers
     from easy_tdx.web.routers.announcement import router as announcement_router
     from easy_tdx.web.routers.backtest import router as backtest_router
+    from easy_tdx.web.routers.audit import router as audit_router
     from easy_tdx.web.routers.bars import router as bars_router
     from easy_tdx.web.routers.block import router as block_router
     from easy_tdx.web.routers.board_mac import router as board_mac_router
@@ -257,6 +258,8 @@ def _create_app(
 
     app.include_router(market_router, prefix="/api/v1")
     app.include_router(bars_router, prefix="/api/v1")
+    # 模型准确性审计（V722）
+    app.include_router(audit_router, prefix="/api/v1")
     app.include_router(finance_router, prefix="/api/v1")
     app.include_router(block_router, prefix="/api/v1")
     app.include_router(chanlun_router, prefix="/api/v1")

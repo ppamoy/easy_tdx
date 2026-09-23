@@ -1,8 +1,23 @@
+## [Unreleased]
+
+**准确性审计全链路 + 图表全历史回溯（V722）**
+- 新增统一信号台账 `web/signal_ledger.py`（signal_returns/aggregate_signal_returns/forward_returns）：逐信号逐窗口记录 SignalReturnRecord（方向对齐、零基价 -100%、无指数基准时 benchmark/excess 为 None），面板 `_signal_type_stats` 改为内部同源调用——台账与面板数字必须对得上。
+- 新增审计管道 `audit/accuracy.py` + CLI `audit-accuracy`：长盈三维分层前瞻收益（最近 5 个已过去季末做基期，20/60/250 日窗口，分基期 per_class + per_symbol + PIT 未来函数哨兵 + data_missing 诚实缺失）、缠论 15 只样本台账口径命中率（horizons 5/20）、图表一致性对账（图表异步路径 vs 审计同步路径，末根时间戳+收盘价）。报告落盘 `~/.easy_tdx/audit/accuracy_<date>.json/.md` + latest 指针。
+- 新增只读 API `GET /api/v1/audit/accuracy`（?date 可选）与 `GET /api/v1/audit/history`。
+- 前端新增「准确性审计」页（/audit，主导航入口）：总览卡片（标记数/缠论信号数/图表对账/PIT 违规/数据缺失）、长盈分层前瞻收益表、缠论台账命中率表、口径与诚实性说明。
+- `/bars` 新增 `lookback` 参数（0=缺省行为完全不变）：服务端 `fetch_paged_bars` 循环翻页（每页 800，MAX_LOOKBACK=20000 防御上限）凑满即停、跨页时间戳去重、升序契约，响应新增可选 total_returned/earliest_ts。
+- 前端 `loadEarlierBars()` + 缠论分析页「加载更早 / 回最新」：增量扩窗历史，扩窗后按新窗口长度重跑缠论（叠加层覆盖全部已加载 bar）。
+- 真实验证（非伪造）：accuracy_2026-09-24 报告——长盈 90/90 无缺失、PIT 违规 0；缠论 15 只 404 条信号全有效（1buy n=186 hit 69.4% avg +4.14%、3buy n=147 hit 61.2% avg +5.86%、2sell_s hit 79.2%）；图表对账 8 只 0 不一致；fetch_paged_bars lookback=2000 真实 MAC 返回 2400 根（2016-11-10 至 2026-09-23）无重复升序。
+- 测试：新增 test_signal_ledger.py 7 项、test_audit_accuracy.py 9 项、test_fetch_paged_bars.py 5 项、test_bars_lookback.py 3 项；前端 vue-tsc/eslint/vitest 全绿。
+- **全视图全历史回溯（3.4 收口）**：DiagnosisView（K 线走势）、ScreeningView（扩窗重分析）、BacktestView（缠论窗口对齐 CHANLUN_MAX_COUNT=2000 并随已加载 K 线扩窗）、StockPickView（择时图）、TodayView（看板下钻图）、SignalVerifyView（信号核验图）全部支持「加载更早 ⏪」，统一走 useEarlierBars composable；ChanlunView/TrainView 窗口上限放宽到 2000。
+- 后端取数统一分流：/chanlun/analyze 与 /chanlun/train/session（count>800 且 start=0）、stock-pick timing（count 上限 1600→8000）、stock-pick dashboard、verify signals/detail 在线回退——超单页 800 根自动走 fetch_paged_bars 循环翻页，QFQ 口径不变；ChanlunRequest.count 上限 800→8000。
+- 回归基线：pytest 3605 passed / 6 skipped（4m12s）；前端 vue-tsc 0 错、eslint 0 错、vitest 76 passed（10 files）。
+
+
 # 更新日志
 
 本文件记录 easy-tdx 的版本变更。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
-## [Unreleased]
 
 **看板接入信号监控自动提醒（V718）**
 - 新增共享口径模块 `web/actionable.py`（`_verdict`/`_novice_advice`/`_recursion_context`/`season_position_note` 从 stock-pick 移入，stock-pick 再导出保持测试兼容）——看板与监控共用同一「可操作」口径。

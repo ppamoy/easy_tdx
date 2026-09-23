@@ -81,3 +81,59 @@ async def fetch_qfq_klines(
         market_from_str(market), code, cat, start, count, bar_time=bar_time
     )
     return df
+
+
+
+# ── 全历史分页取数（V722，R3 图表全历史回溯）──────────────────────────────
+
+# TDX/MAC 协议单次请求上限（/bars 的 count 上限一致）
+_PAGE_SIZE = 800
+# lookback 参数硬上限（约 80 年日线，防御性限制）
+MAX_LOOKBACK = 20000
+
+
+async def fetch_paged_bars(
+    mac_client: Any,
+    tdx_client: Any,
+    market: str,
+    code: str,
+    category: str,
+    lookback: int = _PAGE_SIZE,
+    bar_time: str = "start",
+) -> pd.DataFrame:
+    """从最新 bar 向过去循环翻页，凑满 lookback 根并去重拼接。
+
+    TDX 协议 start 偏移为 uint16 且单次 count ≤800：前端要看更早的
+    历史（同级别 K 线往前翻）必须由服务端循环翻页拼接。
+
+    - 每页 800 根，第 k 页 start = k*800（0 = 最新一页）；
+    - 每页拼接后按时间戳去重（跨页重叠场景），凑满即停；
+    - 拼接后按时间升序排列（与单页契约一致）；
+    - lookback 超过标的上市历史时返回全部可得 bar（不报错）。
+    """
+    lookback = max(1, min(int(lookback), MAX_LOOKBACK))
+    frames: list[pd.DataFrame] = []
+    have = 0
+    for page in range((lookback + _PAGE_SIZE - 1) // _PAGE_SIZE):
+        start = page * _PAGE_SIZE
+        if start > 65535:  # uint16 偏移上限保护（V720 同款语义）
+            break
+        df = await fetch_qfq_klines(
+            mac_client, tdx_client, market, code, category, start, _PAGE_SIZE,
+            bar_time=bar_time,
+        )
+        if df is None or df.empty:
+            break
+        frames.append(df)
+        have += len(df)
+        if len(df) < _PAGE_SIZE:
+            break  # 已到上市最早一页
+        if have >= lookback:
+            break
+    if not frames:
+        return pd.DataFrame()
+    col = "date" if "date" in frames[0].columns else "datetime"
+    combined = pd.concat(frames, ignore_index=True)
+    combined = combined.drop_duplicates(subset=[col], keep="first")
+    combined = combined.sort_values(col).reset_index(drop=True)
+    return combined

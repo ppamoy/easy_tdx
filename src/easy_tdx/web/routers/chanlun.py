@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 
 from easy_tdx.web.deps import get_client, get_mac_client_optional
-from easy_tdx.web.klines import fetch_qfq_klines  # 共享 K 线取数（MAC 回退）
+from easy_tdx.web.klines import fetch_paged_bars, fetch_qfq_klines  # 共享 K 线取数（MAC 回退）
 from easy_tdx.web.schemas import ChanlunRequest
 
 logger = logging.getLogger(__name__)
@@ -274,7 +274,7 @@ async def chanlun_analyze(
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
     # 1. Fetch kline data（QFQ 前复权，与前端 /bars 同一价格体系）
-    df = await fetch_qfq_klines(
+    df = await _fetch_request_klines(
         mac_client,
         client,
         req.market,
@@ -910,6 +910,25 @@ async def chanlun_recommend(
     )
 
 
+def _fetch_request_klines(
+    mac_client: Any,
+    client: Any,
+    market: str,
+    code: str,
+    category: str,
+    start: int,
+    count: int,
+) -> Any:
+    """V722: 按请求取 K 线；count>800 分流到 fetch_paged_bars 循环翻页。
+
+    QFQ 口径与列规整同 fetch_qfq_klines；start>0 时不分页（历史偏移语义
+    只在单页内有效，分页路径固定从最新 bar 往回凑 lookback）。
+    """
+    if count > 800 and start == 0:
+        return fetch_paged_bars(mac_client, client, market, code, category, lookback=count)
+    return fetch_qfq_klines(mac_client, client, market, code, category, start, count)
+
+
 @router.post("/chanlun/train/session")
 async def chanlun_train_session(
     req: ChanlunRequest,
@@ -930,7 +949,8 @@ async def chanlun_train_session(
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
     # 1. 取行情（QFQ 前复权，与 /bars 同一价格体系）
-    df = await fetch_qfq_klines(
+    # V722: count>800 时走服务端循环翻页（start 仅单页协议内有效）
+    df = await _fetch_request_klines(
         mac_client, client, req.market, req.code, req.category, req.start, req.count
     )
     if df is None or len(df) == 0:

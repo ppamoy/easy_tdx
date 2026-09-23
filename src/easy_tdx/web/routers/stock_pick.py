@@ -151,7 +151,46 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
     pool_scope = str(req.get("pool_scope", "pool"))
     top_n = _int_arg(req.get("top_n"), "top_n", 50, 1, 200)
 
-    # V591: 白天优先读本地沉淀池（凌晨 changying-refresh 生成），避免反复打 TDX。
+    # V591/V722: 白天优先读本地数据避免反复打 TDX。
+    # 回退链：marks 全量标记（local-full）→ top20 精选池（local）→ 在线扫描（online）。
+    from easy_tdx.fundamental.marks import load_changying_marks
+
+    marks = await asyncio.to_thread(load_changying_marks)
+    if marks and marks.get("results"):
+        marks_rows: list[dict[str, Any]] = [
+            {
+                "symbol": r["symbol"],
+                "market": r["market"],
+                "code": r["code"],
+                "category": r["category"],
+                "quality_score": r.get("score", 0),
+                "total_mcap_yi": r.get("total_mcap_yi"),
+                "detail": {
+                    "scores": r.get("scores", {}),
+                    "details": r.get("details", {}),
+                    "indicators": r.get("indicators", {}),
+                },
+                "post_performance": None,
+                "data_source": r.get("data_source"),
+            }
+            for r in marks["results"]
+        ]
+        if stock_type != "all":
+            marks_rows = [r for r in marks_rows if r["category"] == stock_type]
+        if norm_markets:
+            marks_rows = [r for r in marks_rows if r["market"] in norm_markets]
+        return _apply_top_n(
+            {
+                "date": marks.get("date", date_str),
+                "total": len(marks_rows),
+                "results": marks_rows,
+                "source": "local-full",
+                "updated_at": marks.get("updated_at"),
+                "by_category": marks.get("by_category"),
+            },
+            top_n,
+        )
+
     from easy_tdx.fundamental.changying_pool import load_changying_pool
 
     local = await asyncio.to_thread(load_changying_pool)
@@ -221,8 +260,12 @@ async def _fetch_window(
     code: str,
     count: int,
 ) -> pd.DataFrame:
-    from easy_tdx.web.klines import fetch_qfq_klines
+    # V722: count 超过单页 800 时走服务端循环翻页（QFQ 口径不变），
+    # 择时/看板的图表与结构分析可覆盖任意历史窗口。
+    from easy_tdx.web.klines import fetch_paged_bars, fetch_qfq_klines
 
+    if count > 800:
+        return await fetch_paged_bars(mac_client, tdx_client, market, code, "DAY", lookback=count)
     return await fetch_qfq_klines(mac_client, tdx_client, market, code, "DAY", start=0, count=count)
 
 
@@ -407,7 +450,8 @@ async def stock_pick_timing(
     ]
     if not symbols:
         raise HTTPException(status_code=400, detail="symbols 不能为空")
-    count = _int_arg(req.get("count"), "count", 400, 60, 1600)
+    # V722: upper raised to 8000 (~20y daily); server-side paged fetch supports it
+    count = _int_arg(req.get("count"), "count", 400, 60, 8000)
     recursion_depth = _int_arg(req.get("recursion_depth"), "recursion_depth", 2, 1, 8)
 
     # 并发取数 + 分析（串行依赖单连接，简单起见 per-symbol 串行，快于全市场）
