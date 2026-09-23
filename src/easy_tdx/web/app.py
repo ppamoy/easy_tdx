@@ -337,9 +337,14 @@ def _create_app(
                 try:
                     return await super().get_response(path, scope)
                 except Exception:
-                    # 任何 404（路径非文件）都返回 index.html，让前端路由处理。
-                    # 仅对 GET 请求生效；API 路径 (/api/v1/*) 已在前面注册，
-                    # 不会走到这里。
+                    # API 命名空间**不做** SPA 兜底：未注册的 /api/* 必须由 Starlette
+                    # 返回 JSON 404，否则客户端会把「端点不存在」当成功、随后解析
+                    # HTML 得到莫名其妙的错误（V719 修复）。
+                    req_path = str(scope.get("path", "")) if scope else ""
+                    if req_path == "/api" or req_path.startswith("/api/"):
+                        raise
+                    # 其余路径（前端路由 /optimize、/portfolio…）返回 index.html，
+                    # 让 Vue Router 接管。
                     index = _Path(str(self.directory)) / "index.html"
                     if index.is_file():
                         return FileResponse(str(index))

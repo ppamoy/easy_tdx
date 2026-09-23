@@ -126,22 +126,20 @@ def test_scan_sh_market(app_client: TestClient, mock_client: AsyncMock):
 
 
 def test_evaluate_missing_params(app_client: TestClient):
-    """不提供 code 或 date 应返回错误。"""
+    """V719：不提供 code 或 date → 400 + detail（参数错误不再用 200）。"""
     resp = app_client.post("/api/v1/screening/evaluate", json={"market": "SZ"})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "error" in body
+    assert resp.status_code == 400
+    assert "detail" in resp.json()
 
 
 def test_evaluate_invalid_date(app_client: TestClient):
-    """无效日期应返回错误。"""
+    """V719：无效日期 → 400 + detail。"""
     resp = app_client.post(
         "/api/v1/screening/evaluate",
         json={"market": "SZ", "code": "000001", "date": "bad"},
     )
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "error" in body
+    assert resp.status_code == 400
+    assert "日期" in resp.json().get("detail", "")
 
 
 def test_evaluate_success(app_client: TestClient, mock_client: AsyncMock):

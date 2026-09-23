@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from easy_tdx.web.actionable import (
     _novice_advice,
@@ -298,9 +298,10 @@ async def monitor_create(
     category = req.get("category", "DAY")
     threshold = req.get("confidence_threshold", 0.7)
     interval = req.get("interval_seconds", 60)
-
     if not stocks:
-        return {"error": "stocks 不能为空"}
+        # V719: 参数错误用 400（此前 200 + {"error": ...}，前端会走成功分支拿到
+        # undefined task_id 并启动无效轮询）。
+        raise HTTPException(status_code=400, detail="stocks 不能为空")
 
     task_id = await _monitor.create_task(stocks, category, threshold, interval)
 
@@ -360,7 +361,8 @@ async def monitor_status(task_id: str) -> dict[str, Any]:
     """获取监控任务状态。"""
     task = await _monitor.get_task(task_id)
     if task is None:
-        return {"error": "任务不存在"}
+        # V719: 与 check/stop 对齐，未知任务用 404（此前 200 + {"error": ...}）。
+        raise HTTPException(status_code=404, detail="任务不存在")
     return {
         "task_id": task.task_id,
         "stocks": task.stocks,
@@ -384,7 +386,8 @@ async def monitor_check(
     """手动触发一次信号检查。"""
     task = await _monitor.get_task(task_id)
     if task is None:
-        return {"error": "任务不存在"}
+        # V719: 未知任务用 404（此前 200 + {"error": ...} 会让客户端误判成功）
+        raise HTTPException(status_code=404, detail=f"未知监控任务 '{task_id}'")
 
     task.running = True
     try:

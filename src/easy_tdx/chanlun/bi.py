@@ -42,7 +42,8 @@ def _warn_bi_type_simple_legacy() -> None:
     if not _warned_simple_legacy:
         _warned_simple_legacy = True
         _logger.warning(
-            'bi_type="simple" 为 legacy 简化口径（仅显式配置时启用，不推荐）；请使用默认新笔 new 或老笔 old。'
+            'bi_type="simple" 为 legacy 简化口径'
+            "（仅显式配置时启用，不推荐）；请使用默认新笔 new 或老笔 old。"
         )
 
 

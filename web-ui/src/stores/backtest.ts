@@ -94,7 +94,7 @@ export const useBacktestStore = defineStore('backtest', () => {
       const { task_id } = await submitPortfolioTask(req)
       // 轮询
       const start = Date.now()
-      // eslint-disable-next-line no-constant-condition
+
       while (true) {
         const state = await fetchTask(task_id)
         if (state.status === 'done' && state.result) {
@@ -133,7 +133,7 @@ export const useBacktestStore = defineStore('backtest', () => {
     try {
       const { task_id } = await submitMultiStrategyTask(req)
       const start = Date.now()
-      // eslint-disable-next-line no-constant-condition
+
       while (true) {
         const state = await fetchTask(task_id)
         if (state.status === 'done' && state.result) {
@@ -191,7 +191,7 @@ export const useBacktestStore = defineStore('backtest', () => {
     try {
       const { task_id } = await submitOptimizeTask(req)
       const start = Date.now()
-      // eslint-disable-next-line no-constant-condition
+
       while (true) {
         const state = await fetchTask(task_id)
         if (state.status === 'done' && state.result) {
@@ -225,7 +225,7 @@ export const useBacktestStore = defineStore('backtest', () => {
       const { task_id } = await submitOptimizeAllTask(req)
       const start = Date.now()
       // 一键寻优全策略网格点更多，放宽超时到 300s
-      // eslint-disable-next-line no-constant-condition
+
       while (true) {
         const state = await fetchTask(task_id)
         if (state.status === 'done' && state.result) {

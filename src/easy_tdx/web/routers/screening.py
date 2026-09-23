@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from easy_tdx.web.deps import get_client, get_mac_client_optional
 from easy_tdx.web.klines import fetch_qfq_klines
@@ -129,12 +129,13 @@ async def evaluate_stock(
     date_str = req.get("date", "")
 
     if not code or not date_str:
-        return {"error": "请提供股票代码和日期"}
+        # V719: 参数错误统一 400（此前 200 + {"error": ...}，客户端会把失败当成功）
+        raise HTTPException(status_code=400, detail="请提供股票代码和日期")
 
     try:
         target_date = datetime.strptime(date_str, "%Y-%m-%d")
     except ValueError:
-        return {"error": "日期格式错误"}
+        raise HTTPException(status_code=400, detail="日期格式错误，请使用 YYYY-MM-DD") from None
 
     # 获取数据（MAC 优先 + QFQ，标准 TDX 失效时仍可用）
     df = await fetch_qfq_klines(

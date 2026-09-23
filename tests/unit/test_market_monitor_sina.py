@@ -89,8 +89,8 @@ class TestMonitorRouter:
     def test_monitor_create_missing_stocks(self) -> None:
         client = _make_app_client()
         resp = client.post("/api/v1/monitor/create", json={})
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "stocks 不能为空"
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "stocks 不能为空"
 
     def test_monitor_create_success(self) -> None:
         client = _make_app_client()
@@ -116,8 +116,8 @@ class TestMonitorRouter:
 
         with patch.object(mon._monitor, "get_task", new=AsyncMock(return_value=None)):
             resp = client.get("/api/v1/monitor/no-such-task")
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "任务不存在"
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "任务不存在"
 
     def test_monitor_check_not_found(self) -> None:
         client = _make_app_client()
@@ -125,8 +125,8 @@ class TestMonitorRouter:
 
         with patch.object(mon._monitor, "get_task", new=AsyncMock(return_value=None)):
             resp = client.post("/api/v1/monitor/no-such-task/check")
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "任务不存在"
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "未知监控任务 'no-such-task'"
 
     def test_monitor_stop(self) -> None:
         client = _make_app_client()

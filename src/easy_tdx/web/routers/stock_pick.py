@@ -139,7 +139,7 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
     if stock_type not in ("all", "tree", "grain", "vegetable"):
         stock_type = "all"
     pool_scope = str(req.get("pool_scope", "pool"))
-    top_n = max(1, min(int(req.get("top_n", 50)), 200))
+    top_n = _int_arg(req.get("top_n"), "top_n", 50, 1, 200)
 
     # V591: 白天优先读本地沉淀池（凌晨 changying-refresh 生成），避免反复打 TDX。
     from easy_tdx.fundamental.changying_pool import load_changying_pool
@@ -387,8 +387,8 @@ async def stock_pick_timing(
         for s in symbols_raw
         if s.get("code")
     ]
-    count = max(60, min(int(req.get("count", 400)), 1600))
-    recursion_depth = max(1, min(int(req.get("recursion_depth", 2)), 8))
+    count = _int_arg(req.get("count"), "count", 400, 60, 1600)
+    recursion_depth = _int_arg(req.get("recursion_depth"), "recursion_depth", 2, 1, 8)
 
     # 并发取数 + 分析（串行依赖单连接，简单起见 per-symbol 串行，快于全市场）
     results: list[dict[str, Any]] = []
@@ -448,7 +448,7 @@ async def stock_pick_screen_async(req: dict[str, Any]) -> dict[str, Any]:
     if stock_type not in ("all", "tree", "grain", "vegetable"):
         stock_type = "all"
     pool_scope = str(req.get("pool_scope", "pool"))
-    top_n = max(1, min(int(req.get("top_n", 50)), 200))
+    top_n = _int_arg(req.get("top_n"), "top_n", 50, 1, 200)
 
     from easy_tdx.web.task_runner import get_runner
 
@@ -483,6 +483,17 @@ async def stock_pick_screen_task(task_id: str) -> dict[str, Any]:
     return state.to_dict()
 
 
+def _int_arg(raw: Any, name: str, default: int, lo: int, hi: int) -> int:
+    """解析整数参数并在越界/非法时给出可读的 400（避免泄漏 int() 内部报错）。"""
+    if raw is None or raw == "":
+        return default
+    try:
+        val = int(raw)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"{name} 必须是整数") from None
+    return max(lo, min(val, hi))
+
+
 def _screen_run_sync(
     target: date,
     norm_markets: list[str],
@@ -495,6 +506,7 @@ def _screen_run_sync(
     with_performance: bool = False,
 ) -> dict[str, Any]:
     """选股扫描（同步，供 worker 线程执行；进度经 report_progress 上报）。"""
+    report_progress(3.0, "开始选股")
     if pool_scope == "full":
         from easy_tdx.fundamental.pipeline import scan_market
 
@@ -513,10 +525,12 @@ def _screen_run_sync(
             _normalize_result_row(r) for r in out.get("results") or []
         ]
         full_rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
+        report_progress(100.0, "完成")
         return {"total": len(full_rows), "results": full_rows}
 
     from easy_tdx.fundamental.pipeline import run_screen
 
+    # V719: 池路径同样上报进度（此前 progress 恒 null，前端进度条不显示）。
     out = run_screen(
         target,
         norm_pool,
@@ -524,11 +538,13 @@ def _screen_run_sync(
         min_mcap_yi=100.0,
         require_profit=True,
     )
+    report_progress(97.0, "整理选股结果")
     results = out.get("results") or []
     if stock_type != "all":
         results = [r for r in results if r["category"] == stock_type]
     rows: list[dict[str, Any]] = [_normalize_result_row(r) for r in results]
     rows.sort(key=lambda x: x["quality_score"] or 0, reverse=True)
+    report_progress(100.0, "完成")
     return {"total": len(rows), "results": rows}
 
 
@@ -734,9 +750,9 @@ async def stock_pick_dashboard_async(req: dict[str, Any]) -> dict[str, Any]:
     if stock_type not in ("all", "tree", "grain", "vegetable"):
         stock_type = "all"
     pool_scope = str(req.get("pool_scope", "pool"))
-    top_n = max(1, min(int(req.get("top_n", 50)), 200))
-    time_n = max(1, min(int(req.get("time_n", 20)), 50))
-    recursion_depth = max(1, min(int(req.get("recursion_depth", 2)), 8))
+    top_n = _int_arg(req.get("top_n"), "top_n", 50, 1, 200)
+    time_n = _int_arg(req.get("time_n"), "time_n", 20, 1, 50)
+    recursion_depth = _int_arg(req.get("recursion_depth"), "recursion_depth", 2, 1, 8)
 
     from easy_tdx.web.task_runner import get_runner
 

@@ -164,12 +164,14 @@ def c_chanlun_recursion() -> tuple[bool, str, dict]:
     if "xd_l2" in levels:
         chain_ok &= levels["xd_l2"].get("bi_count") == levels["xd"].get("xd_count")
         chain_detail.append(
-            f"xd_l2.bi_count={levels['xd_l2'].get('bi_count')} vs xd.xd_count={levels['xd'].get('xd_count')}"
+            f"xd_l2.bi_count={levels['xd_l2'].get('bi_count')}"
+            f" vs xd.xd_count={levels['xd'].get('xd_count')}"
         )
     if "xd_l3" in levels:
         chain_ok &= levels["xd_l3"].get("bi_count") == levels["xd_l2"].get("xd_count")
         chain_detail.append(
-            f"xd_l3.bi_count={levels['xd_l3'].get('bi_count')} vs xd_l2.xd_count={levels['xd_l2'].get('xd_count')}"
+            f"xd_l3.bi_count={levels['xd_l3'].get('bi_count')}"
+            f" vs xd_l2.xd_count={levels['xd_l2'].get('xd_count')}"
         )
     # 不变量：每级 xds 的方向交替 + 端点首尾相连
     geom_ok = True
@@ -185,7 +187,12 @@ def c_chanlun_recursion() -> tuple[bool, str, dict]:
     return (
         True,
         f"levels={list(levels)}；链一致；端点连续",
-        {"levels": {k: {"xd_count": v.get("xd_count"), "bi_count": v.get("bi_count")} for k, v in levels.items()}},
+        {
+            "levels": {
+                k: {"xd_count": v.get("xd_count"), "bi_count": v.get("bi_count")}
+                for k, v in levels.items()
+            }
+        },
     )
 
 
@@ -212,7 +219,16 @@ def c_screen_pool() -> tuple[bool, str, dict]:
     return (
         True,
         f"{len(rows)} 只，最高分 {max((r.get('quality_score') or 0) for r in rows)}",
-        {"rows": [{"symbol": r.get("symbol"), "category": r.get("category"), "score": r.get("quality_score")} for r in rows[:3]]},
+        {
+            "rows": [
+                {
+                    "symbol": r.get("symbol"),
+                    "category": r.get("category"),
+                    "score": r.get("quality_score"),
+                }
+                for r in rows[:3]
+            ]
+        },
     )
 
 
@@ -220,7 +236,11 @@ def c_screen_async_progress() -> tuple[bool, str, dict]:
     code, d = _req(
         "POST",
         f"{API}/stock-pick/screen/async",
-        {"date": DATE, "pool": [{"market": "SH", "code": "600519"}, {"market": "SZ", "code": "000001"}], "top_n": 5},
+        {
+            "date": DATE,
+            "pool": [{"market": "SH", "code": "600519"}, {"market": "SZ", "code": "000001"}],
+            "top_n": 5,
+        },
         timeout=30,
     )
     assert code == 200 and isinstance(d, dict), f"提交失败 http={code} {str(d)[:120]}"
@@ -244,7 +264,12 @@ def c_timing_contract() -> tuple[bool, str, dict]:
     code, d = _req(
         "POST",
         f"{API}/stock-pick/timing",
-        {"date": DATE, "symbols": [{"market": "SH", "code": "600519"}], "count": 1200, "recursion_depth": 2},
+        {
+            "date": DATE,
+            "symbols": [{"market": "SH", "code": "600519"}],
+            "count": 1200,
+            "recursion_depth": 2,
+        },
         timeout=120,
     )
     assert code == 200, f"http={code} {str(d)[:150]}"
@@ -261,11 +286,18 @@ def c_timing_contract() -> tuple[bool, str, dict]:
     assert "signal_quality" in r, "缺 signal_quality"
     # 不变量：若 verdict 是买入/卖出，则入场价应存在（有触发笔时）
     if v.get("action") in ("买入", "卖出"):
-        assert na.get("entry") is not None, f"{v.get('action')} 但 entry=None（explanation={na.get('explanation')}）"
+        assert na.get("entry") is not None, (
+            f"{v.get('action')} 但 entry=None（explanation={na.get('explanation')}）"
+        )
     return (
         True,
-        f"action={v.get('action')} signal={v.get('signal')} conf={v.get('confidence')} entry={na.get('entry')} levels={list((r.get('levels') or {}).keys())}",
-        {"verdict": v, "recursion": r.get("recursion"), "best_buy": (r.get("signal_quality") or {}).get("best_buy")},
+        f"action={v.get('action')} signal={v.get('signal')} conf={v.get('confidence')}"
+        f" entry={na.get('entry')} levels={list((r.get('levels') or {}).keys())}",
+        {
+            "verdict": v,
+            "recursion": r.get("recursion"),
+            "best_buy": (r.get("signal_quality") or {}).get("best_buy"),
+        },
     )
 
 
@@ -285,7 +317,9 @@ def c_dashboard_flow() -> tuple[bool, str, dict]:
     pr = season.get("position_range")
     assert isinstance(pr, list) and len(pr) == 2 and pr[0] <= pr[1], f"position_range 异常: {pr}"
     sm = res.get("summary") or {}
-    assert sm.get("buy", 0) + sm.get("sell", 0) + sm.get("wait", 0) == sm.get("timed"), f"汇总不自洽: {sm}"
+    assert sm.get("buy", 0) + sm.get("sell", 0) + sm.get("wait", 0) == sm.get("timed"), (
+        f"汇总不自洽: {sm}"
+    )
     acts = res.get("actions") or []
     assert acts, "行动榜为空"
     # 不变量：排序 = (买入→卖出→观望, 置信度降序)
@@ -334,11 +368,17 @@ def c_screening_verify() -> tuple[bool, str, dict]:
     assert code == 200 and isinstance(d, dict), f"http={code}"
     assert not d.get("error"), f"error={d.get('error')}"
     assert d.get("verdict"), "verdict 为空"
-    return True, f"verdict={str(d.get('verdict'))[:80]}", {"horizons": list((d.get("horizons") or {}).keys())}
+    return (
+        True,
+        f"verdict={str(d.get('verdict'))[:80]}",
+        {"horizons": list((d.get("horizons") or {}).keys())},
+    )
 
 
 def c_diagnosis_analyze() -> tuple[bool, str, dict]:
-    code, d = _req("POST", f"{API}/diagnosis/analyze", {"market": "SH", "code": "600519"}, timeout=120)
+    code, d = _req(
+        "POST", f"{API}/diagnosis/analyze", {"market": "SH", "code": "600519"}, timeout=120
+    )
     assert code == 200 and isinstance(d, dict), f"http={code}"
     assert not d.get("error"), f"error={d.get('error')}"
     for k in ("chanlun", "macd", "action_label"):
@@ -356,9 +396,16 @@ def c_diagnosis_multi_stock() -> tuple[bool, str, dict]:
     assert code == 200 and isinstance(d, dict), f"http={code}"
     rows = d.get("stocks") or []
     assert rows, "无结果"
-    ok_rows = [r for r in rows if not r.get("error") and (r.get("total_bars") or 0) > 0]
+    ok_rows = [
+        r for r in rows if not r.get("error") and (r.get("total_bars") or 0) > 0
+    ]
     assert ok_rows, f"全部标的取数失败（await 回归？）: {rows[:2]}"
-    return True, f"{len(ok_rows)}/{len(rows)} 只有数据（signal_count={[r.get('signal_count') for r in ok_rows]}）", {"rows": rows[:2]}
+    sig_counts = [r.get("signal_count") for r in ok_rows]
+    return (
+        True,
+        f"{len(ok_rows)}/{len(rows)} 只有数据（signal_count={sig_counts}）",
+        {"rows": rows[:2]},
+    )
 
 
 def c_server_test_validate() -> tuple[bool, str, dict]:
@@ -385,6 +432,60 @@ def c_strategies_params() -> tuple[bool, str, dict]:
     return True, f"chanlun 参数 {sorted(names)}", {"params": sorted(names)}
 
 
+def c_api_unknown_path_404() -> tuple[bool, str, dict]:
+    """V719-F1：/api/* 未知路径必须 JSON 404（不能被 SPA 兜底成 200+HTML）。"""
+    bad = []
+    for path in (
+        "/api/v1/does-not-exist",
+        "/api/v1/monitor/nope/nope",
+        "/api/v1/bars/nope",
+    ):
+        code, d = _req("GET", path, timeout=15)
+        is_html = isinstance(d, str) and d.lstrip().startswith("<")
+        if code != 404 or is_html:
+            bad.append(f"{path} → http={code} html={is_html}")
+    assert not bad, f"未知 API 路径未返回 JSON 404: {bad}"
+    # 前端路由仍须可服务（若 dist 存在则返回 HTML）
+    code2, d2 = _req("GET", "/optimize", timeout=15)
+    assert code2 in (200, 404), f"/optimize → http={code2}"
+    return True, "3 条未知 /api 路径均 404 JSON；前端路由未受影响", {"optimize_http": code2}
+
+
+def c_error_semantics() -> tuple[bool, str, dict]:
+    """V719-F4/F5：参数错误用 4xx + 可读 detail（不再 200+error，也不泄漏内部报错）。"""
+    cases = [
+        ("POST", f"{API}/monitor/create", {"stocks": [], "category": "DAY"}, 400),
+        ("POST", f"{API}/monitor/nope-task/check", {}, 404),
+        ("POST", f"{API}/screening/evaluate", {"market": "SZ"}, 400),
+        (
+            "POST",
+            f"{API}/screening/evaluate",
+            {"market": "SZ", "code": "000001", "date": "bad"},
+            400,
+        ),
+        (
+            "POST",
+            f"{API}/stock-pick/screen",
+            {"date": DATE, "markets": ["SH"], "top_n": "abc"},
+            400,
+        ),
+    ]
+    bad = []
+    details = []
+    for m, p, b, want in cases:
+        code, d = _req(m, p, b, timeout=30)
+        detail = (d or {}).get("detail") if isinstance(d, dict) else None
+        if code != want:
+            bad.append(f"{m} {p} → {code}（期望 {want}）")
+        if not detail:
+            bad.append(f"{m} {p} 缺 detail")
+        if isinstance(detail, str) and "invalid literal" in detail:
+            bad.append(f"{m} {p} 泄漏内部报错: {detail}")
+        details.append(f"{p.split('/')[-1]}:{code}")
+    assert not bad, f"错误语义不符: {bad}"
+    return True, "；".join(details), {"cases": details}
+
+
 def c_alerts_clear() -> tuple[bool, str, dict]:
     code, d = _req("POST", f"{API}/monitor/alerts/clear", timeout=20)
     assert code == 200, f"http={code}"
@@ -408,6 +509,8 @@ CHECKS = [
     ("server_test_validate", c_server_test_validate),
     ("strategies_params", c_strategies_params),
     ("alerts_clear", c_alerts_clear),
+    ("api_unknown_path_404", c_api_unknown_path_404),
+    ("error_semantics", c_error_semantics),
 ]
 
 DATE = "2026-09-01"
@@ -425,7 +528,7 @@ def main() -> int:
 
     selected = CHECKS
     if args.fast:
-        skip = {"dashboard_flow", "alerts_after_dashboard", "screen_async_progress"}
+        skip = {"dashboard_flow", "alerts_after_dashboard"}
         selected = [(n, f) for n, f in CHECKS if n not in skip]
 
     print(f"== easy_tdx 生产 E2E 冒烟 @ {BASE} date={DATE} ==", flush=True)
@@ -446,7 +549,10 @@ def main() -> int:
         "elapsed_s": round(total, 1),
         "results": results,
     }
-    print(f"\n== 结果: {summary['passed']} pass / {summary['failed']} fail / {summary['warned']} warn，耗时 {summary['elapsed_s']}s ==")
+    print(
+        f"\n== 结果: {summary['passed']} pass / {summary['failed']} fail"
+        f" / {summary['warned']} warn，耗时 {summary['elapsed_s']}s =="
+    )
     for r in fails:
         print(f"  FAIL {r['name']}: {r['detail']}")
     if args.json:

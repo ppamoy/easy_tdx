@@ -454,22 +454,77 @@ def run_screen(
         {"date", "pool_size", "results": [screen dict + perf], "season": ...}
     """
     frame = load_pool(target, pool, client=client, zips=zips)
+    report_progress(10.0, f"财报已加载（{len(pool)} 只候选）")
     results: list[dict[str, Any]] = []
     if not frame.empty:
-        for _, row in frame.iterrows():
+        rows = list(frame.iterrows())
+        total_rows = max(1, len(rows))
+        # ── 第 1 遍：树粮菜打分 + 盈利硬门槛（纯计算，快）──
+        cands: list[Any] = []
+        for i, (_, row) in enumerate(rows):
+            if i % max(1, total_rows // 10) == 0:
+                report_progress(10.0 + 30.0 * i / total_rows, f"打分中 {i}/{total_rows}")
             sr = screen_stock(row, pool_size=len(pool))
             if sr is None:
                 continue
             if require_profit and not _profitable(sr.indicators):
                 continue
+            cands.append(sr)
+        # ── 第 2 遍：市值门槛（V719：8 线程并行 + 每线程复用一条 MAC 连接；
+        #     此前逐只新建连接 1.30s/只，30 只需 ~40s）──
+        if min_mcap_yi is not None and cands:
+            import threading
+            from concurrent.futures import ThreadPoolExecutor
+
+            tl = threading.local()
+            created: list[Any] = []
+            created_lock = threading.Lock()
+
+            def _conn() -> Any:
+                mc = getattr(tl, "mac", None)
+                if mc is None:
+                    try:
+                        from easy_tdx.mac.client import MacClient
+
+                        mc = MacClient()
+                        mc.connect()
+                    except Exception:  # noqa: BLE001
+                        mc = None
+                    tl.mac = mc
+                    if mc is not None:
+                        with created_lock:
+                            created.append(mc)
+                return mc
+
+            def _quote(sr: Any) -> tuple[Any, float | None]:
+                quote = _market_quote(sr.market, sr.code, target, mac_client=_conn())
+                return sr, _total_mcap_yi(sr.indicators, quote)
+
+            done = 0
+            keep: list[Any] = []
+            try:
+                with ThreadPoolExecutor(max_workers=8) as ex:
+                    for sr, mcap in ex.map(_quote, cands):
+                        done += 1
+                        report_progress(
+                            40.0 + 40.0 * done / max(1, len(cands)),
+                            f"市值校验 {done}/{len(cands)}",
+                        )
+                        if mcap is not None and mcap >= min_mcap_yi:
+                            sr.__dict__["_mcap_yi"] = mcap
+                            keep.append(sr)
+            finally:
+                for mc in created:
+                    try:
+                        mc.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+            cands = keep
+        # ── 第 3 遍：组装结果（可选后续表现/估值）──
+        for sr in cands:
             d = sr.as_dict()
-            # V597: 市值门槛独立于后续表现，用 MAC 取目标日收盘价
-            if min_mcap_yi is not None:
-                quote = _market_quote(sr.market, sr.code, target)
-                mcap = _total_mcap_yi(d.get("indicators", {}), quote)
-                d["total_mcap_yi"] = mcap
-                if mcap is None or mcap < min_mcap_yi:
-                    continue
+            if "_mcap_yi" in sr.__dict__:
+                d["total_mcap_yi"] = sr.__dict__["_mcap_yi"]
             if with_performance:
                 perf = subsequent_performance(sr.market, sr.code, target, client=client)
                 d["performance"] = perf
@@ -478,7 +533,9 @@ def run_screen(
                     d["indicators"], perf.get("as_of_close"), sr.report_date
                 )
             results.append(d)
+    report_progress(85.0, "四季判断")
     season = detect_season_for_date(target, client=client)
+    report_progress(95.0, "汇总排序")
     # V512: 同分时按三维总分作次级排序（与 scan_market 的 V511 一致）
     results.sort(
         key=lambda r: (
