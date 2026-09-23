@@ -104,7 +104,9 @@ def test_recursive_level_golden_counts() -> None:
     assert result.xds[0].start.val == 100.0
     assert result.xds[0].end.val == 112.0
     assert result.xds[1].direction == Direction.DOWN
-    assert result.xds[1].end.val == 98.0
+    # V725（收尾不换取端点）：高级别收尾段终点取最后一个同向线段端点 100.0
+    # （旧实现 max/min 换出到早已越过的 98.0 低点，违反原文收尾语义）。
+    assert result.xds[1].end.val == 100.0
 
     # 高级别线段中枢：全部 10 根低级别线段重叠，ZG=112/ZD=100
     assert len(result.zss) == 1

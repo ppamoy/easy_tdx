@@ -470,11 +470,15 @@ def test_find_xds_gap_bi_destruction_confirmed() -> None:
 
 
 def test_find_xds_gap_no_confirmation_continues() -> None:
-    """特征序列有缺口但第4元素不跌破 → 线段继续（1 段收尾）。"""
+    """特征序列有缺口但第4元素不跌破 → 线段继续，收尾取最后一个同向笔端点。"""
+    # V725（line-segment-original-fidelity「收尾不换取端点」）：收尾禁止 max/min
+    # 换出端点。旧实现从序列中挑 max(end.val)=15（bi2 的端点，早已被后续走势
+    # 离开），违反「最后已完成且方向一致的同向笔分型」；现取最后一个同向笔
+    # bi6 的端点 13.0。
     xds = find_xds(_gap_bis(12.0), ChanlunConfig())
     assert len(xds) == 1
     assert xds[0].direction == Direction.UP
-    assert xds[0].end.val == 15.0
+    assert xds[0].end.val == 13.0
 
 
 # ── 盘整背驰语义金标 ─────────────────────────────────────────────────

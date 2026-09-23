@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+**线段收尾口径收敛：收尾不换取端点（V725）**
+- 修陷（line-segment-original-fidelity「收尾不换取端点」Requirement）：
+  find_xds 收尾（数据用尽）时旧实现用 max/min 换出端点，会把未完成段
+  终点挪到早已越过的极值笔上，违反原文「最后已完成且方向一致的
+  同向笔分型」语义。现改为取最后一个方向一致且有效的同向笔
+  端点（端点必落在笔分型上，与下一段共享时不断裂）。
+- 受控金标更新：缺口无确认继续情形收尾 15.0→13.0
+  （test_chanlun_golden_samples，理由写入测试注释）；递归高级别收尾
+  98.0→100.0（test_chanlun_recursive）。其余 3605 项全部不变。
+- 原文分歧显式标注：xd.py 补缺口检测范围与未完成段收尾的
+  工程化延伸说明（非静默近似）；模块 docstring 同步。
+- 验证：后端全量 3605 passed / 6 skipped；ruff、mypy 通过；
+  openspec easy-tdx-chanlun-original-strict 进度 10/12。
+
 **K线图视口保持推平 + 诊断页扩窗可见（V724）**
 - KlineChart（诊断页/回测页使用）同步接入 prepend 视口保持：
   加载更早后 dataZoom 绝对窗口平移 delta 根，不再跳回默认 60-100

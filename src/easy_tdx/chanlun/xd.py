@@ -10,7 +10,11 @@
 
 说明：采用缠论原文的确定性取舍（XD_TIEBREAK_EARLIEST）与收尾同向端点规则，
 保证同一输入永远同一次、端点落在特征序列转折点分型上且方向一致。
-笔破坏由 config.xd_bi_pohuai 控制（默认 False，原文口径将随后续 spec 校准）。
+笔破坏由 config.xd_bi_pohuai 控制（默认 True，原文口径，见 bi-pohuai-default-on spec）。
+
+缺口与第二特征序列：特征序列出现区间缺口时，结束需「笔破坏」式确认
+（分型后第 4 个特征元素跌破/升破分型极值）；收尾端点取最后一个已完成
+且方向一致的同向笔端点（收尾不换取端点，见 line-segment-original-fidelity spec）。
 """
 
 from __future__ import annotations
@@ -131,6 +135,8 @@ def find_xds(
         end: int | None = None
 
         j = start + 1
+        # 原文分歧备注：原文的缺口判定覆盖整个特征序列中相邻元素；此处仅检测
+        # 第一、第二特征元素之间（工程化简化，显式标注，非静默近似）。
         has_gap = False
         while j < len(bis):
             if bis[j].direction != seg_dir:
@@ -188,22 +194,21 @@ def find_xds(
             xds.append(_create_xd_from_bis(bis, start, end, len(xds), seg_dir))
             start = end + 1
         else:
-            # 收尾：只在「方向与线段一致的同向笔」端点中选择，避开反向笔端点分型，
-            # 保证端点落在某笔分型上、与线段方向一致，且前段断裂。
+            # 收尾（数据用尽）：取「最后一个已完成且方向一致的同向笔」端点
+            # （line-segment-original-fidelity：收尾不换取端点——禁止 max/min 换出
+            # 非共享端点；max/min 选点会把终点挪到早已过去的笔上，与「未完成段」
+            # 的原文语义不符）。端点必落在某笔端点分型上，与下一段共享时不断裂。
+            # 原文分歧备注：缠论原文对未完成线段并无收尾规定，此处为工程化的
+            # 确定性延伸（显式标注，非静默近似）。
             if len(bis) - start >= 3:
                 tail_end: int | None = None
-                best_val = -1.0 if seg_dir == Direction.UP else float("inf")
-                for i in range(start, len(bis)):
+                for i in range(len(bis) - 1, start - 1, -1):
                     if bis[i].direction != seg_dir:
                         continue
                     if not _valid_segment_end(bis, start, i, seg_dir):
                         continue
-                    if seg_dir == Direction.UP and bis[i].end.val > best_val:
-                        best_val = bis[i].end.val
-                        tail_end = i
-                    elif seg_dir == Direction.DOWN and bis[i].end.val < best_val:
-                        best_val = bis[i].end.val
-                        tail_end = i
+                    tail_end = i
+                    break
                 if tail_end is not None:
                     xds.append(_create_xd_from_bis(bis, start, tail_end, len(xds), seg_dir))
             start = len(bis)
