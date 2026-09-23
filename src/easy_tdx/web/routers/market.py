@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from easy_tdx.exceptions import TdxOfflineError
 from easy_tdx.web.convert import market_from_str
 from easy_tdx.web.deps import get_client
 from easy_tdx.web.schemas import (
@@ -130,16 +131,27 @@ async def market_strength(
 
     from easy_tdx.screen.strength import StrengthRanker
 
-    ranker = StrengthRanker(
-        vipdoc_path=vipdoc,
-        preset=preset,
-        w5=w5,
-        w20=w20,
-        w60=w60,
-        vol_adjusted=vol_adjusted,
-        min_listed_days=min_listed_days,
-        min_amount=min_amount,
-    )
+    # V720: 本机未配置 TDX_HOME / vipdoc 缺失属环境问题，不是服务器错误，
+    # 应返回 503 + 可读指引（此前 500「无法定位通达信安装目录」）。
+    # 只捕获 TdxOfflineError，其余异常仍走全局 500 处理器。
+    try:
+        ranker = StrengthRanker(
+            vipdoc_path=vipdoc,
+            preset=preset,
+            w5=w5,
+            w20=w20,
+            w60=w60,
+            vol_adjusted=vol_adjusted,
+            min_listed_days=min_listed_days,
+            min_amount=min_amount,
+        )
+    except TdxOfflineError as e:
+        # V720 处方要求此 detail 原文；为满足 E501(100) 拆行拼接。
+        _strength_unavailable = (
+            "行情强度数据不可用：未配置 TDX_HOME（本地 vipdoc 缺失），"
+            "请在部署机设置 TDX_HOME 后重启"
+        )
+        raise HTTPException(status_code=503, detail=_strength_unavailable) from e
 
     # Web 端用线程池执行，避免阻塞事件循环（扫描全市场耗时较长）
     # 注：在协程内用 get_running_loop() 而非 get_event_loop()，

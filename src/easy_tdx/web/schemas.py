@@ -84,7 +84,8 @@ class ChanlunRequest(BaseModel):
     code: str = Field(..., min_length=6, max_length=6)
     category: str = Field(default="DAY", description="K线周期")
     count: int = Field(default=800, ge=1, le=800)
-    start: int = Field(default=0, ge=0)
+    # V720: start 加 le=65535——TDX 协议 bar 偏移为 uint16，越界应在参数层 422。
+    start: int = Field(default=0, ge=0, le=65535)
     # V708: 多级别递归深度（1=线段级别；>=2 继续把更高级别线段当「笔」递归）。
     recursion_depth: int = Field(default=1, ge=1, le=8, description="多级别递归深度")
     # V599: 可选日期范围，用于让缠论分析与前端 K 线图窗口精确对齐。

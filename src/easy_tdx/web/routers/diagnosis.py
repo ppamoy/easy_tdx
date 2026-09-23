@@ -2707,12 +2707,15 @@ async def quick_diagnosis(
     market: str = "SZ",
     code: str = "",
     client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """快速诊断接口（GET），方便浏览器直接访问。"""
     if not code:
         return {"error": "请提供股票代码"}
     req = StockIdentifier(market=market, code=code)
-    return await diagnose_stock(req, client)
+    # V720: 显式传 mac_client（此前 diagnose_stock 默认值含 Depends，直接调用
+    # 不会触发依赖注入，mac_client 落成裸 Depends 对象 → AttributeError 500）。
+    return await diagnose_stock(req, client, mac_client)
 
 
 # ── V102 建议回放实证 ───────────────────────────────────────────────────────

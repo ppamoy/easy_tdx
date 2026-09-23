@@ -303,6 +303,18 @@ async def monitor_create(
         # undefined task_id 并启动无效轮询）。
         raise HTTPException(status_code=400, detail="stocks 不能为空")
 
+    # V720: 参数校验必须先于 create_task——此前 interval 传 "abc"/负数时
+    # 任务已入库，随后才在 `if interval > 0` 处炸出 500，/monitor/list 残留
+    # 无法清理的孤儿任务。
+    if isinstance(interval, bool) or not isinstance(interval, int) or not 0 <= interval <= 86400:
+        raise HTTPException(status_code=400, detail="interval_seconds 必须是 0~86400 的整数")
+    if (
+        isinstance(threshold, bool)
+        or not isinstance(threshold, (int, float))
+        or not 0 <= threshold <= 1
+    ):
+        raise HTTPException(status_code=400, detail="confidence_threshold 必须是 0~1 的数字")
+
     task_id = await _monitor.create_task(stocks, category, threshold, interval)
 
     # 如果 interval > 0，启动后台定时检查

@@ -638,9 +638,9 @@ def test_async_backtest_with_inline_data(client, sample_ohlcv):
 
 
 def test_task_poll_unknown_id(client):
-    """轮询不存在的 task_id 应返回 400（ValueError → 全局 handler）。"""
+    """轮询不存在的 task_id 应返回 404（V720 与全站任务轮询端点语义对齐）。"""
     resp = client.get("/api/v1/backtest/tasks/nonexistent")
-    assert resp.status_code == 400
+    assert resp.status_code == 404
     assert "未知任务" in resp.json()["detail"]
 
 

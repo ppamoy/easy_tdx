@@ -788,6 +788,12 @@ class TdxClient:
             )
         )
 
+    # V720: 空数据故障转移的总时间预算（秒）。此前逐台 ping + 实测无总预算，
+    # 真无数据的标的（如新股）会把全部候选主机轮完，实测 >280s——期间还拖慢
+    # 同 client 并发窗口内的其他请求。超预算即返回空数据（"该股票本就没数据"
+    # 的语义不变），单台尝试的超时（ping 5s / 连接 timeout）不受影响。
+    _FAILOVER_TIME_BUDGET_SEC = 30.0
+
     def _find_host_returning_data(self, cmd: "BaseCommand[_T]") -> _T:
         """空数据故障转移：测速后按延迟顺序逐台实测，返回首台有效数据的结果。
 
@@ -802,15 +808,31 @@ class TdxClient:
         """
         bad_host = self._host
         ranked = ping_all(get_known_hosts(), self._port, 5.0)
+        # V720: 总时间预算——只在逐台实测循环中消耗，正常路径（首台有数据）
+        # 一次实测即返回，预算不生效。
+        deadline = time.monotonic() + self._FAILOVER_TIME_BUDGET_SEC
+        budget_exhausted = False
+        log = logging.getLogger(__name__)
 
         def _try(host: str) -> bool:
+            nonlocal budget_exhausted
+            if time.monotonic() >= deadline:
+                budget_exhausted = True
+                return True  # 中断轮询（find_working_host_* 视 True 为成功）
             # 切换到候选 host 并实测；非空即视为该 host 可用
             self._reconnect(host)
             return bool(self._execute(cmd))
 
         new_host = find_working_host_sync(ranked, _try, save_best_host, bad_host)
-        if new_host is None:
-            # 全部候选都不可用，回退到原 host（保持状态可预测）
+        if new_host is None or budget_exhausted:
+            if budget_exhausted:
+                # 预算耗尽：不再补测，直接回原 host 返回空（failover 语义收敛）
+                log.warning(
+                    "空数据故障转移超过 %.0fs 总预算，放弃逐台尝试并返回空数据（host=%s）",
+                    self._FAILOVER_TIME_BUDGET_SEC,
+                    bad_host,
+                )
+            # 全部候选都不可用（或预算耗尽），回退到原 host（保持状态可预测）
             if self._host != bad_host:
                 self._reconnect(bad_host)
             return []  # type: ignore[return-value]
@@ -944,14 +966,30 @@ class TdxClient:
         """
         bad_host = self._host
         ranked = ping_all(get_known_hosts(), self._port, 5.0)
+        # V720: 总时间预算（同 _find_host_returning_data）——真无数据的标的
+        # 不再逐台轮完候选主机拖到 >280s，超 ~30s 返回空 DataFrame。
+        deadline = time.monotonic() + self._FAILOVER_TIME_BUDGET_SEC
+        budget_exhausted = False
+        log = logging.getLogger(__name__)
 
         def _try(host: str) -> bool:
+            nonlocal budget_exhausted
+            if time.monotonic() >= deadline:
+                budget_exhausted = True
+                return True  # 中断轮询
             self._reconnect(host)
             return bool(self._fetch_fund_flow_records(market, code, start, count))
 
         new_host = find_working_host_sync(ranked, _try, save_best_host, bad_host)
-        if new_host is None:
-            # 全部候选都不可用，回退到原 host（保持状态可预测）
+        if new_host is None or budget_exhausted:
+            if budget_exhausted:
+                log.warning(
+                    "资金流空数据故障转移超过 %.0fs 总预算，返回空数据（%s%s）",
+                    self._FAILOVER_TIME_BUDGET_SEC,
+                    market.name if isinstance(market, Market) else market,
+                    code,
+                )
+            # 全部候选都不可用（或预算耗尽），回退到原 host（保持状态可预测）
             if self._host != bad_host:
                 self._reconnect(bad_host)
             return []
@@ -975,6 +1013,9 @@ class AsyncTdxClient(AsyncHeartbeatMixin):
     注意：
         单个 AsyncTdxClient 仅维护一条 TCP 连接；并发调用会在连接内串行执行。
     """
+
+    # V720: 与 sync TdxClient 同值——空数据故障转移的总时间预算（秒）。
+    _FAILOVER_TIME_BUDGET_SEC = 30.0
 
     def __init__(
         self,
@@ -1472,15 +1513,29 @@ class AsyncTdxClient(AsyncHeartbeatMixin):
         """
         bad_host = self._host
         ranked = await asyncio.to_thread(ping_all, get_known_hosts(), self._port, 5.0)
+        # V720: 总时间预算（同 sync 版）——超 ~30s 放弃逐台尝试，返回空数据。
+        deadline = time.monotonic() + self._FAILOVER_TIME_BUDGET_SEC
+        budget_exhausted = False
+        log = logging.getLogger(__name__)
 
         async def _try(host: str) -> bool:
+            nonlocal budget_exhausted
+            if time.monotonic() >= deadline:
+                budget_exhausted = True
+                return True  # 中断轮询
             await self._areconnect(host)
             # mypy 对 async 闭包内泛型参数的推断会宽化为 BaseCommand[object]
             # （sync 同模式可正确推断），此处为已知 mypy 限制，非真实类型错误。
             return bool(await self._execute(cmd))  # type: ignore[arg-type]
 
         new_host = await find_working_host_async(ranked, _try, save_best_host, bad_host)
-        if new_host is None:
+        if new_host is None or budget_exhausted:
+            if budget_exhausted:
+                log.warning(
+                    "空数据故障转移超过 %.0fs 总预算，放弃逐台尝试并返回空数据（host=%s）",
+                    self._FAILOVER_TIME_BUDGET_SEC,
+                    bad_host,
+                )
             if self._host != bad_host:
                 await self._areconnect(bad_host)
             return []  # type: ignore[return-value]
@@ -1605,13 +1660,28 @@ class AsyncTdxClient(AsyncHeartbeatMixin):
         """
         bad_host = self._host
         ranked = await asyncio.to_thread(ping_all, get_known_hosts(), self._port, 5.0)
+        # V720: 总时间预算（同 sync 版）——超 ~30s 放弃逐台尝试，返回空数据。
+        deadline = time.monotonic() + self._FAILOVER_TIME_BUDGET_SEC
+        budget_exhausted = False
+        log = logging.getLogger(__name__)
 
         async def _try(host: str) -> bool:
+            nonlocal budget_exhausted
+            if time.monotonic() >= deadline:
+                budget_exhausted = True
+                return True  # 中断轮询
             await self._areconnect(host)
             return bool(await self._fetch_fund_flow_records(market, code, start, count))
 
         new_host = await find_working_host_async(ranked, _try, save_best_host, bad_host)
-        if new_host is None:
+        if new_host is None or budget_exhausted:
+            if budget_exhausted:
+                log.warning(
+                    "资金流空数据故障转移超过 %.0fs 总预算，返回空数据（%s%s）",
+                    self._FAILOVER_TIME_BUDGET_SEC,
+                    market.name if isinstance(market, Market) else market,
+                    code,
+                )
             if self._host != bad_host:
                 await self._areconnect(bad_host)
             return []

@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from easy_tdx.web.backtest_schemas import (
     BacktestRequest,
@@ -136,9 +136,9 @@ async def get_task(task_id: str) -> TaskStateResponse:
     """查询后台回测任务状态。done 时 result 字段含完整回测结果。"""
     state = get_runner().peek(task_id)
     if state is None:
-        # 未知 task → 404（通过 ValueError 走 400 handler；这里用 KeyError 由
-        # 调用方判定。为保持语义清晰，统一抛 ValueError → HTTP 400）
-        raise ValueError(f"未知任务 '{task_id}'")
+        # V720: 未知任务用 404（此前 ValueError → 全局 400，与全站任务轮询端点
+        # stock-pick/screen/task、monitor 状态查询的 404 语义不一致）。
+        raise HTTPException(status_code=404, detail=f"未知任务 '{task_id}'")
     return TaskStateResponse(
         task_id=state.task_id,
         status=state.status,

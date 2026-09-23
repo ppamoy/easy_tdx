@@ -7,7 +7,7 @@
 > 用 `.venv/bin/python -m uvicorn easy_tdx.web:create_app --factory`，代码改动需
 > `sudo -n systemctl restart easy-tdx.service` 后生效；前端需 `npx vite build`）。
 >
-> 核心测试脚本：`tests/e2e/prod_smoke.py`（14 项检查，含不变量断言，基线 14/14 全过）。
+> 核心测试脚本：`tests/e2e/prod_smoke.py`（16 项检查，含不变量断言，基线 16/16 全过）。
 
 ## 生产代码新鲜度核查（2026-09-22）
 

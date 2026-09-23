@@ -407,8 +407,21 @@ async def chanlun_multi_level(
         "DAY": "daily",
         "WEEK": "weekly",
     }
-    high_freq = frequency_map.get(req.category.upper(), "daily")
-    low_freq = frequency_map.get(req.low_level.upper(), "30min")
+    # V720: category/low_level 不在白名单时显式 400（此前静默回落 daily/30min，
+    # 与 analyze 同参 400 的行为不一致，且把错别字悄悄当成日线分析）。
+    if req.category.upper() not in frequency_map:
+        raise HTTPException(
+            status_code=400,
+            detail=f"非法周期 '{req.category}'，可选值: {', '.join(frequency_map)}",
+        )
+    low_raw = req.low_level or "MIN_30"  # 空低级别 = 默认 30min（保留原语义）
+    if low_raw.upper() not in frequency_map:
+        raise HTTPException(
+            status_code=400,
+            detail=f"非法低级别周期 '{req.low_level}'，可选值: {', '.join(frequency_map)}",
+        )
+    high_freq = frequency_map[req.category.upper()]
+    low_freq = frequency_map[low_raw.upper()]
 
     symbol = f"{req.market}{req.code}"
 
@@ -963,6 +976,31 @@ async def chanlun_train_score(req: dict[str, Any]) -> dict[str, Any]:
     """
     from easy_tdx.web.train_store import TrainScore, get_score_store
 
+    # V720: 数值字段前置校验（此前 score="abc" 等在 int()/float() 处抛
+    # ValueError → 500；松散 dict 端点形状非法一律 400）。
+    def _num_field(name: str, default: float) -> float:
+        raw = req.get(name, default)
+        if raw is None or raw == "":
+            return default
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"{name} 必须是数字") from None
+
+    _num_field("score", 0)
+    _num_field("hit_rate", 0)
+    for _name in ("count", "total_asked", "hit_count"):
+        raw = req.get(_name)
+        if raw is None or raw == "":
+            continue
+        try:
+            int(raw)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail=f"{_name} 必须是整数") from None
+        # 浮点整型检查：count=3.5 之类也应拒绝（int() 会静默截断 float，但 str "3.5" 抛错）
+        if isinstance(raw, float) and not raw.is_integer():
+            raise HTTPException(status_code=400, detail=f"{_name} 必须是整数")
+
     def _run() -> dict[str, Any]:
         store = get_score_store()
         rec = TrainScore(
@@ -1041,6 +1079,24 @@ async def learn_progress(player: str = "学员") -> dict[str, Any]:
 async def learn_mistakes_add(req: dict[str, Any]) -> dict[str, Any]:
     """V426: 记录一道错题（供复习）。"""
     from easy_tdx.web.train_store import get_score_store
+
+    # V720: 错题字段形状校验——question_date/signal_type/user_choice/actual/
+    # explanation 会原样入库 SQLite，传数组/对象会导致存储层类型混乱，
+    # 这里限制为标量（str/int/float/None），非法 400。
+    _SCALAR_OK = (str, int, float, type(None))
+    for _name in (
+        "player",
+        "symbol",
+        "category",
+        "difficulty",
+        "question_date",
+        "signal_type",
+        "user_choice",
+        "actual",
+        "explanation",
+    ):
+        if _name in req and not isinstance(req[_name], _SCALAR_OK):
+            raise HTTPException(status_code=400, detail=f"{_name} 必须是标量（字符串/数字）")
 
     def _run() -> dict[str, Any]:
         get_score_store().add_mistake(req)

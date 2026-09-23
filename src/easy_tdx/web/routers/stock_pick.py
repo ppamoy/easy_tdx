@@ -127,14 +127,8 @@ async def stock_pick_screen(req: dict[str, Any]) -> dict[str, Any]:
 
     markets = req.get("markets") or ["SZ", "SH"]
     norm_markets = [str(m).upper()[:2] for m in markets if str(m).upper()[:2] in ("SH", "SZ")]
-    pool_raw = req.get("pool") or _default_pool(norm_markets)
-    if not pool_raw:
-        raise HTTPException(status_code=400, detail="pool 为空")
-    norm_pool = [
-        {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
-        for p in pool_raw
-        if p.get("code")
-    ]
+    # V720: pool 形状校验（元素须 {market, code} 对象），非法 400 而非 500。
+    norm_pool = _norm_pool_arg(req)
     stock_type = str(req.get("stock_type", "all"))
     if stock_type not in ("all", "tree", "grain", "vegetable"):
         stock_type = "all"
@@ -321,9 +315,7 @@ def _run_timing_one(
     rec = _recursion_context(result)
     vdir = v.get("direction")
     if rec.get("latest") and vdir:
-        rec["alignment"] = (
-            "confirm" if rec["latest"]["direction"] == vdir else "conflict"
-        )
+        rec["alignment"] = "confirm" if rec["latest"]["direction"] == vdir else "conflict"
     else:
         rec["alignment"] = "none"
     rec["base_direction"] = vdir
@@ -382,11 +374,17 @@ async def stock_pick_timing(
     symbols_raw = req.get("symbols") or []
     if not symbols_raw:
         raise HTTPException(status_code=400, detail="symbols 不能为空")
+    # V720: symbols 形状校验——元素必须是含 code 的对象（此前 ["SH600519"] 之类
+    # 字符串元素会让 s.get 抛 'str' has no attribute 'get' → 500）。
+    if any(not isinstance(s, dict) for s in symbols_raw):
+        raise HTTPException(status_code=400, detail="symbols 必须是 {market, code} 对象列表")
     symbols: list[dict[str, str]] = [
         {"market": str(s.get("market", "SZ")).upper()[:2], "code": str(s["code"]).zfill(6)}
         for s in symbols_raw
         if s.get("code")
     ]
+    if not symbols:
+        raise HTTPException(status_code=400, detail="symbols 不能为空")
     count = _int_arg(req.get("count"), "count", 400, 60, 1600)
     recursion_depth = _int_arg(req.get("recursion_depth"), "recursion_depth", 2, 1, 8)
 
@@ -436,14 +434,8 @@ async def stock_pick_screen_async(req: dict[str, Any]) -> dict[str, Any]:
 
     markets = req.get("markets") or ["SZ", "SH"]
     norm_markets = [str(m).upper()[:2] for m in markets if str(m).upper()[:2] in ("SH", "SZ")]
-    pool_raw = req.get("pool") or _default_pool(norm_markets)
-    if not pool_raw:
-        raise HTTPException(status_code=400, detail="pool 为空")
-    norm_pool = [
-        {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
-        for p in pool_raw
-        if p.get("code")
-    ]
+    # V720: pool 形状校验（元素须 {market, code} 对象），非法 400 而非 500。
+    norm_pool = _norm_pool_arg(req)
     stock_type = str(req.get("stock_type", "all"))
     if stock_type not in ("all", "tree", "grain", "vegetable"):
         stock_type = "all"
@@ -492,6 +484,28 @@ def _int_arg(raw: Any, name: str, default: int, lo: int, hi: int) -> int:
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail=f"{name} 必须是整数") from None
     return max(lo, min(val, hi))
+
+
+def _norm_pool_arg(req: dict[str, Any]) -> list[dict[str, str]]:
+    """V720: 校验并规整请求里的 pool——元素必须是 {market, code} 对象。
+
+    此前 pool 传字符串/数字时，后续 ``p.get(...)`` 直接抛
+    ``'str' object has no attribute 'get'`` → 500。松散 dict 端点在入口处
+    做形状校验，非法一律 400。
+    """
+    pool_raw = req.get("pool")
+    if pool_raw is None or pool_raw == "":
+        return _default_pool(["SZ", "SH"])
+    if not isinstance(pool_raw, list) or any(not isinstance(p, dict) for p in pool_raw):
+        raise HTTPException(status_code=400, detail="pool 必须是 {market, code} 对象列表")
+    norm = [
+        {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
+        for p in pool_raw
+        if p.get("code")
+    ]
+    if not norm:
+        raise HTTPException(status_code=400, detail="pool 必须是 {market, code} 对象列表")
+    return norm
 
 
 def _screen_run_sync(
@@ -628,14 +642,10 @@ def _dashboard_run_sync(
         market = str(r.get("market", "SZ"))
         code = str(r.get("code", "")).zfill(6)
         symbol = f"{market}:{code}"
-        report_progress(
-            40.0 + 50.0 * i / max(1, len(batch)), f"择时 {i + 1}/{len(batch)} {symbol}"
-        )
+        report_progress(40.0 + 50.0 * i / max(1, len(batch)), f"择时 {i + 1}/{len(batch)} {symbol}")
         try:
             df = _fetch_window_sync(market, code, 1200)
-            tr = _run_timing_one(
-                df, symbol, market, code, target, recursion_depth=recursion_depth
-            )
+            tr = _run_timing_one(df, symbol, market, code, target, recursion_depth=recursion_depth)
         except Exception as e:  # noqa: BLE001
             logger.warning("dashboard 择时 %s 失败: %s", symbol, e)
             tr = {"symbol": symbol, "market": market, "code": code, "error": str(e)}
@@ -658,24 +668,22 @@ def _dashboard_run_sync(
         tr["confidence"] = v.get("confidence") or 0
         rec = tr.get("recursion") or {}
         tr["alignLabel"] = (
-            "同向" if rec.get("alignment") == "confirm"
-            else "背离" if rec.get("alignment") == "conflict"
+            "同向"
+            if rec.get("alignment") == "confirm"
+            else "背离"
+            if rec.get("alignment") == "conflict"
             else "—"
         )
         top_buy = (tr.get("signal_quality") or {}).get("best_buy")
         tr["top_hit_label"] = (
-            f"{top_buy['type']} {round(float(top_buy['hit_rate']) * 100)}%"
-            if top_buy
-            else "—"
+            f"{top_buy['type']} {round(float(top_buy['hit_rate']) * 100)}%" if top_buy else "—"
         )
         tr["top_hit_good"] = bool(
             top_buy
             and float(top_buy.get("hit_rate") or 0) >= 0.6
             and float(top_buy.get("excess_hit_rate") or 0) > 0
         )
-    timing_rows.sort(
-        key=lambda x: (action_rank.get(x["action"], 2), -x["confidence"])
-    )
+    timing_rows.sort(key=lambda x: (action_rank.get(x["action"], 2), -x["confidence"]))
     summary = {
         "buy": sum(1 for x in timing_rows if x["action"] == "买入"),
         "sell": sum(1 for x in timing_rows if x["action"] == "卖出"),
@@ -738,14 +746,8 @@ async def stock_pick_dashboard_async(req: dict[str, Any]) -> dict[str, Any]:
 
     markets = req.get("markets") or ["SZ", "SH"]
     norm_markets = [str(m).upper()[:2] for m in markets if str(m).upper()[:2] in ("SH", "SZ")]
-    pool_raw = req.get("pool") or _default_pool(norm_markets)
-    if not pool_raw:
-        raise HTTPException(status_code=400, detail="pool 为空")
-    norm_pool = [
-        {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
-        for p in pool_raw
-        if p.get("code")
-    ]
+    # V720: pool 形状校验（元素须 {market, code} 对象），非法 400 而非 500。
+    norm_pool = _norm_pool_arg(req)
     stock_type = str(req.get("stock_type", "all"))
     if stock_type not in ("all", "tree", "grain", "vegetable"):
         stock_type = "all"

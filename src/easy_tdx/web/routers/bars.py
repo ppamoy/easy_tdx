@@ -69,7 +69,9 @@ async def security_bars(
         "DAY",
         description="K线周期: MIN_1, MIN_5, MIN_15, MIN_30, MIN_60, DAY, WEEK, MONTH, YEAR",
     ),
-    start: int = Query(0, ge=0),
+    # V720: start 加 le=65535——TDX 协议 bar 偏移为 uint16，越界值只会得到
+    # 空结果或下游异常，应在参数层直接 422。
+    start: int = Query(0, ge=0, le=65535),
     count: int = Query(800, ge=1, le=800),
     bar_time: str = Query(
         "start", description="时间戳: start=bar开始时间(默认) / end=bar结束时间(对齐Tushare)"
@@ -118,7 +120,8 @@ async def index_bars(
     market: str = Query(..., description="市场: SZ, SH"),
     code: str = Query(..., min_length=6, max_length=6),
     category: str = Query("DAY", description="K线周期"),
-    start: int = Query(0, ge=0),
+    # V720: start 加 le=65535（同 /bars，TDX 协议偏移上限）
+    start: int = Query(0, ge=0, le=65535),
     count: int = Query(800, ge=1, le=800),
     bar_time: str = Query(
         "start", description="时间戳: start=bar开始时间(默认) / end=bar结束时间(对齐Tushare)"
@@ -147,7 +150,9 @@ async def minute_time(
 async def history_minute_time(
     market: str = Query(..., description="市场: SZ, SH"),
     code: str = Query(..., min_length=6, max_length=6),
-    date: int = Query(..., description="日期 YYYYMMDD"),
+    # V720: date 限定为合法 YYYYMMDD 日历范围（19900101~20991231），
+    # 负数/超长数字在参数层 422，避免把垃圾值透传给 TDX。
+    date: int = Query(..., ge=19900101, le=20991231, description="日期 YYYYMMDD"),
     client: Any = Depends(get_client),
 ) -> DataFrameResponse:
     """获取历史某日分时数据。"""
@@ -159,7 +164,8 @@ async def history_minute_time(
 async def transaction_data(
     market: str = Query(..., description="市场: SZ, SH"),
     code: str = Query(..., min_length=6, max_length=6),
-    start: int = Query(0, ge=0),
+    # V720: start 加 le=65535（同 /bars，TDX 协议偏移上限）
+    start: int = Query(0, ge=0, le=65535),
     count: int = Query(800, ge=1, le=800),
     client: Any = Depends(get_client),
 ) -> DataFrameResponse:
@@ -172,8 +178,10 @@ async def transaction_data(
 async def history_transaction_data(
     market: str = Query(..., description="市场: SZ, SH"),
     code: str = Query(..., min_length=6, max_length=6),
-    date: int = Query(..., description="日期 YYYYMMDD"),
-    start: int = Query(0, ge=0),
+    # V720: date 限定为合法 YYYYMMDD 日历范围（同 /minute/history）
+    date: int = Query(..., ge=19900101, le=20991231, description="日期 YYYYMMDD"),
+    # V720: start 加 le=65535（同 /bars，TDX 协议偏移上限）
+    start: int = Query(0, ge=0, le=65535),
     count: int = Query(800, ge=1, le=800),
     client: Any = Depends(get_client),
 ) -> DataFrameResponse:

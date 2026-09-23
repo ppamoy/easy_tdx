@@ -396,9 +396,7 @@ def c_diagnosis_multi_stock() -> tuple[bool, str, dict]:
     assert code == 200 and isinstance(d, dict), f"http={code}"
     rows = d.get("stocks") or []
     assert rows, "无结果"
-    ok_rows = [
-        r for r in rows if not r.get("error") and (r.get("total_bars") or 0) > 0
-    ]
+    ok_rows = [r for r in rows if not r.get("error") and (r.get("total_bars") or 0) > 0]
     assert ok_rows, f"全部标的取数失败（await 回归？）: {rows[:2]}"
     sig_counts = [r.get("signal_count") for r in ok_rows]
     return (
@@ -494,6 +492,91 @@ def c_alerts_clear() -> tuple[bool, str, dict]:
     return True, f"清空 {d.get('cleared')} 条", {}
 
 
+def c_v720_semantics() -> tuple[bool, str, dict]:
+    """V720 语义防回退：D1 quick 不再 500、D2/D3/D4 越界→4xx、D7/D8/D9/D10 语义更正。
+
+    前置：c_alerts_clear 已执行（alerts 流为空），limit=0 才能稳定返回空列表。
+    """
+    bad = []
+    details = []
+    # D1 [high]：quick 诊断绝不能 500（旧代码漏传 mac_client → 'Depends' object 500）
+    code, d = _req("GET", f"{API}/diagnosis/quick?market=SH&code=600519", timeout=120)
+    if code == 500 or (isinstance(d, dict) and "Depends" in str(d.get("detail", ""))):
+        bad.append(f"diagnosis/quick 仍 500: {code} {str(d)[:80]}")
+    details.append(f"quick:{code}")
+    # D2：start 越界（struct 'H' 上限 65535）与 date 边界 → 4xx，绝不 500
+    code, d = _req(
+        "GET",
+        f"{API}/bars/index?market=SH&code=600519&category=DAY&start=999999999&count=20",
+        timeout=60,
+    )
+    if code >= 500:
+        bad.append(f"bars/index start 越界 → {code}")
+    details.append(f"bars_index:{code}")
+    code, d = _req("GET", f"{API}/minute/history?market=SH&code=600519&date=-1", timeout=60)
+    if code >= 500:
+        bad.append(f"minute/history date=-1 → {code}")
+    details.append(f"minute_history:{code}")
+    code, d = _req(
+        "POST",
+        f"{API}/chanlun/analyze",
+        {"market": "SH", "code": "600519", "category": "DAY", "start": 999999999, "count": 100},
+        timeout=60,
+    )
+    if code >= 500:
+        bad.append(f"chanlun/analyze start 越界 → {code}")
+    details.append(f"analyze:{code}")
+    # D3：复合形状非法 → 400（不 500）
+    code, d = _req(
+        "POST", f"{API}/stock-pick/screen", {"date": DATE, "pool": "abc", "top_n": 5}, timeout=60
+    )
+    if code != 400:
+        bad.append(f"pool 传字符串 → {code}（期望 400）")
+    details.append(f"pool_shape:{code}")
+    # D4：monitor/create 非法 interval → 400 且不产生孤儿任务
+    code, d = _req(
+        "POST",
+        f"{API}/monitor/create",
+        {"stocks": [{"market": "SZ", "code": "000001"}], "interval_seconds": "abc"},
+        timeout=30,
+    )
+    if code != 400:
+        bad.append(f"interval 'abc' → {code}（期望 400）")
+    code_l, d_l = _req("GET", f"{API}/monitor/list", timeout=20)
+    n_tasks = (d_l or {}).get("count", -1) if isinstance(d_l, dict) else -1
+    if code == 400 and n_tasks != 0:
+        bad.append(f"monitor 400 后 list 仍有 {n_tasks} 任务（孤儿）")
+    details.append(f"monitor_validate:{code}/tasks={n_tasks}")
+    # D7：backtest 未知任务 → 404
+    code, d = _req("GET", f"{API}/backtest/tasks/nonexistent-v720", timeout=30)
+    if code != 404:
+        bad.append(f"backtest 未知任务 → {code}（期望 404）")
+    details.append(f"backtest_404:{code}")
+    # D8：multi-level 非法 category → 400
+    code, d = _req(
+        "POST",
+        f"{API}/chanlun/multi-level",
+        {"market": "SH", "code": "600519", "category": "HOUR4", "count": 100},
+        timeout=60,
+    )
+    if code != 400:
+        bad.append(f"multi-level category=HOUR4 → {code}（期望 400）")
+    details.append(f"ml_category:{code}")
+    # D9：alerts limit=0 → 空列表（c_alerts_clear 之后恒空）
+    code, d = _req("GET", f"{API}/monitor/alerts?limit=0", timeout=20)
+    if code != 200 or (isinstance(d, dict) and (d.get("alerts") or [])):
+        bad.append(f"alerts limit=0 → {code} 非空（期望空）")
+    details.append(f"alerts_limit0:{code}")
+    # D10：sina 格式非法代码 → 4xx（422 参数层拦截；合法格式不存在的代码走上游
+    # SinaError → 503 属正确语义，故此处只测非法格式）
+    code, d = _req("GET", f"{API}/sina/financial-report?market=SH&code=abc123", timeout=60)
+    if code >= 500:
+        bad.append(f"sina 非法格式代码 → {code}（期望 4xx）")
+    details.append(f"sina:{code}")
+    assert not bad, f"V720 语义回退: {bad}"
+    return True, "；".join(details), {"cases": details}
+
+
 CHECKS = [
     ("openapi_routes", c_openapi_routes),
     ("bars_mac_fallback", c_bars_mac_fallback),
@@ -511,6 +594,7 @@ CHECKS = [
     ("alerts_clear", c_alerts_clear),
     ("api_unknown_path_404", c_api_unknown_path_404),
     ("error_semantics", c_error_semantics),
+    ("v720_semantics", c_v720_semantics),
 ]
 
 DATE = "2026-09-01"

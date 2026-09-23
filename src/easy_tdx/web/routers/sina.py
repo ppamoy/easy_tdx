@@ -13,7 +13,13 @@ router = APIRouter(tags=["sina"])
 
 @router.get("/sina/financial-report", response_model=DataFrameResponse)
 async def financial_report(
-    code: str = Query(..., min_length=6, max_length=6, description="6位股票代码"),
+    code: str = Query(
+        ...,
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+        description="6位股票代码",
+    ),
     type: str = Query(
         "lrb",
         pattern=r"^(lrb|fzb|llb)$",
@@ -36,4 +42,6 @@ async def financial_report(
     try:
         return await asyncio.to_thread(_fetch)
     except SinaError as e:
+        # V720: 无效代码（如 abc123）不是服务不可用——参数层 pattern 校验
+        # 直接 422 拦截；剩余 SinaError 仍按上游不可用 503 处理。
         raise HTTPException(status_code=503, detail=str(e)) from e

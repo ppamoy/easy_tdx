@@ -38,11 +38,14 @@ def push_alert(alert: dict[str, Any]) -> None:
 
 
 def recent_alerts(limit: int = 50) -> list[dict[str, Any]]:
-    """最近的提醒（最新在前）。"""
+    """最近的提醒（最新在前）。limit<=0 返回空列表（语义：不取任何条）。"""
+    # V720: 此前 max(1, …) 把 limit=0/-1 夹成 1 条，"要 0 条" 却返回了 1 条。
+    if limit <= 0:
+        return []
     with _lock:
         items = list(_feed)
     items.reverse()
-    return items[: max(1, min(int(limit), _MAX_ALERTS))]
+    return items[: min(int(limit), _MAX_ALERTS)]
 
 
 def clear_alerts() -> int:
