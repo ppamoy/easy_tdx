@@ -1,5 +1,16 @@
 ## [Unreleased]
 
+**存量 change 清理 + 审计管道复跑（V727）**
+- openspec 归档两个已完成但未记账的 change：
+  easy-tdx-v590-three-module-refactor（84/84）与 easy-tdx-chanlun-learning（34/34）；
+  learning 的 18 个 ADDED Requirement 补 SHALL/MUST 规范句、proposal 补
+  Why/What Changes 段（格式债修复，非静默 --no-validate）。
+- 审计管道端到端复跑验证（easy-tdx audit-accuracy --samples 20 --chanlun-limit 10）：
+  1602 只树粮菜标记（tree 116 / grain 1141 / vegetable 345，全部市值 ≥100 亿，
+  age_days=0 未过期）；长盈三类各 20 抽样 PIT 违规 0、数据缺失 0；
+  缠论 281 信号审计可复现；图表对账无错位。
+- openspec 现仅剩 easy-tdx-v386-quality-hardening（0/22，下轮启动）。
+
 **缠论原文口径收敛归档 + 前端 build 门禁修复（V726）**
 - openspec easy-tdx-chanlun-original-strict 全部 12 项任务完成并归档
   （archive/2026-09-24-easy-tdx-chanlun-original-strict）：线段原文口径

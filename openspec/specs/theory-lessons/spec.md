@@ -1,5 +1,10 @@
-## ADDED Requirements
+# theory-lessons Specification
+
+## Purpose
+TBD - created by archiving change easy-tdx-chanlun-learning. Update Purpose after archive.
+## Requirements
 ### Requirement: 缠论概念图文教学
+学习页 SHALL 提供缠论概念图文教学内容（K线/分型/笔/线段/中枢/背驰/三类买卖点）。强制（MUST）。
 - `/learn` 页提供「理论教学」入口，展示缠论核心概念的分篇图文讲解
 - 概念覆盖：分型（顶/底）、笔、线段、中枢、三类买卖点（1/2/3 买、1/2/3 卖）、背驰
 - 每篇含：定义、判定规则要点、一个 ChanlunChart 静态图例（用真实/合成 K 线标注）
@@ -9,8 +14,10 @@
 - **THEN** 页面展示中枢定义、形成条件（至少 3 笔重叠）、图例标注中枢区间（ZG/ZD/GG/DD），并可前后翻页到相邻概念
 
 ### Requirement: 概念导航与进度
+学习页 SHALL 提供概念间导航与学习进度标记。强制（MUST）。
 - 理论教学页展示概念列表（按学习顺序），已读/未读标记（localStorage）
 - 支持上一篇/下一篇顺序学习
 #### Scenario: 标记已读并跳转
 - **WHEN** 用户打开「笔」篇并完整滚动到底
 - **THEN** 概念列表中将「笔」标记为已读，下一课「线段」高亮为待学
+
