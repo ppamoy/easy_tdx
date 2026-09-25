@@ -41,10 +41,10 @@ POOL = [
 ]
 
 
-def analyze(market: str, code: str, count: int) -> dict | None:
+def analyze(market: str, code: str, count: int, category: str = "DAY") -> dict | None:
     """取信号（/chanlun/analyze，POST）。"""
     payload = json.dumps(
-        {"market": market, "code": code, "category": "DAY", "start": 0, "count": count}
+        {"market": market, "code": code, "category": category, "start": 0, "count": count}
     ).encode()
     req = urllib.request.Request(
         API, data=payload, headers={"Content-Type": "application/json"}
@@ -57,11 +57,11 @@ def analyze(market: str, code: str, count: int) -> dict | None:
         return None
 
 
-def fetch_closes(market: str, code: str, count: int) -> list[float]:
+def fetch_closes(market: str, code: str, count: int, category: str = "DAY") -> list[float]:
     """取收盘价序列（/bars，GET + query 参数，count 上限 800）。"""
     url = (
         f"http://127.0.0.1:8000/api/v1/bars?market={market}&code={code}"
-        f"&category=DAY&start=0&count={min(count, 800)}"
+        f"&category={category}&start=0&count={min(count, 800)}"
     )
     try:
         with urllib.request.urlopen(url, timeout=120) as resp:  # noqa: S310
@@ -86,16 +86,20 @@ def main() -> int:
     ap.add_argument("--count", type=int, default=800, help="每只票取多少根日线")
     ap.add_argument("--threshold", type=float, default=0.5, help="区间套确认阈值")
     ap.add_argument("--horizons", type=str, default="5,10,20")
+    ap.add_argument("--categories", type=str, default="DAY",
+                    help="周期列表，逗号分隔（如 DAY,MIN_30,MIN_60）以扩大样本")
     args = ap.parse_args()
     horizons = tuple(int(x) for x in args.horizons.split(","))
 
     # 逐标的收集：bar_index 不可跨标的拼接，需各自留 closes
     per_symbol: list[tuple[str, list[float], list[dict]]] = []
-    for market, code in POOL:
-        d = analyze(market, code, args.count)
+    categories = [c.strip() for c in args.categories.split(",") if c.strip()]
+    for category in categories:
+      for market, code in POOL:
+        d = analyze(market, code, args.count, category)
         if not d:
             continue
-        closes = fetch_closes(market, code, args.count)
+        closes = fetch_closes(market, code, args.count, category)
         if not closes:
             continue
         sigs = []
@@ -109,9 +113,10 @@ def main() -> int:
                     "_nesting": nesting_score(m),
                 }
             )
-        per_symbol.append((f"{market}{code}", closes, sigs))
+        # 标的内索引不可跨周期/标的拼接 → 用 (周期,标的) 作为分组键
+        per_symbol.append((f"{category}:{market}{code}", closes, sigs))
         n_nest = sum(1 for s in sigs if (s["_nesting"] or 0) >= args.threshold)
-        print(f"  {market}{code}: bars={len(closes)} mmds={len(sigs)} 有区间套={n_nest}")
+        print(f"  {category} {market}{code}: bars={len(closes)} mmds={len(sigs)} 有区间套={n_nest}")
 
     if not per_symbol:
         print("无可用数据")
@@ -154,7 +159,7 @@ def main() -> int:
 
     print("\n" + "=" * 78)
     print(f"区间套回测验证  count={args.count}  阈值={args.threshold}  "
-          f"horizons={horizons}")
+          f"horizons={horizons}  周期={categories}")
     print("=" * 78)
 
     closes_by_sym = {sym: c for sym, c, _ in per_symbol}
