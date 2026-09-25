@@ -16092,24 +16092,44 @@ def _is_strong_beichi(
             ) or (direction == "up" and curr_zs.zg > prev_zs.zg and curr_zs.zd > prev_zs.zd)
 
             if is_same_trend:
-                prev_exit = prev_zs.lines[-1]
-                curr_exit = curr_zs.lines[-1]
+                # V730（缠论原文口径修正）：趋势背驰比较的是「离开段」（中枢之后的
+                # 那一笔，即 bis[lines[-1].index + 1]），而非中枢内的末笔。
+                # 原文（第24课）：趋势背驰 = 两个同向中枢之间，后一离开段（c 段）
+                # 相对前一离开段（a/b 段）力度衰减。中枢末笔仍在中枢重叠区间内，
+                # 不是离开段；且「末笔方向奇偶校验」会让奇数笔中枢该分支永不成立。
+                # 与 beichi.py:_check_qs_beichi 的离开段取法保持一致。
+                if not prev_zs.lines or not curr_zs.lines:
+                    continue
+                prev_exit_idx = prev_zs.lines[-1].index + 1
+                curr_exit_idx = curr_zs.lines[-1].index + 1
+                if prev_exit_idx >= len(bis) or curr_exit_idx >= len(bis):
+                    continue  # 离开段尚未完成，无法判定
+                prev_exit = bis[prev_exit_idx]
+                curr_exit = bis[curr_exit_idx]
 
+                # 锚定：背驰点 = 第二离开段终点。候选笔必须就是该离开段，
+                # 否则趋势背驰会被标到后面不相关的笔上（原文：背驰段即创新极值的离开段）。
+                if curr_exit_idx != bi_idx:
+                    continue
+
+                # 两段离开段方向都必须与趋势方向一致（离开段 = 延续趋势方向的那笔）
                 if (
-                    prev_exit.direction.value == direction
-                    and curr_exit.direction.value == direction
+                    prev_exit.direction.value != direction
+                    or curr_exit.direction.value != direction
                 ):
-                    # 新极值确认：后一中枢离开笔须创出更极端价位
-                    if direction == "down":
-                        new_extreme = curr_exit.low < prev_exit.low
-                    else:
-                        new_extreme = curr_exit.high > prev_exit.high
+                    continue
 
-                    prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
-                    curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index)
+                # 新极值确认：后一中枢离开段须创出更极端价位（否则只是中枢震荡/扩展）
+                if direction == "down":
+                    new_extreme = curr_exit.low < prev_exit.low
+                else:
+                    new_extreme = curr_exit.high > prev_exit.high
 
-                    if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
-                        return True
+                prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
+                curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index)
+
+                if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
+                    return True
 
     return False
 

@@ -34,3 +34,6 @@ audit-report-*.html
 
 # 一次性脚手架脚本归档（本地保留，不入库）
 scaffolds/
+
+# 服务运行日志（本地产物，不入库）
+logs/

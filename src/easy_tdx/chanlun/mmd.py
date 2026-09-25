@@ -2095,10 +2095,14 @@ def _find_first_type_mmds(
     #   1. 相邻 1卖 至少相隔 5 笔
     #   2. pullback_low：前一次 1卖 之后价格必须显著回落（≥3%），
     #      否则视为同一顶部的反复创新高（震荡市中的假顶），不重复标记。
+    # V730 P1-5：改为与 1买 完全镜像的正向扫描。旧实现 reversed(bis) 中
+    # pullback_low 在评估第 k 笔时累计的是「第 k 笔之后」的回落低点——
+    # 时间倒置（未来函数：用信号之后的走势判定信号），且与 1买 的
+    # rebound_high（信号之前的反弹高点）语义不对称。
     last_1sell_bi_idx = -100
     last_1sell_high: float | None = None
     pullback_low = float("inf")  # 自上次1卖以来的回落最低价
-    for bi in reversed(bis):
+    for bi in bis:
         # 更新自上次1卖以来的回落最低点（含当前笔）
         pullback_low = min(pullback_low, bi.low)
 
@@ -2112,7 +2116,7 @@ def _find_first_type_mmds(
             continue
         # 最小笔间距（工程启发式，非原文）
         if config.mmd_1st_dedup:
-            if abs(bi.index - last_1sell_bi_idx) < _MIN_1ST_GAP_BIS:
+            if bi.index - last_1sell_bi_idx < _MIN_1ST_GAP_BIS:
                 continue
             # 结构去重：前一次 1卖 后必须出现有意义回落（工程启发式，非原文）
             if last_1sell_high is not None and last_1sell_bi_idx >= 0:

@@ -18,8 +18,16 @@ from easy_tdx.chanlun.types import Direction
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 
 # (fixture 文件名, frequency, 期望计数 bi/xd/zs/mmd/bc)
+# V730：600519_daily 的 mmd 5→3——旧「趋势背驰」用中枢末笔(lines[-1])对比且不锚定
+# 候选笔，把中枢延伸期的 bi6/bi14 误标为 1卖（连带 2卖）。修正为离开段口径
+# （bis[lines[-1].index+1]，与 beichi._check_qs_beichi 一致）后，该段行情第二离开段
+# (bi15) 超出数据末端、无有效趋势背驰，1卖/2卖 按原文正确消失。
+# V730 P1-4：600519_daily 的 xd 1→2——旧实现对「向下笔低点跌破特征序列分型
+# 极值」这一情况二场景以「第4特征元素分型且创新低」粗糙近似，导致 1578.34 前的
+# 突破分型被漏判（欠分段，正是用户反馈的「线段画不准」）。改为按第71课真实价格
+# 击穿判定（bi.low < gap_fx_extreme）后，UP 段正确止于 1578.34 并衔接 DOWN 段。
 CASES = [
-    ("chanlun_600519_daily.json", "daily", (15, 1, 4, 5, 1)),
+    ("chanlun_600519_daily.json", "daily", (15, 2, 4, 3, 1)),
     ("chanlun_000333_daily.json", "daily", (15, 4, 2, 1, 1)),
     ("chanlun_000001_weekly.json", "weekly", (15, 2, 3, 3, 2)),
     ("chanlun_000001_30min.json", "30min", (13, 1, 3, 2, 1)),
@@ -74,10 +82,12 @@ def test_zs_semantics(case) -> None:
         assert zs.zg > zs.zd
         assert zs.gg >= zs.zg
         assert zs.dd <= zs.zd
-        if len(zs.lines) >= 3:
-            first3 = zs.lines[:3]
-            assert zs.zg == min(line.high for line in first3)
-            assert zs.zd == max(line.low for line in first3)
+        # V730 原文口径（第17/20课）：ZG/ZD 由前两个走势的重叠确定后冻结；
+        # 第3笔起为延伸，不改变 ZG/ZD。gg/dd 为全部走势极值。
+        if len(zs.lines) >= 2:
+            first2 = zs.lines[:2]
+            assert zs.zg == min(line.high for line in first2), f"zg 应为前两笔 min(high) {zs}"
+            assert zs.zd == max(line.low for line in first2), f"zd 应为前两笔 max(low) {zs}"
         if zs.lines:
             assert zs.gg == max(line.high for line in zs.lines)
             assert zs.dd == min(line.low for line in zs.lines)

@@ -38,10 +38,14 @@ def test_fixture_loads(result) -> None:
 
 def test_counts_locked(result) -> None:
     assert len(result.bis) == 14  # V635 严格笔（顶底至少1根独立K线）后
-    assert len(result.xds) == 3  # V706 笔破坏默认开启后：更早结束 → 3 段
-    assert len(result.zss) == 3
+    assert len(result.xds) == 2  # 假破坏恢复（第71-78课）：笔破坏暂定+真破坏确认后，原 3 段合并为 2 段
+    # V730 原文中枢口径：ZG/ZD 前两笔冻结 + 无重叠率阈值 → zs 3→2
+    # （zs0=[bi0..bi9] 大震荡，bi9 上离开后 bi10 不回补 → 中枢结束；zs1=[bi10..bi12]）
+    assert len(result.zss) == 2
     assert len(result.mmds) == 3
-    assert len(result.bcs) == 1  # V617 MACD 力度窗口用极值 bar_index 后，此段出现 1 个笔背驰
+    # V730 原文中枢口径：旧 zs2 的「进入笔 bi9」现属于 zs0 本身，进入段(bi8)与
+    # 离开段(bi13)力度相当 → 盘整背驰按原文正确消失，bcs 1→0
+    assert len(result.bcs) == 0
 
 
 def test_bi_endpoints_on_extremes(result) -> None:
@@ -62,11 +66,12 @@ def test_zs_semantics(result) -> None:
         assert zs.zg > zs.zd, f"中枢上沿应高于下沿 {zs}"
         assert zs.gg >= zs.zg, f"gg 应 >= zg {zs}"
         assert zs.dd <= zs.zd, f"dd 应 <= zd {zs}"
-        # 缠论原文：zg/zd 由前三个走势确定，gg/dd 为全部走势极值
-        if len(zs.lines) >= 3:
-            first3 = zs.lines[:3]
-            assert zs.zg == min(line.high for line in first3), f"zg 应为前三个 min(high) {zs}"
-            assert zs.zd == max(line.low for line in first3), f"zd 应为前三个 max(low) {zs}"
+        # V730 原文口径（第17/20课）：ZG/ZD 由前两个走势的重叠确定后冻结；
+        # 第3笔起为延伸，不改变 ZG/ZD。gg/dd 为全部走势极值。
+        if len(zs.lines) >= 2:
+            first2 = zs.lines[:2]
+            assert zs.zg == min(line.high for line in first2), f"zg 应为前两笔 min(high) {zs}"
+            assert zs.zd == max(line.low for line in first2), f"zd 应为前两笔 max(low) {zs}"
         if zs.lines:
             assert zs.gg == max(line.high for line in zs.lines), f"gg 应为 max(high) {zs}"
             assert zs.dd == min(line.low for line in zs.lines), f"dd 应为 min(low) {zs}"
@@ -129,11 +134,11 @@ def test_timing_response_novice_fields() -> None:
     assert out["novice_advice"] is not None
     assert out["novice_advice"]["explanation"]
     assert out["signal_quality"]["summary"]
-    # structure 计数与快照一致
+    # structure 计数与快照一致（V730 原文中枢口径后 zs 3→2）
     assert out["structure"]["bi_count"] == 14
-    assert out["structure"]["zs_count"] == 3
+    assert out["structure"]["zs_count"] == 2
     assert out["structure"]["mmd_count"] == 3
-    assert out["structure"]["bc_count"] == 1
+    assert out["structure"]["bc_count"] == 0
 
 
 def test_bi_end_to_end(result) -> None:

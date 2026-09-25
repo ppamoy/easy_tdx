@@ -1,24 +1,16 @@
-"""中枢计算（改进版 v89）。
+"""中枢计算（V730 原文口径版）。
 
-中枢定义：至少三笔（或线段）的价格区间有重叠。
-- zg（上沿）= 重叠区间的上边界 = 所有构成笔的最高点中的最低者（min(high)）
-- zd（下沿）= 重叠区间的下边界 = 所有构成笔的最低点中的最高者（max(low)）
-- gg = 中枢内所有笔的最高价（max(high)）
-- dd = 中枢内所有笔的最低价（min(low)）
+缠论原文口径（第17/20/35课）：
+- 中枢 = 至少三个连续次级别走势的重叠区间。
+- ZG/ZD 由前两个次级别走势的重叠确定后即冻结（ZG = min(g1,g2)，ZD = max(d1,d2)），
+  之后的延伸段只更新极值 GG/DD，不改变 ZG/ZD。
+- 延伸判据 = 与 [ZD, ZG] 有重叠（overlap_high > overlap_low），无比例阈值。
+- gg = 中枢内所有笔的最高价（max(high)），dd = 最低价（min(low)）。
 
-标准中枢算法（v89 - 增强版）：
-1. 逐笔扫描，累积与当前区间有重叠的笔
-2. 只有当新笔与现有中枢区间有重叠且重叠率 > threshold 时才加入
-3. 当某笔完全离开中枢区间后，检查是否形成有效中枢（≥min_lines笔）
-4. 有效中枢关闭后，从当前笔重新开始候选
-5. 最后一批笔形成未完成中枢（done=False）
-6. v87: 增加"中枢方向推断"——根据首尾笔方向推断中枢所处趋势阶段
-7. v89: 增加"中枢质量评分"——基于笔数、宽度、位置综合评估中枢强度
-
-v89 改进：
-- 增加"中枢有效性二次验证"——关闭前检查重叠度是否足够
-- 增加"中枢最小宽度动态调整"——根据价格水平自适应
-- 增加"中枢方向推断"——标记中枢处于上升/下降/盘整阶段
+工程实现说明：
+- v87 的「重叠率动态阈值」「区间有效性二次验证」「中枢质量评分」保留辅助
+  定位（_overlap_ratio 供测试与外部使用），但延伸判定不再使用百分比阈值。
+- V730 P1-6：中枢震荡延伸达 _MAX_ZS_SEGMENTS 段后关闭（工程上限）。
 """
 
 from __future__ import annotations
@@ -27,6 +19,10 @@ from typing import Any
 
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import BI, ZS
+
+# V730 P1-6：中枢延伸段数上限（含初始3段）。原文允许中枢任意延伸，
+# 但工程上无限延伸会让中枢吞没后续行情、买卖点定位漂移，故设上限。
+_MAX_ZS_SEGMENTS = 9
 
 
 def _overlap_ratio(
@@ -164,15 +160,17 @@ def find_zss(
     bis: list[BI],
     config: ChanlunConfig | None = None,
 ) -> list[ZS]:
-    """从笔列表中计算中枢（v89 增强版）。
+    """从笔列表中计算中枢（V730 原文口径版）。
 
-    算法：
-    1. 逐笔扫描，维护当前中枢候选区间 [zg_candidate, zd_candidate]
-    2. 新笔与当前区间有重叠且重叠率 > 动态阈值 → 加入中枢，更新重叠区间
-    3. 新笔完全离开当前区间 → 检查中枢是否成立（≥min_lines笔），然后重置
-    4. 最后一批笔也可能形成未完成中枢
-    5. v87: 增加区间有效性检查和稳定性保护
-    6. v89: 增加"中枢质量评分"和"方向推断"
+    缠论原文口径（第17/20/35课）：
+    1. 中枢 = 至少三个连续次级别走势的重叠区间；ZG/ZD 由「前两个次级别走势」
+       的明确重叠确定后即冻结（ZG = min(g1,g2)，ZD = max(d1,d2)）。
+    2. 之后每个同级别走势若与 [ZD, ZG] 有重叠（overlap_high > overlap_low，
+       无比例阈值——原文只要求「重叠」，不要求达到某个百分比），
+       则为中枢延伸，只更新 GG/DD，不改变 ZG/ZD。
+    3. 某走势与 [ZD, ZG] 完全无重叠 → 中枢结束。
+    4. 中枢震荡延伸达 _MAX_ZS_SEGMENTS 段后关闭（工程上限，防止无限延伸
+       吞没后续行情；原文允许任意延伸，但同样可用「走势终完美」判断结束）。
 
     Args:
         bis: 笔列表
@@ -199,9 +197,6 @@ def find_zss(
     candidate_start = first_bi.start
     candidate_end = first_bi.end
 
-    # v87: 中心率动态阈值
-    base_overlap_threshold = 0.05
-
     for i in range(1, len(bis)):
         bi = bis[i]
 
@@ -209,63 +204,50 @@ def find_zss(
         overlap_high = min(zg_candidate, bi.high)
         overlap_low = max(zd_candidate, bi.low)
 
+        # V730 P1-2：原文只要求「重叠」，移除 v87 的重叠率百分比阈值——
+        # 只要 overlap_high > overlap_low 即为重叠（0 宽度的 touch 不算）。
         if overlap_high > overlap_low:
-            # 有重叠，计算重叠率
-            overlap_rate = _overlap_ratio(zg_candidate, zd_candidate, bi.high, bi.low)
-
-            # v87: 动态阈值——小价格区间使用更宽松的重叠率要求
-            mid_price = (zg_candidate + zd_candidate) / 2
-            if mid_price > 0:
-                price_range = (zg_candidate - zd_candidate) / mid_price
-                if price_range < 0.05:  # 区间宽度 < 5%
-                    # 窄区间：放宽重叠率要求到 2%
-                    effective_threshold = max(0.02, base_overlap_threshold * 0.4)
-                else:
-                    effective_threshold = base_overlap_threshold
-            else:
-                effective_threshold = base_overlap_threshold
-
-            # 重叠率过低时视为无有效重叠，关闭当前候选
-            if overlap_rate < effective_threshold:
-                # 关闭当前候选
-                if len(candidate_lines) >= config.zs_min_lines:
-                    zs = ZS(
-                        lines=list(candidate_lines),
-                        zg=zg_candidate,
-                        zd=zd_candidate,
-                        gg=gg_candidate,
-                        dd=dd_candidate,
-                        start=candidate_start,
-                        end=candidate_end,
-                        index=len(zss),
-                        done=True,
-                    )
-                    # v89: 计算中枢质量评分
-                    quality = _calc_zs_quality(zs, bis, len(zss))
-                    zs.quality_score = quality["quality_score"]
-                    zs.grade = quality["grade"]
-                    zs.width_pct = quality["width_pct"]
-                    zss.append(zs)
-                # 开始新的中枢候选
-                candidate_lines = [bi]
-                zg_candidate = bi.high
-                zd_candidate = bi.low
-                gg_candidate = bi.high
-                dd_candidate = bi.low
-                candidate_start = bi.start
-                candidate_end = bi.end
-                continue
-
-            # 有足够重叠，加入中枢候选
+            # 有重叠，加入中枢候选
             candidate_lines.append(bi)
-            # 缠论原文：中枢区间由「前三个连续次级别走势」的重叠确定；
-            # 之后的中枢延伸（第4笔及以后）不改变 ZG/ZD，只更新极值 GG/DD。
-            if len(candidate_lines) <= config.zs_min_lines:
+            # V730 P1-1：原文口径——ZG/ZD 由前两个次级别走势的重叠确定后冻结，
+            # 第3笔起为中枢延伸，只更新极值 GG/DD，不再改变 ZG/ZD。
+            if len(candidate_lines) <= 2:
                 zg_candidate = overlap_high
                 zd_candidate = overlap_low
             gg_candidate = max(gg_candidate, bi.high)
             dd_candidate = min(dd_candidate, bi.low)
             candidate_end = bi.end
+
+            # V730 P1-6：延伸上限——中枢震荡延伸达 _MAX_ZS_SEGMENTS 段后关闭，
+            # 之后的笔开启新的中枢候选（防止无限延伸吞没后续行情）。
+            if (
+                len(candidate_lines) >= config.zs_min_lines
+                and len(candidate_lines) >= _MAX_ZS_SEGMENTS
+            ):
+                zs = ZS(
+                    lines=list(candidate_lines),
+                    zg=zg_candidate,
+                    zd=zd_candidate,
+                    gg=gg_candidate,
+                    dd=dd_candidate,
+                    start=candidate_start,
+                    end=candidate_end,
+                    index=len(zss),
+                    done=True,
+                )
+                # v89: 计算中枢质量评分
+                quality = _calc_zs_quality(zs, bis, len(zss))
+                zs.quality_score = quality["quality_score"]
+                zs.grade = quality["grade"]
+                zs.width_pct = quality["width_pct"]
+                zss.append(zs)
+                candidate_lines = []
+                zg_candidate = 0.0
+                zd_candidate = 0.0
+                gg_candidate = 0.0
+                dd_candidate = 0.0
+                candidate_start = None
+                candidate_end = None
         else:
             # 完全无重叠，关闭当前候选
             if len(candidate_lines) >= config.zs_min_lines:
@@ -298,8 +280,8 @@ def find_zss(
             candidate_start = bi.start
             candidate_end = bi.end
 
-    # 处理最后一个中枢候选
-    if len(candidate_lines) >= config.zs_min_lines:
+    # 处理最后一个中枢候选（V730：candidate_lines 可能为空——9段上限关闭后重置）
+    if candidate_lines and len(candidate_lines) >= config.zs_min_lines:
         # v87: 验证中枢区间有效性
         if _is_valid_zs_range(zg_candidate, zd_candidate, gg_candidate, dd_candidate):
             zs = ZS(

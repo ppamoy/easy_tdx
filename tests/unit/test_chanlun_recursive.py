@@ -108,11 +108,12 @@ def test_recursive_level_golden_counts() -> None:
     # （旧实现 max/min 换出到早已越过的 98.0 低点，违反原文收尾语义）。
     assert result.xds[1].end.val == 100.0
 
-    # 高级别线段中枢：全部 10 根低级别线段重叠，ZG=112/ZD=100
+    # 高级别线段中枢：ZG/ZD 前两笔冻结 → ZG=min(112,112)=112, ZD=max(98,98)=98。
+    # V730 P1-6：延伸达 9 段上限后中枢关闭，第 10 段归入新候选（不足 3 段不成中枢）。
     assert len(result.zss) == 1
     assert result.zss[0].zg == 112.0
-    assert result.zss[0].zd == 100.0
-    assert result.zss[0].line_count == 10
+    assert result.zss[0].zd == 98.0
+    assert result.zss[0].line_count == 9
 
     # 高级别背驰：向下线段力度衰竭
     assert len(result.bcs) == 1
@@ -239,8 +240,11 @@ def test_compute_recursive_levels_deep_three_levels() -> None:
     res = compute_recursive_levels(xds, depth=5, config=_cfg())
 
     assert len(res) == 3
-    # 级别线段数逐级收敛：基础级 → 56 → 6 → 1（数据决定的确定性金标）。
-    assert [len(rl.xds) for rl in res] == [56, 6, 1]
+    # 级别线段数逐级收敛：基础级 → 56 → 8 → 1（数据决定的确定性金标）。
+    # V730 P1-4：level2 6→8——旧实现对缺口后「第4特征元素创新低/新高」的粗糙
+    # 近似漏判了部分线段终点（欠分段）；按第71课真实价格击穿判定后，158.36 段
+    # 正确止于 390.81 处的特征序列分型并衔接 DOWN 段，末段同理，4 段变 8 段。
+    assert [len(rl.xds) for rl in res] == [56, 8, 1]
 
     # 每级几何不变量：端点首尾相连、方向交替、区间合理。
     for rl in res:

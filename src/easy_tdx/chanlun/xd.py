@@ -12,6 +12,13 @@
 保证同一输入永远同一次、端点落在特征序列转折点分型上且方向一致。
 笔破坏由 config.xd_bi_pohuai 控制（默认 True，原文口径，见 bi-pohuai-default-on spec）。
 
+假破坏 / 真破坏（线段延伸与确认，第71-78课）：笔破坏只是「暂定」结束，需确认：
+- 真破坏确认：破坏笔之后出现更深的反向笔（越过破坏笔极值）→ 破坏方向仍在延续、
+  破坏成立 → 线段在破坏笔之前结束（立即提交，优先于特征分型）。
+- 假破坏恢复：破坏笔之后同向笔创出超过线段终点的新高/新低（候选假破坏），且无更
+  深反向突破推翻 → 破坏笔只是途中回撤、原线段方向仍在延续 → 撤销暂定、线段延伸。
+- 特征序列分型为「确认式」结束，立即提交（与真破坏确认并列，取最早端点）。
+
 缺口与第二特征序列：特征序列出现区间缺口时，结束需「笔破坏」式确认
 （分型后第 4 个特征元素跌破/升破分型极值）；收尾端点取最后一个已完成
 且方向一致的同向笔端点（收尾不换取端点，见 line-segment-original-fidelity spec）。
@@ -131,65 +138,176 @@ def find_xds(
     start = 0
     while start < len(bis):
         seg_dir = bis[start].direction
+        seg_dir_is_up = seg_dir == Direction.UP
         features: list[tuple[int, BI]] = []
-        end: int | None = None
+        # 两种暂定结束：
+        #   confirmed_end   —— 特征序列分型 / 真破坏确认（确认式，立即提交）
+        #   provisional_end —— 笔破坏（暂定式，可被「假破坏」撤销）
+        confirmed_end: int | None = None
+        provisional_end: int | None = None
+        # 线段终点极值水位：向上段取已见最高顶（up-bi 的 end.val），向下段取已见最低底。
+        end_extreme = bis[start].end.val
+        # 假破坏恢复状态（缠论第71-78课：线段破坏需确认）：
+        #   breakthrough_extreme —— 破坏笔的极值（向上段=向下笔 low，向下段=向上笔 high）。
+        #     其后若出现更深的同向破坏笔（越过该极值），则破坏「成立」（真破坏）→ 线段在
+        #     破坏笔之前结束；反之原线段方向仍在延续。
+        #   seg_new —— 破坏暂定后，同向笔是否创出超过终点水位的新极值（候选「假破坏」）。
+        #     此为「待定」信号，不立即撤销——须等到收尾时再据真破坏是否确认来裁决。
+        breakthrough_extreme: float | None = None
+        seg_new = False
 
         j = start + 1
-        # 原文分歧备注：原文的缺口判定覆盖整个特征序列中相邻元素；此处仅检测
-        # 第一、第二特征元素之间（工程化简化，显式标注，非静默近似）。
-        has_gap = False
+        # V730 P1-3/P1-4（缠论第67/71课口径）：
+        #   缺口判定随每个特征序列分型进行——比较「分型左元素 vs 中元素」区间是否重叠
+        #   （旧实现在首两个特征元素间一次性判定，与分型无对应关系，已废弃）。
+        #   带缺口的分型不立即结束线段：进入 gap_pending 待确认状态，由「第二特征序列」
+        #   （分型中间元素之后、与线段同向的笔构成的序列）裁决——第二特征序列出现分型
+        #   → 确认结束；同向笔创出超过分型顶点的新极值 → 分型无效、线段延续。
+        gap_pending: int | None = None
+        gap_fx_extreme: float | None = None
+        second_features: list[tuple[int, BI]] = []
         while j < len(bis):
-            if bis[j].direction != seg_dir:
-                features.append((j, bis[j]))
-                # 缠论原文：线段由「至少 3 笔 + 特征序列分型」界定，也可由「笔破坏」结束。
-                # 启用该规则时，反向走势笔一旦越过线段起点的极值（即破坏了线段
-                # 内部结构与方向），线段在破坏笔之前结束；首次确认即定（XD_TIEBREAK_EARLIEST）。
-                if config.xd_bi_pohuai and j >= start + 3:
-                    breakout_feat = bis[j]
-                    cand_end = j - 1
-                    if seg_dir == Direction.UP and breakout_feat.low < bis[start].start.val:
-                        if _valid_segment_end(bis, start, cand_end, seg_dir):
-                            end = cand_end
-                            break
-                    elif seg_dir == Direction.DOWN and breakout_feat.high > bis[start].start.val:
-                        if _valid_segment_end(bis, start, cand_end, seg_dir):
-                            end = cand_end
-                            break
-                # 特征序列第一、第二元素之间是否有缺口（区间不重叠）
-                if len(features) == 2:
-                    a = features[0][1]
-                    b = features[1][1]
-                    has_gap = not (min(a.high, b.high) > max(a.low, b.low))
+            bi = bis[j]
+            same_dir = bi.direction == seg_dir
 
-                if len(features) >= 3:
+            if gap_pending is not None:
+                # V730 P1-4 第三出口（第71课）：缺口待确认期间，股价直接击穿
+                # 第一特征序列分型的极值（向上段=分型三元素最低点，向下段=最高点）
+                # → 线段在分型中元素处结束（旧实现的「第4特征元素跌破」为此 clause
+                # 的粗糙近似，现改为按真实价格击穿判定）。
+                # 注意：此出口只做确认；分型无效化的唯一路径是同向笔创出超过
+                # 分型顶点的新极值（见同向分支），反向笔的高点高于分型低点是常态，
+                # 不构成无效化。
+                if (seg_dir_is_up and bi.low < gap_fx_extreme) or (
+                    not seg_dir_is_up and bi.high > gap_fx_extreme
+                ):
+                    cand_end = gap_pending - 1
+                    if _valid_segment_end(bis, start, cand_end, seg_dir):
+                        confirmed_end = cand_end
+                        break
+                    # 候选终点与方向矛盾（退化形态）→ 放弃该待确认分型，恢复常规扫描
+                    gap_pending = None
+                    gap_fx_extreme = None
+                    second_features = []
+
+            if same_dir:
+                # ── 缺口待确认期间：同向笔构成第二特征序列（第71课）──
+                if gap_pending is not None:
+                    if (seg_dir_is_up and bi.end.val > end_extreme) or (
+                        not seg_dir_is_up and bi.end.val < end_extreme
+                    ):
+                        # 创出超过分型顶点的新极值 → 待确认分型无效，线段延续；
+                        # 落入下方常规同向逻辑（更新水位 / 假破坏判定）。
+                        gap_pending = None
+                        gap_fx_extreme = None
+                        second_features = []
+                    else:
+                        second_features.append((j, bi))
+                        if len(second_features) >= 3:
+                            m2 = _merge_feature_sequence(second_features)
+                            # 第二特征序列属于「反向候选线段」，其结束分型按候选
+                            # 方向判定（向上段→候选向下段→其特征序列出底分型）。
+                            opp_dir = Direction.DOWN if seg_dir_is_up else Direction.UP
+                            if _merged_feature_fx(m2, opp_dir):
+                                # 第二特征序列分型成立 → 缺口场景线段结束确认
+                                cand_end = gap_pending - 1
+                                if _valid_segment_end(bis, start, cand_end, seg_dir):
+                                    confirmed_end = cand_end
+                                    break
+                                # 候选终点与方向矛盾 → 放弃该待确认分型，恢复常规扫描
+                                gap_pending = None
+                                gap_fx_extreme = None
+                                second_features = []
+                        j += 1
+                        continue
+                # 同向笔：先据当前水位判断是否候选假破坏（新极值），再更新水位。
+                if (
+                    provisional_end is not None
+                    and not seg_new
+                    and (
+                        (seg_dir_is_up and bi.end.val > end_extreme)
+                        or (not seg_dir_is_up and bi.end.val < end_extreme)
+                    )
+                ):
+                    seg_new = True
+                if seg_dir_is_up:
+                    end_extreme = max(end_extreme, bi.end.val)
+                else:
+                    end_extreme = min(end_extreme, bi.end.val)
+            else:
+                # ── 真破坏确认（笔破坏成立）──
+                # 笔破坏暂定后，若后续反向笔越过破坏笔极值（更深突破），说明破坏方向仍在
+                # 延续、破坏成立 → 线段在破坏笔之前结束（cand_end = 破坏笔前一笔）。此为
+                # 确认式，立即提交，优先于特征序列分型（XD_TIEBREAK_EARLIEST：更早的端点）。
+                if (
+                    provisional_end is not None
+                    and breakthrough_extreme is not None
+                    and (
+                        (seg_dir_is_up and bi.low < breakthrough_extreme)
+                        or (not seg_dir_is_up and bi.high > breakthrough_extreme)
+                    )
+                ):
+                    confirmed_end = provisional_end
+                    break
+                features.append((j, bi))
+                # 缠论原文：线段由「至少 3 笔 + 特征序列分型」界定，也可由「笔破坏」结束。
+                # 笔破坏为暂定式：反向走势笔越过线段起点极值时记为暂定结束（cand_end = 破坏笔前一笔），
+                # 不立即提交；其后若反向笔再创新极值（更深突破）→ 真破坏确认（见上方）；
+                # 若同向笔创出超过终点的新极值且无更深突破 → 假破坏，撤销、线段延伸（见收尾裁决）。
+                if (
+                    config.xd_bi_pohuai
+                    and j >= start + 3
+                    and provisional_end is None
+                    and confirmed_end is None
+                ):
+                    breakout_feat = bi
+                    cand_end = j - 1
+                    if seg_dir_is_up and breakout_feat.low < bis[start].start.val:
+                        if _valid_segment_end(bis, start, cand_end, seg_dir):
+                            provisional_end = cand_end
+                            breakthrough_extreme = breakout_feat.low
+                    elif not seg_dir_is_up and breakout_feat.high > bis[start].start.val:
+                        if _valid_segment_end(bis, start, cand_end, seg_dir):
+                            provisional_end = cand_end
+                            breakthrough_extreme = breakout_feat.high
+
+                if len(features) >= 3 and gap_pending is None:
+                    # V730 P1-4：缺口待确认期间第一特征序列分型检测暂停（否则会把
+                    # gap_pending 重置、覆盖第二特征序列的确认进度）。
                     merged = _merge_feature_sequence(features)
                     mid_orig_idx: int | None = None
-                    if has_gap and len(merged) >= 4:
-                        # 特征序列有缺口：线段结束需要「笔破坏」确认——
-                        # 顶/底分型之后出现的第 4 个特征元素跌破/升破分型极值。
-                        left, mid, right = merged[-4], merged[-3], merged[-2]
-                        confirm = merged[-1]
-                        if seg_dir == Direction.UP:
-                            top_ok = mid[1] > left[1] and mid[1] > right[1]
-                            top_low = min(left[2], mid[2], right[2])
-                            if top_ok and confirm[2] < top_low:
-                                mid_orig_idx = mid[0][0]
+                    if _merged_feature_fx(merged, seg_dir):
+                        # V730 P1-3：缺口判定随分型进行——比较「分型左元素 vs 中元素」
+                        # （merged[-3] vs merged[-2]）区间是否重叠（原文第67课）。
+                        left_m, mid_m = merged[-3], merged[-2]
+                        has_gap = not (min(left_m[1], mid_m[1]) > max(left_m[2], mid_m[2]))
+                        if has_gap:
+                            # V730 P1-4（原文第71课）：带缺口分型不立即结束，
+                            # 由第二特征序列（分型中元素之后的同向笔）确认，
+                            # 或待确认期间价格击穿分型极值确认（见同向/反向入口处）。
+                            gap_pending = merged[-2][0][0]
+                            # 清空上一轮待确认可能残留的第二特征序列（状态卫生）
+                            second_features = []
+                            gap_fx_extreme = min(left_m[2], mid_m[2], merged[-1][2]) if seg_dir_is_up else max(
+                                left_m[1], mid_m[1], merged[-1][1]
+                            )
                         else:
-                            bottom_ok = mid[2] < left[2] and mid[2] < right[2]
-                            bottom_high = max(left[1], mid[1], right[1])
-                            if bottom_ok and confirm[1] > bottom_high:
-                                mid_orig_idx = mid[0][0]
-                    elif not has_gap and _merged_feature_fx(merged, seg_dir):
-                        mid_orig_idx = merged[-2][0][0]
+                            mid_orig_idx = merged[-2][0][0]
 
                     if mid_orig_idx is not None:
                         cand_end = mid_orig_idx - 1
                         if _valid_segment_end(bis, start, cand_end, seg_dir):
-                            # 确定性取舍：首次成立即结束（XD_TIEBREAK_EARLIEST）
-                            end = cand_end
+                            # 特征序列分型 = 确认式结束，立即提交（XD_TIEBREAK_EARLIEST）。
+                            confirmed_end = cand_end
                             break
             j += 1
 
+        # 收尾裁决：确认式（特征分型 / 真破坏确认）优先于暂定式（笔破坏）。
+        # 笔破坏暂定若出现候选假破坏（同向笔创出超过终点的新极值）且未被真破坏确认
+        # （更深突破）推翻 → 撤销暂定、线段延伸（落入收尾同向端点）；否则暂定转为正式结束。
+        if provisional_end is not None and seg_new and confirmed_end is None:
+            provisional_end = None
+        end = confirmed_end if confirmed_end is not None else provisional_end
         if end is not None:
             xds.append(_create_xd_from_bis(bis, start, end, len(xds), seg_dir))
             start = end + 1

@@ -14,12 +14,13 @@ from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.kline_merge import merge_klines
 from easy_tdx.chanlun.mmd import (
+    _find_first_type_mmds,
     _has_meaningful_pullback,
     _has_meaningful_rebound,
     _reference_zs_for_bi,
 )
 from easy_tdx.chanlun.mmd_conditions import _calc_trend_strength
-from easy_tdx.chanlun.types import BI, FX, ZS, BCType, CLKline, Direction, FXType, Kline
+from easy_tdx.chanlun.types import BI, FX, MMDType, ZS, BCType, CLKline, Direction, FXType, Kline
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
     _merged_feature_fx,
@@ -561,12 +562,14 @@ def test_find_zss_records_enter_exit_bi() -> None:
     zs = zss[0]
     assert zs.enter_bi is bis[0]
     assert zs.exit_bi is bis[4]
-    assert zs.zg == 13.0
+    # V730 原文口径：ZG/ZD 前两笔冻结 → ZG=min(15,14)=14, ZD=max(8,7)=8
+    # （旧 3 笔收窄口径为 13/8）
+    assert zs.zg == 14.0
     assert zs.zd == 8.0
 
 
 def test_find_zss_extension_keeps_zg_zd() -> None:
-    """缠论原文：中枢区间由前三个走势确定，第4笔延伸不改变 zg/zd，只更新 gg/dd。"""
+    """缠论原文：中枢区间由前两个走势确定并冻结，延伸不改变 zg/zd，只更新 gg/dd。"""
     bis = [
         _mk_bi(0, "up", 12.0, 8.0),
         _mk_bi(1, "down", 11.0, 9.0),
@@ -577,7 +580,7 @@ def test_find_zss_extension_keeps_zg_zd() -> None:
     zss = find_zss(bis, ChanlunConfig())
     assert len(zss) == 1
     zs = zss[0]
-    assert zs.zg == 11.0  # 前三个走势确定，延伸不改变
+    assert zs.zg == 11.0  # 前两个走势（bi0/bi1）确定并冻结，延伸不改变
     assert zs.zd == 9.0
     assert zs.gg == 12.0
     assert zs.dd == 8.0
@@ -667,3 +670,225 @@ def test_beichi_rejects_no_new_high() -> None:
     ]
     bcs = check_bi_beichi(bis, [], closes=None)
     assert all(bc.bc_type != BCType.BI for bc in bcs)
+
+
+# ══ V730 原文对照测试（缠论第17/20/24/35/67/71课口径锁定）══════════════
+
+
+# ── 一、线段：特征序列分型的「两种情况」（第67/71课）──────────────────
+# 情况一（无缺口）：特征序列分型一出现即确认结束。
+# 情况二（有缺口）：分型不立即结束线段，须由第二特征序列分型、或价格击穿
+#   分型极值、或同向笔创新极值（分型无效）裁决。
+
+
+def _mk_zs_raw(bis, zg, zd, gg, dd, index=0, done=True):
+    return ZS(lines=bis, zg=zg, zd=zd, gg=gg, dd=dd, direction="", index=index, done=done)
+
+
+def test_xd_no_gap_fx_confirms_immediately() -> None:
+    """情况一：特征序列无缺口 → 分型出现即结束（对照：find_zss 前两笔冻结）。
+
+    向上线段特征序列（向下笔）：F1=[11,12]，F2=[13,15] 与 F1 有缺口 → 修改样本
+    使 F2 区间 [11.5,13.5] 与 F1 重叠（无缺口）→ 分型即确认，线段终点 15.0。
+    """
+    bis = [
+        _mk_bi(0, "up", 12.0, 9.0, start_val=10.0, end_val=12.0),
+        _mk_bi(1, "down", 12.0, 11.0, start_val=12.0, end_val=11.0),  # F1 [11,12]
+        _mk_bi(2, "up", 15.0, 10.0, start_val=11.0, end_val=15.0),
+        _mk_bi(3, "down", 13.5, 11.5, start_val=15.0, end_val=11.5),  # F2 [11.5,13.5] 无缺口
+        _mk_bi(4, "up", 14.0, 12.0, start_val=11.5, end_val=14.0),
+        _mk_bi(5, "down", 12.5, 10.5, start_val=14.0, end_val=10.5),  # F3 [10.5,12.5]
+    ]
+    xds = find_xds(bis, ChanlunConfig())
+    # F1/F2/F3 构成顶分型（中元素 bi3 高点 13.5 最高）且 F1/F2 无缺口 → 立即结束
+    assert len(xds) == 2
+    assert xds[0].direction == Direction.UP
+    assert xds[0].end.val == 15.0
+    assert xds[1].direction == Direction.DOWN
+
+
+def test_xd_gap_requires_confirmation_price_pierce() -> None:
+    """情况二：特征序列有缺口 + 价格击穿分型极值 → 确认结束（第71课第三出口）。
+
+    旧实现以「第4特征元素创新低」粗糙近似该场景；V730 改为真实价格击穿判定：
+    向上段的分型极值 = 分型三元素最低点，任何后续笔 low < 该极值 → 确认。
+    """
+    # _gap_bis(10.0)：分型 F1[11,12] F2[13,15] F3[12,14]，缺口 → gap_pending，
+    # 分型极值 = min(11,13,12)=11；bi7 low=10 < 11 → 确认，终点在 bi3（15.0）。
+    xds = find_xds(_gap_bis(10.0), ChanlunConfig())
+    assert len(xds) == 2
+    assert xds[0].end.val == 15.0
+
+
+def test_xd_gap_invalidated_by_new_extreme() -> None:
+    """情况二：特征序列有缺口 + 同向笔创出超过分型顶点的新极值 → 分型无效、线段延续。"""
+    # bi7 改为向上笔创新高：顶分型从未被确认，线段延伸至新高 16.0
+    bis = [
+        _mk_bi(0, "up", 12.0, 9.0, start_val=10.0, end_val=12.0),
+        _mk_bi(1, "down", 12.0, 11.0, start_val=12.0, end_val=11.0),
+        _mk_bi(2, "up", 15.0, 10.0, start_val=11.0, end_val=15.0),
+        _mk_bi(3, "down", 15.0, 13.0, start_val=15.0, end_val=13.0),
+        _mk_bi(4, "up", 14.0, 12.0, start_val=13.0, end_val=14.0),
+        _mk_bi(5, "down", 14.0, 12.0, start_val=14.0, end_val=12.0),
+        _mk_bi(6, "up", 15.5, 11.0, start_val=12.0, end_val=15.5),
+        _mk_bi(7, "up", 16.0, 15.5, start_val=15.5, end_val=16.0),
+    ]
+    xds = find_xds(bis, ChanlunConfig())
+    # 分型无效后线段延续；收尾取最后一个同向笔端点 = 16.0
+    assert len(xds) == 1
+    assert xds[0].end.val == 16.0
+
+
+# ── 二、中枢：前两笔冻结 + 纯重叠延伸（第17/20/35课）────────────────
+
+
+def test_zs_zg_zd_frozen_first_two_no_enter_offset() -> None:
+    """中枢区间 = 前两个次级别走势重叠的冻结：ZG=min(g1,g2), ZD=max(d1,d2)。
+
+    直接喂 find_zss（无进入段偏移，bis[0] 即中枢第一笔）：
+    bi0=[8,10], bi1=[7,15] → 冻结 ZG=min(10,15)=10, ZD=max(8,7)=8。
+    bi2=[8.5,9.5] 完全在区间内 → 延伸；延伸只更新 gg/dd。
+    """
+    bis = [
+        _mk_bi(0, "up", 10.0, 8.0),
+        _mk_bi(1, "down", 15.0, 7.0),
+        _mk_bi(2, "up", 9.5, 8.5),
+        _mk_bi(3, "down", 12.0, 9.0),  # 延伸笔（与 [8,10] 重叠）
+        _mk_bi(4, "down", 6.0, 4.0),  # 与 [8,10] 无重叠 → 中枢关闭
+    ]
+    zss = find_zss(bis, ChanlunConfig())
+    assert len(zss) == 1
+    zs = zss[0]
+    assert zs.zg == 10.0  # min(10, 15)
+    assert zs.zd == 8.0  # max(8, 7)
+    assert zs.gg == 15.0  # 全区间最高
+    assert zs.dd == 7.0  # 全区间最低
+    assert zs.line_count == 4
+
+
+def test_zs_extension_pure_overlap_no_ratio_threshold() -> None:
+    """延伸判据 = 与 [ZD,ZG] 纯重叠（overlap_high > overlap_low），无比例阈值。
+
+    V730 P1-2 移除了 v87 的重叠率百分比要求：窄至 0.1 的重叠也是延伸，
+    不应因「重叠占比低」而把同一中枢误拆成两个。
+    """
+    bis = [
+        _mk_bi(0, "up", 10.0, 8.0),
+        _mk_bi(1, "down", 15.0, 7.0),
+        _mk_bi(2, "up", 9.5, 8.5),
+        _mk_bi(3, "down", 20.0, 9.95),  # 与 [8,10] 仅重叠 [9.95,10]，宽 0.05
+        _mk_bi(4, "down", 6.0, 4.0),
+    ]
+    zss = find_zss(bis, ChanlunConfig())
+    assert len(zss) == 1
+    assert zss[0].zg == 10.0
+    assert zss[0].zd == 8.0
+    assert zss[0].line_count == 4
+
+
+def test_zs_extension_cap_9_segments_closes_and_restarts() -> None:
+    """V730 P1-6（社区共识工程上限）：延伸达 9 段后关闭中枢，后续笔开启新候选。"""
+    bis = [_mk_bi(0, "up", 10.0, 8.0), _mk_bi(1, "down", 15.0, 7.0)]
+    # 再造 7 笔与 [8,10] 有重叠的笔（共 9 段）→ 达上限关闭
+    for i in range(2, 9):
+        lo = 8.5 + 0.1 * i
+        bis.append(_mk_bi(i, "down" if i % 2 else "up", lo + 1.0, lo))
+    bis.append(_mk_bi(9, "down", 30.0, 25.0))  # 无重叠 → 若未达上限会被并入延伸
+    zss = find_zss(bis, ChanlunConfig())
+    assert len(zss) == 1
+    assert zss[0].line_count == 9  # 9 段上限（含初始 2 段）
+    assert zss[0].zg == 10.0 and zss[0].zd == 8.0  # 冻结不变
+
+
+# ── 三、趋势背驰：离开段口径 + 候选笔锚定（第24课）──────────────────
+
+
+def test_qs_beichi_anchored_to_exit_segment() -> None:
+    """趋势背驰的背驰点必须锚定在「第二离开段」本身（curr_exit_idx == bi_idx）。
+
+    构造两个同向下移中枢：zs0 lines=[bi1,bi2,bi3]（zg=15,zd=11），zs1
+    lines=[bi5,bi6,bi7]（zg=11,zd=7）。离开段口径下比较 bis[4] vs bis[8]，
+    bis[8] 创新低且力度（振幅）衰减 → 趋势背驰成立，且 bc.bi 即 bis[8]。
+    """
+    bis = [
+        _mk_bi(0, "up", 22.0, 18.0),
+        _mk_bi(1, "down", 15.0, 11.0),
+        _mk_bi(2, "up", 15.0, 11.0),
+        _mk_bi(3, "down", 15.0, 11.0),
+        _mk_bi(4, "down", 11.0, 7.0),  # zs0 离开段（向下，力度 4）
+        _mk_bi(5, "up", 11.0, 7.0),
+        _mk_bi(6, "down", 11.0, 7.0),
+        _mk_bi(7, "up", 11.0, 7.0),
+        _mk_bi(8, "down", 7.5, 5.0),  # zs1 离开段：创新低(5<7)、力度 2.5 < 4*0.8
+    ]
+    zss = [
+        _mk_zs_raw([bis[1], bis[2], bis[3]], 15.0, 11.0, 15.0, 11.0),
+        _mk_zs_raw([bis[5], bis[6], bis[7]], 11.0, 7.0, 11.0, 7.0, index=1),
+    ]
+    bcs = check_bi_beichi(bis, zss, closes=None)
+    qs = [bc for bc in bcs if bc.bc_type == BCType.QS]
+    assert len(qs) == 1
+    assert qs[0].curr is bis[8]  # 背驰点锚定在第二离开段本身，而非后续不相关的笔
+
+
+def test_qs_beichi_not_anchored_no_signal() -> None:
+    """候选笔不是第二离开段（curr_exit_idx != bi_idx）→ 不产生趋势背驰。
+
+    P0-1 锚定语义的反向验证：把 bis[8]（真正的离开段）换成 bis[9]（后续
+    同向笔），力度再弱也不能把背驰标到它上面——旧实现会误标。
+    """
+    bis = [
+        _mk_bi(0, "up", 22.0, 18.0),
+        _mk_bi(1, "down", 15.0, 11.0),
+        _mk_bi(2, "up", 15.0, 11.0),
+        _mk_bi(3, "down", 15.0, 11.0),
+        _mk_bi(4, "down", 11.0, 7.0),
+        _mk_bi(5, "up", 11.0, 7.0),
+        _mk_bi(6, "down", 11.0, 7.0),
+        _mk_bi(7, "up", 11.0, 7.0),
+        _mk_bi(8, "up", 10.0, 8.0),  # zs1 离开段方向向上（与趋势相反）→ QS 不成立
+        _mk_bi(9, "down", 9.0, 5.0),  # 后续同向笔：即使创新低也不背驰（未锚定）
+    ]
+    zss = [
+        _mk_zs_raw([bis[1], bis[2], bis[3]], 15.0, 11.0, 15.0, 11.0),
+        _mk_zs_raw([bis[5], bis[6], bis[7]], 11.0, 7.0, 11.0, 7.0, index=1),
+    ]
+    bcs = check_bi_beichi(bis, zss, closes=None)
+    assert all(bc.bc_type != BCType.QS for bc in bcs)
+
+
+# ── 四、1买/1卖 扫描方向对称（V730 P1-5）────────────────────────────
+
+
+def test_first_type_mmd_scan_direction_symmetry() -> None:
+    """1买 forward 与 1卖 forward 镜像：pullback_low 只累计「信号之前」的回落。
+
+    反向验证（未来函数探测）：1卖候选笔 high > zg 但**之后**的走势大幅回落
+    ——正向扫描下 pullback_low 含未来数据不影响判定时序，但若实现退回
+    reversed(bis)，评估首笔时 pullback_low 已含末端低点，会拒绝本应成立的
+    顶部信号。锁定：两支顶背驰笔（力度衰减+创新高）都应被标出。
+    """
+    bis = [
+        _mk_bi(0, "up", 22.0, 18.0),
+        _mk_bi(1, "down", 14.0, 10.0),  # zs0: zg=14, zd=10
+        _mk_bi(2, "up", 14.0, 10.0),
+        _mk_bi(3, "down", 14.0, 10.0),
+        _mk_bi(4, "up", 20.0, 14.0),  # zs0 离开段（向上）
+        _mk_bi(5, "down", 16.0, 12.0),  # zs1: zg=16, zd=12（上移 → 同向上升趋势）
+        _mk_bi(6, "up", 16.0, 12.0),
+        _mk_bi(7, "down", 16.0, 12.0),
+        _mk_bi(8, "up", 24.0, 16.0),  # zs1 离开段：创新高(24>20)、力度 8 > 6*0.8 → 无背驰
+        _mk_bi(9, "down", 24.0, 20.0),
+        _mk_bi(10, "up", 25.0, 24.0),  # 创新高(25>24)、力度 1 < 8*0.8 → 1卖 ✓
+        _mk_bi(11, "down", 25.0, 21.0),
+        _mk_bi(12, "up", 26.0, 25.0),  # 创新高(26>25)、力度 1 < 1*0.8? 否 → 跳过
+        _mk_bi(13, "down", 26.0, 22.0),  # 之后深度回落（若 reversed 扫描会污染判定）
+    ]
+    zss = [
+        _mk_zs_raw([bis[1], bis[2], bis[3]], 14.0, 10.0, 14.0, 10.0),
+        _mk_zs_raw([bis[5], bis[6], bis[7]], 16.0, 12.0, 16.0, 12.0, index=1),
+    ]
+    mmds = _find_first_type_mmds(bis, zss, None, ChanlunConfig())
+    sells = [m for m in mmds if m.mmd_type == MMDType.SELL_1]
+    assert len(sells) == 1
+    assert sells[0].bi is bis[10]
