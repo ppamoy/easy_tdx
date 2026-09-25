@@ -14,6 +14,7 @@ import {
   type StockPickTimingResult,
 } from '../api'
 import { useEarlierBars } from '../composables/useEarlierBars'
+import { useTimeJump } from '../composables/useTimeJump'
 import type { Bar, Category } from '../types'
 import { padMacdHead, shiftStructure } from '../utils/shiftStructure'
 
@@ -81,6 +82,98 @@ async function loadEarlierTiming() {
 
 const season = ref<SeasonInfo | null>(null)
 const error = ref('')
+
+// ── V723: 任意日期区间跳转（重新按区间取数 + 择时分析）────────────────
+// 择时数据来自 /stock-pick/timing（date 语义 = 分析截至日），这里跳转时：
+// date 用区间终点（结构与图表对齐到该日），count 按 8000 上限覆盖起点。
+const {
+  jumpStart,
+  jumpEnd,
+  jumping,
+  jumpError,
+} = useTimeJump({
+  code: () => timingResult.value?.code ?? '',
+  category: () => 'DAY' as Category,
+  detectMarket: () => timingResult.value?.market ?? 'SZ',
+})
+
+async function jumpTimingRange() {
+  const item = selected.value
+  if (!item || jumping.value) return
+  const start = jumpStart.value.trim()
+  if (!start) {
+    jumpError.value = '请选择开始日期'
+    return
+  }
+  const end = jumpEnd.value.trim() || selectDate.value
+  error.value = ''
+  jumping.value = true
+  jumpError.value = ''
+  try {
+    // 服务端每页 800 根逐页回溯，count 越大越慢；按日期跨度估算根数
+    //（自然日 × 5/7 ≈ 交易日）+ 余量，封顶 3000，控制跳转等待时间。
+    const spanDays = Math.max(0, Math.round((Date.parse(end) - Date.parse(start)) / 86400000))
+    const estCount = Math.min(3000, Math.max(400, Math.ceil((spanDays * 5) / 7) + 60))
+    const res = await stockPickTiming({
+      date: end,
+      symbols: [{ market: item.market || 'SH', code: item.code }],
+      count: estCount,
+      recursion_depth: 2,
+    })
+    const r = res.results[0]
+    if (!r || r.error) {
+      jumpError.value = r?.error ?? '该区间无可用分析结果'
+      return
+    }
+    // 客户端按 start 精确左截断（服务端 date 只截右端）
+    const allBars = (r.bars as Bar[]) ?? []
+    const barsWin = allBars.filter((b) => b.datetime.slice(0, 10) >= start)
+    if (!barsWin.length) {
+      jumpError.value = allBars.length
+        ? `区间起点早于已取数据（只取到 ${allBars[0].datetime.slice(0, 10)}），请缩短区间或重试`
+        : '该区间没有行情数据'
+      return
+    }
+    const shift = allBars.length - barsWin.length
+    const shiftList = (list: any[] | undefined) => (list ?? []).slice(shift)
+    const levels: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(r.levels ?? {})) {
+      const lv = v as Record<string, unknown>
+      levels[k] = {
+        ...lv,
+        bis: shiftList(lv.bis as any[]),
+        xds: shiftList(lv.xds as any[]),
+        zss: shiftList(lv.zss as any[]),
+        mmds: shiftList(lv.mmds as any[]),
+        fractals: shiftList(lv.fractals as any[]),
+        bcs: shiftList(lv.bcs as any[]),
+      }
+    }
+    timingResult.value = {
+      ...r,
+      bars: barsWin,
+      bis: shiftList(r.bis as any[]),
+      xds: shiftList(r.xds as any[]),
+      zss: shiftList(r.zss as any[]),
+      mmds: shiftList(r.mmds as any[]),
+      fractals: shiftList(r.fractals as any[]),
+      bcs: shiftList(r.bcs as any[]),
+      macd: (r.macd as any)
+        ? {
+            ...(r.macd as any),
+            dif: (r.macd as any).dif?.slice(shift),
+            dea: (r.macd as any).dea?.slice(shift),
+            hist: (r.macd as any).hist?.slice(shift),
+          }
+        : r.macd,
+      levels,
+    } as StockPickTimingResult
+  } catch (e) {
+    jumpError.value = formatError(e)
+  } finally {
+    jumping.value = false
+  }
+}
 // V716: 全市场扫描异步任务进度（0~100，null=未在跑）
 const screenProgress = ref<number | null>(null)
 const screenProgressNote = ref('')
@@ -413,6 +506,13 @@ function pickTiming(row: StockPickTimingResult) {
             <button class="hint-btn" :disabled="!earlierCanLoad" @click="loadEarlierTiming">
               {{ earlierLoading ? '加载中…' : '加载更早 ⏪' }}
             </button>
+            <!-- V723: 任意日期区间跳转（重新按区间取数 + 择时分析） -->
+            <input v-model="jumpStart" type="date" title="开始日期" />
+            <input v-model="jumpEnd" type="date" title="结束日期" />
+            <button class="hint-btn" :disabled="jumping" @click="jumpTimingRange">
+              {{ jumping ? '跳转中…' : '跳转 📅' }}
+            </button>
+            <span v-if="jumpError" class="hint">{{ jumpError }}</span>
           </div>
           <ChanlunChart
             v-if="timingResult.bars?.length"

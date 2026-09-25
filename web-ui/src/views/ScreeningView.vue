@@ -9,6 +9,7 @@ import ChanlunChart from '../components/ChanlunChart.vue'
 import EquityChart from '../components/EquityChart.vue'
 import { fetchBars, formatError, saveStrategy } from '../api'
 import { useEarlierBars } from '../composables/useEarlierBars'
+import { useTimeJump } from '../composables/useTimeJump'
 import { fmtPct } from '../format'
 import type { Bar } from '../types'
 
@@ -930,7 +931,23 @@ const {
   detectMarket: () => selectedStock.value?.market ?? 'SZ',
 })
 
-/** 扩窗后按新窗口长度重跑缠论（叠加层覆盖全部已加载 bar）。 */
+// ── V723: 任意日期区间跳转（时间旅行）──
+const {
+  jumpStart,
+  jumpEnd,
+  jumping,
+  jumpError,
+  fetchRange,
+  resetToLatest: resetTimeJump,
+} = useTimeJump({
+  code: () => selectedStock.value?.code ?? '',
+  category: () => chanlunCategory.value,
+  detectMarket: () => selectedStock.value?.market ?? 'SZ',
+})
+const isTimeJump = ref(false)
+
+/** 扩窗后按新窗口长度重跑缠论（叠加层覆盖全部已加载 bar）。
+ * V723: 跳转模式下透传窗口起止日期，叠加层与展示窗口精确对齐。 */
 async function reanalyseWindow() {
   if (!selectedStock.value) return
   const resp = await fetch('/api/v1/chanlun/analyze', {
@@ -942,6 +959,9 @@ async function reanalyseWindow() {
       category: chanlunCategory.value,
       count: bars.value.length,
       start: 0,
+      ...(isTimeJump.value
+        ? { start_date: bars.value[0]?.datetime.slice(0, 10), end_date: bars.value[bars.value.length - 1]?.datetime.slice(0, 10) }
+        : {}),
     }),
   })
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
@@ -968,7 +988,23 @@ async function loadEarlier() {
 async function backToLatest() {
   if (!selectedStock.value) return
   resetToLatest()
+  resetTimeJump()
+  isTimeJump.value = false
   await selectStock(selectedStock.value)
+}
+
+/** V723: 跳转到指定日期区间（时间旅行）。 */
+async function jumpToRange() {
+  if (!selectedStock.value || jumping.value) return
+  const rangeBars = await fetchRange()
+  if (!rangeBars) return
+  bars.value = rangeBars
+  try {
+    await reanalyseWindow()
+    isTimeJump.value = true
+  } catch (e) {
+    error.value = `区间重分析失败: ${formatError(e)}`
+  }
 }
 
 async function runChanlunAnalysis(stock: StockResult) {
@@ -1511,10 +1547,17 @@ onMounted(() => {
         <!-- K线图 -->
         <div v-if="!chanlunLoading && bars.length > 0" class="chart-area">
           <div class="chart-toolbar">
-            <button class="ghost" :disabled="!earlierCanLoad" @click="loadEarlier">
+            <button class="ghost" :disabled="!earlierCanLoad || isTimeJump" @click="loadEarlier">
               {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
             </button>
-            <button v-if="bars.length > 500" class="ghost" @click="backToLatest">回最新 ⏭</button>
+            <button v-if="bars.length > 500 || isTimeJump" class="ghost" @click="backToLatest">回最新 ⏭</button>
+            <!-- V723: 任意日期区间跳转 -->
+            <input v-model="jumpStart" type="date" title="开始日期" />
+            <input v-model="jumpEnd" type="date" title="结束日期" />
+            <button class="ghost" :disabled="jumping" @click="jumpToRange">
+              {{ jumping ? '跳转中…' : '跳转 📅' }}
+            </button>
+            <span v-if="jumpError" class="error-msg">{{ jumpError }}</span>
             <span v-if="earlierError" class="error-msg">{{ earlierError }}</span>
           </div>
           <ChanlunChart

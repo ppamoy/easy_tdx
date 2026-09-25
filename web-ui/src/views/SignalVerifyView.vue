@@ -5,6 +5,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import { useEarlierBars } from '../composables/useEarlierBars'
+import { useTimeJump } from '../composables/useTimeJump'
 import { shiftStructure } from '../utils/shiftStructure'
 import { formatError } from '../api'
 import type { Bar } from '../types'
@@ -123,6 +124,63 @@ async function loadEarlierVerify() {
   }
 }
 
+// ── V723: 任意日期区间跳转（区间直达取数 + 现场缠论分析）──────────────
+// detail 端点日线走预跑缓存，跳转时带 start_date/end_date 强制现场分析。
+const {
+  jumpStart,
+  jumpEnd,
+  jumping,
+  jumpError,
+  fetchRange,
+  resetToLatest: resetTimeJump,
+} = useTimeJump({
+  code: () => currentCode.value,
+  category: () => category.value,
+  detectMarket: () => (market.value as 'SZ' | 'SH') || 'SZ',
+})
+const isTimeJump = ref(false)
+
+async function jumpVerifyRange() {
+  if (!currentCode.value || jumping.value) return
+  const rangeBars = await fetchRange()
+  if (!rangeBars) return
+  loading.value = true
+  try {
+    const resp = await fetch(
+      `/api/v1/verify/signals/detail?code=${currentCode.value}&category=${category.value}` +
+        `&start_date=${rangeBars[0].datetime.slice(0, 10)}` +
+        `&end_date=${rangeBars[rangeBars.length - 1].datetime.slice(0, 10)}`,
+    )
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const d = await resp.json()
+    if (d.error) throw new Error(d.error)
+    bars.value = rangeBars
+    rawDetail.value = d
+    analysisLevel.value = 'bi'
+    applyAnalysisLevel('bi', d)
+    fxs.value = (d.fractals ?? []).map((f: any) => ({
+      fx_type: f.fx_type,
+      date: f.date,
+      val: f.val,
+      bar_index: f.bar_index,
+    }))
+    selectedMmdIdx.value = -1
+    revealCursor.value = undefined
+    isTimeJump.value = true
+  } catch (e) {
+    jumpError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function backToLatestVerify() {
+  if (!currentCode.value) return
+  isTimeJump.value = false
+  resetTimeJump()
+  await selectStock(currentCode.value)
+}
+
 
 const selectedMmd = computed<MmdItem | null>(() =>
   selectedMmdIdx.value >= 0 ? (mmds.value[selectedMmdIdx.value] ?? null) : null,
@@ -213,6 +271,8 @@ async function selectStock(code: string) {
   error.value = ''
   selectedMmdIdx.value = -1
   revealCursor.value = undefined
+  isTimeJump.value = false
+  resetTimeJump()
   try {
     const resp = await fetch(
       `/api/v1/verify/signals/detail?code=${code}&category=${category.value}`,
@@ -420,6 +480,14 @@ onMounted(() => {
                 <button class="ghost" :disabled="!earlierCanLoad" @click="loadEarlierVerify">
                   {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
                 </button>
+                <!-- V723: 任意日期区间跳转（区间重取 + 现场分析） -->
+                <input v-model="jumpStart" type="date" title="开始日期" />
+                <input v-model="jumpEnd" type="date" title="结束日期" />
+                <button class="ghost" :disabled="jumping" @click="jumpVerifyRange">
+                  {{ jumping ? '跳转中…' : '跳转 📅' }}
+                </button>
+                <button v-if="isTimeJump" class="ghost" @click="backToLatestVerify">回最新 ⏭</button>
+                <span v-if="jumpError" class="reveal-label">{{ jumpError }}</span>
                 <span v-if="earlierError" class="reveal-label">{{ earlierError }}</span>
               </div>
             </div>

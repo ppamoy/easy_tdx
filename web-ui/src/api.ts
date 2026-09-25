@@ -25,6 +25,11 @@ import type {
   MultiStockComparisonResponse,
   AdviceSimulateResult,
 } from './types'
+import {
+  barsCacheKey,
+  loadBarsSeries,
+  saveBarsSeries,
+} from './utils/barsCache'
 
 const BASE = '/api/v1'
 
@@ -79,7 +84,148 @@ export async function fetchStrategies(): Promise<StrategiesResponse> {
  */
 const MAX_PAGES = 10 // 翻页上限：10 × 800 = 8000 根（约 32 年日线）
 
+// ── V724: K 线历史本地缓存（IndexedDB）─────────────────────────────────────
+// 已收盘历史序列存浏览器本地；重复查看同一标的时不再向服务器翻页重拉。
+// 策略：缓存命中且请求窗口可满足 → 只取「缓存末日之后」的增量（1 次小请求）
+// 校准尾部；除权导致前复权历史重算（价格整体变化）→ 自动检测并整体重取。
+const BARS_SAMPLE_STRIDE = 37 // 除权检测采样步长
+const BARS_TAIL_SAMPLE = 5 // 除权检测尾部采样根数
+
+function cacheDay(b: Bar): string {
+  return b.datetime.slice(0, 10)
+}
+
+/** 采样比对缓存与最新数据的 close：抽样一致才算缓存可信（前复权重算检测）。 */
+function cacheLooksValid(cached: Bar[], fresh: Bar[]): boolean {
+  if (!cached.length || !fresh.length) return true
+  const freshIdx = new Map<string, Bar>()
+  for (const b of fresh) freshIdx.set(cacheDay(b), b)
+  const stride = Math.max(1, BARS_SAMPLE_STRIDE)
+  const samples: Bar[] = []
+  for (let i = 0; i < cached.length; i += stride) samples.push(cached[i])
+  for (let i = Math.max(0, cached.length - BARS_TAIL_SAMPLE); i < cached.length; i++) {
+    samples.push(cached[i])
+  }
+  for (const s of samples) {
+    const f = freshIdx.get(cacheDay(s))
+    if (!f) continue // 增量覆盖不到的采样点跳过（无法证伪即信任）
+    if (Math.abs(f.close - s.close) > 1e-6) return false
+  }
+  return true
+}
+
+/**
+ * 请求「缓存末日之后」的增量（含末日当天，便于对齐校准）。
+ * endDate 缺省 = 最新。start_date 早于缓存末日一格以上时绕过缓存，
+ * 走服务端区间直达取数（fetch_bars_range 一次往返）。
+ */
+async function fetchBarsIncrement(
+  market: string,
+  code: string,
+  category: Category,
+  lastDay: string,
+  endDate?: string,
+): Promise<Bar[]> {
+  const params = new URLSearchParams({
+    market,
+    code,
+    category,
+    start_date: lastDay,
+  })
+  if (endDate) params.set('end_date', endDate)
+  const resp = await fetch(`${BASE}/bars?${params}`)
+  if (!resp.ok) await throwError(resp)
+  const body = (await parseJson(resp)) as { data: Record<string, unknown>[] }
+  return body.data.map((row) => normalizeBar(row))
+}
+
 export async function fetchBars(
+  market: string,
+  code: string,
+  category: Category,
+  startDate?: string,
+  endDate?: string,
+  maxCount?: number,
+): Promise<Bar[]> {
+  // ── 缓存快速路径 ────────────────────────────────────────────────
+  // 无 startDate（=最新窗口）或 startDate 在缓存范围内，且 endDate 未早于
+  // 缓存末日时，可用缓存 + 尾部增量合成结果，避免整段翻页重拉。
+  const key = barsCacheKey(market, code, category)
+  const cached = await loadBarsSeries(key)
+  // 窗口起点落在缓存范围内即可走缓存：endDate 早于缓存末日 = 窗口完全在
+  // 缓存内（直接用）；endDate 晚于缓存末日 = 增量校准到 endDate 为止。
+  const cacheUsable =
+    cached !== null && (!startDate || startDate >= cacheDay(cached[0]))
+
+  if (cached && cacheUsable) {
+    // 无显式窗口 = 看最新：增量取缓存末日之后（endDate 缺省到最新）
+    // 有窗口但末端早于缓存末日：缓存自身即可满足，无需联网
+    const needFresh = !endDate || endDate >= cacheDay(cached[cached.length - 1])
+    if (needFresh) {
+      try {
+        const increment = await fetchBarsIncrement(
+          market,
+          code,
+          category,
+          cacheDay(cached[cached.length - 1]),
+          endDate,
+        )
+        const incByDay = new Map<string, Bar>()
+        for (const b of increment) incByDay.set(cacheDay(b), b)
+        // 除权检测：采样比对缓存段 close，价格被前复权重算 → 整体重取
+        if (!cacheLooksValid(cached, increment)) {
+          const fresh = await fetchBarsDirect(market, code, category, startDate, endDate, maxCount)
+          if (!startDate && !endDate && !maxCount) {
+            void saveBarsSeries(key, fresh)
+          }
+          return fresh
+        }
+        // 合并：缓存段 + 增量段（增量含末日当天重叠一根，按日期覆盖）
+        let merged = cached.slice()
+        for (const b of increment) {
+          const day = cacheDay(b)
+          const i = merged.findIndex((c) => cacheDay(c) === day)
+          if (i >= 0) merged[i] = b
+          else if (day > cacheDay(merged[merged.length - 1])) merged.push(b)
+          // 增量里的更早日期（缓存缺口）：忽略——序列仍连续，缺口不影响缠论分析
+        }
+        merged.sort((a, b) => a.datetime.localeCompare(b.datetime))
+        let bars = applyBarsWindow(merged, startDate, endDate, maxCount)
+        // 无窗口全量结果回填缓存（下次查看免增量请求）
+        if (!startDate && !endDate && !maxCount) {
+          void saveBarsSeries(key, bars)
+        }
+        return bars
+      } catch {
+        // 增量请求失败（断网/服务器忙）→ 直接用缓存渲染，静默降级
+        return applyBarsWindow(cached, startDate, endDate, maxCount)
+      }
+    }
+    return applyBarsWindow(cached, startDate, endDate, maxCount)
+  }
+
+  // ── 常规路径：翻页直取（无缓存 / 窗口早于缓存起点 / 请求被缓存否定）──
+  const bars = await fetchBarsDirect(market, code, category, startDate, endDate, maxCount)
+  // 无窗口全量结果回填缓存
+  if (!startDate && !endDate && !maxCount) {
+    void saveBarsSeries(key, bars)
+  }
+  return bars
+}
+
+/** 按窗口闭区间过滤 + maxCount 尾截（fetchBars 两路径共用的收尾）。 */
+function applyBarsWindow(cached: Bar[], startDate?: string, endDate?: string, maxCount?: number): Bar[] {
+  let bars = cached
+  if (startDate) bars = bars.filter((b) => b.datetime.slice(0, 10) >= startDate)
+  if (endDate) bars = bars.filter((b) => b.datetime.slice(0, 10) <= endDate)
+  if (maxCount && bars.length > maxCount) {
+    bars = bars.slice(bars.length - maxCount)
+  }
+  return bars
+}
+
+/** 常规翻页直取（原 fetchBars 主体，未走缓存的路径）。 */
+async function fetchBarsDirect(
   market: string,
   code: string,
   category: Category,
@@ -113,20 +259,11 @@ export async function fetchBars(
     if (pageBars.length < 800) break
   }
 
-  // 按日期范围过滤（闭区间）
-  let bars = allBars
-  if (startDate) bars = bars.filter((b) => b.datetime.slice(0, 10) >= startDate)
-  if (endDate) bars = bars.filter((b) => b.datetime.slice(0, 10) <= endDate)
   // 翻页拼接后按时间正序排序：每页内部是正序，但页间是逆序
   // （page1=最新段，page2=更旧段），concat 后需排序保证整体正序，
   // 否则引擎/图表只正确处理第一页的数据。
-  bars.sort((a, b) => a.datetime.localeCompare(b.datetime))
-  // 可选 maxCount：只保留最新 maxCount 根（与缠论分析窗口对齐，
-  // 避免图表显示 8000 根历史但叠加层只覆盖最近 800 根）。
-  if (maxCount && bars.length > maxCount) {
-    bars = bars.slice(bars.length - maxCount)
-  }
-  return bars
+  allBars.sort((a, b) => a.datetime.localeCompare(b.datetime))
+  return applyBarsWindow(allBars, startDate, endDate, maxCount)
 }
 
 /**
@@ -188,6 +325,34 @@ function normalizeBar(row: Record<string, unknown>): Bar {
     vol: Number(row.vol),
     amount: Number(row.amount),
   }
+}
+
+/**
+ * V723: 按日期区间取 K 线（服务端一次往返直达，闭区间）。
+ *
+ * 后端 /bars?start_date= 由 fetch_bars_range 从最新 bar 向过去循环翻页，
+ * 直达 [start_date, end_date] 区间——与前端自行翻页（fetchBars）相比，
+ * 无 8000 根客户端上限，也不受响应体大小拖累。
+ * endDate 缺省 = 到最新一根。
+ */
+export async function fetchBarsRange(
+  market: string,
+  code: string,
+  category: Category,
+  startDate: string,
+  endDate?: string,
+): Promise<Bar[]> {
+  const params = new URLSearchParams({
+    market,
+    code,
+    category,
+    start_date: startDate,
+  })
+  if (endDate) params.set('end_date', endDate)
+  const resp = await fetch(`${BASE}/bars?${params}`)
+  if (!resp.ok) await throwError(resp)
+  const body = (await parseJson(resp)) as { data: Record<string, unknown>[] }
+  return body.data.map((row) => normalizeBar(row))
 }
 
 /** 同步回测（内联 OHLCV，快速）。 */

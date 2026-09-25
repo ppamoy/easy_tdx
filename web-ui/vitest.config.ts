@@ -8,6 +8,8 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'jsdom',
+    // V724: K 线 IndexedDB 缓存单测需要全局 indexedDB（jsdom 未内置）
+    setupFiles: ['./src/test-setup.ts'],
     // V723: 让组件内 import.meta.env.DEV 分支（调试句柄/测试钩子）在单测可用
     env: { DEV: true },
     include: ['src/**/*.test.ts'],

@@ -9,6 +9,7 @@ import V102DecisionCard from '../components/V102DecisionCard.vue'
 import { formatError } from '../api'
 import type { Bar } from '../types'
 import { fetchBars, loadEarlierBars } from '../api'
+import { useTimeJump } from '../composables/useTimeJump'
 
 const router = useRouter()
 const code = ref('000001')
@@ -779,6 +780,46 @@ const windowEarliest = computed(() =>
 )
 const hasEarlier = ref(false)
 
+// ── V723: 任意日期区间跳转（时间旅行）────────────────────────────────
+const {
+  jumpStart,
+  jumpEnd,
+  jumping,
+  jumpError,
+  fetchRange,
+  resetToLatest: resetTimeJump,
+} = useTimeJump({ code: () => code.value, category: () => category.value, detectMarket })
+
+/** 当前窗口是否处于日期跳转模式（有别于默认「最新 count 根」窗口）。 */
+const isTimeJump = ref(false)
+
+/** 跳转到指定日期区间：服务端直达取数 + 全窗口缠论分析。 */
+async function jumpToRange() {
+  if (jumping.value || loading.value) return
+  const rangeBars = await fetchRange()
+  if (!rangeBars) return
+  loading.value = true
+  try {
+    bars.value = rangeBars
+    hasEarlier.value = false // 跳转窗口内不再向前翻页（区间外起点即用户所选）
+    await reanalyseForWindow()
+    isTimeJump.value = true
+  } catch (e) {
+    error.value = formatError(e)
+  } finally {
+    loading.value = false
+  }
+}
+
+/** 回到最新窗口：清空跳转状态并重新按 count 取最新数据。 */
+async function backToLatestFromJump() {
+  if (loading.value) return
+  isTimeJump.value = false
+  resetTimeJump()
+  await analyze()
+}
+
+
 async function loadEarlier() {
   if (loadingEarlier.value || !windowEarliest.value) return
   loadingEarlier.value = true
@@ -811,6 +852,8 @@ async function loadEarlier() {
  *
  * 复用 analyze() 的请求构造但把 count 换成当前窗口长度：直接调单级别
  * /chanlun/analyze（多级别联立不支持历史扩窗，扩窗后回落单级别视图）。
+ * V723: 跳转模式下透传窗口起止日期——服务端 fetch_bars_range 直达历史
+ * 区间取数，叠加层与展示窗口精确对齐（此前缺日期会错切到最新窗口）。
  */
 async function reanalyseForWindow() {
   const market = detectMarket(code.value)
@@ -824,6 +867,9 @@ async function reanalyseForWindow() {
       count: bars.value.length,
       start: 0,
       recursion_depth: recursionDepth.value,
+      ...(isTimeJump.value
+        ? { start_date: bars.value[0]?.datetime.slice(0, 10), end_date: bars.value[bars.value.length - 1]?.datetime.slice(0, 10) }
+        : {}),
     }),
   })
   if (!resp.ok) {
@@ -1216,9 +1262,20 @@ onUnmounted(() => {
         <button class="btn btn-secondary" :disabled="loadingEarlier || !hasEarlier" @click="loadEarlier">
           {{ loadingEarlier ? '加载中…' : '加载更早 ⏮' }}
         </button>
-        <button v-if="bars.length > count" class="btn btn-secondary" :disabled="loading" @click="backToLatest">
+        <button v-if="bars.length > count || isTimeJump" class="btn btn-secondary" :disabled="loading" @click="isTimeJump ? backToLatestFromJump() : backToLatest()">
           回最新 ⏭
         </button>
+      </div>
+      <!-- V723: 任意日期区间跳转（时间旅行） -->
+      <div class="field-group time-jump-group">
+        <label>从</label>
+        <input v-model="jumpStart" type="date" @keyup.enter="jumpToRange" />
+        <label>到</label>
+        <input v-model="jumpEnd" type="date" @keyup.enter="jumpToRange" />
+        <button class="btn btn-secondary" :disabled="jumping || loading" @click="jumpToRange">
+          {{ jumping ? '跳转中…' : '跳转 📅' }}
+        </button>
+        <span v-if="jumpError" class="jump-error">{{ jumpError }}</span>
       </div>
       <div class="field-group">
         <label> <input type="checkbox" v-model="multiLevel" /> 多级别联立 </label>
@@ -1928,6 +1985,31 @@ onUnmounted(() => {
 
 .field-group input[type='text'] {
   width: 90px;
+}
+
+/* V723: 日期跳转行——横向排列的日期选择器（与其他纵向 field-group 区分） */
+.time-jump-group {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-jump-group label {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.time-jump-group input[type='date'] {
+  width: 130px;
+  padding: 6px 8px;
+  height: 34px;
+}
+
+.jump-error {
+  font-size: 11px;
+  color: var(--up);
+  max-width: 200px;
+  white-space: normal;
 }
 
 .analyze-btn {

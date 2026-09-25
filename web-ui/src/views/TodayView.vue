@@ -16,6 +16,7 @@ import {
   type SeasonInfo,
 } from '../api'
 import { useEarlierBars } from '../composables/useEarlierBars'
+import { useTimeJump } from '../composables/useTimeJump'
 import { padMacdHead, shiftStructure } from '../utils/shiftStructure'
 import type { Bar, Category } from '../types'
 
@@ -66,6 +67,68 @@ async function loadEarlierToday() {
       bcs: shiftStructure(selected.value.bcs as any[], shift),
       macd: padMacdHead(selected.value.macd as any, shift),
     } as DashboardAction
+  }
+}
+
+// ── V723: 任意日期区间跳转（区间直达取数 + 现场缠论分析）──────────────
+// 看板下钻数据来自 dashboard 聚合任务（无法按区间重跑），跳转时改用
+// /chanlun/analyze 带 start_date/end_date 现场分析，结构覆盖整个区间窗口。
+const {
+  jumpStart,
+  jumpEnd,
+  jumping,
+  jumpError,
+  fetchRange,
+  resetToLatest: resetTimeJump,
+} = useTimeJump({
+  code: () => (selected.value?.symbol ?? '').split(':')[1] ?? '',
+  category: () => 'DAY' as Category,
+  detectMarket: () => (selected.value?.symbol ?? '').split(':')[0] || 'SZ',
+})
+const todayJumping = ref(false)
+const isTimeJump = ref(false)
+
+async function jumpTodayRange() {
+  const sel = selected.value
+  if (!sel || todayJumping.value) return
+  const rangeBars = await fetchRange()
+  if (!rangeBars) return
+  todayJumping.value = true
+  try {
+    const market = (sel.symbol ?? '').split(':')[0] || 'SZ'
+    const code6 = (sel.symbol ?? '').split(':')[1] ?? ''
+    const resp = await fetch('/api/v1/chanlun/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        market,
+        code: code6,
+        category: 'DAY',
+        count: rangeBars.length,
+        start: 0,
+        recursion_depth: recursionDepth.value,
+        start_date: rangeBars[0].datetime.slice(0, 10),
+        end_date: rangeBars[rangeBars.length - 1].datetime.slice(0, 10),
+      }),
+    })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    const data = await resp.json()
+    selected.value = {
+      ...sel,
+      bars: rangeBars,
+      bis: data.bis ?? [],
+      xds: data.xds ?? [],
+      zss: data.zss ?? [],
+      mmds: data.mmds ?? [],
+      fractals: data.fractals ?? [],
+      bcs: data.bcs ?? [],
+      macd: data.macd ?? null,
+    } as DashboardAction
+    isTimeJump.value = true
+  } catch (e) {
+    jumpError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    todayJumping.value = false
   }
 }
 
@@ -145,6 +208,11 @@ async function runDashboard() {
 }
 
 function pickRow(row: DashboardAction) {
+  // V723: 切换/收起详情时清掉跳转状态，恢复默认「截至 selectDate 的看板窗口」
+  if (selected.value?.symbol !== row.symbol) {
+    isTimeJump.value = false
+    resetTimeJump()
+  }
   selected.value = selected.value?.symbol === row.symbol ? null : row
 }
 </script>
@@ -265,6 +333,13 @@ function pickRow(row: DashboardAction) {
           <button class="btn-mini" :disabled="!earlierCanLoad" @click="loadEarlierToday">
             {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
           </button>
+          <!-- V723: 任意日期区间跳转（区间重取 + 现场缠论分析，结构覆盖全窗口） -->
+          <input v-model="jumpStart" type="date" title="开始日期" class="btn-mini date-mini" />
+          <input v-model="jumpEnd" type="date" title="结束日期" class="btn-mini date-mini" />
+          <button class="btn-mini" :disabled="jumping" @click="jumpTodayRange">
+            {{ jumping ? '跳转中…' : '跳转 📅' }}
+          </button>
+          <span v-if="jumpError" class="hint">{{ jumpError }}</span>
           <span v-if="earlierError" class="hint">{{ earlierError }}</span>
         </h3>
         <p v-if="selected.novice_advice?.explanation" class="hint">
