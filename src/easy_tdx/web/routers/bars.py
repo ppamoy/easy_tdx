@@ -81,6 +81,9 @@ async def security_bars(
     ),
     # V722: lookback > 0 时走服务端循环翻页（图表「往前看」全历史）
     lookback: int = Query(0, ge=0, le=20000),
+    # V723: start_date/end_date 日期区间取数（闭区间），优先级高于 lookback/start
+    start_date: str | None = Query(None, description="开始日期 YYYY-MM-DD（闭区间）"),
+    end_date: str | None = Query(None, description="结束日期 YYYY-MM-DD（含当天）"),
     mac_client: Any = Depends(get_mac_client_optional),
     client: Any = Depends(get_client),
 ) -> DataFrameResponse:
@@ -91,6 +94,25 @@ async def security_bars(
     输出契约与旧版一致：日线返回 ``date`` 列，分钟线返回 ``datetime`` 列。
     """
     cat = category_from_str(category)
+    if start_date:
+        # V723: 任意历史区间取数——TDX 协议只能从最新 bar 向过去翻页，
+        # 由 fetch_bars_range 循环翻页后按 [start_date, end_date] 闭区间切片。
+        from easy_tdx.web.klines import MAX_LOOKBACK, fetch_bars_range
+
+        df = await fetch_bars_range(
+            mac_client,
+            client,
+            market,
+            code,
+            category,
+            start_date=start_date,
+            end_date=end_date,
+            max_bars=MAX_LOOKBACK,
+            bar_time=bar_time,
+        )
+        resp = _df_resp(df)
+        resp.total_returned = int(len(df))
+        return resp
     if lookback > 0:
         # V722: 全历史分页（循环翻页 + 去重 + 升序），与单页契约同列
         from easy_tdx.web.klines import MAX_LOOKBACK, fetch_paged_bars

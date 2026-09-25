@@ -137,3 +137,71 @@ async def fetch_paged_bars(
     combined = combined.drop_duplicates(subset=[col], keep="first")
     combined = combined.sort_values(col).reset_index(drop=True)
     return combined
+
+
+async def fetch_bars_range(
+    mac_client: Any,
+    tdx_client: Any,
+    market: str,
+    code: str,
+    category: str,
+    start_date: str,
+    end_date: str | None = None,
+    max_bars: int = MAX_LOOKBACK,
+    bar_time: str = "start",
+) -> pd.DataFrame:
+    """取任意历史区间 [start_date, end_date] 的 K 线（闭区间）。
+
+    TDX 协议把一切取数锚定在最新 bar 上：start 只能是往回的偏移量。
+    因此「看 2019 年的日线」无法单次直达——本函数从最新 bar 逐页向过去
+    翻页，直到某页最早一根 ≤ start_date（或历史耗尽），再整体去重排序、
+    按闭区间切片返回。
+
+    - 分页节奏与 fetch_paged_bars 相同（每页 800 根，start = k*800）；
+    - 页数由 max_bars 封顶（默认 MAX_LOOKBACK ≈ 80 年日线，防御性限制）；
+    - 区间过滤对日线/分钟线一致：start_date 当日 00:00 起、
+      end_date 次日 00:00 前（含 end_date 全天）；
+    - 区间内无数据（如 start_date 早于上市日）返回空 DataFrame。
+    """
+    start_ts = pd.to_datetime(start_date, errors="coerce")
+    if pd.isna(start_ts):
+        return pd.DataFrame()
+    end_ts_exclusive: pd.Timestamp | None = None
+    if end_date:
+        end_ts = pd.to_datetime(end_date, errors="coerce")
+        if not pd.isna(end_ts):
+            end_ts_exclusive = end_ts + pd.Timedelta(days=1)
+
+    max_pages = max(1, min(int(max_bars), MAX_LOOKBACK) // _PAGE_SIZE)
+    frames: list[pd.DataFrame] = []
+    col: str | None = None
+    reached_start = False
+    for page in range(max_pages):
+        start = page * _PAGE_SIZE
+        if start > 65535:  # uint16 偏移上限保护（V720 同款语义）
+            break
+        df = await fetch_qfq_klines(
+            mac_client, tdx_client, market, code, category, start, _PAGE_SIZE,
+            bar_time=bar_time,
+        )
+        if df is None or df.empty:
+            break
+        col = col or ("date" if "date" in df.columns else "datetime")
+        frames.append(df)
+        if len(df) < _PAGE_SIZE:
+            reached_start = True  # 上市最早一页，历史已耗尽
+            break
+        page_oldest = pd.to_datetime(df[col].iloc[0])
+        if page_oldest <= start_ts:
+            reached_start = True
+            break
+    if not frames or col is None:
+        return pd.DataFrame()
+    combined = pd.concat(frames, ignore_index=True)
+    combined = combined.drop_duplicates(subset=[col], keep="first")
+    combined = combined.sort_values(col).reset_index(drop=True)
+    ts = pd.to_datetime(combined[col])
+    mask = ts >= start_ts
+    if end_ts_exclusive is not None:
+        mask &= ts < end_ts_exclusive
+    return combined.loc[mask].reset_index(drop=True)

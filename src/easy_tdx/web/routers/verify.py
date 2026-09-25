@@ -173,13 +173,26 @@ async def _detail_for_category(
     category: str,
     client: Any | None,
     mac_client: Any | None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict[str, Any]:
-    """按指定周期现场取数并分析（用于非日线周期，不写入预跑缓存）。"""
+    """按指定周期现场取数并分析（用于非日线周期，不写入预跑缓存）。
+
+    V723: start_date 给定时走 fetch_bars_range 区间直达取数（时间旅行）。
+    """
     market = item["market"]
     code = item["code"]
     frequency = _FREQ_BY_CATEGORY.get(category, "daily")
-    count = 400 if category in ("DAY", "WEEK") else 800
-    df = await _fetch_online_df(mac_client, client, market, code, category, count)
+    if start_date:
+        from easy_tdx.web.klines import fetch_bars_range
+
+        df = await fetch_bars_range(
+            mac_client, client, market, code, category,
+            start_date=start_date, end_date=end_date, max_bars=8000,
+        )
+    else:
+        count = 400 if category in ("DAY", "WEEK") else 800
+        df = await _fetch_online_df(mac_client, client, market, code, category, count)
     if df is None or len(df) < 100:
         return {
             "code": code,
@@ -292,19 +305,26 @@ async def list_signals() -> dict[str, Any]:
 async def detail_signals(
     code: str,
     category: str = "DAY",
+    # V723: 任意日期区间查看——给定 start_date 时忽略预跑缓存，按区间现场取数分析
+    start_date: str | None = None,
+    end_date: str | None = None,
     client: Any = Depends(get_client),
     mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
     """单标的详情：买卖点 + 同级别中枢 + 基础 K 线。
 
     日线优先使用预跑缓存；其它周期现场取数分析，便于前端切换级别。
+    V723: start_date 给定时走 fetch_bars_range 区间直达（日线也现场分析）。
     """
     item = next((i for i in VERIFY_POOL if i["code"] == code), None)
     if item is None:
         return {"error": f"未知标的 {code}"}
 
-    if category.upper() != "DAY":
-        return await _detail_for_category(item, category.upper(), client, mac_client)
+    if start_date or category.upper() != "DAY":
+        return await _detail_for_category(
+            item, category.upper(), client, mac_client,
+            start_date=start_date, end_date=end_date,
+        )
 
     if code not in _prerun_cache:
         # 未预跑则现场分析（含在线回退）
