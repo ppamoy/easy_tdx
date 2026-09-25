@@ -1095,3 +1095,86 @@ def test_nesting_retest_hold_penalizes_breakdown() -> None:
     assert r_hold["multi_level_score"] > r_brk["multi_level_score"], (
         "回踩破位的 3买 评分必须低于站稳者"
     )
+
+
+# ── V730 其余「时间错配」类缺陷（同批 V79 条件）────────────────────────
+# 与区间套（条件205）同构：这些条件都直接调整 mmd.confidence，若用序列
+# 最新状态标注历史信号，则评分与信号自身无关、且含未来函数。
+
+
+def test_distance_safety_uses_prior_same_direction_signals() -> None:
+    """V730：距离安全须找「之前」的同向信号；且方向判定须匹配 1buy/3buy 小写值。
+
+    原实现两处缺陷：①遍历 mmds[:-1]（含未来信号）；②用 startswith("BUY")
+    而 MMDType.value 是小写的 "1buy"/"3buy" → 永远匹配不到，所有信号恒为
+    isolated/99（实测 5/5 标的恒定，完全丧失区分度）。
+    """
+    from easy_tdx.chanlun.mmd_conditions import _calc_mmd_distance_safety_v79
+
+    def mk(t: MMDType, bar: int) -> MMD:
+        m = MMD(mmd_type=t, msg="", confidence=0.5)
+        m.bi = _mk_bi_for_nesting(bar - 5, bar)
+        return m
+
+    mmds = [
+        mk(MMDType.BUY_1, 10),
+        mk(MMDType.BUY_3, 30),  # 距前一同向 20 根
+        mk(MMDType.SELL_1, 45),
+        mk(MMDType.SELL_3, 50),  # 距前一同向 5 根
+    ]
+    closes = [10.0] * 60
+
+    first = _calc_mmd_distance_safety_v79(mmds, mmds[0], closes)
+    assert first["safety_level"] == "isolated"  # 无前置同向信号
+
+    buy3 = _calc_mmd_distance_safety_v79(mmds, mmds[1], closes)
+    assert buy3["bars_to_nearest"] == 20
+    assert buy3["safety_level"] == "safe"
+
+    sell3 = _calc_mmd_distance_safety_v79(mmds, mmds[3], closes)
+    assert sell3["bars_to_nearest"] == 5
+    assert sell3["safety_level"] == "close"
+
+
+def test_distance_safety_ignores_later_signals() -> None:
+    """不得把「信号之后」才出现的同向信号计入距离（未来函数）。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_mmd_distance_safety_v79
+
+    def mk(t: MMDType, bar: int) -> MMD:
+        m = MMD(mmd_type=t, msg="", confidence=0.5)
+        m.bi = _mk_bi_for_nesting(bar - 5, bar)
+        return m
+
+    target = mk(MMDType.BUY_1, 30)
+    later = mk(MMDType.BUY_3, 33)  # 仅相隔 3 根，但在目标之后
+    closes = [10.0] * 60
+    r = _calc_mmd_distance_safety_v79([target, later], target, closes)
+    assert r["bars_to_nearest"] == 99, "不得引用未来信号计算距离"
+    assert r["safety_level"] == "isolated"
+
+
+def test_fractal_stability_anchored_after_signal() -> None:
+    """分型稳定性须观察「信号之后」的窗口，而非序列末尾（否则所有信号同值）。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_fractal_stability_validation_v79
+
+    def mk(t: MMDType, bar: int) -> MMD:
+        m = MMD(mmd_type=t, msg="", confidence=0.5)
+        m.bi = _mk_bi_for_nesting(bar - 5, bar)
+        return m
+
+    # 信号在 bar 30：其后平稳（无新高）→ stable
+    early = mk(MMDType.BUY_1, 30)
+    highs = [10.0] * 60
+    lows = [9.0] * 60
+    r_early = _calc_fractal_stability_validation_v79(early, highs, lows)
+
+    # 信号在 bar 30，之后出现大幅新高（破坏顶分型）→ 稳定性应下降
+    # 判据：窗口末根 current_high 是否突破窗口内此前最高 * 1.02
+    highs2 = [10.0] * 60
+    highs2[50] = 11.0  # 窗口末根（bar 50）独创新高，其余维持 10.0
+    r_broken = _calc_fractal_stability_validation_v79(early, highs2, lows)
+
+    assert r_early["fractal_status"] == "stable"
+    assert r_early["stability_score"] > r_broken["stability_score"], (
+        "信号后出现新高破坏分型时，稳定性评分必须下降"
+    )

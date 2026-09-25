@@ -1191,9 +1191,17 @@ def _calc_fractal_stability_validation_v79(
             result["msg"] = "数据不足"
             return result
 
-        lookback = min(20, len(highs))
-        recent_highs = highs[-lookback:]
-        recent_lows = lows[-lookback:]
+        # V730 修复：原实现取 highs[-20:]（序列**末尾**20根）判断「分型是否被
+        # 后续K线破坏」——对历史信号而言，末尾行情与该信号无关，导致同一标的
+        # 全部信号的 v79_fractal_stability 恒定（实测 5/5 标的如此），丧失
+        # 区分度。现锚定信号位置：观察窗口取「信号之后 lookback 根」，
+        # 这才是「该信号之后是否出现破坏」的正确语义；后续数据不足则用
+        # 已有的部分（越靠近序列末尾的 signals 观察越充分，符合实盘逐步展开）。
+        sig_bar = mmd.bi.end.bar_index if (mmd.bi is not None and mmd.bi.end) else None
+        start = 0 if sig_bar is None else min(sig_bar + 1, len(highs) - 1)
+        lookback = min(20, len(highs) - start) if len(highs) - start > 0 else 1
+        recent_highs = highs[start : start + lookback]
+        recent_lows = lows[start : start + lookback]
         current_high = recent_highs[-1]
         current_low = recent_lows[-1]
 
@@ -1271,17 +1279,37 @@ def _calc_mmd_distance_safety_v79(
             return result
 
         # 找最近同向买卖点的距离（以K线根数计）
+        #
+        # V730 修复（两处）：
+        # 1) 原实现遍历 mmds[:-1]（**整个**信号列表），对历史信号而言其中包含
+        #    「该信号之后才出现」的信号——属未来函数。现只统计「之前」的同向信号。
+        # 2) 更致命：同向判定用 startswith("BUY")，而 MMDType 的 value 是小写
+        #    （"1buy"/"3buy"/"2sell_s"…），大小写不匹配 → 永远匹配不到同向信号，
+        #    所有信号恒为 isolated/99 根（实测 5/5 标的恒定）。改为小写比较。
         is_buy = "buy" in mmd.mmd_type.value
-        same_type_prefix = "BUY" if is_buy else "SELL"
+        # 注：MMDType.value 形如 "1buy"/"3buy"/"2sell_s"，方向在**尾部**，
+        # 不能用 startswith，须用包含判断（原实现的两个 bug 之一）。
+        same_dir = "buy" if is_buy else "sell"
 
+        def _bar_of(m: MMD) -> int | None:
+            if m.bi is None:
+                return None
+            return m.bi.end.bar_index if m.bi.end is not None else None
+
+        cur_bar = _bar_of(mmd)
         nearest_dist = None
-        for prev_mmd in reversed(mmds[:-1]):
-            prev_is_same = prev_mmd.mmd_type.value.startswith(same_type_prefix)
-            if prev_is_same and prev_mmd.bi is not None and mmd.bi is not None:
-                # 用bi.index估算距离
-                dist = abs(mmd.bi.index - prev_mmd.bi.index)
-                if nearest_dist is None or dist < nearest_dist:
-                    nearest_dist = dist
+        for prev_mmd in mmds:
+            if prev_mmd is mmd:
+                continue
+            prev_bar = _bar_of(prev_mmd)
+            if cur_bar is None or prev_bar is None or prev_bar > cur_bar:
+                continue  # 跳过自身与「之后」的信号（未来信息）
+            if same_dir not in prev_mmd.mmd_type.value:
+                continue
+            # 用K线索引估算距离
+            dist = cur_bar - prev_bar
+            if nearest_dist is None or dist < nearest_dist:
+                nearest_dist = dist
 
         if nearest_dist is None:
             nearest_dist = 99  # 没有最近的同向信号，视为安全
