@@ -1178,3 +1178,77 @@ def test_fractal_stability_anchored_after_signal() -> None:
     assert r_early["stability_score"] > r_broken["stability_score"], (
         "信号后出现新高破坏分型时，稳定性评分必须下降"
     )
+
+
+# ── V730 条件254/259/263 的时间锚定 ───────────────────────────────────
+# 由 scripts/detect_constant_mmd_fields.py 巡检发现：这三个字段在 12/12 或
+# 10/12 的标的上对所有信号取恒定值 → 用序列末尾状态标注历史信号（未来函数）。
+# 修复后均降至 0/12。
+
+
+def test_ma_alignment_anchored_to_signal() -> None:
+    """均线排列须取「信号当时」的均线，而非序列末尾。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_ma_alignment_strength_v80
+
+    def mk(t: MMDType, bar: int) -> MMD:
+        m = MMD(mmd_type=t, msg="", confidence=0.5)
+        m.bi = _mk_bi_for_nesting(bar - 5, bar)
+        return m
+
+    n = 120
+    # 前 60 根横盘 10，后 60 根上涨到 20 → 末尾是多头排列，而 bar=60 处不是
+    closes = [10.0] * 60 + [10.0 + i * 0.15 for i in range(60)]
+    early = mk(MMDType.BUY_1, 60)
+    late = mk(MMDType.BUY_1, n - 1)
+
+    r_early = _calc_ma_alignment_strength_v80(early, closes)
+    r_late = _calc_ma_alignment_strength_v80(late, closes)
+    assert r_early["ma_alignment"] != r_late["ma_alignment"], (
+        "不同时点的信号应得到各自的均线排列结论（修复前共享末尾结论）"
+    )
+
+
+def test_volatility_compression_anchored_to_signal() -> None:
+    """波动率压缩须衡量「信号当时」的区间宽度，而非末尾。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_volatility_compression_breakout_v82
+
+    def mk(t: MMDType, bar: int) -> MMD:
+        m = MMD(mmd_type=t, msg="", confidence=0.5)
+        m.bi = _mk_bi_for_nesting(bar - 5, bar)
+        return m
+
+    n = 100
+    # 前 50 根极窄（压缩），后 50 根剧烈震荡（无压缩）
+    highs = [10.05] * 50 + [10.0 + (i % 5) * 0.5 for i in range(50)]
+    lows = [9.95] * 50 + [10.0 + (i % 5) * 0.5 - 0.2 for i in range(50)]
+    closes = [10.0] * 50 + [10.0 + (i % 5) * 0.4 for i in range(50)]
+
+    r_compressed = _calc_volatility_compression_breakout_v82(mk(MMDType.BUY_1, 49), closes, highs, lows)
+    r_wide = _calc_volatility_compression_breakout_v82(mk(MMDType.BUY_1, 99), closes, highs, lows)
+    assert r_compressed["compression_pct"] < r_wide["compression_pct"], (
+        "压缩段的区间宽度必须小于震荡段（修复前两者都用末尾窗口而相同）"
+    )
+
+
+def test_execution_window_anchored_to_signal() -> None:
+    """执行窗口须评估「信号当时」的波动与量能，而非末尾。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_signal_execution_window_v81
+
+    def mk(t: MMDType, bar: int) -> MMD:
+        m = MMD(mmd_type=t, msg="", confidence=0.5)
+        m.bi = _mk_bi_for_nesting(bar - 5, bar)
+        return m
+
+    n = 120
+    # 前 60 根平静，后 60 根剧烈波动 → 波动率分应不同
+    calm = [10.0] * 60
+    wild = [10.0 + ((-1) ** i) * 3.0 for i in range(60)]
+    closes = calm + wild
+    highs = [c + 0.5 for c in closes]
+    lows = [c - 0.5 for c in closes]
+
+    r_calm = _calc_signal_execution_window_v81(mk(MMDType.BUY_1, 59), closes, highs, lows, None)
+    r_wild = _calc_signal_execution_window_v81(mk(MMDType.BUY_1, 119), closes, highs, lows, None)
+    assert r_calm["volatility_score"] != r_wild["volatility_score"], (
+        "平静段与剧烈段的执行窗口评分必须不同（修复前共享末尾结论）"
+    )

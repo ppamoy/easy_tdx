@@ -792,9 +792,16 @@ def _calc_mmd_cycle_position_v78(
             return result
 
         lookback = min(60, len(closes))
-        recent_highs = highs[-lookback:]
-        recent_lows = lows[-lookback:]
-        current_price = closes[-1]
+        # V730 修复：原用 highs[-lookback:]/closes[-1]（序列末尾）判断
+        # 「波动率压缩突破」——这是信号**发生时**的状态，用末尾数据即未来
+        # 信息，且所有信号同值（实测 12/12 标的恒定）。改为锚定信号位置。
+        sig_idx = mmd.bi.end.bar_index if (mmd.bi is not None and mmd.bi.end) else None
+        if sig_idx is None or not (0 <= sig_idx < len(closes)):
+            sig_idx = len(closes) - 1
+        end = sig_idx + 1
+        recent_highs = highs[max(0, end - lookback) : end]
+        recent_lows = lows[max(0, end - lookback) : end]
+        current_price = closes[sig_idx]
 
         period_high = max(recent_highs)
         period_low = min(recent_lows)
@@ -1718,11 +1725,19 @@ def _calc_ma_alignment_strength_v80(
             result["msg"] = "数据不足（需≥60根）"
             return result
 
-        ma5 = MA(closes, 5)[-1]
-        ma10 = MA(closes, 10)[-1]
-        ma20 = MA(closes, 20)[-1]
-        ma60 = MA(closes, 60)[-1]
-        current = closes[-1]
+        # V730 修复：原用 MA(closes,n)[-1] 与 closes[-1]（序列**末尾**），
+        # 对历史信号而言是未来信息，且所有信号共享同一排列结论
+        # （实测 10/12 标的该字段恒定）。现锚定信号时刻：只用信号位置
+        # 之前（含）的数据计算均线，即为「信号当时的均线排列」。
+        sig_idx = mmd.bi.end.bar_index if (mmd.bi is not None and mmd.bi.end) else None
+        if sig_idx is None or not (0 <= sig_idx < len(closes)):
+            sig_idx = len(closes) - 1
+        hist = closes[: sig_idx + 1]
+        ma5 = MA(hist, 5)[-1]
+        ma10 = MA(hist, 10)[-1]
+        ma20 = MA(hist, 20)[-1]
+        ma60 = MA(hist, 60)[-1]
+        current = hist[-1]
 
         eps = 1e-10
         if ma5 > ma10 + eps and ma10 > ma20 + eps and ma20 > ma60 + eps:
@@ -2132,7 +2147,15 @@ def _calc_signal_execution_window_v81(
             result["msg"] = "数据不足"
             return result
 
-        vol = _calc_atr_volatility(closes[-40:])
+        # V730 修复：原用 closes[-40:]（序列末尾）的波动率与量能评估「当前
+        # 是否适合入场」，并据此调整**历史信号**的置信度 → 末尾状态与该信号
+        # 无关（实测 12/12 标的该字段恒定）。改为锚定信号时刻，评估
+        # 「信号当时」的执行环境，语义一致且不再含未来信息。
+        _sig = mmd.bi.end.bar_index if (mmd.bi is not None and mmd.bi.end) else None
+        if _sig is None or not (0 <= _sig < len(closes)):
+            _sig = len(closes) - 1
+        _end = _sig + 1
+        vol = _calc_atr_volatility(closes[max(0, _end - 40) : _end])
         vol_pct = vol * 100.0
 
         # 波动率分：中枢波动 (1.5%~4%) 最优
@@ -2150,7 +2173,7 @@ def _calc_signal_execution_window_v81(
         # 流动性分：近期量能相对平稳充足
         liq_score = 0.5
         if volumes is not None and len(volumes) >= 20:
-            recent_vols = volumes[-20:]
+            recent_vols = volumes[max(0, _end - 20) : _end]
             avg = sum(recent_vols) / len(recent_vols)
             if avg > 0:
                 last15 = recent_vols[-15:]
@@ -2474,10 +2497,17 @@ def _calc_volatility_compression_breakout_v82(
             result["compression_level"] = "unknown"
             return result
 
+        # V730 修复：原用 highs[-lookback:]/closes[-1]（序列末尾）判断「波动率
+        # 压缩突破」——这是**信号发生时**的状态，用末尾数据即未来信息，且所有
+        # 信号同值（实测 12/12 标的恒定）。改为锚定信号位置。
+        _sig = mmd.bi.end.bar_index if (mmd.bi is not None and mmd.bi.end) else None
+        if _sig is None or not (0 <= _sig < len(closes)):
+            _sig = len(closes) - 1
+        end = _sig + 1
         lookback = min(30, len(closes))
-        recent_highs = highs[-lookback:]
-        recent_lows = lows[-lookback:]
-        current_price = closes[-1]
+        recent_highs = highs[max(0, end - lookback) : end]
+        recent_lows = lows[max(0, end - lookback) : end]
+        current_price = closes[_sig]
         if current_price <= 0:
             result["compression_level"] = "unknown"
             return result
@@ -2486,8 +2516,8 @@ def _calc_volatility_compression_breakout_v82(
         result["compression_pct"] = round(range_pct, 2)
 
         # 近5根突破力度
-        last5_high = max(highs[-5:]) if len(highs) >= 5 else current_price
-        last5_low = min(lows[-5:]) if len(lows) >= 5 else current_price
+        last5_high = max(highs[max(0, end - 5) : end]) if highs[:end] else current_price
+        last5_low = min(lows[max(0, end - 5) : end]) if lows[:end] else current_price
         move_pct = (last5_high - last5_low) / current_price * 100.0
         result["breakout_strength"] = round(move_pct, 2)
 
