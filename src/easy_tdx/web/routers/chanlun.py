@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 
 from easy_tdx.web.deps import get_client, get_mac_client_optional
-from easy_tdx.web.klines import fetch_paged_bars, fetch_qfq_klines  # 共享 K 线取数（MAC 回退）
+from easy_tdx.web.klines import fetch_bars_range, fetch_paged_bars, fetch_qfq_klines  # 共享 K 线取数（MAC 回退）
 from easy_tdx.web.schemas import ChanlunRequest
 
 logger = logging.getLogger(__name__)
@@ -282,6 +282,8 @@ async def chanlun_analyze(
         req.category,
         req.start,
         req.count,
+        start_date=req.start_date,
+        end_date=req.end_date,
     )
 
     # V599: 按可选日期范围截断，让缠论分析与前端 K 线图窗口精确对齐
@@ -918,12 +920,29 @@ def _fetch_request_klines(
     category: str,
     start: int,
     count: int,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> Any:
     """V722: 按请求取 K 线；count>800 分流到 fetch_paged_bars 循环翻页。
 
     QFQ 口径与列规整同 fetch_qfq_klines；start>0 时不分页（历史偏移语义
     只在单页内有效，分页路径固定从最新 bar 往回凑 lookback）。
+
+    V723: start_date 给定时走 fetch_bars_range——TDX 协议取数锚定最新 bar，
+    历史日期窗口必须由服务端翻页直达，否则旧数据只取到「最新窗口」再被
+    V599 截断成空。end_date 可省略（默认到最新 bar）。
     """
+    if start_date:
+        return fetch_bars_range(
+            mac_client,
+            client,
+            market,
+            code,
+            category,
+            start_date=start_date,
+            end_date=end_date,
+            max_bars=8000,
+        )
     if count > 800 and start == 0:
         return fetch_paged_bars(mac_client, client, market, code, category, lookback=count)
     return fetch_qfq_klines(mac_client, client, market, code, category, start, count)
@@ -950,8 +969,17 @@ async def chanlun_train_session(
 
     # 1. 取行情（QFQ 前复权，与 /bars 同一价格体系）
     # V722: count>800 时走服务端循环翻页（start 仅单页协议内有效）
+    # V723: start_date 给定时走 fetch_bars_range（历史区间直达）
     df = await _fetch_request_klines(
-        mac_client, client, req.market, req.code, req.category, req.start, req.count
+        mac_client,
+        client,
+        req.market,
+        req.code,
+        req.category,
+        req.start,
+        req.count,
+        start_date=req.start_date,
+        end_date=req.end_date,
     )
     if df is None or len(df) == 0:
         return {"error": "未取到行情数据", "bars": [], "candidates": [], "mmd_outcomes": []}
