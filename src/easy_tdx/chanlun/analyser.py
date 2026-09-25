@@ -404,6 +404,12 @@ class ChanlunResult:
                     "v102_signal_quality": getattr(mmd, "_signal_quality_scorecard", None),
                     "v102_decision_support": getattr(mmd, "_decision_support", None),
                     "v102_pattern_match": getattr(mmd, "_historical_pattern_match", None),
+                    # V68 条件205 区间套（多级别共振一致性）：字面意义的「区间套」
+                    # ——仅 3 类买卖点计算（需 >=40 根 K 线），含 multi_level_score
+                    # （0-1）与置信度调整；便于前端标注与回测分组统计。
+                    "v68_range_set_multi_level": getattr(
+                        mmd, "_range_set_multi_level_v68", None
+                    ),
                 }
                 for mmd in self.mmds
             ],

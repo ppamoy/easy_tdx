@@ -331,3 +331,73 @@ def test_to_dict_emits_deep_recursion_levels() -> None:
     assert d["levels"]["xd_l3"]["name"] == "递归3级"
     assert d["levels"]["xd_l3"]["bi_count"] == len(res[1].xds)
     assert d["levels"]["xd_l3"]["xd_count"] == len(res[2].xds)
+
+
+# ── V730 跨级别端点共享（缠论原文：相邻级别必须共享转折点）────────────
+
+
+def _endpoint_identities(xds: list[XD]) -> set[int]:
+    """某级别所有线段的端点分型对象身份集合（start/end 都算）。"""
+    ids: set[int] = set()
+    for xd in xds:
+        ids.add(id(xd.start))
+        ids.add(id(xd.end))
+    return ids
+
+
+def test_recursive_levels_share_turning_points_across_levels() -> None:
+    """V730：高级别线段端点 MUST 是低级别线段的端点（跨级别共享转折点）。
+
+    缠论递归的本质是「低级别线段 → 高级别笔」，因此高级别线段的起止点
+    必须落在低级别的转折点（线段端点分型）上，不得悬空在低级别线段中间。
+
+    这里用**对象身份**（id）断言而非仅比值：recursive._compute_one_level 把
+    上一级 XD 原样当作 BI 传入 find_xds，端点 FX 必须是同一个对象，而不只是
+    数值相同的新对象——数值相同可能掩盖「重建端点」的隐患。
+    """
+    xds = _craft_multiscale_xds()
+    res = compute_recursive_levels(xds, depth=3, config=_cfg())
+    assert len(res) == 3
+
+    # 基础级（传入的低级别线段）端点集合
+    base_ids = _endpoint_identities(xds)
+
+    # Level-2 端点必须来自 Level-1 线段的端点
+    for xd in res[1].xds:
+        assert id(xd.start) in base_ids, f"L2 起点未共享基础级端点: {xd.start.val}"
+        assert id(xd.end) in base_ids, f"L2 终点未共享基础级端点: {xd.end.val}"
+
+    # Level-3 端点必须来自 Level-2 线段的端点（逐级递进，而非都指向基础级）
+    l2_ids = _endpoint_identities(res[1].xds)
+    for xd in res[2].xds:
+        assert id(xd.start) in l2_ids, f"L3 起点未共享 L2 端点: {xd.start.val}"
+        assert id(xd.end) in l2_ids, f"L3 终点未共享 L2 端点: {xd.end.val}"
+
+
+def test_recursive_levels_high_endpoint_values_subset_of_low() -> None:
+    """V730：高级别端点 (val, bar_index) 是低级别端点集合的子集。
+
+    对象身份之外再锁定数值与锚定索引：序列化到前端后前端只能按
+    (val, bar_index) 定位，因此这两者也必须严格落在低级别端点上，
+    否则图上高级别线段会与低级别转折点错位。
+    """
+
+    def pts(xds: list[XD]) -> set[tuple[float, int]]:
+        out: set[tuple[float, int]] = set()
+        for xd in xds:
+            out.add((round(float(xd.start.val), 4), int(xd.start.bar_index)))
+            out.add((round(float(xd.end.val), 4), int(xd.end.bar_index)))
+        return out
+
+    xds = _craft_multiscale_xds()
+    res = compute_recursive_levels(xds, depth=3, config=_cfg())
+
+    base_pts = pts(xds)
+    for xd in res[1].xds:
+        assert (round(float(xd.start.val), 4), int(xd.start.bar_index)) in base_pts
+        assert (round(float(xd.end.val), 4), int(xd.end.bar_index)) in base_pts
+
+    l2_pts = pts(res[1].xds)
+    for xd in res[2].xds:
+        assert (round(float(xd.start.val), 4), int(xd.start.bar_index)) in l2_pts
+        assert (round(float(xd.end.val), 4), int(xd.end.bar_index)) in l2_pts

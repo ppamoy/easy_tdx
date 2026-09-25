@@ -9011,6 +9011,10 @@ def _calc_range_set_multi_level_v68(
                 # 价格离中枢有一定距离（非刚突破）
                 distance_factor = max(0, min(1.0, latest["dist_pct"] * 5))
                 # 多个中枢提供支撑
+                # 语义澄清（V730）：zs_above = 「价格在中枢上方」的中枢数
+                # （"above": current > zs.zg），买入语境即「已站上/突破多数中枢」，
+                # 命名 support_level 虽易误解，但口径本身并非笔误。曾尝试改
+                # zs_below，分层回测显示 3买/3卖 命中率双双下降，故保持原口径。
                 support_level = zs_above / max(len(zs_list), 1)
                 score = 0.3 * breakout_confirm + 0.3 * distance_factor + 0.4 * support_level
             else:
@@ -9020,6 +9024,7 @@ def _calc_range_set_multi_level_v68(
                 latest = zs_list[-1]
                 breakdown_confirm = latest["below"]
                 distance_factor = max(0, min(1.0, abs(latest["dist_pct"]) * 5))
+                # 同上：保持原口径（见上方 support_level 注释）。
                 resistance_level = zs_below / max(len(zs_list), 1)
                 score = 0.3 * breakdown_confirm + 0.3 * distance_factor + 0.4 * resistance_level
             else:

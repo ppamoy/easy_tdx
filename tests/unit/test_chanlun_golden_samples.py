@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
+
 from easy_tdx.chanlun.beichi import _check_pz_beichi, check_bi_beichi
 from easy_tdx.chanlun.bi import find_bis
 from easy_tdx.chanlun.config import ChanlunConfig
@@ -20,7 +22,18 @@ from easy_tdx.chanlun.mmd import (
     _reference_zs_for_bi,
 )
 from easy_tdx.chanlun.mmd_conditions import _calc_trend_strength
-from easy_tdx.chanlun.types import BI, FX, MMDType, ZS, BCType, CLKline, Direction, FXType, Kline
+from easy_tdx.chanlun.types import (
+    BI,
+    FX,
+    MMD,
+    MMDType,
+    ZS,
+    BCType,
+    CLKline,
+    Direction,
+    FXType,
+    Kline,
+)
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
     _merged_feature_fx,
@@ -892,3 +905,101 @@ def test_first_type_mmd_scan_direction_symmetry() -> None:
     sells = [m for m in mmds if m.mmd_type == MMDType.SELL_1]
     assert len(sells) == 1
     assert sells[0].bi is bis[10]
+
+
+# ── V730 区间套（V68 条件205）计分契约 ────────────────────────────────
+# 背景：分层回测（scripts/nesting_backtest.py，20 只龙头 × 800 根日线）显示
+# 区间套确认在 3卖 上显著占优（h=5/10/20 命中率 74.6%/74.6%/66.7% vs
+# 62.8%/55.8%/48.8%），但在 3买 上不占优（47.8%/34.8%/47.6% vs 63.0%/63.0%/57.7%）。
+# 换言之：该评分目前对卖点有效、对买点无效。这里锁定**当前计分契约**，
+# 使任何试图调整计分方向的改动都必须同步更新本测试与回测结论。
+
+
+def _mk_zs_for_nesting(zg: float, zd: float, index: int = 0) -> ZS:
+    """构造区间套计分用的中枢（只需 zg/zd/done，其余字段不参与计分）。"""
+    return ZS(lines=[], zg=zg, zd=zd, gg=zg, dd=zd, direction="", index=index, done=True)
+
+
+def test_nesting_score_needs_40_bars() -> None:
+    """数据不足 40 根时不计算区间套（评分保持默认 0）。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    mmd = MMD(mmd_type=MMDType.BUY_3, msg="", confidence=0.5)
+    zss = [_mk_zs_for_nesting(10.0, 9.0)]
+    res = _calc_range_set_multi_level_v68(mmd, zss, closes=[10.0] * 39)
+    assert res["multi_level_score"] == 0.0
+    assert "数据不足" in res["msg"]
+
+
+def test_nesting_score_buy_uses_zs_above_counts() -> None:
+    """锁定买入分支口径：support_level 取「价格上方中枢数 / 中枢总数」。
+
+    注意这是**原实现口径**（价格上方的中枢在买入语境下实为阻力），分层回测
+    表明按此口径 3买 不占优；曾尝试改为下方中枢反而更差，故保持。测试目的
+    是让任何改动作实据对比后再改，而不是静默翻转。
+    """
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    mmd = MMD(mmd_type=MMDType.BUY_3, msg="", confidence=0.5)
+    # 价格 20，三个中枢全部位于价格下方（9-10 / 10-11 / 11-12）
+    zss = [
+        _mk_zs_for_nesting(10.0, 9.0, 0),
+        _mk_zs_for_nesting(11.0, 10.0, 1),
+        _mk_zs_for_nesting(12.0, 11.0, 2),
+    ]
+    closes = [20.0] * 60
+    res = _calc_range_set_multi_level_v68(mmd, zss, closes)
+    # 语义：zs_above_price = 「价格在中枢上方」的中枢数（代码 "above": current > zs.zg）
+    assert res["zs_above_price"] == 3.0  # 价格站上全部 3 个中枢
+    assert res["zs_below_price"] == 0.0
+    # 买入分支 support_level = zs_above/n = 1.0（突破确认），加距离项 → 高分
+    assert res["multi_level_score"] == pytest.approx(0.3 * 1.0 + 0.3 * 1.0 + 0.4 * 1.0, abs=0.02)
+
+
+def test_nesting_score_sell_uses_zs_below_counts() -> None:
+    """锁定卖出分支口径：resistance_level 取「价格下方中枢数 / 中枢总数」（镜像）。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    mmd = MMD(mmd_type=MMDType.SELL_3, msg="", confidence=0.5)
+    # 价格 5，三个中枢全在价格上方
+    zss = [
+        _mk_zs_for_nesting(10.0, 9.0, 0),
+        _mk_zs_for_nesting(11.0, 10.0, 1),
+        _mk_zs_for_nesting(12.0, 11.0, 2),
+    ]
+    closes = [5.0] * 60
+    res = _calc_range_set_multi_level_v68(mmd, zss, closes)
+    assert res["zs_above_price"] == 0.0
+    assert res["zs_below_price"] == 3.0  # 价格跌破全部 3 个中枢
+    # 卖出分支 resistance_level = zs_below/n = 1.0（跌破确认），镜像买入分支
+    assert res["multi_level_score"] == pytest.approx(0.3 * 1.0 + 0.3 * 1.0 + 0.4 * 1.0, abs=0.02)
+
+
+def test_nesting_score_confidence_adjust_bands() -> None:
+    """评分→置信度调整的分档：>=0.7→+5%，>=0.5→+3%，>=0.3→0，否则 -3%。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    def adj(score_zss: list[ZS], price: float, buy: bool) -> float:
+        mmd = MMD(mmd_type=MMDType.BUY_3 if buy else MMDType.SELL_3, msg="", confidence=0.5)
+        return _calc_range_set_multi_level_v68(mmd, score_zss, closes=[price] * 60)[
+            "confidence_adjust"
+        ]
+
+    # 卖点：价格远低于所有中枢 → 三项均满分 → 高分档
+    below_all = [_mk_zs_for_nesting(20.0, 19.0), _mk_zs_for_nesting(21.0, 20.0)]
+    assert adj(below_all, 5.0, buy=False) == pytest.approx(0.05, abs=0.011)
+    # 买点：价格位于中枢内部（未突破）→ 低分档
+    inside = [_mk_zs_for_nesting(20.0, 10.0)]
+    assert adj(inside, 15.0, buy=True) == pytest.approx(-0.03, abs=0.011)
+
+
+def test_nesting_score_serialized_by_analyser() -> None:
+    """to_dict 输出 v68_range_set_multi_level，供前端标注与回测分组消费。"""
+    from easy_tdx.chanlun.analyser import ChanlunResult
+
+    mmd = MMD(mmd_type=MMDType.SELL_3, msg="", confidence=0.5)
+    mmd._range_set_multi_level_v68 = {"multi_level_score": 0.75, "confidence_adjust": 0.05}
+    result = ChanlunResult(code="600519", frequency="daily")
+    result.mmds = [mmd]
+    d = result.to_dict()
+    assert d["mmds"][0]["v68_range_set_multi_level"]["multi_level_score"] == 0.75
