@@ -8958,7 +8958,14 @@ def _calc_range_set_multi_level_v68(
     - 卖出：价格应位于最近中枢下方（跌破后反抽确认）
     - 中枢数量越多、距离越近，区间套效果越好
 
-    返回：zhongshu_count, zs_above_price, zs_below_price, multi_level_score, confidence_adjust, msg
+    V730 修复（未来函数 + 时间错配）：
+    原实现以 closes[-1]（序列最新价）与**全部**中枢评估，导致同一标的所有
+    3buy 共享同一评分、所有 3sell 共享另一评分（实测 600519：全部 3buy=0.592、
+    全部 3sell=0.639），与信号自身位置无关；且使用了信号之后才形成的中枢，
+    属未来函数。现改为：
+    - current 取信号发生时刻的价格（mmd.bi.end.bar_index）
+    - 只统计该时刻**之前**已形成的中枢（zs.end.bar_index <= 信号位置）
+    区间套本意即「信号发生时各级别是否共振」，必须锚定当时状态。
     """
     result: dict[str, Any] = {
         "zhongshu_count": 0,
@@ -8975,11 +8982,19 @@ def _calc_range_set_multi_level_v68(
             result["msg"] = "数据不足（需≥40根且有机枢）"
             return result
 
-        current = closes[-1]
+        # V730：锚定「信号发生时刻」而非序列末尾。
+        sig_idx = mmd.bi.end.bar_index if mmd.bi else None
+        if sig_idx is None or not (0 <= sig_idx < n):
+            sig_idx = n - 1
+        current = closes[sig_idx]
 
-        # 统计中枢信息
+        # 统计中枢信息：V730 只用信号发生「之前」已形成的中枢，
+        # 信号之后才完成的中枢属未来信息，不得用于评价该信号。
         zs_list = []
         for zs in zss:
+            z_end = zs.end.bar_index if zs.end else None
+            if z_end is not None and z_end > sig_idx:
+                continue
             zs_mid = (zs.zg + zs.zd) / 2
             zs_dist = (current - zs_mid) / max(current, 1e-10)
             zs_list.append(
@@ -8999,6 +9014,18 @@ def _calc_range_set_multi_level_v68(
         result["zs_above_price"] = float(zs_above)
         result["zs_below_price"] = float(zs_below)
 
+        # V730：回踩站稳因子（仅买入分支）。3买 的定义是「突破中枢后回踩不破」，
+        # 原评分只用静态价格位置，未检验突破是否站稳 → 离线验证发现这是 3买
+        # 区间套无效的成因之一：有区间套组后续 20 根跌回中枢内达 34.8%，
+        # 而无区间套组仅 13.7%。因子区分力实测（10 根命中率）：
+        # 站稳组 59.8% vs 破位组 35.7%（lookback=10）。
+        # 用 closes 窗口最小值近似回踩低点（避免改动函数签名/调用点）。
+        retest_hold = 1.0
+        if is_buy and zs_list:
+            lb = 10
+            lo = min(closes[max(0, sig_idx - lb) : sig_idx + 1])
+            retest_hold = 1.0 if lo >= zs_list[-1]["zg"] else 0.0
+
         # 区间套评分
         # 买入信号：中枢在下方（被突破），且价格远离中枢上沿（确认突破）
         # 卖出信号：中枢在上方（被跌破），且价格远离中枢下沿（确认跌破）
@@ -9016,7 +9043,13 @@ def _calc_range_set_multi_level_v68(
                 # 命名 support_level 虽易误解，但口径本身并非笔误。曾尝试改
                 # zs_below，分层回测显示 3买/3卖 命中率双双下降，故保持原口径。
                 support_level = zs_above / max(len(zs_list), 1)
-                score = 0.3 * breakout_confirm + 0.3 * distance_factor + 0.4 * support_level
+                # 加入回踩站稳项：0.25/0.25/0.3/0.2（原三项权重按比例压缩）
+                score = (
+                    0.25 * breakout_confirm
+                    + 0.25 * distance_factor
+                    + 0.3 * support_level
+                    + 0.2 * retest_hold
+                )
             else:
                 score = 0.3
         else:
@@ -9031,6 +9064,7 @@ def _calc_range_set_multi_level_v68(
                 score = 0.3
 
         score = min(1.0, max(0.0, score))
+        result["retest_hold"] = float(retest_hold)
         result["multi_level_score"] = round(score, 3)
 
         if score >= 0.7:

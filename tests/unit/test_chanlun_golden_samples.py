@@ -1003,3 +1003,95 @@ def test_nesting_score_serialized_by_analyser() -> None:
     result.mmds = [mmd]
     d = result.to_dict()
     assert d["mmds"][0]["v68_range_set_multi_level"]["multi_level_score"] == 0.75
+
+
+# ── V730 区间套：时间锚定与回踩站稳因子 ──────────────────────────────
+# 修复前缺陷：评分用 closes[-1]（序列最新价）+ 全部中枢 → 同一标的所有 3buy
+# 共享同一评分、所有 3sell 共享另一评分（实测 600519：3buy 恒 0.592、
+# 3sell 恒 0.639），与信号自身位置无关；且用到信号之后才形成的中枢（未来函数）。
+# 修复后：锚定信号时刻（mmd.bi.end.bar_index），只用此前已形成的中枢，
+# 并新增回踩站稳因子（3买 破位组实测 10 根命中率仅 35.7% vs 站稳组 59.8%）。
+
+
+def _mk_bi_for_nesting(start_bar: int, end_bar: int) -> BI:
+    """构造带 bar_index 的笔（用于给 MMD 提供信号时间锚点）。"""
+    bi = _mk_bi(start_bar, "up", 12.0, 10.0, start_val=10.0, end_val=12.0)
+    bi.start.bar_index = start_bar
+    bi.end.bar_index = end_bar
+    return bi
+
+
+def test_nesting_score_anchored_to_signal_time() -> None:
+    """评分必须锚定信号时刻，而非序列末尾：末尾价变化不应影响历史信号评分。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    zs = _mk_zs_for_nesting(10.0, 9.0, index=0)
+    zs.start = _mk_bi_for_nesting(10, 20).start
+    zs.end = _mk_bi_for_nesting(10, 20).end  # 中枢结束于 bar 20（信号之前）
+
+    mmd = MMD(mmd_type=MMDType.BUY_3, msg="", confidence=0.5)
+    mmd.bi = _mk_bi_for_nesting(21, 30)  # 信号在 bar 30
+    closes = [10.0] * 60
+    closes[30] = 12.0  # 信号时刻价格 12（站上中枢 ZG=10）
+    r1 = _calc_range_set_multi_level_v68(mmd, [zs], closes)
+
+    # 只改末尾价（模拟继续行情推进），信号时刻状态未变 → 评分不应变
+    closes2 = list(closes)
+    closes2[-1] = 3.0  # 末尾暴跌（回到中枢下方）
+    r2 = _calc_range_set_multi_level_v68(mmd, [zs], closes2)
+    assert r1["multi_level_score"] == r2["multi_level_score"], (
+        "历史信号评分不应被后续行情改写（修复前会用 closes[-1]，导致评分漂移）"
+    )
+
+
+def test_nesting_score_ignores_future_zhongshu() -> None:
+    """信号之后才形成的中枢不得参与计分（未来函数）。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    past = _mk_zs_for_nesting(10.0, 9.0, index=0)  # 信号前
+    past.start = _mk_bi_for_nesting(5, 10).start
+    past.end = _mk_bi_for_nesting(5, 10).end
+    future = _mk_zs_for_nesting(30.0, 29.0, index=1)  # 信号后（未来）
+    future.start = _mk_bi_for_nesting(40, 45).start
+    future.end = _mk_bi_for_nesting(40, 45).end
+
+    mmd = MMD(mmd_type=MMDType.BUY_3, msg="", confidence=0.5)
+    mmd.bi = _mk_bi_for_nesting(21, 30)  # 信号在 bar 30
+    closes = [15.0] * 60
+    closes[30] = 15.0
+
+    only_past = _calc_range_set_multi_level_v68(mmd, [past], closes)
+    with_future = _calc_range_set_multi_level_v68(mmd, [past, future], closes)
+    # 未来中枢（ZG=30，价格在下方）若被计入会拉低 above 比例 → 评分下降
+    assert with_future["multi_level_score"] == only_past["multi_level_score"]
+    assert with_future["zhongshu_count"] == only_past["zhongshu_count"]
+
+
+def test_nesting_retest_hold_penalizes_breakdown() -> None:
+    """回踩跌回中枢内（破位）应拉低 3买 评分。"""
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    zs = _mk_zs_for_nesting(10.0, 9.0, index=0)
+    zs.start = _mk_bi_for_nesting(5, 10).start
+    zs.end = _mk_bi_for_nesting(5, 10).end  # 中枢在信号前完成
+
+    mmd = MMD(mmd_type=MMDType.BUY_3, msg="", confidence=0.5)
+    mmd.bi = _mk_bi_for_nesting(21, 40)  # 信号在 bar 40
+
+    # 站稳：前 10 根回踩最低 10.5 >= ZG=10
+    hold_closes = [12.0] * 60
+    hold_closes[31:41] = [10.5] * 10
+    hold_closes[40] = 12.0
+    r_hold = _calc_range_set_multi_level_v68(mmd, [zs], hold_closes)
+
+    # 破位：前 10 根最低 8.5 < ZG=10（跌回中枢内）
+    brk_closes = [12.0] * 60
+    brk_closes[31:41] = [8.5] * 10
+    brk_closes[40] = 12.0
+    r_brk = _calc_range_set_multi_level_v68(mmd, [zs], brk_closes)
+
+    assert r_hold["retest_hold"] == 1.0
+    assert r_brk["retest_hold"] == 0.0
+    assert r_hold["multi_level_score"] > r_brk["multi_level_score"], (
+        "回踩破位的 3买 评分必须低于站稳者"
+    )
