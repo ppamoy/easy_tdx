@@ -6,6 +6,8 @@
 3) K线索引单调不回退
 4) 线段端点必须是笔端点（级别递归的共享转折点要求）
 5) 买卖点 bar_index 落在数据范围内
+   （另观测：3类信号关联的中枢是否已完成 —— 未完成中枢的 ZD/ZG 会随延伸
+    变化，基于它的信号事后可能失效；当前仅统计提示，不阻断）
 
 用法：.venv/bin/python scripts/verify_structural_invariants.py
 """
@@ -38,7 +40,23 @@ for mk,code,cat in CASES:
     for x in d.get("xds",[]):
         for p in ((round(x["start_val"],4),x["start_index"]),(round(x["end_val"],4),x["end_index"])):
             if p not in bi_pts: errs.append(f"线段端点{p}不在笔端点集合")
-    # 5) mmd bar_index 在范围内
+    # 5) 3类买卖点关联的中枢应已完成（已知边界：极少数未完成中枢也会触发，
+    #    因其 ZD/ZG 仍会随延伸变化，这类信号事后可能失效；当前仅观测不阻断）
+    zss = d.get("zss", [])
+    undone = 0
+    for m in d.get("mmds", []):
+        if not m["type"].endswith(("3buy", "3sell")):
+            continue
+        bi = m.get("bar_index")
+        if bi is None:
+            continue
+        cand = [z for z in zss if z.get("end_index") is not None and z["end_index"] <= bi]
+        if cand and not cand[-1].get("done", True):
+            undone += 1
+    if undone:
+        print(f"        ℹ️ 3类信号关联未完成中枢: {undone} 个（已知边界，非错误）")
+
+    # 6) mmd bar_index 在范围内
     n=d.get("kline_count",0)
     for m in d.get("mmds",[]):
         if m.get("bar_index") is not None and not (0<=m["bar_index"]<n): errs.append(f"mmd {m['type']} bar_index={m['bar_index']} 越界(n={n})")
