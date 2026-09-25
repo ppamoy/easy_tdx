@@ -74,6 +74,24 @@ pip install -e ".[dev]"
 pip install -e ".[web]"
 ```
 
+## 服务管理（systemd user）
+
+开发 Web API 服务（FastAPI + Uvicorn）由 systemd user unit 托管：**开机自启 + 崩溃自拉起**（本机已 `loginctl enable-linger`）。
+
+| 项 | 值 |
+|---|---|
+| 监听 | `0.0.0.0:8000` |
+| unit | `easy-tdx.service` |
+| 日志 | `logs/service.log` |
+
+```bash
+systemctl --user status easy-tdx        # 查看状态 / 端口
+systemctl --user restart easy-tdx       # 改代码后重启
+journalctl --user -u easy-tdx -f        # 跟随日志
+```
+
+> 改代码后直接 `systemctl --user restart easy-tdx`，无需手动 kill / 重新起。
+
 ## CLI 参考
 
 `easy-tdx` 默认输出 JSON（一行一条记录），`--table` 切换表格，`--output csv` 输出 CSV。
