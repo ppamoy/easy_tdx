@@ -261,6 +261,13 @@ class MultiLevelAnalyser:
         return {
             "bi_count": len(low_bis),
             "zs_count": len(low_zss),
+            # V731：把筛选出来的**真实**低级别笔/中枢对象一并暴露。
+            # 此前只返回计数，而 compute_qujiantao_cross_period 需要对象
+            # 列表（bis_low / zss_low）才能做逐信号确认 —— 真实数据已经算了
+            # 出来却被丢弃，跨周期区间套只好去用 level_synth 的**合成**数据。
+            # 有了这两个字段，「真实行情 + 逐信号」的真区间套路径才成立。
+            "bis": low_bis,
+            "zss": low_zss,
             "has_trend": has_trend,
             "has_consolidation": has_consolidation,
             "trend_direction": trend_direction,
