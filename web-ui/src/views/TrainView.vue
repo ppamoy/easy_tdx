@@ -113,6 +113,14 @@ const count = ref(400)
 // V421: 难度分级 + 随机标的
 const difficulty = ref<'easy' | 'medium' | 'hard'>('medium')
 const seed = ref(0)
+// V731 F3：任意历史区间回放（不是只能从「现在」往后退）。
+// 后端 train/session 早已支持 start_date/end_date（ChanlunView 的「时光跳转」
+// 就是这么用的），但训练页此前既不提供输入、请求里也没传 —— F3 第一条在
+// 训练页实际不可用。留空 = 按 K 线根数取最近一段（保持原行为）。
+const startDate = ref('')
+const endDate = ref('')
+/** 是否启用了历史区间（两个都填才生效，避免只填一半导致歧义）。 */
+const useDateRange = computed(() => Boolean(startDate.value && endDate.value))
 const RANDOM_POOL = [
   '000001',
   '000333',
@@ -181,6 +189,122 @@ const userChoice = ref<'buy' | 'sell' | 'hold' | null>(null)
 const totalAsked = ref(0)
 const hitCount = ref(0)
 const score = ref(0)
+
+// ── V731 F3：训练会话可保存/续练（localStorage）────────────────────────
+// 需求 F3 第二条此前**完全没有实现**（全项目 localStorage 只用于自选股/
+// 新手引导/阅读记录/最近浏览）。这里补上。
+//
+// **安全约束（重要）**：只持久化进度，绝不持久化 candidates[].signal
+// 与 mmd_outcomes —— 那些是「答案 + 未来走势」，写进 localStorage 等于
+// 把防作弊闸门（4fe2bbb）绕过：用户 F12 看 Application 就能读到全部答案。
+// 恢复时仍以 mode=train 重新拉题，答案照旧按需取回。
+const SESSION_KEY = 'easy_tdx_train_session_v1'
+
+type SavedSession = {
+  code: string
+  category: string
+  count: number
+  difficulty: string
+  seed: number
+  startDate: string
+  endDate: string
+  revealIndex: number
+  currentCandidateIdx: number
+  totalAsked: number
+  hitCount: number
+  score: number
+  savedAt: string
+}
+
+const hasSavedSession = ref(false)
+const savedInfo = ref<{ code: string; totalAsked: number; savedAt: string } | null>(null)
+
+function loadSavedSession(): SavedSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (!raw) return null
+    const s = JSON.parse(raw) as Partial<SavedSession>
+    // 关键字段缺失就当作无效存档，避免恢复出一个半残状态
+    if (typeof s?.code !== 'string' || typeof s?.revealIndex !== 'number') return null
+    return s as SavedSession
+  } catch {
+    return null
+  }
+}
+
+function refreshSavedInfo() {
+  const s = loadSavedSession()
+  hasSavedSession.value = Boolean(s)
+  savedInfo.value = s
+    ? { code: s.code, totalAsked: s.totalAsked ?? 0, savedAt: s.savedAt ?? '' }
+    : null
+}
+
+/** 存档时间的简短展示（用于「继续上次训练」按钮的 tooltip）。 */
+const fmtSavedAt = computed(() => {
+  const t = savedInfo.value?.savedAt
+  if (!t) return ''
+  const d = new Date(t)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('zh-CN', { hour12: false })
+})
+
+function saveSession() {
+  const payload: SavedSession = {
+    code: code.value,
+    category: category.value,
+    count: count.value,
+    difficulty: difficulty.value,
+    seed: seed.value,
+    startDate: startDate.value,
+    endDate: endDate.value,
+    revealIndex: revealIndex.value,
+    currentCandidateIdx: currentCandidateIdx.value,
+    totalAsked: totalAsked.value,
+    hitCount: hitCount.value,
+    score: score.value,
+    savedAt: new Date().toISOString(),
+  }
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(payload))
+    refreshSavedInfo()
+  } catch {
+    /* 隐私模式下 localStorage 不可写：不影响训练本身 */
+  }
+}
+
+function clearSavedSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY)
+  } catch {
+    /* ignore */
+  }
+  refreshSavedInfo()
+}
+
+/**
+ * 续练：把存档的参数恢复回来，再重新拉一次题目。
+ * 注意这里**必须**重新请求 —— 不能把 bars/candidates 也存起来，
+ * 因为它们带着答案，存下来就是泄题（同上）。
+ */
+async function resumeSession() {
+  const s = loadSavedSession()
+  if (!s) return
+  code.value = s.code
+  category.value = s.category as typeof category.value
+  count.value = s.count
+  difficulty.value = s.difficulty as typeof difficulty.value
+  seed.value = s.seed
+  startDate.value = s.startDate ?? ''
+  endDate.value = s.endDate ?? ''
+  await startTraining()
+  // startTraining 会重置进度，这里再把存档的进度覆盖回去
+  revealIndex.value = s.revealIndex
+  currentCandidateIdx.value = s.currentCandidateIdx
+  totalAsked.value = s.totalAsked ?? 0
+  hitCount.value = s.hitCount ?? 0
+  score.value = s.score ?? 0
+  jumpToCandidateIdx(s.currentCandidateIdx)
+}
 
 // 训练是否完成
 const finished = computed(() => revealIndex.value >= bars.value.length - 1)
@@ -276,33 +400,56 @@ function onAnalysisLevelChange() {
  * 因此这里检测到 outcomes 为空就单独以 review 模式补拉一次。
  * 主动切到复盘页已不是在答题，此时取事后收益不构成泄题。
  */
+/**
+ * 统一的 train/session 请求（V731 F3）。
+ *
+ * 三处调用（开始训练 / 作答后取答案 / 复盘补拉）必须**参数完全一致**，
+ * 否则同一轮训练会拿到不同区间的数据 —— 题目与答案对不上。此前三处各写
+ * 一遍，已经出现过「复盘取不到 outcomes」这类不一致（见 6b83562）。
+ *
+ * 同时这里带上历史区间：F3 要求「任意历史区间回放」，后端早已支持
+ * start_date/end_date，但训练页此前从未传过。
+ */
+async function fetchSession(
+  opts: { mode?: 'train' | 'review'; revealLimit?: number | null } = {},
+): Promise<any> {
+  const qs = new URLSearchParams({
+    difficulty: String(difficulty.value),
+    seed: String(seed.value),
+    mode: opts.mode ?? 'train',
+  })
+  if (opts.revealLimit != null) qs.set('reveal_limit', String(opts.revealLimit))
+  const body: Record<string, unknown> = {
+    market: detectMarket(code.value),
+    code: code.value,
+    category: category.value,
+    count: count.value,
+    start: 0,
+  }
+  // F3：历史区间（两个都填才传，留空则按 K 线根数取最近一段）
+  if (useDateRange.value) {
+    body.start_date = startDate.value
+    body.end_date = endDate.value
+  }
+  const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+  return await resp.json()
+}
+
 async function switchToReview() {
   mode.value = 'review'
   if (!bars.value.length || outcomes.value.length > 0) return
   loading.value = true
   try {
-    const qs = new URLSearchParams({
-      difficulty: String(difficulty.value),
-      seed: String(seed.value),
-      mode: 'review',
-    })
-    const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        market: detectMarket(code.value),
-        code: code.value,
-        category: category.value,
-        count: count.value,
-        start: 0,
-      }),
-    })
-    if (!resp.ok) return
+    const d = await fetchSession({ mode: 'review' })
     // 只补 outcomes，**不覆盖 candidates**：复盘模式的 candidates 是带答案的，
     // 若写回前端，用户切回训练就会在内存里看到答案（泄题）。训练进度也
     // 保持不动，避免中途看一眼复盘就丢分。
-    const d = await resp.json()
-    if (!d.error) outcomes.value = d.mmd_outcomes ?? []
+    if (!d?.error) outcomes.value = d?.mmd_outcomes ?? []
   } catch {
     /* 复盘数据取不到时保持原样，不打断用户 */
   } finally {
@@ -314,36 +461,12 @@ async function startTraining() {
   loading.value = true
   error.value = ''
   try {
-    const market = detectMarket(code.value)
-    // V731 防作弊闸门：本函数固定以 train 模式开局（不下发答案与未来走势，
-    // 避免 F12 看 Network 泄题）。复盘需要的 mmd_outcomes 由 switchToReview()
+    // V731 防作弊闸门：固定 train 模式开局（不下发答案与未来走势，避免
+    // F12 看 Network 泄题）。复盘需要的 mmd_outcomes 由 switchToReview()
     // 单独补拉 —— 两者分开，复盘数据才不会污染训练态。
-    // 注意：mode/reveal_limit 与既有的 difficulty/seed 一样是**查询参数**
-    // （FastAPI 里 POST 的标量参数默认走 query，实测放 body 里后端收不到，
-    // 闸门会静默失效 —— 这一点已由 HTTP 层回归测试锁定）。
-    const qs = new URLSearchParams({
-      difficulty: String(difficulty.value),
-      seed: String(seed.value),
-      mode: 'train',
-      reveal_limit: '0', // 开局 ⇒ 不下发任何答案
-    })
-    const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        market,
-        code: code.value,
-        category: category.value,
-        count: count.value,
-        start: 0,
-      }),
-    })
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}))
-      throw new Error((err as { detail?: string }).detail ?? `HTTP ${resp.status}`)
-    }
-    const d = await resp.json()
-    if (d.error) throw new Error(d.error)
+    // 参数构造统一走 fetchSession（含 F3 历史区间），避免三处不一致。
+    const d = await fetchSession({ mode: 'train', revealLimit: 0 })
+    if (d?.error) throw new Error(d.error)
     bars.value = d.bars ?? []
     rawDetail.value = d
     analysisLevel.value = 'bi'
@@ -374,6 +497,21 @@ async function startTraining() {
 
 // 揭示到下一个候选点：需要至少 CONTEXT 根背景 K 线，揭示到转折点本身
 const CONTEXT = 30
+/** 定位到指定候选点下标（续练用：恢复到上次停下的那一题）。 */
+function jumpToCandidateIdx(idx: number) {
+  const c = candidates.value[idx]
+  if (c && c.index < bars.value.length) {
+    revealIndex.value = Math.min(c.index, bars.value.length - 1)
+    currentCandidateIdx.value = idx
+  } else if (candidates.value.length) {
+    // 存档下标越界（数据变了）→ 退化为跳到第一个候选点
+    jumpToNextCandidate()
+    return
+  }
+  answered.value = false
+  userChoice.value = null
+}
+
 function jumpToNextCandidate() {
   for (let i = 0; i < candidates.value.length; i++) {
     const c = candidates.value[i]
@@ -437,26 +575,10 @@ function submitChoice(choice: 'buy' | 'sell' | 'hold') {
 async function fetchSignalFor(index: number, c: Candidate): Promise<string> {
   if (c.signal?.type) return c.signal.type // 复盘模式/已带答案时直接用
   try {
-    const qs = new URLSearchParams({
-      difficulty: String(difficulty.value),
-      seed: String(seed.value),
-      mode: 'train',
-      reveal_limit: String(index),
-    })
-    const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        market: detectMarket(code.value),
-        code: code.value,
-        category: category.value,
-        count: count.value,
-        start: 0,
-      }),
-    })
-    if (!resp.ok) return ''
-    const d = await resp.json()
-    const hit = (d.candidates ?? []).find(
+    // 统一走 fetchSession：必须与开局请求同区间、同难度/种子，否则取回的
+    // 答案可能来自另一段行情（题目与答案对不上）。
+    const d = await fetchSession({ mode: 'train', revealLimit: index })
+    const hit = (d?.candidates ?? []).find(
       (x: { index: number }) => x.index === index,
     ) as Candidate | undefined
     if (hit?.signal?.type) {
@@ -487,6 +609,9 @@ function judge(choice: 'buy' | 'sell' | 'hold', c: Candidate, sig: string) {
     // V426: 答错入错题集
     recordMistake(c, choice, actual)
   }
+  // V731 F3：每题作答后自动存进度，用户中途关页面也能续练。
+  // 存的是进度与计分，不含答案（见 saveSession 的安全约束）。
+  saveSession()
 }
 
 // V426: 答错时提交错题（fire-and-forget，不阻塞训练）
@@ -695,6 +820,7 @@ function isOutcomeMiss(o: MmdOutcome): boolean {
 }
 
 onMounted(() => {
+  refreshSavedInfo() // F3：读存档，决定是否显示「继续上次训练」
   startTraining()
   loadLeaderboard()
 })
@@ -723,6 +849,20 @@ onMounted(() => {
         <label>K 线根数</label>
         <input v-model.number="count" type="number" min="100" max="2000" step="100" />
       </div>
+      <!-- V731 F3：任意历史区间回放（不是只能从「现在」往后退）。
+           两个都填才生效，留空则按 K 线根数取最近一段（保持原行为）。 -->
+      <div class="field-group">
+        <label>历史区间起</label>
+        <input v-model="startDate" type="date" />
+      </div>
+      <div class="field-group">
+        <label>历史区间止</label>
+        <input v-model="endDate" type="date" :min="startDate || undefined" />
+      </div>
+      <div v-if="useDateRange" class="field-group">
+        <label>&nbsp;</label>
+        <button class="ghost" @click="startDate = ''; endDate = ''">清除区间</button>
+      </div>
       <div class="field-group">
         <label>难度</label>
         <select v-model="difficulty">
@@ -742,6 +882,19 @@ onMounted(() => {
         {{ loading ? '加载中…' : '🔄 开始训练' }}
       </button>
       <button class="ghost" :disabled="loading" @click="randomStock">🎲 随机标的</button>
+      <!-- V731 F3：训练会话可保存/续练 -->
+      <button
+        v-if="hasSavedSession"
+        class="ghost"
+        :disabled="loading"
+        :title="`上次：${savedInfo?.code} 已答 ${savedInfo?.totalAsked} 题（${fmtSavedAt}）`"
+        @click="resumeSession()"
+      >
+        ⏯ 继续上次训练
+      </button>
+      <button class="ghost" :disabled="loading || !bars.length" @click="saveSession()">
+        💾 保存进度
+      </button>
       <div class="mode-tabs">
         <button :class="['tab', { active: mode === 'train' }]" @click="mode = 'train'">
           🎯 逐步揭示训练
