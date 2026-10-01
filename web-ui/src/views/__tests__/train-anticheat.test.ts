@@ -76,3 +76,68 @@ describe('TrainView 防作弊闸门请求契约', () => {
     30_000,
   )
 })
+
+// ── F2 复盘讲解的回归锁定 ──────────────────────────────────────────────
+// 复盘面板 v-for 的是 outcomes（= d.mmd_outcomes）。训练模式带防作弊闸门时
+// 后端把 mmd_outcomes 置空 —— 若不按模式补拉，复盘表格**永远是空的**，
+// F2「逐笔复盘讲解」直接失效。这是 V731 引入闸门时的真实回归。
+describe('F2 复盘讲解不得因防作弊闸门而变空', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  test(
+    '训练会话后切到复盘，应补拉到 mmd_outcomes（复盘表有数据可渲染）',
+    async () => {
+      const urls: string[] = []
+      // 第一次（训练，带闸门）：outcomes 为空；第二次（review）：有 outcomes
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: any) => {
+          const u = String(url)
+          urls.push(u)
+          const isReview = u.includes('mode=review')
+          return new Response(
+            JSON.stringify({
+              ...SESSION_PAYLOAD,
+              mmd_outcomes: isReview
+                ? [
+                    {
+                      type: '1buy', date: '2025-01-02', price: 10,
+                      ret_5d: 1.2, ret_10d: 2.3, ret_20d: 4.5,
+                      max_5d: 3.0, min_5d: -1.0,
+                    },
+                  ]
+                : [],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          )
+        }),
+      )
+      const { default: TrainView } = await import('../TrainView.vue')
+      const { createPinia } = await import('pinia')
+      const wrapper = shallowMount(TrainView, {
+        global: { plugins: [createPinia()] },
+      })
+      const vm = wrapper.vm as unknown as {
+        startTraining: (m?: string) => Promise<void>
+        switchToReview: () => Promise<void>
+        outcomes: any[]
+        mode: string
+      }
+      await vm.startTraining('train')
+      await flushPromises()
+      // 训练模式：闸门生效 ⇒ outcomes 为空（这是有意的）
+      expect(vm.outcomes).toEqual([])
+
+      await vm.switchToReview()
+      await flushPromises()
+      expect(vm.mode).toBe('review')
+      expect(vm.outcomes.length).toBeGreaterThan(0)
+      // 且补拉请求确实带了 mode=review
+      expect(urls.some((u) => u.includes('mode=review'))).toBe(true)
+      wrapper.unmount()
+    },
+    30_000,
+  )
+})

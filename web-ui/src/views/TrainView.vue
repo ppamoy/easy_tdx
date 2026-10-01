@@ -269,23 +269,63 @@ function onAnalysisLevelChange() {
   }
 }
 
+/**
+ * 切到「复盘讲解」：F2 需要 mmd_outcomes（信号后 5/10/20 日实际涨跌）。
+ * 但训练会话是带防作弊闸门拉的（outcomes 为空），直接切过去会得到**空表格**
+ * —— 这正是 V731 引入闸门时引入的回归（复盘面板 v-for 的就是 outcomes）。
+ * 因此这里检测到 outcomes 为空就单独以 review 模式补拉一次。
+ * 主动切到复盘页已不是在答题，此时取事后收益不构成泄题。
+ */
+async function switchToReview() {
+  mode.value = 'review'
+  if (!bars.value.length || outcomes.value.length > 0) return
+  loading.value = true
+  try {
+    const qs = new URLSearchParams({
+      difficulty: String(difficulty.value),
+      seed: String(seed.value),
+      mode: 'review',
+    })
+    const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        market: detectMarket(code.value),
+        code: code.value,
+        category: category.value,
+        count: count.value,
+        start: 0,
+      }),
+    })
+    if (!resp.ok) return
+    // 只补 outcomes，**不覆盖 candidates**：复盘模式的 candidates 是带答案的，
+    // 若写回前端，用户切回训练就会在内存里看到答案（泄题）。训练进度也
+    // 保持不动，避免中途看一眼复盘就丢分。
+    const d = await resp.json()
+    if (!d.error) outcomes.value = d.mmd_outcomes ?? []
+  } catch {
+    /* 复盘数据取不到时保持原样，不打断用户 */
+  } finally {
+    loading.value = false
+  }
+}
+
 async function startTraining() {
   loading.value = true
   error.value = ''
   try {
     const market = detectMarket(code.value)
-    // V731：训练模式开**防作弊闸门** —— 开局只拿题目，不拿答案与未来走势。
-    // 后端会据此把 candidates[].signal 置空、mmd_outcomes 置空，避免用户
-    // F12 看 Network 直接读到全部答案和信号后 20 日涨跌。
-    // 复盘模式（mode=review）不设闸门，因为 F2 事后验证本来就需要未来收益。
-    // 注意：mode / reveal_limit 与既有的 difficulty / seed 一样是**查询参数**
+    // V731 防作弊闸门：本函数固定以 train 模式开局（不下发答案与未来走势，
+    // 避免 F12 看 Network 泄题）。复盘需要的 mmd_outcomes 由 switchToReview()
+    // 单独补拉 —— 两者分开，复盘数据才不会污染训练态。
+    // 注意：mode/reveal_limit 与既有的 difficulty/seed 一样是**查询参数**
     // （FastAPI 里 POST 的标量参数默认走 query，实测放 body 里后端收不到，
     // 闸门会静默失效 —— 这一点已由 HTTP 层回归测试锁定）。
     const qs = new URLSearchParams({
       difficulty: String(difficulty.value),
       seed: String(seed.value),
       mode: 'train',
-      reveal_limit: '0',
+      reveal_limit: '0', // 开局 ⇒ 不下发任何答案
     })
     const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
       method: 'POST',
@@ -706,7 +746,7 @@ onMounted(() => {
         <button :class="['tab', { active: mode === 'train' }]" @click="mode = 'train'">
           🎯 逐步揭示训练
         </button>
-        <button :class="['tab', { active: mode === 'review' }]" @click="mode = 'review'">
+        <button :class="['tab', { active: mode === 'review' }]" @click="switchToReview()">
           📖 复盘讲解
         </button>
         <button :class="['tab', { active: mode === 'leaderboard' }]" @click="showLeaderboard">
