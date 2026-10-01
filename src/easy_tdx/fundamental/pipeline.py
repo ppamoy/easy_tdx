@@ -392,13 +392,41 @@ def _summarize_periods(
             "avg": round(sum(vals) / len(vals), 2) if vals else None,
         }
 
+    # V731：alpha 必须**同基对比** —— 只在「个股与指数都有值」的期上相减。
+    # 旧实现用 overall（所有期个股的均值）减 index_stats（仅有指数数据的那些期
+    # 的均值），两者样本期集合不同：某期指数取不到时（index_performance 异常
+    # 会返回 {}，如断网/接口失败），该期个股收益仍计入分子、指数却不计入基准，
+    # alpha 被系统性扭曲。实测：3 期中 1 期指数缺失时，个股基 3 期、指数基 2 期，
+    # 直接相减得出错误结论。
+    pair_vals: dict[str, list[tuple[float, float]]] = {}
+    for p in periods:
+        idx = p.get("index") or {}
+        rows = p.get("results", [])
+        for h in horizons:
+            bm = idx.get(f"ret_{h}d")
+            if bm is None:
+                continue  # 该期没有指数基准 ⇒ 整期不参与 alpha
+            ov_vals = [
+                r["performance"].get(f"ret_{h}d")
+                for r in rows
+                if r.get("performance") and r["performance"].get(f"ret_{h}d") is not None
+            ]
+            if not ov_vals:
+                continue  # 该期没有个股收益 ⇒ 同样不参与
+            pair_vals.setdefault(f"ret_{h}d", []).append(
+                (sum(ov_vals) / len(ov_vals), bm)
+            )
+
     beats: dict[str, Any] = {}
     for h in horizons:
-        ov = overall[f"ret_{h}d"].get("avg")
-        bm = index_stats[f"ret_{h}d"].get("avg")
+        pairs = pair_vals.get(f"ret_{h}d", [])
+        ov = sum(a for a, _ in pairs) / len(pairs) if pairs else None
+        bm = sum(b for _, b in pairs) / len(pairs) if pairs else None
         beats[f"ret_{h}d"] = {
             "alpha": round(ov - bm, 2) if ov is not None and bm is not None else None,
             "beats": (ov is not None and bm is not None and ov > bm),
+            # 透明化：明确告知 alpha 基于几期（旧实现口径不可解释）
+            "n_periods": len(pairs),
         }
 
     return {

@@ -543,6 +543,18 @@ onMounted(() => {
             <span class="beats-badge" :class="verifySummary.beats_index[h].beats ? 'win' : 'lose'">
               {{ verifySummary.beats_index[h].beats ? '跑赢' : '跑输' }}
             </span>
+            <!-- V731：α 只在「个股与指数都有数据」的期上计算（同基对比）。
+                 某些期因取不到指数而被排除时，必须让用户看见样本期数，
+                 否则「跑赢/跑输」会建立在一个口径不明的数字上。 -->
+            <span
+              v-if="verifySummary.beats_index[h].n_periods != null"
+              class="beats-n"
+              :title="`α 基于 ${verifySummary.beats_index[h].n_periods} 个有效时点（个股与指数均有数据的期）`"
+            >
+              {{ verifySummary.beats_index[h].n_periods }}/{{
+                verifyPeriods?.length ?? verifySummary.beats_index[h].n_periods
+              }} 期
+            </span>
           </div>
         </div>
       </div>
@@ -1064,6 +1076,13 @@ onMounted(() => {
 .beats-badge.lose {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
+}
+/* V731：α 的有效样本期数（口径透明化，弱化处理不抢主数字） */
+.beats-n {
+  font-size: 10px;
+  color: var(--text-muted, #8b949e);
+  opacity: 0.75;
+  cursor: help;
 }
 .result-table-wrap {
   background: var(--bg-panel);
