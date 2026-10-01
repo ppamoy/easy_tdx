@@ -259,12 +259,20 @@ def compute_qujiantao_cross_period(
     zss_low: list[ZS] | None = None,
     bcs_low: list[BC] | None = None,
     mmds_low: list[Any] | None = None,
+    synthetic: bool = False,
 ) -> list[dict[str, Any] | None]:
     """**真·区间套**：用真实低周期数据逐信号确认（缠论原文语义）。
 
     与 :func:`qujiantao_for_result`（用同序列递归级别）不同，本函数要求传入
     **另一份真实行情**的低周期笔/中枢/背驰/买卖点（如日线信号 + 30 分钟结构），
     按**行情时间重叠**对齐，而不是 bar_index。
+
+    V731 补充契约：若调用方拿不到真实低级别数据、改用
+    :mod:`easy_tdx.chanlun.level_synth` 合成（该模块自述「只是近似，不是真实
+    Tick」），**必须显式传 ``synthetic=True``** 声明来源 —— 否则产出的
+    ``nested`` 会被当作原文意义的真区间套，而它其实建立在近似数据上，用于
+    ``require_qujiantao`` 过滤真实交易即构成误导。声明后结果带
+    ``synthetic=True``，调用方/前端可据此区分。
 
     对每个高级别 ``mmd``：
     1. 取其锚定笔的时间窗口 ``[bi_start_date, bi_end_date]``；
@@ -391,6 +399,9 @@ def compute_qujiantao_cross_period(
                 "nested": confirmed,
                 "score": round(score, 3),
                 "method": "cross_period",
+                # V731 来源标注：True = 低周期数据是合成的近似值，不是真实
+                # 行情，不得当作原文意义的真区间套使用（见函数 docstring）。
+                "synthetic": bool(synthetic),
                 "confidence_adjust": round(adj, 3),
                 "msg": (
                     f"区间套{('确认' if confirmed else '未确认')} | {conf} | "

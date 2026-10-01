@@ -437,12 +437,22 @@ class ChanlunPairStrategy(ParametrizedStrategy):
         self._chanlun_signals = sorted(kept, key=lambda x: x[0])
 
     def _attach_cross_period_qujiantao(self, df: pd.DataFrame, src_mmds: list[Any]) -> None:
-        """给每个高级别 MMD 打上**真跨周期区间套**标签（写入 mmd._qujiantao）。
+        """给每个高级别 MMD 打上区间套标签（写入 mmd._qujiantao）。
 
-        策略只被喂进单一周期 df，拿不到真实低级别行情。这里用
+        **V731 口径更正**：此前这里自称打「**真**跨周期区间套」标签，但实际
+        建立在合成数据上——两者矛盾。准确表述是：**合成低级别区间套（近似）**。
+
+        策略只被喂进单一周期 df，拿不到真实低级别行情，因此用
         :mod:`easy_tdx.chanlun.level_synth` 合成近似低级别 K 线（默认日线→30分钟），
         再跑一遍缠论得到笔/中枢/背驰/买卖点，交给
         :func:`compute_qujiantao_cross_period` 按原文语义确认。
+
+        注意 :mod:`easy_tdx.chanlun.level_synth` 自述「这只是**近似**，不是真实
+        Tick……不能当成精确的小级别买卖点」；而
+        :func:`compute_qujiantao_cross_period` 的契约要求「另一份**真实行情**」。
+        因此本路径产出的 ``nested`` **不等于**原文意义的真区间套，调用方以
+        ``synthetic=True`` 显式声明来源。开启 ``require_qujiantao`` 过滤真实
+        交易时，请务必知道它过滤的是「合成数据上的确认」。
 
         任何一步失败都**静默降级**为 ``_qujiantao = None``：
         此时 ``require_qujiantao=True`` 会因为 ``nested is not True`` 过滤掉全部信号，
@@ -484,6 +494,11 @@ class ChanlunPairStrategy(ParametrizedStrategy):
                 zss_low=getattr(low_result, "zss", None),
                 bcs_low=getattr(low_result, "bcs", None),
                 mmds_low=getattr(low_result, "mmds", None),
+                # V731：这里的低级别数据是 level_synth **合成**的近似值
+                # （该模块自述「不能当成精确的小级别买卖点」），不是真实
+                # 行情。必须声明来源，否则 nested 会被误当作原文意义的
+                # 真区间套。开启 require_qujiantao 时请先读这个前提。
+                synthetic=True,
             )
         except Exception:  # noqa: BLE001
             results = [None] * len(src_mmds)
