@@ -458,7 +458,19 @@ def pick_report(
             usable.append(row)
     if not usable:
         return None
-    usable.sort(key=lambda r: _coerce_date(r.get("disclosure_date")) or _coerce_date(r.get("report_date")) or date.min, reverse=True)
+    # V731 排序键修正：此前**只用披露日**排序，同一天披露多期时（实测 gpcw
+    # 里 2025-12-31 与 2026-03-31 两期都在 2026-04-29 披露）顺序由
+    # iterrows() 原始顺序决定 → 可能取到**较旧**的报告期，等于用过期财报
+    # 选股（不是未来数据，但结果同样错）。且该顺序与向量化实现
+    # pick_reports_bulk 的 groupby.first() 不一致 —— 实测 400 只里 94 只
+    # （23.5%）两者结果分叉，说明两者都在"碰运气"。
+    # 复合键：(披露日, 报告期) 降序 —— 同披露日取报告期更新的那期。
+    def _pit_sort_key(r: pd.Series) -> tuple:
+        d = _coerce_date(r.get("disclosure_date"))
+        p = _coerce_date(r.get("report_date"))
+        return (d or date.min, p or date.min)
+
+    usable.sort(key=_pit_sort_key, reverse=True)
     return usable[0]
 
 
@@ -505,9 +517,11 @@ def pick_reports_bulk(
     if sub.empty:
         return sub
 
-    # 排序键：披露日（缺失用报告期），取每只股票最新一期
-    sort_key = dd.fillna(rd)
-    sub = sub.assign(_pit_sort=sort_key).sort_values("_pit_sort", ascending=False)
+    # 排序键：(披露日, 报告期)。V731：此前只用披露日，同日披露多期时
+    # 由 groupby.first() 取原顺序第一条（不确定），与 pick_report 的
+    # iterrows() 顺序分叉（实测 23.5% 不一致）。加报告期作次级键后两者一致。
+    sub = sub.assign(_pit_dd=dd.fillna(rd), _pit_rd=rd.fillna(dd))
+    sub = sub.sort_values(["_pit_dd", "_pit_rd"], ascending=False)
     out = sub.groupby(["code", "market"], as_index=False).first()
-    out = out.drop(columns="_pit_sort")
+    out = out.drop(columns=["_pit_dd", "_pit_rd"])
     return out
