@@ -154,6 +154,14 @@ async def fundamental_screen(req: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="date 格式应为 YYYY-MM-DD") from None
     if not pool:
         raise HTTPException(status_code=400, detail="pool 不能为空，至少一只股票")
+    if not isinstance(pool, list) or not all(isinstance(p, dict) for p in pool):
+        # V-30：pool 传字符串/错误形态时给 400 可读提示，而非 500
+        # "'str' object has no attribute 'get'"（smoke 脚本 V-28 首跑发现）。
+        raise HTTPException(
+            status_code=400,
+            detail="pool 形态错误：应为 [{market, code}, ...] 标的列表"
+            "（注意 stock_type（tree/grain/vegetable）是独立字段，不要传给 pool）",
+        )
 
     norm_pool = [
         {"market": str(p.get("market", "SZ")).upper()[:2], "code": str(p["code"]).zfill(6)}
@@ -223,6 +231,12 @@ async def fundamental_verify(req: dict[str, Any]) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="缺少 dates（至少一个 YYYY-MM-DD）")
     if not pool:
         raise HTTPException(status_code=400, detail="pool 不能为空，至少一只股票")
+    if not isinstance(pool, list) or not all(isinstance(p, dict) for p in pool):
+        # V-30：与 /screen 同款守卫——坏形态 pool 给 400 而非 500
+        raise HTTPException(
+            status_code=400,
+            detail="pool 形态错误：应为 [{market, code}, ...] 标的列表",
+        )
 
     targets: list[date] = []
     for ds in date_strs:

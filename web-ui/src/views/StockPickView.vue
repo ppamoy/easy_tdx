@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // 选股两步流（v590）：Step1 长盈基本面选股池 → Step2 缠论择时。
+// V2：新增「缠论选股」标签页（结构驱动选股），与长盈选股并列。
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import BeginnerGuide from '../components/BeginnerGuide.vue'
 import ChanlunChart from '../components/ChanlunChart.vue'
 import {
@@ -9,9 +11,11 @@ import {
   stockPickScreenAsync,
   stockPickScreenTask,
   stockPickTiming,
+  chanlunScreen,
   type SeasonInfo,
   type StockPickPoolItem,
   type StockPickTimingResult,
+  type ChanlunScreenResult,
 } from '../api'
 import { useEarlierBars } from '../composables/useEarlierBars'
 import { useTimeJump } from '../composables/useTimeJump'
@@ -61,8 +65,9 @@ async function loadEarlierTiming() {
         xds: shiftStructure(lv.xds as any[], shift),
         zss: shiftStructure(lv.zss as any[], shift),
         mmds: shiftStructure(lv.mmds as any[], shift),
-        fractals: shiftStructure(lv.fractals as any[], shift),
         bcs: shiftStructure(lv.bcs as any[], shift),
+        zsds: shiftStructure(lv.zsds as any[], shift),
+        qsds: shiftStructure(lv.qsds as any[], shift),
       }
     }
     timingResult.value = {
@@ -73,7 +78,10 @@ async function loadEarlierTiming() {
       zss: shiftStructure(timingResult.value.zss as any[], shift),
       mmds: shiftStructure(timingResult.value.mmds as any[], shift),
       fractals: shiftStructure(timingResult.value.fractals as any[], shift),
+      valid_fractals: shiftStructure(timingResult.value.valid_fractals as any[], shift),
       bcs: shiftStructure(timingResult.value.bcs as any[], shift),
+      zsds: shiftStructure(timingResult.value.zsds as any[], shift),
+      qsds: shiftStructure(timingResult.value.qsds as any[], shift),
       macd: padMacdHead(timingResult.value.macd as any, shift),
       levels,
     } as StockPickTimingResult
@@ -83,7 +91,83 @@ async function loadEarlierTiming() {
 const season = ref<SeasonInfo | null>(null)
 const error = ref('')
 
-// ── V723: 任意日期区间跳转（重新按区间取数 + 择时分析）────────────────
+// ── 缠论选股标签页 ────────────────────────────────────────────────────────
+const router = useRouter()
+const activeTab = ref<'changying' | 'chanlun'>('changying')
+
+// 缠论选股条件
+const clMarket = ref('SZ')
+const clCodes = ref('') // 自定义代码（每行一个），空则自动取前 30 只
+const clSignalType = ref('any_buy')
+const clTrend = ref('any')
+const clZsPosition = ref('any')
+const clHasBeichi = ref(false)
+const clCombineChangying = ref(false)
+const clTopN = ref(10)
+
+const clScanning = ref(false)
+const clError = ref('')
+const clResults = ref<ChanlunScreenResult[]>([])
+
+const signalTypeLabels: Record<string, string> = {
+  any: '任意信号',
+  any_buy: '任意买点',
+  '1buy': '1买（背驰买）',
+  '2buy': '2买',
+  '3buy': '3买',
+  '1sell': '1卖（背驰卖）',
+}
+const trendLabels: Record<string, string> = {
+  any: '不限',
+  up: '向上',
+  down: '向下',
+}
+const zsPosLabels: Record<string, string> = {
+  any: '不限',
+  above: '中枢上方',
+  below: '中枢下方',
+  inside: '中枢内',
+}
+
+async function runChanlunScreen() {
+  clScanning.value = true
+  clError.value = ''
+  clResults.value = []
+  try {
+    const codes = clCodes.value
+      .split(/[\s,]+/)
+      .map((c) => c.trim())
+      .filter(Boolean)
+    const resp = await chanlunScreen({
+      market: clMarket.value,
+      codes: codes.length ? codes : undefined,
+      criteria: {
+        signal_type: clSignalType.value,
+        trend: clTrend.value,
+        zs_position: clZsPosition.value,
+        has_beichi: clHasBeichi.value,
+      },
+      combine_changying: clCombineChangying.value,
+      top_n: clTopN.value,
+    })
+    clResults.value = resp.qualified
+    if (!resp.qualified.length) {
+      clError.value = `扫描 ${resp.total_scanned} 只，无符合条件的标的`
+    }
+  } catch (e) {
+    clError.value = formatError(e)
+  } finally {
+    clScanning.value = false
+  }
+}
+
+/** 选股→择时→回测闭环：跳转回测页，预填代码 + chanlun_pair 策略。 */
+function gotoBacktest(item: ChanlunScreenResult) {
+  router.push({
+    path: '/',
+    query: { symbol: item.code, strategy: 'chanlun_pair' },
+  })
+}
 // 择时数据来自 /stock-pick/timing（date 语义 = 分析截至日），这里跳转时：
 // date 用区间终点（结构与图表对齐到该日），count 按 8000 上限覆盖起点。
 const {
@@ -145,8 +229,9 @@ async function jumpTimingRange() {
         xds: shiftList(lv.xds as any[]),
         zss: shiftList(lv.zss as any[]),
         mmds: shiftList(lv.mmds as any[]),
-        fractals: shiftList(lv.fractals as any[]),
         bcs: shiftList(lv.bcs as any[]),
+        zsds: shiftList(lv.zsds as any[]),
+        qsds: shiftList(lv.qsds as any[]),
       }
     }
     timingResult.value = {
@@ -157,6 +242,7 @@ async function jumpTimingRange() {
       zss: shiftList(r.zss as any[]),
       mmds: shiftList(r.mmds as any[]),
       fractals: shiftList(r.fractals as any[]),
+      valid_fractals: shiftList(r.valid_fractals as any[]),
       bcs: shiftList(r.bcs as any[]),
       macd: (r.macd as any)
         ? {
@@ -333,9 +419,122 @@ function pickTiming(row: StockPickTimingResult) {
 
 <template>
   <section class="stock-pick-view">
-    <h2>选股（长盈基本面 → 缠论择时）</h2>
+    <h2>选股</h2>
     <BeginnerGuide />
 
+    <!-- 标签切换：长盈选股 / 缠论选股 -->
+    <div class="tab-bar">
+      <button
+        :class="['tab-btn', { active: activeTab === 'changying' }]"
+        @click="activeTab = 'changying'"
+      >
+        长盈选股
+      </button>
+      <button
+        :class="['tab-btn', { active: activeTab === 'chanlun' }]"
+        @click="activeTab = 'chanlun'"
+      >
+        缠论选股
+      </button>
+    </div>
+
+    <!-- ════════ 缠论选股面板 ════════ -->
+    <div v-if="activeTab === 'chanlun'" class="chanlun-screen-panel">
+      <h3>缠论原著选股（结构驱动：买卖点 / 走势 / 中枢 / 背驰）</h3>
+      <div class="cl-controls">
+        <label>
+          市场
+          <select v-model="clMarket">
+            <option value="SZ">深圳</option>
+            <option value="SH">上海</option>
+          </select>
+        </label>
+        <label>
+          信号类型
+          <select v-model="clSignalType">
+            <option v-for="(lbl, val) in signalTypeLabels" :key="val" :value="val">{{ lbl }}</option>
+          </select>
+        </label>
+        <label>
+          走势方向
+          <select v-model="clTrend">
+            <option v-for="(lbl, val) in trendLabels" :key="val" :value="val">{{ lbl }}</option>
+          </select>
+        </label>
+        <label>
+          中枢位置
+          <select v-model="clZsPosition">
+            <option v-for="(lbl, val) in zsPosLabels" :key="val" :value="val">{{ lbl }}</option>
+          </select>
+        </label>
+        <label class="checkbox-label">
+          <input v-model="clHasBeichi" type="checkbox" /> 必须有背驰
+        </label>
+        <label class="checkbox-label">
+          <input v-model="clCombineChangying" type="checkbox" /> 叠加长赢过滤
+        </label>
+        <label>
+          返回前
+          <input v-model.number="clTopN" type="number" min="1" max="50" style="width: 60px" />
+          只
+        </label>
+        <button class="primary" :disabled="clScanning" @click="runChanlunScreen">
+          {{ clScanning ? '扫描中…' : '🔍 缠论选股' }}
+        </button>
+      </div>
+      <label class="cl-codes-label">
+        自定义代码（每行一个，留空则自动取前 30 只）
+        <textarea
+          v-model="clCodes"
+          rows="2"
+          placeholder="000001&#10;600519"
+          :disabled="clScanning"
+        />
+      </label>
+
+      <p v-if="clError" class="error">{{ clError }}</p>
+
+      <table v-if="clResults.length" class="cl-results">
+        <thead>
+          <tr>
+            <th>代码</th>
+            <th>现价</th>
+            <th>最新信号</th>
+            <th>走势</th>
+            <th>中枢位置</th>
+            <th>背驰</th>
+            <th>质量分</th>
+            <th>笔/中枢</th>
+            <th>分类</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in clResults" :key="item.code">
+            <td>{{ item.symbol }}</td>
+            <td>{{ item.close }}</td>
+            <td>
+              <span :class="item.latest_signal?.is_buy ? 'cl-buy' : 'cl-sell'">
+                {{ item.latest_signal?.type ?? '—' }}
+              </span>
+              <span v-if="item.latest_signal?.date" class="cl-date">{{ item.latest_signal.date }}</span>
+            </td>
+            <td>{{ trendLabels[item.trend ?? 'any'] ?? item.trend ?? '—' }}</td>
+            <td>{{ zsPosLabels[item.zs_position ?? 'any'] ?? item.zs_position ?? '—' }}</td>
+            <td>{{ item.has_beichi ? '✓' : '—' }}</td>
+            <td>{{ item.quality_score }}</td>
+            <td>{{ item.bi_count }}/{{ item.zs_count }}</td>
+            <td>{{ item.classification }}</td>
+            <td>
+              <button class="ghost small" @click="gotoBacktest(item)">📊 回测</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ════════ 长盈选股面板（原有） ════════ -->
+    <div v-if="activeTab === 'changying'">
     <div class="controls">
       <label>
         目标日期
@@ -353,6 +552,10 @@ function pickTiming(row: StockPickTimingResult) {
           <option value="full">全市场扫描</option>
         </select>
       </label>
+      <p v-if="poolScope === 'pool'" class="pool-bias-hint">
+        ⚠️ 热门池为当前龙头股（幸存者样本），回测胜率会系统性偏高；衡量策略真实
+        水平请用「全市场扫描」。
+      </p>
       <label v-if="poolScope === 'pool'" class="pool-text">
         自定义池（每行一个代码，留空用热门池）
         <textarea v-model="poolText" rows="2" placeholder="600519&#10;000333" />
@@ -522,6 +725,7 @@ function pickTiming(row: StockPickTimingResult) {
             :zss="(timingResult.zss as any) ?? []"
             :mmds="(timingResult.mmds as any) ?? []"
             :fxs="(timingResult.fractals as any) ?? []"
+            :validFxs="(timingResult.valid_fractals as any) ?? []"
             :bcs="(timingResult.bcs as any) ?? []"
             :macd="(timingResult.macd as any) ?? undefined"
             frequency="daily"
@@ -532,6 +736,7 @@ function pickTiming(row: StockPickTimingResult) {
         <p v-else class="hint">在左侧点击「② 缠论择时」查看单只标的的买卖点/背驰/中枢。</p>
       </div>
     </div>
+    </div><!-- /长盈选股面板 -->
   </section>
 </template>
 
@@ -583,6 +788,12 @@ function pickTiming(row: StockPickTimingResult) {
 .pool-text {
   display: flex;
   flex-direction: column;
+}
+.pool-bias-hint {
+  color: #fcd34d;
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 4px 0 0;
 }
 button {
   background: var(--accent, #3b82f6);
@@ -774,5 +985,113 @@ tr.active td {
   font-size: 12px;
   color: #94a3b8;
   white-space: nowrap;
+}
+
+/* ── 缠论选股标签页 ── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+.tab-btn {
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+.tab-btn:hover {
+  color: #e2e8f0;
+}
+.tab-btn.active {
+  color: #60b4ff;
+  border-bottom-color: #60b4ff;
+  font-weight: 600;
+}
+.chanlun-screen-panel {
+  margin-bottom: 20px;
+}
+.chanlun-screen-panel h3 {
+  font-size: 15px;
+  margin-bottom: 12px;
+  color: #e2e8f0;
+}
+.cl-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.cl-controls label {
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.cl-controls select,
+.cl-controls input[type='number'] {
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+.checkbox-label {
+  flex-direction: row !important;
+  cursor: pointer;
+}
+.cl-codes-label {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+.cl-codes-label textarea {
+  display: block;
+  width: 300px;
+  margin-top: 4px;
+  padding: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-family: monospace;
+}
+.cl-results {
+  width: 100%;
+  font-size: 13px;
+}
+.cl-results th {
+  color: #94a3b8;
+  font-weight: 500;
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.cl-results td {
+  padding: 6px 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cl-buy {
+  color: #22c55e;
+  font-weight: 600;
+}
+.cl-sell {
+  color: #f87171;
+  font-weight: 600;
+}
+.cl-date {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
 }
 </style>

@@ -73,6 +73,13 @@ class BacktestRequest(BaseModel):
     min_commission: float = Field(default=5.0, ge=0, description="单笔最低佣金")
     stamp_tax: float = Field(default=0.001, ge=0, le=0.01, description="印花税（卖出）")
     slippage: float = Field(default=0.0, ge=0, le=0.05, description="滑点费率")
+    respect_price_limit: bool = Field(
+        default=True,
+        description="涨跌停约束（V-AUDIT）：涨停禁买/跌停禁卖，默认开启",
+    )
+    limit_pct: float = Field(
+        default=0.10, gt=0, le=0.3, description="涨跌停幅度（0.10=主板10%，0.20=创业板/科创板）"
+    )
     execution: Literal["next_open", "next_close"] = Field(
         default="next_open", description="成交模式"
     )

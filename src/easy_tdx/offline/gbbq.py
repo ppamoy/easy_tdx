@@ -1,10 +1,13 @@
 """股本变迁数据读取（XOR 加密的 gbbq 文件）。"""
 
+import logging
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..exceptions import TdxFileNotFoundError
+
+logger = logging.getLogger(__name__)
 
 _MASK32 = 0xFFFFFFFF
 
@@ -313,6 +316,11 @@ def read_gbbq(filepath: str | Path) -> list[GbbqRecord]:
     data_offset = 4
 
     for _ in range(count):
+        # V-42：数据不足一条完整记录（29B = 24 解密 + 5 附加）时停止，
+        # 防止 count 声明数大于实际数据时 struct.error 崩溃。
+        if data_offset + 29 > len(content):
+            logger.warning("gbbq 数据不足: count=%d 声明, 实际只够 %d 条", count, len(results))
+            break
         clear_data = bytearray()
         # 每条记录解密 3 轮，每轮 8 字节
         for _round in range(3):
@@ -348,10 +356,18 @@ def read_gbbq(filepath: str | Path) -> list[GbbqRecord]:
         clear_data.extend(content[data_offset : data_offset + 5])
 
         v1, v2, v3, v4, v5, v6, v7, v8 = struct.unpack("<B7sIBffff", clear_data)
+        try:
+            code = v2.rstrip(b"\x00").decode("utf-8")
+        except UnicodeDecodeError:
+            # V-42：pytdx 原版同样裸解 utf-8，坏数据（截断/伪加密文件）会直接
+            # UnicodeDecodeError 崩掉 CLI。退化为 latin-1 可逆解码 + 警告日志，
+            # 保证一条坏记录不毁掉整份文件解析。
+            code = v2.rstrip(b"\x00").decode("latin-1")
+            logger.warning("gbbq 记录 code 含非 UTF-8 字节，已按 latin-1 解码: %r", v2)
         results.append(
             GbbqRecord(
                 market=v1,
-                code=v2.rstrip(b"\x00").decode("utf-8"),
+                code=code,
                 datetime=v3,
                 category=v4,
                 hongli_panqianliutong=v5,

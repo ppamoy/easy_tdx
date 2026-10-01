@@ -5,6 +5,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ChanlunChart from '../components/ChanlunChart.vue'
+import PeriodSelect from '../components/PeriodSelect.vue'
 import V102DecisionCard from '../components/V102DecisionCard.vue'
 import { formatError } from '../api'
 import type { Bar } from '../types'
@@ -13,7 +14,7 @@ import { useTimeJump } from '../composables/useTimeJump'
 
 const router = useRouter()
 const code = ref('000001')
-const category = ref<'DAY' | 'WEEK' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
+const category = ref<'DAY' | 'WEEK' | 'MONTH' | 'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('DAY')
 const count = ref(800)
 const multiLevel = ref(false)
 const lowLevel = ref<'MIN_5' | 'MIN_15' | 'MIN_30' | 'MIN_60'>('MIN_30')
@@ -111,10 +112,26 @@ interface ChanlunMmd {
     confidence_adjust: number
     msg: string
   } | null
+  // 真·区间套（缠论原文语义：低周期同向背驰/买卖点确认）。
+  // nested=true 才算确认；method='cross_period' 表示用真实双周期数据。
+  qujiantao?: {
+    nested: boolean
+    score: number
+    method: string
+    confidence_adjust: number
+    msg: string
+    detail?: {
+      low_bi_count?: number
+      low_zs_count?: number
+      low_bc_same_dir?: boolean
+      low_mmd_same_dir?: boolean
+      hi_bar_window?: number[]
+    } | null
+  } | null
 }
 
 interface ChanlunFx {
-  type: 'ding' | 'di'
+  fx_type: 'ding' | 'di'
   date: string
   val: number
   bar_index?: number
@@ -136,6 +153,9 @@ const xds = ref<ChanlunXd[]>([])
 const zss = ref<ChanlunZs[]>([])
 const mmds = ref<ChanlunMmd[]>([])
 const fxs = ref<ChanlunFx[]>([])
+// 缠论有效分型（笔端点分型，交替且不重叠），用于消除「底-顶-底」挤在连续K线的
+// 重叠分型噪声。展示层优先使用它，原始 fractals 仍保留用于买卖点等计算。
+const validFxs = ref<ChanlunFx[]>([])
 const bcs = ref<ChanlunBc[]>([])
 const zsds = ref<ChanlunXd[]>([])
 const qsds = ref<ChanlunXd[]>([])
@@ -216,6 +236,11 @@ function mapMmds(raw: any[]): ChanlunMmd[] {
     msg: m.msg,
     confidence: m.confidence ?? 0,
     bar_index: m.bar_index,
+    // V731 修复：anchor_val 是买卖点标记价格的唯一真源（= 触发笔终点分型的
+    // 极值价：买点取底分型低点、卖点取顶分型高点）。此前漏映射，导致
+    // ChanlunChart 走 fallback（该K线 low*0.995 / high*1.005）——图上画的
+    // 价格并非模型识别出的买卖点价格，而是带视觉偏移的近似值。
+    anchor_val: m.anchor_val ?? null,
     quality: m.quality
       ? {
           grade: m.quality.grade ?? null,
@@ -227,6 +252,7 @@ function mapMmds(raw: any[]): ChanlunMmd[] {
     v102_signal_quality: m.v102_signal_quality ?? null,
     v102_decision_support: m.v102_decision_support ?? null,
     v102_pattern_match: m.v102_pattern_match ?? null,
+    qujiantao: m.qujiantao ?? null,
   }))
 }
 
@@ -242,6 +268,16 @@ function mapBcs(raw: any[]): ChanlunBc[] {
   }))
 }
 
+/** 把后端的分型字典映射成图表所需结构（顶层 fractals / valid_fractals 同构）。 */
+function mapFxs(raw: any[]): ChanlunFx[] {
+  return (raw ?? []).map((f: any) => ({
+    fx_type: f.fx_type,
+    date: f.date,
+    val: f.val,
+    bar_index: f.bar_index,
+  }))
+}
+
 function applyAnalysisLevel(level: AnalysisLevel, data: any) {
   if (level !== 'bi' && data?.levels?.[level]) {
     const lvl = data.levels[level]
@@ -253,6 +289,11 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
     zss.value = mapZss(lvl.zss)
     mmds.value = mapMmds(lvl.mmds)
     bcs.value = mapBcs(lvl.bcs)
+    // 递归级别（xd/xd_lN）：后端 levels 里**没有**分型字段（只有 bis/xds/zss/mmds/bcs），
+    // 若不同步清空，图上会残留上一级别（bi）的分型——与本级别笔/中枢不匹配，
+    // 用户会看到「按 xd 笔划分」却标着「bi 的分型」这种自相矛盾的画面。
+    fxs.value = []
+    validFxs.value = []
     return
   }
 
@@ -263,6 +304,10 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
   zss.value = mapZss(data?.zss)
   mmds.value = mapMmds(data?.mmds)
   bcs.value = mapBcs(data?.bcs)
+  // 回到笔级别：分型只存在于顶层数据（levels 里没有），必须恢复，
+  // 否则从 xd 切回 bi 后图上将永久丢失分型标注。
+  fxs.value = mapFxs(data?.fractals)
+  validFxs.value = mapFxs(data?.valid_fractals)
 }
 
 // 由后端 levels 键推导分析级别选项与展示标签（bi / xd / xd_l2 / xd_l3…）。
@@ -886,7 +931,13 @@ async function reanalyseForWindow() {
   analysisLevel.value = 'bi'
   applyAnalysisLevel('bi', data)
   fxs.value = (data.fractals ?? []).map((f: any) => ({
-    type: f.fx_type,
+    fx_type: f.fx_type,
+    date: f.date,
+    val: f.val,
+    bar_index: f.bar_index,
+  }))
+  validFxs.value = (data.valid_fractals ?? []).map((f: any) => ({
+    fx_type: f.fx_type,
     date: f.date,
     val: f.val,
     bar_index: f.bar_index,
@@ -957,7 +1008,13 @@ async function analyze() {
         boll.value = hr.boll
       }
       fxs.value = (hr.fractals ?? []).map((f: any) => ({
-        type: f.fx_type,
+        fx_type: f.fx_type,
+        date: f.date,
+        val: f.val,
+        bar_index: f.bar_index,
+      }))
+      validFxs.value = (hr.valid_fractals ?? []).map((f: any) => ({
+        fx_type: f.fx_type,
         date: f.date,
         val: f.val,
         bar_index: f.bar_index,
@@ -1001,7 +1058,13 @@ async function analyze() {
       analysisLevel.value = 'bi'
       applyAnalysisLevel('bi', data)
       fxs.value = (data.fractals ?? []).map((f: any) => ({
-        type: f.fx_type,
+        fx_type: f.fx_type,
+        date: f.date,
+        val: f.val,
+        bar_index: f.bar_index,
+      }))
+      validFxs.value = (data.valid_fractals ?? []).map((f: any) => ({
+        fx_type: f.fx_type,
         date: f.date,
         val: f.val,
         bar_index: f.bar_index,
@@ -1244,14 +1307,7 @@ onUnmounted(() => {
       </div>
       <div class="field-group">
         <label>周期</label>
-        <select v-model="category">
-          <option value="DAY">日线</option>
-          <option value="WEEK">周线</option>
-          <option value="MIN_5">5分钟</option>
-          <option value="MIN_15">15分钟</option>
-          <option value="MIN_30">30分钟</option>
-          <option value="MIN_60">60分钟</option>
-        </select>
+        <PeriodSelect v-model="category" :options="['DAY', 'WEEK', 'MONTH', 'MIN_5', 'MIN_15', 'MIN_30', 'MIN_60']" />
       </div>
       <div class="field-group">
         <label>K 线根数</label>
@@ -1597,6 +1653,7 @@ onUnmounted(() => {
         :zss="zss"
         :mmds="mmds"
         :fxs="fxs"
+        :validFxs="validFxs"
         :bcs="bcs"
         :macd="macd ?? undefined"
         :frequency="category"
@@ -1683,6 +1740,15 @@ onUnmounted(() => {
                 :class="'g' + m.v102_signal_quality.overall_grade"
               >
                 V102·{{ m.v102_signal_quality.overall_grade }}
+              </span>
+              <!-- 真·区间套确认徽章（嵌套=低周期同向确认） -->
+              <span
+                v-if="m.qujiantao"
+                class="qt-badge"
+                :class="m.qujiantao.nested ? 'qt-ok' : 'qt-no'"
+                :title="m.qujiantao.msg"
+              >
+                {{ m.qujiantao.nested ? '🔗 套' : '🔗✗' }}{{ (m.qujiantao.score * 100).toFixed(0) }}
               </span>
             </td>
             <td>{{ m.msg }}</td>
@@ -2440,6 +2506,26 @@ onUnmounted(() => {
 }
 .v102-grade-badge.gD {
   background: #ef4444;
+}
+
+/* 真·区间套确认徽章：绿=低周期确认，灰=未确认 */
+.qt-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: help;
+}
+.qt-badge.qt-ok {
+  background: #0e7490;
+  color: #a5f3fc;
+}
+.qt-badge.qt-no {
+  background: #334155;
+  color: #94a3b8;
 }
 
 /* 操作建议面板 */

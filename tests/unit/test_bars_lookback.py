@@ -34,9 +34,7 @@ def _master(n: int = 1200) -> pd.DataFrame:
 
 def test_bars_lookback_paginated(client) -> None:
     df = _master()
-    with patch(
-        "easy_tdx.web.klines.fetch_paged_bars", new_callable=AsyncMock
-    ) as m:
+    with patch("easy_tdx.web.klines.fetch_paged_bars", new_callable=AsyncMock) as m:
         m.return_value = df
         resp = client.get(
             "/api/v1/bars",
@@ -53,9 +51,7 @@ def test_bars_lookback_paginated(client) -> None:
 def test_bars_lookback_zero_keeps_single_page(client) -> None:
     """lookback=0（缺省）不走分页路径：契约与 V720 完全一致。"""
     df = _master(100)
-    with patch(
-        "easy_tdx.web.klines.fetch_paged_bars", new_callable=AsyncMock
-    ) as m:
+    with patch("easy_tdx.web.klines.fetch_paged_bars", new_callable=AsyncMock) as m:
         m.return_value = df
         resp = client.get(
             "/api/v1/bars", params={"market": "SZ", "code": "000001", "category": "DAY"}

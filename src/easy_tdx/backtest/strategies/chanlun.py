@@ -19,7 +19,10 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from easy_tdx.backtest.strategies.registry import (
     Param,
@@ -90,6 +93,28 @@ class ChanlunStrategy(ParametrizedStrategy):
             bool,
             default=False,
             label="3买按V102建议止损止盈",
+        ),
+        Param(
+            "lookahead_guard",
+            bool,
+            default=True,
+            label="前视守卫(前缀复现确认后才发信号)",
+        ),
+        Param(
+            "confirm_lag",
+            int,
+            default=3,
+            min_value=0,
+            max_value=20,
+            label="信号确认延迟(根)",
+        ),
+        Param(
+            "guard_window",
+            int,
+            default=400,
+            min_value=60,
+            max_value=5000,
+            label="守卫滚动复核窗口(根)",
         ),
     ]
 
@@ -207,6 +232,13 @@ class ChanlunStrategy(ParametrizedStrategy):
             advice = getattr(mmd, "_decision_support", None) or None
             self._chanlun_signals.append((bar_idx, mmd.mmd_type.value, conf, advice))
 
+        # V-AUDIT: 前视守卫（与 chanlun_pair 同款语义）。
+        # 笔端点 bar_idx 是事后标签：分型需后续反向分型封口才成为笔终点，端点
+        # 当根不可知。审计实证（合成日线 seed=11）：无守卫时全部入场落在
+        # 「当根不可知」的锚点上（教科书级未来函数）。守卫把每个候选信号放到
+        # 只含历史的前缀上复现，复现成功才保留并延后 lag 根生效。
+        self._apply_lookahead_guard(df)
+
         # v9: 信号类型追踪（供回测准确度分析使用）
         self._signal_traces: dict[str, list[dict[str, Any]]] = {}
         for mmd in src_mmds:
@@ -256,6 +288,65 @@ class ChanlunStrategy(ParametrizedStrategy):
             return -1
         end_date_str = str(bi.end.k.date)[:10]
         return self._date_to_bar.get(end_date_str, -1)
+
+    def _apply_lookahead_guard(self, df: pd.DataFrame) -> None:
+        """前视守卫：候选信号用"只含历史的前缀"复核，延后到确认点生效。
+
+        语义与 chanlun_pair._apply_lookahead_guard 一致（同一作者序列，防漂移
+        特此对照）：对每个候选 ``(b, type)``，在以 ``b+lag`` 为右端的滚动窗口
+        （默认 400 根）上重跑一次缠论（本策略、关守卫），仍能得到同一
+        ``(b, type)`` 才保留，并把生效 bar 改为 ``b + lag``；复现不出即为
+        依赖未来数据的伪影，丢弃。数据不足（前缀==全量）时丢弃信号。
+
+        差异说明：本策略信号为 4 元组 ``(b, type, conf, advice)``；复核时
+        保留**首次出现的 conf/advice**（同一 (b,type) 视为同一信号）。
+        """
+        if not bool(self.p.get("lookahead_guard", True)):
+            return
+        lag = max(0, int(self.p.get("confirm_lag", 3) or 0))
+        window = max(60, int(self.p.get("guard_window", 400) or 400))
+        candidates = self._chanlun_signals
+        if not candidates:
+            return
+
+        n = len(df)
+        kept: list[tuple[int, str, float, dict[str, Any] | None]] = []
+        seen: set[tuple[int, str]] = set()
+        cache: dict[int, set[tuple[int, str]]] = {}
+
+        from easy_tdx.backtest.strategies.registry import get_registry
+
+        entry = get_registry().get("chanlun")
+
+        for bar_idx, mmd_type, conf, advice in candidates:
+            key = (bar_idx, mmd_type)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # 确认前缀必须严格短于全量数据，否则复核自证恒真
+            k = bar_idx + lag + 1
+            if k <= 0 or k >= n:
+                continue
+            lo = max(0, k - window)
+            if k not in cache:
+                sub = df.iloc[lo:k].reset_index(drop=True)
+                offset = lo  # sub 内 bar_idx + offset = 原 df bar_idx
+                try:
+                    sub_strat = entry.build({**dict(self.p), "lookahead_guard": False})
+                    sub_strat._bind_data(sub)
+                    sub_strat._call_init()
+                    sigs = getattr(sub_strat, "_chanlun_signals", [])
+                    cache[k] = {(b + offset, t) for b, t, _c, _a in sigs}
+                except Exception:  # noqa: BLE001
+                    cache[k] = set()
+                    continue
+
+            if key in cache[k]:
+                # 延后到确认点：第 bar_idx+lag 根才真正可知
+                kept.append((min(bar_idx + lag, n - 1), mmd_type, conf, advice))
+
+        self._chanlun_signals = sorted(kept, key=lambda x: x[0])
 
     def next(self) -> None:
         """每根 bar 调用：消费到达的信号。"""

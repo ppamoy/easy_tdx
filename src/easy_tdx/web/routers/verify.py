@@ -155,6 +155,9 @@ def _analyze(df: pd.DataFrame, market: str, code: str, frequency: str = "daily")
         }
         for fx in result.fractals
     ]
+    # 缠论有效分型（笔端点，相邻分型不共用K线）。展示层应优先用它；原始 fractals
+    # 含共用K线的重叠分型，直接渲染会出现「底-顶-底挤在连续三根K线」的伪分型。
+    d["valid_fractals"] = result.valid_fractals_to_dict()
     return d
 
 
@@ -187,8 +190,14 @@ async def _detail_for_category(
         from easy_tdx.web.klines import fetch_bars_range
 
         df = await fetch_bars_range(
-            mac_client, client, market, code, category,
-            start_date=start_date, end_date=end_date, max_bars=8000,
+            mac_client,
+            client,
+            market,
+            code,
+            category,
+            start_date=start_date,
+            end_date=end_date,
+            max_bars=8000,
         )
     else:
         count = 400 if category in ("DAY", "WEEK") else 800
@@ -322,8 +331,12 @@ async def detail_signals(
 
     if start_date or category.upper() != "DAY":
         return await _detail_for_category(
-            item, category.upper(), client, mac_client,
-            start_date=start_date, end_date=end_date,
+            item,
+            category.upper(),
+            client,
+            mac_client,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     if code not in _prerun_cache:
@@ -331,4 +344,13 @@ async def detail_signals(
         entry = await _prerun_one(item, client, mac_client)
         if "error" in entry:
             return entry
-    return _prerun_cache[code]
+
+    cached = _prerun_cache[code]
+    # 兼容旧进程遗留的预跑缓存：它当时还没 valid_fractals 字段，直接返回会让前端
+    # 渲染出「0 个分型」（比渲染脏分型好，但仍不完整）。缺字段时现场重算补齐，
+    # 而不是让调用方拿到残缺结构。重启服务后本分支自然不再命中。
+    if "valid_fractals" not in cached:
+        entry = await _prerun_one(item, client, mac_client)
+        if "error" not in entry:
+            cached = _prerun_cache[code]
+    return cached

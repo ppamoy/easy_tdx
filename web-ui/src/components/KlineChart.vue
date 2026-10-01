@@ -4,7 +4,8 @@
 
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import echarts, { DOWN_COLOR, UP_COLOR } from '../echarts-setup'
+import echarts from '../echarts-setup'
+import { colorScheme, downColor, upColor } from '../colors'
 import { fmt2 } from '../format'
 import type { Bar, Trade } from '../types'
 
@@ -45,10 +46,11 @@ function render() {
   prevFirstKey = firstKey
   const option = buildOption()
   if (zoomKeep) {
+    // inside 与 slider 两个 dataZoom 都需同步，否则范围不一致。
     const dzArr = option.dataZoom as { start: number; end: number }[]
-    if (dzArr?.[0]) {
-      dzArr[0].start = zoomKeep.start
-      dzArr[0].end = zoomKeep.end
+    for (const dz of dzArr ?? []) {
+      dz.start = zoomKeep.start
+      dz.end = zoomKeep.end
     }
     zoomKeep = null
   }
@@ -99,7 +101,7 @@ function buildOption(): echarts.EChartsCoreOption {
     markPoints.push({
       name: t.direction,
       coord: [idx, t.price],
-      itemStyle: { color: isBuy ? UP_COLOR : DOWN_COLOR },
+      itemStyle: { color: isBuy ? upColor.value : downColor.value },
       symbol: isBuy ? 'triangle' : 'pin',
       symbolSize: 14,
     })
@@ -131,17 +133,28 @@ function buildOption(): echarts.EChartsCoreOption {
       splitLine: { lineStyle: { color: '#2a2e3a' } },
       axisLabel: { formatter: (v: number) => fmt2(v) },
     },
-    dataZoom: [{ type: 'slider', bottom: 10, start: 60, end: 100 }],
+    dataZoom: [
+      {
+        // 滚轮缩放：以鼠标所在 K 线为中心放大/缩小。
+        type: 'inside',
+        start: 60,
+        end: 100,
+        zoomOnMouseWheel: true,
+        moveOnMouseWheel: false,
+        moveOnMouseMove: true,
+      },
+      { type: 'slider', bottom: 10, start: 60, end: 100 },
+    ],
     series: [
       {
         name: 'K线',
         type: 'candlestick',
         data: ohlc,
         itemStyle: {
-          color: UP_COLOR,
-          color0: DOWN_COLOR,
-          borderColor: UP_COLOR,
-          borderColor0: DOWN_COLOR,
+          color: upColor.value,
+          color0: downColor.value,
+          borderColor: upColor.value,
+          borderColor0: downColor.value,
         },
         markPoint: {
           data: markPoints,
@@ -159,13 +172,6 @@ function resize() {
 onMounted(() => {
   render()
   window.addEventListener('resize', resize)
-  const el = container.value
-  if (el) {
-    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), {
-      passive: false,
-      capture: true,
-    })
-  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resize)
@@ -173,6 +179,8 @@ onBeforeUnmount(() => {
   chart = null
 })
 watch(() => [props.bars, props.trades], render)
+// 全局涨跌配色变化时重渲染。
+watch(colorScheme, render)
 </script>
 
 <template>

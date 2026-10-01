@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MMD 标记像素验证（真实组件）</title>
+    <style>
+      html, body { margin: 0; padding: 0; }
+      #app { width: 1400px; height: 900px; }
+      /* 保证 .chanlun-layout 里 flex:1 的图表容器拿到真实高度 */
+      #app > * { height: 100%; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, nextTick } from 'vue'
+      import echarts from '/src/echarts-setup'
+      import ChanlunChart from '/src/components/ChanlunChart.vue'
+
+      const payload = window.__PAYLOAD__
+
+      createApp({
+        render() {
+          return h(ChanlunChart, {
+            bars: payload.bars,
+            fxs: payload.fxs ?? [],
+            bis: payload.bis ?? [],
+            xds: payload.xds ?? [],
+            zss: payload.zss ?? [],
+            mmds: payload.mmds,
+            bcs: payload.bcs ?? [],
+            showMmds: true,
+            showBcs: true,
+            showBis: true,
+            showXds: false,
+            showZss: true,
+          })
+        },
+      }).mount('#app')
+
+      // 等组件渲染完成后，用 echarts.getInstanceByDom 拿到**真实实例**
+      setTimeout(() => {
+        try {
+          // 必须用**同一个模块**的 echarts（/src/echarts-setup），
+          // 否则 getInstanceByDom 的实例注册表是空的。
+          const cv = document.querySelector('canvas')
+          window.__DIAG__ = { foundCanvas: !!cv }
+          if (cv) {
+            const chain = []
+            let n = cv
+            for (let i = 0; i < 5 && n; i++) {
+              chain.push({
+                tag: n.tagName,
+                cls: String(n.className || ''),
+                inst: n.getAttribute
+                  ? n.getAttribute('_echarts_instance_')
+                  : null,
+              })
+              n = n.parentElement
+            }
+            window.__DIAG__.chain = chain
+          }
+          let chart = null
+          let t = cv
+          for (let i = 0; i < 6 && t && !chart; i++) {
+            chart = echarts.getInstanceByDom(t)
+            t = t.parentElement
+          }
+          if (!chart) {
+            window.__ERROR__ = '未找到 ECharts 实例'
+            window.__READY__ = true
+            return
+          }
+          // 默认 dataZoom 只显示最近一段，早期标记会被滚出视口，
+          // convertToPixel 返回负值（并非坐标错误）。先展开到全区间再测量。
+          try {
+            chart.dispatchAction({
+              type: 'dataZoom',
+              start: 0,
+              end: 100,
+            })
+          } catch (e) {
+            /* 无 dataZoom 组件时忽略 */
+          }
+          chart.resize()
+          const opt = chart.getOption()
+          const result = []
+          ;(opt.series || []).forEach((s, si) => {
+            if (s.type !== 'scatter' || !s.data) return
+            s.data.forEach((d) => {
+              if (!d || !d.name) return
+              const nm = String(d.name)
+              if (!nm.includes('buy') && !nm.includes('sell')) return
+              const coord = Array.isArray(d.value) ? d.value.slice(0, 2) : null
+              if (!coord) return
+              const px = chart.convertToPixel({ seriesIndex: si }, coord)
+              result.push({ name: nm, coord, pixel: px })
+            })
+          })
+          window.__RESULT__ = result
+        } catch (e) {
+          window.__ERROR__ = String(e)
+        }
+        window.__READY__ = true
+      }, 1500)
+    </script>
+  </body>
+</html>

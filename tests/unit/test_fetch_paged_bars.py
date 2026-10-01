@@ -100,7 +100,7 @@ async def test_paged_bars_lookback_clamped() -> None:
         return _page(start, count)
 
     with patch("easy_tdx.web.klines.fetch_qfq_klines", side_effect=_spy):
-        df = await fetch_paged_bars(None, None, "SZ", "000001", "DAY", lookback=10**9)
+        await fetch_paged_bars(None, None, "SZ", "000001", "DAY", lookback=10**9)
     assert MAX_LOOKBACK == 20000
     # 最多请求 ceil(20000/800)=25 页（本假历史 2000 根会提前停）
     assert len(seen_counts) <= 25

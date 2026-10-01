@@ -178,9 +178,26 @@ def find_xds(
                 # 注意：此出口只做确认；分型无效化的唯一路径是同向笔创出超过
                 # 分型顶点的新极值（见同向分支），反向笔的高点高于分型低点是常态，
                 # 不构成无效化。
-                if (seg_dir_is_up and bi.low < gap_fx_extreme) or (
-                    not seg_dir_is_up and bi.high > gap_fx_extreme
+                if gap_fx_extreme is not None and (
+                    (seg_dir_is_up and bi.low < gap_fx_extreme)
+                    or (not seg_dir_is_up and bi.high > gap_fx_extreme)
                 ):
+                    # V732：同一根确认笔可能同时确认「缺口击穿」与「笔破坏真破坏」——
+                    # 两者在同一根成立时取端点更早者。真破坏的暂定终点（破坏笔之前一笔）
+                    # 通常早于 gap 分型中元素，且落在线段自身极值上；若让 gap 抢先确认，
+                    # 会出现「向下线段终点 9.27 高于自身最低 8.21」的退化（破坏点 8.21 才是
+                    # 真正终点）。故 gap 击穿确认前先看是否同根确认了更早的真破坏。
+                    if (
+                        provisional_end is not None
+                        and breakthrough_extreme is not None
+                        and (
+                            (seg_dir_is_up and bi.low < breakthrough_extreme)
+                            or (not seg_dir_is_up and bi.high > breakthrough_extreme)
+                        )
+                        and provisional_end < gap_pending - 1
+                    ):
+                        confirmed_end = provisional_end
+                        break
                     cand_end = gap_pending - 1
                     if _valid_segment_end(bis, start, cand_end, seg_dir):
                         confirmed_end = cand_end
@@ -251,7 +268,8 @@ def find_xds(
                     break
                 features.append((j, bi))
                 # 缠论原文：线段由「至少 3 笔 + 特征序列分型」界定，也可由「笔破坏」结束。
-                # 笔破坏为暂定式：反向走势笔越过线段起点极值时记为暂定结束（cand_end = 破坏笔前一笔），
+                # 笔破坏为暂定式：反向走势笔越过线段起点极值时记为暂定结束
+                # （cand_end = 破坏笔前一笔），
                 # 不立即提交；其后若反向笔再创新极值（更深突破）→ 真破坏确认（见上方）；
                 # 若同向笔创出超过终点的新极值且无更深突破 → 假破坏，撤销、线段延伸（见收尾裁决）。
                 if (
@@ -288,8 +306,10 @@ def find_xds(
                             gap_pending = merged[-2][0][0]
                             # 清空上一轮待确认可能残留的第二特征序列（状态卫生）
                             second_features = []
-                            gap_fx_extreme = min(left_m[2], mid_m[2], merged[-1][2]) if seg_dir_is_up else max(
-                                left_m[1], mid_m[1], merged[-1][1]
+                            gap_fx_extreme = (
+                                min(left_m[2], mid_m[2], merged[-1][2])
+                                if seg_dir_is_up
+                                else max(left_m[1], mid_m[1], merged[-1][1])
                             )
                         else:
                             mid_orig_idx = merged[-2][0][0]

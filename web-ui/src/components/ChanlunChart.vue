@@ -2,8 +2,9 @@
 // 缠论分析图表：K 线 + 笔（虚线）+ 线段（实线）+ 中枢 + 买卖点 + 分型 + 背驰。
 // 遵循缠论理论：笔用细虚线，线段用细实线。
 
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import echarts, { DOWN_COLOR, UP_COLOR } from '../echarts-setup'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import echarts, { FX_BORDER_COLOR, FX_COLOR } from '../echarts-setup'
+import { colorScheme, downColor, upColor } from '../colors'
 import { fmt2 } from '../format'
 import type { Bar } from '../types'
 
@@ -21,6 +22,11 @@ const props = withDefaults(
     zss: ChanlunZs[]
     mmds: ChanlunMmd[]
     fxs?: ChanlunFx[]
+    /** 缠论有效分型（笔端点分型，顶底交替且不共用K线）。提供时优先用于展示，
+     *  消除原始 fractals 中重叠的「底-顶-底」噪声。
+     *  注意：仅在该 prop「完全未传」（undefined）时才回退 fxs；若调用方传了
+     *  空数组，表示本窗口确实没有合规分型，绝不能再退回含违规对的原始列表。 */
+    validFxs?: ChanlunFx[]
     bcs?: ChanlunBc[]
     frequency?: string
     /** 揭示游标（训练模式）：只显示前 revealIndex+1 根 K 线及其范围内的叠加层 */
@@ -129,7 +135,7 @@ interface ChanlunMmd {
 }
 
 interface ChanlunFx {
-  type: 'ding' | 'di'
+  fx_type: 'ding' | 'di'
   date: string
   val: number
   /** 分型极值锚定的原始K线索引（后端按极值来源输出），优先于日期匹配 */
@@ -146,6 +152,29 @@ interface ChanlunBc {
   /** 背驰触发笔终点分型极值价与索引，用于主图标注 */
   anchor_val?: number | null
   anchor_bar_index?: number | null
+}
+
+/**
+ * 买卖点某一类型的完整视觉定义。
+ * 图上（ECharts option）与图例（DOM）共用同一份，避免两处配置漂移。
+ */
+interface MmdVisual {
+  /** ECharts symbol 名（买卖点统一 triangle，朝向由 series 级 symbolRotate 决定）。 */
+  symbol: string
+  /** 图例里的字形，与图上实际朝向一致：买点 ▲、卖点 ▼。 */
+  glyph: string
+  /** 图例 DOM 的 class 钩子（端到端脚本按它取 computed 颜色）。 */
+  cls: string
+  /** 图例文案，如「一类买点 (1buy)」。 */
+  label: string
+  /** 图上/图例颜色：买点=上涨色、卖点=下跌色。 */
+  color: string
+  /** 图上符号尺寸（px）。 */
+  size: number
+  /** 图上不透明度：1类最实、3类最淡。 */
+  opacity: number
+  /** 图例字形字号（px），与 size 同向变化，让用户能靠大小分辨 1/2/3 类。 */
+  fontSize: number
 }
 
 const container = ref<HTMLDivElement>()
@@ -181,6 +210,14 @@ function findBarIndex(keyIndex: Map<string, number>, dateStr: string): number {
 /**
  * 优先使用后端给出的原始K线索引锚点（分钟线日期匹配不可靠），否则回退日期匹配。
  * 与旧 findIdx 一致：超出训练揭示窗口（revealLimit）的端点返回 -1，由各 filter 丢弃。
+ *
+ * 防御：bar_index 在范围内时，对日线及以上周期校验其指向的 bar 日期是否与
+ * 端点自带 date 一致；不一致说明分析帧与 props.bars 帧长漂移（如取数翻页多返
+ * 导致分析 bar 数 > 前端 bars 数），bar_index 已指向另一根 K 线，此时回退到
+ * 日期匹配，避免分型/笔/中枢等所有索引锚定的标记整体错位
+ * （用户反馈「2023-06-13~16 日线全部标记底分型」即此错位所致）。
+ * 仅对 dateStr 无时分（日线/周/月，每天/周/月唯一一根）做该校验——分钟线
+ * 日期匹配不可靠，仍信任后端 bar_index（与下方 findBarIndex 注释一致）。
  */
 function findAnchorIndex(
   keyIndex: Map<string, number>,
@@ -197,6 +234,20 @@ function findAnchorIndex(
     barIndex < props.bars.length
   ) {
     idx = barIndex
+    // 仅对「日线及以上」周期做日期校验：其每天/周/月唯一一根 K 线，日期前缀
+    // 是可靠的单 bar 键，可用来识别 bar_index 是否因帧长漂移而指向了另一根。
+    // 分钟级日期匹配不可靠（一天多根），仍信任后端 bar_index（与 findBarIndex
+    // 注释一致）。判定「日线及以上」= dateStr 无时分，或时分全为 00:00。
+    const s = dateStr.replace(' ', 'T')
+    const timePart = s.length > 10 ? s.slice(11) : ''
+    const dailyGrade = !timePart || timePart === '00:00:00' || timePart === '00:00'
+    if (dailyGrade && dateStr) {
+      const bar = props.bars[idx]
+      if (bar && bar.datetime.slice(0, 10) !== dateStr.slice(0, 10)) {
+        const dateIdx = findBarIndex(keyIndex, dateStr)
+        if (dateIdx !== -1) idx = dateIdx
+      }
+    }
   } else {
     idx = findBarIndex(keyIndex, dateStr)
   }
@@ -234,10 +285,11 @@ function render() {
   prevFirstKey = firstKey
   const option = buildOption()
   if (zoomKeep) {
+    // inside 与 slider 两个 dataZoom 都需同步，否则范围不一致。
     const dzArr = option.dataZoom as { start: number; end: number }[]
-    if (dzArr?.[0]) {
-      dzArr[0].start = zoomKeep.start
-      dzArr[0].end = zoomKeep.end
+    for (const dz of dzArr ?? []) {
+      dz.start = zoomKeep.start
+      dz.end = zoomKeep.end
     }
     zoomKeep = null
   }
@@ -245,6 +297,115 @@ function render() {
   // 开发/调试专用：暴露图表实例供 playwright 等浏览器测试检查内部状态
   if (import.meta.env.DEV) {
     ;(window as unknown as Record<string, unknown>).__CHANLUN_CHART__ = chart
+  }
+}
+
+// ── 分型配色（顶/底统一白色，常量定义见 echarts-setup.ts）──
+// 分型只是结构端点（顶=三K高点、底=三K低点），不表达多空方向；红/绿留给买卖点
+// 专用，否则图上会出现「绿色顶分型」这种与卖点撞色、易被误读成信号的标记。
+// 顶/底之间靠三角朝向（顶▼/底▲）区分，不靠颜色。
+
+// ── 买卖点的视觉配置（唯一真源）──
+// 图上 ECharts option 与侧边图例 DOM 都从 MMD_VISUAL 取值，杜绝「图上改了、
+// 图例没改」的两套配置漂移（历史上图例曾用 ●/■/◆ 而图上已是 ▲/▼）。
+//   形状：买点=底→向上三角▲，卖点=顶→向下三角▼（卖点系列 symbolRotate:180）
+//   类型（1/2/3）：只用 「大小 + 不透明度」区分——1类=大且实、3类=小且淡
+//   颜色：买点=上涨色、卖点=下跌色，跟随全局涨跌配色。不写死「绿买红卖」，
+//         否则与 K 线涨跌色相反会误读。
+/**
+ * 类型档位：图上符号尺寸（px）+ 不透明度。1类最实最大、3类最淡最小。
+ * 图例字号不在这里写死，而是按 LEGEND_FONT_SCALE 从 size 等比算出，保证图例的
+ * 「大小」与图上档位永远同步变化（写死过一次就必然漂移）。
+ * 缩放系数取 1.1 而非更小值：早期 0.8 时图例字形只有 14.4px vs 9.6px，截图目视
+ * 被判为「大小一致、看不出区分」，等于没区分；放大到 1.1（19.8 vs 13.2）才够看。
+ */
+const LEGEND_FONT_SCALE = 1.1
+/**
+ * 档位间距刻意拉开（22/15/11）：原先的 18/14/12 三档在图上挨着时肉眼难辨，
+ * 达不到「用大小区分 1/2/3 类」的目的。
+ */
+const MMD_TIER: Record<string, { size: number; opacity: number }> = {
+  '1buy': { size: 22, opacity: 1 },
+  '2buy': { size: 15, opacity: 0.8 },
+  '2buy_s': { size: 15, opacity: 0.72 },
+  '3buy': { size: 11, opacity: 0.6 },
+  '1sell': { size: 22, opacity: 1 },
+  '2sell': { size: 15, opacity: 0.8 },
+  '2sell_s': { size: 15, opacity: 0.72 },
+  '3sell': { size: 11, opacity: 0.6 },
+}
+/** 图例展示顺序（key 与后端 MMDType 取值一致）：先买后卖、每方向按 1→2→类2→3。 */
+const MMD_LEGEND_ORDER = [
+  '1buy',
+  '2buy',
+  '2buy_s',
+  '3buy',
+  '1sell',
+  '2sell',
+  '2sell_s',
+  '3sell',
+] as const
+const MMD_LEGEND_LABEL: Record<string, string> = {
+  '1buy': '一类买点 (1buy)',
+  '2buy': '二类买点 (2buy)',
+  '2buy_s': '类二买 (2buy_s)',
+  '3buy': '三类买点 (3buy)',
+  '1sell': '一类卖点 (1sell)',
+  '2sell': '二类卖点 (2sell)',
+  '2sell_s': '类二卖 (2sell_s)',
+  '3sell': '三类卖点 (3sell)',
+}
+/** 图例 DOM 的 class 钩子（scripts/verify_mmd_colors.py 用它取 computed 色）。 */
+const MMD_LEGEND_CLASS: Record<string, string> = {
+  '1buy': 'buy-1',
+  '2buy': 'buy-2',
+  '2buy_s': 'buy-2s',
+  '3buy': 'buy-3',
+  '1sell': 'sell-1',
+  '2sell': 'sell-2',
+  '2sell_s': 'sell-2s',
+  '3sell': 'sell-3',
+}
+
+const MMD_VISUAL = computed<Record<string, MmdVisual>>(() => {
+  const buy = upColor.value // 买点=上涨色
+  const sell = downColor.value // 卖点=下跌色
+  const out: Record<string, MmdVisual> = {}
+  for (const key of MMD_LEGEND_ORDER) {
+    const tier = MMD_TIER[key]
+    const isBuyKey = key.includes('buy')
+    out[key] = {
+      symbol: 'triangle', // 买点 ▲；卖点由 series 级 symbolRotate:180 翻成 ▼
+      glyph: isBuyKey ? '▲' : '▼', // 图例字形，与图上实际朝向一致
+      cls: MMD_LEGEND_CLASS[key],
+      label: MMD_LEGEND_LABEL[key],
+      color: isBuyKey ? buy : sell,
+      size: tier.size,
+      opacity: tier.opacity,
+      // 由图上尺寸等比算出，不写死 → 调 size 时图例自动跟着变
+      fontSize: +(tier.size * LEGEND_FONT_SCALE).toFixed(1),
+    }
+  }
+  return out
+})
+/** 侧边图例列表（v-for 渲染，样式全部内联绑定 → 配色/大小/透明度与图上同源）。 */
+const mmdLegendItems = computed(() =>
+  MMD_LEGEND_ORDER.map((key) => ({ key, ...MMD_VISUAL.value[key] })),
+)
+/** 图上打点取配置：未知类型回退到与方向一致的中性档位，不静默变黑。 */
+function mmdVisual(type: string): MmdVisual {
+  const known = MMD_VISUAL.value[type]
+  if (known) return known
+  const isBuy = type.includes('buy')
+  return {
+    symbol: 'triangle',
+    glyph: isBuy ? '▲' : '▼',
+    cls: '',
+    label: type,
+    color: isBuy ? upColor.value : downColor.value,
+    size: 14,
+    opacity: 0.8,
+    fontSize: +(14 * LEGEND_FONT_SCALE).toFixed(1),
   }
 }
 
@@ -292,10 +453,18 @@ function buildOption(): echarts.EChartsCoreOption {
 
   // ── 分型的 MarkPoint ──
   // 紧凑模式下不显示「顶/底」文字标签，只画小圆点（268 个分型每个都带文字会严重遮挡 K 线）。
+  // 颜色：顶/底统一白色，不跟涨跌配色。分型只是结构端点（顶=高点、底=低点），
+  //       不表达多空方向；若套用红绿色会与买卖点语义混淆（红/绿留给买卖点专用）。
+  // 优先使用缠论有效分型（笔端点，顶底交替且不共用K线）。
+  // 只在调用方「完全没传」validFxs 时才回退原始 fractals（此时无从选择）；
+  // 不再把「传了但为空」当成回退信号——后端正常必定返回 valid_fractals，空数组
+  // 表示本窗口确实没有合规分型，此时退回含大量违规对的原始列表，会在图上画出
+  // 「12-17底→12-18顶→12-19底」这类共用K线的伪分型。
+  const fractalSrc = props.validFxs ?? props.fxs
   const fxPoints =
     props.showFractals === false
       ? []
-      : (props.fxs ?? [])
+      : (fractalSrc ?? [])
           .map((fx) => {
             const idx = findAnchorIndex(keyIndex, fx.bar_index, fx.date, revealLimit)
             if (idx === -1 || idx >= revealLimit) return null
@@ -304,15 +473,16 @@ function buildOption(): echarts.EChartsCoreOption {
             const price = fx.val
             return {
               coord: [idx, price],
-              itemStyle: { color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR },
-              symbol: fx.type === 'ding' ? 'triangle' : 'diamond',
+              itemStyle: { color: FX_COLOR },
+              symbol: 'triangle',
+              fxType: fx.fx_type, // 顶=ding→系列级旋转180°，底=di→不旋转
               symbolSize: props.compact ? 5 : 8,
               label: {
                 show: props.showFractalLabels === true && !props.compact,
-                formatter: fx.type === 'ding' ? '顶' : '底',
-                color: fx.type === 'ding' ? DOWN_COLOR : UP_COLOR,
+                formatter: fx.fx_type === 'ding' ? '顶' : '底',
+                color: FX_COLOR,
                 fontSize: 9,
-                position: fx.type === 'ding' ? 'top' : 'bottom',
+                position: fx.fx_type === 'ding' ? 'top' : 'bottom',
               },
             }
           })
@@ -332,7 +502,7 @@ function buildOption(): echarts.EChartsCoreOption {
       // ECharts 6 的 markLine 两点标记必须是 [起点, 终点] 二元组数组，
       // 不再支持旧的 {coord, endCoord} 单对象形式（会导致 ECharts 内部崩溃）。
       const lineStyle = {
-        color: isUp ? UP_COLOR : DOWN_COLOR,
+        color: isUp ? upColor.value : downColor.value,
         width: 1,
         type: 'dashed' as const,
         opacity: 0.7,
@@ -462,33 +632,6 @@ function buildOption(): echarts.EChartsCoreOption {
             ]
           })
 
-  // ── 买卖点的 MarkPoint（v598：改用图标区分类型，不再用文字标注）──
-  const MMD_SYMBOL: Record<string, string> = {
-    '1buy': 'triangle', // ▲ 一类买
-    '2buy': 'circle', // ● 二类买
-    '2buy_s': 'rect', // ■ 类二买
-    '3buy': 'diamond', // ◆ 三类买
-    '1sell': 'triangle', // ▼ 一类卖（卖点系列整体旋转 180°）
-    '2sell': 'circle', // ● 二类卖
-    '2sell_s': 'roundRect', // ▬ 类二卖
-    '3sell': 'diamond', // ◆ 三类卖
-  }
-  const MMD_COLOR: Record<string, string> = {
-    '1buy': '#22c55e',
-    '2buy': '#4ade80',
-    '2buy_s': '#86efac',
-    '3buy': '#bbf7d0',
-    '1sell': '#ef4444',
-    '2sell': '#f87171',
-    '2sell_s': '#fca5a5',
-    '3sell': '#fecaca',
-  }
-  const MMD_SIZE: Record<string, number> = {
-    '1buy': 18,
-    '1sell': 18,
-    '3buy': 12,
-    '3sell': 12,
-  }
   const mmdBuyPoints =
     props.showMmds === false
       ? []
@@ -507,12 +650,16 @@ function buildOption(): echarts.EChartsCoreOption {
             } else {
               price = props.bars[idx].low * (1 - 0.005)
             }
+            const v = mmdVisual(m.type)
             return {
               name: m.type,
               coord: [idx, price],
-              itemStyle: { color: MMD_COLOR[m.type] ?? '#22c55e' },
-              symbol: MMD_SYMBOL[m.type] ?? 'circle',
-              symbolSize: MMD_SIZE[m.type] ?? 14,
+              itemStyle: {
+                color: v.color,
+                opacity: v.opacity,
+              },
+              symbol: v.symbol,
+              symbolSize: v.size,
               label: { show: false },
             }
           })
@@ -535,12 +682,16 @@ function buildOption(): echarts.EChartsCoreOption {
             } else {
               price = props.bars[idx].high * (1 + 0.005)
             }
+            const v = mmdVisual(m.type)
             return {
               name: m.type,
               coord: [idx, price],
-              itemStyle: { color: MMD_COLOR[m.type] ?? '#ef4444' },
-              symbol: MMD_SYMBOL[m.type] ?? 'circle',
-              symbolSize: MMD_SIZE[m.type] ?? 14,
+              itemStyle: {
+                color: v.color,
+                opacity: v.opacity,
+              },
+              symbol: v.symbol,
+              symbolSize: v.size,
               label: { show: false },
             }
           })
@@ -623,8 +774,8 @@ function buildOption(): echarts.EChartsCoreOption {
             html += `<div>${p.marker} 走势段</div>`
           } else if (p.seriesName === '趋势段(粗虚线)') {
             html += `<div>${p.marker} 趋势段</div>`
-          } else if (p.seriesName === '分型') {
-            html += `<div>${p.marker} ${p.name === '顶' ? '顶分型' : '底分型'}</div>`
+          } else if (p.seriesName === '顶分型' || p.seriesName === '底分型') {
+            html += `<div>${p.marker} ${p.seriesName}</div>`
           } else if (p.seriesName === '买点' || p.seriesName === '卖点') {
             html += `<div>${p.marker} ${p.name}</div>`
           } else if (p.seriesName === '背驰') {
@@ -650,7 +801,9 @@ function buildOption(): echarts.EChartsCoreOption {
         ...((props.zsds?.length ?? 0) > 0 ? ['走势段(粗实线)'] : []),
         ...((props.qsds?.length ?? 0) > 0 ? ['趋势段(粗虚线)'] : []),
         ...(props.showZss !== false && props.zss.length ? ['中枢'] : []),
-        ...(props.showFractals !== false && props.fxs && props.fxs.length ? ['分型'] : []),
+        ...(props.showFractals !== false && props.fxs && props.fxs.length
+          ? ['顶分型', '底分型']
+          : []),
         ...(mmdBuyPoints.length ? ['买点'] : []),
         ...(mmdSellPoints.length ? ['卖点'] : []),
         ...(props.showBcs !== false && props.bcs && props.bcs.some((bc) => bc.bc)
@@ -704,6 +857,16 @@ function buildOption(): echarts.EChartsCoreOption {
     ],
     dataZoom: [
       {
+        // 滚轮缩放：以鼠标所在 K 线为中心放大/缩小（ECharts inside dataZoom 默认行为）。
+        type: 'inside',
+        xAxisIndex: [0, 1],
+        start: 50,
+        end: 100,
+        zoomOnMouseWheel: true,
+        moveOnMouseWheel: false,
+        moveOnMouseMove: true,
+      },
+      {
         type: 'slider',
         bottom: 8,
         start: 50,
@@ -721,10 +884,10 @@ function buildOption(): echarts.EChartsCoreOption {
         yAxisIndex: 0,
         data: ohlc,
         itemStyle: {
-          color: UP_COLOR,
-          color0: DOWN_COLOR,
-          borderColor: UP_COLOR,
-          borderColor0: DOWN_COLOR,
+          color: upColor.value,
+          color0: downColor.value,
+          borderColor: upColor.value,
+          borderColor0: downColor.value,
         },
         markLine: cursorMarkLines.length
           ? {
@@ -827,26 +990,57 @@ function buildOption(): echarts.EChartsCoreOption {
           },
         },
       },
-      // 分型标记
+      // 分型标记：顶/底拆成两个独立 scatter 序列，各自用 series 级固定 symbol。
+      // 顶=向下三角▼(symbolRotate:180)，底=向上三角▲
+      // 颜色顶/底统一白色（FX_COLOR）：分型是结构端点而非多空信号，红/绿只给买卖点用。
       {
-        name: '分型',
+        name: '顶分型',
         type: 'scatter',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: (fxPoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
-        symbol: (fxPoints as any[]).map((p) => p.symbol),
-        symbolSize: (fxPoints as any[]).map((p) => p.symbolSize),
-        itemStyle: {
-          color: (params: any) => (fxPoints as any[])[params.dataIndex]?.itemStyle.color,
-        },
-        label: {
-          show: props.showFractalLabels === true && !props.compact,
-          formatter: (params: any) => (fxPoints as any[])[params.dataIndex]?.label.formatter,
-          color: (params: any) => (fxPoints as any[])[params.dataIndex]?.label.color,
-          fontSize: 9,
-          position: (params: any) => (fxPoints as any[])[params.dataIndex]?.label.position ?? 'top',
-        },
+        symbol: 'triangle',
+        symbolRotate: 180, // 顶→向下 ▼
+        // 放大 + 深色描边：顶标记锚在K线最高点上，白三角压在白系高亮上易糊，
+        // 加一圈深色描边保证与浅色背景/上影线都能分离。
+        symbolSize: props.compact ? 7 : 10,
+        itemStyle: { color: FX_COLOR, borderColor: FX_BORDER_COLOR, borderWidth: 1 },
+        data: (fxPoints as any[])
+          .filter((p) => p.fxType === 'ding')
+          .map((p) => ({
+            value: [p.coord[0], p.coord[1]],
+            label: {
+              show: props.showFractalLabels === true && !props.compact,
+              formatter: p.label.formatter,
+              color: p.label.color,
+              fontSize: 9,
+              position: p.label.position,
+            },
+          })),
         labelLayout: { hideOverlap: true },
+        z: 12,
+      },
+      {
+        name: '底分型',
+        type: 'scatter',
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        symbol: 'triangle', // 底→向上 ▲
+        symbolSize: props.compact ? 7 : 10,
+        itemStyle: { color: FX_COLOR, borderColor: FX_BORDER_COLOR, borderWidth: 1 },
+        data: (fxPoints as any[])
+          .filter((p) => p.fxType === 'di')
+          .map((p) => ({
+            value: [p.coord[0], p.coord[1]],
+            label: {
+              show: props.showFractalLabels === true && !props.compact,
+              formatter: p.label.formatter,
+              color: p.label.color,
+              fontSize: 9,
+              position: p.label.position,
+            },
+          })),
+        labelLayout: { hideOverlap: true },
+        z: 12,
       },
       // 买点（v598：图标区分类型，无文字标注）
       {
@@ -854,15 +1048,15 @@ function buildOption(): echarts.EChartsCoreOption {
         type: 'scatter',
         xAxisIndex: 0,
         yAxisIndex: 0,
+        // 买点（买点=底→向上三角▲；类型靠 symbolSize + opacity 区分）
         data: (mmdBuyPoints as any[]).map((p) => ({
           name: p.name,
           value: [p.coord[0], p.coord[1]],
+          symbol: p.symbol,
+          symbolSize: p.symbolSize,
+          // opacity 必须透传：1/2/3 类的「浓淡」区分全靠它，丢了就只剩大小一维
+          itemStyle: { color: p.itemStyle.color, opacity: p.itemStyle.opacity },
         })),
-        symbol: (mmdBuyPoints as any[]).map((p) => p.symbol),
-        symbolSize: (mmdBuyPoints as any[]).map((p) => p.symbolSize),
-        itemStyle: {
-          color: (params: any) => (mmdBuyPoints as any[])[params.dataIndex]?.itemStyle.color,
-        },
         label: {
           show: props.showMmdLabels === true && !props.compact,
           formatter: (params: any) => params?.name ?? '',
@@ -879,15 +1073,15 @@ function buildOption(): echarts.EChartsCoreOption {
         xAxisIndex: 0,
         yAxisIndex: 0,
         symbolRotate: 180,
+        // 卖点（整体旋转 180°，triangle 变向下三角▼；类型靠 symbolSize + opacity 区分）
         data: (mmdSellPoints as any[]).map((p) => ({
           name: p.name,
           value: [p.coord[0], p.coord[1]],
+          symbol: p.symbol,
+          symbolSize: p.symbolSize,
+          // opacity 必须透传：1/2/3 类的「浓淡」区分全靠它，丢了就只剩大小一维
+          itemStyle: { color: p.itemStyle.color, opacity: p.itemStyle.opacity },
         })),
-        symbol: (mmdSellPoints as any[]).map((p) => p.symbol),
-        symbolSize: (mmdSellPoints as any[]).map((p) => p.symbolSize),
-        itemStyle: {
-          color: (params: any) => (mmdSellPoints as any[])[params.dataIndex]?.itemStyle.color,
-        },
         label: {
           show: props.showMmdLabels === true && !props.compact,
           formatter: (params: any) => params?.name ?? '',
@@ -904,19 +1098,19 @@ function buildOption(): echarts.EChartsCoreOption {
         type: 'scatter',
         xAxisIndex: 1,
         yAxisIndex: 1,
-        data: (bcPoints as any[]).map((p) => [p.coord[0], macdHist[p.coord[0]] ?? 0]),
-        symbol: (bcPoints as any[]).map((p) => p.symbol),
-        symbolSize: (bcPoints as any[]).map((p) => p.symbolSize),
-        itemStyle: {
-          color: (params: any) => (bcPoints as any[])[params.dataIndex]?.itemStyle.color,
-        },
-        label: {
-          show: true,
-          formatter: (params: any) => (bcPoints as any[])[params.dataIndex]?.label.formatter,
-          color: (params: any) => (bcPoints as any[])[params.dataIndex]?.label.color,
-          fontSize: 9,
-          position: 'top',
-        },
+        data: (bcPoints as any[]).map((p) => ({
+          value: [p.coord[0], macdHist[p.coord[0]] ?? 0],
+          symbol: p.symbol,
+          symbolSize: p.symbolSize,
+          itemStyle: { color: p.itemStyle.color },
+          label: {
+            show: true,
+            formatter: p.label.formatter,
+            color: p.label.color,
+            fontSize: 9,
+            position: 'top',
+          },
+        })),
         labelLayout: { hideOverlap: true },
       },
       // 背驰主图标注（落在触发笔终点分型极值上，与副图对照）
@@ -925,19 +1119,19 @@ function buildOption(): echarts.EChartsCoreOption {
         type: 'scatter',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        data: (bcPricePoints as any[]).map((p) => [p.coord[0], p.coord[1]]),
-        symbol: (bcPricePoints as any[]).map((p) => p.symbol),
-        symbolSize: (bcPricePoints as any[]).map((p) => p.symbolSize),
-        itemStyle: {
-          color: (params: any) => (bcPricePoints as any[])[params.dataIndex]?.itemStyle.color,
-        },
-        label: {
-          show: true,
-          formatter: (params: any) => (bcPricePoints as any[])[params.dataIndex]?.label.formatter,
-          color: (params: any) => (bcPricePoints as any[])[params.dataIndex]?.label.color,
-          fontSize: 9,
-          position: 'top',
-        },
+        data: (bcPricePoints as any[]).map((p) => ({
+          value: [p.coord[0], p.coord[1]],
+          symbol: p.symbol,
+          symbolSize: p.symbolSize,
+          itemStyle: { color: p.itemStyle.color },
+          label: {
+            show: true,
+            formatter: p.label.formatter,
+            color: p.label.color,
+            fontSize: 9,
+            position: 'top',
+          },
+        })),
         labelLayout: { hideOverlap: true },
       },
       // ── MACD 副图：红绿柱 + DIF/DEA 线 ──
@@ -982,14 +1176,6 @@ function resize() {
 onMounted(() => {
   render()
   window.addEventListener('resize', resize)
-  // 在捕获阶段阻止图表容器吞没滚轮事件，确保页面可以滚动
-  const el = container.value
-  if (el) {
-    el.addEventListener('wheel', (e: WheelEvent) => e.stopPropagation(), {
-      passive: false,
-      capture: true,
-    })
-  }
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resize)
@@ -1004,12 +1190,15 @@ watch(
     props.zss,
     props.mmds,
     props.fxs,
+    props.validFxs,
     props.bcs,
     props.macd,
     props.revealIndex,
   ],
   render,
 )
+// 全局涨跌配色变化时重渲染（红涨绿跌 ↔ 绿涨红跌）。
+watch(colorScheme, render)
 </script>
 
 <template>
@@ -1024,14 +1213,27 @@ watch(
     >
       <div class="mmd-legend-title">买卖点图例</div>
       <template v-if="props.showMmds !== false && props.mmds.length">
-        <div class="mmd-legend-item"><span class="ic buy-1">▲</span> 一类买点 (1buy)</div>
-        <div class="mmd-legend-item"><span class="ic buy-2">●</span> 二类买点 (2buy)</div>
-        <div class="mmd-legend-item"><span class="ic buy-2s">■</span> 类二买 (2buy_s)</div>
-        <div class="mmd-legend-item"><span class="ic buy-3">◆</span> 三类买点 (3buy)</div>
-        <div class="mmd-legend-item"><span class="ic sell-1">▼</span> 一类卖点 (1sell)</div>
-        <div class="mmd-legend-item"><span class="ic sell-2">●</span> 二类卖点 (2sell)</div>
-        <div class="mmd-legend-item"><span class="ic sell-2s">▬</span> 类二卖 (2sell_s)</div>
-        <div class="mmd-legend-item"><span class="ic sell-3">◆</span> 三类卖点 (3sell)</div>
+        <!-- 图例从 MMD_VISUAL 取字形/颜色/大小/透明度，与图上打点同源：
+             买点统一 ▲、卖点统一 ▼；颜色跟随全局涨跌配色；1/2/3 类靠大小+浓淡区分。 -->
+        <div
+          v-for="item in mmdLegendItems"
+          :key="item.key"
+          class="mmd-legend-item"
+          :title="item.label"
+        >
+          <span
+            class="ic"
+            :class="item.cls"
+            :style="{
+              color: item.color,
+              opacity: item.opacity,
+              fontSize: item.fontSize + 'px',
+              lineHeight: 1,
+            }"
+            >{{ item.glyph }}</span
+          >
+          {{ item.label }}
+        </div>
       </template>
       <template v-if="props.showBcs !== false && props.bcs && props.bcs.some((b) => b.bc)">
         <div class="legend-sep"></div>
@@ -1077,33 +1279,12 @@ watch(
 }
 .ic {
   display: inline-block;
-  width: 14px;
+  /* 买卖点字形按 1/2/3 类放大缩小（10~15px），固定槽宽保证文案左对齐不跳动 */
+  width: 18px;
   text-align: center;
 }
-.buy-1 {
-  color: #22c55e;
-}
-.buy-2 {
-  color: #4ade80;
-}
-.buy-2s {
-  color: #86efac;
-}
-.buy-3 {
-  color: #bbf7d0;
-}
-.sell-1 {
-  color: #ef4444;
-}
-.sell-2 {
-  color: #f87171;
-}
-.sell-2s {
-  color: #fca5a5;
-}
-.sell-3 {
-  color: #fecaca;
-}
+/* 买卖点图例的颜色/大小/透明度全部内联绑定自 MMD_VISUAL（与图上同源），
+   此处不再写死买点/卖点色系——写死会让图例与图在换配色后漂移。 */
 .bc {
   color: #ff9500;
 }

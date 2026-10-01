@@ -16147,6 +16147,7 @@ def _is_strong_beichi(
     closes: list[float] | None,
     threshold: float = 0.8,
     direction: str = "down",
+    normalize_by_bars: bool = False,
 ) -> bool:
     """检查是否是强背驰（满足动态阈值 + 新极值确认）。
 
@@ -16167,10 +16168,33 @@ def _is_strong_beichi(
             else:
                 if bi.high <= prev_bi.high:
                     break
-            curr_force = _calc_bi_force(bi, closes, bi_idx)
-            prev_force = _calc_bi_force(prev_bi, closes, j)
+            curr_force = _calc_bi_force(bi, closes, bi_idx, normalize_by_bars)
+            prev_force = _calc_bi_force(prev_bi, closes, j, normalize_by_bars)
 
-            if prev_force > 0 and curr_force < prev_force * threshold:
+            # V731a：补 curr_force > 0 保护。
+            # 旧条件只要求 prev_force > 0，故 curr_force == 0（该笔无任何动能
+            # 数据，_calc_bi_force 返回 0）时 `0 < prev_force * threshold` 恒真，
+            # 一个力度为零的笔会被直接判成「强力背驰」并发出 1买/1卖。
+            # 实测 chanlun_000001_daily 的 BI6/BI9 force 恰为 0（见
+            # tests/unit/test_chanlun_v731_ref_zs_no_lookahead.py::
+            # TestZeroForceNotBeichi）。
+            # beichi.py 的 _check_bi_level_beichi / _check_pz_beichi /
+            # _check_qs_beichi 三处均有该保护，唯独此处遗漏。
+            if curr_force <= 0:
+                break  # 当前笔本身无力度，无从谈"衰竭"
+
+            # V731b：prev_force == 0 时应**继续向前找**，而不是 break。
+            # 中枢内部的笔其 MACD 力度常恰为 0（实测 5 个 fixture 共 51 笔中
+            # 8 笔 = 16% 力度为 0）。旧代码遇到第一个同向笔就 break，若它
+            # 恰好是零力度的中枢内笔，则本笔的背驰判定被永久扼杀——
+            # 教科书「下跌趋势 + 离开段背驰」形态因此完全无信号（实测
+            # audit_mmd_ground_truth.py 的 Case1/5）：背驰段 BI7 的前一同向笔
+            # BI5 力度为 0，而真正该比的进入段 BI3 力度 1.81 却够不着。
+            # 零力度不构成"力度基准"，跳过它继续向前找有效的对比笔。
+            if prev_force <= 0:
+                continue
+
+            if curr_force < prev_force * threshold:
                 return True
             break
 
@@ -16222,8 +16246,12 @@ def _is_strong_beichi(
                 else:
                     new_extreme = curr_exit.high > prev_exit.high
 
-                prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
-                curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index)
+                prev_force = _calc_bi_force(
+                    prev_exit, closes, prev_exit.index, normalize_by_bars
+                )
+                curr_force = _calc_bi_force(
+                    curr_exit, closes, curr_exit.index, normalize_by_bars
+                )
 
                 if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
                     return True
@@ -16245,6 +16273,7 @@ def _get_beichi_strength(
     for j in range(bi_idx - 1, -1, -1):
         prev_bi = bis[j]
         if prev_bi.direction.value == direction:
+            # 强度标签沿用原始力度口径（不做归一），保持与历史标签一致
             curr_force = _calc_bi_force(bi, closes, bi_idx)
             prev_force = _calc_bi_force(prev_bi, closes, j)
 
@@ -16283,10 +16312,29 @@ def _calc_bi_force(
     bi: Line,
     closes: list[float] | None,
     bi_idx: int,
+    normalize_by_bars: bool = False,
 ) -> float:
-    """计算笔的力度（MACD面积）。"""
+    """计算笔的力度（MACD面积）。
+
+    Args:
+        normalize_by_bars: True 时按窗口根数归一（返回「单位根平均力度」）。
+
+    V731 长度偏置：直接返回 MACD 柱面积之和会让**长而慢**的段累积出更大的
+    数值，与缠论「力度衰竭」的直觉相反。纯斜线实测（跌幅同为 10 点）：
+        5根→5.7323、10根→10.6917、20根→14.6748（越慢越"有力"），
+    20 根之后再拉长则因价格走平而回落（40根→12.3559），单调性并不成立。
+    归一后单位根力度单调下降（0.9554 / 0.9720 / 0.6988 / 0.3014 / 0.0859）。
+    默认 False 保持历史行为，由 config.bi_force_normalize 显式开启。
+    """
+    # ── 三条「降级路径」统一注明：返回的是**振幅**，与正常路径的 MACD 面积
+    #    不在同一量纲。实测两路径数值比中位 3.2 倍（范围 1.0~12.0）。
+    #    背驰是比值比较（curr < prev * threshold），若同一比较中两操作数走了
+    #    不同路径，结果会彻底失真。
+    #    正常链路不会混用：analyser 的 closes 由同一份 klines 导出，实测 5 个
+    #    fixture 共 51 个笔全部走 MACD 路径。风险仅在调用方传入被裁剪的 closes
+    #    （增量加载/拼接/部分重算）时——实测那样会让背驰命中集合发生漂移。
     if closes is None or len(closes) == 0:
-        return abs(bi.high - bi.low)
+        return abs(bi.high - bi.low)          # 降级(a)：无收盘价数据
 
     # V617: 用分型极值来源的原始 K 线索引（bar_index）而非合并 K 线的
     # 最后一根索引（k.k_index），使 MACD 力度窗口精确覆盖笔的极值区间。
@@ -16294,16 +16342,22 @@ def _calc_bi_force(
     end_idx = bi.end.bar_index
 
     if start_idx < 0 or end_idx >= len(closes):
-        return abs(bi.high - bi.low)
+        return abs(bi.high - bi.low)          # 降级(b)：笔超出 closes 范围
 
     try:
         macd_result = calc_macd_force(closes, start_idx, end_idx)
         if bi.direction.value == "down":
-            return macd_result["hist_down_sum"]
+            raw = macd_result["hist_down_sum"]
         else:
-            return macd_result["hist_up_sum"]
+            raw = macd_result["hist_up_sum"]
     except Exception:
-        return abs(bi.high - bi.low)
+        return abs(bi.high - bi.low)          # 降级(c)：MACD 计算失败
+
+    if normalize_by_bars:
+        n_bars = end_idx - start_idx + 1
+        if n_bars > 0:
+            return raw / n_bars
+    return raw
 
 
 def _check_atr_support_zone(

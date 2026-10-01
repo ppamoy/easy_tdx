@@ -62,6 +62,82 @@ def _df_to_klines(df: pd.DataFrame) -> list[Kline]:
     return klines
 
 
+def _enforce_fx_independence(fxs: list[FX], config: ChanlunConfig) -> list[FX]:
+    """按缠论原文保证剩余分型「顶底严格交替 + 相邻不共用 K 线」。
+
+    为什么需要单独这一步：``valid_fractals`` 是笔端点分型，其性质原本由
+    ``find_bis`` 间接保证，但该保证依赖 ``bi_type``——legacy 的 ``simple``
+    口径只要顶底交替就成笔，甚至允许一笔起止点同类（实测 ``ding@2 → ding@2``）。
+    分型的交替性与独立性是缠论原文的硬性要求，不应取决于用户选了哪种笔口径，
+    故在序列化前显式收紧一次。
+
+    输入可能已经病态（含同类相邻、同值重复），因此这里不能假定入参干净：
+      1. 先按 (bar_index, 类型) 去重；
+      2. 顺序扫描，候选必须满足：与前一分型异类 + 间距达标，才纳入；
+      3. 同类或间距不足的候选，若为更强的极值则替换前一分型
+         （顶取更高、底取更低），否则丢弃。替换后仍要与再前一分型保持交替，
+         不满足则直接丢弃。
+
+    Args:
+        fxs: 候选分型（按时间排序，可能已含违反者）
+        config: 缠论配置，决定最小间距（口径同 bi.py::_check_bi_gap）
+
+    Returns:
+        满足「严格交替 + 相邻独立」的分型列表
+    """
+    if len(fxs) <= 1:
+        return list(fxs)
+
+    min_gap = 5 if config.bi_type == "old" else 3
+
+    def _gap_ok(a: FX, b: FX) -> bool:
+        """a 在前、b 在后：两者之间是否至少隔 min_gap 根缠论K线。"""
+        if not a.klines or not b.klines:
+            return False
+        try:
+            gap = b.klines[0].index - a.klines[-1].index + 1
+        except (AttributeError, IndexError):
+            return False
+        return gap >= min_gap
+
+    def _is_stronger(cand: FX, cur: FX) -> bool:
+        """同为顶/底时，cand 是否比 cur 更符合「该位置的极值」。"""
+        return cand.val < cur.val if cand.fx_type.value == "di" else cand.val > cur.val
+
+    unique: list[FX] = []
+    seen: set[tuple[int, str]] = set()
+    for fx in fxs:
+        key = (fx.bar_index, fx.fx_type.value)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(fx)
+
+    kept: list[FX] = []
+    for fx in unique:
+        if not kept:
+            kept.append(fx)
+            continue
+        prev = kept[-1]
+        if prev.fx_type != fx.fx_type and _gap_ok(prev, fx):
+            kept.append(fx)
+            continue
+        # 走到这里：同类相邻，或间距不足，或间距无法判定。
+        # 「留极值更强者」只有在确知两者冲突（同类/间距不足）时才成立；
+        # 若仅仅是 klines 缺失导致无法判定，绝不能用它去替换已保留的合法分型
+        # ——数据损坏时宁可保守地丢弃候选，也不能把好数据换掉。
+        known_conflict = fx.fx_type == prev.fx_type or (
+            prev.klines and fx.klines and not _gap_ok(prev, fx)
+        )
+        if known_conflict and _is_stronger(fx, prev):
+            # 替换后仍须与「前前项」保持交替与间距
+            if len(kept) < 2 or (kept[-2].fx_type != fx.fx_type and _gap_ok(kept[-2], fx)):
+                kept[-1] = fx
+        continue
+        kept.append(fx)
+    return kept
+
+
 @dataclass
 class ChanlunResult:
     """缠论分析结果。"""
@@ -71,6 +147,17 @@ class ChanlunResult:
     klines: list[Kline] = field(default_factory=list)
     cklines: list[CLKline] = field(default_factory=list)
     fractals: list[FX] = field(default_factory=list)
+    # 缠论意义上的「有效分型」：构成笔端点的分型，并经独立性收紧后，保证顶底严格
+    # 交替且相邻不共用K线。原始 fractals 由逐三根滑动窗口扫出，含大量共用K线的
+    # 重叠分型（如 底-顶-底 挤在连续K线），不能直接作为独立分型渲染。
+    #
+    # ⚠️ 已证伪并修正：旧注释称笔端点分型「天然交替且不重叠」，此说法**不成立**。
+    # 该性质实际依赖 bi_type——legacy 的 simple 口径只要顶底交替就成笔，甚至允许
+    # 一笔起止点同类（实测 ding@2 → ding@2），此时笔端点集合会退化成几乎全部原始
+    # 分型（000001 日线：266 个原始分型 → valid 退化到 45 个且仍有 15 对同类相邻）。
+    # 现由 _enforce_fx_independence 显式施加「交替 + 间距」约束，与 bi_type 无关。
+    # 展示层应使用它而非原始 fractals。
+    valid_fractals: list[FX] = field(default_factory=list)
     bis: list[BI] = field(default_factory=list)
     zss: list[ZS] = field(default_factory=list)
     xds: list[XD] = field(default_factory=list)
@@ -267,6 +354,7 @@ class ChanlunResult:
             "kline_count": len(self.klines),
             "ckline_count": len(self.cklines),
             "fractal_count": len(self.fractals),
+            "valid_fractal_count": len(self.valid_fractals),
             "bi_count": len(self.bis),
             "zs_count": len(self.zss),
             "xd_count": len(self.xds),
@@ -407,9 +495,10 @@ class ChanlunResult:
                     # V68 条件205 区间套（多级别共振一致性）：字面意义的「区间套」
                     # ——仅 3 类买卖点计算（需 >=40 根 K 线），含 multi_level_score
                     # （0-1）与置信度调整；便于前端标注与回测分组统计。
-                    "v68_range_set_multi_level": getattr(
-                        mmd, "_range_set_multi_level_v68", None
-                    ),
+                    "v68_range_set_multi_level": getattr(mmd, "_range_set_multi_level_v68", None),
+                    # 真·区间套（统一实现）：与条件205 单级别伪区间套区分开。
+                    # 无递归级别时 _qujiantao 为 None，前端据此不显示「真区间套」卡片。
+                    "qujiantao": getattr(mmd, "_qujiantao", None),
                 }
                 for mmd in self.mmds
             ],
@@ -467,6 +556,19 @@ class ChanlunResult:
                 **self._recursive_levels_payload(),
             },
         }
+
+    def _fx_to_dict(self, fx: FX) -> dict[str, Any]:
+        """分型序列化为前端可用的精简字典（与 router 中 fractals 字段结构一致）。"""
+        return {
+            "fx_type": fx.fx_type.value,
+            "date": self._fmt_dt(self._fx_anchor_datetime(fx)),
+            "val": round(fx.val, 2),
+            "index": fx.index,
+            "bar_index": fx.bar_index,
+        }
+
+    def valid_fractals_to_dict(self) -> list[dict[str, Any]]:
+        return [self._fx_to_dict(fx) for fx in self.valid_fractals]
 
 
 class ChanlunAnalyser:
@@ -540,7 +642,37 @@ class ChanlunAnalyser:
 
         # Step 4: 笔计算（传入 cklines 用于分型稳定性校验）
         bis = find_bis(fractals, self._config, cklines=self._result.cklines)
+        # 修正每笔 high/low 为笔区间内原始K线真实极值。
+        # find_bis 用端点分型值 max/min(start.val,end.val) 初始化 high/low，但在
+        # 「区间内存在更高顶/更低底却因 gap 不足未成笔端点」时会漏算——例如两底
+        # 之间的最高顶因 gap 不足无法作为笔端点，其价格仍落在笔区间内，端点 high
+        # 偏低会令中枢 zg 偏窄。缠论原文：笔的极值为笔区间内所有K线的最高/最低价。
+        for bi in bis:
+            si = bi.start.bar_index
+            ei = bi.end.bar_index
+            if 0 <= si <= ei < len(klines):
+                seg = klines[si : ei + 1]
+                if seg:
+                    bi.high = max(k.high for k in seg)
+                    bi.low = min(k.low for k in seg)
         self._result.bis = bis
+
+        # Step 4.5: 有效分型 = 笔端点分型（去重）。用于前端展示，要求顶底交替且
+        # 相邻分型不共用 K 线（缠论原文：中间至少 1 根独立K线）。
+        # 注意：不能只靠 find_bis 的 gap 规则保证独立性——bi_type="simple" 是
+        # legacy 口径，只要顶底交替就成笔，会让共用 K 线的分型成为笔端点，此时
+        # 笔端点分型集合不再满足独立性（实测 simple 下退化成全部 266 个原始分型，
+        # 184 对相邻违规）。故这里再独立施加一次独立性过滤。
+        seen: set[tuple[int, str]] = set()
+        valid: list[FX] = []
+        for bi in bis:
+            for fx in (bi.start, bi.end):
+                key = (fx.bar_index, fx.fx_type.value)
+                if key not in seen:
+                    seen.add(key)
+                    valid.append(fx)
+        valid = _enforce_fx_independence(valid, self._config)
+        self._result.valid_fractals = valid
 
         # Step 5: 中枢计算
         zss = find_zss(bis, self._config)
@@ -633,6 +765,20 @@ class ChanlunAnalyser:
                 self._result.bcs_l1 = r0.bcs
                 self._result.zsds_l1 = r0.zsds
                 self._result.qsds_l1 = r0.qsds
+
+        # Step 10.5: 真·区间套确认（统一实现，见 chanlun/qujiantao.py）。
+        # 以递归级别作为「低级别」，对基础级别每个 MMD 做跨级别确认。
+        # 无递归级别时 qujiantao_for_result 整列返回 None（不编造评分）。
+        if mmds:
+            try:
+                from easy_tdx.chanlun.qujiantao import qujiantao_for_result
+
+                qt_results = qujiantao_for_result(self._result, 0)
+                for m, qt in zip(mmds, qt_results):
+                    m._qujiantao = qt
+            except Exception:
+                # 区间套是增强信息，失败不影响主流程
+                pass
 
         return self._result
 

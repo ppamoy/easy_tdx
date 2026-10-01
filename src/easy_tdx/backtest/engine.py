@@ -64,6 +64,8 @@ class BacktestEngine:
         slippage_model: SlippageModel | None = None,
         execution_model: ExecutionModel | None = None,
         warmup_bars: int = 0,
+        respect_price_limit: bool = True,
+        limit_pct: float = 0.10,
     ):
         """Initialize engine.
 
@@ -104,6 +106,9 @@ class BacktestEngine:
         self._slippage_model = slippage_model
         self._execution_model = execution_model
         self._warmup_bars = max(int(warmup_bars), 0)
+        # V-AUDIT: 涨跌停约束（涨停禁买/跌停禁卖）
+        self._respect_price_limit = respect_price_limit
+        self._limit_pct = limit_pct
         # 最近一次信号生成使用的策略实例（供后续步骤读取策略内预计算数据，
         # 如缠论策略的 _signal_traces 买卖点信号追踪）。
         self._last_strategy: Strategy | None = None
@@ -155,6 +160,8 @@ class BacktestEngine:
                 stamp_tax=self._stamp_tax,
                 slippage=self._slippage,
                 slippage_model=self._slippage_model,
+                respect_price_limit=self._respect_price_limit,
+                limit_pct=self._limit_pct,
             )
             trades = simulator.simulate(
                 signals=signals,
@@ -186,7 +193,11 @@ class BacktestEngine:
         )
 
         # Step 5.5: 缠论策略专属信号准确度（按买卖点类型分组，复用现有函数）
-        if self._strategy_cls.__name__ in ("ChanlunStrategy", "ChangyingChanlunStrategy"):
+        if self._strategy_cls.__name__ in (
+            "ChanlunStrategy",
+            "ChangyingChanlunStrategy",
+            "ChanlunPairStrategy",
+        ):
             try:
                 from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type
 

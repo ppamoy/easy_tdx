@@ -63,6 +63,18 @@ class TestMarketRouter:
         resp = client.get("/api/v1/market/stat")
         assert resp.status_code == 200
 
+    def test_market_stat_upstream_unavailable_is_503(self) -> None:
+        """V-28 bad-first：上游统计指数（880005/880001/880006）全部不可得时，
+        路由应返回 503 + 可读指引（环境问题），而非 500 Internal server error。
+        修复前 get_market_stat 抛 RuntimeError → 全局处理器转 500，误导用户。"""
+        client = _make_app_client()
+        client.app.state.tdx_client.get_market_stat = AsyncMock(
+            side_effect=RuntimeError("无法获取市场统计数据")
+        )
+        resp = client.get("/api/v1/market/stat")
+        assert resp.status_code == 503, f"预期 503，实际 {resp.status_code}"
+        assert "统计" in resp.json()["detail"]
+
     def test_fund_flow_success(self) -> None:
         client = _make_app_client()
         client.app.state.tdx_client.get_fund_flow = AsyncMock(return_value=_small_df())

@@ -475,21 +475,64 @@ class TestChanlunStrategyPositionPct:
         assert ChanlunStrategy().p["position_pct"] == 1.0
 
     def test_position_pct_half_buys_half_size(self) -> None:
-        """position_pct=0.5 买入数量约为全仓的一半（100 股整数手）。"""
+        """position_pct=0.5 买入数量约为全仓的一半（100 股整数手）。
+
+        V-AUDIT: 守卫默认开启后，信号生效点整体延后 confirm_lag 根，
+        测试结束时刻可能恰好空仓（300 根短数据尾部信号被确认点平移出
+        窗口）。本测试验证的是仓位折算比例，与守卫正交——两侧显式关
+        守卫，固定在无守卫信号集上比较。
+        """
         df = _make_trending_df(300, "up")
-        engine_full = BacktestEngine(ChanlunStrategy(), cash=100000)
-        engine_half = BacktestEngine(ChanlunStrategy(position_pct=0.5), cash=100000)
+        engine_full = BacktestEngine(ChanlunStrategy(lookahead_guard=False), cash=100000)
+        engine_half = BacktestEngine(
+            ChanlunStrategy(position_pct=0.5, lookahead_guard=False), cash=100000
+        )
 
         res_full = engine_full.run(df)
         res_half = engine_half.run(df)
         assert "total_return" in res_full.performance
         assert "total_return" in res_half.performance
 
-        s_full = engine_full._last_strategy
-        s_half = engine_half._last_strategy
-        assert s_full is not None and s_half is not None
+        # V731：断言对象改为「策略实际发出的买入信号数量」，不再用
+        # ``_position_size``（期末持仓）代替。
+        #
+        # 原因一（直接触发）：_position_size 在每次 SELL 时被清零
+        # （engine.py:483），它表达的是「回测结束时刻是否仍持仓」，而不是
+        # 「是否买入过」。V731 的 3买/3卖 定位修复让该数据集尾部多出一个
+        # 真实 3买→1卖，两侧都以空仓收尾（均为 0.0），原断言 `> 0` 随之失败
+        # ——这是断言选错了观测量，不是仓位折算回归。
+        #
+        # 原因二（顺带暴露的既有缺陷）：本测试原先能通过，只是因为期末恰好
+        # 都持仓。经查 position_pct 在默认 position_mode="full" 下**根本不
+        # 生效**——orders.py:290 ``position_mode == "full" or signal_size == 0``
+        # 优先按可用现金全仓估算，直接丢弃了 _do_buy 算出的 signal_size，
+        # 故 pct=1.0 与 pct=0.5 的成交手数完全相同（6900/5300/4600）。
+        # 该缺陷先于本次改动存在（已用 git stash 对照确认），属回测引擎
+        # 仓位口径问题，与缠论买卖点审计正交，另行跟进；此处只锁定
+        # 「策略层按 pct 折算」这一本测试真正要守的行为，用 fixed 模式
+        # 让 signal_size 直通成交，避免被引擎全仓估算掩盖。
+        def _buy_signal_sizes(strat: Any, res: object) -> list[float]:
+            t = getattr(res, "trades", None)
+            assert t is not None, "回测结果缺少 trades"
+            buy_rows = t[t["direction"] == "BUY"]
+            return [float(x) for x in buy_rows["size"]]
+
+        engine_full_f = BacktestEngine(
+            ChanlunStrategy(lookahead_guard=False), cash=100000, position_mode="fixed"
+        )
+        engine_half_f = BacktestEngine(
+            ChanlunStrategy(position_pct=0.5, lookahead_guard=False),
+            cash=100000,
+            position_mode="fixed",
+        )
+        res_full_f = engine_full_f.run(df)
+        res_half_f = engine_half_f.run(df)
+
+        buys_full = _buy_signal_sizes(engine_full_f._last_strategy, res_full_f)
+        buys_half = _buy_signal_sizes(engine_half_f._last_strategy, res_half_f)
         # 两者都应发生过买入（趋势数据 + 默认参数）
-        assert s_full._position_size > 0
-        assert s_half._position_size > 0
-        # 半仓买入数量应明显小于全仓（且不超过全仓）
-        assert s_half._position_size < s_full._position_size
+        assert buys_full, "全仓策略未发生任何买入"
+        assert buys_half, "半仓策略未发生任何买入"
+        # 半仓买入数量应明显小于全仓（逐笔比较 + 总量比较）
+        assert sum(buys_half) < sum(buys_full)
+        assert all(h < f for h, f in zip(buys_half, buys_full))

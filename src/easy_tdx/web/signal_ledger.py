@@ -98,7 +98,9 @@ def signal_returns(
             continue
         bar_index = int(bar_index)
         sig_type = str(sig.get("type", ""))
-        direction = "buy" if ("buy" in sig_type.lower() or sig_type.lower().endswith("b")) else "sell"
+        direction = (
+            "buy" if ("buy" in sig_type.lower() or sig_type.lower().endswith("b")) else "sell"
+        )
         for h in horizons:
             raw, bench, excess = forward_returns(closes, bar_index, h, index_closes)
             if raw is None:
@@ -130,6 +132,7 @@ def aggregate_signal_returns(
         {"overall": {...}, "by_type": {类型: {...}}}；
         每档含 signals/hit_rate/excess_hit_rate/avg_return/excess_avg_return。
     """
+
     def _agg(rs: list[SignalReturnRecord]) -> dict[str, Any]:
         if not rs:
             return {

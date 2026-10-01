@@ -23,6 +23,7 @@ from typing import Any, cast
 
 import numpy as np
 from fastapi import APIRouter, Depends
+from pydantic import Field, field_validator
 
 from easy_tdx.web.deps import get_client, get_mac_client_optional
 from easy_tdx.web.klines import fetch_qfq_klines
@@ -275,9 +276,32 @@ def _detect_candlestick_patterns(
 # ── 诊断主函数 ──────────────────────────────────────────────────────────────────
 
 
+class DiagnoseRequest(StockIdentifier):
+    """诊断请求：在 StockIdentifier 之上带一个 K 线周期字段。
+
+    新增 category 是为了让诊断页的 K 线图与缠论/MACD 结论跟所选周期一致
+    （此前内部写死 DAY，前端若展示其它周期会与诊断结论对不上）。
+    """
+
+    category: str = Field(
+        default="DAY",
+        description="K线周期：DAY/WEEK/MONTH/MIN_5/MIN_15/MIN_30/MIN_60",
+    )
+
+    @field_validator("category")
+    @classmethod
+    def _check_category(cls, v: str) -> str:
+        from easy_tdx.web.routers.chanlun import FREQUENCY_MAP  # 避免顶层循环导入
+
+        key = (v or "DAY").upper()
+        if key not in FREQUENCY_MAP:
+            raise ValueError(f"不支持的周期 '{v}'，可选: {sorted(FREQUENCY_MAP)}")
+        return key
+
+
 @router.post("/diagnosis/analyze")
 async def diagnose_stock(
-    req: StockIdentifier,
+    req: DiagnoseRequest,
     client: Any = Depends(get_client),
     mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
@@ -286,6 +310,7 @@ async def diagnose_stock(
     请求参数：
     - market: 市场 (SZ/SH)
     - code: 6位股票代码
+    - category: K线周期，默认 DAY（与前端诊断页的周期选择联动）
     """
     from easy_tdx.chanlun import ChanlunAnalyser
     from easy_tdx.chanlun.mmd import (
@@ -300,13 +325,18 @@ async def diagnose_stock(
     code = req.code
     symbol = f"{market}{code}"
 
-    # 获取日线数据（MAC 优先 + QFQ，与 /bars 同一价格体系；标准 TDX 失效时仍可用）
+    # 获取 K 线数据（MAC 优先 + QFQ，与 /bars 同一价格体系；标准 TDX 失效时仍可用）
+    # 周期跟随请求的 category，保证诊断结论与前端 K 线图展示的是同一份数据。
+    from easy_tdx.web.routers.chanlun import resolve_frequency  # 避免顶层循环导入
+
+    category = getattr(req, "category", None) or "DAY"
+    frequency = resolve_frequency(category)
     df = await fetch_qfq_klines(
         mac_client,
         client,
         req.market,
         req.code,
-        "DAY",
+        category,
         0,
         500,
     )
@@ -327,7 +357,8 @@ async def diagnose_stock(
     latest_date = dates[-1] if dates else ""
 
     # ── 缠论分析 ──────────────────────────────────────────────────────
-    analyser = ChanlunAnalyser(code=symbol, frequency="daily")
+    # frequency 跟随 category（FREQUENCY_MAP 值即 ChanlunAnalyser 的频率名）
+    analyser = ChanlunAnalyser(code=symbol, frequency=frequency)
     result = analyser.process_klines(df)
 
     # ── MACD分析 ──────────────────────────────────────────────────────
@@ -2706,13 +2737,17 @@ def _get_position_notes(
 async def quick_diagnosis(
     market: str = "SZ",
     code: str = "",
+    category: str = "DAY",
     client: Any = Depends(get_client),
     mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
-    """快速诊断接口（GET），方便浏览器直接访问。"""
+    """快速诊断接口（GET），方便浏览器直接访问。
+
+    category: K线周期，默认 DAY；与 POST /diagnosis/analyze 的 category 同义。
+    """
     if not code:
         return {"error": "请提供股票代码"}
-    req = StockIdentifier(market=market, code=code)
+    req = DiagnoseRequest(market=market, code=code, category=category)
     # V720: 显式传 mac_client（此前 diagnose_stock 默认值含 Depends，直接调用
     # 不会触发依赖注入，mac_client 落成裸 Depends 对象 → AttributeError 500）。
     return await diagnose_stock(req, client, mac_client)

@@ -132,3 +132,48 @@ def test_fractal_stability_confirmation() -> None:
 
     flat_cklines = [_k(i, high=10.0, low=9.0) for i in range(6)]
     assert not _check_fractal_stability(top, flat_cklines, Direction.UP)
+
+
+def test_pending_opposite_more_extreme_same_type_replaces_start() -> None:
+    """pending_opposite 期间出现更极端同型分型应替换起点（V740 回归）。
+
+    场景：底(8.0)→顶(10.0)成笔后，底(9.0)因 gap 不足 pending；此时出现更
+    高的顶(11.0)。缠论「相邻同型取更极端」——两底之间的最高顶才是笔端点，
+    故上一笔应延伸到 11.0，而非停在较低的 10.0（旧实现因 pending 保护跳过了
+    更极端顶，导致笔端点取低顶、伪拆分）。
+    """
+    from easy_tdx.chanlun.bi import find_bis
+
+    fxs = [
+        _fx(FXType.DI, 8.0, [_k(0), _k(1), _k(2)]),
+        _fx(FXType.DING, 10.0, [_k(5), _k(6), _k(7)]),  # gap(底,顶)=4 ≥3 → 成笔
+        _fx(FXType.DI, 9.0, [_k(8), _k(9), _k(10)]),  # gap(顶,底)=2 <3 → pending
+        _fx(FXType.DING, 11.0, [_k(11), _k(12), _k(13)]),  # 更高顶，应替换起点+清 pending
+        _fx(FXType.DI, 9.5, [_k(20), _k(21), _k(22)]),  # gap(新顶,底)=8 ≥3 → 成笔
+    ]
+    bis = find_bis(fxs, ChanlunConfig(bi_type="new"))
+    assert len(bis) == 2, f"应为 2 笔（上+下），实际 {len(bis)}"
+    # 第一笔（上）终点必须落在更高的顶 11.0，而非较低的 10.0
+    assert bis[0].end.val == 11.0, f"向上笔终点应取最高顶 11.0，实际 {bis[0].end.val}"
+    assert bis[0].direction == Direction.UP
+    # 第二笔（下）从 11.0 起
+    assert bis[1].start.val == 11.0
+    assert bis[1].direction == Direction.DOWN
+
+
+def test_pending_opposite_non_extreme_same_type_keeps_start() -> None:
+    """pending_opposite 期间出现不更极端的同型分型应保留旧起点（不误替换）。"""
+    from easy_tdx.chanlun.bi import find_bis
+
+    fxs = [
+        _fx(FXType.DI, 8.0, [_k(0), _k(1), _k(2)]),
+        _fx(FXType.DING, 12.0, [_k(5), _k(6), _k(7)]),  # 成笔
+        _fx(FXType.DI, 9.0, [_k(8), _k(9), _k(10)]),  # gap 不足 → pending
+        _fx(FXType.DING, 10.0, [_k(11), _k(12), _k(13)]),  # 较低顶，不更极端 → 保留旧顶
+        _fx(FXType.DI, 9.5, [_k(20), _k(21), _k(22)]),  # 与旧顶(12.0) gap 够 → 成笔
+    ]
+    bis = find_bis(fxs, ChanlunConfig(bi_type="new"))
+    assert len(bis) == 2
+    # 第一笔终点保留在较高的旧顶 12.0，未被较低顶 10.0 替换
+    assert bis[0].end.val == 12.0
+    assert bis[1].start.val == 12.0

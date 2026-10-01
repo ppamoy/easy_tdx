@@ -339,6 +339,8 @@ def _run_backtest(df: pd.DataFrame, req: BacktestRequest) -> dict[str, Any]:
         stamp_tax=req.stamp_tax,
         slippage=req.slippage,
         execution=req.execution,
+        respect_price_limit=req.respect_price_limit,
+        limit_pct=req.limit_pct,
     )
     result = engine.run(df)
     result_dict = serialize_result(result)

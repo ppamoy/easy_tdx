@@ -84,6 +84,18 @@ const qsds = ref<XdItem[]>([])
 const zss = ref<ZsItem[]>([])
 const mmds = ref<MmdItem[]>([])
 const fxs = ref<FxItem[]>([])
+// 展示用「有效分型」（笔端点分型，相邻不共用K线）。原始 fractals 含滑动窗口产生
+// 的重叠分型，缠论原文要求相邻分型至少间隔 1 根独立K线，直接渲染会画伪分型。
+// 详见 scripts/verify_fx_independence.py。
+const validFxs = ref<FxItem[]>([])
+/** 分型列表 → 前端字段形状（原始 fractals 与 valid_fractals 结构一致）。 */
+const mapFx = (fr: any[]): FxItem[] =>
+  (fr ?? []).map((f: any) => ({
+    fx_type: f.fx_type,
+    date: f.date,
+    val: f.val,
+    bar_index: f.bar_index,
+  }))
 const name = ref('')
 const market = ref('')
 
@@ -158,12 +170,8 @@ async function jumpVerifyRange() {
     rawDetail.value = d
     analysisLevel.value = 'bi'
     applyAnalysisLevel('bi', d)
-    fxs.value = (d.fractals ?? []).map((f: any) => ({
-      fx_type: f.fx_type,
-      date: f.date,
-      val: f.val,
-      bar_index: f.bar_index,
-    }))
+    fxs.value = mapFx(d.fractals)
+    validFxs.value = mapFx(d.valid_fractals)
     selectedMmdIdx.value = -1
     revealCursor.value = undefined
     isTimeJump.value = true
@@ -241,6 +249,10 @@ function applyAnalysisLevel(level: 'bi' | 'xd', data: any) {
       confidence: m.confidence ?? 0,
       zs_index: m.zs_index ?? null,
     }))
+    // 递归级别（xd）：后端 levels 不含分型字段，不清空会残留 bi 级别分型，
+    // 与本级别笔/中枢不匹配（详见 ChanlunView.applyAnalysisLevel 同处说明）。
+    fxs.value = []
+    validFxs.value = []
     return
   }
 
@@ -257,6 +269,10 @@ function applyAnalysisLevel(level: 'bi' | 'xd', data: any) {
     confidence: m.confidence ?? 0,
     zs_index: m.zs_index ?? null,
   }))
+  // 回到笔级别：分型只在顶层数据里（levels 中没有），必须恢复，
+  // 否则从 xd 切回 bi 后分型会永久丢失。
+  fxs.value = mapFx(data?.fractals)
+  validFxs.value = mapFx(data?.valid_fractals)
 }
 
 function onAnalysisLevelChange() {
@@ -286,12 +302,8 @@ async function selectStock(code: string) {
     rawDetail.value = d
     analysisLevel.value = 'bi'
     applyAnalysisLevel('bi', d)
-    fxs.value = (d.fractals ?? []).map((f: any) => ({
-      fx_type: f.fx_type,
-      date: f.date,
-      val: f.val,
-      bar_index: f.bar_index,
-    }))
+    fxs.value = mapFx(d.fractals)
+    validFxs.value = mapFx(d.valid_fractals)
   } catch (e) {
     error.value = formatError(e)
   } finally {
@@ -390,6 +402,13 @@ onMounted(() => {
 
     <div v-if="error" class="error-banner">⚠ {{ error }}</div>
 
+    <div class="bias-banner" role="note">
+      ⚠️ 样本偏差警示：本页 20 只标的为**当前的大市值龙头**（茅台、宁德、比亚迪等），
+      属于事后筛选的幸存者样本——它们都活到了今天且做大。用此样本统计「买卖点
+      命中率/胜率」会系统性偏高，不能外推到全市场（退市股、ST 股不在样本里）。
+      结论仅用于复盘验证单个买卖点的形态语义，不作为策略收益预期依据。
+    </div>
+
     <div class="verify-layout">
       <!-- 左列表（20 只标的） -->
       <aside class="stock-list">
@@ -443,6 +462,7 @@ onMounted(() => {
               :zss="zss as any"
               :mmds="mmds as any"
               :fxs="fxs as any"
+              :validFxs="validFxs as any"
               :frequency="category"
               :reveal-index="revealCursor"
               :single-zs-index="singleZsIndex"
@@ -519,6 +539,16 @@ onMounted(() => {
 .error-banner {
   background: #7f1d1d;
   color: #fecaca;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
+}
+.bias-banner {
+  background: rgba(146, 64, 14, 0.18);
+  border: 1px solid rgba(217, 119, 6, 0.45);
+  color: #fcd34d;
+  font-size: 12px;
+  line-height: 1.6;
   padding: 8px 12px;
   border-radius: 6px;
   margin-bottom: 12px;

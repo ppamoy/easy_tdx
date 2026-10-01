@@ -145,7 +145,9 @@ def audit_accuracy(
         "marks": report.get("marks"),
         "files": report.get("files"),
         "changying_per_class": {
-            cat: {k: s for k, s in stats.items() if k in ("samples", "pit_violations", "data_missing")}
+            cat: {
+                k: s for k, s in stats.items() if k in ("samples", "pit_violations", "data_missing")
+            }
             for cat, stats in ((report.get("changying") or {}).get("per_class") or {}).items()
         },
         "chanlun_signal_count": (report.get("chanlun") or {}).get("signal_count"),

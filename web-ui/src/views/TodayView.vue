@@ -64,6 +64,7 @@ async function loadEarlierToday() {
       zss: shiftStructure(selected.value.zss as any[], shift),
       mmds: shiftStructure(selected.value.mmds as any[], shift),
       fractals: shiftStructure(selected.value.fractals as any[], shift),
+      valid_fractals: shiftStructure(selected.value.valid_fractals as any[], shift),
       bcs: shiftStructure(selected.value.bcs as any[], shift),
       macd: padMacdHead(selected.value.macd as any, shift),
     } as DashboardAction
@@ -121,6 +122,7 @@ async function jumpTodayRange() {
       zss: data.zss ?? [],
       mmds: data.mmds ?? [],
       fractals: data.fractals ?? [],
+      valid_fractals: data.valid_fractals ?? [],
       bcs: data.bcs ?? [],
       macd: data.macd ?? null,
     } as DashboardAction
@@ -353,6 +355,7 @@ function pickRow(row: DashboardAction) {
           :zss="(selected.zss as any) ?? []"
           :mmds="(selected.mmds as any) ?? []"
           :fxs="(selected.fractals as any) ?? []"
+          :validFxs="(selected.valid_fractals as any) ?? []"
           :bcs="(selected.bcs as any) ?? []"
           :macd="(selected.macd as any) ?? undefined"
           frequency="daily"
@@ -403,12 +406,15 @@ function pickRow(row: DashboardAction) {
             <td>{{ a.stop ?? '—' }}</td>
             <td>{{ a.target ?? '—' }}</td>
             <td class="msg-cell" :title="a.season_note ?? ''">
-              {{ a.msg ?? '—' }}<span v-if="a.season_note" class="season-inline"> · {{ a.season_note }}</span>
+              {{ a.msg ?? '—'
+              }}<span v-if="a.season_note" class="season-inline"> · {{ a.season_note }}</span>
             </td>
           </tr>
         </tbody>
       </table>
-      <p v-else class="hint">暂无提醒——生成今日看板或创建信号监控任务后，买入/卖出信号会自动出现在这里。</p>
+      <p v-else class="hint">
+        暂无提醒——生成今日看板或创建信号监控任务后，买入/卖出信号会自动出现在这里。
+      </p>
     </div>
     <p v-if="!result && !loading && !error" class="hint">
       选择日期后点击「生成今日看板」，一屏聚合选股池、批量择时与四季仓位建议。

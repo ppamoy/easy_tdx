@@ -274,6 +274,34 @@ class TestFundamentalRouterValidation:
         )
         assert resp.status_code == 400
 
+    def test_screen_bad_pool_shape_is_400_not_500(self) -> None:
+        """V-30 bad-first：pool 传字符串（如把 stock_type 误传给 pool）时应返回
+        400 + 可读提示，而非 500 "'str' object has no attribute 'get'"。
+        smoke 脚本 V-28 首跑发现的真实 500。修复前此测试必挂。"""
+        resp = _make_app_client().post(
+            "/api/v1/fundamental/screen",
+            json={"date": "2025-06-30", "pool": "vegetable"},
+        )
+        assert resp.status_code == 400, f"预期 400，实际 {resp.status_code}"
+        assert "pool 形态错误" in resp.json()["detail"]
+
+    def test_verify_bad_pool_shape_is_400_not_500(self) -> None:
+        """V-30：/verify 同款守卫（pool 字符串 → 400 而非 500）。"""
+        resp = _make_app_client().post(
+            "/api/v1/fundamental/verify",
+            json={"dates": ["2025-06-30"], "pool": "vegetable"},
+        )
+        assert resp.status_code == 400
+        assert "pool 形态错误" in resp.json()["detail"]
+
+    def test_screen_pool_with_non_dict_items_is_400(self) -> None:
+        """V-30：pool 列表里混入非 dict 元素同样拦截。"""
+        resp = _make_app_client().post(
+            "/api/v1/fundamental/screen",
+            json={"date": "2025-06-30", "pool": ["600519"]},
+        )
+        assert resp.status_code == 400
+
 
 # ── announcement（参数校验 + mock 客户端） ────────────────────────────────────
 

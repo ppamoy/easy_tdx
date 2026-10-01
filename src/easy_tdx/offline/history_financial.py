@@ -33,8 +33,10 @@ def read_history_financial(filepath: str | Path) -> list[FinancialRecord]:
     results: list[FinancialRecord] = []
     for code, market_byte, report_date, fields in raw_records:
         try:
-            market = Market(market_byte)
-        except ValueError:
+            # codec 解出的 market_byte 是 1 字节 bytes（如 b"\x01"），IntEnum 不接受
+            # bytes 值——这里统一转 int 再查表；非法值（如 9）回退深圳。
+            market = Market(market_byte[0] if isinstance(market_byte, bytes) else market_byte)
+        except (ValueError, IndexError):
             market = Market.SZ  # 默认深圳
         results.append(
             FinancialRecord(

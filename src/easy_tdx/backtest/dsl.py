@@ -1,6 +1,8 @@
-"""DSL 策略定义模块 (P1 — 骨架)。
+"""DSL 策略定义模块。
 
-v1 提供 @dsl_strategy 装饰器的基本实现。
+v1 提供 @dsl_strategy 装饰器：把返回 (buy_mask, sell_mask) 的函数编译为
+可直接进 BacktestEngine 的 Strategy。init 时一次性预计算全量 mask（V-35
+修复：骨架版从未调用 _signal_func，导致全链路 0 交易）。
 字符串 DSL 解析器将在后续版本实现。
 """
 
@@ -10,7 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-from numpy.typing import NDArray
+import pandas as pd
 
 from .strategy import Strategy
 
@@ -32,11 +34,26 @@ def dsl_strategy(func: Callable[..., Any]) -> type[Strategy]:
 
     class DSLStrategy(Strategy):
         _signal_func = staticmethod(func)
-        _buy_mask: NDArray[np.bool_] | None = None
-        _sell_mask: NDArray[np.bool_] | None = None
 
         def init(self) -> None:
-            pass
+            # 数据绑定完成后一次性执行用户函数，预计算全量买卖 mask。
+            # 此前骨架版从未调用 _signal_func（_buy_mask/_sell_mask 恒 None），
+            # next() 永远静默返回 → 0 交易（V-35 修复，见 tests/unit/test_dsl_strategy.py）。
+            proxy = self._data_proxy
+            if proxy is None:
+                return
+            df = pd.DataFrame(
+                {col: proxy._arrays[col] for col in proxy._arrays},
+                index=range(len(next(iter(proxy._arrays.values())))),
+            )
+            buy_mask, sell_mask = type(self)._signal_func(df)
+            self._buy_mask = np.asarray(buy_mask, dtype=bool)
+            self._sell_mask = np.asarray(sell_mask, dtype=bool)
+            n = len(self._buy_mask)
+            if len(self._sell_mask) != n:
+                raise ValueError(
+                    f"dsl_strategy 返回的 buy/sell 长度不一致: {n} vs {len(self._sell_mask)}"
+                )
 
         def next(self) -> None:
             buy = self._buy_mask

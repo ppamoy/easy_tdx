@@ -337,12 +337,8 @@ class TestD17SyncScreenTopN:
 
         # 回退链第一环 local-full（marks 全量）也必须隔离——本机真实跑过
         # changying-mark 后 1602 条真实标记会抢先命中，在线 mock 永不触发。
-        monkeypatch.setattr(
-            marks_mod, "_db_path", lambda: tmp_path / "marks.db"
-        )
-        monkeypatch.setattr(
-            pool_mod, "_db_path", lambda: tmp_path / "pool.db"
-        )
+        monkeypatch.setattr(marks_mod, "_db_path", lambda: tmp_path / "marks.db")
+        monkeypatch.setattr(pool_mod, "_db_path", lambda: tmp_path / "pool.db")
 
     def _fake_run_screen_out(self, n: int) -> dict[str, object]:
         return {

@@ -1949,6 +1949,31 @@ def _has_meaningful_pullback(pullback_low: float, last_1st_high: float | None) -
     )
 
 
+def _zs_frozen_k(zs: ZS) -> int:
+    """返回中枢 zg/zd **被确定（冻结）**的原始K线索引。
+
+    zs.py::find_zss 的原文口径：ZG/ZD 由前两条线的重叠确定后即冻结，第 3 条线
+    起为中枢延伸，只更新 GG/DD、不再改变 ZG/ZD（``if len(candidate_lines) <= 2``）。
+    因此中枢走到第 2 条线终点时，其 zg/zd 已确定且此后不再变化——这是该中枢
+    「可用于判定」的最早时刻，远早于它整体关闭的时刻（``zs.end.k.k_index``）。
+
+    用关闭时刻当门槛会把大量本可合法参考的中枢误判为「尚未存在」（实测
+    000001_daily 的 ZS0：zg/zd 在 k=20 冻结，中枢直到 k=118 才关闭）。
+    """
+    lines = getattr(zs, "lines", None) or []
+    if len(lines) >= 2:
+        end = lines[1].end
+        if end is not None and end.k is not None:
+            return int(end.k.k_index)
+    if len(lines) == 1:
+        end = lines[0].end
+        if end is not None and end.k is not None:
+            return int(end.k.k_index)
+    if zs.end is not None and zs.end.k is not None:
+        return int(zs.end.k.k_index)
+    return 0
+
+
 def _reference_zs_for_bi(zss: list[ZS], bi: BI) -> ZS | None:
     """返回笔所对应的"同期参考中枢"：在笔开始前最后一个已完成的（或最近的）中枢。
 
@@ -1962,20 +1987,30 @@ def _reference_zs_for_bi(zss: list[ZS], bi: BI) -> ZS | None:
     bi_start_k = bi.start.k.k_index
     ref: ZS | None = None
     for zs in zss:
-        if zs.end is None or zs.end.k is None:
-            continue
-        if zs.end.k.k_index < bi_start_k:
-            ref = zs  # 记录最后一个在该笔之前结束的中枢
+        # V731：不再要求 zs.end 非空。判定可用性只看 zg/zd 的冻结时刻，
+        # 而该时刻由 zs.lines 推出；某些构造（如单测里的 _mk_zs_raw）会把
+        # zs.end 留空但 lines 完整，旧的 `zs.end is None: continue` 会直接
+        # 跳过它们，导致一/二类信号整体消失。
+        #
+        # 判据为 zg/zd 的**冻结时刻**：zs.py::find_zss 的原文口径是 ZG/ZD 由
+        # **前两条线**的重叠确定后即冻结（`if len(candidate_lines) <= 2:`），
+        # 第 3 条线起为中枢延伸，**只更新 GG/DD、不再改变 ZG/ZD**。故只要中枢
+        # 已走到第 2 条线终点，其 zg/zd 就已确定且此后不会再变——用它们判定
+        # 「是否跌破 ZD」不依赖任何未来数据。
+        #
+        # 旧实现用整个中枢的关闭时刻 `zs.end.k.k_index` 作门槛（000001_daily 上
+        # ZS0 的 zg/zd 在 k=20 即冻结，但中枢直到 k=118 才关闭），把大量本可
+        # 合法参考的中枢误判为「尚未存在」；再叠加旧兜底「回退到第一个/最后一个
+        # 中枢」，结果反而返回**超前最多 115 根K线**的未来中枢（标准未来函数，
+        # 实测 8/12 笔中招）。两者一并修正。
+        if _zs_frozen_k(zs) <= bi_start_k:
+            ref = zs
         else:
             break  # zss 按时间排序，之后的都更晚
-    # 若无已完成先导中枢，退而取最早的完成中枢，再退而取最后的中枢（可能未完成）。
-    # 最终跌破/突破笔正是"关闭"最后中枢的那一笔，此时参考该中枢是合法的。
-    if ref is None:
-        for zs in zss:
-            if zs.done:
-                return zs
-        if zss:
-            return zss[-1]
+
+    # V731：删除「回退到第一个/最后一个中枢」的兜底路径——它会返回在该笔之后
+    # 才成立的中枢（未来函数）。该笔之前确实无可用中枢时返回 None，由调用方
+    # 跳过（两处调用点均已处理 None），不借未来信息凑信号。
     return ref
 
 
@@ -2017,6 +2052,9 @@ def _find_first_type_mmds(
     else:
         threshold = base_threshold
 
+    # V731：背驰力度是否按窗口根数归一（消除「长而慢反而力度更大」的偏置）。
+    _norm = bool(getattr(config, "bi_force_normalize", False))
+
     # V14: 获取最近高低点用于缺口分析
     recent_highs = highs[-50:] if highs else None
     recent_lows = lows[-50:] if lows else None
@@ -2051,7 +2089,9 @@ def _find_first_type_mmds(
                 if not _has_meaningful_rebound(rebound_high, last_1buy_low):
                     continue
         # 检查背驰（识别所有有效背驰点）
-        if _is_strong_beichi(bi, bis, zss, closes, threshold):
+        if _is_strong_beichi(
+            bi, bis, zss, closes, threshold, normalize_by_bars=_norm
+        ):
             strength = _get_beichi_strength(bi, bis, zss, closes)
             msg_parts = [
                 f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={ref_zs.zd:.2f}"
@@ -2123,7 +2163,9 @@ def _find_first_type_mmds(
                 if not _has_meaningful_pullback(pullback_low, last_1sell_high):
                     continue
         # 检查背驰（识别所有有效背驰点）
-        if _is_strong_beichi(bi, bis, zss, closes, threshold, direction="up"):
+        if _is_strong_beichi(
+            bi, bis, zss, closes, threshold, direction="up", normalize_by_bars=_norm
+        ):
             strength = _get_beichi_strength(bi, bis, zss, closes, direction="up")
             msg_parts = [
                 f"1卖: 顶背驰(强度={strength}), 高点={bi.high:.2f} > 中枢上沿={ref_zs.zg:.2f}"
@@ -2191,6 +2233,11 @@ def _find_second_type_mmds(
     """
     mmds: list[MMD] = []
 
+    # V731：2买/2卖 回调笔的时间窗口上限（0 = 不限，纯原文口径）。
+    # 原硬编码 15/20 根会静默吞掉 28% 的候选（实测 46 个相邻笔间隔），
+    # 且绝对根数阈值跨周期不等价。默认放开，保留开关以便按周期收紧。
+    _max_2nd_span = int(getattr(config, "mmd_2nd_span_max_bars", 0) or 0)
+
     # V8: 收集所有有效的1买/1卖（不只是第一个）
     buy_1_list = [m for m in first_type_mmds if m.mmd_type == MMDType.BUY_1]
     sell_1_list = [m for m in first_type_mmds if m.mmd_type == MMDType.SELL_1]
@@ -2232,8 +2279,15 @@ def _find_second_type_mmds(
         if leave_range <= 0:
             continue
 
-        _ = leave_range * 0.5  # 严格条件（2买）
-        _ = leave_range * 0.7  # 宽松条件（类二买）
+        # V731：买侧回撤深度门槛**此前是死代码**——值赋给 `_` 后立即丢弃，
+        # 实际判定只看 `bi.low > buy_1_low`（不创新低），于是回撤 99%（几乎
+        # 回到 1买 原点）照样标记 2买；而卖侧 `max_pullback_strict/loose`
+        # 真的参与判定，反弹 ≥75% 时连类二卖都消失。
+        # 实测对照（同一市场形态）：买侧 20%→99% 全部产出 2buy；卖侧
+        # 20%→2sell、55%→2sell_s、75%→无信号。买卖两侧用同一形态却一放一收，
+        # 回测会产生**系统性做多偏误**。现补齐买侧门槛，使两侧对称。
+        max_pullback_strict = leave_range * 0.5  # 严格条件（2买）
+        max_pullback_loose = leave_range * 0.7  # 宽松条件（类二买）
 
         # V8: 在离开笔之后找回调笔，限制总时间窗口在10-40根K线内
         found_2buy = False
@@ -2245,14 +2299,28 @@ def _find_second_type_mmds(
 
             if bi.direction.value == "down":
                 # 检查是否是2买（严格条件）：低点不创新低 + 回撤不超过50%
-                if not found_2buy and bi.low > buy_1_low:
+                # V731：补上此前缺失的「回撤不超过 50%」判定（注释一直这么写，
+                # 但代码从未实现，见上方 max_pullback_strict 处说明）。
+                if (
+                    not found_2buy
+                    and bi.low > buy_1_low
+                    and (leave_high - bi.low) < max_pullback_strict
+                ):
                     pullback_from_high = leave_high - bi.low
                     pct = (pullback_from_high / leave_range * 100) if leave_range > 0 else 0.0
                     pct = max(0.0, min(100.0, pct))
 
                     # V8: 时间窗口检查（10-30根K线内）
+                    # V731：上限改为可配置（默认 0 = 不限，纯原文口径）。
+                    # 原文对 2买 只要求「1买后回调不创新低」，**无K线数限制**；
+                    # 实测 5 个 fixture 共 46 个相邻笔间隔中 28% 超过 15 根，
+                    # 硬编码 15 会静默吞掉这些信号；且该阈值是**绝对根数**，
+                    # 周线/月线上同一形态的间隔只有日线的 1/5、1/20，跨周期
+                    # 含义完全不同（日线被拒的形态在周线反而通过）。
                     time_span = bi.end.k.k_index - leave_bi_up.end.k.k_index
-                    if time_span < 1 or time_span > 15:
+                    if time_span < 1 or (
+                        _max_2nd_span > 0 and time_span > _max_2nd_span
+                    ):
                         continue
 
                     # V8: 与已有买卖点距离检查
@@ -2302,13 +2370,21 @@ def _find_second_type_mmds(
                     existing_positions.add(bi.end.k.k_index)
 
                 # 检查是否是类二买（宽松条件）
-                elif not found_2s_buy and not found_2buy and bi.low > buy_1_low:
+                # V731：同样补上宽松门槛（与卖侧 max_pullback_loose 对称）。
+                elif (
+                    not found_2s_buy
+                    and not found_2buy
+                    and bi.low > buy_1_low
+                    and (leave_high - bi.low) < max_pullback_loose
+                ):
                     pullback_from_high = leave_high - bi.low
                     pct = (pullback_from_high / leave_range * 100) if leave_range > 0 else 0.0
                     pct = max(0.0, pct)
 
                     time_span = bi.end.k.k_index - leave_bi_up.end.k.k_index
-                    if time_span < 1 or time_span > 20:
+                    if time_span < 1 or (
+                        _max_2nd_span > 0 and time_span > _max_2nd_span
+                    ):
                         continue
 
                     bi_pos = bi.end.k.k_index
@@ -2381,7 +2457,9 @@ def _find_second_type_mmds(
                     pct = max(0.0, pct)
 
                     time_span = bi.end.k.k_index - leave_bi_down.end.k.k_index
-                    if time_span < 1 or time_span > 15:
+                    if time_span < 1 or (
+                        _max_2nd_span > 0 and time_span > _max_2nd_span
+                    ):
                         continue
 
                     bi_pos = bi.end.k.k_index
@@ -2442,7 +2520,9 @@ def _find_second_type_mmds(
                     pct = max(0.0, pct)
 
                     time_span = bi.end.k.k_index - leave_bi_down.end.k.k_index
-                    if time_span < 1 or time_span > 20:
+                    if time_span < 1 or (
+                        _max_2nd_span > 0 and time_span > _max_2nd_span
+                    ):
                         continue
 
                     bi_pos = bi.end.k.k_index
@@ -2603,6 +2683,7 @@ def _find_third_type_mmds_original(
     bis: list[BI],
     zss: list[ZS],
     first_type_mmds: list[MMD],
+    config: ChanlunConfig | None = None,
 ) -> list[MMD]:
     """严格缠论原文的三类买卖点。
 
@@ -2613,64 +2694,90 @@ def _find_third_type_mmds_original(
     mmds: list[MMD] = []
     existing: set[int] = {m.bi.end.k.k_index for m in first_type_mmds if m.bi}
 
+    # V731：回抽/反抽笔允许跨越的原始K线根数上限（0 = 不限制，纯原文口径）。
+    # 旧的硬编码 15 根实测误杀日线约 14.5%~21.5% 的合法信号，周线/月线近乎全失效。
+    max_bars = int(getattr(config, "mmd_3rd_retest_max_bars", 0) or 0) if config else 0
+
     for zs in zss:
         if zs.line_count < 3:
             continue
-        zs_end = zs.end.k.k_index if zs.end else 0
+        # V731 修复：中枢的「离开笔」就是把它关闭的那一笔，而 zs.py 的
+        # find_zss 在关闭中枢前已把该笔并入 zs.lines（它是中枢的最后一条线）。
+        # 旧实现用 `bi.start.k.k_index > zs_end` 在中枢**之后**找突破笔，
+        # 而 zs_end = zs.end.k.k_index 正是这条离开笔自己的终点索引，
+        # 于是离开笔永远被排除、只能选中更晚的笔 —— 实测教科书 3买/3卖
+        # 召回率 0%（见 scripts/audit_3rd_type_accuracy.py）。
+        # 原文口径：离开笔 = 自中枢末条线（含）起的第一个突破 zg/zd 的同向笔。
+        leave_start_idx = zs.lines[-1].index if zs.lines else 0
 
-        # 3买：向上突破笔 + 其后回踩不破 zg 的向下笔
-        break_up = None
-        for bi in bis:
-            if bi.start.k.k_index > zs_end and bi.direction.value == "up" and bi.high > zs.zg:
-                break_up = bi
-                break
-        if break_up is not None:
-            for bi in bis[bis.index(break_up) + 1 :]:
-                if bi.direction.value != "down":
-                    continue
-                if bi.low <= zs.zg:
-                    break  # 回踩破了上沿，不是 3买
-                if bi.end.k.k_index - break_up.end.k.k_index > 15:
-                    break
-                if bi.end.k.k_index in existing:
-                    continue
-                mmds.append(
-                    MMD(
-                        mmd_type=MMDType.BUY_3,
-                        zs=zs,
-                        bi=bi,
-                        msg=f"3买: 突破中枢上沿后回踩不破，低点={bi.low:.2f} > zg={zs.zg:.2f}",
-                    )
+        # 3买：向上突破笔 + 其后回踩不破 zg 的向下笔。
+        #
+        # V731 修复 #2（漏报）：原文并未限制「一个中枢只能出一个 3买」。
+        # 若首个回踩跌回中枢（假突破 → 回踩破 zg），价格**再次突破**并回踩不破，
+        # 应产生新的 3买。旧实现在 `bi.low <= zs.zg` 时用 `break` 终止整轮搜索，
+        # 导致该中枢的**真 3买永久漏报**（趋势启动初期假突破很常见）。
+        #
+        # 现改为：回踩失败只清掉「当前离开笔」并 continue，允许后续**新的突破笔**
+        # 重建 3买；但一旦某次突破已成功兑现 3买，就停止该中枢的搜索
+        # （原文「走势终完美」：该次离开已被其后的回抽确认完成），
+        # 否则同一段上行会被拆成多个 3买（实测 000001_daily/weekly 上过生成）。
+        cur_break = None
+        for bi in bis[leave_start_idx:]:
+            if bi.direction.value == "up" and bi.high > zs.zg:
+                if cur_break is None:
+                    cur_break = bi  # 新的（或再次的）离开笔
+                continue
+            if cur_break is None or bi.direction.value != "down":
+                continue
+            if bi.low <= zs.zg:
+                # 回踩破了上沿：本次突破作废，但后续可能还有新的突破笔
+                cur_break = None
+                continue
+            if max_bars and bi.end.k.k_index - cur_break.end.k.k_index > max_bars:
+                cur_break = None
+                continue
+            if bi.end.k.k_index in existing:
+                continue
+            mmds.append(
+                MMD(
+                    mmd_type=MMDType.BUY_3,
+                    zs=zs,
+                    bi=bi,
+                    msg=f"3买: 突破中枢上沿后回踩不破，低点={bi.low:.2f} > zg={zs.zg:.2f}",
                 )
-                existing.add(bi.end.k.k_index)
-                break
+            )
+            existing.add(bi.end.k.k_index)
+            break  # 该次离开已被回抽确认完成，停止该中枢搜索
+            cur_break = None  # 该次突破已兑现，等下一次突破
 
-        # 3卖：向下跌破笔 + 其后反抽不破 zd 的向上笔
-        break_down = None
-        for bi in bis:
-            if bi.start.k.k_index > zs_end and bi.direction.value == "down" and bi.low < zs.zd:
-                break_down = bi
-                break
-        if break_down is not None:
-            for bi in bis[bis.index(break_down) + 1 :]:
-                if bi.direction.value != "up":
-                    continue
-                if bi.high >= zs.zd:
-                    break  # 反抽破了上沿，不是 3卖
-                if bi.end.k.k_index - break_down.end.k.k_index > 15:
-                    break
-                if bi.end.k.k_index in existing:
-                    continue
-                mmds.append(
-                    MMD(
-                        mmd_type=MMDType.SELL_3,
-                        zs=zs,
-                        bi=bi,
-                        msg=f"3卖: 跌破中枢下沿后反抽不破，高点={bi.high:.2f} < zd={zs.zd:.2f}",
-                    )
+        # 3卖：与 3买 完全对称（见上方 3买 的 V731 修复 #2 说明）。
+        cur_break = None
+        for bi in bis[leave_start_idx:]:
+            if bi.direction.value == "down" and bi.low < zs.zd:
+                if cur_break is None:
+                    cur_break = bi
+                continue
+            if cur_break is None or bi.direction.value != "up":
+                continue
+            if bi.high >= zs.zd:
+                # 反抽升破下沿（即回到中枢区间内）：本次跌破作废，等下一次跌破
+                cur_break = None
+                continue
+            if max_bars and bi.end.k.k_index - cur_break.end.k.k_index > max_bars:
+                cur_break = None
+                continue
+            if bi.end.k.k_index in existing:
+                continue
+            mmds.append(
+                MMD(
+                    mmd_type=MMDType.SELL_3,
+                    zs=zs,
+                    bi=bi,
+                    msg=f"3卖: 跌破中枢下沿后反抽不破，高点={bi.high:.2f} < zd={zs.zd:.2f}",
                 )
-                existing.add(bi.end.k.k_index)
-                break
+            )
+            existing.add(bi.end.k.k_index)
+            break  # 该次离开已被反抽确认完成，停止该中枢搜索
 
     return mmds
 
@@ -2706,7 +2813,7 @@ def _find_third_type_mmds(
     # 走精简的 3买/3卖 检测；仅当 config.mmd_3rd_type_technical=True 时
     # 才启用下方 RSI/KDJ/BOLL/量能/MACD零轴等增强过滤。
     if not config.mmd_3rd_type_technical:
-        return _find_third_type_mmds_original(bis, zss, first_type_mmds)
+        return _find_third_type_mmds_original(bis, zss, first_type_mmds, config)
 
     existing_mmd_positions: set[int] = set()
     for m in first_type_mmds:
@@ -2770,12 +2877,17 @@ def _find_third_type_mmds(
         avg_vol_20 = _calc_zs_avg_volume(volumes, zs)
 
         # 找3买：突破中枢后的回踩
-        # （zs_end_idx 已在计算均量时定义，bi.start.k.k_index 同为原始K线索引）
+        #
+        # V731：与 _find_third_type_mmds_original 同口径——中枢的离开笔本身就
+        # 是 zs.lines[-1]（find_zss 关闭中枢前已并入），而 zs_end_idx 是它自己
+        # 的终点索引，故 `bi.start.k.k_index > zs_end_idx` 会永久排除真·离开笔
+        # （原文精简版实测召回率 0%，此处同病）。改用「自中枢末条线（含）起」
+        # 按笔序号筛选。
 
         # 找向上突破笔
         break_bi_up = None
         for bi in bis:
-            if bi.start.k.k_index > zs_end_idx and bi.direction.value == "up":
+            if bi.index >= (zs.lines[-1].index if zs.lines else 0) and bi.direction.value == "up":
                 if bi.high > zs.zg:  # 突破中枢上沿
                     break_bi_up = bi
                     break
@@ -3099,7 +3211,8 @@ def _find_third_type_mmds(
         # 找3卖：跌破中枢后的反抽
         break_bi_down = None
         for bi in bis:
-            if bi.start.k.k_index > zs_end_idx and bi.direction.value == "down":
+            # V731：同 3买 增强版，改用「自中枢末条线（含）起」按笔序号筛选
+            if bi.index >= (zs.lines[-1].index if zs.lines else 0) and bi.direction.value == "down":
                 if bi.low < zs.zd:  # 跌破中枢下沿
                     break_bi_down = bi
                     break
@@ -5161,11 +5274,9 @@ def find_mmds_v39(
             and len(closes) >= 40
         ):
             try:
-                rs_cons = _calc_range_set_multi_level_v68(mmd, zss, closes)
-                mmd._range_set_multi_level_v68 = rs_cons
-                mmd.confidence = max(
-                    0.0, min(1.0, mmd.confidence + rs_cons.get("confidence_adjust", 0.0))
-                )
+                # V-25：confidence_adjust 已下线（恒 0），不再改写 confidence；
+                # 结果仅作诊断序列化（见 docs/区间套现状说明与统一方案.md §四 step2）。
+                mmd._range_set_multi_level_v68 = _calc_range_set_multi_level_v68(mmd, zss, closes)
             except Exception:
                 pass
 
@@ -6238,8 +6349,18 @@ def _calc_breakout_retest_validation(
 
         is_buy = "buy" in mmd.mmd_type.value
         zs = mmd.zs
-        zs_high = zs.gg
-        zs_low = zs.dd
+        # V731：突破/回踩的基准应是**中枢区间本身** ZG/ZD，而非 GG/DD。
+        #
+        # 原文口径：3买 = 离开中枢后回抽「不跌回中枢区间」，中枢区间由 ZG/ZD
+        # 界定；GG/DD 只是**区间内的最高/最低极值**（含所有成员笔的毛刺），
+        # 不代表中枢边界。用 GG/DD 会把边界外推（实测 5 个 fixture 的 9 个
+        # 中枢上，GG/DD 区间比 ZG/ZD 大 31.6%~530%），于是：
+        #   - 「突破」判定更容易成立（边界被外推，随便就"突破"了）
+        #   - Fib 回踩区（38.2%~61.8%）被拉伸，实际落在区间外的价格也会被
+        #     算成"健康回踩"
+        # 本函数 docstring 写的就是「中枢上沿」，与 ZG 一致，实现却取了 gg。
+        zs_high = zs.zg
+        zs_low = zs.zd
         zs_range = zs_high - zs_low
         if zs_range <= 0:
             return result

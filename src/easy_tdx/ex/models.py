@@ -93,7 +93,12 @@ class ExInstrumentQuote:
 
 @dataclass
 class ExInstrumentBar:
-    """K线数据（GetInstrumentBars / GetHistoryInstrumentBarsRange 返回）。"""
+    """K线数据（GetInstrumentBars / GetHistoryInstrumentBarsRange 返回）。
+
+    V-38 审计注记：amount 在 GetExInstrumentBarsCmd 里读 record offset+16，
+    与 position（<ffffIIf 第 5 字段，同 offset）同源——是 position 的 float
+    重解读而非独立成交额字段（行为确定，测试已锁定；语义待真机数据校准）。
+    """
 
     open: float
     high: float

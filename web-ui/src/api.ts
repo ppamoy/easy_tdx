@@ -549,9 +549,15 @@ export async function switchServerHost(host: string): Promise<ServerSwitchResult
 
 // ── 股票诊断 ──────────────────────────────────────────────────────────────
 
-/** 快速诊断单只股票技术面（GET，方便浏览器直接访问）。 */
-export async function fetchDiagnosis(market: string, code: string): Promise<DiagnosisResult> {
-  const resp = await fetch(`${BASE}/diagnosis/quick?market=${market}&code=${code}`)
+/** 快速诊断单只股票技术面（GET，方便浏览器直接访问）。category 与诊断页周期选择联动。 */
+export async function fetchDiagnosis(
+  market: string,
+  code: string,
+  category: Category = 'DAY',
+): Promise<DiagnosisResult> {
+  const resp = await fetch(
+    `${BASE}/diagnosis/quick?market=${market}&code=${code}&category=${category}`,
+  )
   if (!resp.ok) await throwError(resp)
   return (await parseJson(resp)) as DiagnosisResult
 }
@@ -620,6 +626,14 @@ export interface StockPickTimingResult {
   mmds?: unknown[]
   bcs?: unknown[]
   fractals?: unknown[]
+  /**
+   * 缠论有效分型（笔端点，相邻不共用K线）。展示层应优先用这个；原始 fractals
+   * 是逐三根滑动窗口产物，含共用K线的重叠分型，直接渲染会出现伪分型。
+   */
+  valid_fractals?: unknown[]
+  // 线段级别结构（round12 起 timing 契约覆盖 to_dict 图表字段全集；扩窗平移需同步 shift）
+  zsds?: unknown[]
+  qsds?: unknown[]
   macd?: { dif: number[]; dea: number[]; hist: number[] }
   verdict?: { action: string; signal?: string; confidence?: number; reason?: string; direction?: string }
   novice_advice?: {
@@ -800,6 +814,11 @@ export interface DashboardAction {
   mmds?: unknown[]
   bcs?: unknown[]
   fractals?: unknown[]
+  /**
+   * 缠论有效分型（笔端点，相邻不共用K线）。展示层应优先用这个；原始 fractals
+   * 是逐三根滑动窗口产物，含共用K线的重叠分型，直接渲染会出现伪分型。
+   */
+  valid_fractals?: unknown[]
   macd?: { dif: number[]; dea: number[]; hist: number[] }
 }
 
@@ -886,4 +905,62 @@ export async function stockPickTiming(req: {
   })
   if (!resp.ok) await throwError(resp)
   return (await parseJson(resp)) as { date: string; results: StockPickTimingResult[] }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// 缠论原著选股（结构驱动：买卖点类型 / 走势方向 / 中枢位置 / 背驰）
+// ════════════════════════════════════════════════════════════════════════
+
+export interface ChanlunScreenResult {
+  code: string
+  symbol: string
+  close: number
+  latest_signal: {
+    type: string
+    is_buy: boolean
+    date: string | null
+    price: number | null
+    confidence: number
+  } | null
+  trend: string | null
+  zs_position: string | null
+  has_beichi: boolean
+  quality_score: number
+  bi_count: number
+  zs_count: number
+  bc_count: number
+  classification: string
+}
+
+export interface ChanlunScreenResponse {
+  market: string
+  total_scanned: number
+  qualified: ChanlunScreenResult[]
+  errors: { code: string; error: string }[]
+  elapsed: number
+}
+
+/** 缠论原著选股扫描（/screening/chanlun-scan）。 */
+export async function chanlunScreen(req: {
+  codes?: string[]
+  market?: string
+  criteria?: {
+    signal_type?: string
+    trend?: string
+    zs_position?: string
+    has_beichi?: boolean
+    min_zs_count?: number
+    min_quality?: number
+  }
+  combine_changying?: boolean
+  stock_type?: string
+  top_n?: number
+}): Promise<ChanlunScreenResponse> {
+  const resp = await fetch(BASE + '/screening/chanlun-scan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await parseJson(resp)) as ChanlunScreenResponse
 }

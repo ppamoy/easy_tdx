@@ -45,10 +45,7 @@ _MIN_CLASS_SAMPLE = 30
 
 
 def _audit_dir() -> Path:
-    d = (
-        Path(os.environ.get("EASY_TDX_CONFIG_DIR", str(Path.home() / ".easy_tdx")))
-        / "audit"
-    )
+    d = Path(os.environ.get("EASY_TDX_CONFIG_DIR", str(Path.home() / ".easy_tdx"))) / "audit"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -81,7 +78,7 @@ class MacSession:
     def __init__(self) -> None:
         self.client: Any = None
 
-    def __enter__(self) -> "MacSession":
+    def __enter__(self) -> MacSession:
         from easy_tdx.mac.client import MacClient
 
         c = MacClient()
@@ -206,6 +203,7 @@ def audit_changying(
     if own:
         session = MacSession()
         session.__enter__()
+    assert session is not None  # own 分支已构造；外部传入由调用方保证
     try:
         try:
             idx_df = session.index_kline()
@@ -246,8 +244,8 @@ def audit_changying(
                 for h in AUDIT_HORIZONS:
                     rets: list[float] = []
                     excs: list[float] = []
-                    for e in stats_rows:
-                        p = (e.get("performance") or {}).get(bk) or {}
+                    for row_e in stats_rows:
+                        p = (row_e.get("performance") or {}).get(bk) or {}
                         v = p.get(f"ret_{h}d")
                         if v is not None:
                             rets.append(float(v))
@@ -277,7 +275,8 @@ def audit_changying(
             "index": index_perf,
             "per_class": per_class,
             "per_symbol": per_symbol,
-            "caveat": "分类为 marks.trade_date 时点快照；完全 point-in-time 重跑用 changying-mark --date",
+            "caveat": "分类为 marks.trade_date 时点快照；"
+            "完全 point-in-time 重跑用 changying-mark --date",
         }
     finally:
         if own:
@@ -321,6 +320,7 @@ def audit_chanlun(
     if own:
         session = MacSession()
         session.__enter__()
+    assert session is not None  # own 分支已构造；外部传入由调用方保证
     try:
         per_type: dict[str, dict[str, Any]] = {}
         per_symbol: list[dict[str, Any]] = []
@@ -511,7 +511,8 @@ def load_latest_audit() -> dict[str, Any] | None:
         return None
     try:
         ptr = json.loads(latest.read_text(encoding="utf-8"))
-        return json.loads(Path(ptr["json"]).read_text(encoding="utf-8"))
+        loaded: dict[str, Any] = json.loads(Path(ptr["json"]).read_text(encoding="utf-8"))
+        return loaded
     except (OSError, ValueError, KeyError):
         return None
 
@@ -572,7 +573,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append("## 缠论买卖点信号质量")
         lines.append("")
         lines.append(
-            f"样本 {cl.get('sample_size')} 只，有效信号 {cl.get('signal_count')} 条。{cl.get('note')}"
+            f"样本 {cl.get('sample_size')} 只，有效信号 {cl.get('signal_count')} 条。"
+            f"{cl.get('note')}"
         )
         lines.append("")
         lines.append("| 类型 | 有效信号 | 命中率(5根) | 平均收益%(5根) |")

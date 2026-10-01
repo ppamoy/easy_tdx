@@ -88,11 +88,19 @@ class TestSecondTypeTimeWindowIndexConsistency:
     """2买/2卖 时间窗口必须使用原始K线索引（k_index）而非笔索引。"""
 
     def test_2buy_detected_within_kline_window(self) -> None:
-        """回调笔与离开笔相差 6 根 K 线（K线索引差），应识别为 2买。"""
+        """回调笔与离开笔相差 6 根 K 线（K线索引差），应识别为 2买。
+
+        V731：回调幅度由 16.5 调整为 19.0（回撤约 43%，小于 50%）。
+        原取值 low=16.5 对应 leave_range=7.0 上回撤 **78.6%**，
+        按 `_find_second_type_mmds` docstring「回调幅度小于原下跌的 50%」
+        本就不该是 2买——卖侧镜像早已正确拒绝该幅度，只有买侧因 50% 阈值
+        被赋给 `_` 丢弃（死代码）而错误放行。本用例锁定的是「K线索引窗口」
+        这一主题，故把幅度改为合格值，避免用例同时夹带被修复的不对称 bug。
+        """
         bis = [
             _bi(0, Direction.DOWN, 100, 105, 20.0, 15.0),
             _bi(1, Direction.UP, 106, 112, 22.0, 16.0),
-            _bi(2, Direction.DOWN, 113, 118, 21.5, 16.5),
+            _bi(2, Direction.DOWN, 113, 118, 21.5, 19.0),
             _bi(3, Direction.UP, 119, 125, 24.0, 17.5),
         ]
         first_type_mmds = [

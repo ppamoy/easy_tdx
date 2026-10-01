@@ -325,6 +325,10 @@ def _run_timing_one(
         }
         for fx in result.fractals
     ]
+    # 缠论有效分型（笔端点，相邻分型不共用K线）。原始 fractals 由逐三根滑动窗口
+    # 产出、含大量共用K线的重叠分型，展示层必须优先用这个，否则图上会出现
+    # 「底-顶-底挤在连续三根K线」的伪分型（详见 scripts/verify_fx_independence.py）。
+    d["valid_fractals"] = result.valid_fractals_to_dict()
     v = _verdict(result.mmds)
     novice = _novice_advice(result, v)
     # V594: 用这只标的自己历史窗口内的信号做前瞻命中率验证，
@@ -396,9 +400,17 @@ def _run_timing_one(
         "mmds": d["mmds"],
         "bcs": d["bcs"],
         "fractals": d["fractals"],
+        # 缠论有效分型（笔端点，相邻不共用K线）。前端展示层必须优先用它；
+        # 原始 fractals 含共用K线的重叠分型，直接渲染会出现伪分型。
+        "valid_fractals": d["valid_fractals"],
         # MACD 序列（dif/dea/hist 与 bars 一一对应），前端 ChanlunChart 副图展示，
         # 便于用户核对背驰的 MACD 面积依据。
         "macd": d["macd"],
+        # zsds/qsds：与 levels 内各级别一致的本级别走势段/趋势段。当前页面
+        # 图表未消费，但契约要求手工清单覆盖 to_dict 图表字段全集——多给
+        # 无害，缺了则将来接入时会静默拿到恒空数据。
+        "zsds": d["zsds"],
+        "qsds": d["qsds"],
         "verdict": v,
         # V592: 面向小白的择时建议（入场/止损/目标 + 人话说明 + 仓位提示）
         "novice_advice": novice,

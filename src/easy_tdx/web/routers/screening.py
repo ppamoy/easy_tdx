@@ -438,6 +438,10 @@ def _pass_screening(
     if stock_result.get("quality_score", 0) < 60:
         return False
 
+    # 分类过滤（tree/grain/vegetable）
+    if stock_type != "all" and stock_result.get("classification") != stock_type:
+        return False
+
     return True
 
 
@@ -472,7 +476,237 @@ def _calc_quality_score(result: Any, target_date: datetime) -> float:
     return min(score, 100)
 
 
-@router.post("/screening/verify")
+# ════════════════════════════════════════════════════════════════════════
+# 缠论原著选股（结构驱动，非长赢模型）
+# ════════════════════════════════════════════════════════════════════════
+
+
+def _chanlun_trend_direction(result: Any) -> str | None:
+    """取线段(更高一级)趋势方向：'up' / 'down' / None。
+
+    用最后一段已完成线段的方向。线段交替向上向下，最后一段的方向代表
+    当前走势方向。
+    """
+    xds = getattr(result, "xds", None) or []
+    done = [x for x in xds if getattr(x, "is_done", None) and x.is_done()]
+    if not done:
+        done = xds
+    if not done:
+        return None
+    d = getattr(
+        getattr(done[-1], "direction", None), "value", str(getattr(done[-1], "direction", ""))
+    )
+    return str(d).lower() or None
+
+
+def _chanlun_zs_position(result: Any, close: float | None = None) -> str | None:
+    """当前价相对最后中枢的位置：'above' / 'below' / 'inside' / None。"""
+    zss = getattr(result, "zss", None) or []
+    if not zss or close is None:
+        return None
+    z = zss[-1]
+    # 中枢用 zg(中枢高)/zd(中枢低) 表示区间；兼容 high/low
+    hi = getattr(z, "zg", None) or getattr(z, "high", None)
+    lo = getattr(z, "zd", None) or getattr(z, "low", None)
+    if hi is None or lo is None:
+        return None
+    if close > float(hi):
+        return "above"
+    if close < float(lo):
+        return "below"
+    return "inside"
+
+
+def _chanlun_has_beichi(result: Any) -> bool:
+    """是否有背驰确认。"""
+    bcs = getattr(result, "bcs", None) or []
+    return len(bcs) > 0
+
+
+def _chanlun_latest_signal(result: Any) -> dict[str, Any] | None:
+    """最新买卖点信息（用于选股筛选）。"""
+    latest = _latest_mmd_obj(result)
+    if latest is None:
+        return None
+    mmd_val = latest.mmd_type.value
+    return {
+        "type": mmd_val,
+        "is_buy": "buy" in mmd_val,
+        "date": latest.bi.end.k.date.strftime("%Y-%m-%d") if latest.bi else None,
+        "price": (latest.bi.low if "buy" in mmd_val else latest.bi.high) if latest.bi else None,
+        "confidence": round(float(latest.confidence), 4),
+    }
+
+
+def _chanlun_screen(
+    result: Any,
+    criteria: dict[str, Any],
+    close: float | None = None,
+) -> tuple[bool, dict[str, Any]]:
+    """按缠论结构条件筛选单只股票。
+
+    criteria 支持：
+    - signal_type: "1buy"/"2buy"/"3buy"/"any_buy"/"1sell"/"any" (默认 "any_buy")
+    - trend: "up"/"down"/"any" (默认 "any")
+    - zs_position: "above"/"below"/"inside"/"any" (默认 "any")
+    - has_beichi: bool (默认 False)
+    - min_zs_count: int (默认 0)
+    - min_quality: int (默认 0)
+    """
+    sig_type = criteria.get("signal_type", "any_buy")
+    trend_req = criteria.get("trend", "any")
+    has_bc = bool(criteria.get("has_beichi", False))
+    min_zs = int(criteria.get("min_zs_count", 0) or 0)
+    min_q = int(criteria.get("min_quality", 0) or 0)
+    zs_pos_req = criteria.get("zs_position", "any")
+
+    latest = _chanlun_latest_signal(result)
+    trend = _chanlun_trend_direction(result)
+    zs_pos = _chanlun_zs_position(result, close)
+    bc = _chanlun_has_beichi(result)
+    quality = _calc_stock_quality(result)
+
+    details = {
+        "latest_signal": latest,
+        "trend": trend,
+        "zs_position": zs_pos,
+        "has_beichi": bc,
+        "quality_score": quality,
+        "bi_count": len(getattr(result, "bis", []) or []),
+        "zs_count": len(getattr(result, "zss", []) or []),
+        "bc_count": len(getattr(result, "bcs", []) or []),
+        "classification": _classify_stock(result),
+    }  # type: dict[str, Any]
+
+    # 信号类型过滤
+    if sig_type != "any":
+        if latest is None:
+            return False, details
+        lt = latest["type"]
+        if sig_type == "any_buy":
+            if not latest["is_buy"]:
+                return False, details
+        elif sig_type == "1sell":
+            if lt != "1sell":
+                return False, details
+        elif lt != sig_type:
+            return False, details
+
+    # 走势方向过滤
+    if trend_req != "any" and trend != trend_req:
+        return False, details
+
+    # 中枢位置过滤
+    if zs_pos_req != "any" and zs_pos != zs_pos_req:
+        return False, details
+
+    # 背驰过滤
+    if has_bc and not bc:
+        return False, details
+
+    # 中枢数量过滤
+    if details["zs_count"] < min_zs:
+        return False, details
+
+    # 质量分过滤
+    if quality < min_q:
+        return False, details
+
+    return True, details
+
+
+@router.post("/screening/chanlun-scan")
+async def chanlun_scan(
+    req: dict[str, Any],
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
+    """缠论原著选股扫描。
+
+    按缠论结构条件（买卖点类型、走势方向、中枢位置、背驰）筛选股票，
+    以缠论为准；可选叠加长赢模型过滤。
+
+    请求参数：
+    - codes: 指定股票代码列表（不传则自动取市场前 30 只）
+    - market: 市场 (SZ/SH，默认 SZ)
+    - criteria: 筛选条件 dict（见 _chanlun_screen）
+    - combine_changying: 是否叠加长赢过滤 (默认 False)
+    - stock_type: 长赢类型 (tree/grain/vegetable/all，combine_changying=True 时生效)
+    - top_n: 返回前 N 只 (默认 10)
+    """
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    market = req.get("market", "SZ")
+    codes = req.get("codes") or []
+    criteria = req.get("criteria", {})
+    combine_changying = bool(req.get("combine_changying", False))
+    stock_type = req.get("stock_type", "all")
+    top_n = int(req.get("top_n", 10) or 10)
+
+    # 获取股票列表
+    if codes:
+        stocks = [str(c).zfill(6) for c in codes]
+    else:
+        stocks = await _get_stock_list(client, market)
+        stocks = stocks[:30]
+
+    results = {
+        "market": market,
+        "total_scanned": len(stocks),
+        "qualified": [],
+        "errors": [],
+    }
+
+    import time
+
+    start = time.time()
+
+    for i, code in enumerate(stocks):
+        try:
+            df = await fetch_qfq_klines(mac_client, client, market, code, "DAY", 0, 500)
+            if df is None or len(df) < 100:
+                continue
+
+            analyser = ChanlunAnalyser(code=f"{market}{code}", frequency="DAILY")
+            result = analyser.process_klines(df)
+            close = float(df["close"].iloc[-1])
+
+            passes, details = _chanlun_screen(result, criteria, close)
+
+            # 可选：叠加长赢过滤
+            if passes and combine_changying:
+                stock_result = {
+                    "buy_1_count": 1 if details["latest_signal"] else 0,
+                    "quality_score": details["quality_score"],
+                    "classification": details["classification"],
+                }
+                if not _pass_screening(stock_result, stock_type, True):
+                    passes = False
+
+            if passes:
+                results["qualified"].append(
+                    {
+                        "code": code,
+                        "symbol": f"{market}:{code}",
+                        "close": round(close, 2),
+                        **details,
+                    }
+                )
+        except Exception as e:  # noqa: BLE001
+            results["errors"].append({"code": code, "error": str(e)})
+            continue
+
+        if (i + 1) % 5 == 0:
+            logger.info(f"缠论选股: 已扫描 {i + 1}/{len(stocks)}")
+
+    # 按质量分排序
+    results["qualified"].sort(key=lambda x: x.get("quality_score", 0), reverse=True)
+    results["qualified"] = results["qualified"][:top_n]
+    results["elapsed"] = round(time.time() - start, 1)
+
+    return results
+
+
 async def verify_screening(
     req: dict[str, Any],
     client: Any = Depends(get_client),

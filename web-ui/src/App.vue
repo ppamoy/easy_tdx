@@ -45,6 +45,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
       <RouterView />
     </main>
     <footer class="app-footer">
+      <RouterLink to="/display-settings" class="settings-link" title="显示设置">🎨 显示设置</RouterLink>
       <RouterLink to="/settings" class="settings-link" title="服务器设置">⚙ 服务器设置</RouterLink>
     </footer>
     <WatchlistPanel />

@@ -36,7 +36,8 @@ async def audit_accuracy_latest(
             status_code=404,
             detail="尚无审计报告，请先运行 easy-tdx audit-accuracy",
         )
-    return report
+    result: dict[str, Any] = report
+    return result
 
 
 @router.get("/audit/history")

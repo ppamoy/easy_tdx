@@ -6,9 +6,7 @@
 
 from __future__ import annotations
 
-import json
 from datetime import date
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -16,9 +14,8 @@ import pytest
 from easy_tdx.fundamental import marks as marks_mod
 from easy_tdx.fundamental.marks import (
     ChangyingMarkStore,
-    detect_new_report_period,
     derive_pool_from_marks,
-    load_changying_marks,
+    detect_new_report_period,
     marks_selfcheck,
     refresh_changying_marks,
 )

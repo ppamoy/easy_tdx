@@ -17,8 +17,8 @@ import pytest
 from easy_tdx.audit.accuracy import (
     MacSession,
     _returns_at_dates,
-    audit_chanlun,
     audit_changying,
+    audit_chanlun,
     recent_quarter_ends,
 )
 
@@ -107,9 +107,33 @@ def _session_with(up: set[str], down: set[str]) -> MacSession:
 @pytest.fixture()
 def fake_marks():
     rows = [
-        {"symbol": "SH:600001", "market": "SH", "code": "600001", "category": "tree", "score": 90.0, "report_date": "2026-06-20", "trade_date": "2026-09-23"},
-        {"symbol": "SZ:000002", "market": "SZ", "code": "000002", "category": "grain", "score": 60.0, "report_date": "2026-06-20", "trade_date": "2026-09-23"},
-        {"symbol": "SZ:000003", "market": "SZ", "code": "000003", "category": "vegetable", "score": 20.0, "report_date": None, "trade_date": "2026-09-23"},
+        {
+            "symbol": "SH:600001",
+            "market": "SH",
+            "code": "600001",
+            "category": "tree",
+            "score": 90.0,
+            "report_date": "2026-06-20",
+            "trade_date": "2026-09-23",
+        },
+        {
+            "symbol": "SZ:000002",
+            "market": "SZ",
+            "code": "000002",
+            "category": "grain",
+            "score": 60.0,
+            "report_date": "2026-06-20",
+            "trade_date": "2026-09-23",
+        },
+        {
+            "symbol": "SZ:000003",
+            "market": "SZ",
+            "code": "000003",
+            "category": "vegetable",
+            "score": 20.0,
+            "report_date": None,
+            "trade_date": "2026-09-23",
+        },
     ]
     with patch("easy_tdx.audit.accuracy._sample_marks") as m:
         m.return_value = {
@@ -160,7 +184,6 @@ def test_audit_changying_class_stats_shape(fake_marks) -> None:
 
 def test_audit_chanlun_ledger_aligned(fake_marks) -> None:
     """缠论审计口径 = signal_ledger（方向对齐，命中率可复核）。"""
-    from easy_tdx.web.signal_ledger import signal_returns
 
     # 用上行序列喂三只标的 → 全部买点信号应全胜（涨势中买点后必涨）
     s = _session_with(up={"600001", "000002", "000003"}, down=set())

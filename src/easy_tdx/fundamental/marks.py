@@ -98,9 +98,7 @@ class ChangyingMarkStore:
     def last_snapshot_meta(self) -> dict[str, Any] | None:
         """上次成功快照元信息（count/trade_date/updated_at），无数据返回 None。"""
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT value FROM marks_meta WHERE key = 'snapshot'"
-            ).fetchone()
+            row = conn.execute("SELECT value FROM marks_meta WHERE key = 'snapshot'").fetchone()
         if row is None:
             return None
         try:
@@ -299,9 +297,7 @@ def load_changying_marks(
     top_n: int | None = None,
 ) -> dict[str, Any] | None:
     """读取本地全量标记（供 Web 白天快速读取），无数据返回 None。"""
-    return ChangyingMarkStore().load_marks(
-        stock_type=stock_type, markets=markets, top_n=top_n
-    )
+    return ChangyingMarkStore().load_marks(stock_type=stock_type, markets=markets, top_n=top_n)
 
 
 def marks_selfcheck() -> dict[str, Any]:
@@ -325,9 +321,7 @@ def detect_new_report_period() -> bool:
     """gpcw 缓存出现上次标记后没有的新报告期时返回 True（季报兜底触发）。"""
     store = ChangyingMarkStore()
     with store._connect() as conn:
-        row = conn.execute(
-            "SELECT value FROM marks_meta WHERE key = 'periods'"
-        ).fetchone()
+        row = conn.execute("SELECT value FROM marks_meta WHERE key = 'periods'").fetchone()
     known: list[str] = json.loads(row["value"]) if row else []
     current = _gpcw_periods()
     return any(p not in known for p in current)
@@ -376,4 +370,3 @@ def derive_pool_from_marks(top_n: int = 20) -> dict[str, Any] | None:
             }
         )
     return ChangyingStore().save_pool(marks["date"], rows)
-

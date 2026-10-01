@@ -33,6 +33,10 @@ class OrderSimulator:
         min_commission: 最低佣金
         stamp_tax: 印花税率（仅卖出）
         slippage: 滑点（每股）
+        respect_price_limit: 是否启用涨跌停约束（V-AUDIT，默认开启）。
+            涨停（成交价 ≥ 前收×(1+limit_pct)）禁止买入、跌停禁止卖出，
+            拒绝的成交记 rejected=True。无前收（首根）不约束。
+        limit_pct: 涨跌停幅度（默认 0.10 = 10%；主板口径，不含 ST/创业板差异）
     """
 
     df: pd.DataFrame
@@ -44,6 +48,8 @@ class OrderSimulator:
     stamp_tax: float = 0.001
     slippage: float = 0.0
     slippage_model: SlippageModel | None = None
+    respect_price_limit: bool = True
+    limit_pct: float = 0.10
 
     def simulate(
         self,
@@ -122,6 +128,25 @@ class OrderSimulator:
                     continue
                 price = price_raw
 
+            # V-AUDIT: 涨跌停约束。A 股涨停当日无法买入、跌停当日无法卖出。
+            # 以成交 bar 的前一根收盘为基准判定；基准缺失（首根）不约束。
+            if self.respect_price_limit and self._is_limit_bar(exec_idx, price, signal.direction):
+                # 生成拒绝成交记录（与资金不足拒绝同形态），保留信号轨迹可审计
+                row = self.df.iloc[exec_idx] if exec_idx < len(self.df) else None
+                trades.append(
+                    Trade(
+                        datetime=row["datetime"] if row is not None else signal.datetime,
+                        direction=signal.direction,
+                        size=0.0,
+                        price=price,
+                        commission=0.0,
+                        slippage=0.0,
+                        pnl=0.0,
+                        rejected=True,
+                    )
+                )
+                continue
+
             # 执行交易
             if signal.direction == "BUY":
                 trade = self._execute_buy(
@@ -189,6 +214,24 @@ class OrderSimulator:
             return None
 
         return None
+
+    def _is_limit_bar(self, exec_idx: int, price: float, direction: str) -> bool:
+        """判定成交 bar 是否处于涨跌停状态（V-AUDIT）。
+
+        以**前一根收盘**为基准（撮合时刻可知的口径）：成交价 ≥ 前收×(1+pct)
+        视为涨停（禁买），≤ 前收×(1-pct) 视为跌停（禁卖）。基准无效或
+        价格非正时不约束。买入看涨停、卖出看跌停，另一侧不限制。
+        """
+        if exec_idx <= 0 or exec_idx >= len(self.df):
+            return False
+        prev_close = float(self.df.iloc[exec_idx - 1]["close"])
+        if prev_close <= 0 or price <= 0:
+            return False
+        limit_up = prev_close * (1 + self.limit_pct)
+        limit_down = prev_close * (1 - self.limit_pct)
+        if direction == "BUY":
+            return price >= limit_up - 1e-9
+        return price <= limit_down + 1e-9
 
     def _resolve_exec_index(self, bar_idx: int) -> int | None:
         """根据执行模式确定成交的 K 线索引。

@@ -104,8 +104,8 @@ def _changying_scheduler_loop() -> None:
 
     logger = logging.getLogger("changying-scheduler")
     from easy_tdx.fundamental.marks import (
-        detect_new_report_period,
         derive_pool_from_marks,
+        detect_new_report_period,
         marks_selfcheck,
         refresh_changying_marks,
     )
@@ -126,8 +126,7 @@ def _changying_scheduler_loop() -> None:
                 age_days = (wake - datetime.fromisoformat(meta["updated_at"])).days
                 if age_days > 35:
                     logger.warning(
-                        "长盈全市场标记已 %s 天未更新（上次 %s，%s 只），"
-                        "树/粮/菜覆盖可能过期",
+                        "长盈全市场标记已 %s 天未更新（上次 %s，%s 只），树/粮/菜覆盖可能过期",
                         age_days,
                         meta.get("trade_date"),
                         meta.get("count"),

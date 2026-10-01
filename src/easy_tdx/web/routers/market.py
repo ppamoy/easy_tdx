@@ -73,7 +73,21 @@ async def market_stat(
     client: Any = Depends(get_client),
 ) -> DataFrameResponse:
     """获取 A 股全市场涨跌统计。"""
-    df = await client.get_market_stat()
+    # V-28：上游统计指数（880005/880001/880006）并非所有 TDX 服务器都提供，
+    # 全部不可得时 client 抛 RuntimeError——这是环境/上游问题，不是服务器
+    # 错误，应返回 503 + 可读指引（与 /market/strength 的 V720 处理同款），
+    # 而非 500 Internal server error 误导排障方向。
+    try:
+        df = await client.get_market_stat()
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "市场统计数据不可用：上游服务器未提供统计指数"
+                "（880005/880001/880006，非交易时段或服务器不支持）。"
+                f"原始信息：{e}"
+            ),
+        ) from e
     return _df_response(df)
 
 

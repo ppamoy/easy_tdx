@@ -81,6 +81,11 @@ const chanlunXds = ref<any[]>([])
 const chanlunZss = ref<any[]>([])
 const chanlunMmds = ref<any[]>([])
 const chanlunFxs = ref<any[]>([])
+// 展示用「有效分型」（笔端点分型，相邻不共用K线）。
+// 原始 fractals 是逐三根滑动窗口扫出来的，含大量共用K线的重叠分型，缠论原文
+// 要求相邻分型之间至少 1 根独立K线，直接渲染会画出伪分型。
+// 详见 scripts/verify_fx_independence.py。
+const chanlunValidFxs = ref<any[]>([])
 const chanlunBcs = ref<any[]>([])
 const chanlunZsds = ref<any[]>([])
 const chanlunQsds = ref<any[]>([])
@@ -850,6 +855,10 @@ function applyChanlunLevel(level: 'bi' | 'xd', data: any) {
     chanlunZss.value = xdLevel.zss ?? []
     chanlunMmds.value = xdLevel.mmds ?? []
     chanlunBcs.value = xdLevel.bcs ?? []
+    // 递归级别（xd）：后端 levels 不含分型字段；不清空会残留 bi 级别分型，
+    // 与本级别笔/中枢不匹配（详见 ChanlunView.applyAnalysisLevel 同处说明）。
+    chanlunFxs.value = []
+    chanlunValidFxs.value = []
     return
   }
 
@@ -860,6 +869,10 @@ function applyChanlunLevel(level: 'bi' | 'xd', data: any) {
   chanlunZss.value = data?.zss ?? []
   chanlunMmds.value = data?.mmds ?? []
   chanlunBcs.value = data?.bcs ?? []
+  // 回到笔级别：分型只在顶层数据里（levels 中没有），必须恢复，
+  // 否则从 xd 切回 bi 后分型会永久丢失。
+  chanlunFxs.value = data?.fractals ?? []
+  chanlunValidFxs.value = data?.valid_fractals ?? []
 }
 
 function onChanlunLevelChange() {
@@ -877,6 +890,7 @@ async function selectStock(stock: StockResult) {
   chanlunZss.value = []
   chanlunMmds.value = []
   chanlunFxs.value = []
+  chanlunValidFxs.value = []
   chanlunBcs.value = []
   chanlunZsds.value = []
   chanlunQsds.value = []
@@ -970,6 +984,7 @@ async function reanalyseWindow() {
   chanlunLevel.value = 'bi'
   applyChanlunLevel('bi', data)
   chanlunFxs.value = data.fractals ?? []
+  chanlunValidFxs.value = data.valid_fractals ?? []
   chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
 }
 
@@ -1033,6 +1048,7 @@ async function runChanlunAnalysis(stock: StockResult) {
     chanlunLevel.value = 'bi'
     applyChanlunLevel('bi', data)
     chanlunFxs.value = data.fractals ?? []
+    chanlunValidFxs.value = data.valid_fractals ?? []
     chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
   } catch (e) {
     console.error('缠论分析失败:', e)
@@ -1569,6 +1585,7 @@ onMounted(() => {
             :zss="chanlunZss"
             :mmds="chanlunMmds"
             :fxs="chanlunFxs"
+            :validFxs="chanlunValidFxs"
             :bcs="chanlunBcs"
             :macd="chanlunMacd ?? undefined"
             :frequency="chanlunCategory"

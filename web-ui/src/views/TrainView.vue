@@ -67,7 +67,8 @@ interface ChanlunMmd {
   } | null
 }
 interface ChanlunFx {
-  type: 'ding' | 'di'
+  // 字段名与后端 fractals[].fx_type 及 ChanlunChart 的 ChanlunFx 保持一致
+  fx_type: 'ding' | 'di'
   date: string
   val: number
   index?: number
@@ -153,6 +154,11 @@ const xds = ref<ChanlunXd[]>([])
 const zss = ref<ChanlunZs[]>([])
 const mmds = ref<ChanlunMmd[]>([])
 const fxs = ref<ChanlunFx[]>([])
+// 展示用「有效分型」（笔端点分型），与 BacktestView / ChanlunView 一致。
+// 原始 fractals 是逐三根滑动窗口扫出来的，含共用K线的重叠分型（缠论原文要求
+// 相邻分型之间至少 1 根独立K线），直接渲染会出现「底→顶→底挤在连续三根K线」
+// 的伪分型。详见 scripts/verify_fx_independence.py。
+const validFxs = ref<ChanlunFx[]>([])
 const bcs = ref<ChanlunBc[]>([])
 const zsds = ref<ChanlunXd[]>([])
 const qsds = ref<ChanlunXd[]>([])
@@ -196,6 +202,15 @@ function randomStock() {
   startTraining()
 }
 
+/** 后端分型字典 → 图表所需结构（顶层 fractals / valid_fractals 同构）。 */
+const mapFx = (fr: any[]): ChanlunFx[] =>
+  (fr ?? []).map((f: any) => ({
+    fx_type: f.fx_type,
+    date: f.date,
+    val: f.val,
+    bar_index: f.bar_index,
+  }))
+
 function applyAnalysisLevel(level: 'bi' | 'xd', data: any) {
   if (level === 'xd' && data?.levels?.xd) {
     const xdLevel = data.levels.xd
@@ -214,6 +229,10 @@ function applyAnalysisLevel(level: 'bi' | 'xd', data: any) {
       v102_pattern_match: m.v102_pattern_match ?? null,
     }))
     bcs.value = xdLevel.bcs ?? []
+    // 递归级别（xd）：后端 levels 不含分型字段，不清空会残留 bi 级别分型，
+    // 与本级别笔/中枢不匹配（详见 ChanlunView.applyAnalysisLevel 同处说明）。
+    fxs.value = []
+    validFxs.value = []
     return
   }
 
@@ -227,11 +246,21 @@ function applyAnalysisLevel(level: 'bi' | 'xd', data: any) {
     date: m.date,
     msg: m.msg,
     confidence: m.confidence ?? 0,
+    // V731 修复：bar_index（横轴锚定）+ anchor_val（纵轴锚定，= 触发笔终点
+    // 分型极值价）此前双双漏映射。缺 anchor_val 时 ChanlunChart 会退化为
+    // 「该K线 low*0.995 / high*1.005」的视觉偏移值，图上画的不是真实买卖点
+    // 价格；缺 bar_index 时横轴只能靠日期匹配，分钟级会错位。
+    bar_index: m.bar_index,
+    anchor_val: m.anchor_val ?? null,
     v102_signal_quality: m.v102_signal_quality ?? null,
     v102_decision_support: m.v102_decision_support ?? null,
     v102_pattern_match: m.v102_pattern_match ?? null,
   }))
   bcs.value = data?.bcs ?? []
+  // 回到笔级别：分型只在顶层数据里（levels 中没有），必须恢复，
+  // 否则从 xd 切回 bi 后分型会永久丢失。
+  fxs.value = mapFx(data?.fractals)
+  validFxs.value = mapFx(data?.valid_fractals)
 }
 
 function onAnalysisLevelChange() {
@@ -268,12 +297,8 @@ async function startTraining() {
     rawDetail.value = d
     analysisLevel.value = 'bi'
     applyAnalysisLevel('bi', d)
-    fxs.value = (d.fractals ?? []).map((f: any) => ({
-      type: f.fx_type,
-      date: f.date,
-      val: f.val,
-      bar_index: f.bar_index,
-    }))
+    fxs.value = mapFx(d.fractals)
+    validFxs.value = mapFx(d.valid_fractals)
     macd.value = d.macd && d.macd.dif?.length ? d.macd : null
     candidates.value = d.candidates ?? []
     outcomes.value = d.mmd_outcomes ?? []
@@ -502,10 +527,15 @@ interface StructureEvent {
 const structureTimeline = computed<StructureEvent[]>(() => {
   const limit = revealIndex.value
   const events: StructureEvent[] = []
-  for (const fx of fxs.value) {
+  // 与图上同源：也只列有效分型，否则时间线会出现图上没画的伪分型
+  for (const fx of validFxs.value) {
     const idx = fx.bar_index ?? fx.index
     if (idx !== undefined && idx <= limit) {
-      events.push({ index: idx, kind: 'fx', label: `${fx.type === 'ding' ? '顶分型' : '底分型'}` })
+      events.push({
+        index: idx,
+        kind: 'fx',
+        label: `${fx.fx_type === 'ding' ? '顶分型' : '底分型'}`,
+      })
     }
   }
   for (const bi of bis.value) {
@@ -644,6 +674,7 @@ onMounted(() => {
               :zss="zss"
               :mmds="mmds"
               :fxs="fxs"
+              :validFxs="validFxs"
               :bcs="bcs"
               :macd="macd ?? undefined"
               :frequency="category"

@@ -64,7 +64,6 @@ def test_bars_start_date_routes_to_range() -> None:
 def test_bars_without_start_date_keeps_legacy_path() -> None:
     """不带 start_date 时维持原语义（单页协议取数，不走区间翻页）。"""
     from easy_tdx.web.deps import get_client
-    from easy_tdx.web.klines import fetch_qfq_klines
 
     df = _bars_df(10)
     fake_qfq = AsyncMock(return_value=df)

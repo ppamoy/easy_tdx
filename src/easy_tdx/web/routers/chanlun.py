@@ -11,12 +11,37 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 
 from easy_tdx.web.deps import get_client, get_mac_client_optional
-from easy_tdx.web.klines import fetch_bars_range, fetch_paged_bars, fetch_qfq_klines  # 共享 K 线取数（MAC 回退）
+from easy_tdx.web.klines import (  # 共享 K 线取数（MAC 回退）
+    fetch_bars_range,
+    fetch_paged_bars,
+    fetch_qfq_klines,
+)
 from easy_tdx.web.schemas import ChanlunRequest
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chanlun"])
+
+
+# 周期白名单：前端 category → ChanlunAnalyser 的 frequency 名。
+# 原先在 analyze / multi-level 两处各写一份局部字典，容易走偏（multi-level 那份
+# 漏了 MONTH/YEAR）。提到模块级后，诊断路由等其它模块可复用同一份。
+FREQUENCY_MAP: dict[str, str] = {
+    "MIN_1": "1min",
+    "MIN_5": "5min",
+    "MIN_15": "15min",
+    "MIN_30": "30min",
+    "MIN_60": "60min",
+    "DAY": "daily",
+    "WEEK": "weekly",
+    "MONTH": "monthly",
+    "YEAR": "yearly",
+}
+
+
+def resolve_frequency(category: str) -> str:
+    """把前端 category 转成 ChanlunAnalyser 的 frequency；未知则原样返回。"""
+    return FREQUENCY_MAP.get((category or "DAY").upper(), category)
 
 
 def _to_json_safe(obj: Any) -> Any:
@@ -53,6 +78,55 @@ def _build_signal_explanation(mmd: Any) -> str:
     if msg:
         parts.append(str(msg))
     return "；".join(parts)
+
+
+def _attach_signal_accuracy(d: dict[str, Any], result: Any) -> None:
+    """给分析结果 dict 附上买卖点分类准确度（前瞻命中率 vs 随机基准）。
+
+    V-HOTFIX: multi-level 的 fmt_result 曾漏算此字段，导致多级别联立模式下
+    前端「买卖点分类准确度验证」面板永不显示（v-if 恒 false）。抽成公共
+    helper 让 /chanlun/analyze 与 multi-level 共用，防止两处漂移。
+    准确度验证是附加信息，失败不应阻断主分析结果。
+    """
+    try:
+        from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type
+
+        closes = [float(k.close) for k in result.klines]
+        mmd_signals = [
+            {
+                "type": mmd.mmd_type.value,
+                "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
+            }
+            for mmd in result.mmds
+        ]
+        d["signal_accuracy"] = compute_signal_accuracy_by_type(closes, mmd_signals)
+    except Exception:  # noqa: BLE001
+        d["signal_accuracy"] = None
+
+
+def _multi_fmt_result(result: Any) -> dict[str, Any]:
+    """multi-level 端点的结果序列化（模块级，可离线单测）。
+
+    V-17: 原为端点内嵌套函数 fmt_result，无法导入测试——嵌套组装函数是
+    payload 漏传 bug 的温床（train/build_train_session_payload 同例，提取
+    后才纳入契约测试）。字段含 fractals/valid_fractals/signal_accuracy。
+    """
+    d: dict[str, Any] = result.to_dict()
+    d["fractals"] = [
+        {
+            "fx_type": fx.fx_type.value,
+            "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
+            "val": round(fx.val, 2),
+            "index": fx.index,
+            "bar_index": fx.bar_index,
+        }
+        for fx in result.fractals
+    ]
+    d["valid_fractals"] = result.valid_fractals_to_dict()
+    # 买卖点分类准确度：与 /chanlun/analyze 对齐，否则多级别联立模式下
+    # 前端准确度面板（读 hr.signal_accuracy）永不显示。
+    _attach_signal_accuracy(d, result)
+    return d
 
 
 def _filter_candidates_by_difficulty(
@@ -131,6 +205,7 @@ def build_train_session_payload(
         }
         for fx in result.fractals
     ]
+    d["valid_fractals"] = result.valid_fractals_to_dict()
     if result.boll:
         d["boll"] = {
             "upper": [round(x, 2) for x in result.boll.upper[-100:]],
@@ -251,8 +326,24 @@ def build_train_session_payload(
                 "zss": d.get("zss", []),
                 "mmds": d.get("mmds", []),
                 "fractals": d.get("fractals", []),
+                # V-HOTFIX: valid_fractals 在上面 d["valid_fractals"] 已算好，
+                # 但这里手工列字段时漏了它 —— 前端 train 页拿到的恒为空，
+                # 图上 0 个分型（36 根窗口实测：直调 analyser=4，HTTP=0）。
+                # 教训与 stock_pick._run_timing_one 的同类漏传一致：算过的
+                # 字段必须在 return 处再核对一遍，别只靠手写清单。
+                "valid_fractals": d.get("valid_fractals", []),
                 "bcs": d.get("bcs", []),
                 "boll": d.get("boll"),
+                # macd 与 valid_fractals 同批漏传：to_dict 明确给出完整序列
+                # 供前端副图展示，这里手工清单却漏了 —— train 页 MACD 副图
+                # 恒缺失（d.macd 恒 undefined，无 hist 就不渲染副图面板）。
+                "macd": d.get("macd"),
+                # levels（笔/线段递归级别）与 zsds/qsds 同样来自 to_dict，
+                # 手工清单漏了 levels 会让 train 页线段级别切换退化为空图
+                # （data.levels.xd 恒 undefined，笔/分型/买卖点清空后无从恢复）。
+                "levels": d.get("levels"),
+                "zsds": d.get("zsds", []),
+                "qsds": d.get("qsds", []),
                 "candidates": candidates,
                 "mmd_outcomes": mmd_outcomes,
             }
@@ -300,18 +391,7 @@ async def chanlun_analyze(
 
     # 2. Run chanlun analysis
     symbol = f"{req.market}{req.code}"
-    frequency_map: dict[str, str] = {
-        "MIN_1": "1min",
-        "MIN_5": "5min",
-        "MIN_15": "15min",
-        "MIN_30": "30min",
-        "MIN_60": "60min",
-        "DAY": "daily",
-        "WEEK": "weekly",
-        "MONTH": "monthly",
-        "YEAR": "yearly",
-    }
-    freq = frequency_map.get(req.category.upper(), req.category)
+    freq = resolve_frequency(req.category)
     # V708: 多级别递归深度经前端指定（1=线段级别；标准请求不传时回落 1）。
     analyser = ChanlunAnalyser(
         code=symbol,
@@ -334,6 +414,7 @@ async def chanlun_analyze(
         }
         for fx in result.fractals
     ]
+    d["valid_fractals"] = result.valid_fractals_to_dict()
 
     # 添加BOLL数据
     if result.boll:
@@ -353,21 +434,7 @@ async def chanlun_analyze(
 
     # 4. 买卖点分类准确度验证（前瞻命中率 vs 随机基准）——让用户核对
     #    「哪类缠论买卖点信号真的准」，直接服务择时交易的可信度判断。
-    try:
-        from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type
-
-        closes = [float(k.close) for k in result.klines]
-        mmd_signals = [
-            {
-                "type": mmd.mmd_type.value,
-                "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
-            }
-            for mmd in result.mmds
-        ]
-        d["signal_accuracy"] = compute_signal_accuracy_by_type(closes, mmd_signals)
-    except Exception:
-        # 准确度验证是附加信息，失败不应阻断主分析结果
-        d["signal_accuracy"] = None
+    _attach_signal_accuracy(d, result)
 
     # V534: 基本面估值（PE/PB），复用诊断页的离线取数 helper（无缓存时为 None）
     try:
@@ -400,15 +467,8 @@ async def chanlun_multi_level(
     from easy_tdx.chanlun import ChanlunAnalyser
     from easy_tdx.chanlun.multi_level import MultiLevelAnalyser
 
-    frequency_map: dict[str, str] = {
-        "MIN_1": "1min",
-        "MIN_5": "5min",
-        "MIN_15": "15min",
-        "MIN_30": "30min",
-        "MIN_60": "60min",
-        "DAY": "daily",
-        "WEEK": "weekly",
-    }
+    # 复用模块级白名单（原先这里漏了 MONTH/YEAR，导致多级别比 analyze 少两档）
+    frequency_map = FREQUENCY_MAP
     # V720: category/low_level 不在白名单时显式 400（此前静默回落 daily/30min，
     # 与 analyze 同参 400 的行为不一致，且把错别字悄悄当成日线分析）。
     if req.category.upper() not in frequency_map:
@@ -483,26 +543,35 @@ async def chanlun_multi_level(
 
     confluence = mla.compute_confluence_score("high", "low")
 
+    # 真·区间套：用真实低周期数据对**每个**高级别买卖点做确认（缠论原文语义）。
+    # 与上面 confluence（只比「最新一对」信号）区分开：这里逐信号、按行情时间
+    # 对齐、防未来函数，且只在窗口内出现同方向背驰/买卖点时才算确认。
+    qujiantao: list[dict[str, Any] | None] = []
+    try:
+        from easy_tdx.chanlun.qujiantao import compute_qujiantao_cross_period
+
+        qujiantao = compute_qujiantao_cross_period(
+            high_result.mmds,
+            bis_low=low_result.bis,
+            zss_low=low_result.zss,
+            bcs_low=low_result.bcs,
+            mmds_low=low_result.mmds,
+        )
+        # 同时挂到 MMD 上，供序列化与回测复用
+        for m, qt in zip(high_result.mmds, qujiantao):
+            m._qujiantao = qt
+    except Exception:  # noqa: BLE001
+        # 区间套是增强信息，失败不影响主流程
+        qujiantao = []
+
     # 最后一级笔的低级别走势
     low_qs: dict[str, Any] = {}
     if high_result.bis:
         last_bi = high_result.bis[-1]
         low_qs = mla.query_low_level_qs("high", "low", last_bi)
 
-    # 格式化结果
-    def fmt_result(result: Any) -> dict[str, Any]:
-        d: dict[str, Any] = result.to_dict()
-        d["fractals"] = [
-            {
-                "fx_type": fx.fx_type.value,
-                "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
-                "val": round(fx.val, 2),
-                "index": fx.index,
-                "bar_index": fx.bar_index,
-            }
-            for fx in result.fractals
-        ]
-        return d
+    # 格式化结果（V-17: 提取到模块级 _multi_fmt_result 以纳入离线契约测试）
+    fmt_result = _multi_fmt_result
 
     # V541: 高级别（日线）补基本面估值，与单级别 chanlun_analyze 对齐
     high_valuation: dict[str, Any] | None = None
@@ -528,6 +597,8 @@ async def chanlun_multi_level(
                 },
                 "confluence": confluence,
                 "low_level_qs": low_qs,
+                # 真·区间套（逐信号、真实低周期确认）；与 confluence 区分
+                "qujiantao": qujiantao,
             }
         ),
     )

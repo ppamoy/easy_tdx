@@ -43,9 +43,7 @@ async def test_range_within_single_page() -> None:
     global call_log
     call_log = []
     with patch("easy_tdx.web.klines.fetch_qfq_klines", side_effect=_fake_fetch):
-        df = await fetch_bars_range(
-            None, None, "SZ", "000001", "DAY", "2024-05-06", "2024-05-20"
-        )
+        df = await fetch_bars_range(None, None, "SZ", "000001", "DAY", "2024-05-06", "2024-05-20")
     assert call_log == [0]
     # 2017-01-02 + 2000 个工作日 → 最后一根 = 2024-10-11 附近；切片应为闭区间
     assert len(df) > 0
@@ -62,9 +60,7 @@ async def test_range_spans_multiple_pages() -> None:
     call_log = []
     target = _MASTER["date"].iloc[800]
     with patch("easy_tdx.web.klines.fetch_qfq_klines", side_effect=_fake_fetch):
-        df = await fetch_bars_range(
-            None, None, "SZ", "000001", "DAY", target.strftime("%Y-%m-%d")
-        )
+        df = await fetch_bars_range(None, None, "SZ", "000001", "DAY", target.strftime("%Y-%m-%d"))
     assert 800 in call_log  # 翻到了第 2 页
     assert 1600 not in call_log  # 覆盖 start_date 后停
     assert len(df) == _TOTAL - 800  # end_date 缺省 → 到最新一根
@@ -104,9 +100,7 @@ async def test_range_end_date_inclusive() -> None:
     global call_log
     call_log = []
     with patch("easy_tdx.web.klines.fetch_qfq_klines", side_effect=_fake_fetch):
-        df = await fetch_bars_range(
-            None, None, "SZ", "000001", "DAY", "2024-05-06", "2024-05-06"
-        )
+        df = await fetch_bars_range(None, None, "SZ", "000001", "DAY", "2024-05-06", "2024-05-06")
     assert len(df) == 1
     assert df["date"].iloc[0] == pd.Timestamp("2024-05-06")
 
@@ -129,9 +123,7 @@ async def test_range_minute_datetime_column() -> None:
         return minutes.iloc[begin:end].reset_index(drop=True)
 
     with patch("easy_tdx.web.klines.fetch_qfq_klines", side_effect=_fake_min):
-        df = await fetch_bars_range(
-            None, None, "SZ", "000001", "MIN_5", "2024-05-06", "2024-05-06"
-        )
+        df = await fetch_bars_range(None, None, "SZ", "000001", "MIN_5", "2024-05-06", "2024-05-06")
     # 闭区间含 5/6 全天（次日 00:00 前）
     assert len(df) == int((24 * 60 - 9.5 * 60) / 5)  # 09:30 → 23:55
     assert df["datetime"].iloc[0] == pd.Timestamp("2024-05-06 09:30")

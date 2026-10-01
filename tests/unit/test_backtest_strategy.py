@@ -6,9 +6,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from easy_tdx.backtest.engine import BacktestEngine
 from easy_tdx.backtest.strategy import (
     Strategy,
     StrategyDataProxy,
+    _datetime_to_int,
     _SeriesAccessor,
     crossover,
 )
@@ -539,3 +541,50 @@ class TestWarmupAndLookback:
         df = _make_df(n=15)
         BacktestEngine(CountStrategy, cash=100000).run(df)
         assert next_count == 15
+
+
+class TestDatetimeCompat:
+    """datetime 列兼容性（V-24）。
+
+    用户从 JSON/CSV 读入行情时 datetime 常是 ISO 字符串（'2024-01-02'），
+    修复前 `_datetime_to_int` 走 `astype(float64)` 直接抛不可读的
+    `ValueError: could not convert string to float`。
+    """
+
+    def test_datetime_to_int_accepts_iso_strings(self) -> None:
+
+        arr = pd.Series(["2024-01-02", "2024-01-31", "2024-12-31"]).values
+        out = _datetime_to_int(arr)
+        assert out.tolist() == [20240102.0, 20240131.0, 20241231.0]
+
+    def test_engine_runs_on_iso_string_datetime(self) -> None:
+        """端到端：ISO 字符串 datetime 直接喂 BacktestEngine 不再报错。"""
+        df = _make_df(n=30)
+        df["datetime"] = pd.bdate_range("2024-01-02", periods=30).strftime("%Y-%m-%d")
+
+        class OneBuyStrategy(Strategy):
+            def init(self) -> None:
+                pass
+
+            def next(self) -> None:
+                if self._bar_index == 5:
+                    self.buy(size=100)
+
+        result = BacktestEngine(OneBuyStrategy, cash=100000).run(df)
+        assert len(result.equity_curve) == 30
+
+    def test_engine_still_accepts_timestamp_datetime(self) -> None:
+        """对照组：Timestamp 类型（原有行为）不受影响。"""
+        df = _make_df(n=30)
+        df["datetime"] = pd.bdate_range("2024-01-02", periods=30)
+
+        class OneBuyStrategy(Strategy):
+            def init(self) -> None:
+                pass
+
+            def next(self) -> None:
+                if self._bar_index == 5:
+                    self.buy(size=100)
+
+        result = BacktestEngine(OneBuyStrategy, cash=100000).run(df)
+        assert len(result.equity_curve) == 30

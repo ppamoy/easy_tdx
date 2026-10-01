@@ -1105,5 +1105,24 @@ cd web-ui && npx vue-tsc --noEmit
 
 ---
 
+
+---
+
+## V-33 质量门禁复跑（openspec easy-tdx-v386-quality-hardening 收官，2026-09-30）
+
+| 门禁 | 结果 |
+| --- | --- |
+| pytest tests/unit | **3810 passed / 4 skipped** |
+| ruff check src/ tests/ | ✅ 0 错误 |
+| ruff format --check | ✅ 522 文件全部已格式化 |
+| mypy src/ | ✅ 0 错误（266 文件；本轮修掉 accuracy/zs/xd/screening/audit 等 20 处遗留） |
+| vue-tsc -b --force | ✅ 0 error |
+| vitest run | ✅ 129 passed（16 文件） |
+| vite build | ✅ built in ~3.7s |
+| 覆盖率（tests/unit） | **78.7%**（门槛 70；scripts/coverage_gaps.py 可复跑） |
+| CI | test 矩阵 job 补入 `npm test`（V-33，openspec 1.6） |
+
+openspec 任务 22/22 全勾。低覆盖遗留：ex/ 命令簇与 CLI 入口（详见 tasks.md 2.5 注记）。
+
 *报告生成时间: 2025-08-28*
 *版本: easy-tdx 1.59.0*

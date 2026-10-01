@@ -222,6 +222,10 @@ class _TrainFakeResult:
     def to_dict(self) -> dict:
         return self._to_dict
 
+    def valid_fractals_to_dict(self) -> list:
+        """与 ChanlunAnalyser.valid_fractals_to_dict 对齐的 mock。"""
+        return self.fractals
+
 
 def _train_df(n: int = 40) -> pd.DataFrame:
     closes = [100.0] * n

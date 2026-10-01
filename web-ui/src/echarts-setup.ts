@@ -35,9 +35,19 @@ echarts.use([
   VisualMapComponent,
 ])
 
-// A股惯例：红涨绿跌
+// 默认涨跌色常量（红涨绿跌）。运行时响应式配色见 colors.ts，组件请用 upColor/downColor。
 export const UP_COLOR = '#ef4146'
 export const DOWN_COLOR = '#18a058'
+
+/**
+ * 分型（顶/底）统一色：白色。
+ * 分型只是结构端点（顶=三K高点、底=三K低点），不表达多空方向；红/绿留给买卖点
+ * 专用，否则「绿色顶分型」会与卖点撞色、被误读成信号。顶/底之间靠三角朝向
+ * （顶▼/底▲）区分，不靠颜色。
+ */
+export const FX_COLOR = '#ffffff'
+/** 分型描边色：白三角压在浅色高亮/K线上影上会糊，深色描边保证可分离。 */
+export const FX_BORDER_COLOR = '#1f2430'
 
 // 注册内联 dark 主题（echarts/core 不预置 'dark' 主题数据）。
 // 覆盖坐标轴文字、分割线等默认浅色样式，适配深色背景。

@@ -71,12 +71,19 @@ const chanlunXds = ref<any[]>([])
 const chanlunZss = ref<any[]>([])
 const chanlunMmds = ref<any[]>([])
 const chanlunFxs = ref<any[]>([])
+// 展示用「有效分型」（笔端点分型，天然顶底交替且不共用K线）。
+// 缠论原文要求相邻分型不得共用K线；后端 fractals 是逐三根滑动窗口扫出来的，
+// 含大量共用K线的重叠分型（实测 000001 日线 184/265 对违规），直接渲染会出现
+// 「12-17 底 → 12-18 顶 → 12-19 底」这种挤在连续三根K线上的伪分型。
+// 详见 scripts/verify_fx_independence.py。
+const chanlunValidFxs = ref<any[]>([])
 const chanlunBcs = ref<any[]>([])
 const chanlunZsds = ref<any[]>([])
 const chanlunQsds = ref<any[]>([])
 const chanlunMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
 const chanlunLevel = ref<'bi' | 'xd'>('bi')
 const chanlunRaw = ref<any>(null)
+const showMmdLabels = ref(false) // 买卖点类型文字标注（1卖/2卖/3卖…）
 
 // 成交价模式（精简为 开盘价/收盘价）
 const EXECUTIONS: { value: ExecutionMode; label: string }[] = [
@@ -193,7 +200,7 @@ async function onRun() {
     oos_train_ratio: oosTrainRatio.value,
   })
   // 3. 如果选择了缠论策略，运行缠论分析
-  if (strategy.value === 'chanlun' && store.ohlcv.length > 0) {
+  if (drawsChanlunChart.value && store.ohlcv.length > 0) {
     await runChanlunAnalysis()
   }
 }
@@ -208,6 +215,10 @@ function applyChanlunLevel(level: 'bi' | 'xd', data: any) {
     chanlunZss.value = xdLevel.zss ?? []
     chanlunMmds.value = xdLevel.mmds ?? []
     chanlunBcs.value = xdLevel.bcs ?? []
+    // 递归级别（xd）：后端 levels 不含分型字段；不清空会残留 bi 级别分型，
+    // 与本级别笔/中枢不匹配（详见 ChanlunView.applyAnalysisLevel 同处说明）。
+    chanlunFxs.value = []
+    chanlunValidFxs.value = []
     return
   }
 
@@ -218,6 +229,10 @@ function applyChanlunLevel(level: 'bi' | 'xd', data: any) {
   chanlunZss.value = data?.zss ?? []
   chanlunMmds.value = data?.mmds ?? []
   chanlunBcs.value = data?.bcs ?? []
+  // 回到笔级别：分型只在顶层数据里（levels 中没有），必须恢复，
+  // 否则从 xd 切回 bi 后分型会永久丢失。
+  chanlunFxs.value = data?.fractals ?? []
+  chanlunValidFxs.value = data?.valid_fractals ?? []
 }
 
 function onChanlunLevelChange() {
@@ -305,6 +320,7 @@ async function runChanlunAnalysis() {
     chanlunLevel.value = 'bi'
     applyChanlunLevel('bi', data)
     chanlunFxs.value = data.fractals ?? []
+    chanlunValidFxs.value = data.valid_fractals ?? []
     chanlunMacd.value = data.macd && data.macd.dif?.length ? data.macd : null
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
@@ -424,23 +440,28 @@ function fullSymbol(code6: string): string {
   return `${detectMarket(code6)}:${code6}`
 }
 
-// 判断是否为缠论策略
-const isChanlunStrategy = computed(() => {
-  return strategy.value === 'chanlun' || strategy.value === 'changying_chanlun'
-})
+// 判断是否为缠论策略。
+// chanlun_pair（缠论买卖点配对）同样跑缠论分析、画缠论结构图，
+// 必须与 chanlun 同等待遇；changying_chanlun 不做结构图（历史约定）。
+const CHANLUN_STRUCTURED_STRATEGIES = new Set(['chanlun', 'chanlun_pair'])
+const isChanlunStrategy = computed(
+  () => strategy.value === 'chanlun' || strategy.value === 'changying_chanlun',
+)
+// 是否绘制缠论结构图（笔/线段/中枢/买卖点叠加）
+const drawsChanlunChart = computed(() => CHANLUN_STRUCTURED_STRATEGIES.has(strategy.value))
 
 // 计算 bars（用于 ChanlunChart）
 // 缠论图表必须与后端分析窗口对齐：分析接口最多取最近 CHANLUN_MAX_COUNT 根，
 // 若把全部回测 K 线（可能远超 800 根）传给图表，叠加层（笔/线段/中枢/分型/
 // 买卖点/背驰）会全部挤在右侧少数 K 线上，左侧一片空白，视觉上乱七八糟。
-// 仅对真正运行缠论分析并填充结构数据的 'chanlun' 策略截断窗口；
-// changying_chanlun 不做缠论结构图（onRun 只对 'chanlun' 调 runChanlunAnalysis），
+// 仅对真正运行缠论分析并填充结构数据的策略（chanlun / chanlun_pair）截断窗口；
+// changying_chanlun 不做缠论结构图（不调 runChanlunAnalysis），
 // 保持全量 K 线由 KlineChart 展示，避免丢失回测区间。
 // V722: 后端 /chanlun/analyze count 上限已放宽到 8000（fetch_paged_bars 分页），
 // 窗口跟随已加载 K 线；前端上限 2000（>2000 叠加层过密且分析耗时显著上升）。
 const CHANLUN_MAX_COUNT = 2000
 const bars = computed(() => {
-  if (strategy.value !== 'chanlun') return store.ohlcv
+  if (!drawsChanlunChart.value) return store.ohlcv
   return store.ohlcv.length > CHANLUN_MAX_COUNT
     ? store.ohlcv.slice(store.ohlcv.length - CHANLUN_MAX_COUNT)
     : store.ohlcv
@@ -1211,28 +1232,35 @@ async function onSave() {
         <section class="report-section">
           <h3>
             K线 + 买卖点
-            <span v-if="strategy === 'chanlun'" class="chanlun-badge">缠论</span>
+            <span v-if="drawsChanlunChart" class="chanlun-badge">缠论</span>
           </h3>
-          <div v-if="strategy === 'chanlun'" class="chanlun-level-switch">
+          <div v-if="drawsChanlunChart" class="chanlun-level-switch">
             <label>分析级别</label>
             <select v-model="chanlunLevel" @change="onChanlunLevelChange">
               <option value="bi">笔级别</option>
               <option value="xd">线段级别</option>
             </select>
+            <label class="mmd-label-toggle">
+              <input v-model="showMmdLabels" type="checkbox" /> 买卖点标注
+            </label>
           </div>
           <!-- V722: 全历史回溯 -->
           <div v-if="isChanlunStrategy" class="chanlun-history-bar">
             <button class="ghost" :disabled="!earlierCanLoad" @click="loadEarlierForChanlun">
               {{ earlierLoading ? '加载中…' : '加载更早 ⏮' }}
             </button>
-            <button v-if="store.ohlcv.length > CHANLUN_MAX_COUNT" class="ghost" @click="backToLatestChanlun">
+            <button
+              v-if="store.ohlcv.length > CHANLUN_MAX_COUNT"
+              class="ghost"
+              @click="backToLatestChanlun"
+            >
               回最新 ⏭
             </button>
             <span v-if="earlierError" class="chanlun-error-text">{{ earlierError }}</span>
           </div>
           <!-- 缠论策略：显示缠论结构图 -->
           <ChanlunChart
-            v-if="isChanlunStrategy && !chanlunLoading && bars.length > 0"
+            v-if="drawsChanlunChart && !chanlunLoading && bars.length > 0"
             :bars="bars"
             :bis="chanlunBis"
             :xds="chanlunXds"
@@ -1241,13 +1269,15 @@ async function onSave() {
             :zss="chanlunZss"
             :mmds="chanlunMmds"
             :fxs="chanlunFxs"
+            :validFxs="chanlunValidFxs"
             :bcs="chanlunBcs"
             :macd="chanlunMacd ?? undefined"
             :frequency="category"
+            :show-mmd-labels="showMmdLabels"
             compact
           />
           <!-- 缠论分析中 -->
-          <div v-else-if="strategy === 'chanlun' && chanlunLoading" class="chanlun-loading">
+          <div v-else-if="drawsChanlunChart && chanlunLoading" class="chanlun-loading">
             正在分析缠论结构…
           </div>
           <!-- 缠论分析失败 -->
@@ -1742,6 +1772,16 @@ async function onSave() {
   border-radius: 6px;
   padding: 4px 8px;
   font-size: 12px;
+}
+.mmd-label-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.mmd-label-toggle input {
+  cursor: pointer;
 }
 .chanlun-loading {
   display: flex;

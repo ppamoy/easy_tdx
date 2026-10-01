@@ -37,15 +37,16 @@ def test_fixture_loads(result) -> None:
 
 
 def test_counts_locked(result) -> None:
-    assert len(result.bis) == 14  # V635 严格笔（顶底至少1根独立K线）后
-    assert len(result.xds) == 2  # 假破坏恢复（第71-78课）：笔破坏暂定+真破坏确认后，原 3 段合并为 2 段
+    assert len(result.bis) == 12  # V740 笔算法修正后伪拆分合并（两底间取最高顶）
+    # 假破坏恢复（第71-78课）：笔破坏暂定+真破坏确认后，原 3 段合并为 2 段
+    assert len(result.xds) == 2
     # V730 原文中枢口径：ZG/ZD 前两笔冻结 + 无重叠率阈值 → zs 3→2
     # （zs0=[bi0..bi9] 大震荡，bi9 上离开后 bi10 不回补 → 中枢结束；zs1=[bi10..bi12]）
     assert len(result.zss) == 2
     assert len(result.mmds) == 3
-    # V730 原文中枢口径：旧 zs2 的「进入笔 bi9」现属于 zs0 本身，进入段(bi8)与
-    # 离开段(bi13)力度相当 → 盘整背驰按原文正确消失，bcs 1→0
-    assert len(result.bcs) == 0
+    # V740：笔 high/low 改为区间真实极值后，中枢 zg 上移，盘整背驰力度对比变化，
+    # 1 个笔背驰（bi3 力度 < bi1）正确显现。
+    assert len(result.bcs) == 1
 
 
 def test_bi_endpoints_on_extremes(result) -> None:
@@ -135,10 +136,10 @@ def test_timing_response_novice_fields() -> None:
     assert out["novice_advice"]["explanation"]
     assert out["signal_quality"]["summary"]
     # structure 计数与快照一致（V730 原文中枢口径后 zs 3→2）
-    assert out["structure"]["bi_count"] == 14
+    assert out["structure"]["bi_count"] == 12
     assert out["structure"]["zs_count"] == 2
     assert out["structure"]["mmd_count"] == 3
-    assert out["structure"]["bc_count"] == 0
+    assert out["structure"]["bc_count"] == 1
 
 
 def test_bi_end_to_end(result) -> None:

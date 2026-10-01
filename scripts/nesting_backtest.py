@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""区间套（多级别共振）信号的量化回测验证 —— 一次性统计脚本（不入库）。
+"""真·区间套（nested 布尔）信号的量化回测验证 —— 一次性统计脚本（不入库）。
 
-缠论原文：区间套 = 各级别走势「套」在一起共振，是背驰/买卖点的最强确认。
-本脚本验证这个理论断言在真实行情上是否成立：
+V-22：按《区间套现状说明与统一方案》§九迁移——分组键从 B 伪区间套评分
+（v68_range_set_multi_level.multi_level_score，仅 3 类信号、单级别中枢位置）
+换成**真区间套确认标签** ``mmd.qujiantao.nested``（低周期同向背驰/买卖点确认）。
 
-  分组：A=有区间套确认（multi_level_score >= 阈值）
-        B=无区间套确认
-        C=全部信号（基线）
-  指标：未来 5/10/20 根的 hit_rate（命中率=方向正确）、avg_return（平均收益）、
-        profit_factor（盈亏比）、excess_hit_rate（相对随机入场基准的超额命中率）
+数据源：/api/v1/chanlun/multi-level（日线高级别 + 30 分钟真实低周期结构，
+compute_qujiantao_cross_period 逐信号确认，时间对齐 + 防未来函数）。
+关闭阈值扫描：nested 是布尔，无需阈值；两组 = 确认 vs 未确认。
 
-数据取自在跑的本地服务（/api/v1/chanlun/analyze），标的 = verify.VERIFY_POOL
-20 只沪深龙头，日线 800 根。随机基准 seed=42，结果可复现。
+对照设计：
+  A_nested = 区间套确认（nested=True，任意类型信号）
+  B_plain  = 未确认（nested=False 或缺失）
+  仍按方向分层（buy/sell），因为买卖点的前瞻收益方向相反。
 
-用法：.venv/bin/python scripts/nesting_backtest.py [--count N] [--threshold T]
+⚠️ 口径注意：/chanlun/analyze（单周期）的 qujiantao 来自**递归级别**，确认率
+极低（文档 §七：3%），不能用于本验证；必须走 multi-level 的跨周期口径。
+
+用法：.venv/bin/python scripts/nesting_backtest.py [--count 800] [--horizons 5,10,20]
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import argparse
 import json
 import sys
 import urllib.request
+from collections import Counter
 from pathlib import Path
 
 # 让脚本可直接跑（无需安装）
@@ -29,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type  # noqa: E402
 
-API = "http://127.0.0.1:8000/api/v1/chanlun/analyze"
+API = "http://127.0.0.1:8000/api/v1/chanlun/multi-level"
 
 # 与 src/easy_tdx/web/routers/verify.py 的 VERIFY_POOL 一致（20 只龙头）
 POOL = [
@@ -41,27 +46,28 @@ POOL = [
 ]
 
 
-def analyze(market: str, code: str, count: int, category: str = "DAY") -> dict | None:
-    """取信号（/chanlun/analyze，POST）。"""
+def analyze_multi(market: str, code: str, count: int, low_level: str = "MIN_30") -> dict | None:
+    """取高级别信号 + 真·区间套标签（/chanlun/multi-level，POST）。"""
     payload = json.dumps(
-        {"market": market, "code": code, "category": category, "start": 0, "count": count}
+        {"market": market, "code": code, "category": "DAY", "start": 0,
+         "count": count, "low_level": low_level}
     ).encode()
     req = urllib.request.Request(
         API, data=payload, headers={"Content-Type": "application/json"}
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:  # noqa: S310
+        with urllib.request.urlopen(req, timeout=180) as resp:  # noqa: S310
             return json.loads(resp.read())
     except Exception as exc:  # noqa: BLE001
-        print(f"  ! {market}{code} 信号取数失败: {exc}")
+        print(f"  ! {market}{code} 多级别取数失败: {exc}")
         return None
 
 
-def fetch_closes(market: str, code: str, count: int, category: str = "DAY") -> list[float]:
-    """取收盘价序列（/bars，GET + query 参数，count 上限 800）。"""
+def fetch_closes(market: str, code: str, count: int) -> list[float]:
+    """取高级别收盘价序列（/bars，GET，count 上限 800）。"""
     url = (
         f"http://127.0.0.1:8000/api/v1/bars?market={market}&code={code}"
-        f"&category={category}&start=0&count={min(count, 800)}"
+        f"&category=DAY&start=0&count={min(count, 800)}"
     )
     try:
         with urllib.request.urlopen(url, timeout=120) as resp:  # noqa: S310
@@ -72,94 +78,66 @@ def fetch_closes(market: str, code: str, count: int, category: str = "DAY") -> l
     return [float(b["close"]) for b in d.get("data", [])]
 
 
-def nesting_score(mmd: dict) -> float | None:
-    """区间套评分；非 3 类信号未计算（返回 None）。"""
-    v = mmd.get("v68_range_set_multi_level")
-    if not v:
-        return None
-    sc = v.get("multi_level_score")
-    return float(sc) if sc is not None else None
-
-
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--count", type=int, default=800, help="每只票取多少根日线")
-    ap.add_argument("--threshold", type=float, default=0.5, help="区间套确认阈值")
     ap.add_argument("--horizons", type=str, default="5,10,20")
-    ap.add_argument("--categories", type=str, default="DAY",
-                    help="周期列表，逗号分隔（如 DAY,MIN_30,MIN_60）以扩大样本")
+    ap.add_argument("--low-level", type=str, default="MIN_30", help="低级别周期")
     args = ap.parse_args()
     horizons = tuple(int(x) for x in args.horizons.split(","))
 
-    # 逐标的收集：bar_index 不可跨标的拼接，需各自留 closes
     per_symbol: list[tuple[str, list[float], list[dict]]] = []
-    categories = [c.strip() for c in args.categories.split(",") if c.strip()]
-    for category in categories:
-      for market, code in POOL:
-        d = analyze(market, code, args.count, category)
+    for market, code in POOL:
+        d = analyze_multi(market, code, args.count, args.low_level)
         if not d:
             continue
-        closes = fetch_closes(market, code, args.count, category)
+        closes = fetch_closes(market, code, args.count)
         if not closes:
             continue
+        hi = d.get("high_level", {}).get("result", {}).get("mmds", [])
+        qt = d.get("qujiantao", [])
         sigs = []
-        for m in d.get("mmds", []):
+        for m, q in zip(hi, qt):
             if m.get("bar_index") is None:
                 continue
+            # nested：True=确认 / False=明确未确认 / 缺失=算不出。
+            # 全部进样本；B 组 = 非 True（含缺失），与回测过滤口径一致
+            # （require_qujiantao 只放行 nested is True）。
+            nested = bool(q.get("nested")) if q else False
             sigs.append(
                 {
                     "type": m["type"],
                     "bar_index": int(m["bar_index"]),
-                    "_nesting": nesting_score(m),
+                    "_nested": nested,
                 }
             )
-        # 标的内索引不可跨周期/标的拼接 → 用 (周期,标的) 作为分组键
-        per_symbol.append((f"{category}:{market}{code}", closes, sigs))
-        n_nest = sum(1 for s in sigs if (s["_nesting"] or 0) >= args.threshold)
-        print(f"  {category} {market}{code}: bars={len(closes)} mmds={len(sigs)} 有区间套={n_nest}")
+        per_symbol.append((f"DAY:{market}{code}", closes, sigs))
+        n_nest = sum(1 for s in sigs if s["_nested"])
+        print(f"  {market}{code}: bars={len(closes)} mmds={len(sigs)} nested={n_nest}")
 
     if not per_symbol:
         print("无可用数据")
         return 1
 
-    # 分组统计：分组时保留所属标的，逐标的只喂自己的信号
-    # （bar_index 是标的内的索引，跨标的拼接会张冠李戴；且同一信号被多个
-    #  标的重复计入会虚增样本量 n，误导显著性判断）。
-    #
-    # 对照组设计（关键）：区间套字段 _range_set_multi_level_v68 仅对 3 类买卖点
-    # 计算（mmd.py:5157），若直接拿「有区间套」对比「全部无区间套」，B 组会混入
-    # 大量 1/2 类信号——两组类型构成不同，差异无法归因于区间套。因此主对照限定在
-    # 3 类信号内部：A3 = 3类且有区间套确认，B3 = 3类但无区间套确认。
+    # 分组：A=nested 确认，B=未确认。bar_index 是标的内索引，逐标的喂自己的 closes。
     groups: dict[str, list[tuple[str, dict]]] = {
-        "A3_三类有区间套": [],
-        "B3_三类无区间套": [],
-        "C_全部基线": [],
+        "A_nested_确认": [],
+        "B_plain_未确认": [],
     }
     for sym, _closes, sigs in per_symbol:
         for s in sigs:
-            sc = s["_nesting"]
             rec = {"type": s["type"], "bar_index": s["bar_index"]}
-            groups["C_全部基线"].append((sym, rec))
-            if "3" not in s["type"]:  # 仅 1/2 类：不进主对照
-                continue
-            if sc is not None and sc >= args.threshold:
-                groups["A3_三类有区间套"].append((sym, rec))
-            else:
-                groups["B3_三类无区间套"].append((sym, rec))
+            groups["A_nested_确认" if s["_nested"] else "B_plain_未确认"].append((sym, rec))
 
-    # 打印各组类型/方向构成，便于核验两组可比性
     print("\n分组构成：")
     for name, tagged in groups.items():
-        from collections import Counter
-
         c = Counter(r["type"] for _s, r in tagged)
         buy = sum(1 for _s, r in tagged if "buy" in r["type"])
-        sell = len(tagged) - buy
-        print(f"  {name}: n={len(tagged)} BUY={buy} SELL={sell} {dict(c)}")
+        print(f"  {name}: n={len(tagged)} BUY={buy} SELL={len(tagged)-buy} {dict(c)}")
 
     print("\n" + "=" * 78)
-    print(f"区间套回测验证  count={args.count}  阈值={args.threshold}  "
-          f"horizons={horizons}  周期={categories}")
+    print(f"真·区间套回测验证  count={args.count}  low_level={args.low_level}  "
+          f"horizons={horizons}")
     print("=" * 78)
 
     closes_by_sym = {sym: c for sym, c, _ in per_symbol}
@@ -173,7 +151,6 @@ def main() -> int:
         ]
         if not sel:
             return None
-        # 按标的切片，各自用自己的 closes 计算（bar_index 为标的内索引）
         all_rep = []
         for sym in {s for s, _ in sel}:
             closes = closes_by_sym[sym]
@@ -188,7 +165,6 @@ def main() -> int:
         for h in horizons:
             tot = 0
             w_hit = w_ret = w_exc = 0.0
-            pfs: list[float] = []
             for rep, _n in all_rep:
                 for tinfo in rep.get("by_type", {}).values():
                     st = tinfo.get("horizons", {}).get(str(h))
@@ -201,14 +177,9 @@ def main() -> int:
                     w_hit += st.get("hit_rate", 0.0) * cnt
                     w_ret += st.get("avg_return", 0.0) * cnt
                     w_exc += st.get("excess_hit_rate", 0.0) * cnt
-                    # pf = 平均盈利/平均亏损，无亏损时引擎取 999（截断值），
-                    # 线性平均会被带飞 → 只做中位数与截断计数。
-                    pfs.append(st.get("profit_factor", 0.0))
             if tot == 0:
                 continue
-            med_pf = sorted(pfs)[len(pfs) // 2] if pfs else 0.0
-            out[h] = (tot, w_hit / tot, w_ret / tot, w_exc / tot, med_pf,
-                      sum(1 for p in pfs if p >= 999.0))
+            out[h] = (tot, w_hit / tot, w_ret / tot, w_exc / tot)
         return out
 
     def show(name: str, st: dict | None) -> None:
@@ -218,27 +189,23 @@ def main() -> int:
         for h in horizons:
             if h not in st:
                 continue
-            tot, hit, ret, exc, pf, ntr = st[h]
+            tot, hit, ret, exc = st[h]
             print(
                 f"  h={h:>2}: n={tot:>3}  hit={hit:6.1%}  avg_ret={ret:+7.3f}%  "
-                f"pf(med)={pf:5.2f}{f' [含{ntr}组无亏损]' if ntr else ''}  "
                 f"excess_hit={exc:+6.1%}"
             )
 
-    summary = {}
     for name, tagged in groups.items():
-        st = stats_for(tagged)
-        if st:
-            summary[name] = st
-        show(name, st)
+        show(name, stats_for(tagged))
 
-    # ── 主结论：按方向分层对比（A3/B3 方向构成相反，必须分层才可比）──
+    # ── 主结论：按方向分层对比 ──
     print("\n" + "=" * 78)
-    print("分层对照（同为 3 类信号，按方向分层）")
+    print("分层对照（按方向分层；nested 确认 vs 未确认）")
     print("=" * 78)
-    for direction, label in (("buy", "BUY(3buy)"), ("sell", "SELL(3sell)")):
-        a = stats_for(groups["A3_三类有区间套"], direction)
-        b = stats_for(groups["B3_三类无区间套"], direction)
+    a_all, b_all = groups["A_nested_确认"], groups["B_plain_未确认"]
+    for direction, label in (("buy", "BUY"), ("sell", "SELL")):
+        a = stats_for(a_all, direction)
+        b = stats_for(b_all, direction)
         if not a or not b:
             continue
         print(f"\n{label}:")
@@ -248,24 +215,12 @@ def main() -> int:
             ah, bh = a[h], b[h]
             v = "✅ 区间套占优" if ah[1] > bh[1] else "⚠️ 区间套不占优"
             print(
-                f"  h={h:>2}: 有区间套(hit={ah[1]:.1%},ret={ah[2]:+.3f}%,n={ah[0]}) vs "
-                f"无(hit={bh[1]:.1%},ret={bh[2]:+.3f}%,n={bh[0]})  → {v}"
+                f"  h={h:>2}: 确认(hit={ah[1]:.1%},ret={ah[2]:+.3f}%,n={ah[0]}) vs "
+                f"未确认(hit={bh[1]:.1%},ret={bh[2]:+.3f}%,n={bh[0]})  → {v}"
             )
 
-    # 结论
-    print("\n" + "-" * 78)
-    for h in horizons:
-        a = summary.get(("A3_三类有区间套", h))
-        b = summary.get(("B3_三类无区间套", h))
-        if not a or not b:
-            continue
-        verdict = "✅ 区间套占优" if a[1] > b[1] else "⚠️ 区间套不占优"
-        print(
-            f"h={h:>2}: A3(hit={a[1]:.1%},ret={a[2]:+.3f}%,n={a[0]}) vs "
-            f"B3(hit={b[1]:.1%},ret={b[2]:+.3f}%,n={b[0]})  → {verdict}"
-        )
-    print("-" * 78)
-    print("注：excess_hit = 相对可复现随机入场基准（seed=42）的超额命中率。")
+    print("\n注：excess_hit = 相对可复现随机入场基准（seed=42）的超额命中率。")
+    print("注：B 组含 nested 缺失（算不出）的信号——与回测过滤口径一致（只放行 True）。")
     return 0
 
 

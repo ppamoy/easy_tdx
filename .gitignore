@@ -37,3 +37,11 @@ scaffolds/
 
 # 服务运行日志（本地产物，不入库）
 logs/
+.v73-snapshot-backup/
+
+# 根目录下载的公告/报告 PDF（本地产物，不入库）
+/*.PDF
+/*.pdf
+
+# 根目录 npm 安装残留（web-ui 的依赖由 web-ui/.gitignore 忽略）
+/node_modules/

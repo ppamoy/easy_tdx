@@ -11,6 +11,7 @@ import PortfolioView from './views/PortfolioView.vue'
 import ScreeningView from './views/ScreeningView.vue'
 import FundamentalView from './views/FundamentalView.vue'
 import ServerSettingsView from './views/ServerSettingsView.vue'
+import DisplaySettingsView from './views/DisplaySettingsView.vue'
 import StrategiesView from './views/StrategiesView.vue'
 import LearnView from './views/LearnView.vue'
 import StockPickView from './views/StockPickView.vue'
@@ -29,6 +30,7 @@ const routes = [
   { path: '/compare', name: 'compare', component: CompareView },
   { path: '/strategies', name: 'strategies', component: StrategiesView },
   { path: '/settings', name: 'settings', component: ServerSettingsView },
+  { path: '/display-settings', name: 'display-settings', component: DisplaySettingsView },
   { path: '/monitor', name: 'monitor', component: MonitorView },
   { path: '/diagnosis', name: 'diagnosis', component: DiagnosisView },
   { path: '/verify', redirect: { path: '/learn', query: { tab: 'verify' } } },

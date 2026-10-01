@@ -6,7 +6,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { fetchBars } from '../api'
 import { detectMarket } from '../market'
 import type { Bar } from '../types'
-import echarts, { UP_COLOR, DOWN_COLOR } from '../echarts-setup'
+import echarts from '../echarts-setup'
+import { colorScheme, downColor, upColor } from '../colors'
 import { fmt2 } from '../format'
 
 // ── 四季周期状态 ────────────────────────────────────────────────────────
@@ -397,10 +398,10 @@ function renderChart() {
           type: 'candlestick',
           data: ohlc,
           itemStyle: {
-            color: UP_COLOR,
-            color0: DOWN_COLOR,
-            borderColor: UP_COLOR,
-            borderColor0: DOWN_COLOR,
+            color: upColor.value,
+            color0: downColor.value,
+            borderColor: upColor.value,
+            borderColor0: downColor.value,
           },
         },
       ],
@@ -466,6 +467,8 @@ onMounted(() => {
 watch([code, category], () => {
   if (code.value) analyze()
 })
+// 全局涨跌配色变化时重渲染。
+watch(colorScheme, renderChart)
 </script>
 
 <template>
@@ -599,7 +602,7 @@ watch([code, category], () => {
             <span class="metric-label">涨跌比</span>
             <span
               class="metric-value"
-              :style="{ color: marketMetrics.advanceDecline > 0 ? UP_COLOR : DOWN_COLOR }"
+              :style="{ color: marketMetrics.advanceDecline > 0 ? upColor : downColor }"
               >{{ marketMetrics.advanceDecline > 0 ? '+' : ''
               }}{{ marketMetrics.advanceDecline.toFixed(2) }}</span
             >
@@ -623,7 +626,7 @@ watch([code, category], () => {
             <span class="metric-label">距200日均线</span>
             <span
               class="metric-value"
-              :style="{ color: marketMetrics.ma200 > 0 ? UP_COLOR : DOWN_COLOR }"
+              :style="{ color: marketMetrics.ma200 > 0 ? upColor : downColor }"
               >{{ marketMetrics.ma200 > 0 ? '+' : '' }}{{ marketMetrics.ma200.toFixed(2) }}%</span
             >
           </div>
@@ -742,12 +745,12 @@ watch([code, category], () => {
                 </span>
               </td>
               <td>{{ fmt2(stock.price) }}</td>
-              <td :style="{ color: stock.change >= 0 ? UP_COLOR : DOWN_COLOR }">
+              <td :style="{ color: stock.change >= 0 ? upColor : downColor }">
                 {{ stock.change >= 0 ? '+' : '' }}{{ stock.change.toFixed(2) }}%
               </td>
               <td>{{ stock.pe }}</td>
               <td>{{ stock.dividend }}%</td>
-              <td :style="{ color: stock.growth >= 0 ? UP_COLOR : DOWN_COLOR }">
+              <td :style="{ color: stock.growth >= 0 ? upColor : downColor }">
                 {{ stock.growth >= 0 ? '+' : '' }}{{ stock.growth }}%
               </td>
               <td class="moat-cell">{{ stock.moat }}</td>

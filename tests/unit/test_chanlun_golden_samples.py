@@ -26,13 +26,13 @@ from easy_tdx.chanlun.types import (
     BI,
     FX,
     MMD,
-    MMDType,
     ZS,
     BCType,
     CLKline,
     Direction,
     FXType,
     Kline,
+    MMDType,
 )
 from easy_tdx.chanlun.xd import (
     _merge_feature_sequence,
@@ -976,21 +976,46 @@ def test_nesting_score_sell_uses_zs_below_counts() -> None:
 
 
 def test_nesting_score_confidence_adjust_bands() -> None:
-    """评分→置信度调整的分档：>=0.7→+5%，>=0.5→+3%，>=0.3→0，否则 -3%。"""
+    """V-25 下线：confidence_adjust 恒 0，评分只作诊断不再调权。
+
+    旧分档（>=0.7→+5%，>=0.5→+3%，>=0.3→0，否则 -3%）已随文档
+    §四 step2 移除——价格位置评分与真区间套不同义，不得混入
+    mmd.confidence。本测试同时守住两侧：不加分也不减分。
+    """
     from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
 
-    def adj(score_zss: list[ZS], price: float, buy: bool) -> float:
+    def adjust_and_score(zss_: list[ZS], price: float, buy: bool) -> dict:
         mmd = MMD(mmd_type=MMDType.BUY_3 if buy else MMDType.SELL_3, msg="", confidence=0.5)
-        return _calc_range_set_multi_level_v68(mmd, score_zss, closes=[price] * 60)[
-            "confidence_adjust"
-        ]
+        return _calc_range_set_multi_level_v68(mmd, zss_, closes=[price] * 60)
 
-    # 卖点：价格远低于所有中枢 → 三项均满分 → 高分档
+    # 高分场景（旧逻辑会 +5%）：现在必须 0
     below_all = [_mk_zs_for_nesting(20.0, 19.0), _mk_zs_for_nesting(21.0, 20.0)]
-    assert adj(below_all, 5.0, buy=False) == pytest.approx(0.05, abs=0.011)
-    # 买点：价格位于中枢内部（未突破）→ 低分档
+    res_hi = adjust_and_score(below_all, 5.0, buy=False)
+    assert res_hi["confidence_adjust"] == 0.0
+    # 诊断评分本身仍在（高分场景评分应 >0.5，证明不是靠数据不足路径返回 0）
+    assert res_hi["multi_level_score"] > 0.5
+    # 低分场景（旧逻辑会 -3%）：现在也必须 0
     inside = [_mk_zs_for_nesting(20.0, 10.0)]
-    assert adj(inside, 15.0, buy=True) == pytest.approx(-0.03, abs=0.011)
+    res_lo = adjust_and_score(inside, 15.0, buy=True)
+    assert res_lo["confidence_adjust"] == 0.0
+    assert res_lo["multi_level_score"] < 0.5
+    # msg 不再含「置信度」尾巴
+    assert "置信度" not in res_hi["msg"]
+
+
+def test_nesting_score_does_not_touch_confidence() -> None:
+    """端到端对照：条件 205 运行后 mmd.confidence 必须与运行前一致。
+
+    控制组：同数据同信号，仅存在/不存在 v68 调用——置信度必须同值。
+    （V-25 前旧实现会 +3~5%/-3% 改写 confidence。）
+    """
+    from easy_tdx.chanlun.mmd_conditions import _calc_range_set_multi_level_v68
+
+    below_all = [_mk_zs_for_nesting(20.0, 19.0), _mk_zs_for_nesting(21.0, 20.0)]
+    mmd = MMD(mmd_type=MMDType.SELL_3, msg="", confidence=0.6)
+    before = mmd.confidence
+    _calc_range_set_multi_level_v68(mmd, below_all, closes=[5.0] * 60)
+    assert mmd.confidence == before, "v68 评分不得改写 mmd.confidence"
 
 
 def test_nesting_score_serialized_by_analyser() -> None:
@@ -1217,13 +1242,15 @@ def test_volatility_compression_anchored_to_signal() -> None:
         m.bi = _mk_bi_for_nesting(bar - 5, bar)
         return m
 
-    n = 100
+    n = 100  # noqa: F841 — len(highs) 即该值，保留变量仅为可读性
     # 前 50 根极窄（压缩），后 50 根剧烈震荡（无压缩）
     highs = [10.05] * 50 + [10.0 + (i % 5) * 0.5 for i in range(50)]
     lows = [9.95] * 50 + [10.0 + (i % 5) * 0.5 - 0.2 for i in range(50)]
     closes = [10.0] * 50 + [10.0 + (i % 5) * 0.4 for i in range(50)]
 
-    r_compressed = _calc_volatility_compression_breakout_v82(mk(MMDType.BUY_1, 49), closes, highs, lows)
+    r_compressed = _calc_volatility_compression_breakout_v82(
+        mk(MMDType.BUY_1, 49), closes, highs, lows
+    )
     r_wide = _calc_volatility_compression_breakout_v82(mk(MMDType.BUY_1, 99), closes, highs, lows)
     assert r_compressed["compression_pct"] < r_wide["compression_pct"], (
         "压缩段的区间宽度必须小于震荡段（修复前两者都用末尾窗口而相同）"
@@ -1239,7 +1266,7 @@ def test_execution_window_anchored_to_signal() -> None:
         m.bi = _mk_bi_for_nesting(bar - 5, bar)
         return m
 
-    n = 120
+    n = 120  # noqa: F841 — len(closes) 即该值，保留变量仅为可读性
     # 前 60 根平静，后 60 根剧烈波动 → 波动率分应不同
     calm = [10.0] * 60
     wild = [10.0 + ((-1) ** i) * 3.0 for i in range(60)]

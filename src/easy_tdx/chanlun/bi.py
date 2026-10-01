@@ -137,39 +137,6 @@ def _validate_bi_price_direction(start: FX, end: FX, direction: Direction) -> bo
         return end.val < start.val
 
 
-def _check_trend_consistency(
-    bis: list[BI],
-    new_bi: BI,
-    lookback: int = 5,
-) -> bool:
-    """检查新笔是否与局部趋势方向一致。
-
-    缠论要求笔的方向应与当前趋势方向一致：
-    - 上升趋势中，向上笔为主，向下笔为辅（回调）
-    - 下降趋势中，向下笔为主，向上笔为辅（反弹）
-
-    通过比较最近N根笔的净方向判断趋势方向。
-    """
-    if len(bis) < 2:
-        return True
-
-    # 取最近 lookback 根笔（不包括新笔）
-    recent_bis = bis[-lookback:] if len(bis) >= lookback else bis
-    if len(recent_bis) < 2:
-        return True
-
-    # 计算净方向：向上笔+1，向下笔-1
-    net_direction = sum(1 if b.direction == Direction.UP else -1 for b in recent_bis)
-
-    # 如果近期趋势明显（净方向绝对值 >= 2），新笔应与趋势同向或为合理回调
-    if abs(net_direction) >= 2:
-        # 上升趋势中：允许向上笔（趋势延续）或向下笔（回调）
-        # 下降趋势中：允许向下笔（趋势延续）或向上笔（反弹）
-        return True  # 在当前实现中，所有笔都允许，由后续质量评分过滤
-
-    return True
-
-
 def _check_fractal_stability(
     fx: FX,
     cklines: list[Any],
@@ -264,24 +231,28 @@ def find_bis(
         if not current_fx.klines or not start_fx.klines:
             continue
 
-        # 同类型分型：取更极端的
+        # 同类型分型：取更极端的（缠论「相邻同型分型取更极端」）
         if current_fx.fx_type == start_fx.fx_type:
-            # 当存在 pending_opposite 时，不替换 start_fx。
-            # 保留 start_fx 在较早位置，让后续异类型分型有机会满足 gap。
-            # 若替换，right_kline_index 前推会导致 gap 反复为 0，卡死算法。
+            more_extreme = (start_fx.fx_type == FXType.DING and current_fx.val > start_fx.val) or (
+                start_fx.fx_type == FXType.DI and current_fx.val < start_fx.val
+            )
             if pending_opposite is not None:
-                continue
+                # pending_opposite 是夹在旧起点与当前同型分型之间的异型分型，
+                # 因 gap 不足未成笔。若当前同型分型并不更极端，保留旧起点
+                # （让后续异型分型有机会满足 gap，避免 right_kline 前推导致
+                # gap 反复为 0）；但若当前同型分型更极端，说明趋势已穿越
+                # pending_opposite——它夹在两个同型分型之间、且较新的更极端，
+                # 按缠论规则应被丢弃，此时必须替换 start_fx 并清空 pending，
+                # 否则会漏掉真正的极值端点（例如两底之间的最高顶被跳过，
+                # 导致笔端点取了较低的顶）。
+                if not more_extreme:
+                    continue
+                pending_opposite = None
 
-            if start_fx.fx_type == FXType.DING and current_fx.val > start_fx.val:
+            if more_extreme:
                 # 更极端的同型分型更新起点时，若上一笔终点就是旧起点
                 # （即当前起点尚未成笔、仍是被趋势穿越中的转折点），
                 # 同步延伸上一笔终点到新起点，保持笔序列首尾相连。
-                if bis and bis[-1].end is start_fx:
-                    bis[-1].end = current_fx
-                    bis[-1].high = max(bis[-1].high, current_fx.val)
-                    bis[-1].low = min(bis[-1].low, current_fx.val)
-                start_fx = current_fx
-            elif start_fx.fx_type == FXType.DI and current_fx.val < start_fx.val:
                 if bis and bis[-1].end is start_fx:
                     bis[-1].end = current_fx
                     bis[-1].high = max(bis[-1].high, current_fx.val)

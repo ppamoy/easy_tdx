@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import Any
 
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.types import BI, ZS
+from easy_tdx.chanlun.types import BI, FX, ZS
 
 # V730 P1-6：中枢延伸段数上限（含初始3段）。原文允许中枢任意延伸，
 # 但工程上无限延伸会让中枢吞没后续行情、买卖点定位漂移，故设上限。
@@ -194,8 +194,8 @@ def find_zss(
     gg_candidate = first_bi.high
     dd_candidate = first_bi.low
     candidate_lines: list[BI] = [first_bi]
-    candidate_start = first_bi.start
-    candidate_end = first_bi.end
+    candidate_start: FX | None = first_bi.start
+    candidate_end: FX | None = first_bi.end
 
     for i in range(1, len(bis)):
         bi = bis[i]

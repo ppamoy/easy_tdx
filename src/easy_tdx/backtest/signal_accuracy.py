@@ -315,7 +315,6 @@ def _signal_type_stats(
     V722: 前瞻收益计算统一走 web/signal_ledger.py（唯一实现），
     accuracy 审计与本面板共用同一口径，防止两处各算各的漂移。
     """
-    n_bars = len(closes)
     direction = _classify_direction(sig_type)
     out: dict[str, Any] = {
         "type": sig_type,
@@ -328,16 +327,12 @@ def _signal_type_stats(
 
     ledger = signal_returns(
         closes,
-        [
-            {"type": sig_type, "bar_index": idx}
-            for idx in idx_list
-            if idx is not None
-        ],
+        [{"type": sig_type, "bar_index": idx} for idx in idx_list if idx is not None],
         horizons=horizons,
     )
     for h in horizons:
         recs = [r for r in ledger if r.horizon == h]
-        fwd_list = [float(r.raw_ret_pct) for r in recs]
+        fwd_list = [float(r.raw_ret_pct or 0.0) for r in recs]
         fwd = np.asarray(fwd_list, dtype=float)
         stats = _horizon_stats(fwd)
         # V430: 方向对齐后的盈亏比（BUY 用 fwd，SELL 用 -fwd）

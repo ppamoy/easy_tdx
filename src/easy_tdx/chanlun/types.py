@@ -526,6 +526,11 @@ class MMD:
     _post_signal_fund_flow_v68: dict[str, Any] | None = None  # 信号后资金流向确认（条件206）
     _market_regime_adaptation_v68: dict[str, Any] | None = None  # 市场风格适配评分（条件207）
 
+    # 真·区间套（统一实现，见 chanlun/qujiantao.py）：区别于条件205 单级别伪区间套，
+    # 必须有真实低级别数据才给确认（无数据时 nested=False 但仍返回 dict；
+    # 而 qujiantao_for_result 在无递归级别时整列返回 None）。
+    _qujiantao: dict[str, Any] | None = None
+
     # V69 enhancement fields (2026-08-29)
     _price_volume_divergence_v69: dict[str, Any] | None = None  # 量价背离二次确认（条件208）
     _structural_integrity_v69: dict[str, Any] | None = None  # 结构完整性评分（条件209）

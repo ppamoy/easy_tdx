@@ -15,6 +15,9 @@
   - [成交价规则](#成交价规则)
   - [仓位模式](#仓位模式)
   - [费用模型](#费用模型)
+  - [滑点默认值说明（V-AUDIT 如实声明）](#滑点默认值说明v-audit-如实声明)
+  - [涨跌停约束（V-AUDIT，默认开启）](#涨跌停约束v-audit默认开启)
+  - [真·区间套信号过滤（V-21/V-22）](#真区间套信号过滤v-21v-22)
   - [订单拒绝策略](#订单拒绝策略)
 - [获取回测结果](#获取回测结果)
   - [绩效指标一览](#绩效指标一览)
@@ -287,6 +290,45 @@ engine = BacktestEngine(MyStrategy, commission=0.0, min_commission=0.0, stamp_ta
 # 模拟实际佣金
 engine = BacktestEngine(MyStrategy, commission=0.00025, min_commission=5.0, stamp_tax=0.001)
 ```
+
+### 真·区间套信号过滤（V-21/V-22）
+
+缠论原文语义的区间套 = 「高级别信号笔，在低周期（如 30 分钟）上也有同向
+背驰/买卖点确认」。本项目的统一实现在 `chanlun/qujiantao.py`：
+
+- **回测过滤**：`chanlun_pair` 策略参数 `require_qujiantao=True` 只交易
+  nested 确认的信号；`qujiantao_strict=True` 时连「算不出」的也过滤
+  （默认宽松放行，避免低级别数据失败导致 0 交易假象）。
+- **回测里的低级别数据是合成的**（`level_synth.py` 由日线 bar 展开 30 分钟
+  子 bar，不凭空造价格但也不是真实 Tick）——结论应视为结构性参考。
+- **真实双周期口径**：`/chanlun/multi-level`（日线 + 真实 30 分钟），
+  时间对齐 + 防未来函数，前端买卖点明细的 🔗套 徽章即此数据。
+- **分组验证脚本**：`scripts/nesting_backtest.py`（nested 布尔口径，
+  按方向分层对照）。V-22 实测：20 龙头 800 根日线，4/6 分层组合确认组
+  占优、长窗口（10/20 根）区分度更稳定，但 n≈40~90 小样本，只做方向性
+  参考不做强结论。
+- ⚠️ `v68_range_set_multi_level` 是**单级别中枢位置评分**（伪区间套），
+  不要与真区间套混用；`/chanlun/analyze` 单周期的 qujiantao 来自递归级别
+  （确认率约 3%），同样不能当跨周期确认用。
+
+### 滑点默认值说明（V-AUDIT 如实声明）
+
+`slippage` 默认为 **0**——引擎按「下一根 K 线的开盘/收盘价全额成交」模拟，
+**不含买卖价差与冲击成本**。这是乐观口径：对低频日线策略影响很小（1~2‰
+量级），对高频或小市值标的会系统性高估收益。评估策略时建议：
+
+- 日线级别：至少给 `slippage=0.01~0.02`（每股 1~2 分）做敏感性对照；
+- 需要更真实的市场冲击模型时，用 `slippage_model` 传入可插拔模型
+  （`PercentSlippage` / `SquareRootSlippage` / `VolumeSlippage`，见
+  `backtest/slippage.py`）。
+
+### 涨跌停约束（V-AUDIT，默认开启）
+
+引擎默认按 A 股规则处理涨跌停：成交 bar 相对**前一根收盘**涨/跌幅达到
+`limit_pct`（默认 0.10，创业板/科创板标的可设 0.20）时，涨停**禁买**、
+跌停**禁卖**，被拒成交记 `rejected=True`（与资金不足拒绝同形态，可从
+trades 中统计）。基准用前一根收盘而非当日判定——撮合时刻可知，无前视。
+关闭：`BacktestEngine(MyStrategy, respect_price_limit=False)`。
 
 ### 订单拒绝策略
 
@@ -672,7 +714,7 @@ easy-tdx backtest SZ 000001 \
 
 ## 注意事项
 
-1. **DataFrame 格式要求**：必须包含 `datetime`, `open`, `close`, `high`, `low` 列。`vol`/`amount` 为可选但推荐。
+1. **DataFrame 格式要求**：必须包含 `datetime`, `open`, `close`, `high`, `low` 列。`vol`/`amount` 为可选但推荐。`datetime` 列支持 `pd.Timestamp`、`datetime64`、ISO 字符串（`'2024-01-02'`，V-24 起）与数值（YYYYMMDD）四种类型，可从 JSON/CSV 直接读入。
 2. **成交时机**：默认 `next_open` 模式下，信号产生后需等待下一根 K 线才能成交。如果信号在最后一根 K 线产生，则无法成交。
 3. **整手交易**：A 股按 100 股整手交易。全仓模式会自动向下取整到 100 的倍数。
 4. **做空限制**：v1 不支持做空，卖出数量不能超过当前持仓。

@@ -83,7 +83,6 @@ async def fetch_qfq_klines(
     return df
 
 
-
 # ── 全历史分页取数（V722，R3 图表全历史回溯）──────────────────────────────
 
 # TDX/MAC 协议单次请求上限（/bars 的 count 上限一致）
@@ -119,7 +118,13 @@ async def fetch_paged_bars(
         if start > 65535:  # uint16 偏移上限保护（V720 同款语义）
             break
         df = await fetch_qfq_klines(
-            mac_client, tdx_client, market, code, category, start, _PAGE_SIZE,
+            mac_client,
+            tdx_client,
+            market,
+            code,
+            category,
+            start,
+            _PAGE_SIZE,
             bar_time=bar_time,
         )
         if df is None or df.empty:
@@ -136,6 +141,15 @@ async def fetch_paged_bars(
     combined = pd.concat(frames, ignore_index=True)
     combined = combined.drop_duplicates(subset=[col], keep="first")
     combined = combined.sort_values(col).reset_index(drop=True)
+    # 截断为最新 lookback 根：翻页以「凑满 lookback」为停页条件，最后一页往往
+    # 会多带回一整页（lookback=2000 → 3 页 ≈ 2400 根）。若不截断，返回的 bar
+    # 数会大于请求的 lookback，与前端 /bars（按 count 截断为恰好 lookback 根、
+    # 与本函数同源同价）帧长不一致——缠论分析的 bar_index 落在前端 props.bars
+    # 的错误位置，导致分型/笔/中枢等所有索引锚定的标记整体错位
+    # （用户反馈「顶底分型标记错乱」的根因）。两帧同以「最新 bar」对齐，
+    # 取尾部 lookback 根即与 /bars 完全一致。
+    if len(combined) > lookback:
+        combined = combined.tail(lookback).reset_index(drop=True)
     return combined
 
 
@@ -181,7 +195,13 @@ async def fetch_bars_range(
         if start > 65535:  # uint16 偏移上限保护（V720 同款语义）
             break
         df = await fetch_qfq_klines(
-            mac_client, tdx_client, market, code, category, start, _PAGE_SIZE,
+            mac_client,
+            tdx_client,
+            market,
+            code,
+            category,
+            start,
+            _PAGE_SIZE,
             bar_time=bar_time,
         )
         if df is None or df.empty:
@@ -193,7 +213,7 @@ async def fetch_bars_range(
             break
         page_oldest = pd.to_datetime(df[col].iloc[0])
         if page_oldest <= start_ts:
-            reached_start = True
+            reached_start = True  # noqa: F841  循环出口标记（下轮循环前提前结束）
             break
     if not frames or col is None:
         return pd.DataFrame()
