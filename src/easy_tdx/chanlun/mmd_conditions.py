@@ -9125,19 +9125,19 @@ def _calc_range_set_multi_level_v68(
         result["retest_hold"] = float(retest_hold)
         result["multi_level_score"] = round(score, 3)
 
-        if score >= 0.7:
-            adj = 0.05
-        elif score >= 0.5:
-            adj = 0.03
-        elif score >= 0.3:
-            adj = 0.0
-        else:
-            adj = -0.03
-
+        # V-25：confidence_adjust **恒 0**（见 docs/区间套现状说明与统一方案.md
+        # §四 step2）。旧分档（>=0.7→+5% / >=0.5→+3% / >=0.3→0 / 否则 -3%）
+        # 已下线 —— 价格位置评分与「真区间套」不同义，不得混入 mmd.confidence。
+        # 此前这里仍保留旧分档：V-25 只改了调用侧（mmd.py 不再累加），漏改
+        # 函数内部。虽暂未污染置信度，但与文档「恒 0」不符，且一旦有人接回
+        # 该字段就会重新污染 —— V731 实测后按文档修正实现侧。
+        # 诊断用的 multi_level_score 照旧产出。
+        adj = 0.0
         result["confidence_adjust"] = round(adj, 3)
+        # msg 也不再带「置信度±x%」尾巴 —— 恒 0 还提示会误导人以为仍在调权。
         result["msg"] = (
             f"中枢数={len(zs_list)} 上方={zs_above} 下方={zs_below} "
-            f"区间套评分={score:.2f} | 置信度{adj:+.0%}"
+            f"区间套评分={score:.2f}（仅诊断，不参与打分）"
         )
         return result
     except Exception:
