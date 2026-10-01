@@ -167,7 +167,12 @@ def _filter_candidates_by_difficulty(
 
 
 def build_train_session_payload(
-    result: Any, df: pd.DataFrame, category: str, difficulty: str = "medium", seed: int = 0
+    result: Any,
+    df: pd.DataFrame,
+    category: str,
+    difficulty: str = "medium",
+    seed: int = 0,
+    reveal_limit: int | None = None,
 ) -> dict[str, Any]:
     """把缠论分析结果组装成训练会话负载（纯函数，可单测）。
 
@@ -175,6 +180,17 @@ def build_train_session_payload(
     - bis/xds/zss/mmds/fractals/bcs/boll：完整结构
     - candidates：候选点（买卖点信号 + 采样分型干扰项），供逐步揭示提问
     - mmd_outcomes：每个买卖点的信号后 5/10/20 日收益（复盘验证）
+
+    Args:
+        reveal_limit: **训练防作弊闸门**（V731）。
+            ``None``（默认）= 复盘模式，返回全量（F2 事后验证确实需要未来收益）。
+            整数 N = 训练模式，只下发「截至第 N 根 K 线」应有的信息：
+              * ``mmd_outcomes`` 置空（那是信号之后的**未来走势**）
+              * 尚未揭示（index > N）的候选点，其 ``signal`` 答案置空
+            前端只用 revealIndex 截断**图表渲染**，数据本身若不截断，用户
+            F12 看 Network 即可读到全部答案与后续 20 日涨跌，「逐步揭示
+            训练」失去意义（实测 000333 日线开局即可知 46/87/110 三个答案
+            点，以及 1buy 后 20 日 +13.17%）。
     """
     # K 线（与 /bars 一致的列）
     _date_col = "date" if "date" in df.columns else "datetime"
@@ -273,6 +289,14 @@ def build_train_session_payload(
     # V421: 难度分级过滤（D3），seed 保证出题可复现
     candidates = _filter_candidates_by_difficulty(candidates, difficulty, seed)
 
+    # V731 防作弊闸门：训练模式（reveal_limit 非 None）下，
+    # 尚未揭示到的候选点不得携带答案（signal）。注意只置空答案、保留题目
+    # 本身（index/date/kind/fx_type），否则题目会凭空消失、训练没法进行。
+    if reveal_limit is not None:
+        for c in candidates:
+            if c["index"] > reveal_limit:
+                c["signal"] = None
+
     # 买卖点信号后 N 日收益
     closes = [k.close for k in result.klines]
 
@@ -287,31 +311,35 @@ def build_train_session_payload(
             return None
         return round((float(closes[end]) / float(base) - 1) * 100, 2)
 
+    # V731 防作弊闸门：训练模式不下发未来走势。mmd_outcomes 是「信号之后
+    # 5/10/20 日实际涨跌」，只有 F2 复盘模式才需要（事后验证准确率给评分用）；
+    # 训练模式下它就是标准答案，必须整段置空。
     mmd_outcomes: list[dict[str, Any]] = []
-    for mmd in result.mmds:
-        if not mmd.bi:
-            continue
-        k_idx = mmd.bi.end.k.k_index
-        outcomes: dict[str, Any] = {
-            "type": mmd.mmd_type.value,
-            "date": result._fmt_dt(mmd.bi.end.k.date),
-            "price": round(result.klines[k_idx].close, 2)
-            if 0 <= k_idx < len(result.klines)
-            else None,
-            "ret_5d": _ret_from(k_idx, 5),
-            "ret_10d": _ret_from(k_idx, 10),
-            "ret_20d": _ret_from(k_idx, 20),
-            "max_5d": None,
-            "min_5d": None,
-        }
-        if 0 <= k_idx < len(closes):
-            base = closes[k_idx]
-            if base:
-                win = closes[k_idx : k_idx + 6]
-                if win:
-                    outcomes["max_5d"] = round((max(win) / base - 1) * 100, 2)
-                    outcomes["min_5d"] = round((min(win) / base - 1) * 100, 2)
-        mmd_outcomes.append(outcomes)
+    if reveal_limit is None:
+        for mmd in result.mmds:
+            if not mmd.bi:
+                continue
+            k_idx = mmd.bi.end.k.k_index
+            outcomes: dict[str, Any] = {
+                "type": mmd.mmd_type.value,
+                "date": result._fmt_dt(mmd.bi.end.k.date),
+                "price": round(result.klines[k_idx].close, 2)
+                if 0 <= k_idx < len(result.klines)
+                else None,
+                "ret_5d": _ret_from(k_idx, 5),
+                "ret_10d": _ret_from(k_idx, 10),
+                "ret_20d": _ret_from(k_idx, 20),
+                "max_5d": None,
+                "min_5d": None,
+            }
+            if 0 <= k_idx < len(closes):
+                base = closes[k_idx]
+                if base:
+                    win = closes[k_idx : k_idx + 6]
+                    if win:
+                        outcomes["max_5d"] = round((max(win) / base - 1) * 100, 2)
+                        outcomes["min_5d"] = round((min(win) / base - 1) * 100, 2)
+            mmd_outcomes.append(outcomes)
 
     return cast(
         dict[str, Any],
@@ -1026,6 +1054,8 @@ async def chanlun_train_session(
     mac_client: Any | None = Depends(get_mac_client_optional),
     difficulty: str = "medium",
     seed: int = 0,
+    mode: str = "train",
+    reveal_limit: int | None = None,
 ) -> dict[str, Any]:
     """创建缠论学习训练会话（P0：逐步揭示训练 + 逐笔复盘讲解）。
 
@@ -1035,6 +1065,12 @@ async def chanlun_train_session(
     - candidates：训练候选点（关键分型 + 买卖点信号），供前端逐步揭示时暂停提问
       [{index, date, kind: fractal|mmd, fx_type, signal: null | {type, confidence, grade}}]
     - mmd_outcomes：每个买卖点的信号后 5/10/20 日收益（复盘验证准确率用）
+
+    Args:
+        mode: ``"train"``（默认）启用防作弊闸门；``"review"`` 复盘模式，
+            返回全量（需要未来收益做事后验证）。
+        reveal_limit: 训练模式下「当前揭示到第几根 K 线（含）」。``mode=train``
+            且本参数为 ``None`` 时按 **0** 处理（开局，不泄露任何答案）。
     """
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
@@ -1074,7 +1110,15 @@ async def chanlun_train_session(
     result = analyser.process_klines(df)
 
     # 2. 组装训练会话负载（纯函数，可单测；V421 难度分级 + seed 复现）
-    payload = build_train_session_payload(result, df, req.category, difficulty, seed)
+    # V731 防作弊闸门：训练模式按 reveal_limit 截断答案与未来收益；
+    # 复盘模式（mode=review）传 None 保持全量（F2 事后验证需要）。
+    if mode == "review":
+        _gate: int | None = None
+    else:
+        _gate = 0 if reveal_limit is None else max(int(reveal_limit), 0)
+    payload = build_train_session_payload(
+        result, df, req.category, difficulty, seed, reveal_limit=_gate
+    )
     payload["code"] = symbol
     payload["frequency"] = freq
     return payload

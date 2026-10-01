@@ -274,7 +274,20 @@ async function startTraining() {
   error.value = ''
   try {
     const market = detectMarket(code.value)
-    const resp = await fetch('/api/v1/chanlun/train/session', {
+    // V731：训练模式开**防作弊闸门** —— 开局只拿题目，不拿答案与未来走势。
+    // 后端会据此把 candidates[].signal 置空、mmd_outcomes 置空，避免用户
+    // F12 看 Network 直接读到全部答案和信号后 20 日涨跌。
+    // 复盘模式（mode=review）不设闸门，因为 F2 事后验证本来就需要未来收益。
+    // 注意：mode / reveal_limit 与既有的 difficulty / seed 一样是**查询参数**
+    // （FastAPI 里 POST 的标量参数默认走 query，实测放 body 里后端收不到，
+    // 闸门会静默失效 —— 这一点已由 HTTP 层回归测试锁定）。
+    const qs = new URLSearchParams({
+      difficulty: String(difficulty.value),
+      seed: String(seed.value),
+      mode: 'train',
+      reveal_limit: '0',
+    })
+    const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -283,8 +296,6 @@ async function startTraining() {
         category: category.value,
         count: count.value,
         start: 0,
-        difficulty: difficulty.value,
-        seed: seed.value,
       }),
     })
     if (!resp.ok) {
@@ -373,8 +384,54 @@ function submitChoice(choice: 'buy' | 'sell' | 'hold') {
   totalAsked.value++
   const c = currentCandidate.value
   if (!c) return
-  // 判定：模型真实信号方向
-  const sig = c.signal?.type ?? ''
+
+  // V731：开局为了防止作弊，后端没下发 signal 答案。作答**之后**才按需
+  // 拉取这一题的真实结论用于判分与讲解 —— 顺序不能反，否则就是提前泄题。
+  void (async () => {
+    const sig = await fetchSignalFor(c.index, c)
+    judge(choice, c, sig)
+  })()
+}
+
+/** V731：作答后按需取回该题的真实信号（防作弊闸门的配套）。 */
+async function fetchSignalFor(index: number, c: Candidate): Promise<string> {
+  if (c.signal?.type) return c.signal.type // 复盘模式/已带答案时直接用
+  try {
+    const qs = new URLSearchParams({
+      difficulty: String(difficulty.value),
+      seed: String(seed.value),
+      mode: 'train',
+      reveal_limit: String(index),
+    })
+    const resp = await fetch(`/api/v1/chanlun/train/session?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        market: detectMarket(code.value),
+        code: code.value,
+        category: category.value,
+        count: count.value,
+        start: 0,
+      }),
+    })
+    if (!resp.ok) return ''
+    const d = await resp.json()
+    const hit = (d.candidates ?? []).find(
+      (x: { index: number }) => x.index === index,
+    ) as Candidate | undefined
+    if (hit?.signal?.type) {
+      // 回填到本地候选点，供讲解/错题集复用（本题已作答，不算泄题）
+      c.signal = hit.signal
+      return hit.signal.type
+    }
+  } catch {
+    /* 取不到答案时不判分，不计入正确数 */
+  }
+  return ''
+}
+
+/** 判分 + 讲解 + 错题库（抽出来以便答案异步到位后执行）。 */
+function judge(choice: 'buy' | 'sell' | 'hold', c: Candidate, sig: string) {
   let actual: 'buy' | 'sell' | 'hold' = 'hold'
   if (sig.includes('buy')) actual = 'buy'
   else if (sig.includes('sell')) actual = 'sell'
