@@ -117,8 +117,14 @@ describe('ChanlunView qujiantao 透传', () => {
     vi.unstubAllGlobals()
   })
 
-  test('analyze 响应里的 qujiantao 字段经 mapMmds 后不丢失', async () => {
-    // 用真实 Response（带 headers.get，api 层 V721 的 parseJson 要检查 content-type）
+  // V731：本用例构造 800 根 bar 并挂载**真实** ChanlunView，单次约 4s；
+  // 全量并发跑实测到 6s，超过 vitest 默认 5000ms 而失败 —— 那是**超时**
+  // 而非功能缺陷（单独跑 3 次均通过）。显式放宽到 30s，避免把性能抖动
+  // 误报成「qujiantao 透传坏了」。
+  test(
+    'analyze 响应里的 qujiantao 字段经 mapMmds 后不丢失',
+    async () => {
+      // 用真实 Response（带 headers.get，api 层 V721 的 parseJson 要检查 content-type）
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) =>
@@ -139,13 +145,15 @@ describe('ChanlunView qujiantao 透传', () => {
     expect(vm.error).toBe('')
     expect(vm.mmds.length).toBeGreaterThanOrEqual(2)
     const withQt = vm.mmds.find((m: any) => m.type === '1buy')
-    expect(withQt?.qujiantao).toBeTruthy()
-    expect(withQt.qujiantao.nested).toBe(true)
-    expect(withQt.qujiantao.method).toBe('recursive')
-    expect(withQt.qujiantao.detail?.low_bi_count).toBe(3)
-    // 无 qujiantao 的信号 → null（mapMmds 的 `?? null` 契约）
-    const noQt = vm.mmds.find((m: any) => m.type === '2sell')
-    expect(noQt?.qujiantao).toBeNull()
-    wrapper.unmount()
-  })
+      expect(withQt?.qujiantao).toBeTruthy()
+      expect(withQt.qujiantao.nested).toBe(true)
+      expect(withQt.qujiantao.method).toBe('recursive')
+      expect(withQt.qujiantao.detail?.low_bi_count).toBe(3)
+      // 无 qujiantao 的信号 → null（mapMmds 的 `?? null` 契约）
+      const noQt = vm.mmds.find((m: any) => m.type === '2sell')
+      expect(noQt?.qujiantao).toBeNull()
+      wrapper.unmount()
+    },
+    30_000,
+  )
 })

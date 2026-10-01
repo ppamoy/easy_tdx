@@ -21,6 +21,7 @@ import re
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date
+from datetime import datetime as dt_datetime
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +64,41 @@ def _to_date(v: Any) -> date | None:
         return date(y, mm, dd)
     except ValueError:
         return None
+
+
+def _coerce_date(v: Any) -> date | None:
+    """把 disclosure_date/report_date 归一化成 datetime.date，失败返回 None。
+
+    V731：pick_report 的 point-in-time 比较要求两侧类型一致。外部传入的
+    DataFrame 里日期可能是 date / str / pandas.Timestamp / datetime /
+    NaT，直接 `dd <= target` 会在 str、Timestamp 上抛 TypeError（实测
+    复现）。这里统一收敛到 date；无法解析的返回 None，由调用方按
+    「无法判定 ⇒ 保守排除」处理，绝不把未知记录当成已披露。
+
+    注意：datetime 是 date 的子类，这里也归一成 date，避免
+    `datetime <= date` 在部分 pandas 版本上的比较歧义。
+    """
+    # NaT 检查必须放在 isinstance(date) **之前**：pd.NaT 同时是
+    # datetime/date 的实例，若先按 date 命中就会原样返回 NaT，
+    # 后续 `NaT <= target` 仍会抛 TypeError（实测复现）。
+    if v is None:
+        return None
+    try:
+        if pd.isna(v):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(v, dt_datetime):
+        return v.date()
+    if isinstance(v, date):
+        return v
+    try:
+        ts = pd.to_datetime(v, errors="coerce")
+    except (TypeError, ValueError):
+        return None
+    if ts is None or pd.isna(ts):
+        return None
+    return ts.date()
 
 
 def _dt(v: Any) -> date | None:
@@ -398,8 +434,23 @@ def pick_report(
             sub = m
     usable: list[pd.Series] = []
     for _, row in sub.iterrows():
-        dd = row.get("disclosure_date")
-        rd = row.get("report_date")
+        # V731：与 pick_reports_bulk（向量化版）保持一致，先做类型归一化。
+        # 该函数自称「规则与 pick_report 完全一致」，但只有它做了
+        # pd.to_datetime。本函数原本直接用 `dd <= target` 比较，当调用方
+        # 传入的 disclosure_date 是 str / pandas.Timestamp 时会抛
+        # TypeError（实测复现）——生产路径（gpcw 的 _to_date、新浪适配器的
+        # date、SQLite 缓存反序列化）都产出真 date 所以从未触发，但本函数是
+        # 公开 API 且被 4 处生产代码直接调用，类型契约不该靠调用方自觉。
+        # 归一化失败（NaT/None）时**保守排除**：宁可漏掉这条，也绝不能把
+        # 无法判定的记录当成「已披露」而引入未来数据。
+        dd_raw = row.get("disclosure_date")
+        dd = _coerce_date(dd_raw)
+        rd = _coerce_date(row.get("report_date"))
+        if dd_raw is not None and dd is None:
+            # 披露日**有值但无法解析**（NaT/非法字符串）：不能当作「无披露日」
+            # 而退回报告期近似——那等于用一条我们读不懂日期的记录参与
+            # point-in-time 判定，存在引入未来数据的风险。保守排除。
+            continue
         if dd is not None:
             if dd <= target:
                 usable.append(row)
@@ -407,7 +458,7 @@ def pick_report(
             usable.append(row)
     if not usable:
         return None
-    usable.sort(key=lambda r: r["disclosure_date"] or r["report_date"] or date.min, reverse=True)
+    usable.sort(key=lambda r: _coerce_date(r.get("disclosure_date")) or _coerce_date(r.get("report_date")) or date.min, reverse=True)
     return usable[0]
 
 
