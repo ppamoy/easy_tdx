@@ -56,11 +56,20 @@ def _expand_ohlc(
             np.array([c]),
         )
 
-    # 构造一条 o -> ... -> h/low -> ... -> c 的价格路径：
-    # 先走到极值之一，再走到另一极值，最后收在 c
+    # V731：以下两处原本都是**随机**的，实测导致区间套确认结果依赖随机种子
+    # （9 个高级别信号中 5 个 = 56% 的 nested 标签随 seed 翻转）。而 nested 是
+    # 布尔，chanlun_pair 在 require_qujiantao=True 时按 `nested is True` 过滤
+    # 交易 ⇒ 随机种子直接决定某笔交易做不做 ⇒ 回测不可复现。故改为确定性。
+
+    # (1) 先摸高还是先探低：由 OHLC **推断**，不掷硬币。
+    #     开盘更靠近高点 → 先延续上冲再回落；更靠近低点 → 先下探再回升。
+    #     这符合「先沿开盘方向延续、再反向」的形态直觉，且对同一根 bar
+    #     永远给出同一结果。
     mid = n // 2
-    # 第一段：o → h（或 low），第二段：→ low（或 h），第三段：→ c
-    first_ext = h if rng.random() < 0.5 else low
+    if hi > lo:
+        first_ext = h if (o - lo) >= (hi - o) else low
+    else:  # hi == lo（一字线/退化 bar），无所谓顺序
+        first_ext = h
     second_ext = low if first_ext == h else h
 
     path = np.empty(n)
@@ -83,7 +92,13 @@ def _expand_ohlc(
         span = b - a
         if span <= 1:
             continue
-        noise = rng.normal(0, max(abs(vb - va) * 0.15, 1e-9), span - 1)
+        # (2) 路径抖动：由 bar 自身 OHLC 派生的**确定性**序列，不掷随机数。
+        #     用 [-1, +1] 交替的归一化锯齿（幅度与段间距成比例）替代
+        #     rng.normal，既保留"非直线"的形态（避免 high==low 的退化 bar），
+        #     又保证同一根 bar 永远合成出同一条子路径。
+        amp = max(abs(vb - va) * 0.15, 1e-9)
+        idx = np.arange(1, span)
+        noise = np.where(idx % 2 == 1, amp, -amp)
         walk = np.linspace(va, vb, span + 1)[1:-1] + noise
         path[a + 1 : b] = np.clip(walk, lo, hi)
     path = np.clip(path, lo, hi)
@@ -98,9 +113,13 @@ def _expand_ohlc(
     highs = np.maximum(opens, closes)
     lows = np.minimum(opens, closes)
     # 让相邻子 bar 之间有一点波动，避免 high==low 的退化 bar
-    jitter_h = np.abs(rng.normal(0, (hi - lo) * 0.02 + 1e-9, n))
+    # (3) 高低点抖动：同样改为确定性序列（锯齿），理由同 (2)。
+    #     幅度保持 (hi-lo)*0.02，形态上仍避免 high==low 的退化 bar。
+    _jamp = (hi - lo) * 0.02 + 1e-9
+    _idx = np.arange(n)
+    jitter_h = np.where(_idx % 2 == 1, _jamp, _jamp * 0.5)
     highs = np.minimum(highs + jitter_h, hi)
-    jitter_l = np.abs(rng.normal(0, (hi - lo) * 0.02 + 1e-9, n))
+    jitter_l = np.where(_idx % 2 == 0, _jamp, _jamp * 0.5)
     lows = np.maximum(lows - jitter_l, lo)
     # 保证整段覆盖高级别的高低点
     highs[np.argmax(highs)] = hi
@@ -125,7 +144,9 @@ def synthesize_lower_level(
         df: 高级别 K 线，需含 open/high/low/close 与 datetime
         high_level: 高级别周期名
         low_level: 目标低级别周期名
-        seed: 随机种子（保证可复现——回测必须可复现）
+        seed: 随机种子。**V731 起已不再影响结果**——合成过程已全部改为
+            确定性（详见 :func:`_expand_ohlc`）。保留该参数仅为向后兼容
+            调用签名，传任何值都得到同一份合成数据。
 
     Returns:
         合成的低级别 DataFrame；无法合成时返回 None。
