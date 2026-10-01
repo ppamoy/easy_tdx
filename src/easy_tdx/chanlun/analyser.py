@@ -766,8 +766,15 @@ class ChanlunAnalyser:
                 self._result.zsds_l1 = r0.zsds
                 self._result.qsds_l1 = r0.qsds
 
-        # Step 10.5: 真·区间套确认（统一实现，见 chanlun/qujiantao.py）。
+        # Step 10.5: 区间套确认（**递归级别口径**，见 chanlun/qujiantao.py）。
         # 以递归级别作为「低级别」，对基础级别每个 MMD 做跨级别确认。
+        #
+        # ⚠️ V731 口径更正：此处**不是**「真·区间套」（此前注释这么写，与
+        # docs/区间套现状说明与统一方案.md §七 的实测结论矛盾）。递归级别是
+        # 把日线压缩成更高周期，实测确认率仅 3%（真实双周期为 50%），只能作
+        # 「高一级别趋势参考」，**不得用于区间套过滤，也不应呈现为已确认**。
+        # 结果里 method='recursive' 即标识该口径（'cross_period' 才是真实
+        # 双周期）；前端据此在徽章上区分，见 web-ui ChanlunView.vue。
         # 无递归级别时 qujiantao_for_result 整列返回 None（不编造评分）。
         if mmds:
             try:

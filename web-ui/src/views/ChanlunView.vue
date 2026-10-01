@@ -1741,14 +1741,38 @@ onUnmounted(() => {
               >
                 V102·{{ m.v102_signal_quality.overall_grade }}
               </span>
-              <!-- 真·区间套确认徽章（嵌套=低周期同向确认） -->
+              <!-- 区间套徽章（口径区分）
+                   method='cross_period' = 真实双周期数据（缠论原文语义，可用）；
+                   其他（recursive/single）= 同序列递归或单级别近似，
+                   实测确认率仅 3%（真跨周期 50%），不得当作"真区间套"呈现。
+                   见 docs/区间套现状说明与统一方案.md §七 实测证伪。 -->
               <span
                 v-if="m.qujiantao"
                 class="qt-badge"
-                :class="m.qujiantao.nested ? 'qt-ok' : 'qt-no'"
-                :title="m.qujiantao.msg"
+                :class="
+                  m.qujiantao.method === 'cross_period'
+                    ? m.qujiantao.nested
+                      ? 'qt-ok'
+                      : 'qt-no'
+                    : m.qujiantao.nested
+                      ? 'qt-recursive'
+                      : 'qt-no'
+                "
+                :title="
+                  m.qujiantao.method === 'cross_period'
+                    ? m.qujiantao.msg
+                    : '⚠ 非真跨周期：本标记来自同序列递归级别（或单级别近似），实测确认率约 3%，不能等同于缠论原文的区间套。' + m.qujiantao.msg
+                "
               >
-                {{ m.qujiantao.nested ? '🔗 套' : '🔗✗' }}{{ (m.qujiantao.score * 100).toFixed(0) }}
+                {{
+                  m.qujiantao.method === 'cross_period'
+                    ? m.qujiantao.nested
+                      ? '🔗 套'
+                      : '🔗✗'
+                    : m.qujiantao.nested
+                      ? '🔗 级?'
+                      : '🔗✗'
+                }}{{ (m.qujiantao.score * 100).toFixed(0) }}
               </span>
             </td>
             <td>{{ m.msg }}</td>
@@ -2526,6 +2550,12 @@ onUnmounted(() => {
 .qt-badge.qt-no {
   background: #334155;
   color: #94a3b8;
+}
+/* 同序列递归/单级别近似口径：与"真跨周期"（qt-ok）视觉上区分开，
+   避免用户把它当成缠论原文的区间套确认（实测确认率 3% vs 50%）。 */
+.qt-badge.qt-recursive {
+  background: #78350f;
+  color: #fcd34d;
 }
 
 /* 操作建议面板 */

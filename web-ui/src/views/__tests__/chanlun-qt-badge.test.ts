@@ -13,17 +13,34 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { flushPromises, mount, shallowMount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 
-// ── 与 ChanlunView.vue 1741-1747 行同构的徽章模板 ──
+// ── 与 ChanlunView.vue 区间套徽章同构的模板 ──
 // （若原模板改动，此处 fixture 需同步；契约测试的价值在于改动必须被双处看见）
+//
+// V731 口径区分：method='cross_period' 才是「真实双周期」（缠论原文语义）；
+// 其他（recursive/单级别近似）实测确认率仅 3%，不得呈现为"已确认的区间套"，
+// 故用 qt-recursive 类 + 「🔗 级?」文字与 qt-ok 视觉区分。
+// 见 docs/区间套现状说明与统一方案.md §七 实测证伪。
 const QtBadgeRow = defineComponent({
   props: { m: { type: Object, required: true } },
   template: `
     <span
       v-if="m.qujiantao"
       class="qt-badge"
-      :class="m.qujiantao.nested ? 'qt-ok' : 'qt-no'"
-      :title="m.qujiantao.msg"
-    >{{ m.qujiantao.nested ? '🔗 套' : '🔗✗' }}{{ (m.qujiantao.score * 100).toFixed(0) }}</span>
+      :class="
+        m.qujiantao.method === 'cross_period'
+          ? m.qujiantao.nested ? 'qt-ok' : 'qt-no'
+          : m.qujiantao.nested ? 'qt-recursive' : 'qt-no'
+      "
+      :title="
+        m.qujiantao.method === 'cross_period'
+          ? m.qujiantao.msg
+          : '⚠ 非真跨周期：本标记来自同序列递归级别（或单级别近似），实测确认率约 3%，不能等同于缠论原文的区间套。' + m.qujiantao.msg
+      "
+    >{{
+      m.qujiantao.method === 'cross_period'
+        ? m.qujiantao.nested ? '🔗 套' : '🔗✗'
+        : m.qujiantao.nested ? '🔗 级?' : '🔗✗'
+    }}{{ (m.qujiantao.score * 100).toFixed(0) }}</span>
   `,
 })
 
@@ -68,6 +85,57 @@ describe('区间套徽章渲染契约', () => {
   test('qujiantao=null（无递归级别/无低周期）→ 徽章不渲染', () => {
     const w = mount(QtBadgeRow, { props: { m: { qujiantao: null } } })
     expect(w.find('.qt-badge').exists()).toBe(false)
+  })
+})
+
+// V731：口径区分 —— 递归/单级别近似不得呈现为"已确认的真区间套"。
+// 背景：analyser.py 把 qujiantao_for_result（递归级别，method='recursive'）
+// 的结果写进 mmd._qujiantao，前端据此渲染。实测递归确认率 3%（真跨周期 50%），
+// 若一律显示「🔗 套」，用户会把"高一级别趋势参考"误当成原文意义的区间套。
+describe('区间套徽章口径区分（V731）', () => {
+  const qt = (nested: boolean, method: string) => ({
+    m: { qujiantao: { nested, score: 0.8, method, confidence_adjust: 0, msg: 'msg-x' } },
+  })
+
+  test('method=cross_period 且 nested → qt-ok「🔗 套」（真实双周期，可用）', () => {
+    const badge = mount(QtBadgeRow, { props: qt(true, 'cross_period') }).find('.qt-badge')
+    expect(badge.classes()).toContain('qt-ok')
+    expect(badge.text()).toContain('🔗 套')
+  })
+
+  test('method=recursive 且 nested → qt-recursive「🔗 级?」，不是 qt-ok', () => {
+    const badge = mount(QtBadgeRow, { props: qt(true, 'recursive') }).find('.qt-badge')
+    expect(badge.classes()).toContain('qt-recursive')
+    expect(badge.classes()).not.toContain('qt-ok')
+    expect(badge.text()).toContain('🔗 级?')
+    expect(badge.text()).not.toContain('🔗 套')
+  })
+
+  test('method=single 且 nested → 同样按非跨周期口径处理', () => {
+    const badge = mount(QtBadgeRow, { props: qt(true, 'single') }).find('.qt-badge')
+    expect(badge.classes()).toContain('qt-recursive')
+    expect(badge.text()).toContain('🔗 级?')
+  })
+
+  test('非跨周期口径的 title 必须带来源警告（用户 hover 可见）', () => {
+    const badge = mount(QtBadgeRow, { props: qt(true, 'recursive') }).find('.qt-badge')
+    const title = badge.attributes('title') ?? ''
+    expect(title).toContain('非真跨周期')
+    expect(title).toContain('3%')
+  })
+
+  test('对照：跨周期口径的 title 就是原始 msg，不带警告', () => {
+    const badge = mount(QtBadgeRow, { props: qt(true, 'cross_period') }).find('.qt-badge')
+    expect(badge.attributes('title')).toBe('msg-x')
+  })
+
+  test('nested=false → 一律 qt-no「🔗✗」，与 method 无关', () => {
+    for (const method of ['cross_period', 'recursive', 'single']) {
+      const badge = mount(QtBadgeRow, { props: qt(false, method) }).find('.qt-badge')
+      expect(badge.classes()).toContain('qt-no')
+      expect(badge.text()).toContain('🔗✗')
+      expect(badge.classes()).not.toContain('qt-recursive')
+    }
   })
 })
 
