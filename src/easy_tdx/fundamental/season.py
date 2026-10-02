@@ -103,6 +103,32 @@ def _closes(
     return [p[0] for p in pairs], [p[1] for p in pairs]
 
 
+def _volumes(
+    dates: Sequence[Any],
+    volumes: Sequence[Any] | None,
+    target: date,
+) -> list[float]:
+    """只保留 <= target 的量能，并按时间升序（与 _closes 同口径）。
+
+    V731 修复：此前 `detect_season` 直接对**未过滤**的 volumes 取 `[-60:]`。
+    收盘价是经 `_closes` 按 target 过滤的，量能却没有 —— 于是历史时点的
+    「量能」信号读的是**序列最后 60 根**，即 target 之后的未来数据。
+    实测：未来段量能暴涨时，vol_score2 从 0 变成 1、总分从 1 变成 2（春季→
+    更热的判定），确实污染了四季结论。
+    """
+    if not volumes:
+        return []
+    pairs: list[tuple[date, float]] = []
+    for d, v in zip(dates, volumes):
+        if v is None or v != v:  # None / NaN
+            continue
+        dd = pd.to_datetime(d).date() if not isinstance(d, date) else d
+        if dd <= target:
+            pairs.append((dd, float(v)))
+    pairs.sort(key=lambda x: x[0])
+    return [p[1] for p in pairs]
+
+
 def detect_season(
     dates: Sequence[Any],
     closes: Sequence[Any],
@@ -166,8 +192,9 @@ def detect_season(
         vol_score = -1 if vr > 1.3 else 1 if vr < 0.7 else 0
 
     vol_score2 = 0
-    if volumes and len(volumes) >= 60:
-        vs = [float(x) for x in volumes[-60:] if x == x]
+    vs = _volumes(dates, volumes, target)  # V731：量能必须先按 target 过滤
+    if len(vs) >= 60:
+        vs = vs[-60:]
         if len(vs) >= 20:
             v5 = sum(vs[-5:]) / 5
             v60 = sum(vs) / len(vs)
