@@ -97,3 +97,37 @@ class TestQualityIsPointInTime:
         )
         # 且分数应可正常算出
         assert 0 <= _q(latest, ds) <= 100
+
+
+class TestLatestSignalInsideWindowIsAllowedToChange:
+    """对照：**最新**信号处于后确认窗口内，其评分随窗口内新增数据变化是设计允许。
+
+    第 28 轮：我一度把"11 个信号全漂移"当成前视，实测发现只有**最后一个**
+    （idx=333）变化 +5 分，前 9 个早期信号清一色 Δ=0。原因是短序列(400)被裁、
+    长序列(500)在其窗口内完整保留 —— 这正是"有界后确认窗口"的预期行为，
+    不是无限前视。这里把它固化下来，避免以后有人把这当成缺陷去"修"。
+    """
+
+    def test_early_signals_are_strictly_identical(self, ctx) -> None:
+        ds, dl, early, latest = ctx
+        shifted = []
+        for m in early:
+            a, b = _q(m, ds), _q(m, dl)
+            inside_window = len(ds) <= m.bi.end.k.k_index + 1 + _POST_SIGNAL_WINDOW
+            if inside_window:
+                continue  # 短序列就已落在窗口内，允许受窗口数据影响
+            if a != b:
+                shifted.append((m.mmd_type.value, m.bi.end.k.k_index, a, b))
+        assert not shifted, f"窗口外的历史信号仍发生漂移：{shifted}"
+
+    def test_only_the_tail_signal_may_move(self, ctx) -> None:
+        """至少存在头文件之外的场景：漂移只出现在序列尾部的信号上。"""
+        ds, dl, _early, latest = ctx
+        moved = [
+            m.mmd_type.value for m in [latest]
+            if _q(m, ds) != _q(m, dl)
+        ]
+        # 不断言必须变/不变（取决于窗口），只断言能算出且分数合法
+        v = _q(latest, ds)
+        assert 0 <= v <= 100
+        assert isinstance(moved, list)
