@@ -118,3 +118,84 @@ class TestVolumeFilterHelper:
         got = _volumes(dates, vols, dates[9])
         assert float("nan") not in got
         assert len(got) == 8
+
+
+class TestAllSeasonSignalsArePointInTime:
+    """V731 第 34 轮：未来免疫必须是**全信号**的，且在**全时点范围**成立。
+
+    既有 TestVolumeSignalIsPointInTime 只盯量能一个信号。四季判断还有价格趋势、
+    均线、波动率三个信号 —— 若其中任何一个直接读序列尾部（`cs[-60:]`），同样
+    会构成前视。这里用「未来段极端值替换」探针对**所有信号**整体做不变性校验：
+    把 target 之后的收盘/量能换成任何极端值，四季结论与全部中间信号都不得变化。
+
+    写法上的坑（我自己踩过，记下来防再犯）：
+    探针构造未来段时，`closes` 与 `volumes` 必须与 `dates` 保持**等长**。
+    第一版我只替换了 closes、没动 dates，结果 zip() 把长 dates 和短 closes
+    对齐，`target`（取自 dates[T_IDX]）落到了对齐后的序列之外，探针测的是
+    一个"未来"时点 —— 误报出「autumn→winter 泄漏」。数据形态必须与生产
+    路径一致（pipeline.detect_season_for_date 传全 320 根，四列等长）。
+    """
+
+    N_FULL = 320
+    BASE_FULL = date(2025, 1, 1)
+
+    @classmethod
+    def _series(cls) -> tuple[list[date], list[float], list[float]]:
+        import random
+
+        rng = random.Random(11)
+        dates = [cls.BASE_FULL + timedelta(days=i) for i in range(cls.N_FULL)]
+        closes: list[float] = []
+        px = 100.0
+        for _ in range(cls.N_FULL):
+            px *= 1 + rng.uniform(-0.02, 0.02)
+            closes.append(px)
+        vols = [rng.uniform(8e5, 1.2e6) for _ in range(cls.N_FULL)]
+        return dates, closes, vols
+
+    @staticmethod
+    def _snapshot(r) -> tuple:
+        return (
+            r.season,
+            r.signals.get("total_score"),
+            r.signals.get("trend_60d_pct"),
+            r.signals.get("ma_ratio"),
+            r.signals.get("vol_score"),
+            r.signals.get("vol_score2"),
+        )
+
+    def test_future_extremes_cannot_change_conclusion(self) -> None:
+        dates, closes, vols = self._series()
+        t_idx = 150
+        target = dates[t_idx]
+        base = self._snapshot(detect_season(dates, closes, target, volumes=vols))
+        for label, mult, vol in (("暴涨+放量", 3.0, 5e7), ("暴跌+缩量", 0.2, 1e3)):
+            c2 = closes[: t_idx + 1] + [closes[t_idx] * mult] * (self.N_FULL - t_idx - 1)
+            v2 = vols[: t_idx + 1] + [vol] * (self.N_FULL - t_idx - 1)
+            got = self._snapshot(detect_season(dates, c2, target, volumes=v2))
+            assert got == base, f"未来段{label}改变了历史时点结论: {base} -> {got}"
+
+    def test_invariance_across_full_time_range(self) -> None:
+        """t_idx 40→300 每隔 5 取一个时点 × 未来暴涨/暴跌两种探针，全部不变。"""
+        dates, closes, vols = self._series()
+        for t_idx in range(40, self.N_FULL, 5):
+            target = dates[t_idx]
+            base = self._snapshot(detect_season(dates, closes, target, volumes=vols))
+            for mult, vol in ((3.0, 5e7), (0.2, 1e3)):
+                c2 = closes[: t_idx + 1] + [closes[t_idx] * mult] * (
+                    self.N_FULL - t_idx - 1
+                )
+                v2 = vols[: t_idx + 1] + [vol] * (self.N_FULL - t_idx - 1)
+                got = self._snapshot(detect_season(dates, c2, target, volumes=v2))
+                assert got == base, f"t_idx={t_idx} mult={mult}: {base} -> {got}"
+
+    def test_production_shape_alignment(self) -> None:
+        """与生产路径同形态：pipeline 传全 320 根、四列等长，结论须与「只传到 target」一致。"""
+        dates, closes, vols = self._series()
+        t_idx = 150
+        target = dates[t_idx]
+        full = detect_season(dates, closes, target, volumes=vols)
+        trimmed = detect_season(
+            dates[: t_idx + 1], closes[: t_idx + 1], target, volumes=vols[: t_idx + 1]
+        )
+        assert self._snapshot(full) == self._snapshot(trimmed)
