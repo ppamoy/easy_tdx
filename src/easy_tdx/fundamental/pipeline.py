@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import date, datetime
 from typing import Any
 
@@ -149,7 +150,23 @@ def _sina_frame(sina_rows: list[Any]) -> pd.DataFrame:
 
 
 def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, Any]:
-    """给定 OHLC DataFrame（含 date/close 列），算 target 之后 N 个交易日的相对涨幅。"""
+    """给定 OHLC DataFrame（含 date/close 列），算 target 之后 N 个交易日的相对涨幅。
+
+    V731（第 35 轮）修复两处会让 F9 结论失真的缺陷：
+
+    1. **NaN 基准**：target 当日收盘为 NaN（数据缺口/复权缺失）时，旧实现
+       产出 ``as_of_close=nan, ret_Nd=nan``。NaN 不是 None，上游
+       `_summarize_periods._stats` 的过滤 `is not None` 拦不住 —— 一个 NaN
+       就能让整组 avg 变 NaN，且 NaN>0 恒为 False 却仍占 hit_rate 分母，
+       胜率被静默稀释。现在无效收盘（NaN/Inf/不可转 float）视同缺数据：
+       基准无效 → 返回空 dict；末端无效 → ret 为 None。
+    2. **停牌错位**：旧实现取 `d >= target` 第一根作基准。个股 target 当日
+       停牌时基准被悄悄推到复牌日，与指数基准（target 当日就有 K 线）起点
+       错开数日 —— F9 的「跑赢指数」在这类样本上是错位对比。现在输出
+       `base_date` 与 `base_shift_bars`（0 = 当日即基准，与旧版行为一致），
+       调用方可据此识别并剔除错位样本。收益计算本身仍按 K 线序（20 个
+       交易日），不改动 —— 只是把错位从「隐式」变成「显式可检测」。
+    """
     if df is None or df.empty:
         return {}
     dates = pd.to_datetime(df["date"]).dt.date
@@ -160,13 +177,31 @@ def _returns_at(df: Any, target: date, horizons: tuple[int, ...]) -> dict[str, A
             break
     if idx is None:
         return {}
-    base = float(df["close"].iloc[idx])
-    out: dict[str, Any] = {"as_of_close": base, "bars_after": len(df) - idx - 1}
+
+    def _close_at(i: int) -> float | None:
+        """第 i 根收盘价；NaN/Inf/不可转换视同缺数据（返回 None）。"""
+        try:
+            c = float(df["close"].iloc[i])
+        except Exception:  # noqa: BLE001
+            return None
+        return c if math.isfinite(c) else None
+
+    # V731 缺陷1：基准日收盘无效 → 整组收益无从谈起，返回空而不是产出 NaN
+    base = _close_at(idx)
+    if base is None:
+        return {}
+    base_date = dates.iloc[idx] if hasattr(dates, "iloc") else dates[idx]
+    out: dict[str, Any] = {
+        "as_of_close": base,
+        "bars_after": len(df) - idx - 1,
+        "base_date": base_date,
+        "base_shift_bars": (base_date - target).days,
+    }
     for h in horizons:
         j = idx + h
         if j < len(df):
-            c2 = float(df["close"].iloc[j])
-            out[f"ret_{h}d"] = round((c2 / base - 1) * 100, 2) if base else None
+            c2 = _close_at(j)
+            out[f"ret_{h}d"] = round((c2 / base - 1) * 100, 2) if c2 else None
         else:
             out[f"ret_{h}d"] = None
     return out
