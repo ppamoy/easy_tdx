@@ -22,6 +22,94 @@ from easy_tdx.chanlun.types import BI, MMD, ZS, Line, MMDType
 from easy_tdx.MyTT import ATR, BIAS, KDJ, MA, OBV, RSI
 
 
+# ── V731 前视修复：as-of 工具（须在模块顶部，因其装饰器被下方助手使用）──
+
+def _asof_end(mmd: MMD, n: int) -> int:
+    """返回"截至该信号"的切片右端点（exclusive），供 `seq[:end]` 使用。
+
+    Returns:
+        `sig_idx + 1 + _POST_SIGNAL_WINDOW`，夹在 `[0, n]` 之间。
+        取不到信号 index 时返回 n（= 序列尾部，保持旧行为）。
+    """
+    try:
+        sig_idx = mmd.bi.end.k.k_index
+    except Exception:
+        return n
+    if not isinstance(sig_idx, int) or sig_idx < 0:
+        return n
+    return max(0, min(sig_idx + 1 + _POST_SIGNAL_WINDOW, n))
+
+
+def _dict_len(d) -> int:
+    for v in d.values():
+        if isinstance(v, list):
+            return len(v)
+    return 0
+
+
+def _asof_arrays(fn):
+    """把助手的数组入参裁剪到"截至信号"的位置（V731 前视修复）。
+
+    一批助手会读 `closes[-5:]`、`closes[-20:]`、`volumes[-N:]` 之类的**序列尾部**。
+    给历史信号打分时这些尾部含信号**之后**的 K 线，于是历史信号评分会随"后来又
+    录入多少数据"而变（实测 63 个助手合计位移 14.47）。
+
+    本装饰器在调用前把 `closes/highs/lows/volumes/macd_data` 统一裁到
+    `_asof_end(mmd, ...)`。相比"在调用方循环里批量改名 / 重绑局部变量"（第 29、30
+    轮两次均失败且使漂移变大），这里**不改任何调用代码**，每个函数只多一行
+    `@_asof_arrays`，可逐个加、逐个测。
+
+    为何保留后确认窗口而非截到信号本身：动态止损、信号后确认等本就需要信号之后的
+    一段；只要窗口**有界**，结果就不会随后续录入而漂移。
+    """
+    import functools
+    import inspect as _inspect
+
+    sig = _inspect.signature(fn)
+    params = [
+        (i, n)
+        for i, n in enumerate(sig.parameters)
+        if n in ("closes", "highs", "lows", "volumes", "macd_data")
+    ]
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not params:
+            return fn(*args, **kwargs)
+        mmd = None
+        try:
+            mmd = sig.bind_partial(*args, **kwargs).arguments.get("mmd")
+        except Exception:
+            mmd = kwargs.get("mmd")
+        # 只有"mmd 是买卖点"时才裁剪。有些函数的 mmd 形参其实是 BI，
+        # 没有 .bi.end.k.k_index —— _asof_end 内部已兜底，这里再做一道保险。
+        if mmd is None:
+            return fn(*args, **kwargs)
+
+        def _cut(seq):
+            if seq is None:
+                return None
+            if isinstance(seq, dict):
+                end = _asof_end(mmd, _dict_len(seq))
+                return {k: (v[:end] if isinstance(v, list) else v) for k, v in seq.items()}
+            try:
+                return seq[: _asof_end(mmd, len(seq))]
+            except Exception:
+                return seq
+
+        new_args = list(args)
+        for idx, name in params:
+            if idx < len(new_args):
+                new_args[idx] = _cut(new_args[idx])
+            elif name in kwargs:
+                kwargs[name] = _cut(kwargs[name])
+        return fn(*new_args, **kwargs)
+
+    return wrapper
+
+
+
+
 def _calc_atr_volatility(closes: list[float] | None, lookback: int = 20) -> float:
     """计算近期ATR波动率，用于动态调整阈值。
 
@@ -54,6 +142,7 @@ def _calc_atr_volatility(closes: list[float] | None, lookback: int = 20) -> floa
 # V76: 条件 236-239（价格结构完整性+趋势方向对齐+波动率自适应置信度+买卖点最终有效性）
 
 
+@_asof_arrays
 def _calc_price_structure_integrity_v76(
     mmd: MMD,
     closes: list[float],
@@ -154,6 +243,7 @@ def _calc_price_structure_integrity_v76(
         return result
 
 
+@_asof_arrays
 def _calc_trend_alignment_validation_v76(
     mmd: MMD,
     closes: list[float],
@@ -405,6 +495,7 @@ def _calc_signal_final_validity_v76(
 # ── V77: 条件 240-243（量能分布深度+中枢结构权重+信号新鲜度+价格动能加速度）────────────
 
 
+@_asof_arrays
 def _calc_volume_distribution_depth_v77(
     mmd: MMD,
     closes: list[float],
@@ -506,6 +597,7 @@ def _calc_volume_distribution_depth_v77(
         return result
 
 
+@_asof_arrays
 def _calc_zhongshu_structure_weight_v77(
     mmd: MMD,
     zss: list[Any],
@@ -667,6 +759,7 @@ def _calc_signal_freshness_validation_v77(
         return result
 
 
+@_asof_arrays
 def _calc_price_momentum_acceleration_v77(
     mmd: MMD,
     closes: list[float],
@@ -1352,6 +1445,7 @@ def _calc_mmd_distance_safety_v79(
         return result
 
 
+@_asof_arrays
 def _calc_multi_level_structure_consistency_v79(
     mmd: MMD,
     closes: list[float],
@@ -1433,6 +1527,7 @@ def _calc_multi_level_structure_consistency_v79(
         return result
 
 
+@_asof_arrays
 def _calc_price_momentum_continuity_v79(
     mmd: MMD,
     closes: list[float],
@@ -1536,6 +1631,7 @@ def _calc_price_momentum_continuity_v79(
 # ── V80: 条件 252-255（中枢距离+量能配合+均线排列+盈亏比）────────────────────
 
 
+@_asof_arrays
 def _calc_mmd_zhongshu_distance_v80(
     mmd: MMD,
     closes: list[float],
@@ -1790,6 +1886,7 @@ def _calc_ma_alignment_strength_v80(
         return result
 
 
+@_asof_arrays
 def _calc_dynamic_risk_reward_v80(
     mmd: MMD,
     closes: list[float],
@@ -1928,6 +2025,7 @@ def _calc_volatility_regime_transition_v81(
         return result
 
 
+@_asof_arrays
 def _calc_support_resistance_strength_v81(
     mmd: MMD,
     closes: list[float],
@@ -2030,6 +2128,7 @@ def _calc_support_resistance_strength_v81(
         return result
 
 
+@_asof_arrays
 def _calc_volume_price_energy_distribution_v81(
     mmd: MMD,
     closes: list[float],
@@ -2212,6 +2311,7 @@ def _calc_signal_execution_window_v81(
 # ── V82 条件 260-263 实现 ──────────────────────────────────────────────
 
 
+@_asof_arrays
 def _calc_mmd_age_decay_v82(
     mmd: MMD,
     closes: list[float],
@@ -2377,6 +2477,7 @@ def _calc_breakout_retest_confirm_v82(
         return result
 
 
+@_asof_arrays
 def _calc_macd_multi_tf_resonance_v82(
     mmd: MMD,
     closes: list[float],
@@ -2826,6 +2927,7 @@ def _calc_zhongshu_level_weight_v49(
 # ── V50: 条件140-143 缠论模型精准度进一步提升 ────────────────────────────────────────
 
 
+@_asof_arrays
 def _calc_sector_correlation_v50(
     mmd: MMD,
     closes: list[float],
@@ -3042,6 +3144,7 @@ def _calc_level_recursive_validation_v50(
         return result
 
 
+@_asof_arrays
 def _calc_market_sentiment_fusion_v50(
     mmd: MMD,
     closes: list[float],
@@ -3206,6 +3309,7 @@ def _calc_volume_sustain_after_signal_v52(
         return result
 
 
+@_asof_arrays
 def _calc_multi_indicator_divergence_fusion_v52(
     mmd: MMD,
     closes: list[float],
@@ -3304,6 +3408,7 @@ def _calc_multi_indicator_divergence_fusion_v52(
         return result
 
 
+@_asof_arrays
 def _calc_recent_extreme_price_v52(
     mmd: MMD,
     closes: list[float],
@@ -3469,6 +3574,7 @@ def _calc_market_regime_score_v52(
         return result
 
 
+@_asof_arrays
 def _calc_trend_stage_follow_confirmation_v53(
     mmd: MMD,
     closes: list[float],
@@ -3571,6 +3677,7 @@ def _calc_trend_stage_follow_confirmation_v53(
         return result
 
 
+@_asof_arrays
 def _calc_atr_adaptive_stop_v53(
     closes: list[float],
     highs: list[float],
@@ -4452,6 +4559,7 @@ def _calc_zhongshu_level_weight_v55(
         return result
 
 
+@_asof_arrays
 def _calc_weak_stock_risk_v55(
     mmd: MMD,
     closes: list[float],
@@ -4582,6 +4690,7 @@ def _calc_weak_stock_risk_v55(
         return result
 
 
+@_asof_arrays
 def _calc_signal_trend_alignment_v55(
     mmd: MMD,
     closes: list[float],
@@ -5008,6 +5117,7 @@ def _calc_volatility_adaptive_position_v56(
         return result
 
 
+@_asof_arrays
 def _calc_multi_signal_resonance_v56(
     mmd: MMD,
     closes: list[float],
@@ -5533,6 +5643,7 @@ def _calc_signal_decay_detection_v57(
         return result
 
 
+@_asof_arrays
 def _calc_multi_tf_trend_consistency_v58(
     mmd: MMD,
     closes: list[float],
@@ -5610,6 +5721,7 @@ def _calc_multi_tf_trend_consistency_v58(
         return result
 
 
+@_asof_arrays
 def _calc_volume_accumulation_validation_v58(
     mmd: MMD,
     closes: list[float],
@@ -5668,6 +5780,7 @@ def _calc_volume_accumulation_validation_v58(
         return result
 
 
+@_asof_arrays
 def _calc_atr_adaptive_stop_v58(
     mmd: MMD,
     highs: list[float],
@@ -5910,6 +6023,7 @@ def _calc_volatility_adaptive_ma_v59(
         return result
 
 
+@_asof_arrays
 def _calc_atr_multiplier_adapt_v59(
     mmd: MMD,
     highs: list[float],
@@ -6115,6 +6229,7 @@ def _calc_multi_tf_resonance_signal_v59(
         return result
 
 
+@_asof_arrays
 def _calc_signal_decay_speed_v59(
     mmd: MMD,
     closes: list[float],
@@ -6216,6 +6331,7 @@ def _calc_signal_decay_speed_v59(
 # ── V60 条件 180-183 ──
 
 
+@_asof_arrays
 def _calc_rsi_deep_divergence_v60(
     mmd: MMD,
     closes: list[float],
@@ -6352,6 +6468,7 @@ def _calc_rsi_deep_divergence_v60(
         return result
 
 
+@_asof_arrays
 def _calc_ma_spacing_strength_v60(
     mmd: MMD,
     closes: list[float],
@@ -6462,6 +6579,7 @@ def _calc_ma_spacing_strength_v60(
         return result
 
 
+@_asof_arrays
 def _calc_zs_distance_enhanced_v60(
     mmd: MMD,
     closes: list[float],
@@ -6600,6 +6718,7 @@ def _calc_zs_distance_enhanced_v60(
         return result
 
 
+@_asof_arrays
 def _calc_kdj_ob_os_confirm_v60(
     mmd: MMD,
     closes: list[float],
@@ -6727,6 +6846,7 @@ def _calc_kdj_ob_os_confirm_v60(
         return result
 
 
+@_asof_arrays
 def _calc_macd_histogram_divergence_v61(
     mmd: MMD,
     closes: list[float],
@@ -7436,6 +7556,7 @@ def _calc_dynamic_threshold_atr_multiplier_v62(
 # =============================================================================
 
 
+@_asof_arrays
 def _calc_zhongshu_level_weight_enhanced_v63(
     mmd: MMD,
     zss: list[ZS],
@@ -7861,6 +7982,7 @@ def _calc_volume_price_divergence_secondary_v65(
         return result
 
 
+@_asof_arrays
 def _calc_breakout_retest_confirmation_v65(
     mmd: MMD,
     zss: list[ZS],
@@ -8723,6 +8845,7 @@ def _calc_multi_level_mmd_consistency_v67(
         return result
 
 
+@_asof_arrays
 def _calc_post_signal_trajectory_health_v67(
     mmd: MMD,
     closes: list[float],
@@ -8902,6 +9025,7 @@ def _calc_dynamic_sl_tp_recommendation_v67(
         return result
 
 
+@_asof_arrays
 def _calc_gap_trend_consistency_v68(
     mmd: MMD,
     closes: list[float],
@@ -9144,6 +9268,7 @@ def _calc_range_set_multi_level_v68(
         return result
 
 
+@_asof_arrays
 def _calc_post_signal_fund_flow_v68(
     mmd: MMD,
     closes: list[float],
@@ -9258,6 +9383,7 @@ def _calc_post_signal_fund_flow_v68(
         return result
 
 
+@_asof_arrays
 def _calc_market_regime_adaptation_v68(
     mmd: MMD,
     closes: list[float],
@@ -9370,6 +9496,7 @@ def _calc_market_regime_adaptation_v68(
 # ──────────────────────────────────────────────────────────────────────────────
 
 
+@_asof_arrays
 def _calc_price_volume_divergence_v69(
     mmd: MMD,
     closes: list[float],
@@ -9570,6 +9697,7 @@ def _calc_structural_integrity_v69(
         return result
 
 
+@_asof_arrays
 def _calc_multi_indicator_divergence_v69(
     mmd: MMD,
     closes: list[float] | None,
@@ -9708,6 +9836,7 @@ def _calc_multi_indicator_divergence_v69(
         return result
 
 
+@_asof_arrays
 def _calc_retracement_depth_v69(
     mmd: MMD,
     closes: list[float],
@@ -10551,6 +10680,7 @@ def _calc_ma_convergence_divergence_v72(
         return result
 
 
+@_asof_arrays
 def _calc_support_resistance_proximity_v72(
     mmd: MMD,
     closes: list[float],
@@ -10791,6 +10921,7 @@ def _calc_signal_decay_velocity_v72(
 
 
 # V73: 条件 224-227（买卖点位置风险+中枢突破验证+多指标一致性+波动率适配）
+@_asof_arrays
 def _calc_mmd_position_risk_v73(
     mmd: MMD,
     closes: list[float],
@@ -11417,6 +11548,7 @@ def _calc_zhongshu_overlap_density_v74(
         return result
 
 
+@_asof_arrays
 def _calc_signal_resonance_depth_v74(
     mmd: MMD,
     closes: list[float],
@@ -11562,6 +11694,7 @@ def _calc_signal_resonance_depth_v74(
 # V75: 条件 232-235（回调深度验证+中枢回踩确认+量峰持续评分+多信号时间一致性）
 
 
+@_asof_arrays
 def _calc_pullback_depth_validation_v75(
     mmd: MMD,
     closes: list[float],
@@ -11670,6 +11803,7 @@ def _calc_pullback_depth_validation_v75(
         return result
 
 
+@_asof_arrays
 def _calc_zhongshu_retracement_confirm_v75(
     mmd: MMD,
     zss: list[ZS],
@@ -11906,6 +12040,7 @@ def _calc_volume_peak_duration_v75(
         return result
 
 
+@_asof_arrays
 def _calc_multi_signal_time_consistency_v75(
     mmd: MMD,
     closes: list[float],
@@ -12380,6 +12515,7 @@ def _calc_atr(
         return 0.0
 
 
+@_asof_arrays
 def _calc_volume_price_energy_dist(
     mmd: MMD,
     closes: list[float],
@@ -12528,6 +12664,7 @@ def _calc_volume_cycle_detection(
         return result
 
 
+@_asof_arrays
 def _calc_post_signal_trajectory(
     closes: list[float],
     volumes: list[float] | None,
@@ -13179,6 +13316,7 @@ def _calc_enhanced_signal_freshness(
         return result
 
 
+@_asof_arrays
 def _calc_volume_price_divergence_secondary_v48(
     mmd: MMD,
     closes: list[float],
@@ -14492,6 +14630,7 @@ def _calc_signal_freshness(
     return decay, f"信号老化({bars_since_signal}根前, 衰减{decay:.2f})"
 
 
+@_asof_arrays
 def _calc_trend_direction_alignment(
     mmd: MMD,
     closes: list[float],
@@ -14948,6 +15087,7 @@ def _calc_trend_momentum_strength(
         return result
 
 
+@_asof_arrays
 def _calc_volume_price_divergence_secondary(
     mmd: MMD,
     closes: list[float],
@@ -15018,6 +15158,7 @@ def _calc_volume_price_divergence_secondary(
         return result
 
 
+@_asof_arrays
 def _calc_zs_breakout_authenticity(
     mmd: MMD,
     closes: list[float],
@@ -15078,6 +15219,7 @@ def _calc_zs_breakout_authenticity(
         return result
 
 
+@_asof_arrays
 def _calc_multi_tf_signal_consistency(
     mmd: MMD,
     closes: list[float],
@@ -18720,6 +18862,7 @@ def _calc_composite_quality(
     return result
 
 
+@_asof_arrays
 def _calc_signal_history_validation(
     mmd: MMD,
     closes: list[float],
@@ -20103,6 +20246,7 @@ def _calc_kline_pattern_confirmation(
         return result
 
 
+@_asof_arrays
 def _calc_zs_breakout_confirmation(
     mmd: MMD,
     closes: list[float],
@@ -20263,6 +20407,7 @@ def _calc_recent_range_stop_loss(
         return result
 
 
+@_asof_arrays
 def _calc_ma_alignment_confirmation(
     mmd: MMD,
     closes: list[float],
@@ -20331,6 +20476,7 @@ def _calc_ma_alignment_confirmation(
         return result
 
 
+@_asof_arrays
 def _calc_macd_histogram_acceleration(
     mmd: MMD,
     macd_data: dict[str, list[float]] | None,
@@ -20400,6 +20546,7 @@ def _calc_macd_histogram_acceleration(
         return result
 
 
+@_asof_arrays
 def _calc_signal_health_dashboard(
     mmd: MMD,
     closes: list[float] | None,
@@ -20989,6 +21136,7 @@ def _calc_macd_histogram_area(
         return result
 
 
+@_asof_arrays
 def _calc_rsi_momentum_confirmation(
     mmd: MMD,
     closes: list[float],
@@ -21112,6 +21260,7 @@ def _calc_rsi_momentum_confirmation(
         return result
 
 
+@_asof_arrays
 def _calc_trend_momentum_continuation(
     mmd: MMD,
     closes: list[float],
@@ -21662,6 +21811,7 @@ def _calc_dynamic_sl_tp_enhanced(
         return result
 
 
+@_asof_arrays
 def _calc_sector_rotation_context(
     mmd: MMD,
     closes: list[float],
@@ -21925,6 +22075,10 @@ def _calc_tf_consistency(
 
     通过比较短期和中期均线趋势，判断当前时间框架信号的一致性。
     多时间框架一致 → 置信度提升；不一致 → 置信度下降。
+
+    V731 前视修复：原实现取 `closes[-5:]`/`[-20:]`/`[-60:]`，即**整段序列**尾部，
+    给历史信号打分时会用到未来数据（实测单独贡献位移 0.64）。现改为以**信号所在
+    bar** 为基准取 MA（as-of），结果不再随后续数据变化。
     """
     result: dict[str, Any] = {
         "short_term_trend": "neutral",
@@ -21938,9 +22092,18 @@ def _calc_tf_consistency(
 
         is_buy = "buy" in mmd.mmd_type.value
 
+        # 截至信号所在 bar（含信号本身 + 有界的后确认窗口），取代原来的 [-N:]
+        end = _asof_end(mmd, len(closes))
+        if end < 60:
+            return result
+
+        def _ma(n: int) -> float:
+            seg = closes[max(0, end - n):end]
+            return sum(seg) / len(seg) if seg else 0.0
+
         # 短期趋势：MA5 vs MA20
-        ma5_short = sum(closes[-5:]) / 5
-        ma20_short = sum(closes[-20:]) / 20
+        ma5_short = _ma(5)
+        ma20_short = _ma(20)
         short_trend = (
             "up"
             if ma5_short > ma20_short * 1.02
@@ -21948,7 +22111,7 @@ def _calc_tf_consistency(
         )
 
         # 中期趋势：MA20 vs MA60
-        ma60 = sum(closes[-60:]) / 60
+        ma60 = _ma(60)
         mid_trend = (
             "up"
             if ma20_short > ma60 * 1.02
@@ -22743,6 +22906,7 @@ def _calc_zs_structure_integrity(
         return result
 
 
+@_asof_arrays
 def _calc_mmd_position_score(
     mmd: MMD,
     closes: list[float],
@@ -23293,6 +23457,7 @@ def _calc_multi_tf_divergence_confirmation(
         return result
 
 
+@_asof_arrays
 def _calc_independent_cross_validation(
     mmd: MMD,
     closes: list[float],
