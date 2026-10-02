@@ -341,6 +341,53 @@ def build_train_session_payload(
                         outcomes["min_5d"] = round((min(win) / base - 1) * 100, 2)
             mmd_outcomes.append(outcomes)
 
+    # ── V731 防作弊闸门（第 37 轮扩展）：训练模式必须**服务端截断**全部
+    # 描述「reveal_limit 之后」的结构数据。此前只置空了 candidates[].signal
+    # 与 mmd_outcomes，但 bis/xds/zss/fractals/valid_fractals/macd/boll 等
+    # 数组仍携带全量未来结构 —— 前端的 revealIndex 只是**显示层**过滤，
+    # F12 网络面板可直接读到：训练开局即可看到「未来还有 7/10 笔、每笔的
+    # 端点价格、中枢将延伸到第 106/152 根、40/62 个未来分型」。逐步揭示
+    # 训练失去意义。实测（000333 日线，160 根）：
+    #   reveal_limit=30: 笔 9/10、中枢 2/2、分型 50/62 泄露
+    #   reveal_limit=50: 笔 7/10、中枢 2/2、分型 40/62 泄露
+    #   reveal_limit=80: 笔 6/10、中枢 2/2、分型 31/62 泄露
+    # 截断口径：保留 end/bar_index <= reveal_limit 的条目；macd/boll 是
+    # 对齐 bars 的序列，直接切到前 N+1 个点。复盘模式（reveal_limit=None）
+    # 不受影响，仍返回全量。
+    if reveal_limit is not None:
+        keep = reveal_limit + 1  # 含第 N 根
+
+        def _end_le(c: dict[str, Any]) -> bool:
+            return max(c.get("end_index", 0), c.get("bar_index", 0)) < keep
+
+        bis_t = [b for b in d.get("bis", []) if _end_le(b)]
+        xds_t = [b for b in d.get("xds", []) if _end_le(b)]
+        zss_t = [z for z in d.get("zss", []) if z.get("start_index", 0) < keep]
+        fractals_t = [f for f in d.get("fractals", []) if f.get("bar_index", 0) < keep]
+        valid_fractals_t = [
+            f for f in d.get("valid_fractals", []) if f.get("bar_index", 0) < keep
+        ]
+        macd_t = d.get("macd")
+        if isinstance(macd_t, dict) and macd_t.get("hist") is not None:
+            macd_t = {
+                k: (v[:keep] if isinstance(v, list) else v)
+                for k, v in macd_t.items()
+            }
+        boll_t = d.get("boll")
+        if isinstance(boll_t, dict):
+            boll_t = {
+                k: (v[:keep] if isinstance(v, list) else v)
+                for k, v in boll_t.items()
+            }
+    else:
+        bis_t = d.get("bis", [])
+        xds_t = d.get("xds", [])
+        zss_t = d.get("zss", [])
+        fractals_t = d.get("fractals", [])
+        valid_fractals_t = d.get("valid_fractals", [])
+        macd_t = d.get("macd")
+        boll_t = d.get("boll")
+
     return cast(
         dict[str, Any],
         _to_json_safe(
@@ -349,23 +396,23 @@ def build_train_session_payload(
                 "frequency": result.frequency,
                 "category": category,
                 "bars": bars,
-                "bis": d.get("bis", []),
-                "xds": d.get("xds", []),
-                "zss": d.get("zss", []),
+                "bis": bis_t,
+                "xds": xds_t,
+                "zss": zss_t,
                 "mmds": d.get("mmds", []),
-                "fractals": d.get("fractals", []),
+                "fractals": fractals_t,
                 # V-HOTFIX: valid_fractals 在上面 d["valid_fractals"] 已算好，
                 # 但这里手工列字段时漏了它 —— 前端 train 页拿到的恒为空，
                 # 图上 0 个分型（36 根窗口实测：直调 analyser=4，HTTP=0）。
                 # 教训与 stock_pick._run_timing_one 的同类漏传一致：算过的
                 # 字段必须在 return 处再核对一遍，别只靠手写清单。
-                "valid_fractals": d.get("valid_fractals", []),
+                "valid_fractals": valid_fractals_t,
                 "bcs": d.get("bcs", []),
-                "boll": d.get("boll"),
+                "boll": boll_t,
                 # macd 与 valid_fractals 同批漏传：to_dict 明确给出完整序列
                 # 供前端副图展示，这里手工清单却漏了 —— train 页 MACD 副图
                 # 恒缺失（d.macd 恒 undefined，无 hist 就不渲染副图面板）。
-                "macd": d.get("macd"),
+                "macd": macd_t,
                 # levels（笔/线段递归级别）与 zsds/qsds 同样来自 to_dict，
                 # 手工清单漏了 levels 会让 train 页线段级别切换退化为空图
                 # （data.levels.xd 恒 undefined，笔/分型/买卖点清空后无从恢复）。
