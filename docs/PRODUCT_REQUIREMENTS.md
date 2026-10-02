@@ -208,7 +208,7 @@
 
 | 阶段 | 内容 | 依赖 |
 | --- | --- | --- |
-| **P0（F1/F2 已完成 V84；F3 **【此前未实现 · V731 实测补全】**）** | 缠论学习回测：逐步揭示训练 + 逐笔复盘讲解 | ✅ F1/F2：train/session 接口（含候选点+事后N日收益）+ TrainView 训练页 + 复盘讲解页 + 图表揭示游标；浏览器实测通过（见 CHANGELOG_V84.md）。<br>**【已证伪 · V731 实测】F3 两条此前均未实现**：①「任意历史区间回放」——后端 train/session 支持 start_date/end_date 且 ChanlunView「时光跳转」已在使用，但训练页无日期输入、请求也不传；②「会话可保存/续练」——localStorage 全项目仅用于自选股/新手引导/阅读记录/最近浏览，训练页零使用。V731 已补齐（日期控件 + 统一 session 请求 + 存档/续练，存档**不含答案**以防绕过 4fe2bbb 的防作弊闸门），回归见 web-ui/src/views/__tests__/train-f3-session.test.ts（5 条）与 scripts/verify_f3_train_session.py（渲染验证） |
+| **P0（F1/F2 已完成 V84；F3 **【此前未实现 · V731 实测补全】**）** | 缠论学习回测：逐步揭示训练 + 逐笔复盘讲解 | ✅ F1/F2：train/session 接口（含候选点+事后N日收益）+ TrainView 训练页 + 复盘讲解页 + 图表揭示游标；浏览器实测通过（见 CHANGELOG_V84.md）。<br>**【已证伪 · V731 实测】F3 两条此前均未实现**：①「任意历史区间回放」——后端 train/session 支持 start_date/end_date 且 ChanlunView「时光跳转」已在使用，但训练页无日期输入、请求也不传；②「会话可保存/续练」——localStorage 全项目仅用于自选股/新手引导/阅读记录/最近浏览，训练页零使用。V731 已补齐（日期控件 + 统一 session 请求 + 存档/续练，存档**不含答案**以防绕过 4fe2bbb 的防作弊闸门），回归见 web-ui/src/views/__tests__/train-f3-session.test.ts（5 条）与 scripts/verify_f3_train_session.py（渲染验证）。<br>**【V731 第 37 轮补充修复】防作弊闸门结构性泄露**：早期闸门只置空 signal 与 mmd_outcomes，但 bis/xds/zss/fractals/valid_fractals/macd/boll 仍携带全量未来结构（实测 000333 日线 reveal_limit=50 时泄露 7/10 笔、2/2 中枢、40/62 分型，F12 可直接读到未来）——现已改为**服务端截断**全部结构数组（复盘模式不受影响），回归见 tests/unit/test_train_anticheat.py |
 | **P1（✅ 验收 4 条全过：明细可解释 V85 / 批量验证 V86 / 未来函数拦截 test_fundamental_p1 / 浏览器 e2e V-31）** | 长赢基本面选股：gpcw/财务指标层 + 树粮菜量化 + 历史时点选股（自选池） | ✅ V85：gpcw 指标层 + 树粮菜打分 + point-in-time + 历史时点 API + 前端「长赢选股」页；全市场扩展已由 P2 扫描覆盖 |
 | **P2（✅ V91 全部落地）** | 增强：~~全市场扫描~~（✅ V88）、~~财务指标缓存~~（✅ V89）、~~训练成绩持久化/排行榜~~（✅ V90）、~~在线数据补充~~（✅ V91：新浪指标 SQLite 缓存 + 全市场扫描新浪回退 + 前端数据源列） | P1 数据层稳定 |
 
