@@ -14083,7 +14083,15 @@ def _calc_confidence(
     3. RSI确认加成：RSI处于合理区域时额外+0.02
     4. V8原有：类型优先级更精细、波动率自适应、多信号融合
     5. V18新增：突破力度+时间窗口+MACD零轴过滤后，3买/3卖准确率提升，基础值上调
+
+    V731 前视修复（防御性）：这里同样做入口裁剪。虽然外部入口
+    `_calc_confidence_v47` 已经裁过一次（重复裁剪是幂等的），但本函数是 `public`
+    级别的 helper，直接调用它时也应保持 point-in-time。
     """
+    closes, highs, lows, volumes, macd_data = _truncate_to_signal_window(
+        mmd, closes, highs, lows, volumes, macd_data
+    )
+
     # V10: 基础置信度（V9校准 + V10多因子增强，3买/3卖提升）
     # V17: 基于回测结果校准 - 3买实际57.3%→0.60, 3卖实际50%→0.55
     # V18: V18新增条件26-28过滤后预期准确率提升，基础值微调
