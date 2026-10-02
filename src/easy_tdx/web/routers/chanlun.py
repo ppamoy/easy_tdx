@@ -341,6 +341,18 @@ def build_train_session_payload(
                         outcomes["min_5d"] = round((min(win) / base - 1) * 100, 2)
             mmd_outcomes.append(outcomes)
 
+    # ── V731 防作弊闸门（第 38 轮补全）：bars 也必须截断 ──
+    # 此前（含第 37 轮结构截断）bars 仍下发全量：训练模式 reveal_limit=50
+    # 时 bars=160，未来 110 根 K 线（答案的原始数据源）就在响应里，前端只是
+    # 不显示。用户 F12 存一次响应即得全部未来走势，无需逐题枚举。现在
+    # 训练模式 bars 切到前 N+1 根 —— 做完这块，训练模式响应中不再有任何
+    # 「N 之后」的信息。复盘模式不受影响。
+    # 渐进揭示（作答后按需取答案 reveal_limit=index）天然兼容：每次请求
+    # 返回「截至该候选点」的 bars，与前端 revealIndex 语义一致；结构截断
+    # 与 bars 截断同用 keep=N+1，索引不漂移，图上对位不受影响。
+    if reveal_limit is not None:
+        bars = bars[: reveal_limit + 1]
+
     # ── V731 防作弊闸门（第 37 轮扩展）：训练模式必须**服务端截断**全部
     # 描述「reveal_limit 之后」的结构数据。此前只置空了 candidates[].signal
     # 与 mmd_outcomes，但 bis/xds/zss/fractals/valid_fractals/macd/boll 等

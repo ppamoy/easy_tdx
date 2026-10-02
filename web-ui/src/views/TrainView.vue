@@ -303,7 +303,7 @@ async function resumeSession() {
   totalAsked.value = s.totalAsked ?? 0
   hitCount.value = s.hitCount ?? 0
   score.value = s.score ?? 0
-  jumpToCandidateIdx(s.currentCandidateIdx)
+  await jumpToCandidateIdx(s.currentCandidateIdx)
 }
 
 // 训练是否完成
@@ -487,7 +487,7 @@ async function startTraining() {
     score.value = 0
     scoreSubmitted.value = false
     // 快进到第一个候选点之前几根，让用户看到背景
-    jumpToNextCandidate()
+    await jumpToNextCandidate()
   } catch (e) {
     error.value = formatError(e)
   } finally {
@@ -497,25 +497,60 @@ async function startTraining() {
 
 // 揭示到下一个候选点：需要至少 CONTEXT 根背景 K 线，揭示到转折点本身
 const CONTEXT = 30
+/**
+ * 本轮训练的 K 线总根数（推断值）：候选点最大 index + 1，与 count 取大。
+ * V731 第 38 轮起后端只下发「截至 reveal_limit」的 bars，本地 bars.length
+ * 不再等于全量长度 —— 推进上限要用这个推断总长，而不是 bars.value.length。
+ */
+const barsTotal = computed(() =>
+  Math.max(count.value, (candidates.value.at(-1)?.index ?? 0) + 1),
+)
+
+/**
+ * V731 第 38 轮：向后端按需补数据（渐进揭示的数据面）。
+ *
+ * 后端闸门（第 38 轮起）训练模式只下发「截至 reveal_limit」的 bars 与结构
+ * —— 前端必须**每步推进时向后端要数据**，不能再指望开局拿全量后本地隐藏。
+ * 拉 reveal_limit=to 的会话，bars/结构整体替换为后端返回（后端保证结构与
+ * bars 同窗、索引不漂移）。目标不比当前长时是 no-op，不重复请求。
+ * rawDetail 同步更新，切换笔/线段级别时用的是当前窗口的结构。
+ */
+async function growTo(to: number): Promise<void> {
+  const target = Math.max(0, Math.min(to, barsTotal.value - 1))
+  if (target < bars.value.length - 1) return // 已有数据覆盖，无需请求
+  try {
+    const d = await fetchSession({ mode: 'train', revealLimit: target })
+    if (d?.error) return
+    bars.value = d.bars ?? bars.value
+    rawDetail.value = d
+    applyAnalysisLevel(analysisLevel.value, d)
+    candidates.value = d.candidates ?? candidates.value
+  } catch {
+    /* 拉取失败保持原窗口，不打断训练 */
+  }
+}
+
 /** 定位到指定候选点下标（续练用：恢复到上次停下的那一题）。 */
-function jumpToCandidateIdx(idx: number) {
+async function jumpToCandidateIdx(idx: number) {
   const c = candidates.value[idx]
-  if (c && c.index < bars.value.length) {
+  if (c) {
+    await growTo(c.index)
     revealIndex.value = Math.min(c.index, bars.value.length - 1)
     currentCandidateIdx.value = idx
   } else if (candidates.value.length) {
     // 存档下标越界（数据变了）→ 退化为跳到第一个候选点
-    jumpToNextCandidate()
+    await jumpToNextCandidate()
     return
   }
   answered.value = false
   userChoice.value = null
 }
 
-function jumpToNextCandidate() {
+async function jumpToNextCandidate() {
   for (let i = 0; i < candidates.value.length; i++) {
     const c = candidates.value[i]
-    if (c.index >= CONTEXT && c.index < bars.value.length) {
+    if (c.index >= CONTEXT && c.index < barsTotal.value) {
+      await growTo(c.index)
       revealIndex.value = Math.min(c.index, bars.value.length - 1)
       currentCandidateIdx.value = i
       answered.value = false
@@ -524,14 +559,17 @@ function jumpToNextCandidate() {
     }
   }
   // 没有更多候选点 → 直接揭示到末尾
+  await growTo(barsTotal.value - 1)
   revealIndex.value = bars.value.length - 1
   currentCandidateIdx.value = -1
 }
 
 // 手动逐根推进
-function stepForward() {
+async function stepForward() {
   if (finished.value) return
-  revealIndex.value = Math.min(revealIndex.value + 5, bars.value.length - 1)
+  const next = Math.min(revealIndex.value + 5, barsTotal.value - 1)
+  await growTo(next)
+  revealIndex.value = Math.min(next, bars.value.length - 1)
   // 检查是否越过某个候选点
   const c = candidates.value[currentCandidateIdx.value]
   if (!c || revealIndex.value >= c.index) {
@@ -637,12 +675,13 @@ function recordMistake(c: Candidate, choice: string, actual: string) {
 }
 
 // 进入下一题
-function nextQuestion() {
+async function nextQuestion() {
   // 从当前候选点后继续
   const from = (currentCandidate.value ? currentCandidate.value.index : revealIndex.value) + 1
   for (let i = 0; i < candidates.value.length; i++) {
     const c = candidates.value[i]
-    if (c.index >= from && c.index < bars.value.length) {
+    if (c.index >= from && c.index < barsTotal.value) {
+      await growTo(c.index)
       revealIndex.value = Math.min(c.index, bars.value.length - 1)
       currentCandidateIdx.value = i
       answered.value = false
@@ -650,6 +689,7 @@ function nextQuestion() {
       return
     }
   }
+  await growTo(barsTotal.value - 1)
   revealIndex.value = bars.value.length - 1
   currentCandidateIdx.value = -1
 }
@@ -663,7 +703,11 @@ function toggleAuto() {
         stopAuto()
         return
       }
-      revealIndex.value = Math.min(revealIndex.value + 2, bars.value.length - 1)
+      // V731 第 38 轮：数据按需补齐后再推进（bars 不再是全量）
+      const next = Math.min(revealIndex.value + 2, barsTotal.value - 1)
+      void growTo(next).then(() => {
+        revealIndex.value = Math.min(next, bars.value.length - 1)
+      })
     }, 120)
   } else {
     stopAuto()
