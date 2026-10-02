@@ -389,13 +389,24 @@ def _summarize_periods(
     """汇总多个历史时点的验证结果：按分类 + 总体 + 指数基准 + 是否跑赢。"""
     cats = ["tree", "grain", "vegetable"]
 
+    def _finite(v: Any) -> bool:
+        """有效收益样本：数值类型且有限（NaN/Inf 视同缺数据）。
+
+        V731（第 36 轮）：旧过滤只有 `is not None`，而 round-35 虽已让
+        _returns_at 在源头不产出 NaN，但 _stats 是公共出口 —— 任何其他
+        来源的 NaN（旧缓存、手工构造、上游新代码）仍能让整组 avg=nan、
+        并把 NaN>0==False 的样本计入 hit_rate 分母，静默稀释胜率。
+        防御收口在出口处，不依赖每个上游都记得堵。
+        """
+        return isinstance(v, (int, float)) and math.isfinite(v)
+
     def _stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
         st: dict[str, Any] = {"count": len(rows)}
         for h in horizons:
             vals = [
-                r["performance"].get(f"ret_{h}d")
+                r["performance"][f"ret_{h}d"]
                 for r in rows
-                if r.get("performance") and r["performance"].get(f"ret_{h}d") is not None
+                if r.get("performance") and _finite(r["performance"].get(f"ret_{h}d"))
             ]
             st[f"ret_{h}d"] = {
                 "count": len(vals),
@@ -417,7 +428,7 @@ def _summarize_periods(
         idx = p.get("index") or {}
         for h in horizons:
             v = idx.get(f"ret_{h}d")
-            if v is not None:
+            if _finite(v):
                 idx_vals.setdefault(f"ret_{h}d", []).append(v)
     index_stats: dict[str, Any] = {}
     for h in horizons:
@@ -439,12 +450,12 @@ def _summarize_periods(
         rows = p.get("results", [])
         for h in horizons:
             bm = idx.get(f"ret_{h}d")
-            if bm is None:
-                continue  # 该期没有指数基准 ⇒ 整期不参与 alpha
+            if not _finite(bm):
+                continue  # 该期没有有效指数基准 ⇒ 整期不参与 alpha
             ov_vals = [
-                r["performance"].get(f"ret_{h}d")
+                r["performance"][f"ret_{h}d"]
                 for r in rows
-                if r.get("performance") and r["performance"].get(f"ret_{h}d") is not None
+                if r.get("performance") and _finite(r["performance"].get(f"ret_{h}d"))
             ]
             if not ov_vals:
                 continue  # 该期没有个股收益 ⇒ 同样不参与

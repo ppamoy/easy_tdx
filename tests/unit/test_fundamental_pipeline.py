@@ -161,3 +161,65 @@ class TestReturnsAtV731:
         # 源头行为：_returns_at 不再产出 nan（见 test_nan_base_returns_empty）。
         # 本测试用 nan 输入校验 _stats 的防御缺口仍然存在 → 需要源头堵住。
         assert st["count"] == 3 or st["count"] == 2  # 记录现状，不掩盖
+
+
+class TestSummarizePeriodsV731:
+    """V731 第 36 轮：_stats 出口的 NaN / 类型防御缺口。
+
+    round-35 已让 _returns_at 在源头不产出 NaN，但 _stats 是公共出口：
+    任何其他来源的 NaN（旧缓存、上游新代码、手工构造）仍能让
+    整组 avg=nan、并把 NaN>0==False 的样本计入 hit_rate 分母。
+    实测（修复前）：vals=[nan,10,-5] → avg=nan, hit_rate=0.33，
+    而有效样本只有 2 个（正确值 avg=2.5, hit_rate=0.5）。
+    另外 str 类型混入会让 sum() 直接 TypeError 崩掉整个汇总。
+    防御收口在出口处，不依赖每个上游都记得堵。
+    """
+
+    def _p(self, rets: list) -> list[dict]:
+        return [{
+            "date": date(2026, 1, 1),
+            "results": [
+                {"category": "tree", "performance": {"ret_20d": v}} for v in rets
+            ],
+        }]
+
+    def test_nan_no_longer_poisons_group(self) -> None:
+        st = _summarize_periods(self._p([float("nan"), 10.0, -5.0]), (20,))
+        s = st["by_category"]["tree"]["ret_20d"]
+        assert s["count"] == 2, f"NaN 应被剔除，count 应为 2，实得 {s}"
+        assert s["avg"] == 2.5
+        assert s["hit_rate"] == 0.5
+
+    def test_all_nan_gives_none_not_crash(self) -> None:
+        st = _summarize_periods(self._p([float("nan"), float("inf")]), (20,))
+        s = st["by_category"]["tree"]["ret_20d"]
+        assert s["count"] == 0
+        assert s["avg"] is None
+        assert s["hit_rate"] is None
+
+    def test_str_value_filtered_not_crash(self) -> None:
+        """str 混入：旧实现 TypeError 崩溃，现在过滤掉。"""
+        st = _summarize_periods(self._p(["12.5", 8.0]), (20,))
+        s = st["by_category"]["tree"]["ret_20d"]
+        assert s["count"] == 1
+        assert s["avg"] == 8.0
+
+    def test_index_nan_excluded_from_alpha_pairing(self) -> None:
+        """指数基准为 NaN 的期不得参与 alpha（旧实现 is not None 拦不住）。"""
+        periods = [
+            {"date": date(2026, 1, 1), "index": {"ret_20d": float("nan")},
+             "results": [{"category": "tree", "performance": {"ret_20d": 10.0}}]},
+            {"date": date(2026, 2, 1), "index": {"ret_20d": 2.0},
+             "results": [{"category": "tree", "performance": {"ret_20d": 6.0}}]},
+        ]
+        b = _summarize_periods(periods, (20,))["beats_index"]["ret_20d"]
+        assert b["n_periods"] == 1, f"NaN 指数期应被剔除，实得 {b}"
+        assert b["alpha"] == 4.0
+
+    def test_clean_data_unchanged(self) -> None:
+        """对照组：干净数据下统计与旧实现完全一致。"""
+        st = _summarize_periods(self._p([10.0, -5.0, 5.0]), (20,))
+        s = st["by_category"]["tree"]["ret_20d"]
+        assert s["count"] == 3
+        assert s["avg"] == round(10.0 / 3, 2)
+        assert s["hit_rate"] == round(2 / 3, 2)
