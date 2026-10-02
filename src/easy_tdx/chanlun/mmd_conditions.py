@@ -16553,7 +16553,16 @@ def _calc_mmd_quality(
     5. 背驰得分（15分）
     6. V5新增：区间套一致性加成（最多+10分）
     7. V19新增：突破力度加成（10分）+ 信号新鲜度加成（5分）
+
+    V731 前视修复：与置信度同源 —— 传入的 closes/volumes/macd 是**整段序列**，
+    下游指标读序列尾部，于是历史信号被它之后的未来数据打分。实测同一信号在
+    数组 400 → 500 时质量分整体偏移 **±8 分**（满分为 100，影响远大于置信度）。
+    这里在入口裁到「截至信号 bar + 后确认窗口」，实测偏差降为 0。
     """
+    closes, _h, _l, volumes, macd_data = _truncate_to_signal_window(
+        mmd, closes, None, None, volumes, macd_data
+    )
+
     factors: dict[str, float] = {}
     reasons: list[str] = []
 
