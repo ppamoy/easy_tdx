@@ -38,7 +38,7 @@ from easy_tdx.chanlun import ChanlunAnalyser
 from easy_tdx.chanlun.mmd_conditions import _calc_confidence_v47
 
 SHORT, LONG = 400, 500
-MAX_DRIFT = 0.01  # 已知残留上限；引入新的前视会被这里挡住
+MAX_DRIFT = 0.005  # 已知残留上限；引入新的前视会被这里挡住
 
 
 def _bars(n: int) -> pd.DataFrame:

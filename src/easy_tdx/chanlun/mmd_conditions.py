@@ -12298,16 +12298,36 @@ def _calc_adx_strength(
         return (0.0, "none")
 
 
-def _calc_rsi(closes: list[float] | None, period: int = 14) -> float:
-    """简化版RSI计算。"""
+def _calc_rsi(
+    closes: list[float] | None,
+    period: int = 14,
+    idx: int | None = None,
+) -> float:
+    """简化版RSI计算。
+
+    Args:
+        closes: 收盘价序列。
+        period: RSI 周期。
+        idx: **截至该位置**（不含）计算 RSI。``None`` = 用序列末尾（原行为，
+            适用于给"当前最新"信号打分的实时语境）。
+
+    V731 修复：此前只有 ``period`` 一个参数，内部固定 ``range(-period, 0)``
+    即**序列最后 period 根** —— 给历史信号打分时等于用了信号之后的未来数据。
+    实测它单独贡献置信度偏差 0.025 中的 0.015（60%），是前视残留的主要来源。
+    更隐蔽的是调用点 ``_calc_rsi(closes, bi_end_idx)`` 本意传"截至位置"，但因没有
+    idx 形参而被当成 ``period``（其上一行 ``_calc_adx_strength(..., bi_end_idx)``
+    是支持按位置取的，可见原意）—— 于是 bar 220 的信号在算 period=220 的 RSI。
+    """
     if closes is None:
         return 50.0
-    if len(closes) < period + 1:
+    end = len(closes) if idx is None else max(0, min(int(idx), len(closes)))
+    start = end - period
+    if start - 1 < 0:  # 需要取到 closes[i-1]
         return 50.0
     try:
         gains = []
         losses = []
-        for i in range(-period, 0):
+        for i in range(start, end):
             diff = closes[i] - closes[i - 1]
             gains.append(max(diff, 0))
             losses.append(max(-diff, 0))
@@ -14017,18 +14037,28 @@ def _calc_boll_position(closes: list[float] | None, bi_end_idx: int) -> dict[str
         return {"upper": 0.0, "mid": 0.0, "lower": 0.0, "percent_b": 0.5, "position": "mid"}
 
 
-def _calc_rsi_momentum(closes: list[float] | None, period: int = 14) -> float:
+def _calc_rsi_momentum(
+    closes: list[float] | None,
+    period: int = 14,
+    idx: int | None = None,
+) -> float:
     """计算RSI动量变化率（V10新增）。
 
     返回RSI的最近变化，正值表示RSI在上升（动量增强），负值表示下降。
+
+    Args:
+        idx: **截至该位置**计算（V731 新增）。``None`` = 序列末尾（实时语境）。
+            不加这个参数时，历史信号会用到它之后的未来数据。
     """
     if closes is None:
         return 0.0
-    if len(closes) < period + 5:
+    end = len(closes) if idx is None else max(0, min(int(idx), len(closes)))
+    if end < period + 5:
         return 0.0
     try:
-        rsi_now = _calc_rsi(closes, period)
-        rsi_prev = _calc_rsi(closes[:-5], period) if len(closes) >= period + 5 else rsi_now
+        # V731：按"截至 end"取两个窗口，不再用 closes[:-5] 的尾部技巧
+        rsi_now = _calc_rsi(closes, period, idx=end)
+        rsi_prev = _calc_rsi(closes, period, idx=end - 5)
         return rsi_now - rsi_prev
     except Exception:
         return 0.0
@@ -14247,8 +14277,11 @@ def _calc_confidence(
                     confidence += 0.02
 
                 # RSI动量加成
-                rsi_val = _calc_rsi(closes, bi_end_idx)
-                rsi_mom = _calc_rsi_momentum(closes, bi_end_idx)
+                # V731：此前写成 _calc_rsi(closes, bi_end_idx)，由于当时没有 idx
+                # 形参，bi_end_idx 被当成 period —— 既取错位置（用序列末尾的未来
+                # 数据），周期也错。现按"截至信号 bar"取。
+                rsi_val = _calc_rsi(closes, 14, idx=bi_end_idx)
+                rsi_mom = _calc_rsi_momentum(closes, 14, idx=bi_end_idx)
                 if mmd.mmd_type in (MMDType.BUY_3, MMDType.BUY_2):
                     if 40 <= rsi_val <= 65:
                         confidence += 0.03  # RSI中性偏强
