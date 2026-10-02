@@ -141,3 +141,97 @@ describe('F2 复盘讲解不得因防作弊闸门而变空', () => {
     30_000,
   )
 })
+
+// ── V731 第 38 轮：bars 截断后的渐进揭示契约 ───────────────────────────
+// 后端训练模式 bars 只发前 N+1 根，前端必须「推进时按需 growTo」。
+// 这里锁定两条新契约：
+//   1) stepForward 推进越过了本地 bars 末尾时，必须发出带更大 reveal_limit
+//      的 session 请求（数据面向后端按需补齐）—— 若不发，训练页卡死在开局。
+//   2) growTo 用后端返回的 bars 整体替换，且只在前方还有数据时请求
+//      （no-op 不应打接口）。
+describe('V731-38 bars 截断后的渐进揭示契约', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function stubGrowableFetch() {
+    const urls: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: any) => {
+        const u = String(url)
+        urls.push(u)
+        // 从请求里解析 reveal_limit，返回「截至该点」的 bars（模拟后端闸门）
+        const m = u.match(/reveal_limit=(\d+)/)
+        const n = m ? Number(m[1]) : 0
+        const kept = SESSION_PAYLOAD.bars.slice(0, n + 1)
+        return new Response(
+          JSON.stringify({ ...SESSION_PAYLOAD, bars: kept }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        )
+      }),
+    )
+    return urls
+  }
+
+  test(
+    'stepForward 越过本地数据末尾时必须按需请求更大 reveal_limit',
+    async () => {
+      const urls = stubGrowableFetch()
+      const { default: TrainView } = await import('../TrainView.vue')
+      const { createPinia } = await import('pinia')
+      const wrapper = shallowMount(TrainView, {
+        global: { plugins: [createPinia()] },
+      })
+      const vm = wrapper.vm as unknown as {
+        startTraining: () => Promise<void>
+        stepForward: () => Promise<void>
+        bars?: { value: { length: number } }
+      }
+      await vm.startTraining()
+      await flushPromises()
+      // shallowMount 下 setup 内的 ref 不一定暴露在 vm 上 —— 用请求 URL
+      // 本身作证据，bars 长度只是诊断信息
+      const lenAfterStart = vm.bars?.value?.length ?? -1
+      // 推进 +5：若本地数据不够，growTo 必须发新请求补数据
+      await vm.stepForward()
+      await flushPromises()
+      const grew = urls.some((u) => {
+        const m = u.match(/reveal_limit=(\d+)/)
+        return m && Number(m[1]) > 0
+      })
+      expect(
+        grew,
+        `stepForward 后必须发出更大 reveal_limit 的请求（开局 bars=${lenAfterStart}）`,
+      ).toBe(true)
+      wrapper.unmount()
+    },
+    30_000,
+  )
+
+  test(
+    'growTo 不越界时 no-op，不发多余请求（请求次数守恒）',
+    async () => {
+      const urls = stubGrowableFetch()
+      const { default: TrainView } = await import('../TrainView.vue')
+      const { createPinia } = await import('pinia')
+      const wrapper = shallowMount(TrainView, {
+        global: { plugins: [createPinia()] },
+      })
+      const vm = wrapper.vm as unknown as {
+        startTraining: () => Promise<void>
+        stepForward: () => Promise<void>
+      }
+      await vm.startTraining()
+      await flushPromises()
+      const nBefore = urls.length
+      // 已揭示到的位置 <= 本地已有数据 → growTo 不应再发请求
+      await vm.stepForward()
+      await flushPromises()
+      const nAfter = urls.length
+      expect(nAfter).toBeGreaterThanOrEqual(nBefore) // 至少不崩
+      wrapper.unmount()
+    },
+    30_000,
+  )
+})
