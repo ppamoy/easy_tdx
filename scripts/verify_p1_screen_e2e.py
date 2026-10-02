@@ -104,28 +104,39 @@ def main() -> int:
         if not same:
             ok = False
 
-    # ── 判据3：早时点不得看到晚财报 ────────────────────────────────
-    print(f"\n判据3：T1={T1} 的选期不得晚于 T2={T2}")
-    newer_at_t1 = 0
+    # ── 判据3：早时点不得看到晚财报（写成"未来免疫"形式）────────────
+    #
+    # ⚠️ 旧写法有漏检（实测发现，务必保留这条注释）：
+    # 旧版比较 T1 与 T2 的选期，只在 `r1 > r2` 时报警。但 T1 与 T2 **本来就可能
+    # 选到同一期**（中间没有新披露），所以"T1 偷看了 T2 的期"会表现为 r1 == r2，
+    # 永远不报警。实测注入「30% 的股票在 T1 返回 T2 的选期」，旧版竟报 ✅ 退出码 0。
+    #
+    # 正确写法：未来免疫 —— 用**全量财报**在 T1 选出的结果，必须等于用
+    # 「披露日 <= T1 的财报子集」选出的结果。这样任何偷看未来的行为都无处遁形。
+    print(f"\n判据3（未来免疫）：T1={T1} 选期不受 T1 之后披露的财报影响")
+    frame_t1 = frame[
+        pd.to_datetime(frame["disclosure_date"], errors="coerce")
+        <= pd.Timestamp(T1)
+    ]
+    leaked = 0
     checked = 0
     for p in pool[:200]:
         c = p["code"]
-        row1 = pick_report(frame, c, T1, market=p.get("market"))
-        row2 = pick_report(frame, c, T2, market=p.get("market"))
-        if row1 is None or row2 is None:
-            continue
-        r1 = pd.to_datetime(row1.get("report_date"), errors="coerce")
-        r2 = pd.to_datetime(row2.get("report_date"), errors="coerce")
-        if pd.isna(r1) or pd.isna(r2):
+        mkt = p.get("market")
+        full = pick_report(frame, c, T1, market=mkt)
+        only_t1 = pick_report(frame_t1, c, T1, market=mkt)
+        if full is None and only_t1 is None:
             continue
         checked += 1
-        if r1 > r2:
-            newer_at_t1 += 1
-            if newer_at_t1 <= 3:
-                print(f"  ❌ {c}: T1 选期 {r1.date()} 晚于 T2 选期 {r2.date()}")
-    flag = "✅" if newer_at_t1 == 0 else "❌"
-    print(f"  {flag} 检查 {checked} 只，异常 {newer_at_t1} 只")
-    if newer_at_t1:
+        a = None if full is None else str(full.get("report_date"))
+        b = None if only_t1 is None else str(only_t1.get("report_date"))
+        if a != b:
+            leaked += 1
+            if leaked <= 3:
+                print(f"  ❌ {c}: 全量={a} 但截至T1应为={b}")
+    flag = "✅" if leaked == 0 else "❌"
+    print(f"  {flag} 检查 {checked} 只，异常 {leaked} 只")
+    if leaked:
         ok = False
     # 覆盖范围自检：样本太少时判定毫无意义，必须报错而非"通过"
     if checked < 20:
