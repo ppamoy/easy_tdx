@@ -117,7 +117,16 @@ def compute_qujiantao(
     bcs_low: list[BC] | None = None,
     mmds_low: list[Any] | None = None,
 ) -> dict[str, Any]:
-    """计算一个高级别买卖点的真区间套确认。
+    """计算一个高级别买卖点的区间套确认。
+
+    ⚠️ V731 补充前提：本函数做的是「逐信号按原文语义确认」，但**"真"与否取决于
+    喂进来的低级别数据**：
+      - 真实另一周期行情（如日线 + 真实 30 分钟）→ 原文意义的真区间套；
+      - 同序列递归级别（``qujiantao_for_result`` 的路径，见该函数说明）→
+        只是更高周期压缩，实测确认率 3%，**不是**真区间套；
+      - level_synth 合成数据 → 近似值，同样不是真区间套（此时调用方应传
+        ``synthetic=True`` 声明）。
+    结果里的 ``method`` / ``synthetic`` 字段即用于区分这三种来源。
 
     Args:
         mmd: 高级别买卖点（须有 ``bi`` 锚定笔）。
@@ -425,7 +434,14 @@ def qujiantao_for_result(
     result: Any,
     low_level_index: int = 0,
 ) -> list[dict[str, Any] | None]:
-    """基于递归级别，给某一级别（默认基础笔级别）的每个 MMD 算真区间套。
+    """基于**递归级别**的区间套确认（**不是**原文意义的真区间套）。
+
+    ⚠️ V731 口径更正：本函数此前自称"算真区间套"，但它的「低级别」是
+    ``result.recursive_levels[...]`` —— 那是把本序列压缩成的**更高周期**，
+    不是另一份真实低周期行情。实测确认率仅 **3%**（真实双周期 50%），
+    只能作「高一级别趋势参考」，不得用于区间套过滤，也不应呈现为已确认。
+    真区间套请用 :func:`compute_qujiantao_cross_period`（要求真实低周期数据）。
+    见 docs/区间套现状说明与统一方案.md §七。
 
     ``result`` 是 ``ChanlunResult``：基础级别笔在 ``result.bis`` / ``result.mmds``，
     低级别（线段级别）在 ``result.recursive_levels[low_level_index]``
@@ -433,7 +449,8 @@ def qujiantao_for_result(
 
     Returns:
         与 ``result.mmds`` 等长的列表，每个元素是 :func:`compute_qujiantao` 的结果，
-        无低级别数据时对应项为 ``None``。
+        无低级别数据时对应项为 ``None``。结果里 ``method='recursive'`` 即标识
+        该口径（``'cross_period'`` 才是真实双周期）。
     """
     mmds = getattr(result, "mmds", None) or []
     recs = getattr(result, "recursive_levels", None) or []

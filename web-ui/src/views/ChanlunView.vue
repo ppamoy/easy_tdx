@@ -112,8 +112,12 @@ interface ChanlunMmd {
     confidence_adjust: number
     msg: string
   } | null
-  // 真·区间套（缠论原文语义：低周期同向背驰/买卖点确认）。
-  // nested=true 才算确认；method='cross_period' 表示用真实双周期数据。
+  // 区间套（缠论原文语义：低周期同向背驰/买卖点确认）。
+  // nested=true 才算确认；但**是否"真"取决于 method**：
+  //   method='cross_period' = 真实双周期数据 → 原文意义的真区间套；
+  //   method='recursive'/'single' = 同序列递归或单级别近似 → 实测确认率
+  //   仅 3%（真跨周期 50%），只能作参考，不得呈现为"已确认"
+  //   （见 docs/区间套现状说明与统一方案.md §七）。渲染时据此区分徽章。
   qujiantao?: {
     nested: boolean
     score: number
@@ -2532,7 +2536,8 @@ onUnmounted(() => {
   background: #ef4444;
 }
 
-/* 真·区间套确认徽章：绿=低周期确认，灰=未确认 */
+/* 区间套徽章：qt-ok(青)=真实双周期确认；qt-recursive(橙)=递归/单级别近似，
+   仅作参考；qt-no(灰)=未确认。三种口径必须视觉可辨，见 §七 实测证伪。 */
 .qt-badge {
   display: inline-block;
   margin-left: 6px;
