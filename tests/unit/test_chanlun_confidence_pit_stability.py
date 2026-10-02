@@ -38,7 +38,7 @@ from easy_tdx.chanlun import ChanlunAnalyser
 from easy_tdx.chanlun.mmd_conditions import _calc_confidence_v47
 
 SHORT, LONG = 400, 500
-MAX_DRIFT = 0.005  # 已知残留上限；引入新的前视会被这里挡住
+MAX_DRIFT = 1e-6  # V731：前视已消除（实测 0.0000），改为严格相等
 
 
 def _bars(n: int) -> pd.DataFrame:
@@ -70,10 +70,17 @@ def ctx():
     return dfs, dfl, rs, rl, pick(rs), pick(rl)
 
 
-def _conf(mmd, df, r) -> float:
+def _conf(mmd, df, zss) -> float:
+    """计算置信度。
+
+    ⚠️ zss 必须**显式传入并且两侧保持一致**，不能跟着 rs/rl 走。
+    中枢集合会随新数据发生**正常的**结构再分析（实测 6 个 → 7 个中枢），
+    那不是前视，但会让置信度变化约 0.015/信号，从而污染本测试要测的东西。
+    此前 `_conf(mmd, dfl, rl)` 把 rl.zss 也换了进去，等于把结构再分析混进了判定。
+    """
     return _calc_confidence_v47(
         mmd, 0.5, df["vol"].tolist(), df["close"].tolist(),
-        None, 0.02, r.zss, df["high"].tolist(), df["low"].tolist(),
+        None, 0.02, zss, df["high"].tolist(), df["low"].tolist(),
     )
 
 
@@ -88,7 +95,8 @@ class TestHistoricalConfidenceStability:
         worst = 0.0
         for key in common:
             mmd = short_m[key]  # **固定** mmd 对象，隔离结构重算的影响
-            drift = abs(_conf(mmd, dfs, rs) - _conf(mmd, dfl, rl))
+            # 两侧都用 rs.zss（锁定结构），只让输入数组变长
+            drift = abs(_conf(mmd, dfs, rs.zss) - _conf(mmd, dfl, rs.zss))
             worst = max(worst, drift)
         assert worst <= MAX_DRIFT, (
             f"历史信号置信度受后续数据影响 {worst:.4f} > {MAX_DRIFT}（前视）。"

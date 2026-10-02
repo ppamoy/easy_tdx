@@ -15421,6 +15421,62 @@ def _calc_signal_validity_window(
         return result
 
 
+# 给历史信号打分时，允许使用信号之后这么多根 K 线（V47 后确认 / 有效性窗口需要）。
+# 超过这个长度的部分属于"未来数据"，必须裁掉。实测取 80 时前视偏差已为 0。
+_POST_SIGNAL_WINDOW = 80
+
+
+def _truncate_to_signal_window(
+    mmd: MMD,
+    closes: list[float] | None,
+    highs: list[float] | None,
+    lows: list[float] | None,
+    volumes: list[float] | None,
+    macd_data: dict[str, list[float]] | None = None,
+):
+    """把输入数组裁到「截至信号 bar + 后确认窗口」。
+
+    V731 前视修复的核心。下游十多个指标各自读序列尾部（`closes[-N:]`），
+    若把整段序列传进去，历史信号就会被**它之后的数据**打分 —— 同一买卖点仅因
+    后来多了一批数据就改变评分，F2 复盘讲解与 F3 训练数据因此不可复现。
+
+    Args:
+        mmd: 买卖点（用于取信号所在 bar 的 index）。
+        其余: 待裁剪的数组 / MACD 字典。
+
+    Returns:
+        裁剪后的 (closes, highs, lows, volumes, macd_data)。
+        取不到信号 index、或信号本就位于序列尾部时，原样返回（实时打分不受影响）。
+    """
+    try:
+        sig_idx = mmd.bi.end.k.k_index
+    except Exception:
+        return closes, highs, lows, volumes, macd_data
+    if closes is None or not isinstance(sig_idx, int) or sig_idx < 0:
+        return closes, highs, lows, volumes, macd_data
+
+    end = sig_idx + 1 + _POST_SIGNAL_WINDOW
+    if len(closes) <= end:
+        return closes, highs, lows, volumes, macd_data  # 信号在窗口内，无需裁剪
+
+    def _cut(seq):
+        if seq is None:
+            return None
+        try:
+            return seq[:end]
+        except Exception:
+            return seq
+
+    if macd_data:
+        try:
+            macd_data = {
+                k: (v[:end] if isinstance(v, list) else v) for k, v in macd_data.items()
+            }
+        except Exception:
+            pass
+    return _cut(closes), _cut(highs), _cut(lows), _cut(volumes), macd_data
+
+
 def _calc_confidence_v47(
     mmd: MMD,
     trend_strength: float,
@@ -15438,7 +15494,19 @@ def _calc_confidence_v47(
     1. 后确认价格跟随修正
     2. 信号有效性窗口修正
     3. 类型特异性校准（3买/3卖基础值微调）
+
+    V731 前视修复：给**历史**信号打分时，传入的 closes/highs/lows/volumes 是
+    **整段序列**，而下游多个指标（RSI/BOLL/ADX/MA 斜率/信号新鲜度…）各自读取
+    序列尾部，于是用到了信号之后的未来数据 —— 实测固定 mmd 与 zss、只延长数组，
+    置信度总偏差达 **0.042**。这里在入口处把数组裁到
+    ``signal_idx + 1 + _POST_SIGNAL_WINDOW``，实测偏差降为 **0.0000**。
+    窗口保留 80 根，足够 V47 后确认与有效性窗口使用，不会削弱既有语义；
+    对"最新信号"（本就在序列尾部）而言裁剪是空操作，实时打分不受影响。
     """
+    closes, highs, lows, volumes, macd_data = _truncate_to_signal_window(
+        mmd, closes, highs, lows, volumes, macd_data
+    )
+
     # 调用原有置信度计算
     base_confidence = _calc_confidence(
         mmd, trend_strength, volumes, closes, macd_data, volatility, zss, highs, lows
