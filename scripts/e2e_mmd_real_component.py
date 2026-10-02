@@ -96,11 +96,42 @@ def build_e2e_page() -> bool:
     """构建审计页（CHANLUN_E2E=1 才会产出 mmd-e2e.html）。
 
     外部可用 SKIP_BUILD=1 跳过（例如 CI 已提前构建好）。
+
+    V731（第 33 轮实测发现的缺陷）：SKIP_BUILD=1 跳过构建时，dist/ 里可能躺着
+    **陈旧的构建产物** —— 本轮实测：改坏 ChanlunChart.vue → 跑出 5 项失败
+    （判据有效）→ 还原源码 → SKIP_BUILD=1 重跑，**仍然 5 项失败**，因为 dist
+    还是坏代码构建出来的。也就是说 SKIP_BUILD 会把「源码已修好」误报成
+    「依然失败」，反之若先构建过好的产物再改坏源码，也会误报成「通过」。
+    现在改为：SKIP_BUILD=1 时比对 dist/mmd-e2e.html 与源码树的修改时间，
+    产物比任一源码文件旧 → 拒绝跳过并强制重建。
     """
     import os
+    import time
 
+    dist_html = WEB / "dist" / "mmd-e2e.html"
     if os.environ.get("SKIP_BUILD") == "1":
-        return True
+        if dist_html.exists():
+            prod_m = dist_html.stat().st_mtime
+            src_files = [
+                WEB / "mmd-e2e.html",
+                WEB / "src" / "components" / "ChanlunChart.vue",
+                WEB / "src" / "echarts-setup.ts",
+            ]
+            stale = [
+                f.name
+                for f in src_files
+                if f.exists() and f.stat().st_mtime > prod_m + 1
+            ]
+            if stale:
+                print(
+                    f"⚠ SKIP_BUILD=1 但以下源码比 dist 产物新: {stale}，"
+                    "陈旧产物会给出假结果 → 强制重建"
+                )
+            else:
+                return True
+        else:
+            print("⚠ SKIP_BUILD=1 但 dist/mmd-e2e.html 不存在 → 强制重建")
+
     env = dict(os.environ, CHANLUN_E2E="1")
     r = subprocess.run(
         ["npx", "vite", "build"], cwd=str(WEB), env=env,
@@ -109,7 +140,7 @@ def build_e2e_page() -> bool:
     if r.returncode != 0:
         print("构建失败：npx vite build（web-ui/，CHANLUN_E2E=1）")
         return False
-    return (WEB / "dist" / "mmd-e2e.html").exists()
+    return dist_html.exists()
 
 
 def main() -> int:
