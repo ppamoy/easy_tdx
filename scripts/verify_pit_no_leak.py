@@ -41,15 +41,23 @@ from easy_tdx.fundamental.indicators import (  # noqa: E402
 )
 
 CACHE_DIR = Path.home() / ".easy_tdx" / "gpcw_cache"
-# 覆盖不同年份的历史时点：财报密集披露期前后各取，能抓到跨期回填
+# V731 修正（第 31 轮自查）：原来的 6 个时点里 **4 个是空跑**。
+# 实测本机 gpcw 缓存的 disclosure_date 全部落在 2026-01-20 ~ 2026-08-29，
+# 因此 2025-03-15/2025-05-10/2025-09-01/2026-01-20 这四个时点命中 0 只 ——
+# 判据1、判据2 等于什么都没测，却照样打印 ✅，是典型的「假阴性守卫」。
+# 现改为：时点选在数据真正密集的区间，并且**命中过少即判失败**（见 main()）。
+# 说明：本机缓存的 disclosure_date 集中在 2026-01-20 ~ 2026-08-29，且 2026-05
+# 之前披露的股票极少（2026-03-15 时仅约 92 只全市场，抽样 400 里只命中 8 只）。
+# 因此这里只用数据真正密集的时点；**早于 2026-05 的 PIT 行为本机无法验证**，
+# 属已知覆盖缺口，需要更多历史财报 zip 才能补上（网络受限，本会话无法补齐）。
 TARGETS = [
-    date(2025, 3, 15),
-    date(2025, 5, 10),
-    date(2025, 9, 1),
-    date(2026, 1, 20),
-    date(2026, 4, 30),
+    date(2026, 5, 1),    # 年报/一季报密集披露后：5511 只
+    date(2026, 6, 1),
+    date(2026, 7, 1),
     date(2026, 8, 15),
 ]
+# 命中数低于此值视为「空跑」→ 判失败，避免守卫自我安慰
+MIN_HITS_PER_TARGET = 30
 MAX_CODES = 400  # 抽样规模（全市场 5000+ 太慢，抽样仍有统计意义）
 
 
@@ -91,8 +99,25 @@ def main() -> int:
         return 2
     print(f"指标帧: {len(frame)} 行 / {frame['code'].nunique()} 只股票\n")
 
-    codes = sorted(frame["code"].unique())[:MAX_CODES]
+    # V731（第二轮修正）：抽样必须同时满足两件事，缺一守卫就失效 ——
+    #   (a) **覆盖同日多期的股票**，否则判据2 根本测不到那个 bug。
+    #       实测：sorted()[:400] 含 160 只同日多期；而「按披露日最早的 400 只」
+    #       只含 1 只 —— 我第一版改成了后者，结果把回归版判成 ✅（守卫失去牙齿）。
+    #   (b) 稀疏时点也要有足够命中，否则判据1 空跑。
+    # 解法：优先取**同日多期**的股票，再用其余股票补足到 MAX_CODES。
+    _d = pd.to_datetime(frame["disclosure_date"], errors="coerce")
+    _multi = (
+        frame.assign(_d=_d)
+        .groupby(["code", "_d"])
+        .size()
+        .reset_index()[lambda x: x[0] > 1]["code"]
+        .unique()
+        .tolist()
+    )
+    _rest = [c for c in sorted(frame["code"].unique()) if c not in set(_multi)]
+    codes = list(_multi)[: MAX_CODES // 2] + _rest[: MAX_CODES - len(_multi[: MAX_CODES // 2])]
     sample = frame[frame["code"].isin(codes)].copy()
+    print(f"抽样 {len(codes)} 只（其中同日多期 {len(set(codes) & set(_multi))} 只）")
 
     ok = True
 
@@ -135,11 +160,20 @@ def main() -> int:
                     )
 
         flag = "✅" if (v1 == 0 and drift == 0) else "❌"
-        print(
-            f"{flag} 时点 {target}: 命中 {n} 只 | 未来数据 {v1} | 实现漂移 {drift}"
-        )
-        if v1 or drift:
+        # V731：命中过少说明该时点在现有数据下无意义（空跑），不能算通过。
+        # 否则守卫会大量打印 ✅ 而实际什么都没验证 —— 见 TARGETS 处注释。
+        thin = n < MIN_HITS_PER_TARGET
+        if thin:
+            flag = "❌"
+            print(f"{flag} 时点 {target}: 命中 {n} 只 < {MIN_HITS_PER_TARGET}（空跑，"
+                  f"该时点在现有财报数据下无法验证 PIT）")
             ok = False
+        else:
+            print(
+                f"{flag} 时点 {target}: 命中 {n} 只 | 未来数据 {v1} | 实现漂移 {drift}"
+            )
+            if v1 or drift:
+                ok = False
 
     # ── 判据3：自检 —— 注入未来数据，检测器必须报警 ──────────────────
     print("\n自检：注入一行「未来披露」记录，检测器必须报警")
