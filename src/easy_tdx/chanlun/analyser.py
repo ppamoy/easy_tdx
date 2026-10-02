@@ -818,6 +818,14 @@ class ChanlunAnalyser:
         # 去重（防止重复追加）
         if "datetime" in combined.columns:
             combined = combined.drop_duplicates(subset=["datetime"], keep="last")
+            # V731：去重后**必须重排序**。drop_duplicates(keep="last") 保留的是
+            # 靠后出现的那条；当 df_new 含**更早日期**（数据回补/修正）时，它
+            # 会被留在序列末尾 —— 实测 5 根 K 线的例子：追加 01-07 与回补的
+            # 01-01 后顺序变成 [01-02,01-03,01-06,01-07,01-01]，时间序列不再
+            # 单调。缠论的分型/笔/中枢全部依赖顺序，实测该乱序会算出**错误的
+            # 分型**（正确顺序 0 个分型 vs 乱序 2 个）。
+            # 排序用稳定排序（mergesort），同 datetime 时保持原有相对次序。
+            combined = combined.sort_values("datetime", kind="mergesort")
             combined = combined.reset_index(drop=True)
 
         return self.process_klines(combined)
