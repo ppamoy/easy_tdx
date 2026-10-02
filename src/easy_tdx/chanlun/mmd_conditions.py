@@ -15240,20 +15240,34 @@ def _check_post_signal_price_follow_through(
         if signal_idx < 0 or signal_idx >= len(closes):
             return result
 
-        # 计算从信号位置到当前为止的价格变化
-        actual_lookback = min(lookback_bars, signal_idx)
-        if actual_lookback == 0:
-            # 信号在最后一根K线，无法验证，返回neutral
-            result["msg"] = "信号在最新K线，无法后确认"
+        # V731 前视修正：原实现取 ``closes[-1]``（序列最后一根）作比较基准 ——
+        # 对**历史**信号而言那包含了信号之后直到"现在"的全部未来数据，导致：
+        #   1. 同一信号的置信度随数据推进漂移（实测 idx=50 的 3买：数据到 55 根
+        #      时 adjust=+0.04「通过」，到 80/200 根时变成 -0.05「失败」），
+        #      **不可复现**，且污染训练数据与 UI 展示；
+        #   2. 回测按 min_confidence 过滤时用了未来信息 → 收益被高估。
+        #   3. 原 ``actual_lookback = min(lookback_bars, signal_idx)`` 取的是
+        #      信号**之前**的索引，msg 却写"信号后 N 根 K 线" —— 语义错乱。
+        # 修正：窗口固定为信号**之后**最多 lookback_bars 根；不足则返回 neutral。
+        end = signal_idx + lookback_bars
+        if end >= len(closes):
+            # 信号之后的数据还不够 lookback_bars 根（近期信号）→ 无法确认
+            result["msg"] = (
+                f"信号后仅 {len(closes) - 1 - signal_idx} 根K线 < {lookback_bars} 根，"
+                "后确认数据不足（neutral）"
+            )
+            result["signal_bar_idx"] = signal_idx
+            result["looked_bars"] = max(0, len(closes) - 1 - signal_idx)
             return result
 
         signal_close = closes[signal_idx]
-        latest_close = closes[-1]
+        latest_close = closes[end]
         follow_pct = (latest_close - signal_close) / (signal_close + 1e-10)
 
         result["follow_pct"] = round(follow_pct * 100, 2)
         result["signal_bar_idx"] = signal_idx
-        result["looked_bars"] = actual_lookback
+        actual_lookback = end - signal_idx  # 真实回看根数（信号之后）
+        result["looked_bars"] = actual_lookback  # V731：原实现漏了这行，字段恒为 0
 
         is_buy = "buy" in mmd.mmd_type.value
 
