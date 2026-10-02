@@ -45,3 +45,4 @@ logs/
 
 # 根目录 npm 安装残留（web-ui 的依赖由 web-ui/.gitignore 忽略）
 /node_modules/
+tmp/
