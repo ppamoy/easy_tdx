@@ -324,6 +324,7 @@ Q-R2 时间衰减：1buy 前半 +0.99% / 后半 +0.93%（差 −0.07%），**几
 | `scripts/audit_non_a_share.py` | **新增** 非 A 股样本（美股 20 + 港股 9）跨市场验证 |
 | `scripts/audit_strategy_vs_buyhold.py` | **新增** 策略端到端 vs 买入持有（t 检验） |
 | `tests/unit/test_chanlun_v733_strategy_vs_buyhold.py` | **新增** 10 项，含"不得建议改默认值" |
+| `.github/workflows/ci.yml` | `chanlun-audit` 拆掉 job 级 `continue-on-error`，只容忍抓数 |
 | `tests/unit/test_chanlun_v733_non_a_share.py` | **新增** 15 项非 A 股脚本契约测试 |
 | `.gitignore` | 新增 `audit_data_nona/` |
 
@@ -888,6 +889,66 @@ tests/unit -k "v732 or v733"  →  100 passed, 3 skipped
   但样本期集中在 2020–2026 A 股，制度相关性高；
 - 回测交易日志**只有 BUY/SELL、没有信号类型字段**，无法把单笔盈亏
   精确归因到 3buy/1buy，这也是我一开始想当然、查了字段才发现的。
+
+---
+
+---
+
+## 五之十二、把 `continue-on-error` 拆开 —— 让未来函数门禁**真正**阻塞合并
+
+五之六里我写了"该 job 是 `continue-on-error: true`，这是有意的，但意味着
+失败不阻塞、必须有人看日志"。本轮回头把这句话当**待办**而不是免责声明，
+结果是：可以**只牺牲联网那一步**，不必牺牲整个门禁。
+
+### 改之前的问题
+
+整个 job 标 `continue-on-error: true`，理由是"抓行情依赖外网，不该阻塞发版"。
+但**未来函数检测**恰恰是 V732 那个真实缺陷（40 组违反）被发现的手段 ——
+而允许失败下，它红了只是一条黄色提示。**这和我在 `audit_rolling_oos.py`
+里犯的"无条件 return 0"是同一类错误**：门禁存在，但不会拦住任何东西。
+
+### 改法：只容忍联网那一步
+
+```yaml
+chanlun-audit:
+  # 不再有 job 级 continue-on-error  ← 三个门禁现在阻塞合并
+  steps:
+    - name: 抓取真实行情数据（失败不阻塞，但会标记 FETCH_OK=0）
+      continue-on-error: true          # ← 只有这一步容忍
+    - name: 未来函数检测（必须为 0 违反）     # 阻塞
+    - name: 结构不变式检测（I1-I12 必须为 0）  # 阻塞
+    - name: 滚动窗样本外验证（门禁…）          # 阻塞
+```
+
+### 必须验证的前提：抓数失败时门禁会不会"静默通过"
+
+不能只改 YAML 就宣布完成 —— 如果抓数失败后审计脚本因为没数据而**静默返回 0**，
+那等于换了个姿势继续放行。我在**真实空目录**（非 symlink，避免
+`Path(__file__).resolve()` 指回真仓库的坑）里实跑了三个脚本：
+
+| 脚本 | 无数据时 | 实际输出 |
+|---|---|---|
+| `audit_future_leak_real.py` | **exit 2** | `❌ /tmp/nd2/audit_data 无数据，先跑 scripts/audit_fetch_real_data.py` |
+| `audit_chanlun_invariants.py` | **exit 2** | `❌ /tmp/nd2/audit_data 无数据，请先跑 scripts/audit_…` |
+| `audit_rolling_oos.py` | **exit 2** | `❌ /tmp/nd2/audit_data 无数据` |
+
+⇒ 抓数失败会**显式变红并说明原因**，不会静默通过。**改动是安全的。**
+
+（顺带记一个我踩的坑：第一次用 symlink 复制脚本去测，`ROOT` 经
+`Path(__file__).resolve()` 指回了真仓库，于是脚本读到真实的 288 只数据、
+不报错还跑了 10 分钟 —— **"测出来没报错"其实是测错了对象**。改成真复制文件
+才测到真实的"无数据"分支。)
+
+### 顺带修掉一条**已经过时**的 CI 注释
+
+第 71-72 行原写着"1buy 必须 6/6 窗为正"。而我上一轮已把门禁改成**按样本量分档**
+（CI 只抓 30 只，实测稳定 5/6）。注释没跟着改 ⇒ 会误导后来者把阈值改回 6/6，
+造成"每次 CI 都红"。已改写并加测试锁住。
+
+### 牙齿验证
+
+把 `continue-on-error: true` 重新塞回 job 级 ⇒
+`test_job_is_not_continue_on_error` **失败**；恢复 ⇒ **通过**。
 
 ---
 

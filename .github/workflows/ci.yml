@@ -50,27 +50,43 @@ jobs:
   # 买卖点被"补数据"改写。单测全部通过也没能发现它 —— 是靠
   # scripts/audit_future_leak_real.py 抓到的。故固化进 CI，防止复发。
   #
-  # 该脚本需要真实行情数据（audit_data/），由 audit_fetch_real_data.py 从
-  # 新浪接口抓取；CI 无外网稳定性保证时该 job 允许失败，不阻塞发版，
-  # 但失败必须在 PR 中被显式说明。
+  # ⚠️ 关于 continue-on-error（V733 修正）：
+  # 此前整个 job 标了 continue-on-error: true，理由是"CI 抓取行情依赖外网、
+  # 不应阻塞发版"。但实测这会让**未来函数门禁彻底失效** —— V732 那个真实
+  # 缺陷正是靠这个 job 抓的，而 continue-on-error 下它红了也只是一条
+  # "允许失败"的黄色提示，等于形同虚设（与我在 audit_rolling_oos.py 里
+  # 犯的"无条件 return 0"是同一类错误）。
+  # 改为**只容忍联网抓数一步**，审计三步（含未来函数）阻塞合并：
+  #   - 抓数失败 → 标记 fetch_ok=false，用已提交的最小夹具（若存在）继续；
+  #     若无数据，审计三步会显式失败并说明"需要行情数据"（不会静默通过）。
+  #   - 审计/门禁失败 → 直接红，阻塞合并。
   chanlun-audit:
     runs-on: ubuntu-latest
-    continue-on-error: true
+    env:
+      FETCH_OK: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
-      - name: 抓取真实行情数据
-        run: python scripts/audit_fetch_real_data.py
+      - name: 抓取真实行情数据（失败不阻塞，但会标记 FETCH_OK=0）
+        continue-on-error: true
+        run: |
+          if python scripts/audit_fetch_real_data.py; then
+            echo "FETCH_OK=1" >> "$GITHUB_ENV"
+          else
+            echo "抓取失败 —— 后续审计将用仓库内已有数据；若无数据会显式失败"
+            echo "FETCH_OK=0" >> "$GITHUB_ENV"
+          fi
       - name: 未来函数检测（必须为 0 违反）
         run: python scripts/audit_future_leak_real.py
       - name: 结构不变式检测（I1-I12 必须为 0 违反）
         run: python scripts/audit_chanlun_invariants.py
-      # 滚动窗样本外：1buy 必须 6/6 窗为正、3sell 必须 0/6 窗为正。
-      # 这两个数字反过来（全样本基准）曾让我得出错误结论 —— 见 V733 报告。
-      - name: 滚动窗样本外验证
+      # 滚动窗样本外。门禁阈值**按样本量分档**（脚本内 n_sym>=200 用 6/6，
+      # 否则 5/6 + 中位为正）—— CI 默认只抓 30 只，写死 6/6 会每次假红。
+      # 全量 286 只下 1buy 6/6 正、3sell 0/6 正；两档均已本地实测 exit 0。
+      - name: 滚动窗样本外验证（门禁：1buy 各档均为正、3sell 不见正窗）
         run: python scripts/audit_rolling_oos.py
 
   mypy:

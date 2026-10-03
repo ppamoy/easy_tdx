@@ -8,9 +8,10 @@ AGENTS.md §5/§7：能跑真实链路就别只跑单测；发现盲区要写能
 1. `audit_rolling_oos.py` **无条件 `return 0`**。CI 里写着
    "1buy 必须 6/6 窗为正、3sell 必须 0/6 窗为正"，但脚本打印完违规就
    退出 0 ⇒ 那条门禁**形同虚设**，模型退化成全负 CI 也不会红。
-2. `chanlun-audit` job 是 `continue-on-error: true`。这是**有意**的
-   （CI 无外网稳定性保证），但意味着必须有人看日志 —— 本测试不消除该风险，
-   只保证脚本自己的退出码是真实的。
+2. `chanlun-audit` job 曾整体标 `continue-on-error: true`，理由是"CI 抓行情
+   依赖外网"。但这让**未来函数门禁彻底失效** —— V732 那个真实缺陷正是靠这个
+   job 抓的，而允许失败下它红了也只是一条黄色提示。**已改为只容忍联网抓数
+   一步，审计三步阻塞合并**（见 TestChanlunAuditJobBlocksOnGates）。
 
 本测试直接对**门禁逻辑**做断言，并含牙齿测试（坏输入必须判失败）。
 """
@@ -66,6 +67,88 @@ class TestNoDataDirsCommitted:
     def test_teeth_removing_gitignore_entry_is_detected(self) -> None:
         """牙齿：证明上面的断言真的在读内容（不是恒真）。"""
         assert "audit_data/" not in "# nothing here\n", "断言应能区分为空内容"
+
+
+class TestChanlunAuditJobBlocksOnGates:
+    """chanlun-audit 必须**阻塞合并**；只容忍联网抓数一步。
+
+    ⚠️ V733 实测：整个 job 曾标 continue-on-error: true，理由是"抓行情依赖外网"。
+    但那让未来函数门禁形同虚设 —— 而 V732 的真实缺陷正是靠这个 job 抓的。
+    允许失败下，它红了也只是一条黄色提示。修正：只对 fetch 一步容忍。
+    """
+
+    @staticmethod
+    def _job() -> dict:
+        import yaml
+        ci = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+        return ci["jobs"]["chanlun-audit"]
+
+    def test_job_is_not_continue_on_error(self) -> None:
+        """job 级不得有 continue-on-error，否则三个门禁全成摆设。"""
+        job = self._job()
+        assert not job.get("continue-on-error"), (
+            "chanlun-audit 不得整体允许失败：否则未来函数/不变式/门禁"
+            "红了也不阻塞合并，等于没有门禁")
+
+    def test_only_fetch_step_tolerates_failure(self) -> None:
+        steps = self._job()["steps"]
+        tol = [s.get("name", "") for s in steps if s.get("continue-on-error")]
+        assert len(tol) == 1, f"只应有抓数一步容忍失败，实际 {len(tol)} 步: {tol}"
+        assert "抓取" in tol[0]
+
+    def test_audit_steps_have_no_continue_on_error(self) -> None:
+        """未来函数/不变式/滚动门禁三步必须阻塞。"""
+        steps = self._job()["steps"]
+        must_block = ("未来函数", "不变式", "滚动窗")
+        for s in steps:
+            name = s.get("name", "")
+            if any(k in name for k in must_block):
+                assert not s.get("continue-on-error"), f"{name} 不得允许失败"
+
+    def test_all_three_audit_steps_present(self) -> None:
+        names = " ".join(s.get("name", "") for s in self._job()["steps"])
+        for kw in ("未来函数", "不变式", "滚动窗"):
+            assert kw in names, f"CI 缺少 {kw} 检测步骤"
+
+    def test_rolling_oos_comment_not_stale(self) -> None:
+        """注释不得还写着'必须 6/6'—— 门禁已改为按样本量分档。
+
+        ⚠️ 实测：CI 默认只抓 30 只，1buy 稳定 5/6（中位 +0.71%~+0.77%，
+        三个随机种子一致），写死 6/6 会每次假红。注释若与脚本分档逻辑
+        不一致，会误导后来者把阈值改回去。
+        """
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        assert "按样本量分档" in ci
+        # 旧注释 '1buy 必须 6/6' 不能再作为门禁说明出现
+        assert "1buy 必须 6/6 窗为正" not in ci
+
+
+class TestNoDataIsNotSilentPass:
+    """无行情数据时，审计脚本必须**显式失败**，不能静默通过。"""
+
+    @staticmethod
+    def _run_nodata(script: str, tmp_path: Path) -> int:
+        import subprocess, shutil, sys
+        d = tmp_path / script.replace(".py", "")
+        d.mkdir()
+        (d / "scripts").mkdir()
+        shutil.copy(SCRIPTS / script, d / "scripts" / script)
+        (d / "src").symlink_to(ROOT / "src")
+        r = subprocess.run(
+            [sys.executable, f"scripts/{script}"],
+            cwd=d, capture_output=True, text=True, timeout=120,
+        )
+        return r.returncode
+
+    @pytest.mark.parametrize("script", [
+        "audit_future_leak_real.py",
+        "audit_chanlun_invariants.py",
+        "audit_rolling_oos.py",
+    ])
+    def test_missing_data_exits_nonzero(self, script: str, tmp_path: Path) -> None:
+        """⚠️ 牙齿：真实空目录（非 symlink 逃逸）下必须非 0 退出。"""
+        rc = self._run_nodata(script, tmp_path)
+        assert rc != 0, f"{script} 在无数据时返回 0 —— 会在 CI 里静默通过"
 
 
 class TestCIJobWiring:
