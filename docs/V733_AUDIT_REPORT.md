@@ -787,6 +787,52 @@ CI 的 `pip install -e ".[dev]"` 能覆盖，无缺依赖风险。）
 
 ---
 
+---
+
+## 五之十、代码已提交（但**推不上去**）
+
+发现一个现实问题：前面 13 轮的全部产出**一直没提交**，`git status` 有 40 项
+未跟踪/已修改。这意味着：
+
+1. **CI 永远看不到**（CI 跑的是 clone，不是我的工作区）
+   ⇒ 五之八里"CI 全链路实跑"验证的是我本地副本，不是仓库真实内容；
+2. **有丢失风险**（一次误操作就没了）。
+
+已提交（`cf36c95`，40 文件 / +6009 行）。提交前核对：
+
+- 无大文件误入（`audit_data`/`audit_data_multi`/`audit_data_nona` 共 167MB
+  已 gitignore，已入库文件数 **0**）；
+- 无密钥/凭据（脚本里 grep `GITHUB_TOKEN`/`apiKey`/`password` 为空）；
+- `src/` 实际只改 **131 行**（`mmd_conditions.py` +50、`zs.py` +19 等），
+  那个 850KB 的文件是**既有**的（HEAD 时就是 868KB），不是我撑大的。
+
+### ⚠️ 推送失败：没有该仓库的权限
+
+```
+remote: Repository not found.
+```
+
+- remote 是 `https://github.com/handsomejustin/easy_tdx.git`；
+- 本机凭据（`~/.dsh/.credentials.yaml`，`GITHUB_TOKEN`）实测可用，
+  但身份是 **`ppamoy`**，与该 remote 的 owner `handsomejustin` 不是同一账号；
+- API 查该仓库返回 `Not Found`（404 = 对该账号不可见，而非不存在）。
+
+**⇒ 只能由用户把该提交推上去**（或授予权限 / 改 remote 到我有权限的仓库）。
+这属于需要人类介入的事项，不是我能自行解决的。
+
+### 已做的替代验证：从**干净克隆**跑测试
+
+为了证明"提交的内容本身是好的"（而非只有我脏工作区能过），
+我把仓库 clone 到 `/tmp` 重新跑：
+
+```
+tests/unit -k "v732 or v733"  →  100 passed, 3 skipped
+```
+
+并在克隆里核对：17 个审计/e2e 脚本齐全、`audit_data*` 未混入、脚本均编译通过。
+
+---
+
 ## 六、仍未完成 / 未验证
 
 ~~- **横截面仅 30 只**：选股力"不显著"不能排除功效不足，需扩大样本。~~
