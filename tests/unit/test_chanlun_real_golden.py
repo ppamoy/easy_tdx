@@ -40,13 +40,16 @@ def test_counts_locked(result) -> None:
     assert len(result.bis) == 12  # V740 笔算法修正后伪拆分合并（两底间取最高顶）
     # 假破坏恢复（第71-78课）：笔破坏暂定+真破坏确认后，原 3 段合并为 2 段
     assert len(result.xds) == 2
-    # V730 原文中枢口径：ZG/ZD 前两笔冻结 + 无重叠率阈值 → zs 3→2
-    # （zs0=[bi0..bi9] 大震荡，bi9 上离开后 bi10 不回补 → 中枢结束；zs1=[bi10..bi12]）
-    assert len(result.zss) == 2
-    assert len(result.mmds) == 3
+    # V733 原文中枢口径：ZG/ZD 前三笔冻结（第17/20/35课）。
+    # 中枢变窄后，原本被并入 zs0 的一段震荡不再与 [ZD,ZG] 重叠 → 中枢提前
+    # 结束，故由 2 个变为 3 个（实测确认，非笔/线段变化所致：bis/xds 未变）。
+    assert len(result.zss) == 3
+    # V733：中枢变窄（2→3 个）后多检出 1 个 1sell → mmds 3→4（实测确认）
+    assert len(result.mmds) == 4
     # V740：笔 high/low 改为区间真实极值后，中枢 zg 上移，盘整背驰力度对比变化，
     # 1 个笔背驰（bi3 力度 < bi1）正确显现。
-    assert len(result.bcs) == 1
+    # V733：中枢由 2 个变 3 个后，新增中枢[1] 的盘整背驰 → bcs 1→2（实测确认）
+    assert len(result.bcs) == 2
 
 
 def test_bi_endpoints_on_extremes(result) -> None:
@@ -70,9 +73,9 @@ def test_zs_semantics(result) -> None:
         # V730 原文口径（第17/20课）：ZG/ZD 由前两个走势的重叠确定后冻结；
         # 第3笔起为延伸，不改变 ZG/ZD。gg/dd 为全部走势极值。
         if len(zs.lines) >= 2:
-            first2 = zs.lines[:2]
-            assert zs.zg == min(line.high for line in first2), f"zg 应为前两笔 min(high) {zs}"
-            assert zs.zd == max(line.low for line in first2), f"zd 应为前两笔 max(low) {zs}"
+            first2 = zs.lines[:3]  # V733：前三笔冻结（原文口径）
+            assert zs.zg == min(line.high for line in first2), f"zg 应为前三笔 min(high) {zs}"
+            assert zs.zd == max(line.low for line in first2), f"zd 应为前三笔 max(low) {zs}"
         if zs.lines:
             assert zs.gg == max(line.high for line in zs.lines), f"gg 应为 max(high) {zs}"
             assert zs.dd == min(line.low for line in zs.lines), f"dd 应为 min(low) {zs}"
@@ -137,9 +140,9 @@ def test_timing_response_novice_fields() -> None:
     assert out["signal_quality"]["summary"]
     # structure 计数与快照一致（V730 原文中枢口径后 zs 3→2）
     assert out["structure"]["bi_count"] == 12
-    assert out["structure"]["zs_count"] == 2
-    assert out["structure"]["mmd_count"] == 3
-    assert out["structure"]["bc_count"] == 1
+    assert out["structure"]["zs_count"] == 3  # V733：中枢变窄 → 2→3
+    assert out["structure"]["mmd_count"] == 4  # V733：中枢变窄多检出 1sell
+    assert out["structure"]["bc_count"] == 2  # V733：中枢变窄多出 1 个盘整背驰
 
 
 def test_bi_end_to_end(result) -> None:

@@ -1,9 +1,10 @@
 """中枢延伸金标测试（V692，V730 按原文口径修正）。
 
 缠论原文（第17/20课）：中枢 = 至少三个连续次级别走势的重叠区间；
-ZG/ZD 由「前两个次级别走势」的明确重叠确定后即冻结（ZG = min(g1,g2)，
-ZD = max(d1,d2)）；第三段起为中枢震荡延伸，只更新极值 GG/DD，不改变 ZG/ZD。
-本用例锁定 find_zss 的冻结口径与延伸行为，防止后续改动破坏原文语义。
+ZG/ZD 由「前三个次级别走势」的明确重叠确定后即冻结（ZG = min(g1,g2,g3)，
+ZD = max(d1,d2,d3)）；第四段起为中枢震荡延伸，只更新极值 GG/DD，不改变 ZG/ZD。
+本用例锁定 find_zss 的冻结口径（config.zs_zd_lines，默认 3）与延伸行为，
+防止后续改动破坏原文语义。
 """
 
 from __future__ import annotations
@@ -44,13 +45,14 @@ def _bi(
 
 
 def test_zs_extension_keeps_zg_zd_updates_gg_dd() -> None:
-    """前两个走势重叠确定 ZG/ZD 并冻结；延伸笔只更新 GG/DD。
+    """前三笔重叠确定 ZG/ZD 并冻结；第4笔起延伸只更新 GG/DD。
 
-    bi0 [10,14] 与 bi1 [11,13] 重叠 → ZG=min(14,13)=13, ZD=max(10,11)=11；
-    bi2 起（含向下突破后又回补的 bi3）均为延伸，ZG/ZD 不再变化。
+    V733（原文「三个连续次级别走势的重叠区间」）：
+    bi0 [10,14]、bi1 [11,13]、bi2 [9,12] → ZG=min(14,13,12)=12, ZD=max(10,11,9)=11；
+    bi3 为延伸（与 [11,12] 重叠 [11,12]），ZG/ZD 不再变化，只更新 GG/DD。
     """
     bis = [
-        _bi(0, "up", 10.0, 14.0, 14.0, 10.0),  # 前2笔重叠 → zg=13, zd=11
+        _bi(0, "up", 10.0, 14.0, 14.0, 10.0),
         _bi(1, "down", 14.0, 12.0, 13.0, 11.0),
         _bi(2, "up", 12.0, 13.0, 12.0, 9.0),
         _bi(3, "down", 13.0, 10.0, 15.0, 8.0),  # 延伸仍回中枢区间，但极值更远
@@ -58,7 +60,7 @@ def test_zs_extension_keeps_zg_zd_updates_gg_dd() -> None:
     zss = find_zss(bis, ChanlunConfig())
     assert len(zss) == 1
     zs = zss[0]
-    assert zs.zg == 13.0
+    assert zs.zg == 12.0
     assert zs.zd == 11.0
     assert zs.gg == 15.0
     assert zs.dd == 8.0

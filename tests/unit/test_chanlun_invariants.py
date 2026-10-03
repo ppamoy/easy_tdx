@@ -106,21 +106,29 @@ def test_bi_direction_alternates(result) -> None:
         )
 
 
-# ── 中枢：zg>zd / gg>=zg / dd<=zd / 前2笔冻结 ───────────────────────────────
+# ── 中枢：zg>zd / gg>=zg / dd<=zd / ZG/ZD 由前 zs_zd_lines 笔冻结 ──────────
+
+# V733：冻结笔数由 2 改为 3（缠论原文「三个连续次级别走势的重叠区间」）。
+# 与 ChanlunConfig.zs_zd_lines 保持一致；若只含 2 笔则退化用 2 笔。
+_ZD_LINES = 3
 
 
 def test_zs_geometry_invariants(result) -> None:
-    """中枢几何不变量：zg>zd，gg>=zg，dd<=zd，且 zg/zd 由前两笔冻结。"""
+    """中枢几何不变量：zg>zd，gg>=zg，dd<=zd，且 zg/zd 由前 zs_zd_lines 笔冻结。"""
     for z in result.zss:
         assert z.zg > z.zd, f"中枢[{z.index}] zg={z.zg} 必须 > zd={z.zd}"
         assert z.gg >= z.zg - _TOL, f"中枢[{z.index}] gg={z.gg} 必须 >= zg={z.zg}"
         assert z.dd <= z.zd + _TOL, f"中枢[{z.index}] dd={z.dd} 必须 <= zd={z.zd}"
         if len(z.lines) >= 2:
-            first2 = z.lines[:2]
-            ezg = min(ln.high for ln in first2)
-            ezd = max(ln.low for ln in first2)
-            assert abs(z.zg - ezg) < _TOL, f"中枢[{z.index}] zg={z.zg}≠前2笔min(high)={ezg}"
-            assert abs(z.zd - ezd) < _TOL, f"中枢[{z.index}] zd={z.zd}≠前2笔max(low)={ezd}"
+            first = z.lines[: min(_ZD_LINES, len(z.lines))]
+            ezg = min(ln.high for ln in first)
+            ezd = max(ln.low for ln in first)
+            assert abs(z.zg - ezg) < _TOL, (
+                f"中枢[{z.index}] zg={z.zg}≠前{len(first)}笔min(high)={ezg}"
+            )
+            assert abs(z.zd - ezd) < _TOL, (
+                f"中枢[{z.index}] zd={z.zd}≠前{len(first)}笔max(low)={ezd}"
+            )
             # gg/dd 覆盖全部走势极值
             assert abs(z.gg - max(ln.high for ln in z.lines)) < _TOL, (
                 f"中枢[{z.index}] gg={z.gg}≠max(high)"

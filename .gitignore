@@ -46,3 +46,9 @@ logs/
 # 根目录 npm 安装残留（web-ui 的依赖由 web-ui/.gitignore 忽略）
 /node_modules/
 tmp/
+
+# 审计用真实行情数据（由 scripts/audit_fetch_real_data.py 抓取，勿入库）
+# V733：audit_data 48M / audit_data_multi 113M，CI 会自己抓，不需要提交。
+audit_data/
+audit_data_multi/
+audit_data_nona/

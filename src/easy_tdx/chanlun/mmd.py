@@ -87,6 +87,7 @@ from easy_tdx.chanlun.mmd_conditions import (
     _calc_atr_adaptive_stop_v58,
     _calc_atr_multiplier_adapt_v59,
     _calc_atr_volatility,
+    _calc_atr_volatility_asof,
     _calc_bi_force,
     _calc_bi_quality,
     _calc_boll_bandwidth_breakout_confirm_v62,
@@ -2046,11 +2047,25 @@ def _find_first_type_mmds(
         return mmds
 
     # V5: 动态阈值 - 根据波动率调整
+    #
+    # V732 未来函数修复：阈值原先用**全序列尾部**的 ATR 波动率算一个全局标量，
+    # 再套用到所有历史信号上 —— "后面又来一批数据"会改写历史 1买/1卖。
+    # 实测 32 只真实日线 × 7 个截断检查点：40 组历史信号因此被改写。
+    # 改为**逐笔 as-of**：每笔用自己端点处的 ATR 波动率定阈值，
+    # 于是历史信号的判定只依赖截至该笔的数据，满足 PIT 纪律。
     base_threshold = 0.8
-    if volatility is not None:
-        threshold = _adjust_threshold_by_volatility(base_threshold, volatility)
-    else:
-        threshold = base_threshold
+
+    def _threshold_for(bi: BI) -> float:
+        if volatility is None:
+            return base_threshold
+        return _adjust_threshold_by_volatility(base_threshold, volatility)
+
+    def _threshold_asof(bi: BI) -> float:
+        """截至该笔端点的波动率 → 阈值（PIT）。"""
+        if closes is None or not closes:
+            return _threshold_for(bi)
+        v = _calc_atr_volatility_asof(closes, bi.end.k.k_index)
+        return _adjust_threshold_by_volatility(base_threshold, v)
 
     # V731：背驰力度是否按窗口根数归一（消除「长而慢反而力度更大」的偏置）。
     _norm = bool(getattr(config, "bi_force_normalize", False))
@@ -2090,7 +2105,7 @@ def _find_first_type_mmds(
                     continue
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(
-            bi, bis, zss, closes, threshold, normalize_by_bars=_norm
+            bi, bis, zss, closes, _threshold_asof(bi), normalize_by_bars=_norm
         ):
             strength = _get_beichi_strength(bi, bis, zss, closes)
             msg_parts = [
@@ -2164,7 +2179,7 @@ def _find_first_type_mmds(
                     continue
         # 检查背驰（识别所有有效背驰点）
         if _is_strong_beichi(
-            bi, bis, zss, closes, threshold, direction="up", normalize_by_bars=_norm
+            bi, bis, zss, closes, _threshold_asof(bi), direction="up", normalize_by_bars=_norm
         ):
             strength = _get_beichi_strength(bi, bis, zss, closes, direction="up")
             msg_parts = [
@@ -2831,25 +2846,29 @@ def _find_third_type_mmds(
         pass
 
     # V8: 波动率自适应 - 确定动态阈值
-    vol_adjusted_force_ratio = 1.3  # 基础突破力度比
-    vol_adjusted_break_ratio = 0.35  # 基础回调幅度比
-    vol_adjusted_time_window = 5  # 基础时间窗口（根K线）
-    # 放量倍数按"突破笔均量 vs 中枢盘整均量"度量。
-    # 笔均量会被笔内多根K线稀释，1.8x 的硬阈值几乎无法达到导致 3买/3卖 系统性失效；
-    # 实测真实结构比值约 1.2-1.5，故下调为 1.3。
-    vol_adjusted_vol_ratio = 1.3  # 基础放量倍数
+    #
+    # V732 未来函数修复：这四个阈值原先用**全序列尾部**的 ATR 波动率一次性定档，
+    # 再套用到所有历史 3买/3卖 上（与 1买/1卖 同一处泄漏，实测 40 组历史信号
+    # 被改写）。改为 **逐笔 as-of**：按该笔端点处的波动率定档。
+    # 抽成函数以便两个方向（3买/3卖）共用同一口径。
+    def _vol_adjusted_params(bi: BI | None) -> tuple[float, float, int, float]:
+        """截至该笔的波动率 → (力度比, 回调幅度比, 时间窗口, 放量倍数)。"""
+        v = volatility
+        if bi is not None and closes:
+            v = _calc_atr_volatility_asof(closes, bi.end.k.k_index)
+        if v is None:
+            return 1.3, 0.35, 5, 1.3
+        if v > 0.03:  # 高波动市场：放宽阈值
+            return 1.1, 0.45, 7, 1.15
+        if v < 0.01:  # 低波动市场：收紧阈值
+            return 1.5, 0.25, 4, 1.5
+        return 1.3, 0.35, 5, 1.3
 
-    if volatility is not None:
-        if volatility > 0.03:  # 高波动市场：放宽阈值
-            vol_adjusted_force_ratio = 1.1
-            vol_adjusted_break_ratio = 0.45
-            vol_adjusted_time_window = 7
-            vol_adjusted_vol_ratio = 1.15
-        elif volatility < 0.01:  # 低波动市场：收紧阈值
-            vol_adjusted_force_ratio = 1.5
-            vol_adjusted_break_ratio = 0.25
-            vol_adjusted_time_window = 4
-            vol_adjusted_vol_ratio = 1.5
+    # 默认档（无笔上下文时的回退，保持旧行为）
+    vol_adjusted_force_ratio = 1.3
+    vol_adjusted_break_ratio = 0.35
+    vol_adjusted_time_window = 5
+    vol_adjusted_vol_ratio = 1.3
 
     # 预计算MACD数据用于动量确认
     latest_dif = macd_data["dif"][-1] if macd_data and macd_data.get("dif") else None
@@ -2922,16 +2941,20 @@ def _find_third_type_mmds(
                     if bi.low <= zs.zg * 1.005:
                         break
 
+                    # V732：按**回调笔自身**位置的波动率定档（PIT），
+                    # 不再复用全序列尾部算出的全局档位。
+                    (_force_r, _break_r, _tw, _vol_r) = _vol_adjusted_params(bi)
+
                     # V8: 条件2 - 回调时间窗口自适应（1-7根K线）
                     time_span = bi.end.k.k_index - break_bi_up.end.k.k_index
-                    if time_span < 1 or time_span > vol_adjusted_time_window:
+                    if time_span < 1 or time_span > _tw:
                         continue
 
                     # V8: 条件3 - 回调幅度不过大（波动率自适应）
                     breakout_range = break_bi_up.high - break_bi_up.low
                     if breakout_range <= 0:
                         continue
-                    if break_bi_up.low - bi.low > breakout_range * vol_adjusted_break_ratio:
+                    if break_bi_up.low - bi.low > breakout_range * _break_r:
                         continue
 
                     # 条件4：检查是否与已有买卖点过于接近（避免重复信号）
@@ -3247,16 +3270,19 @@ def _find_third_type_mmds(
                     if bi.high >= zs.zd * 0.995:
                         break
 
+                    # V732：按**反抽笔自身**位置的波动率定档（PIT）
+                    (_force_r, _break_r, _tw, _vol_r) = _vol_adjusted_params(bi)
+
                     # V8: 条件2 - 反弹时间窗口自适应
                     time_span = bi.end.k.k_index - break_bi_down.end.k.k_index
-                    if time_span < 1 or time_span > vol_adjusted_time_window:
+                    if time_span < 1 or time_span > _tw:
                         continue
 
                     # V8: 条件3 - 反弹幅度不过大（波动率自适应）
                     breakdown_range = break_bi_down.high - break_bi_down.low
                     if breakdown_range <= 0:
                         continue
-                    if bi.high - break_bi_down.high > breakdown_range * vol_adjusted_break_ratio:
+                    if bi.high - break_bi_down.high > breakdown_range * _break_r:
                         continue
 
                     # 条件4：检查是否与已有买卖点过于接近

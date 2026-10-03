@@ -163,14 +163,19 @@ def find_zss(
     """从笔列表中计算中枢（V730 原文口径版）。
 
     缠论原文口径（第17/20/35课）：
-    1. 中枢 = 至少三个连续次级别走势的重叠区间；ZG/ZD 由「前两个次级别走势」
-       的明确重叠确定后即冻结（ZG = min(g1,g2)，ZD = max(d1,d2)）。
+    1. 中枢 = 至少三个连续次级别走势的重叠区间；ZG/ZD 由这三个走势共同确定
+       （ZG = min(g1,g2,g3)，ZD = max(d1,d2,d3)）后即冻结。
     2. 之后每个同级别走势若与 [ZD, ZG] 有重叠（overlap_high > overlap_low，
        无比例阈值——原文只要求「重叠」，不要求达到某个百分比），
        则为中枢延伸，只更新 GG/DD，不改变 ZG/ZD。
     3. 某走势与 [ZD, ZG] 完全无重叠 → 中枢结束。
     4. 中枢震荡延伸达 _MAX_ZS_SEGMENTS 段后关闭（工程上限，防止无限延伸
        吞没后续行情；原文允许任意延伸，但同样可用「走势终完美」判断结束）。
+
+    V733 I8 修复：ZG/ZD 的「冻结笔数」由 config.zs_zd_lines 控制。
+      3（默认，原文口径）：前三笔共同决定 ZG/ZD，第4笔起只更新 GG/DD。
+      2（旧行为）：前两笔决定，第3笔起只更新 GG/DD —— 实测使中枢系统性
+      偏宽（557 个中枢中 52.2% 变窄、0% 变宽），3买/3卖 阈值偏松。
 
     Args:
         bis: 笔列表
@@ -181,6 +186,10 @@ def find_zss(
     """
     if config is None:
         config = ChanlunConfig()
+
+    # V733：ZG/ZD 参与确定的笔数（3=原文口径，2=旧行为）
+    zd_lines = int(getattr(config, "zs_zd_lines", 3) or 3)
+    zd_lines = max(2, min(zd_lines, int(config.zs_min_lines or 3)))
 
     if len(bis) < 3:
         return []
@@ -209,9 +218,9 @@ def find_zss(
         if overlap_high > overlap_low:
             # 有重叠，加入中枢候选
             candidate_lines.append(bi)
-            # V730 P1-1：原文口径——ZG/ZD 由前两个次级别走势的重叠确定后冻结，
-            # 第3笔起为中枢延伸，只更新极值 GG/DD，不再改变 ZG/ZD。
-            if len(candidate_lines) <= 2:
+            # V733 I8：ZG/ZD 由前 `zd_lines` 笔共同确定后冻结，之后只更新 GG/DD。
+            # zd_lines=3（默认）＝ 缠论原文「三个连续次级别走势的重叠」。
+            if len(candidate_lines) <= zd_lines:
                 zg_candidate = overlap_high
                 zd_candidate = overlap_low
             gg_candidate = max(gg_candidate, bi.high)

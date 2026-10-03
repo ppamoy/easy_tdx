@@ -108,11 +108,14 @@ def test_recursive_level_golden_counts() -> None:
     # （旧实现 max/min 换出到早已越过的 98.0 低点，违反原文收尾语义）。
     assert result.xds[1].end.val == 100.0
 
-    # 高级别线段中枢：ZG/ZD 前两笔冻结 → ZG=min(112,112)=112, ZD=max(98,98)=98。
+    # 高级别线段中枢：ZG/ZD 由前 zs_zd_lines 笔冻结（V733 默认 3）。
+    # 实测（V733）：ZG=112.0（前三笔 min(high) 仍为 112，与两笔口径一致），
+    # ZD=100.0（前三笔 max(low)=100 > 两笔口径的 98 —— 第3笔抬高了下沿，
+    # 中枢因此变窄，符合「多求一次交集必然不宽」）。
     # V730 P1-6：延伸达 9 段上限后中枢关闭，第 10 段归入新候选（不足 3 段不成中枢）。
     assert len(result.zss) == 1
     assert result.zss[0].zg == 112.0
-    assert result.zss[0].zd == 98.0
+    assert result.zss[0].zd == 100.0
     assert result.zss[0].line_count == 9
 
     # 高级别背驰：向下线段力度衰竭

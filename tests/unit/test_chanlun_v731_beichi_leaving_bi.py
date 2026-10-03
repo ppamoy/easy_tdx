@@ -714,13 +714,22 @@ class TestBiForceNormalizeTradeoff:
     （实测均为 5 笔 down、2 个中枢、同一最低价），但两种力度口径的检出情况
     不同：
 
-        同时被两者检出     : n = 52..80（慢跌，两者一致）
+    V732 重测（波动率阈值改为逐笔 as-of 后，矩阵已变化，原结论已证伪并更新）：
+
+        同时被两者检出     : n = 48..80（慢跌，两者一致）
         仅 raw 面积检出    : n = 8..12 （急跌）
-        仅 单位根归一 检出 : n = 20..48（缓跌 ← 教科书「背驰」的典型形态）
+        仅 单位根归一 检出 : n = 20..44（缓跌 ← 教科书「背驰」的典型形态）
         两者都漏           : n = 16
 
-    结论：normalize=True 在 20~48 根区间救回教科书背驰，但在极急跌区间会
-    漏。两者都不完备，故 config 默认保持 False，由调用方按风格显式选择。
+    ⚠️ 与 V731 记录的差异：n=48 原属「仅归一」，修复后 raw 也能检出
+    （原因：旧实现用**全序列尾部**的 ATR 波动率算全局阈值，把末尾反弹段的
+    高波动率套到了背驰笔上，导致阈值档位误判；改为按背驰笔自身位置 as-of
+    取值后，该笔判定回到真实波动率，raw 口径得以检出）。
+    这是**召回变好**，不是回归 —— 已用 scripts/audit_mmd_ground_truth.py
+    （6/6）与 scripts/audit_future_leak_real.py（224 组 0 违反）双向确认。
+
+    结论（仍成立）：normalize=True 在 20~44 根区间救回教科书背驰，但在极急跌
+    区间会漏。两者都不完备，故 config 默认保持 False，由调用方按风格显式选择。
     一旦有人做出能同时覆盖 n=8..80 的改进，这里的断言会失败提示重估。
     """
 
@@ -763,8 +772,13 @@ class TestBiForceNormalizeTradeoff:
         )
 
     def test_normalize_recovers_slow_decline(self) -> None:
-        """20~48 根缓跌：只有归一能检出（教科书写照）。"""
-        for n in (20, 32, 40, 48):
+        """20~44 根缓跌：只有归一能检出（教科书写照）。
+
+        V732：n=48 已从本组移出 —— 波动率阈值改为 as-of 后 raw 也能检出（见
+        类 docstring），故此处只断言 20/32/40。n=48 由
+        test_slow_segment_both_agree 覆盖为「两者都检出」。
+        """
+        for n in (20, 32, 40):
             assert not self._has_1buy(n, False), f"n={n}: raw 不应检出"
             assert self._has_1buy(n, True), f"n={n}: 归一应检出"
 
@@ -780,8 +794,11 @@ class TestBiForceNormalizeTradeoff:
         assert not self._has_1buy(16, True)
 
     def test_slow_segment_both_agree(self) -> None:
-        """52 根以上慢跌两者一致（对照组：确认改动没有全局破坏召回）。"""
-        for n in (56, 72):
+        """48 根以上慢跌两者一致（对照组：确认改动没有全局破坏召回）。
+
+        V732：下界由 56 下调为 48 —— as-of 修复后 n=48 的 raw 也检出了。
+        """
+        for n in (48, 56, 72):
             assert self._has_1buy(n, False), f"n={n}: raw 应检出"
             assert self._has_1buy(n, True), f"n={n}: 归一应检出"
 

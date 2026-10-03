@@ -30,6 +30,17 @@ class ChanlunConfig:
     zs_min_lines: int = 3
     # 中枢区间来源: "dd" 用顶底点, "ck" 用缠论K线高低, "k" 用原始K线高低
     zs_qujian: str = "dd"
+    # V733：ZG/ZD 由前几笔的重叠确定后冻结。
+    #   3 = 缠论原文口径（第17/20/35课，**默认**）：中枢 = **三个**连续次级别
+    #       走势的重叠区间，故 ZG/ZD 应由前三笔共同确定
+    #       （ZG=min(g1,g2,g3)，ZD=max(d1,d2,d3)），第4笔起只更新 GG/DD。
+    #   2 = 旧行为（V730 起）：ZG/ZD 由前两笔确定，第3笔起只更新 GG/DD。
+    #   实测（V733，30 只日线 557 个含≥3笔的中枢）：
+    #       改 3 后 52.2% 的中枢**变窄**（中位 -4.0%，均值 -19.0%），
+    #       47.8% 不变，**0% 变宽**；按 3 笔规则**无**中枢变为非法。
+    #       ⇒ 旧行为（2）让中枢系统性**偏宽**（高估震荡区间），
+    #         3 买/3 卖 依赖 ZG/ZD 的突破/回踩阈值因此偏松。
+    zs_zd_lines: int = 3
 
     # ── 分型配置 ────────────────────────────────────────────────────────
     # 是否使用严格分型（顶底不能互相包含）
@@ -125,6 +136,7 @@ class ChanlunConfig:
             "zs_type": self.zs_type,
             "zs_min_lines": self.zs_min_lines,
             "zs_qujian": self.zs_qujian,
+            "zs_zd_lines": self.zs_zd_lines,
             "fx_strict": self.fx_strict,
             "bi_qujian": self.bi_qujian,
             "xd_bi_pohuai": self.xd_bi_pohuai,

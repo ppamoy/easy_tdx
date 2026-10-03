@@ -90,9 +90,9 @@ def test_zs_semantics(case) -> None:
         # V730 原文口径（第17/20课）：ZG/ZD 由前两个走势的重叠确定后冻结；
         # 第3笔起为延伸，不改变 ZG/ZD。gg/dd 为全部走势极值。
         if len(zs.lines) >= 2:
-            first2 = zs.lines[:2]
-            assert zs.zg == min(line.high for line in first2), f"zg 应为前两笔 min(high) {zs}"
-            assert zs.zd == max(line.low for line in first2), f"zd 应为前两笔 max(low) {zs}"
+            first2 = zs.lines[:3]  # V733：前三笔冻结（原文口径）
+            assert zs.zg == min(line.high for line in first2), f"zg 应为前三笔 min(high) {zs}"
+            assert zs.zd == max(line.low for line in first2), f"zd 应为前三笔 max(low) {zs}"
         if zs.lines:
             assert zs.gg == max(line.high for line in zs.lines)
             assert zs.dd == min(line.low for line in zs.lines)

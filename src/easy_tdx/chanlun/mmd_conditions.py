@@ -115,6 +115,21 @@ def _calc_atr_volatility(closes: list[float] | None, lookback: int = 20) -> floa
 
     Returns:
         ATR/价格比率（波动率），0-1之间。越高表示市场越波动，阈值应更宽松。
+
+    ⚠️ 未来函数警告（V732 实测确认）：本函数取 ``closes[-lookback:]``，即
+    **序列尾部**。若把整段历史（含"未来"）传进来，得到的就是**最后一段行情**
+    的波动率，却被用于给**早期**信号定阈值 —— 于是"后面又来一批数据"会改写
+    历史信号。
+
+    实测（32 只真实日线 × 7 个截断检查点 = 224 组）：该口径造成 **40 组**
+    历史信号被改写（18/32 只标的受影响），例如 sh600009 在截断 600 根时
+    bar199 无 1buy，数据补齐到 1500 根后凭空多出 1buy@199 —— 因为
+    ATR 波动率从 0.0136 变到 0.0070（相对差 93.5%），跨越了 0.01 的
+    「低波动 → 收紧阈值」档位边界。把该值固定为常数后，全部 40 组违反消失。
+
+    正确用法：``volatility`` 必须是**逐信号 as-of** 的量，不能在
+    ``find_mmds_v44`` 入口用全序列算一个标量后全局复用。见
+    ``_calc_atr_volatility_asof``。
     """
     if closes is None:
         return 0.0
@@ -136,6 +151,41 @@ def _calc_atr_volatility(closes: list[float] | None, lookback: int = 20) -> floa
 
     atr = sum(tr) / len(tr) if tr else 0
     avg_price = sum(closes[-lookback:]) / lookback if len(closes) > 0 else 1
+    return atr / avg_price if avg_price > 0 else 0.02
+
+
+def _calc_atr_volatility_asof(
+    closes: list[float] | None,
+    end_index: int | None = None,
+    lookback: int = 20,
+) -> float:
+    """截至 ``end_index``（含）的 ATR 波动率 —— PIT 正确版本。
+
+    与 :func:`_calc_atr_volatility` 的唯一区别是「窗口锚点」：
+    后者锚在序列**尾部**（会随后续数据增长而滑动），本函数锚在**信号自己的
+    位置**，因此历史信号的阈值不会因为后面录入了新数据而改变。
+
+    Args:
+        closes: 完整收盘价序列（不会被裁剪，只按 end_index 取窗口）
+        end_index: 信号所在 bar 索引；None 时退化为尾部（兼容旧调用）
+        lookback: 回看窗口
+
+    Returns:
+        ATR/价格比率
+    """
+    if closes is None or len(closes) == 0:
+        return 0.02
+    if end_index is None:
+        return _calc_atr_volatility(closes, lookback)
+    # 窗口 = [end_index-lookback+1, end_index]，钳制到有效范围
+    hi = max(0, min(int(end_index), len(closes) - 1))
+    lo = max(0, hi - lookback + 1)
+    win = closes[lo : hi + 1]
+    if len(win) < 2:
+        return 0.02
+    trs = [abs(win[i] - win[i - 1]) for i in range(1, len(win))]
+    atr = sum(trs) / len(trs)
+    avg_price = sum(win) / len(win)
     return atr / avg_price if avg_price > 0 else 0.02
 
 

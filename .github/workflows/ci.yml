@@ -44,6 +44,35 @@ jobs:
       - run: ruff check src/ tests/
       - run: ruff format --check src/ tests/
 
+  # ── 缠论模型审计（V733）───────────────────────────────────────────────
+  # 单测只保证「代码按预期跑」，不保证「模型没有未来函数」。
+  # V732 实测发现一处真实泄漏：全局 ATR 波动率取序列尾部，导致 40 组历史
+  # 买卖点被"补数据"改写。单测全部通过也没能发现它 —— 是靠
+  # scripts/audit_future_leak_real.py 抓到的。故固化进 CI，防止复发。
+  #
+  # 该脚本需要真实行情数据（audit_data/），由 audit_fetch_real_data.py 从
+  # 新浪接口抓取；CI 无外网稳定性保证时该 job 允许失败，不阻塞发版，
+  # 但失败必须在 PR 中被显式说明。
+  chanlun-audit:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - name: 抓取真实行情数据
+        run: python scripts/audit_fetch_real_data.py
+      - name: 未来函数检测（必须为 0 违反）
+        run: python scripts/audit_future_leak_real.py
+      - name: 结构不变式检测（I1-I12 必须为 0 违反）
+        run: python scripts/audit_chanlun_invariants.py
+      # 滚动窗样本外：1buy 必须 6/6 窗为正、3sell 必须 0/6 窗为正。
+      # 这两个数字反过来（全样本基准）曾让我得出错误结论 —— 见 V733 报告。
+      - name: 滚动窗样本外验证
+        run: python scripts/audit_rolling_oos.py
+
   mypy:
     runs-on: ubuntu-latest
     steps:
