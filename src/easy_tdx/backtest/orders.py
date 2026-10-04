@@ -287,6 +287,27 @@ class OrderSimulator:
         Returns:
             买入数量（股）
         """
+        # V733 修复：策略**显式指定**的仓位必须被尊重。
+        #
+        # ⚠️ 原实现：`if position_mode == "full" or signal_size == 0:`
+        # 引擎默认 position_mode='full' ⇒ 任何非零 signal_size 都被**丢弃**，
+        # 一律按现金满仓买入。而 ChanlunStrategy._do_buy 会按 `position_pct`
+        # 算出成比例的股数（如 50% → 4600 股），却在这里被改回 99900 股。
+        # 后果：策略文档承诺的"四季建议仓位 30%~50% 可直接设该参数"
+        # **完全不起作用**，用户按建议设仓位却仍被满仓 —— 会误导真实决策。
+        #
+        # 修复：'full' 的语义是"**未指定仓位时**满仓"，而非"忽略指定仓位"。
+        # 因此只有 signal_size == 0 才走满仓计算。
+        if signal_size and signal_size > 0:
+            # 策略显式指定了股数（已按整手取整），不再被仓位模式覆盖
+            if position_mode == "percent":
+                total_value = cash  # 简化：假设现金=总资产
+                max_shares = int(total_value * signal_size / price / 100) * 100
+                return float(max_shares)
+            if position_mode == "fixed":
+                return signal_size
+            # full / long_only 等：尊重策略指定的股数
+            return signal_size
         if position_mode == "full" or signal_size == 0:
             # 全仓：计算可用现金能买多少（100股整手）
             # 先计算最大股数，然后向下取整到100的倍数
@@ -322,6 +343,13 @@ class OrderSimulator:
         Returns:
             卖出数量（股）
         """
+        # V733 修复：与买入侧对称 —— 策略显式指定的卖出数量必须被尊重。
+        # 原来 `position_mode == "full"` 会把所有非零 signal_size 也当成"全卖"，
+        # 导致策略想"减半仓"时仍然一次清空。
+        if signal_size and signal_size > 0:
+            if position_mode == "percent":
+                return position * signal_size
+            return signal_size
         if position_mode == "full" or signal_size == 0:
             # 全部卖出
             return position

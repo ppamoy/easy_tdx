@@ -73,7 +73,9 @@ VARIANTS: list[tuple[str, dict]] = [
     ("三类买卖全关", {"use_3buy": False, "use_3sell": False}),
     ("开类二买/卖", {"use_2s_signals": True}),
     ("笔类型=old", {"bi_type": "old"}),
-    ("笔类型=simple", {"bi_type": "simple"}),
+    # ⚠️ 故意不扫 bi_type="simple"：实测它单次回测比其它变体慢一个数量级
+    # （12 只跑 >25 分钟未完成），且策略自身告警"legacy 简化口径…不推荐"。
+    # 保留 new/old 两种正式笔型对照即可。
     # —— 仓位缩放：用来量化"低暴露"能贡献多少（诚实基线）——
     ("仓位0.30(低暴露基线)", {"position_pct": 0.3}),
     ("仓位0.50", {"position_pct": 0.5}),
