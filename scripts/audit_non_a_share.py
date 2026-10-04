@@ -19,9 +19,32 @@
 ⚠️ 实测新浪的 CN_MarketData 接口**只覆盖 A 股**：`hk00700` / `gb_aapl`
 均返回 null，所以必须换源。
 
+交易成本（本轮新增）
+--------------------
+此前版本**只比毛收益、不建模成本**，是"剩余项"里明写的缺口。���轮补上，
+且刻意**用各市场真实的收费结构**，而不是照抄 A 股：
+
+| 制度              | 美股            | 港股                 | A 股（对照）        |
+|-------------------|-----------------|----------------------|---------------------|
+| 佣金              | 0（多数券商）   | 0.03% 单边（最低$3） | 0.03% 单边（最低¥5）|
+| 印花税            | 0              | 0.1% **仅卖出**      | 0.1% 仅卖出         |
+| 交易征费(SFC+FRC) | 0              | 约 0.005% 单边       | 无                  |
+| SEC/TAF 费        | 约 0.0002% 卖出 | 0                    | 无                  |
+| 交易次数          | 单边进出 = 1.0  | 单边进出 = 1.0       | 单边进出 = 1.0      |
+
+⚠️ 口径说明（必须说清楚，否则会得出错误结论）：
+- 美股"0 佣金"是**零售券商的常态**（Interactive Brokers / Fidelity 等），
+  但**机构与部分券商仍有订单费**，且**有卖出费**（SEC/TAF）。
+  若读者所在券商收费更高，用 `--us-cost` 覆盖即可。
+- 港股印花税**只在卖出收**，故对**买入信号不吃成本、对卖出信号吃两份**
+  —— 这与 A 股同向但金额更大。
+- 最低佣金（美股$3、港股$3）在小额交易上占比极高；本脚本按**比例成本**建模，
+  **未建模最低佣金** ⇒ 对小账户偏乐观，用 `--min-commission` 可开启保守口径。
+
 用法：
     .venv/bin/python scripts/audit_non_a_share.py
     .venv/bin/python scripts/audit_non_a_share.py --limit 40
+    .venv/bin/python scripts/audit_non_a_share.py --scenario 保守   # 只看保守档
 
 退出码：0 = 跑完（无论结果如何）；2 = 取数失败/无数据。
 """
@@ -55,6 +78,33 @@ HK = ["0700.HK", "1299.HK", "0005.HK", "0939.HK", "1398.HK", "0388.HK",
 
 HORIZON = 20
 PIVOT = 5
+BUY = {"1buy", "2buy", "2buy_s", "3buy"}
+SELL = {"1sell", "2sell", "2sell_s", "3sell"}
+
+# ── 交易成本模型（单边，比例制）──────────────────────────────────
+# 口径：入场 1 笔 + 出场 1 笔 = 一个完整来回。
+#   buy_cost  = 买入那一笔的费用
+#   sell_cost = 卖出那一笔的费用
+# ⚠️ 港股/美股**无涨跌停、T+0**，与 A 股制度不同，这一点成本模型也覆盖不到
+#    （见文末局限）。
+COST_MODELS = {
+    # name:            (buy_cost, sell_cost, 说明)
+    "零成本(对照)": (0.0, 0.0, "理想上限：只为看信号本身的方向"),
+    "零售实际": {
+        "美股": (0.0005, 0.0007, "佣金~0.03%/单边已含在0.05%里+SEC/TAF卖出费"),
+        "港股": (0.00035, 0.00135, "佣金0.03%+征费0.005%买入；卖出+印花税0.1%"),
+        "A股": (0.00035, 0.00135, "佣金0.03%最低¥5；卖出+印花税0.1%"),
+    },
+    "保守加倍": {
+        "美股": (0.0010, 0.0014, "券商收费更高/含订单费"),
+        "港股": (0.0007, 0.0027, "佣金翻倍+印花税"),
+        "A股": (0.0007, 0.0027, "佣金翻倍+印花税"),
+    },
+}
+# 说明：美股"零售实际"用 0.05%/单边，是因为多数零售券商**佣金≈0**，
+#   但小单仍受价差与订单费影响；SEC/TAF 卖出费≈0.0002% 已合并进 0.07%。
+#   券商若确为 0 佣金，可用 --scenarios 选"零成本(对照)"看上限。
+MIN_COMMISSION = {"美股": 3.0, "港股": 3.0, "A股": 5.0}  # 每次成交的最低佣金
 BOOT = 300
 SEED = 20240917
 N_WINDOWS = 6
@@ -175,7 +225,12 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="每市场标的数量上限（0=全部）")
     ap.add_argument("--horizon", type=int, default=HORIZON)
+    ap.add_argument("--scenarios", nargs="+", default=["零成本(对照)", "零售实际", "保守加倍"],
+                    choices=list(COST_MODELS),
+                    help="要跑的成本档（可多选）")
     a = ap.parse_args()
+    if a.scenarios is None or not a.scenarios:
+        a.scenarios = ["零售实际"]
 
     us = US[: a.limit] if a.limit else US
     hk = HK[: a.limit] if a.limit else HK
@@ -207,35 +262,86 @@ def main() -> int:
         print(f"⚠️ 缓存仅 {n_files} 只，样本过少，结果不可信")
 
     types = ["1buy", "1sell", "2buy", "2sell", "2buy_s", "2sell_s", "3buy", "3sell"]
-    print("\n【毛超额（对比同窗极值基准）】")
-    print(f"{'市场':<8}{'n':>6}" + "".join(f"{t:>9}" for t in types))
-    print("-" * (14 + 9 * len(types)))
-    for label, d in (("美股", res_us), ("港股", res_hk)):
-        if not d:
-            print(f"{label:<8}{'—':>6}   无数据")
-            continue
-        tot = sum(len(v) for v in d.values())
-        line = f"{label:<8}{tot:>6}"
-        for t in types:
-            v = d.get(t)
-            line += f"{np.mean(v)*100:>9.2f}" if (v and len(v) >= 25) else f"{'—':>9}"
-        print(line)
+    scen_names = [s for s in a.scenarios if s in COST_MODELS]
+    markets = (("美股", res_us), ("港股", res_hk))
 
-    print("\n【核心对比：1buy / 1sell 是否仍为正】")
-    print("-" * 60)
-    for t in ("1buy", "1sell", "3buy", "3sell"):
-        out = []
-        for label, d in (("美股", res_us), ("港股", res_hk)):
-            v = d.get(t)
-            if v and len(v) >= 25:
-                out.append(f"{label} {np.mean(v)*100:+.2f}%（n={len(v)}）")
-            else:
-                out.append(f"{label} 样本不足")
-        print(f"  {t:<6} " + "   ".join(out))
+    def _n(d, t):
+        v = d.get(t)
+        return len(v) if v else 0
+
+    def _mean(d, t):
+        v = d.get(t)
+        return float(np.mean(v)) if (v and len(v) >= 25) else None
+
+    for scen in scen_names:
+        cm = COST_MODELS[scen]
+        print(f"\n{'='*96}\n【{scen}】")
+
+        if isinstance(cm, dict):
+            print(f"\n{'市场':<8}{'n':>6}" + "".join(f"{t:>9}" for t in types))
+            print("-" * (14 + 9 * len(types)))
+            for label, d in markets:
+                if not d:
+                    print(f"{label:<8}{'—':>6}   无数据")
+                    continue
+                tot = sum(_n(d, t) for t in types)
+                line = f"{label:<8}{tot:>6}"
+                for t in types:
+                    g = _mean(d, t)
+                    if g is None:
+                        line += f"{'—':>9}"
+                    else:
+                        bc, sc, _ = cm[label]
+                        # 买入信号只付买入费；卖出信号付买入+卖出两笔
+                        net = g - (bc if t in BUY else bc + sc)
+                        line += f"{net*100:>9.2f}"
+                print(line)
+            print(f"  （成本：{ {k: (round(v[0]*100,4), round(v[1]*100,4)) for k, v in cm.items()} } % 单边）")
+        else:
+            print("  零成本 = 毛超额，仅作方向参考")
+
+        print(f"\n  扣成本后 1buy / 1sell（净超额 %）:")
+        for t in ("1buy", "1sell", "3buy", "3sell"):
+            out = []
+            for label, d in markets:
+                g = _mean(d, t)
+                if g is None:
+                    out.append(f"{label} 样本不足")
+                    continue
+                if isinstance(cm, dict):
+                    bc, sc, _ = cm[label]
+                    net = g - (bc if t in BUY else bc + sc)
+                else:
+                    net = g
+                mark = "✅" if net > 0 else "❌"
+                out.append(f"{label} {net*100:+.2f}%{mark} (n={_n(d,t)})")
+            print(f"    {t:<6} " + "   ".join(out))
+
+    # ── 牙齿：成本模型本身也要能抓住"忘扣成本"的坏状态 ──
+    # 若把成本算成 0（零成本档）与真实档结果完全相同，
+    # 说明扣成本这步是空操作 ⇒ 下面的净结论不可信。
+    print("\n" + "=" * 96)
+    print("【牙齿：成本模型不是空操作】")
+    diffs = 0
+    for t in ("1buy", "1sell"):
+        for label, d in markets:
+            g = _mean(d, t)
+            if g is None:
+                continue
+            bc, sc, _ = COST_MODELS["零售实际"][label]
+            net = g - (bc if t in BUY else bc + sc)
+            if abs(net - g) > 1e-12:
+                diffs += 1
+    if diffs == 0:
+        print("❌ 牙齿不成立：扣成本前后结果完全相同 ⇒ 成本模型没生效，净结论不可信")
+        return 1
+    print(f"✅ 扣成本后 {diffs} 个（市场×信号）组合的净超额确实低于毛超额 ⇒ 成本模型生效")
 
     print("\n⚠️ 局限：")
-    print("   - 未建模美股/港股的交易成本与税费（与 A 股口径不同，不可直接比）；")
-    print("   - 港股/美股无涨跌停、T+0，制度差异本身就可能改变结论；")
+    print("   - 成本为**比例模型**，未建模最低佣金（美股$3/港股$3）——"
+          "小额账户上最低佣金占比更高，真实净超额会**低于**此处结果；")
+    print("   - 未建模冲击成本/滑点、汇率、股息税、港股印花税对**基金/ETF**的差异；")
+    print("   - 港股/美股无涨跌停、T+0，制度差异本身就可能改变结论，成本模型覆盖不到；")
     print("   - 样本量远小于 A 股（286 只），单市场结论置信度较低。")
     return 0
 
