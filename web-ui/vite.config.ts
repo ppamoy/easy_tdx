@@ -9,7 +9,10 @@ import vue from '@vitejs/plugin-vue'
 // 做买卖点标记的像素级验证（scripts/e2e_mmd_real_component.py）。
 // 默认不构建，只在 CHANLUN_E2E=1 时加入 —— 避免审计页混进生产 dist。
 const buildE2E = process.env.CHANLUN_E2E === '1'
-const rollupInput = buildE2E
+// ⚠️ 显式标注为 Record<string,string>：三元里 `mmdE2e` 一支可能不存在，
+//    TS 推成 `{main;mmdE2e?:undefined}`，与 rollup 的
+//    `InputOption | Record<string,string>` 重载不匹配而报 TS2769。
+const rollupInput: Record<string, string> = buildE2E
   ? { main: 'index.html', mmdE2e: 'mmd-e2e.html' }
   : { main: 'index.html' }
 

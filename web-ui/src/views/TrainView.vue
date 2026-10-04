@@ -272,14 +272,9 @@ function saveSession() {
   }
 }
 
-function clearSavedSession() {
-  try {
-    localStorage.removeItem(SESSION_KEY)
-  } catch {
-    /* ignore */
-  }
-  refreshSavedInfo()
-}
+// 注：原 clearSavedSession() 在本文件里**从未被调用**，是残留死代码，
+// 导致 `vue-tsc --noEmit` 报 TS6133（declared but never read）而**构建失败**。
+// 已删除该函数。
 
 /**
  * 续练：把存档的参数恢复回来，再重新拉一次题目。

@@ -419,6 +419,27 @@ const strongSignals = computed(() => mmds.value.filter((m) => m.confidence >= 0.
 // 最新买卖点（用于快速详情展示）
 const latestMmd = computed(() => (mmds.value.length > 0 ? mmds.value[mmds.value.length - 1] : null))
 
+// ── V733 信号质量实测结论（如实告知用户，别把 3买/3卖 当普通信号）──
+//
+// 数字来自本仓库 scripts/ 下的实测审计，**不是拍脑袋写的**：
+//   - 逐笔含成本（同窗局部极值基准）：1buy +0.79%、1sell +2.03%，
+//     而 3buy −1.12%、3sell −1.54%；
+//   - 1buy − 3buy = +1.90%，t=+3.06，p=0.0022（60 标的 / 430 vs 636 信号，
+//     本轮独立复现，与之前 n=120 结论一致）；
+//   - 跨周期（120只×7周期）、跨市场（美股20+港股9，含成本）方向一致；
+//   - 滚动样本外 6 窗：1buy 6/6 为正，3sell **0/6** 为正。
+//
+// ⇒ "买卖点"必须拆开看：一买/一卖有可测的正边际；
+//   三买/三卖系统性劣于随机极值入场，当成"更强的确认信号"会误导。
+// ⚠️ 反向解读同样要克制：这只说明**相对同窗极值基准**的表现，
+//   不等于"三买三卖一定亏钱"，更不是缠论整体无效。
+const WEAK_SIGNAL_TYPES = new Set(['3buy', '3sell'])
+// ⚠️ mmds 里的字段名是 `type`（不是 mmd_type），且后端已给全小写，
+//    与本文件既有的 `m.type === '1buy'` 写法保持一致。
+const hasWeakSignals = computed(() =>
+  mmds.value.some((m) => WEAK_SIGNAL_TYPES.has(m.type)),
+)
+
 // V341: 信号历史回溯 —— 每个 3买/3卖 信号的 V102 建议 + 事后 5/10/20 日表现
 interface SignalHistoryRow {
   type: string
@@ -1562,6 +1583,37 @@ onUnmounted(() => {
         ⚠️ 最近买入信号置信度较低（{{
           (latestBuy.confidence * 100).toFixed(0)
         }}%），建议结合其他指标确认。
+      </div>
+      <!--
+        V733：按**实测结论**提示信号质量，而不是只说"信号仅供参考"。
+        本仓库审计实测：3买/3卖 相对"同窗随机极值入场"为负
+        （1buy +0.79% vs 3buy −1.12%，差 +1.90%，t=+3.06，p=0.0022），
+        且滚动样本外 6 窗中 3sell 0/6 为正。
+        ⇒ 不能把三买/三卖当作"更强的确认信号"。
+      -->
+      <div v-if="hasWeakSignals" class="signal-quality-note">
+        <div class="sq-title">📊 信号质量的实测说明（不是"仅供参考"这种套话）</div>
+        <ul class="sq-list">
+          <li>
+            <b>一买/一卖</b>：在同窗极值基准下有可测的正边际（1buy
+            <b>+0.79%</b>、1sell <b>+2.03%</b>），滚动样本外 6 窗中 1buy
+            6/6 为正。
+          </li>
+          <li>
+            <b>三买/三卖</b>：本次结果里相对"随机极值入场"反而为负
+            （3buy <b>−1.12%</b>、3sell <b>−1.54%</b>）；两者差 <b>+1.90%</b>，
+            t=+3.06，p=0.0022。跨周期、跨市场（含成本）方向一致。
+          </li>
+          <li>
+            ⇒ 所以本图里的 3买/3卖
+            <b>不应被当作比 1买/1卖更强的确认信号</b>；
+            下方"建议"（入场/止损/止盈）仅 3买/3卖 有，务必自行复核。
+          </li>
+          <li class="sq-caveat">
+            ⚠️ 以上只说明<b>相对同窗极值基准</b>的统计差异，不等于"三买三卖必亏"，
+            也不代表缠论整体无效；样本为日线、n=60 标的，存在市场与样本量局限。
+          </li>
+        </ul>
       </div>
       <!-- 关键价位参考 -->
       <div v-if="marketState.zsRange > 0" class="price-levels">
@@ -2803,6 +2855,42 @@ onUnmounted(() => {
   font-size: 11px;
   color: #fca5a5;
   line-height: 1.4;
+}
+
+/* V733：信号质量实测说明（用数据说话，不是免责声明套话） */
+.signal-quality-note {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(34, 197, 94, 0.06);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.signal-quality-note .sq-title {
+  font-weight: 600;
+  color: #86efac;
+  margin-bottom: 4px;
+}
+
+.signal-quality-note .sq-list {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--text-dim);
+}
+
+.signal-quality-note .sq-list li {
+  margin-bottom: 2px;
+}
+
+.signal-quality-note .sq-list b {
+  color: #e5e7eb;
+}
+
+.signal-quality-note .sq-caveat {
+  margin-top: 4px;
+  color: #9ca3af;
 }
 
 /* BOLL辅助信息 */
