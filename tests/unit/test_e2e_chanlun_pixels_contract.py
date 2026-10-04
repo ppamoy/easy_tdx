@@ -158,6 +158,22 @@ class TestResolutionGateHonesty:
         s = _src()
         assert "_nseg < _nbar * 0.3" in s
 
+    def test_undeterminable_does_not_fail_the_gate(self) -> None:
+        """⚠️ 关键：CI 里跑的就是这个脚本。
+        "逐点核对不可判定"是**测量方法不行**，不是图表坏了 ——
+        若它把 ok 置 False，CI 就会因为一个测不了的检查而常红，
+        那还不如不测。这条锁死它只 WARN 不 FAIL。"""
+        src = _src()
+        blk = src[src.index("逐点核对**不可判定**"):]
+        blk = blk[:blk.index("else:")]
+        assert "ok = False" not in blk, \
+            "不可判定分支不得置 ok=False，否则 CI 会因测不了的检查而常红"
+
+    def test_real_failures_still_fail(self) -> None:
+        """但真正的失败（配色缺失/牙齿不成立）必须仍然会红。"""
+        assert _src().count("ok = False") >= 3, \
+            "必须保留真正的失败出口，不能把门禁改成永绿"
+
     def test_does_not_count_pixel_columns_as_segments(self) -> None:
         """⚠️ cols 是每列一个色值，非零列数≈像素宽，**不是 K 线段数**。
         我第一版就是这么算错的，导致门槛失效、仍报 70.2% 假准确率。"""
