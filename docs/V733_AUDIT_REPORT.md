@@ -1483,6 +1483,51 @@ JS 作用域错误（`if{var}else{const}`）伪装成"元素不存在"；
 
 ---
 
+---
+
+## 五之二十二、像素级渲染验证**进 CI**（从"未进 CI"到"有门禁"）
+
+五之十九写的是"需浏览器环境故**未进 CI**"。本轮把它接进去了 ——
+新增 `.github/workflows/ci.yml` 的 `e2e-chanlun-render` job。
+
+**为什么能进 CI**：GitHub 的 `ubuntu-latest` runner **自带 chromium**，
+且脚本走**系统 chromium + CDP**，不依赖 playwright，
+**不需要下载几百 MB 浏览器二进制**。
+
+**门禁内容**：`npm ci` → `npm run build` → 装 `[dev,web]+websockets` →
+`easy-tdx serve --port 8000` 轮询至就绪 → `e2e_chanlun_pixels.py --base ...`。
+
+⚠️ **加这个 job 时我犯了一个"没实跑就提交"的错，并被实跑当场抓住**：
+第一版写的是 `python -m easy_tdx.cli serve`，而 `easy_tdx.cli` 是**包**
+且没有 `__main__.py`，实跑直接报
+`No module named easy_tdx.cli.__main__; 'easy_tdx.cli' is a package
+and cannot be directly executed`。
+⇒ **这个 job 上到 GitHub 必红，而我本地单测不会发现**。
+改用 console script `easy-tdx serve`（`pyproject.toml` 已声明
+`easy-tdx = "easy_tdx.cli:cli"`），并在 8099 端口**实跑验证了整条链路**：
+
+```
+服务已就绪（4s）  首页 http=200  分析页 http=200
+[PASS] 蜡烛色像素 26040 / 红(14643)绿(11397) / 红绿交替 45 次 / 白色标记 4854
+[PASS] 牙齿成立：擦掉后测不到蜡烛
+== 判定: 全部通过 ==
+```
+
+数字与本机 8000 端口的跑法**完全一致** ⇒ CI 门禁不是摆设。
+
+⚠️ 该门禁**没有** `continue-on-error`（job 级与 step 级都没有）——
+画歪了就会真的挂；且脚本自带牙齿，PASS 不会是空转。
+
+新增 `tests/unit/test_ci_e2e_render_job.py`（20 项），**做了两轮牙齿验证**：
+- 重新引入 `python -m easy_tdx.cli` ⇒ 确实报 2 项失败；
+- 加 `continue-on-error: true` ⇒ 确实报 1 项失败。
+
+⚠️ **仍未验证**：这个 job **从未在真实 GitHub Actions 上跑过**（需 push 才触发，
+而 push 本身卡在五之二十一的分叉问题上）。本地已模拟跑通整条链路，
+但**"在 GitHub runner 上能过"仍是未验证项**。
+
+---
+
 ## 六、仍未完成 / 未验证
 
 ~~- **横截面仅 30 只**：选股力"不显著"不能排除功效不足，需扩大样本。~~
@@ -1510,8 +1555,11 @@ JS 作用域错误（`if{var}else{const}`）伪装成"元素不存在"；
     现在三个门禁**阻塞合并**；并实测确认"无数据时三脚本均 exit 2"，
     抓数失败不会静默放行。
 - **ECharts 像素级渲染已验证**（五之十九）：K 线存在/配色/顺序/缠论标记，
-  连续 3 次跑数字逐位相同，含牙齿。⚠️ 但**逐点坐标映射仍未验证** ——
-  本项目不暴露 ECharts 实例，做不到；且该验证需浏览器环境，**未进 CI**。
+  连续 3 次跑数字逐位相同，含牙齿。**已进 CI**（五之二十二，新增
+  `e2e-chanlun-render` job，用 runner 自带 chromium，本机 8099 端口整链路
+  实跑通过、数字与 8000 端口完全一致）。
+  ⚠️ 但①**逐点坐标映射仍未验证** —— 本项目不暴露 ECharts 实例，做不到；
+  ②该 job **从未在真实 GitHub Actions 上跑过**（需 push 才触发）。
 - **引擎修复 `position_pct` 的向后兼容已 A/B 实测**（五之十八，10 只标的逐位相同）。
   ⚠️ 我一度以为"还有 UI 路径没验证"，**核查后确认这个担心不成立**：
   `web-ui` 里的 19 处 `position_pct` 全是**建议/诊断结果的只读展示字段**

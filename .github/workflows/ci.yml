@@ -132,3 +132,53 @@ jobs:
         working-directory: web-ui
       - run: npm run build
         working-directory: web-ui
+
+  # 缠论图**像素级**渲染验证（V733 第五之十九）。
+  #
+  # 为什么单独一个 job：前面的 chanlun-audit 只验证**数据流**
+  # （中枢 ZG/ZD、买卖点锚点、笔是否与模型输出对齐），
+  # 但**数据全对而图是错的**完全可能发生（坐标轴映射错、series 顺序错位）——
+  # 这正是 AGENTS.md §1「数据对 ≠ 画出来对」。
+  #
+  # 为什么能进 CI：ubuntu-latest runner **自带 chromium**，
+  # 且不依赖 playwright（直接用系统 chromium + CDP），
+  # 不需要下载几百 MB 的浏览器二进制。
+  #
+  # ⚠️ 这个门禁**会真的红**：它是读像素的判定，图表画歪了就会挂。
+  # 脚本自带牙齿（擦掉画布后必须测不到蜡烛），所以 PASS 不会是空转。
+  e2e-chanlun-render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web-ui/package-lock.json
+      - run: npm ci
+        working-directory: web-ui
+      - run: npm run build
+        working-directory: web-ui
+      - run: pip install -e ".[dev,web]" websockets
+      # ⚠️ 必须用 `easy-tdx serve`（console script）而不是
+      #    `python -m easy_tdx.cli serve` —— 后者会失败：
+      #    `easy_tdx.cli` 是**包**且没有 __main__.py，
+      #    报 "No module named easy_tdx.cli.__main__"。本机实跑验证过。
+      - name: 启动服务（真实后端 + 真实前端产物）
+        run: |
+          nohup easy-tdx serve --port 8000 > /tmp/serve.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:8000/ -o /dev/null; then
+              echo "服务已就绪（${i}s）"; exit 0
+            fi
+            sleep 1
+          done
+          echo "❌ 60s 内服务未就绪"; tail -40 /tmp/serve.log; exit 1
+      - name: 像素级渲染验证（K线/配色/顺序/缠论标记 + 牙齿）
+        run: python scripts/e2e_chanlun_pixels.py --base http://127.0.0.1:8000
+      - name: 失败时保留服务日志
+        if: failure()
+        run: tail -60 /tmp/serve.log || true
