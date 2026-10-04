@@ -1637,8 +1637,20 @@ and cannot be directly executed`。
 2. `vite.config.ts` 三元里 `mmdE2e` 可能不存在，TS 推成 `{mmdE2e?:undefined}`
    与 rollup `InputOption` 重载不匹配 ⇒ TS2769。
 
-两个都修掉后 `npm run build` 才通过。
+两个都修掉后 `npm run build` 才通过（实测 `error TS` 计数 = 0）。
 ⚠️ 这也是 AGENTS.md §2 的要求：**必须证明是不是我引入的**，我做了 worktree 对照。
+
+### ⚠️⚠️ 由此发现：**CI 的 frontend job 本来就是红的**
+
+`web-ui/package.json` 里 `"build": "vue-tsc -b && vite build"` —— **含类型检查**；
+而 `.github/workflows/ci.yml` 的 `frontend` job 明确跑 `npm run build`。
+
+⇒ 那两个 TS 错误会**让 CI 每次 push 都失败**。
+⚠️ 也就是说 **CI 从 `56b619b` 起就没真正绿过**——但没人发现，
+因为**从没推送过**（远端分叉，推送需要用户决策，见五之二十一）。
+这正好印证 AGENTS.md §5：「**能跑真实链路就别只跑单测**」——
+单测全绿（本项目 4388 项）并不代表 CI 绿，两者查的是不同的东西。
+修掉之后 frontend job 才具备能绿的前提。
 
 ### 行为级验证（不是数 DOM）
 
