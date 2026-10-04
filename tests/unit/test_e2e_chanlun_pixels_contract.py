@@ -124,11 +124,75 @@ class TestTeethTest:
         assert "检测器常真" in s
 
 
+class TestResolutionGateHonesty:
+    """⚠️ 本轮我自己踩的坑，值得单列一组。
+
+    我加了"逐点核对"后，测出一致率 70.2% < 90%，差点判定
+    「K 线顺序画错了」。**核查后证明是我测不准，不是图画错**：
+    dataZoom(start=50,end=100) 下 800 根画在约 1000px 绘图区，
+    每根仅 2.9px，**同色相邻蜡烛的像素会连成一片**，
+    800 根只抽出 47 个可分辨段 —— 分辨率根本不够逐点比对。
+
+    这正是 AGENTS.md §3：先验证，再下结论。测不准 ≠ 功能坏。
+    """
+
+    def test_reports_undeterminable_instead_of_guessing(self) -> None:
+        s = _src()
+        assert "不可判定" in s
+
+    def test_states_it_is_not_a_chart_bug(self) -> None:
+        """必须明确区分'测不准'与'图画错了'。"""
+        s = _src()
+        assert "分辨率不足，非图表错误" in s
+
+    def test_explains_why_measurement_fails(self) -> None:
+        s = _src()
+        assert "粘连" in s
+
+    def test_states_minimum_px_per_candle(self) -> None:
+        s = _src()
+        assert "≥6px" in s
+
+    def test_gates_on_segment_count(self) -> None:
+        """分辨率门槛必须真的生效（段数太少就不给准确率）。"""
+        s = _src()
+        assert "_nseg < _nbar * 0.3" in s
+
+    def test_does_not_count_pixel_columns_as_segments(self) -> None:
+        """⚠️ cols 是每列一个色值，非零列数≈像素宽，**不是 K 线段数**。
+        我第一版就是这么算错的，导致门槛失效、仍报 70.2% 假准确率。"""
+        s = _src()
+        wrong = 'sum(1 for c in (cols.get("cols") or []) if c)'
+        assert wrong not in s, (
+            "非零列数是像素宽不是段数，会让分辨率门槛失效")
+
+
+class TestAlignmentUsesRealChartData:
+    def test_uses_pages_own_bars(self) -> None:
+        """必须用页面实际渲染的那份数据，不能自己另查一个窗口。"""
+        s = _src()
+        assert "__barResponses" in s
+
+    def test_intercepts_fetch_response_body(self) -> None:
+        s = _src()
+        assert "r.clone().json()" in s
+
+    def test_derives_colors_from_real_ohlc(self) -> None:
+        s = _src()
+        assert "expected_colors" in s
+        assert "float(b[\"open\"])" in s or "b['open']" in s
+
+    def test_red_is_up_per_frontend_theme(self) -> None:
+        """红涨绿跌取自 echarts-setup.ts 的 UP_COLOR。"""
+        s = _src()
+        assert "close" in s and ">= o" in s
+
+
 class TestHonestLimitations:
     def test_declares_no_per_point_mapping(self) -> None:
         """不能声称做了逐点像素映射——本项目不暴露 ECharts 实例。"""
         s = _src()
-        assert "不逐点核对" in s
+        assert "不逐点核对" in s or "无法验证" in s
 
     def test_declares_single_browser(self) -> None:
         s = _src()
