@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime
 from typing import Any
 
@@ -349,39 +350,48 @@ def _v102_rr_bonus(mmd: Any) -> tuple[int, str]:
     return 0, f"RR={rr_f:.1f}"
 
 
+
+def _log1p(x: int) -> float:
+    """log(1+x) 的轻量实现（避免为一个分数把 numpy 引进 web 层）。"""
+    try:
+        return math.log1p(max(0, int(x)))
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _calc_stock_quality(result: Any) -> float:
-    """计算股票质量分数（结构数量 + V102 信号质量）。"""
-    score = 50  # 基础分
+    """计算股票质量分数（结构数量 + V102 信号质量）。
 
-    # 笔的数量（越多越活跃）
+    ⚠️ V733 五之二十六：原实现是**阶梯式**加分（bi>=20 加 15 分，……）
+       最后 `min(score, 100)` 封顶。实测 500 根 K 线下
+       **57/60 = 95% 的股票都拿满分 100，全场只有 3 个不同取值**。
+       而端点用它 `sort(key=quality_score)` 再截 `top_n`
+       ⇒ **"取前 N 只"实际等于"随便取前 N 只"，排序形同虚设**。
+       实测质量分 vs 未来 20 日收益 Spearman ρ=+0.13、p=0.16 ⇒ 排不出。
+
+    改法：阶梯 → **连续递增**（log1p 压缩，"结构越多越好"不会线性爆掉），
+       封顶只作用在**加分项**上，保留连续基础分。
+    ⚠️ 这**只修"分数区分不出股票"这个缺陷**，
+       **不代表改完就能选股赚钱**——五之二十五实测两种口径都选不出超额。
+       这里刻意**不改动"买卖点结构密度"这个底层口径**：
+       重新标定权重是更大的改动，且必须重做前瞻验证才能下结论。
+    """
+    score = 50.0  # 基础分
+
+    # 结构数量：连续递增（对数压缩），不再阶梯跳变。
+    # ⚠️ 系数是**从实测分布反推**的，不是拍脑袋：
+    #    80 只 500 根K线下 笔 p10=106/中位=117、 中枢 16/18、 买卖点 34/42、 背驰 18/22。
+    #    目标是让**中位数落在该项上限的 ~60%**，这样上下都有区分空间。
+    #    （第一版我随手用 5.0/7.0/5.0/2.5，结果 log1p(117)*5=24 远超上限 15，
+    #      **照样全顶格**——改了等于没改。还是得先量数据。）
     bi_count = len(result.bis)
-    if bi_count >= 20:
-        score += 15
-    elif bi_count >= 10:
-        score += 10
-    elif bi_count >= 5:
-        score += 5
-
-    # 中枢数量（有中枢才有趋势）
+    score += min(15.0, 1.9 * _log1p(bi_count))  # 笔越多越活跃
     zs_count = len(result.zss)
-    if zs_count >= 5:
-        score += 15
-    elif zs_count >= 3:
-        score += 10
-    elif zs_count >= 1:
-        score += 5
-
-    # 买卖点数量
+    score += min(15.0, 3.1 * _log1p(zs_count))  # 中枢数量
     mmd_count = len(result.mmds)
-    if mmd_count >= 5:
-        score += 10
-    elif mmd_count >= 2:
-        score += 5
-
-    # 背驰确认
+    score += min(10.0, 1.6 * _log1p(mmd_count))  # 买卖点数量
     bc_count = len(result.bcs)
-    if bc_count >= 3:
-        score += 5
+    score += min(5.0, 1.0 * _log1p(bc_count))  # 背驰确认
 
     # V428/V437: 最新买卖点的 V102 信号质量 + 风险回报比 + 买入方向加分
     latest = _latest_mmd_obj(result)
