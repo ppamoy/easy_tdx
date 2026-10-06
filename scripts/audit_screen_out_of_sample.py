@@ -79,6 +79,63 @@ def _compare(rel: np.ndarray, hit: np.ndarray, label: str) -> tuple:
     return d, t, p
 
 
+def _pooling_check(df: pd.DataFrame, rel: np.ndarray,
+                   hit: np.ndarray) -> None:
+    """池化偏差诊断：入选占比差异大时，结论还稳吗？
+
+    ⚠️ 池化的隐含假设是"每条观测独立等权"。若某只股票被选中 40 次、
+       另一只只 1 次，前者会**主导**整个结论。
+
+    实测（286 只 / 2288 观测）：入选次数 最小1 / 中位4 / 最大8，
+       入选最多的 5 只只占全部入选的 **3.0%** ⇒ 分布其实很**均匀**。
+       但仍用 3 种加权交叉验证——不靠"看起来均匀"就下结论。
+    """
+    n_hit = df[df["hit"]].groupby("code").size()
+    tot = max(int(n_hit.sum()), 1)
+    print("\n── 池化偏差诊断 ──")
+    print(f"  入选次数  最小 {int(n_hit.min())} / 中位 {int(n_hit.median())}"
+          f" / 最大 {int(n_hit.max())}"
+          f"（{n_hit.size} 只有入选，共 {tot} 条）")
+    print(f"  入选最多的 5 只占全部入选的 {n_hit.nlargest(5).sum()/tot*100:.1f}%")
+
+    def _t(a, b):
+        if len(a) < 2 or len(b) < 2:
+            return float("nan")
+        d = float(a.mean() - b.mean())
+        se = float(np.sqrt(a.var(ddof=1) / len(a) + b.var(ddof=1) / len(b)))
+        return d / se if se > 0 else float("nan")
+
+    ts = [ _t(rel[hit], rel[~hit]) ]
+    print(f"  ① 池化（每条观测等权）      t={ts[0]:+.2f} "
+          f"p={erfc(abs(ts[0])/sqrt(2)):.4f}")
+
+    # ② 每只股票先求均值 ⇒ 每只股票等权，重的股票不再主导
+    per = (pd.DataFrame({"code": df["code"].to_numpy(), "hit": hit, "rel": rel})
+           .groupby(["code", "hit"])["rel"].mean().reset_index())
+    t2 = _t(per[per["hit"]]["rel"].to_numpy(), per[~per["hit"]]["rel"].to_numpy())
+    ts.append(t2)
+    print(f"  ② 每股票等权                t={t2:+.2f} "
+          f"p={erfc(abs(t2)/sqrt(2)):.4f}")
+
+    # ③ 去掉入选次数两端的极端股票
+    cnt = n_hit.reindex(df["code"]).to_numpy()
+    mid = (cnt >= 3) & (cnt <= 15)
+    t3 = (_t(rel[mid][hit[mid]], rel[mid][~hit[mid]])
+          if mid.any() and hit[mid].any() and (~hit[mid]).any()
+          else float("nan"))
+    if t3 == t3:
+        ts.append(t3)
+    print(f"  ③ 只留中等入选次数(3~15)   t={t3:+.2f} "
+          f"p={erfc(abs(t3)/sqrt(2)):.4f}  (剩 {int(mid.sum())} 条)")
+
+    ok = [x for x in ts if x == x]
+    if len(ok) >= 2 and all(abs(x) < 1.96 for x in ok):
+        print("  ⇒ ✅ 三种加权**一致不显著** ⇒ 池化偏差不影响结论")
+    elif len(ok) >= 2:
+        print("  ⇒ ⚠️ **加权方式之间有分歧** ⇒ 池化结论不可靠，"
+              "不能只报池化那一个数字")
+
+
 def main() -> int:
     global ROOT
 
@@ -155,6 +212,8 @@ def main() -> int:
             d2 = t2 = p2 = float("nan")
     else:
         d2 = t2 = p2 = float("nan")
+
+    _pooling_check(df, (df["r"] - mkt).to_numpy(), hit)
 
     # ── 判定 ──────────────────────────────────────────────
     print("\n== 判定 ==")
