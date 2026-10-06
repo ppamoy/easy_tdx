@@ -224,6 +224,78 @@ def _fama_macbeth(joint: pd.DataFrame, min_dof: int = 10) -> tuple[float, float,
     return mb, se, float(arr[:, 1].mean()), len(rows), n_par
 
 
+# ── 多重比较 ────────────────────────────────────────────
+# ⚠️ 已实测的各筛选口径（市场控制后），来源 audit_chanlun_screen_usefulness.py。
+#    每加一个新维度都要往这里登记，否则校正时数漏了口径会**低估** N。
+MEASURED_BASES: list[tuple[str, float, float, float]] = [
+    # (口径, 超额%, t, p)
+    ("any_buy 基线",       -0.41, -0.51, 0.6132),
+    ("zs_position=above",  -1.40, -1.14, 0.2560),
+    ("trend=up",           -1.24, -1.24, 0.2137),
+    ("trend=down",         +0.88, +0.93, 0.3506),
+    ("has_beichi=true",    -0.99, -1.22, 0.2226),
+    ("zs_position=below",   +0.32, +0.39, 0.6944),
+]
+
+
+def multiplicity_report() -> None:
+    """多重比较校正 + p 值均匀性检验。
+
+    ⚠️ 为什么必须做：我已经**假阳性**过一次——五之二十五测出
+       `zs_position=above` 的 +3.71% t=+3.16 p=0.002，一度写进报告，
+       后来发现那是**市场 beta**（减去同期沪深300 后 p=0.15）。
+
+    ⚠️ 单个口径"不显著"是弱证据（可能只是没测出来）；
+       **校正后仍无一显著**才是强证据。两者不能混为一谈。
+    """
+    import numpy as np
+
+    rows = MEASURED_BASES
+    n = len(rows)
+    ps = np.array([r[3] for r in rows])
+    pmin = float(ps.min())
+    print(f"\n{'='*62}")
+    print(f"── 多重比较校正（N = {n} 个已实测筛选口径）──")
+    print(f"  最小 p = {pmin:.4f}（{rows[int(ps.argmin())][0]}）")
+    print(f"  α=0.05 下显著的个数 = {int((ps < 0.05).sum())} / {n}")
+
+    bon = 0.05 / n
+    print(f"\n  ① Bonferroni: α' = 0.05/{n} = {bon:.4f}")
+    print(f"     ⇒ {'**有**口径通过校正' if pmin < bon else '**无**口径通过校正'}"
+          f"（最小 p={pmin:.4f} {'<' if pmin < bon else '≥'} α')")
+
+    print("\n  ② Holm-Bonferroni（逐步放宽，FWER 仍受控）:")
+    order = np.argsort(ps)
+    for rank, i in enumerate(order):
+        thr = 0.05 / (n - rank)
+        print(f"     第{rank+1}顺位 {rows[i][0]:<18} p={ps[i]:.4f} "
+              f"vs α'={thr:.4f} ⇒ {'通过' if ps[i] < thr else '不通过'}")
+
+    print("\n  ③ Benjamini-Hochberg（FDR@5%）:")
+    any_bh = False
+    for rank, i in enumerate(order):
+        thr = 0.05 * (rank + 1) / n
+        found = ps[i] <= thr
+        any_bh = any_bh or found
+        print(f"     p={ps[i]:.4f} vs 阈值={thr:.4f} ⇒ "
+              f"{'发现' if found else '不发现'}")
+    print(f"     ⇒ 有发现: {any_bh}")
+
+    try:
+        from scipy.stats import kstest
+        d, pu = kstest(ps, "uniform")
+        print(f"\n  ④ p 值均匀性 KS 检验: D={d:.3f} p={pu:.4f} ⇒ "
+              f"{'p 值分布**均匀**，与「全无效应」一致' if pu > 0.05 else '分布**不均匀**，可能存在真效应'}")
+    except ImportError:
+        print("\n  ④ 无 scipy，跳过均匀性检验")
+
+    if pmin >= bon and not any_bh:
+        print(f"\n  ⇒ {n} 个口径、最小 p={pmin:.4f}，"
+              f"**校正后仍无一显著**。")
+        print("     这比「每个口径各自不显著」强得多——"
+              "不是「没测出来」，是**校正后依然没有**。")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default="/tmp/screen_audit_cache.json",
@@ -400,6 +472,7 @@ def main() -> int:
                    f"FM t={fm_t:+.2f}, p={fm_p:.4f}）"
                    f" ⇒ 四种口径（指数/行业/市值/回归）均选不出超额")
     print(f"\n== 判定: {verdict} ==")
+    multiplicity_report()
     print(f"   （行业集中度: {concentrated}）")
     print("⚠️ 口径提醒：这是**横截面选股**检验；即便为正也不代表"
           "能跑赢买入持有（五之十八未证明）。")

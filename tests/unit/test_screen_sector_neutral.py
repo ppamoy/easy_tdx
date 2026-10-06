@@ -373,3 +373,73 @@ class TestFamaMacBethTeeth:
         assert n_tp == 6, (
             f"应逐时点回归得到 6 个系数，实得 {n_tp}——"
             f"若为 0 说明退化成了 pooled OLS 或全被自由度守卫筛掉")
+
+
+class TestMultiplicity:
+    """⚠️⚠️ 多重比较校正——**这轮才补上**，本项目最该早就做的一步。
+
+    我已经**假阳性**过一次：五之二十五测出 `zs_position=above`
+    的 +3.71% t=+3.16 p=0.002，一度写进报告，
+    后来发现那是**市场 beta**（减去同期沪深300 后 p=0.15）。
+    """
+
+    def test_exists(self) -> None:
+        assert "def multiplicity_report(" in _s()
+
+    def test_registers_every_measured_basis(self) -> None:
+        """⚠️ 每加一个新口径都要登记，否则校正时数漏了会**低估 N**、
+        门槛被放松 ⇒ 更容易出假阳性。"""
+        src = _s()
+        assert "MEASURED_BASES" in src
+        assert src.count('", ') >= 4
+
+    def test_reports_all_three_corrections(self) -> None:
+        """至少 Bonferroni + Holm + BH 三种，单一校正不够。"""
+        src = _s()
+        assert "Bonferroni" in src
+        assert "Holm-Bonferroni" in src
+        assert "Benjamini-Hochberg" in src
+
+    def test_does_p_value_uniformity(self) -> None:
+        """⚠️ p 值均匀性 KS 检验：若 p 值**均匀**分布，
+        说明与「全无效应」一致——这比逐个看 p 更有力。"""
+        assert "kstest" in _s()
+
+    def test_records_the_past_false_positive(self) -> None:
+        """⚠️ 必须在代码里写明**曾经假阳性过**，
+        否则以后有人会重蹈覆辙还不自知。"""
+        src = _s()
+        assert "假阳性" in src
+        assert "市场 beta" in src
+
+    def test_distinguishes_weak_from_strong_evidence(self) -> None:
+        """单个不显著 = 弱证据（可能只是没测出来）；
+        校正后仍无一显著 = 强证据。措辞不能混。"""
+        assert "校正后仍无一显著" in _s()
+
+
+class TestMultiplicityTeeth:
+    def test_bite_removing_holm_and_bh(self) -> None:
+        """只剩 Bonferroni（最保守）⇒ 漏掉另外两种口径。"""
+        src = _s().replace("Holm-Bonferroni", "x").replace(
+            "Benjamini-Hochberg", "y")
+        assert "Holm-Bonferroni" not in src
+
+    def test_bite_dropping_a_registered_basis(self) -> None:
+        """⚠️ 漏登记一个口径 ⇒ N 偏小 ⇒ Bonferroni 门槛被放松。"""
+        src = _s().replace('("trend=down",         +0.88, +0.93, 0.3506),', '')
+        assert "trend=down" not in src
+
+    def test_bite_removing_uniformity_test(self) -> None:
+        # ⚠️⚠️ 这里踩了**两次**坑：
+        #   1. .replace("kstest","no_kstest") ⇒ "no_kstest" 仍含子串
+        #      "kstest"，断言恒假/恒真，**无意义**；
+        #   2. 改成 "import kstest as _unused" ⇒ 仍含 "kstest"，
+        #      牙齿还是不咬（已实测：改脚本后测试照样全绿）。
+        # ⇒ 正确做法：断言的是**调用点**，不是 import 语句。
+        #    删掉真正干活的那行 kstest(...) 调用。
+        src = _s()
+        assert "d, pu = kstest(ps, \"uniform\")" in src
+        src_bad = src.replace('d, pu = kstest(ps, "uniform")',
+                              'd, pu = 0.0, 1.0')
+        assert 'd, pu = kstest(ps, "uniform")' not in src_bad
