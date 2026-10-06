@@ -69,8 +69,12 @@ class TestHonestVerdict:
         assert "与零无显著差异" in src
 
     def test_zero_branch_says_still_no_excess(self) -> None:
-        """结论要**说清**是"行业中性化后仍选不出"，而不只是 t 值。"""
-        assert "行业中性化后仍选不出超额" in _s()
+        """结论要**说清**是"中性化后仍选不出"，而不只是丢个 t 值。
+
+        ⚠️ 后来加了市值口径，这句也跟着更新——测试**过期**和测试
+        **失效**一样都要修，不能放着。"""
+        src = _s()
+        assert "中性化后仍选不出超额" in src
 
     def test_insufficient_sample_is_not_a_verdict(self) -> None:
         src = _s()
@@ -110,3 +114,77 @@ class TestTeeth:
             'groupby("ind")["r"].transform("mean")', '"r".mean()')
         assert 'groupby("ind")' not in src, \
             "换成整体均值后必须被 TestNeutralisationIsReal 抓到"
+
+
+class TestSizeNeutralisation:
+    """⚠️ 五之二十九补的第三个缺口：**市值中性化**。
+
+    小盘效应是 A股已知最强的异象之一。若选股只是"挑中了小盘股"，
+    它赚的钱其实是**小盘效应**，不是缠论——不排除就没法归因。
+    """
+
+    def test_fetches_float_shares(self) -> None:
+        src = _s()
+        assert "def load_float_shares(" in src
+        assert "liutong_guben" in src
+
+    def test_uses_point_in_time_close_not_latest(self) -> None:
+        """⚠️⚠️ 市值必须用**该时点的收盘价**×流通股本。
+        用最新价会把未来信息带进历史——那就是**未来函数**，
+        测出来的结论不可信（这正是本项目反复出现的坑）。"""
+        src = _s()
+        assert "close[t] * shares[code]" in src
+
+    def test_builds_market_cap(self) -> None:
+        assert "def _with_market_cap(" in _s()
+
+    def test_neutralises_within_size_quintiles(self) -> None:
+        """减**同市值五分位**均值，而不是整体均值。
+        ⚠️ 减整体均值只是普通市场控制，不是市值中性。"""
+        src = _s()
+        assert 'qcut(mdf["mcap"], 5' in src
+        assert 'groupby(bins)["r"].transform("mean")' in src
+
+    def test_reports_whether_size_differs(self) -> None:
+        """必须**先看**入选组市值是否显著不同，这是前提。"""
+        src = _s()
+        assert "mannwhitneyu" in src
+        assert "市值无显著差异" in src
+
+    def test_tolerates_dict_shaped_share_cache(self) -> None:
+        """⚠️ 实测踩到：早期一次性脚本存的缓存是
+        {"code": {"liutong": ...}}，正式脚本直接 float(v) 会崩。
+        缓存格式不一致时**该容忍**，不该整批失败。"""
+        src = _s()
+        assert 'v.get("liutong")' in src
+        assert "except (TypeError, ValueError)" in src
+
+
+class TestVerdictCoversBoth:
+    def test_reports_both_bases(self) -> None:
+        """判定要**同时**给出行业与市值两个口径。"""
+        src = _s()
+        assert "行业中性 t=" in src
+        assert "市值 t=" in src
+
+    def test_either_significant_counts_as_significant(self) -> None:
+        """⚠️ 若只看行业口径而忽略市值，可能漏报一个真实信号。
+        任一显著都要报出来，不能因为一个不显著就盖掉另一个。"""
+        src = _s()
+        assert "abs(t) > 2 or (size_t == size_t and abs(size_t) > 2)" in src
+
+    def test_zero_branch_mentions_both_neutralisations(self) -> None:
+        assert "行业与市值中性化后仍选不出超额" in _s()
+
+
+class TestSizeTeeth:
+    def test_bite_overall_mean_instead_of_quintile(self) -> None:
+        """换成整体均值 ⇒ 市值中性失效。"""
+        src = _s().replace(
+            'groupby(bins)["r"].transform("mean")', '"r".mean()')
+        assert 'groupby(bins)' not in src
+
+    def test_bite_latest_price_instead_of_point_in_time(self) -> None:
+        """用最新价（close[-1]）⇒ 引入未来函数。"""
+        src = _s().replace("close[t] * shares[code]", "close[-1] * shares[code]")
+        assert "close[t] * shares[code]" not in src
