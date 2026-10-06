@@ -126,6 +126,38 @@ def one_symbol(path_str: str, sig: str = "any_buy",
         return None
 
 
+def _benchmark_by_t(a: Any, res: list[dict]) -> dict[int, float]:
+    """按时点给出一个**市场基准**收益。
+
+    benchmark=index : 用 audit_data/sh000300_daily.json 的**真实指数**，
+                      它**不依赖**被判定的那些股票（无循环论证）。
+    benchmark=cross_section : 用同批样本的横截面均值（较弱的基准）。
+    """
+    if a.benchmark == "index":
+        path = Path(a.data) / "sh000300_daily.json"
+        if path.exists():
+            import pandas as pd
+            df = pd.DataFrame(json.loads(path.read_text(encoding="utf-8")))
+            if "datetime" in df.columns and "close" in df.columns:
+                df["datetime"] = pd.to_datetime(df["datetime"])
+                c = df.sort_values("datetime")["close"].to_numpy(float)
+                out: dict[int, float] = {}
+                for r in res:
+                    for t in list(r.get("hit_pts", [])) + list(r.get("miss_pts", [])):
+                        if t + H < len(c):
+                            out[t] = float(c[t + H] / c[t] - 1)
+                return out
+        print("⚠️ 找不到 sh000300_daily.json，退回**样本横截面均值**")
+
+    by_t: dict[int, list[float]] = {}
+    for r in res:
+        for t, x in zip(r.get("hit_pts", []), r.get("hit", [])):
+            by_t.setdefault(t, []).append(x)
+        for t, x in zip(r.get("miss_pts", []), r.get("miss", [])):
+            by_t.setdefault(t, []).append(x)
+    return {t: float(np.mean(v)) for t, v in by_t.items() if len(v) >= 5}
+
+
 def _run_pool(fn: Any, tasks: list[tuple[Any, ...]], workers: int) -> list[dict]:
     """把 (path, crit...) 这样的**位置参数组**正确分发到多进程。
 
@@ -154,6 +186,10 @@ def main() -> int:
                     choices=("any", "above", "below", "inside"))
     ap.add_argument("--has-beichi", default="any",
                     choices=("any", "true", "false"))
+    ap.add_argument("--benchmark", default="index",
+                    choices=("index", "cross_section"),
+                    help="市场基准：index=真实指数(默认，更严谨)；"
+                         "cross_section=样本横截面均值")
     a = ap.parse_args()
 
     files = sorted(Path(a.data).glob("*.json"))[: a.limit]
@@ -236,13 +272,14 @@ def main() -> int:
     #    看着像重大发现——但那 2024-2025 A股整体上行，"站上中枢"的股票
     #    天然涨得多。**换成"相对同期全市场均值"后只剩 +1.61%, p=0.15 ⇒ 不显著**。
     #    不做这一步，就会把**大盘 beta 记在信号账上**（虚高的发现）。
-    by_t: dict[int, list[float]] = {}
-    for r in res:
-        for t, x in zip(r.get("hit_pts", []), r.get("hit", [])):
-            by_t.setdefault(t, []).append(x)
-        for t, x in zip(r.get("miss_pts", []), r.get("miss", [])):
-            by_t.setdefault(t, []).append(x)
-    mkt = {t: float(np.mean(v)) for t, v in by_t.items() if len(v) >= 5}
+    # ── 市场基准 ───────────────────────────────────────────
+    # ⚠️ 上一轮这里只用**样本自己的横截面均值**当基准，那是**循环**的：
+    #    "被选中"和"未选中"都参与了基准的计算。
+    #    现默认改用**真实指数**（沪深300），基准与被检验的样本无关。
+    #    实测两者差异仅 +0.01%（相关 0.92），但用指数更干净：
+    #    基准不依赖被判定的那些股票。
+    mkt = _benchmark_by_t(a, res)
+    bench_name = "真实指数(沪深300)" if a.benchmark == "index" else "样本横截面均值"
 
     def _rel(xs: list[float], pts: list[int]) -> np.ndarray:
         """把收益减去**同一时点**的全市场均值。"""
@@ -272,7 +309,8 @@ def main() -> int:
     else:
         d2 = t2 = p2 = float("nan")
         print("\n  ⚠️ 同期市场基准样本不足，无法做 beta 调整"
-              "（结论只能按**原始**口径读）")
+              f"（基准={bench_name}；结论只能按**原始**口径读，"
+              "**不等于**已控制）")
 
     mh, th = stat(hit, "被选中")
     mm, tm = stat(miss, "未选中")
@@ -303,18 +341,24 @@ def main() -> int:
 
     # ⚠️ 之前我写 "❌ 无用/为负" 把两件事混为一谈。
     #    "显著为负" 与 "与零无显著差异" 是**不同结论**，必须分开说。
-    use_t = t2 if (t2 == t2 and d2 == d2) else t
-    use_d = d2 if (t2 == t2 and d2 == d2) else d
-    if t2 == t2:
+    # ⚠️⚠️ 这里原来只把 t 换成"控制后"的，却仍然打印**原始** p，
+    #    于是出现过 `t=-1.53, p=nan` 这种自相矛盾的行——
+    #    p 是 NaN 说明统计量压根不可用，那 t 也不该被采信。
+    # ⇒ t 与 p 必须**来自同一个口径**。
+    have_ctrl = t2 == t2 and p2 == p2
+    use_t = t2 if have_ctrl else t
+    use_p = p2 if have_ctrl else p
+    use_d = d2 if have_ctrl else d
+    if have_ctrl:
         print("  ⇒ 判定以**市场控制后**为准（未控制会把大盘涨幅算到信号头上）")
     if use_t != use_t:
         verdict = "⚠️ 样本不足，无法判定"
     elif use_t < -2:
-        verdict = f"❌ 显著为负（t={use_t:+.2f}, p={p2:.4f}）"
+        verdict = f"❌ 显著为负（t={use_t:+.2f}, p={use_p:.4f}）"
     elif use_t > 2:
-        verdict = f"✅ 显著为正（t={use_t:+.2f}, p={p2:.4f}）"
+        verdict = f"✅ 显著为正（t={use_t:+.2f}, p={use_p:.4f}）"
     else:
-        verdict = (f"❌ **与零无显著差异**（t={use_t:+.2f}, p={p2:.4f}）"
+        verdict = (f"❌ **与零无显著差异**（t={use_t:+.2f}, p={use_p:.4f}）"
                    f" ⇒ 选不出超额，等同不可用")
     print(f"\n== 判定: {verdict} ==")
     print("⚠️ 口径提醒：这是**横截面选股**检验，与'择时'(五之五)是两回事；"

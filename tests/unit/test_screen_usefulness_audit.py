@@ -111,9 +111,17 @@ class TestMarketBetaControl:
     """
 
     def test_computes_same_period_market_mean(self) -> None:
+        """按**时点**算市场基准（不是整段平均）。
+
+        ⚠️ 跨期比较的经典坑：如果把整段市场收益平均成一个数，
+        就等于允许"4月买、12月卖"这种**跨期套利式对齐**，那是错的。
+        必须是**同一时点**进、同一时点出。
+        """
         src = _s()
         assert "by_t" in src
-        assert "mkt = {t: float(np.mean(v))" in src
+        assert "np.mean(v))" in src
+        # 索引基准也必须按**每个时点**单独算，不能取一个全局常数
+        assert "out[t] = float(c[t + H] / c[t] - 1)" in src
 
     def test_requires_five_peers_per_timepoint(self) -> None:
         src = _s()
@@ -394,3 +402,66 @@ class TestParallelArgsActuallyBind:
         assert captured == {"path": "x.json", "sig": "1buy", "trend": "up",
                             "zs_pos": "above", "has_bc": "true"}, \
             f"starmap 式展开后参数错位：{captured}"
+
+
+class TestRealIndexBenchmark:
+    """⚠️ 上一轮留的缺口：市场基准用的是**样本自己的横截面均值**，
+    那是**循环论证**——"被选中"和"未选中"都参与了基准的计算。
+    现默认改用**真实指数**（沪深300），基准与被判定的股票无关。
+
+    实测两者差异仅 +0.01%（相关 0.92），所以**结论不变**；
+    但用指数更干净，且基准不再依赖被判定的样本。
+    """
+
+    def test_defaults_to_index_not_cross_section(self) -> None:
+        assert 'ap.add_argument("--benchmark", default="index"' in _s()
+
+    def test_offers_cross_section_as_fallback(self) -> None:
+        assert 'choices=("index", "cross_section")' in _s()
+
+    def test_benchmark_function_exists(self) -> None:
+        assert "def _benchmark_by_t(" in _s()
+
+    def test_index_path_is_read(self) -> None:
+        src = _s()
+        assert "sh000300_daily.json" in src
+
+    def test_falls_back_loudly_when_index_missing(self) -> None:
+        """找不到指数文件时必须**明说**并退回，而不是静默用弱基准。"""
+        assert "退回**样本横截面均值**" in _s()
+
+    def test_cross_section_needs_five_peers(self) -> None:
+        """横截面基准仍是"≥5 个同伴"，不能拿 1 个点当市场。"""
+        assert "if len(v) >= 5" in _s()
+
+
+class TestVerdictSelfConsistency:
+    """⚠️⚠️ 修一个真实的自相矛盾：
+
+    原来 t 换成了"市场控制后"的值，**p 却仍打印原始值**，
+    于是输出过 `t=-1.53, p=nan` 这种行——p 是 NaN 说明统计量不可用，
+    那 t 也不该被采信。**t 与 p 必须来自同一个口径。**
+    """
+
+    def test_t_and_p_come_from_same_basis(self) -> None:
+        src = _s()
+        assert "have_ctrl = t2 == t2 and p2 == p2" in src
+        assert "use_t = t2 if have_ctrl else t" in src
+        assert "use_p = p2 if have_ctrl else p" in src
+
+    def test_verdict_uses_matched_p(self) -> None:
+        """判定行里不能出现裸的 p2（那正是 nan 的来源）。"""
+        src = _s()
+        blk = src.split("use_t = t2 if have_ctrl else t")[-1]
+        assert "p={p2:.4f}" not in blk, "判定里仍混用了受控口径的 t 与原始口径的 p"
+        assert "p={use_p:.4f}" in src
+
+    def test_says_uncontrolled_is_not_controlled(self) -> None:
+        """算不出基准时要明说'**不等于**已控制'，不能让人误以为已控制。"""
+        src = _s()
+        assert "**不等于**已控制" in src
+
+    def test_names_which_benchmark_was_used(self) -> None:
+        """必须打印**用的哪个基准**，否则读者无法判断口径。"""
+        src = _s()
+        assert "基准={bench_name}" in src
