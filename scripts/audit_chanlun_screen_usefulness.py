@@ -28,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import warnings
 from concurrent.futures import ProcessPoolExecutor
 from math import erfc, sqrt
 from pathlib import Path
@@ -53,7 +54,9 @@ def _fwd(c: np.ndarray, i: int) -> float | None:
     return c[j] / c[i] - 1.0
 
 
-def one_symbol(path_str: str, sig: str = "any_buy") -> dict | None:
+def one_symbol(path_str: str, sig: str = "any_buy",
+               trend: str = "any", zs_pos: str = "any",
+               has_bc: str = "any") -> dict | None:
     """对一只股票，在每个再平衡时点判定"是否被缠论选股选中"。"""
     from easy_tdx.web.routers.screening import _chanlun_screen
     from easy_tdx.chanlun import ChanlunAnalyser
@@ -83,6 +86,8 @@ def one_symbol(path_str: str, sig: str = "any_buy") -> dict | None:
 
         hit = []   # 命中买入且事后有收益
         miss = []  # 未命中且事后有收益
+        hit_pts: list[int] = []   # 与 hit 一一对应的时点
+        miss_pts: list[int] = []
         for t in points:
             # 端点用 fetch_qfq_klines(...,0,500) → 约500根；这里用 t 之前的数据保证 PIT
             sub = df.iloc[: t + 1]
@@ -94,10 +99,13 @@ def one_symbol(path_str: str, sig: str = "any_buy") -> dict | None:
                 continue
             close = float(c[t])
             try:
+                # ⚠️ must 用**端点自己的判定**，逐项透传 criteria
                 ok, _ = _chanlun_screen(
                     r,
-                    {"signal_type": sig, "trend": "any",
-                     "zs_position": "any", "has_beichi": False},
+                    {"signal_type": sig, "trend": trend,
+                     "zs_position": zs_pos,
+                     "has_beichi": (None if has_bc == "any"
+                                    else has_bc == "true")},
                     close,
                 )
             except Exception:  # noqa: BLE001
@@ -105,11 +113,15 @@ def one_symbol(path_str: str, sig: str = "any_buy") -> dict | None:
             r20 = _fwd(c, t)
             if r20 is None:
                 continue
+            (hit_pts if ok else miss_pts).append(t)
             (hit if ok else miss).append(r20)
         if not hit and not miss:
             return None
         return {"code": p.stem, "hit": hit, "miss": miss,
-                "n_pts": len(points), "sig": sig}
+                "n_pts": len(points), "sig": sig,
+                # ⚠️ 必须记下**时点**，才能算"同期全市场均值"做基准。
+                #    没有它就退化成'和大盘比'，而大盘涨跌会**全部算进信号头上**。
+                "hit_pts": hit_pts, "miss_pts": miss_pts}
     except Exception:  # noqa: BLE001
         return None
 
@@ -123,18 +135,26 @@ def main() -> int:
     ap.add_argument("--cache", default="/tmp/screen_audit_cache.json")
     ap.add_argument("--signal-type", default="any_buy",
                     help="复刻端点的 signal_type 判定（默认 any_buy）")
+    ap.add_argument("--trend", default="any", choices=("any", "up", "down"))
+    ap.add_argument("--zs-position", default="any",
+                    choices=("any", "above", "below", "inside"))
+    ap.add_argument("--has-beichi", default="any",
+                    choices=("any", "true", "false"))
     a = ap.parse_args()
 
     files = sorted(Path(a.data).glob("*.json"))[: a.limit]
     cache_path = Path(a.cache)
     if cache_path.name.startswith("screen_audit_cache"):
+        tag = f"{a.signal_type}_{a.trend}_{a.zs_position}_{a.has_beichi}"
         cache_path = cache_path.with_name(
-            f"{cache_path.stem}_{a.signal_type}{cache_path.suffix}")
+            f"{cache_path.stem}_{tag}{cache_path.suffix}")
     if not files:
         print(f"❌ {a.data}/ 无数据，无法审计（不要拿空目录凑结论）")
         return 2
-    print(f"审计「缠论选股」功能：{len(files)} 只，持有期 {H} 日，"
-          f"判定口径 = 端点 _chanlun_screen(signal_type={a.signal_type}) 原样复刻")
+    print(f"审计「缠论选股」功能：{len(files)} 只，持有期 {H} 日")
+    print(f"  判定口径 = 端点 _chanlun_screen 原样复刻："
+          f"signal_type={a.signal_type} trend={a.trend} "
+          f"zs_position={a.zs_position} has_beichi={a.has_beichi}")
 
     cache = cache_path
     res: list[dict] = []
@@ -145,7 +165,9 @@ def main() -> int:
     todo = [str(f) for f in files if f.stem not in done]
     if todo:
         with ProcessPoolExecutor(max_workers=a.workers) as ex:
-            for r in ex.map(one_symbol, todo, [a.signal_type] * len(todo)):
+            for r in ex.map(one_symbol, todo,
+                            [(a.signal_type, a.trend, a.zs_position,
+                              a.has_beichi)] * len(todo)):
                 if not r:
                     continue
                 res.append(r)
@@ -176,35 +198,90 @@ def main() -> int:
               f"t={t:+.2f}")
         return m, t
 
+    # ── 市场控制（beta 调整）──────────────────────────────────
+    # ⚠️⚠️ 本轮**实测踩到的坑**：zs_position=above 原始差 +3.71%(t=3.16,p=0.002)
+    #    看着像重大发现——但那 2024-2025 A股整体上行，"站上中枢"的股票
+    #    天然涨得多。**换成"相对同期全市场均值"后只剩 +1.61%, p=0.15 ⇒ 不显著**。
+    #    不做这一步，就会把**大盘 beta 记在信号账上**（虚高的发现）。
+    by_t: dict[int, list[float]] = {}
+    for r in res:
+        for t, x in zip(r.get("hit_pts", []), r.get("hit", [])):
+            by_t.setdefault(t, []).append(x)
+        for t, x in zip(r.get("miss_pts", []), r.get("miss", [])):
+            by_t.setdefault(t, []).append(x)
+    mkt = {t: float(np.mean(v)) for t, v in by_t.items() if len(v) >= 5}
+
+    def _rel(xs: list[float], pts: list[int]) -> np.ndarray:
+        """把收益减去**同一时点**的全市场均值。"""
+        out = []
+        for x, t in zip(xs, pts):
+            if t in mkt:
+                out.append(x - mkt[t])
+        return np.array(out, dtype=float)
+
+    rel_h = np.concatenate([_rel(r.get("hit", []), r.get("hit_pts", []))
+                            for r in res]) if res else np.array([])
+    rel_m = np.concatenate([_rel(r.get("miss", []), r.get("miss_pts", []))
+                            for r in res]) if res else np.array([])
+
+    if len(rel_h) > 5 and len(rel_m) > 5:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            d2 = float(rel_h.mean() - rel_m.mean())
+            se2 = float(np.sqrt(rel_h.var(ddof=1) / len(rel_h)
+                                + rel_m.var(ddof=1) / len(rel_m)))
+        t2 = d2 / se2 if se2 == se2 and se2 > 0 else float("nan")
+        p2 = erfc(abs(t2) / sqrt(2)) if t2 == t2 else float("nan")
+        print("\n  ── 市场控制后（减去**同期全市场均值**）──")
+        print(f"  被选中相对超额 {rel_h.mean()*100:+.2f}%   "
+              f"未选中相对超额 {rel_m.mean()*100:+.2f}%")
+        print(f"  差 = {d2*100:+.2f}%  t={t2:+.2f}  p={p2:.4f}")
+    else:
+        d2 = t2 = p2 = float("nan")
+        print("\n  ⚠️ 同期市场基准样本不足，无法做 beta 调整"
+              "（结论只能按**原始**口径读）")
+
     mh, th = stat(hit, "被选中")
     mm, tm = stat(miss, "未选中")
-    d = mh - mm
-    se = np.sqrt(hit.var(ddof=1) / len(hit) + miss.var(ddof=1) / len(miss))
-    t = d / se if se > 0 else float("nan")
-    p = erfc(abs(t) / sqrt(2))
+    # ⚠️ 样本不足时 numpy 会刷一串 RuntimeWarning(自由度≤0/除零)，
+    #    那是**预期**路径，不该污染输出（且日志会被刷屏）。
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        d = mh - mm
+        se = (np.sqrt(hit.var(ddof=1) / len(hit)
+                      + miss.var(ddof=1) / len(miss))
+              if len(hit) > 1 and len(miss) > 1 else float("nan"))
+    t = d / se if se == se and se > 0 else float("nan")
+    p = erfc(abs(t) / sqrt(2)) if t == t else float("nan")
     print(f"\n  超额（选中−未选中）= {d*100:+.2f}%  t={t:+.2f}  p={p:.4f}")
 
     # ② 逐只口径：每只股票入选时点均值 − 未入选时点均值
     per = np.array([np.mean(r["hit"]) - np.mean(r["miss"])
                     for r in res if r["hit"] and r["miss"]], dtype=float)
     if len(per) >= 5:
-        m = per.mean()
-        se2 = per.std(ddof=1) / sqrt(len(per))
-        t2 = m / se2
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            m = per.mean()
+            se_p = per.std(ddof=1) / sqrt(len(per))
+        t_p = m / se_p if se_p > 0 else float("nan")
         print(f"  逐只超额（配对，n={len(per)}）= {m*100:+.2f}%  "
-              f"t={t2:+.2f}  p={erfc(abs(t2)/sqrt(2)):.4f}  "
+              f"t={t_p:+.2f}  p={erfc(abs(t_p)/sqrt(2)):.4f}  "
               f"为正的占比 {(per>0).mean()*100:.1f}%")
 
     # ⚠️ 之前我写 "❌ 无用/为负" 把两件事混为一谈。
     #    "显著为负" 与 "与零无显著差异" 是**不同结论**，必须分开说。
-    if t != t:
+    use_t = t2 if (t2 == t2 and d2 == d2) else t
+    use_d = d2 if (t2 == t2 and d2 == d2) else d
+    if t2 == t2:
+        print("  ⇒ 判定以**市场控制后**为准（未控制会把大盘涨幅算到信号头上）")
+    if use_t != use_t:
         verdict = "⚠️ 样本不足，无法判定"
-    elif t < -2:
-        verdict = f"❌ 显著为负（t={t:+.2f}, p={p:.4f}）"
-    elif t > 2:
-        verdict = f"✅ 显著为正（t={t:+.2f}, p={p:.4f}）"
+    elif use_t < -2:
+        verdict = f"❌ 显著为负（t={use_t:+.2f}, p={p2:.4f}）"
+    elif use_t > 2:
+        verdict = f"✅ 显著为正（t={use_t:+.2f}, p={p2:.4f}）"
     else:
-        verdict = (f"❌ **与零无显著差异**（t={t:+.2f}, p={p:.4f}）"
+        verdict = (f"❌ **与零无显著差异**（t={use_t:+.2f}, p={p2:.4f}）"
                    f" ⇒ 选不出超额，等同不可用")
     print(f"\n== 判定: {verdict} ==")
     print("⚠️ 口径提醒：这是**横截面选股**检验，与'择时'(五之五)是两回事；"

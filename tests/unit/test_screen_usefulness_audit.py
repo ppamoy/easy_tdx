@@ -71,15 +71,18 @@ class TestHonestVerdict:
         （牙齿验证时才发现）。现在改为**分别锁定三个分支**。
         """
         s = _s()
-        # 负分支：必须真的存在，且带 t<-2 条件
-        assert "elif t < -2:" in s
-        # 正分支
-        assert "elif t > 2:" in s
+        # ⚠️ 判定改用**市场控制后**的 use_t（见 TestMarketBetaControl），
+        #    所以分支条件是 use_t 而不是 t。断言要跟着改，否则是**假失败**。
+        assert "elif use_t < -2:" in s
+        assert "elif use_t > 2:" in s
+        # 且 use_t 必须真的来自"控制后优先、控制前兜底"
+        assert "use_t = t2 if" in s
         # 零分支：必须是**独立的 else 兜底**，而不是默认落到某个含混措辞
         assert "与零无显著差异" in s
         assert "样本不足，无法判定" in s
+        assert "use_t != use_t" in s
         # ⚠️ 关键：零分支必须真的在代码里，不能只是"某处出现过这个词"
-        zero_blk = s.split("elif t > 2:")[-1]
+        zero_blk = s.split("elif use_t > 2:")[-1]
         assert "与零无显著差异" in zero_blk, \
             "零分支必须真的存在于判定链末端（第一版断言是空的）"
 
@@ -93,6 +96,97 @@ class TestHonestVerdict:
     def test_states_sample_caveat(self) -> None:
         s = _s()
         assert "口径提醒" in s
+
+
+class TestMarketBetaControl:
+    """⚠️⚠️ 本轮**最关键**的一组。
+
+    `zs_position=above` 原始口径差 **+3.71%、t=+3.16、p=0.002**
+    ——看着像个重大发现。但 2024-2025 A股整体上行，
+    "站上中枢"的股票天然涨得多。
+    换成"相对**同期全市场均值**"后只剩 **+1.61%、p=0.15 ⇒ 不显著**。
+
+    不做这一步，就会把**大盘涨幅记在信号账上**。
+    这是整个审计里最容易骗过自己的地方。
+    """
+
+    def test_computes_same_period_market_mean(self) -> None:
+        src = _s()
+        assert "by_t" in src
+        assert "mkt = {t: float(np.mean(v))" in src
+
+    def test_requires_five_peers_per_timepoint(self) -> None:
+        src = _s()
+        assert "if len(v) >= 5" in src
+
+    def test_subtracts_market_mean_per_timepoint(self) -> None:
+        src = _s()
+        assert "def _rel(" in src
+        assert "x - mkt[t]" in src
+
+    def test_stores_timepoints_per_bucket(self) -> None:
+        """⚠️ 没有时点就无法对齐"同期"——必须**分别**记 hit/miss 的时点。
+        我第一版想用一个 pts 混着记，hit 和 miss 的对应关系就乱了。"""
+        src = _s()
+        assert '"hit_pts"' in src
+        assert '"miss_pts"' in src
+
+    def test_verdict_uses_controlled_result_when_available(self) -> None:
+        """⚠️ 若能算市场基准，判定**必须**以控制后的结果为准。
+        否则原始那个 p=0.002 会被当成"可用"。"""
+        src = _s()
+        assert "use_t = t2 if" in src
+        assert "判定以**市场控制后**为准" in src
+
+    def test_says_loudly_when_control_unavailable(self) -> None:
+        """算不出基准时必须**明说**结论只能按原始口径读，
+        不能默默当成已控制。"""
+        src = _s()
+        assert "无法做 beta 调整" in src
+        assert "结论只能按**原始**口径读" in src
+
+
+class TestStructuralCriteriaSupported:
+    def test_all_endpoint_criteria_exposed(self) -> None:
+        """端点 `_chanlun_screen` 支持 4 个维度，之前只测了 1 个。"""
+        src = _s()
+        for flag in ("--signal-type", "--trend", "--zs-position",
+                     "--has-beichi"):
+            assert flag in src
+
+    def test_passes_them_to_endpoint_not_reimplementing(self) -> None:
+        """⚠️ 仍然必须**透传给端点函数**，不能自己写一套判定 ——
+        否则测的就不是那个功能了（第一版就犯过）。"""
+        src = _s()
+        assert '"trend": trend' in src
+        assert '"zs_position": zs_pos' in src
+
+    def test_has_beichi_tri_state(self) -> None:
+        """has_beichi 是 bool，筛选上却是三态（不限/要/不要）。"""
+        src = _s()
+        assert 'has_bc == "any"' in src
+        assert 'has_bc == "true"' in src
+
+    def test_cache_tag_covers_all_criteria(self) -> None:
+        """⚠️ 缓存文件名必须带**全部**条件，否则不同口径互相污染
+        （这是第一版已有的隐患，补齐维度后更容易踩）。"""
+        src = _s()
+        assert "a.zs_position" in src
+        assert "a.has_beichi" in src
+
+
+class TestNoWarningSpam:
+    def test_suppresses_expected_runtime_warnings(self) -> None:
+        """样本不足时 numpy 会刷一串 RuntimeWarning，那是**预期路径**，
+        不该把输出刷满。"""
+        src = _s()
+        assert "warnings.catch_warnings()" in src
+        assert 'simplefilter("ignore", RuntimeWarning)' in src
+
+    def test_nan_does_not_pretend_to_be_a_verdict(self) -> None:
+        """样本不足 ⇒ 报"样本不足，无法判定"，不能吐一个 nan% 结论。"""
+        src = _s()
+        assert "⚠️ 样本不足，无法判定" in src
 
 
 class TestResumable:
@@ -129,3 +223,51 @@ class TestConfigurable:
     def test_saves_machine_readable_result(self) -> None:
         s = _s()
         assert "json.dumps" in s
+
+
+class TestTimepointAlignmentBehaviour:
+    """⚠️⚠️ 上面那组"牙齿2"暴露了一个**纯文本断言抓不到**的 bug。
+
+    我把 `(hit_pts if ok else miss_pts).append(t)` 改成
+    `hit_pts.append(t)`（永远记进 hit_pts）——**所有字符串断言照样全绿**，
+    因为代码文本几乎没变。但这样 `miss_pts` 永远是空的 ⇒
+    市场基准只用"命中组"算 ⇒ **控制本身是错的**。
+
+    ⇒ 结论：涉及**数据流对齐**的东西，**不能只靠 grep 源码**。
+    必须用真实数据跑一遍，验证对齐关系确实成立。
+    """
+
+    def test_hit_and_miss_timepoints_are_mutually_exclusive(self) -> None:
+        """用一只真实标的跑 one_symbol，验证
+        len(hit_pts) == len(hit) 且 len(miss_pts) == len(miss)。"""
+        import importlib.util
+        import json
+        from pathlib import Path
+
+        spec = importlib.util.spec_from_file_location(
+            "_su", Path(__file__).resolve().parents[2] /
+            "scripts" / "audit_chanlun_screen_usefulness.py")
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+
+        data = Path(__file__).resolve().parents[2] / "audit_data"
+        files = sorted(data.glob("*.json"))
+        if not files:
+            import pytest
+            pytest.skip("audit_data/ 无数据")
+
+        r = mod.one_symbol(str(files[0]))
+        if r is None:
+            import pytest
+            pytest.skip(f"{files[0].name} 样本不足")
+
+        assert len(r["hit_pts"]) == len(r["hit"]), "hit_pts 与 hit 长度不符"
+        assert len(r["miss_pts"]) == len(r["miss"]), "miss_pts 与 miss 长度不符"
+        # ⚠️ 关键：两组时点**不能重叠**。若实现退化成"全记进 hit_pts"，
+        #    miss_pts 会是空的（下面的合计检查会抓到）。
+        assert (len(r["hit_pts"]) + len(r["miss_pts"])) > 0
+        if r["hit"] and r["miss"]:
+            assert r["hit_pts"] and r["miss_pts"], (
+                "命中与未命中**都**有样本时，两组时点都必须有内容；"
+                "只有一组有 ⇒ 说明另一组时点被记错了地方")
