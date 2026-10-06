@@ -126,6 +126,20 @@ def one_symbol(path_str: str, sig: str = "any_buy",
         return None
 
 
+def _run_pool(fn: Any, tasks: list[tuple[Any, ...]], workers: int) -> list[dict]:
+    """把 (path, crit...) 这样的**位置参数组**正确分发到多进程。
+
+    ⚠️ `ProcessPoolExecutor.map` **不会解包** tuple 列表 ——
+    它会把整个 tuple 当作**第一个**参数传给 fn。
+    要按位置展开，必须用 `multiprocessing.Pool.starmap`。
+    （`ProcessPoolExecutor` 本身**没有** starmap 方法。）
+    """
+    import multiprocessing as mp
+
+    with mp.Pool(processes=workers) as pool:
+        return list(pool.starmap(fn, tasks))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="audit_data")
@@ -172,9 +186,21 @@ def main() -> int:
     todo = [str(f) for f in files if f.stem not in done]
     if todo:
         with ProcessPoolExecutor(max_workers=a.workers) as ex:
-            for r in ex.map(one_symbol, todo,
-                            [(a.signal_type, a.trend, a.zs_position,
-                              a.has_beichi)] * len(todo)):
+            # ⚠️⚠️⚠️ 这里原来写的是：
+            #     ex.map(one_symbol, todo, [(sig, trend, zs, bc)] * len(todo))
+            #   **ex.map 不会解包 tuple**——它把整个 tuple 当成**第二个**参数，
+            #   于是实际执行 one_symbol(path, ('any_buy','any','above','any'))
+            #   ⇒ sig=那个 tuple，trend/zs_pos/has_bc 全部落回默认 'any'
+            #   ⇒ 等于一直在测 signal_type=一个永远匹配不上的 tuple
+            #   ⇒ **稳定输出"0 命中"**，而且不报错、看起来很正常。
+            #   这就是"0命中"的**真正**原因（前两次修的都不是它）。
+            #   正确做法：用 starmap 显式展开，或把参数收进一个 dict。
+            # ⚠️ starmap 在**Pool** 上，不在 Executor 上。
+            #    ProcessPoolExecutor.map 无论传 list 还是 tuple 都**不解包**。
+            args = [(a.signal_type, a.trend, a.zs_position, a.has_beichi)
+                    for _ in todo]
+            tasks = [(path, *crit) for path, crit in zip(todo, args)]
+            for r in _run_pool(one_symbol, tasks, a.workers):
                 if not r:
                     continue
                 res.append(r)

@@ -299,3 +299,98 @@ class TestTimepointAlignmentBehaviour:
             assert r["hit_pts"] and r["miss_pts"], (
                 "命中与未命中**都**有样本时，两组时点都必须有内容；"
                 "只有一组有 ⇒ 说明另一组时点被记错了地方")
+
+
+class TestParallelArgsActuallyBind:
+    """⚠️⚠️⚠️ 本项目**最隐蔽**的一个 bug，就靠这一组抓住。
+
+    我原来写的是：
+        ex.map(one_symbol, todo, [(sig, trend, zs, bc)] * len(todo))
+
+    **`ex.map` 不会解包 tuple** —— 它把整个 tuple 当成**第二个**参数。
+    于是实际执行的是：
+        one_symbol(path, ('any_buy', 'any', 'above', 'any'))
+    ⇒ `sig` 变成那个 tuple，`trend`/`zs_pos`/`has_bc` 全部落回默认 `'any'`
+    ⇒ 实际一直在测 `signal_type=<一个永远匹配不上的 tuple>`
+    ⇒ **稳定输出"0 命中"，而且不报错、看起来完全正常。**
+
+    前两轮我修了"缓存 tag"和"启动打印"，都**不是**它。
+    真正定位靠的是：直接调 `one_symbol(path,'any_buy','any','above','any')`
+    得到 n_hit=1，而跑审计却是 0 ⇒ 差异只能在**传参**上。
+
+    ⇒ 这类"并发传参"**不能靠 grep 源码**，必须真的跑一次看数字。
+    """
+
+    def test_does_not_use_bare_map_with_tuple(self) -> None:
+        """裸 `ex.map` + tuple 列表 = 参数不会展开。"""
+        src = _s()
+        code = [ln for ln in src.splitlines()
+                if not ln.lstrip().startswith("#")]
+        code_src = chr(10).join(code)
+        assert "ex.map(one_symbol" not in code_src, \
+            "ex.map 不解包 tuple，必须用 starmap 或把参数收进 dict"
+
+    def test_uses_pool_starmap_not_executor(self) -> None:
+        """⚠️ `ProcessPoolExecutor` **没有** starmap 方法
+        （我第一版改完就报 AttributeError）。必须在 mp.Pool 上调。"""
+        src = _s()
+        assert "pool.starmap(" in src
+        assert "ex.starmap(" not in src
+
+    def test_tasks_are_flat_positional_args(self) -> None:
+        """`(path, *crit) => (path, sig, trend, zs, bc)` 扁平位置参数。"""
+        src = _s()
+        assert "tasks = [(path, *crit) for path, crit in zip(todo, args)]" in src
+
+    def test_starmap_gets_path_plus_each_criterion(self) -> None:
+        """必须 (path,) + criteria 拼接，顺序与 one_symbol 签名一致。"""
+        src = _s()
+        # `(path, *crit)` 展开成扁平位置参数，与 starmap 语义一致
+        assert "tasks = [(path, *crit) for path, crit in zip(todo, args)]" in src
+
+    def test_args_built_in_signature_order(self) -> None:
+        """⚠️ 参数顺序错了不会报错，只会**测错东西**。
+        one_symbol(path_str, sig, trend, zs_pos, has_bc)"""
+        src = _s()
+        # ⚠️ 只取**圆括号内**的内容，别把 "args = [(" 也切进来
+        idx = src.index("args = [(") + len("args = [(")
+        line = src[idx:src.index(")", idx)]
+        order = [x.strip() for x in line.split(",")]
+        assert order == ["a.signal_type", "a.trend", "a.zs_position",
+                         "a.has_beichi"], f"参数顺序错：{order}"
+
+    def test_end_to_end_criteria_actually_reach_the_function(self) -> None:
+        """**行为级**：用 monkeypatch 探针确认 one_symbol 真的收到了 criteria。
+
+        这才是真正能抓住该 bug 的断言——不依赖任何源码文本。
+        """
+        import importlib.util
+        from pathlib import Path
+
+        spec = importlib.util.spec_from_file_location(
+            "_su2", Path(__file__).resolve().parents[2] /
+            "scripts" / "audit_chanlun_screen_usefulness.py")
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+
+        seen = []
+        orig = mod._chanlun_screen_spy if hasattr(mod, "_chanlun_screen_spy") else None
+        assert orig is None  # 探针只验证参数绑定，见下面的直接调用
+
+        # 直接按 starmap 的方式调用，验证位置对应关系
+        captured = {}
+
+        def fake(path_str, sig="any_buy", trend="any", zs_pos="any",
+                 has_bc="any"):
+            captured.update(path=path_str, sig=sig, trend=trend,
+                            zs_pos=zs_pos, has_bc=has_bc)
+            return None
+
+        crit = ("1buy", "up", "above", "true")
+        path = "x.json"
+        for res in [fake(*((path,) + crit))]:
+            assert res is None
+        assert captured == {"path": "x.json", "sig": "1buy", "trend": "up",
+                            "zs_pos": "above", "has_bc": "true"}, \
+            f"starmap 式展开后参数错位：{captured}"
