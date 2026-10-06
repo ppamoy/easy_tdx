@@ -168,11 +168,39 @@ class TestStructuralCriteriaSupported:
         assert 'has_bc == "true"' in src
 
     def test_cache_tag_covers_all_criteria(self) -> None:
-        """⚠️ 缓存文件名必须带**全部**条件，否则不同口径互相污染
-        （这是第一版已有的隐患，补齐维度后更容易踩）。"""
+        """⚠️ 缓存文件名必须带**全部**条件，否则不同口径互相污染。"""
         src = _s()
         assert "a.zs_position" in src
         assert "a.has_beichi" in src
+
+    def test_cache_tag_is_unconditional(self) -> None:
+        """⚠️⚠️ 真实踩过的坑：原来写成
+        `if cache_path.name.startswith("screen_audit_cache")` 才加 tag。
+        我传 `--cache /tmp/sc3.json` ⇒ **根本没加 tag**，
+        各种口径共用一个缓存，输出了"0 命中"这种一眼就假的结果。
+        ⇒ 缓存键必须**无条件**由内容决定，不能靠文件名约定。"""
+        src = _s()
+        # ⚠️ 必须**只看代码行**（去掉注释），否则我写的"解释这个 bug 的注释"
+        #    里那个旧写法会把自己判失败——这是第一版的另一个假失败。
+        code = [ln for ln in src.splitlines()
+                if not ln.lstrip().startswith("#")]
+        code_src = chr(10).join(code)
+        assert 'cache_path.name.startswith("screen_audit_cache")' \
+            not in code_src, "条件加 tag 必须去掉（缓存键无条件由内容决定）"
+        assert "if not cache_path.stem.endswith(tag):" in code_src
+
+    def test_prints_cache_path_in_use(self) -> None:
+        """必须打印**实际用的**缓存文件，否则不知道复用了哪份数据。"""
+        assert "缓存 = {cache_path}" in _s()
+
+    def test_prints_every_criterion_at_startup(self) -> None:
+        """⚠️ 那次"0 命中"还有第二个原因：运行是在加 --zs-position
+        **之前**发出去的，脚本按老逻辑跑。如果启动时打印全部口径，
+        一眼就能看出跑的是 zs_position=any。"""
+        src = _s()
+        for frag in ("signal_type=", "trend=", "zs_position=",
+                     "has_beichi="):
+            assert frag in src
 
 
 class TestNoWarningSpam:

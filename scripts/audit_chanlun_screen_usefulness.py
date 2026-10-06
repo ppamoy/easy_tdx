@@ -143,9 +143,15 @@ def main() -> int:
     a = ap.parse_args()
 
     files = sorted(Path(a.data).glob("*.json"))[: a.limit]
+    # ⚠️⚠️ 这里原来写成 `if cache_path.name.startswith("screen_audit_cache")`
+    #    才加 tag —— 于是我传 `--cache /tmp/sc3.json` 时**根本没加 tag**，
+    #    各种口径共用一个缓存。更糟的是那次运行是**在加 --zs-position 参数
+    #    之前**发出去的，脚本按老逻辑跑，等于测了 zs_position=any。
+    #    ⇒ 两条 bug 叠加，输出了"0 命中"这种一眼就假的结果。
+    #    教训：**缓存键必须无条件由内容决定**，不能靠文件名约定。
     cache_path = Path(a.cache)
-    if cache_path.name.startswith("screen_audit_cache"):
-        tag = f"{a.signal_type}_{a.trend}_{a.zs_position}_{a.has_beichi}"
+    tag = f"{a.signal_type}_{a.trend}_{a.zs_position}_{a.has_beichi}"
+    if not cache_path.stem.endswith(tag):
         cache_path = cache_path.with_name(
             f"{cache_path.stem}_{tag}{cache_path.suffix}")
     if not files:
@@ -155,6 +161,7 @@ def main() -> int:
     print(f"  判定口径 = 端点 _chanlun_screen 原样复刻："
           f"signal_type={a.signal_type} trend={a.trend} "
           f"zs_position={a.zs_position} has_beichi={a.has_beichi}")
+    print(f"  缓存 = {cache_path}")
 
     cache = cache_path
     res: list[dict] = []
