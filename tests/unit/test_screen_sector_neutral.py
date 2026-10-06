@@ -19,6 +19,31 @@ def _s() -> str:
     return SCRIPT.read_text(encoding="utf-8")
 
 
+def _code() -> str:
+    """⚠️ 只取**代码**（剔除注释与字符串字面量）。
+
+    我写了不少"解释这个坑"的注释，断言若扫全文会被**自己**判失败——
+    这已在本项目重复发生（注释里含旧写法 / 措辞过期）。
+
+    ⚠️ 实现注意：tokenize 返回的是**分开的 token**，不能直接换行拼接
+    （那样 "np.linalg.pinv" 会变成三行、断言匹配不到）。
+    这里按 **行号**重建代码，保留行内相邻关系。
+    """
+    import io
+    import tokenize
+
+    lines: dict[int, list[str]] = {}
+    with SCRIPT.open("rb") as fh:
+        for tok in tokenize.tokenize(fh.readline):
+            if tok.type in (tokenize.COMMENT, tokenize.STRING):
+                continue
+            if tok.type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
+                            tokenize.DEDENT):
+                continue
+            lines.setdefault(tok.start[0], []).append(tok.string)
+    return chr(10).join("".join(v) for _, v in sorted(lines.items()))
+
+
 class TestNoDataExitsTwo:
     """⚠️ CI 纪律：审计脚本**没有数据**时必须 exit 2 且打印 ❌，
     绝不能静默 exit 0 让 CI 放行（抓数失败必须显式失败）。"""
@@ -71,10 +96,9 @@ class TestHonestVerdict:
     def test_zero_branch_says_still_no_excess(self) -> None:
         """结论要**说清**是"中性化后仍选不出"，而不只是丢个 t 值。
 
-        ⚠️ 后来加了市值口径，这句也跟着更新——测试**过期**和测试
-        **失效**一样都要修，不能放着。"""
-        src = _s()
-        assert "中性化后仍选不出超额" in src
+        ⚠️ 口径从 2 个加到 4 个后措辞变了，这句也跟着更新——
+        **测试过期和测试失效一样要修**，不能放着。"""
+        assert "均选不出超额" in _s()
 
     def test_insufficient_sample_is_not_a_verdict(self) -> None:
         src = _s()
@@ -177,7 +201,7 @@ class TestVerdictCoversBoth:
         assert "abs(t) > 2 or (size_t == size_t and abs(size_t) > 2)" in src
 
     def test_zero_branch_mentions_both_neutralisations(self) -> None:
-        assert "行业+市值中性化后仍选不出超额" in _s()
+        assert "均选不出超额" in _s()
 
 
 class TestSizeTeeth:
@@ -226,7 +250,9 @@ class TestJointNeutralisation:
         assert "(joint_t == joint_t and abs(joint_t) > 2)" in src
 
     def test_zero_branch_mentions_joint(self) -> None:
-        assert "行业+市值中性化后仍选不出超额" in _s()
+        # ⚠️ 措辞后来改为"四种口径（指数/行业/市值/回归）均选不出超额"，
+        # 这条断言跟着更新——测试**过期**和测试**失效**一样要修。
+        assert "均选不出超额" in _s()
 
 
 class TestJointTeeth:
@@ -241,3 +267,109 @@ class TestJointTeeth:
             'groupby(["ind", "mcap_bin"],\n                                        observed=True)',
             'groupby(["mcap_bin"], observed=True)')
         assert '["ind", "mcap_bin"]' not in src
+
+
+class TestFamaMacBeth:
+    """⚠️ 五之三十一标的缺口：未做**回归法**，只做分组减均值。
+
+    回归能**同时**纳入多个控制变量，是更严格的口径。
+    """
+
+    def test_exists(self) -> None:
+        assert "def _fama_macbeth(" in _s()
+
+    def test_no_statsmodels_dependency(self) -> None:
+        """⚠️ 自己实现 OLS——CI 里不该为单个审计脚本引入新依赖。
+        （实测本机没装 statsmodels，且审计脚本要进 CI 反复跑。）
+        ⚠️ 必须扫**代码行**：docstring 里解释"为什么不引 statsmodels"
+        会让全文断言自己判失败。"""
+        src = _code()
+        assert "statsmodels" not in src
+        assert "np.linalg.pinv" in src
+
+    def test_uses_coarse_industry_not_fine(self) -> None:
+        """⚠️⚠️ 行业固定效应**必须用粗分类**。
+
+        第一版用完整申万行业：47 行业 = 46 个虚拟变量，
+        加截距/hit/log市值 共 **49 参数**，每时点只有 **57 观测**
+        ⇒ 自由度仅 8，模型**接近饱和**，R²=0.93 是**过拟合**，
+        beta 被扭曲成 **+1.25%（符号都反了）**。
+        用申万**一级**（前 3 位）后 beta 回到 −1.40%，与分组口径一致。"""
+        assert 'str[:3]' in _s()
+
+    def test_guards_dof_before_fitting(self) -> None:
+        """⚠️ 必须检查自由度，否则过拟合会**静默**给出漂亮但假的 R²。"""
+        src = _s()
+        assert "len(g) - n_par < min_dof" in src
+        assert "if n <= k:" in src
+
+    def test_se_is_clustered_by_timepoint(self) -> None:
+        """Fama-MacBeth 的标准误：对**逐时点系数**取均值，
+        se = 逐时点系数的样本标准差 / sqrt(时点数)——天然按时点聚类。
+        ⚠️ 同一时点的观测不独立（大盘一起涨），不能当独立样本。"""
+        src = _s()
+        assert "std(ddof=1)) / np.sqrt(len(arr))" in src
+
+    def test_requires_five_timepoints(self) -> None:
+        """时点太少就别报结论。"""
+        assert "if len(rows) < 5" in _s()
+
+    def test_reports_fm_in_verdict(self) -> None:
+        src = _s()
+        assert "FM t=" in src
+
+    def test_fm_significance_counts(self) -> None:
+        assert "(fm_t == fm_t and abs(fm_t) > 1.96)" in _s()
+
+
+class TestFamaMacBethTeeth:
+    def test_bite_switching_to_fine_industry(self) -> None:
+        """改回**细行业** ⇒ 自由度耗尽/过拟合，必须被测试抓到。"""
+        src = _s().replace('str[:3]', 'str[:6]')
+        assert "str[:3]" not in src
+
+    def test_bite_removing_dof_guard(self) -> None:
+        src = _s().replace("len(g) - n_par < min_dof", "False")
+        assert "len(g) - n_par < min_dof" not in src
+
+    def test_bite_pooled_ols_instead_of_per_timepoint(self) -> None:
+        """⚠️ pooled OLS 会把不独立的同一时点观测当独立样本，
+        标准误**严重低估** ⇒ p 值假显著。
+
+        ⚠️⚠️ 这条最初写成**源码 grep 断言**，结果**没有牙齿**：
+        改成 pooled 之后测试照样全绿（源码里仍留着 groupby("t") 那一行，
+        只是换了循环体，grep 自然匹配不到 ⇒ 断言恒真）。
+        ⇒ 必须**行为级**：真构造数据调用函数，看它是否逐时点回归。
+
+        ⚠️⚠️⚠️ 而且我第一次的行为级改写**根本没落地**——替换用的
+        old_string 里 "⚠️" 后面多打了一个空格，.replace() 静默不匹配，
+        测试文件里仍是旧的 grep 版本，却显示"通过"。
+        **这正是本项目反复出现的元教训**：改写后一定要回读确认真的改了，
+        并且断言"补丁已生效"，否则你测的还是旧文件。
+        """
+        import importlib.util
+
+        import numpy as np
+        import pandas as pd
+
+        spec = importlib.util.spec_from_file_location("_sn_p", SCRIPT)
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+
+        rows = []
+        for t in range(6):
+            base = 0.01 + 0.001 * t          # 每个时点整体涨一点
+            for i in range(20):
+                rows.append({
+                    "code": f"c{i}", "t": 100 + t * 10,
+                    "r": base,              # ⚠️ 同点内零方差：完全相关
+                    "hit": i < 5, "mcap": 100.0 + i,
+                    "logmcap": float(np.log(100.0 + i)),
+                    "ind": "X110101",
+                })
+        out = mod._fama_macbeth(pd.DataFrame(rows))
+        n_tp = out[3]
+        assert n_tp == 6, (
+            f"应逐时点回归得到 6 个系数，实得 {n_tp}——"
+            f"若为 0 说明退化成了 pooled OLS 或全被自由度守卫筛掉")

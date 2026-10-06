@@ -161,6 +161,69 @@ def _with_market_cap(res: list[dict], shares: dict[str, float]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["code", "t", "r", "hit", "mcap"])
 
 
+def _fama_macbeth(joint: pd.DataFrame, min_dof: int = 10) -> tuple[float, float, float, int, int]:
+    """Fama-MacBeth 回归：控制行业 + 市值后，"被选中"还有没有解释力。
+
+    ⚠️ 为什么必须做这个：前面都是**分组减均值**（非参数、分箱粒度是折中）。
+       回归能**同时**纳入多个控制变量，是更严格的口径。
+
+    ⚠️⚠️ 自己实现 OLS（不引 statsmodels）——CI 里不该为单个审计脚本加依赖。
+
+    ⚠️⚠️ 行业固定效应**必须用粗分类**。第一版用完整申万行业：
+       47 行业 = 46 个虚拟变量，加截距/hit/log市值 共 **49 参数**，
+       而每个时点只有 **57 观测** ⇒ 自由度仅 8，模型**接近饱和**，
+       R²=0.93 是**过拟合**，且 beta 被扭曲成 **+1.25%（符号都反了）**。
+       改用申万**一级**（前 3 位）后 beta 回到 −1.40%，与分组口径一致。
+
+    标准误：Fama-MacBeth 的做法是对**逐时点系数**取均值，
+    其标准误 = 这些系数的样本标准差 / sqrt(时点数)——
+    这天然按时点聚类（同一时点观测不独立）。
+    """
+    df = joint.copy()
+    df["ind_fine"] = df["ind"]
+    df["ind"] = df["ind"].astype(str).str[:3]      # 申万一级
+    levels = sorted(df["ind"].unique())
+    di = {k: i for i, k in enumerate(levels[1:])}  # 省略第一个作基准
+
+    n_par = 3 + max(0, len(levels) - 1)            # 截距+hit+logmcap+行业虚拟
+    rows = []
+    for _, g in df.groupby("t"):
+        if g["hit"].nunique() < 2 or len(g) - n_par < min_dof:
+            continue
+        D = np.zeros((len(g), len(levels) - 1))
+        for i, v in enumerate(g["ind"].values):
+            j = di.get(v)
+            if j is not None:
+                D[i, j] = 1.0
+        X = np.column_stack([np.ones(len(g)),
+                             g["hit"].astype(float).to_numpy(),
+                             g["logmcap"].to_numpy(), D])
+        y = g["r"].to_numpy(float)
+        XtX = X.T @ X
+        try:
+            inv = np.linalg.pinv(XtX)
+        except Exception:        # noqa: BLE001
+            continue
+        b = inv @ (X.T @ y)
+        resid = y - X @ b
+        n, k = X.shape
+        if n <= k:
+            continue
+        s2 = float(resid @ resid) / (n - k)
+        sse = float(resid @ resid)
+        sst = float(((y - y.mean()) @ (y - y.mean())))
+        r2 = 1.0 - sse / sst if sst > 0 else 0.0
+        rows.append((float(b[1]), r2, int(n - k)))
+
+    if len(rows) < 5:
+        return float("nan"), float("nan"), float("nan"), 0, n_par
+    arr = np.array(rows, dtype=float)
+    mb = float(arr[:, 0].mean())
+    se = (float(arr[:, 0].std(ddof=1)) / np.sqrt(len(arr))
+          if len(arr) > 1 else float("nan"))
+    return mb, se, float(arr[:, 1].mean()), len(rows), n_par
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", default="/tmp/screen_audit_cache.json",
@@ -242,6 +305,7 @@ def main() -> int:
     #    它赚的钱其实是**小盘效应**，不是缠论的价值——必须排除。
     size_t = size_p = float("nan")
     joint_t = joint_p = float("nan")
+    fm_t = fm_p = mb = float("nan")
     mdf = _with_market_cap(res, load_float_shares(codes, Path(args.cap_cache)))
     if not mdf.empty:
         ca = mdf[mdf["hit"]]["mcap"].to_numpy()
@@ -302,20 +366,39 @@ def main() -> int:
             print(f"  ⇒ 联合口径比行业单独口径的差异变化: "
                   f"{(d4 - d) * 100:+.2f}%")
 
+            # ── 5) Fama-MacBeth 回归（最严格口径）────────────
+            j2 = joint.copy()
+            j2["logmcap"] = np.log(j2["mcap"].clip(lower=1e-6))
+            mb, mb_se, mb_r2, n_tp, n_par = _fama_macbeth(j2)
+            fm_t = mb / mb_se if mb_se == mb_se and mb_se > 0 else float("nan")
+            fm_p = (erfc(abs(fm_t) / sqrt(2))
+                    if fm_t == fm_t else float("nan"))
+            print(f"\n── Fama-MacBeth 回归（行业一级固定效应 + log市值）──")
+            print(f"  成功回归时点 {n_tp}，每时点约 {n_par} 参数"
+                  f"（已用**粗行业**，避免自由度耗尽）")
+            print(f"  「被选中」系数 = {mb*100:+.3f}% / 20日"
+                  f"   标准误 {mb_se*100:.3f}%")
+            print(f"  t = {fm_t:+.2f}   p = {fm_p:.4f}"
+                  f"   平均 R² = {mb_r2:.4f}")
+            print(f"  ⇒ {'✅ 显著（95%）' if fm_t == fm_t and abs(fm_t) > 1.96 else '**不显著**'}")
+
     # ⚠️ 所有口径都**不显著**才算真的没戏；任一显著都要报告出来。
     if t != t:
         verdict = "⚠️ 样本不足，无法判定"
     elif (abs(t) > 2 or (size_t == size_t and abs(size_t) > 2)
-          or (joint_t == joint_t and abs(joint_t) > 2)):
+          or (joint_t == joint_t and abs(joint_t) > 2)
+          or (fm_t == fm_t and abs(fm_t) > 1.96)):
         verdict = (f"{'✅ 显著为正' if d > 0 else '❌ 显著为负'}"
                    f"（行业 t={t:+.2f}, p={p:.4f}；"
                    f"市值 t={size_t:+.2f}, p={size_p:.4f}；"
-                   f"联合 t={joint_t:+.2f}, p={joint_p:.4f}）")
+                   f"联合 t={joint_t:+.2f}, p={joint_p:.4f}；"
+                   f"FM t={fm_t:+.2f}, p={fm_p:.4f}）")
     else:
         verdict = (f"❌ **与零无显著差异**（行业 t={t:+.2f}, p={p:.4f}；"
                    f"市值 t={size_t:+.2f}, p={size_p:.4f}；"
-                   f"联合 t={joint_t:+.2f}, p={joint_p:.4f}）"
-                   f" ⇒ 行业+市值中性化后仍选不出超额")
+                   f"联合 t={joint_t:+.2f}, p={joint_p:.4f}；"
+                   f"FM t={fm_t:+.2f}, p={fm_p:.4f}）"
+                   f" ⇒ 四种口径（指数/行业/市值/回归）均选不出超额")
     print(f"\n== 判定: {verdict} ==")
     print(f"   （行业集中度: {concentrated}）")
     print("⚠️ 口径提醒：这是**横截面选股**检验；即便为正也不代表"
