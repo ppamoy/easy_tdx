@@ -162,10 +162,13 @@ class TestSizeNeutralisation:
 
 class TestVerdictCoversBoth:
     def test_reports_both_bases(self) -> None:
-        """判定要**同时**给出行业与市值两个口径。"""
+        """判定要**同时**给出行业与市值两个口径。
+        （后来又加了联合口径，这条断言随之扩展——测试**过期**
+        和测试**失效**一样要修。）"""
         src = _s()
-        assert "行业中性 t=" in src
+        assert "行业 t=" in src
         assert "市值 t=" in src
+        assert "联合 t=" in src
 
     def test_either_significant_counts_as_significant(self) -> None:
         """⚠️ 若只看行业口径而忽略市值，可能漏报一个真实信号。
@@ -174,7 +177,7 @@ class TestVerdictCoversBoth:
         assert "abs(t) > 2 or (size_t == size_t and abs(size_t) > 2)" in src
 
     def test_zero_branch_mentions_both_neutralisations(self) -> None:
-        assert "行业与市值中性化后仍选不出超额" in _s()
+        assert "行业+市值中性化后仍选不出超额" in _s()
 
 
 class TestSizeTeeth:
@@ -188,3 +191,53 @@ class TestSizeTeeth:
         """用最新价（close[-1]）⇒ 引入未来函数。"""
         src = _s().replace("close[t] * shares[code]", "close[-1] * shares[code]")
         assert "close[t] * shares[code]" not in src
+
+
+class TestJointNeutralisation:
+    """⚠️⚠️ 单独做行业、单独做市值**都不够**。
+
+    实测 Spearman(行业平均市值, 个股市值) **ρ=0.827**——
+    银行/石油天生大市值、白酒天生小市值，两者**强相关**。
+    单独减行业均值后，组内仍残留市值差异；反之亦然。
+    必须是 (行业 × 市值分位) 的**联合**分组。
+    """
+
+    def test_groups_by_both_industry_and_size(self) -> None:
+        """核心：必须同时按**行业和**市值分位分组。"""
+        src = _s()
+        assert 'groupby(["ind", "mcap_bin"]' in src
+
+    def test_makes_size_bins_inside_joint(self) -> None:
+        assert 'qcut(joint["mcap"], 3' in _s()
+
+    def test_merges_industry_onto_size_frame(self) -> None:
+        """要把行业并到带市值的表上，否则联合分组无从谈起。"""
+        assert 'df[["code", "t", "ind"]]' in _s()
+
+    def test_reports_all_three_bases_in_verdict(self) -> None:
+        src = _s()
+        assert "行业 t=" in src
+        assert "市值 t=" in src
+        assert "联合 t=" in src
+
+    def test_joint_significance_counts(self) -> None:
+        """⚠️ 不能因为联合口径不显著就盖掉行业/市值口径的信号。"""
+        src = _s()
+        assert "(joint_t == joint_t and abs(joint_t) > 2)" in src
+
+    def test_zero_branch_mentions_joint(self) -> None:
+        assert "行业+市值中性化后仍选不出超额" in _s()
+
+
+class TestJointTeeth:
+    def test_bite_separate_grouping_only(self) -> None:
+        """只按行业分组（不做联合）⇒ 残留市值差异。"""
+        src = _s().replace('groupby(["ind", "mcap_bin"]', 'groupby(["ind"]')
+        assert 'groupby(["ind", "mcap_bin"]' not in src
+
+    def test_bite_size_only_in_joint(self) -> None:
+        """联合里只按市值分组 ⇒ 残留行业差异。"""
+        src = _s().replace(
+            'groupby(["ind", "mcap_bin"],\n                                        observed=True)',
+            'groupby(["mcap_bin"], observed=True)')
+        assert '["ind", "mcap_bin"]' not in src

@@ -241,6 +241,7 @@ def main() -> int:
     # ⚠️ 小盘效应是 A股已知最强的异象之一。若选股只是"挑中了小盘股"，
     #    它赚的钱其实是**小盘效应**，不是缠论的价值——必须排除。
     size_t = size_p = float("nan")
+    joint_t = joint_p = float("nan")
     mdf = _with_market_cap(res, load_float_shares(codes, Path(args.cap_cache)))
     if not mdf.empty:
         ca = mdf[mdf["hit"]]["mcap"].to_numpy()
@@ -272,17 +273,49 @@ def main() -> int:
             size_p = (erfc(abs(size_t) / sqrt(2))
                       if size_t == size_t else float("nan"))
 
-    # ⚠️ 两个口径都**不显著**才算真的没戏；任一显著都要报告出来。
+        # ── 4) 行业 + 市值**联合**中性化 ────────────────────
+        # ⚠️⚠️ 分开做**不够**：行业与市值强相关（实测 Spearman ρ=0.827，
+        #    因为银行/石油天生大市值、白酒天生小市值）。单独减行业均值
+        #    之后，组内仍残留市值差异；单独减市值均值之后，组内仍残留
+        #    行业差异。必须**同时**按 (行业, 市值分位) 分组减均值。
+        joint = mdf.merge(df[["code", "t", "ind"]], on=["code", "t"],
+                          how="left")
+        joint["mcap_bin"] = pd.qcut(joint["mcap"], 3, labels=False,
+                                    duplicates="drop")
+        joint["rel"] = (joint["r"]
+                        - joint.groupby(["ind", "mcap_bin"],
+                                        observed=True)["r"].transform("mean"))
+        rel_j = joint["rel"].to_numpy()
+        hit_j = joint["hit"].to_numpy()
+        _compare(rel_j, hit_j,
+                 "行业+市值**联合**中性化后（减去同(行业×市值分位)均值）")
+        a3, b3 = rel_j[hit_j], rel_j[~hit_j]
+        if len(a3) > 1 and len(b3) > 1:
+            d4 = float(a3.mean() - b3.mean())
+            se4 = float(np.sqrt(a3.var(ddof=1) / len(a3)
+                                + b3.var(ddof=1) / len(b3)))
+            joint_t = d4 / se4 if se4 > 0 else float("nan")
+            joint_p = (erfc(abs(joint_t) / sqrt(2))
+                       if joint_t == joint_t else float("nan"))
+
+            # 量化"分开做到底漏了多少"——这是联合口径的价值所在
+            print(f"  ⇒ 联合口径比行业单独口径的差异变化: "
+                  f"{(d4 - d) * 100:+.2f}%")
+
+    # ⚠️ 所有口径都**不显著**才算真的没戏；任一显著都要报告出来。
     if t != t:
         verdict = "⚠️ 样本不足，无法判定"
-    elif abs(t) > 2 or (size_t == size_t and abs(size_t) > 2):
+    elif (abs(t) > 2 or (size_t == size_t and abs(size_t) > 2)
+          or (joint_t == joint_t and abs(joint_t) > 2)):
         verdict = (f"{'✅ 显著为正' if d > 0 else '❌ 显著为负'}"
-                   f"（行业中性 t={t:+.2f}, p={p:.4f}；"
-                   f"市值中性 t={size_t:+.2f}, p={size_p:.4f}）")
+                   f"（行业 t={t:+.2f}, p={p:.4f}；"
+                   f"市值 t={size_t:+.2f}, p={size_p:.4f}；"
+                   f"联合 t={joint_t:+.2f}, p={joint_p:.4f}）")
     else:
         verdict = (f"❌ **与零无显著差异**（行业 t={t:+.2f}, p={p:.4f}；"
-                   f"市值 t={size_t:+.2f}, p={size_p:.4f}）"
-                   f" ⇒ 行业与市值中性化后仍选不出超额")
+                   f"市值 t={size_t:+.2f}, p={size_p:.4f}；"
+                   f"联合 t={joint_t:+.2f}, p={joint_p:.4f}）"
+                   f" ⇒ 行业+市值中性化后仍选不出超额")
     print(f"\n== 判定: {verdict} ==")
     print(f"   （行业集中度: {concentrated}）")
     print("⚠️ 口径提醒：这是**横截面选股**检验；即便为正也不代表"
