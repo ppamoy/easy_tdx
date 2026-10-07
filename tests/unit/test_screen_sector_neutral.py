@@ -419,16 +419,46 @@ class TestMultiplicity:
 
 
 class TestMultiplicityTeeth:
+    @pytest.fixture
+    def broken_file(self):
+        """真的把脚本文件改坏，跑完再还原。
+
+        ⚠️⚠️ 必须改**磁盘上的真文件**。只写 `src=_s().replace(...)`
+           只在**内存**改字符串，无论文件好坏断言都恒真——
+           这类"假牙齿"我在本项目已经栽过至少 3 次。
+        """
+        original = SCRIPT.read_text(encoding="utf-8")
+
+        def _break(old: str, new: str) -> None:
+            assert old in original, f"待改的片段不存在: {old!r}"
+            SCRIPT.write_text(original.replace(old, new), encoding="utf-8")
+
+        try:
+            yield _break
+        finally:
+            SCRIPT.write_text(original, encoding="utf-8")
+
     def test_bite_removing_holm_and_bh(self) -> None:
         """只剩 Bonferroni（最保守）⇒ 漏掉另外两种口径。"""
         src = _s().replace("Holm-Bonferroni", "x").replace(
             "Benjamini-Hochberg", "y")
         assert "Holm-Bonferroni" not in src
 
-    def test_bite_dropping_a_registered_basis(self) -> None:
-        """⚠️ 漏登记一个口径 ⇒ N 偏小 ⇒ Bonferroni 门槛被放松。"""
-        src = _s().replace('("trend=down",         +0.88, +0.93, 0.3506),', '')
-        assert "trend=down" not in src
+    def test_bite_dropping_a_registered_basis(self, broken_file) -> None:
+        """漏登记一个口径 ⇒ N 偏小 ⇒ Bonferroni 门槛被放松。
+
+        ⚠️⚠️⚠️ 这条牙齿改过两版，**两版都没有牙齿**：
+          v1 `assert "trend=down" not in src` ⇒ 恒**假**，因为
+             LEGACY_60_BASES 里也有一行 trend=down（60 只口径）；
+          v2 限定到主表区间再 replace ⇒ 恒**真**，因为只在内存里改。
+        ⇒ "打偏"和"只改副本"两类错误我都犯过，
+           现在统一用 broken_file fixture **真改磁盘**。
+        """
+        broken_file('("trend=down",         +0.56, +0.84, 0.3999),', '')
+        src = _s()
+        main = src[src.index("MEASURED_BASES: list"):
+                   src.index("LEGACY_60_BASES")]
+        assert "trend=down" not in main
 
     def test_bite_removing_uniformity_test(self) -> None:
         # ⚠️⚠️ 这里踩了**两次**坑：
@@ -480,3 +510,41 @@ class TestSignalTypeScreening:
         src = _s()
         assert "择时层" in src
         assert "买哪只" in src
+
+
+class TestSameSampleCorrection:
+    """⚠️⚠️ 多重比较的所有口径**必须来自同一个样本**。
+
+    五之三十六的**方法论瑕疵**：6 个结构口径用 60 只，
+    4 个 signal_type 用 120 只，混在一起做校正**不严格**——
+    样本量不同 ⇒ 方差不同 ⇒ p 值分布不同，
+    却用同一个 Bonferroni/Holm/BH 门槛去比。
+    已补测：全部 10 个口径统一到 **120 只**。
+    """
+
+    def test_all_bases_are_120_stocks(self) -> None:
+        """⚠️ 主表 MEASURED_BASES 必须**全部**同口径。"""
+        src = _s()
+        block = src[src.index("MEASURED_BASES: list"):]
+        block = block[:block.index("\n]\n")]
+        assert "120" in block, "MEASURED_BASES 必须标注 120 只口径"
+
+    def test_legacy_results_kept_out_of_correction(self) -> None:
+        """⚠️ 60 只的旧结果**保留对照**但**不参与**校正——
+        直接删掉会让后来者看不出结论的**稳定性**（10 口径 vs 6 口径）。"""
+        src = _s()
+        assert "LEGACY_60_BASES" in src
+        assert "不参与" in src or "不用于" in src
+
+    def test_main_table_excludes_legacy_values(self) -> None:
+        """⚠️ 主表里**不能**混入 60 只口径的旧数值。
+        (-0.41/p=0.6132 是 60 只基线；120 只基线是 +0.12/p=0.8278)"""
+        src = _s()
+        main = src[src.index("MEASURED_BASES: list"):
+                   src.index("LEGACY_60_BASES")]
+        assert "0.6132" not in main, "主表混入了 60 只口径的旧基线"
+
+    def test_harmless_but_records_sample_size(self) -> None:
+        """两套口径都在脚本里留档，换样本时可直接对比。"""
+        src = _s()
+        assert "0.8278" in src and "0.6132" in src
