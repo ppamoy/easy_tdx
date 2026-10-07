@@ -548,3 +548,65 @@ class TestSameSampleCorrection:
         """两套口径都在脚本里留档，换样本时可直接对比。"""
         src = _s()
         assert "0.8278" in src and "0.6132" in src
+
+
+class TestSampleIdentity:
+    """⚠️⚠️ 口径"同一样本"不只是**只数**相同，还得是**同一批标的**。
+
+    五之三十七我把 10 个口径统一到 120 只，但 `--limit 120` 每次都
+    取 `sorted(glob)[:120]`。若排序不稳定、或数据文件增减，
+    **每次跑到的可能不是同一批**——那只数相同，样本却不同，
+    多重比较照样不严格。
+
+    实测（/tmp 下 10 份缓存）：并集 120 / 交集 120 ⇒ 确实同一批 ✅
+    """
+    _CACHE_DIRS = (("/tmp", "u120_*.json"), ("/tmp", "sig_*.json"))
+
+    def test_limit_selects_deterministically(self) -> None:
+        """⚠️ 必须**排序**后截断，否则 glob 顺序随文件系统变化。"""
+        src = _s()
+        assert "sorted(" in src
+
+    def test_glob_with_absolute_pattern_is_silent_empty(self) -> None:
+        """⚠️⚠️ `Path('/tmp/x_*.json').glob('*')` 返回**空**、**不报错**。
+
+        这是**静默**失败：文件明明在，glob 却匹配不到，于是下面那条
+        验证以"无缓存可验"**skip** 掉——看起来通过，实际**根本没验**。
+        （本轮实测确认：10 份缓存都在，却一度一条都没匹配上）
+        ⇒ 正确写法是 (dir, pattern) 分离：`Path(d).glob(pat)`。
+        """
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "x_1.json").write_text("[]", encoding="utf-8")
+            assert list(Path(f"{d}/x_*.json").glob("*")) == [], \
+                "前提变了：若绝对 pattern 现在能用，这条需重写"
+            assert len(list(Path(d).glob("x_*.json"))) == 1
+
+    def test_verified_caches_cover_identical_universe(self) -> None:
+        """⚠️ 行为级：真的去读缓存，验证并集==交集。
+        ⚠️ 若 glob 匹配不到，**必须 fail 而不是 skip**——
+           否则"没验"会伪装成"通过"（本轮已栽过这个坑）。
+        """
+        import json
+
+        sets = []
+        for d, pat in self._CACHE_DIRS:
+            for f in sorted(Path(d).glob(pat)):
+                try:
+                    data = json.loads(f.read_text())
+                except Exception:
+                    continue
+                if (data and isinstance(data, list)
+                        and isinstance(data[0], dict) and "code" in data[0]):
+                    sets.append({r["code"] for r in data})
+        if not sets:
+            pytest.fail(
+                "❌ 匹配不到任何审计缓存 ⇒ 这条验证**根本没跑**，"
+                "不能算通过。先跑 audit_chanlun_screen_usefulness.py。")
+        union = set.union(*sets)
+        inter = set.intersection(*sets)
+        assert union == inter, (
+            f"口径样本不一致：并集 {len(union)} 只 vs 交集 {len(inter)} 只 "
+            f"⇒ 多重比较前提不成立")
+        assert len(inter) == 120, f"样本量应为 120，实为 {len(inter)}"
