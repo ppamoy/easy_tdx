@@ -38,6 +38,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+ALPHA = 0.05   # 显著性水平；判定**只**依据 p 与它比较
 H = 20
 MIN_BARS = 120
 # ⚠️ 每个再平衡点都要重跑完整缠论（PIT 要求），成本 = 时点数 × 单次分析。
@@ -56,7 +57,8 @@ def _fwd(c: np.ndarray, i: int) -> float | None:
 
 def one_symbol(path_str: str, sig: str = "any_buy",
                trend: str = "any", zs_pos: str = "any",
-               has_bc: str = "any") -> dict | None:
+               has_bc: str = "any", min_zs: int = 0,
+               min_quality: int = 0) -> dict | None:
     """对一只股票，在每个再平衡时点判定"是否被缠论选股选中"。"""
     from easy_tdx.web.routers.screening import _chanlun_screen
     from easy_tdx.chanlun import ChanlunAnalyser
@@ -105,7 +107,11 @@ def one_symbol(path_str: str, sig: str = "any_buy",
                     {"signal_type": sig, "trend": trend,
                      "zs_position": zs_pos,
                      "has_beichi": (None if has_bc == "any"
-                                    else has_bc == "true")},
+                                    else has_bc == "true"),
+                     # ⚠️ 这两个**门槛**端点一直支持，但审计脚本此前
+                     #    **压根没测过**。缺口：本轮补上。
+                     "min_zs_count": int(min_zs),
+                     "min_quality": int(min_quality)},
                     close,
                 )
             except Exception:  # noqa: BLE001
@@ -186,6 +192,14 @@ def main() -> int:
                     choices=("any", "above", "below", "inside"))
     ap.add_argument("--has-beichi", default="any",
                     choices=("any", "true", "false"))
+    # ⚠️⚠️ 这两个门槛端点**一直支持**（min_zs_count / min_quality），
+    #    但审计脚本此前**压根没有对应的开关** ⇒ 从来没被测过。
+    #    min_quality 尤其关键：质量分在修好之前 95% 都是 100（饱和），
+    #    那时测它毫无意义；修好之后（饱和降到 5%）才**值得**测。
+    ap.add_argument("--min-zs-count", type=int, default=0,
+                    help="要求至少 N 个中枢")
+    ap.add_argument("--min-quality", type=int, default=0,
+                    help="要求质量分 >= N（0=不限）")
     ap.add_argument("--benchmark", default="index",
                     choices=("index", "cross_section"),
                     help="市场基准：index=真实指数(默认，更严谨)；"
@@ -233,8 +247,8 @@ def main() -> int:
             #   正确做法：用 starmap 显式展开，或把参数收进一个 dict。
             # ⚠️ starmap 在**Pool** 上，不在 Executor 上。
             #    ProcessPoolExecutor.map 无论传 list 还是 tuple 都**不解包**。
-            args = [(a.signal_type, a.trend, a.zs_position, a.has_beichi)
-                    for _ in todo]
+            args = [(a.signal_type, a.trend, a.zs_position, a.has_beichi,
+                     a.min_zs_count, a.min_quality) for _ in todo]
             tasks = [(path, *crit) for path, crit in zip(todo, args)]
             for r in _run_pool(one_symbol, tasks, a.workers):
                 if not r:
@@ -353,13 +367,18 @@ def main() -> int:
         print("  ⇒ 判定以**市场控制后**为准（未控制会把大盘涨幅算到信号头上）")
     if use_t != use_t:
         verdict = "⚠️ 样本不足，无法判定"
-    elif use_t < -2:
-        verdict = f"❌ 显著为负（t={use_t:+.2f}, p={use_p:.4f}）"
-    elif use_t > 2:
-        verdict = f"✅ 显著为正（t={use_t:+.2f}, p={use_p:.4f}）"
+    # ⚠️⚠️ 阈值必须是 **α=0.05 对应的 t 临界值 1.96**，不是拍脑袋的 2.0。
+    #    原先用 `use_t > 2` ⇒ 出现**自相矛盾**的输出：
+    #      zs_position=inside  t=+1.98  p=0.0477  ⇒ 判定"与零无显著差异"
+    #    但 p=0.0477 < α=0.05 **已经显著**，同一行里 p 和判定**互相打脸**。
+    #    ⇒ 判定的唯一依据应是 **p 与 α 比较**，t 只用于展示；
+    #       绝不能出现"p<α 却说不显著"。
+    elif use_p < ALPHA:
+        verdict = (f"✅ 显著为{'正' if use_t > 0 else '负'}"
+                   f"（t={use_t:+.2f}, p={use_p:.4f} < α={ALPHA}）")
     else:
-        verdict = (f"❌ **与零无显著差异**（t={use_t:+.2f}, p={use_p:.4f}）"
-                   f" ⇒ 选不出超额，等同不可用")
+        verdict = (f"❌ **与零无显著差异**（t={use_t:+.2f}, p={use_p:.4f} "
+                   f"≥ α={ALPHA}）⇒ 选不出超额，等同不可用")
     print(f"\n== 判定: {verdict} ==")
     print("⚠️ 口径提醒：这是**横截面选股**检验，与'择时'(五之五)是两回事；"
           "\n   即便为正也不代表能跑赢买入持有（五之十八未证明）。")

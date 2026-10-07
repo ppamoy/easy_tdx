@@ -46,6 +46,10 @@ BASES: list[tuple[str, str]] = [
     ("signal_type=2buy",  "/tmp/sig_2buy_2buy_any_any_any.json"),
     ("signal_type=3buy",  "/tmp/sig_3buy_3buy_any_any_any.json"),
     ("signal_type=1sell", "/tmp/sig_1sell_1sell_any_any_any.json"),
+    # ⚠️ 端点一直支持、审计脚本此前**没有开关**的 3 个口径
+    ("zs_position=inside", "/tmp/mq_inside_any_buy_any_inside_false.json"),
+    ("min_quality>=80",    "/tmp/mq_q80_any_buy_any_any_any.json"),
+    ("min_zs_count>=5",    "/tmp/mq_zs5_any_buy_any_any_any.json"),
 ]
 
 SCRIPT = ROOT / "scripts" / "audit_screen_sector_neutral.py"

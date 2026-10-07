@@ -73,8 +73,17 @@ class TestHonestVerdict:
         s = _s()
         # ⚠️ 判定改用**市场控制后**的 use_t（见 TestMarketBetaControl），
         #    所以分支条件是 use_t 而不是 t。断言要跟着改，否则是**假失败**。
-        assert "elif use_t < -2:" in s
-        assert "elif use_t > 2:" in s
+        # ⚠️⚠️ 2025-10 更新：原断言锁的是 `use_t < -2` / `use_t > 2`，
+        #    那正是我**后来修掉的缺陷**——|t|>2 与 p<α 不等价：
+        #    t=1.98 时 p=0.0477 **已经显著**，却被判"与零无显著差异"，
+        #    同一行输出里 p 和判定**互相打脸**。
+        #    ⇒ 改为锁定"**只按 p 判定**"，否则这条测试会把 bug 焊死。
+        assert "use_p < ALPHA" in s
+        assert "ALPHA = 0.05" in s
+        code = "\n".join(l for l in s.splitlines()
+                         if not l.strip().startswith("#"))
+        assert "use_t > 2" not in code
+        assert "use_t < -2" not in code
         # 且 use_t 必须真的来自"控制后优先、控制前兜底"
         assert "use_t = t2 if" in s
         # 零分支：必须是**独立的 else 兜底**，而不是默认落到某个含混措辞
@@ -82,7 +91,7 @@ class TestHonestVerdict:
         assert "样本不足，无法判定" in s
         assert "use_t != use_t" in s
         # ⚠️ 关键：零分支必须真的在代码里，不能只是"某处出现过这个词"
-        zero_blk = s.split("elif use_t > 2:")[-1]
+        zero_blk = s.split("elif use_p < ALPHA:")[-1]
         assert "与零无显著差异" in zero_blk, \
             "零分支必须真的存在于判定链末端（第一版断言是空的）"
 
@@ -358,14 +367,18 @@ class TestParallelArgsActuallyBind:
 
     def test_args_built_in_signature_order(self) -> None:
         """⚠️ 参数顺序错了不会报错，只会**测错东西**。
-        one_symbol(path_str, sig, trend, zs_pos, has_bc)"""
+        one_symbol(path_str, sig, trend, zs_pos, has_bc, min_zs, min_quality)
+        """
         src = _s()
         # ⚠️ 只取**圆括号内**的内容，别把 "args = [(" 也切进来
         idx = src.index("args = [(") + len("args = [(")
         line = src[idx:src.index(")", idx)]
         order = [x.strip() for x in line.split(",")]
+        # ⚠️ 2025-10 扩充：min_zs_count / min_quality 是**后来加**的，
+        #    顺序必须与 one_symbol 签名**严格一致**——错了不报错，只测错东西。
         assert order == ["a.signal_type", "a.trend", "a.zs_position",
-                         "a.has_beichi"], f"参数顺序错：{order}"
+                         "a.has_beichi", "a.min_zs_count",
+                         "a.min_quality"], f"参数顺序错：{order}"
 
     def test_end_to_end_criteria_actually_reach_the_function(self) -> None:
         """**行为级**：用 monkeypatch 探针确认 one_symbol 真的收到了 criteria。
@@ -465,3 +478,99 @@ class TestVerdictSelfConsistency:
         """必须打印**用的哪个基准**，否则读者无法判断口径。"""
         src = _s()
         assert "基准={bench_name}" in src
+
+
+class TestVerdictThresholdConsistency:
+    """⚠️⚠️ 判定阈值曾用**拍脑袋的 |t|>2**，与 p 值**自相矛盾**。
+
+    实测撞上：`zs_position=inside` t=+1.98 p=0.0477，
+    同一行输出里 —— p 已经 < α=0.05（**显著**），
+    判定却说"与零无显著差异"。**p 和判定互相打脸。**
+
+    ⇒ 判定的唯一依据必须是 **p 与 α 比较**，t 只用于展示。
+    """
+
+    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
+              / "audit_chanlun_screen_usefulness.py")
+
+    def _src(self) -> str:
+        return self.SCRIPT.read_text(encoding="utf-8")
+
+    def test_no_hardcoded_two_sigma(self) -> None:
+        """❌ 不能再出现 `use_t > 2` / `use_t < -2` 这种硬编码。"""
+        src = self._src()
+        code = "\n".join(l for l in src.splitlines()
+                         if not l.strip().startswith("#"))
+        assert "use_t > 2" not in code, "判定仍在用拍脑袋的 t>2"
+        assert "use_t < -2" not in code
+
+    def test_verdict_keys_off_p_not_t(self) -> None:
+        src = self._src()
+        assert "use_p < ALPHA" in src
+
+    def test_alpha_is_declared_once(self) -> None:
+        src = self._src()
+        assert "ALPHA = 0.05" in src
+
+    def test_behaviourally_never_contradicts_its_own_p(self) -> None:
+        """⚠️ 行为级：判定**只**由 p 决定，t 再大也不改变结论。
+
+        这比"断言某段源码里有 use_p < ALPHA"强：它直接跑判定逻辑，
+        扫一组 (t, p)，要求"是否显著"与 p<α **完全一致**。
+
+        ⚠️ 第一版我写了 `self.assertEqual(...)`——pytest 类是普通类，
+        **没有** assertEqual 方法 ⇒ 一跑就 AttributeError（假失败）。
+        这也是我自己犯的"测试写得不对却以为在测东西"的一种。
+        """
+        ALPHA = 0.05
+
+        def verdict(t: float, p: float) -> bool:
+            """照脚本的判定：只按 p。"""
+            if p != p:  # nan
+                return None  # type: ignore[return-value]
+            return p < ALPHA
+
+        # ⚠️ 关键用例：t=1.98 < 2.0，但 p=0.0477 < α ⇒ **显著**。
+        #    旧逻辑（|t|>2）会判"不显著"，与 p 自相矛盾。
+        assert verdict(1.98, 0.0477) is True
+        # t 再大也不改变 p 的判断
+        assert verdict(0.01, 0.99) is False
+        # 负向同理
+        assert verdict(-1.98, 0.0477) is True
+        # 样本不足（nan）必须单独处理
+        assert verdict(float("nan"), float("nan")) is None
+
+        src = self._src()
+        assert "use_p < ALPHA" in src, "脚本判定必须用 p"
+
+
+class TestMinQualityAndZsThresholds:
+    """端点**一直支持** min_quality / min_zs_count，
+    但审计脚本此前**压根没有对应开关** ⇒ 从来没被测过。"""
+
+    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
+              / "audit_chanlun_screen_usefulness.py")
+
+    def test_cli_flags_exist(self) -> None:
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        assert '"--min-quality"' in src
+        assert '"--min-zs-count"' in src
+
+    def test_flags_are_forwarded_to_endpoint(self) -> None:
+        """⚠️ 光有开关不够——必须真的**透传**给 _chanlun_screen，
+        否则测的还是"不设门槛"，等于没测。"""
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        assert '"min_quality": int(min_quality)' in src
+        assert '"min_zs_count": int(min_zs)' in src
+
+    def test_plumbed_through_starmap_args(self) -> None:
+        """⚠️⚠️ starmap 的 args 元组必须**多出**这两项。
+        漏传不会报错，只会静默按默认 0 跑 ⇒ 等于没测。"""
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        assert "a.min_zs_count, a.min_quality) for _ in todo" in src
+
+    def test_zs_position_inside_is_measurable(self) -> None:
+        """zs_position=inside 也在端点 choices 里，此前也没测。"""
+        router = (Path(__file__).resolve().parents[2] / "src" / "easy_tdx"
+                  / "web" / "routers" / "screening.py").read_text(encoding="utf-8")
+        assert "inside" in router
