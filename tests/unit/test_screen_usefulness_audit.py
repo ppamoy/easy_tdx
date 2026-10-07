@@ -4,6 +4,7 @@
    **悄悄测了个寂寞**。这组测试锁住那些会让结论失真的点。
 """
 from pathlib import Path
+import pytest
 
 SRC = Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py"
 VIEW = Path(__file__).resolve().parents[2] / "web-ui" / "src" / "views" / "StockPickView.vue"
@@ -378,7 +379,8 @@ class TestParallelArgsActuallyBind:
         #    顺序必须与 one_symbol 签名**严格一致**——错了不报错，只测错东西。
         assert order == ["a.signal_type", "a.trend", "a.zs_position",
                          "a.has_beichi", "a.min_zs_count",
-                         "a.min_quality"], f"参数顺序错：{order}"
+                         "a.min_quality", "a.t_lo", "a.t_hi",
+                         "a.max_points"], f"参数顺序错：{order}"
 
     def test_end_to_end_criteria_actually_reach_the_function(self) -> None:
         """**行为级**：用 monkeypatch 探针确认 one_symbol 真的收到了 criteria。
@@ -567,10 +569,100 @@ class TestMinQualityAndZsThresholds:
         """⚠️⚠️ starmap 的 args 元组必须**多出**这两项。
         漏传不会报错，只会静默按默认 0 跑 ⇒ 等于没测。"""
         src = self.SCRIPT.read_text(encoding="utf-8")
-        assert "a.min_zs_count, a.min_quality) for _ in todo" in src
+        # ⚠️ 2025-10 扩充：t_lo/t_hi/max_points 也在同一个元组里。
+        #    ⚠️ 这里**故意**不用 `a.min_quality) for _ in todo` 这种带尾括号的
+        #    写法——因为元组后面还要接 t_lo/t_hi/max_points，尾括号早就变了。
+        #    只锚定**片段**，新增参数不会让测试假失败，但漏传仍会被抓。
+        assert "a.min_zs_count, a.min_quality, a.t_lo, a.t_hi," in src
 
     def test_zs_position_inside_is_measurable(self) -> None:
         """zs_position=inside 也在端点 choices 里，此前也没测。"""
         router = (Path(__file__).resolve().parents[2] / "src" / "easy_tdx"
                   / "web" / "routers" / "screening.py").read_text(encoding="utf-8")
         assert "inside" in router
+
+
+class TestTimeWindowSamplingOutOfSample:
+    """⚠️ 审计脚本此前**没有 --t-lo/--t-hi** ⇒ 分窗（样本外）复测
+    **根本做不到**。13 个口径全在同一段行情上测，而 inside 是
+    "p 最小"才被留意到的 ⇒ 本身有数据挖掘嫌疑。
+
+    ⚠️⚠️ 加这两个参数时，我用 `s.replace()` 插入的代码把
+    `points = list(range(MIN_BARS, n - H, H))` 那一行**一起吃掉了**
+    ⇒ 运行时 UnboundLocalError，而 one_symbol 外层有
+    `except Exception: return None` ⇒ **静默返回 None**，
+    脚本只打印"❌ 无有效样本"——**看起来像那段行情没数据**，
+    实际是代码崩了。本项目第 11 次"我自己的探针静默失败"。
+
+    ⇒ 这条测试锁死"时点生成那行必须存在"，且**行为级**验证裁剪生效。
+    """
+
+    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
+              / "audit_chanlun_screen_usefulness.py")
+
+    def _src(self) -> str:
+        return self.SCRIPT.read_text(encoding="utf-8")
+
+    def test_points_are_actually_generated(self) -> None:
+        """⚠️ 回归：被吃掉的那一行必须还在，且在裁剪**之前**。"""
+        src = self._src()
+        gen = "points = list(range(MIN_BARS, n - H, H))"
+        assert gen in src, "❌ 时点生成那行不见了（会 UnboundLocalError）"
+        assert src.index(gen) < src.index("if t_lo:"), \
+            "先生成时点、再按窗口裁剪；顺序反了会裁到未定义变量"
+
+    def test_cli_flags_exist(self) -> None:
+        src = self._src()
+        assert '"--t-lo"' in src
+        assert '"--t-hi"' in src
+        assert '"--max-points"' in src
+
+    def test_flags_reach_starmap(self) -> None:
+        src = self._src()
+        assert "a.t_lo, a.t_hi," in src
+        assert "a.max_points)" in src
+
+    def test_max_points_honoured(self) -> None:
+        """⚠️ 分窗时若仍被默认 MAX_POINTS=8 抽稀，样本太轻。"""
+        src = self._src()
+        assert "cap = int(max_pts) if max_pts else MAX_POINTS" in src
+
+    @pytest.mark.slow
+    def test_behaviourally_windows_are_disjoint(self) -> None:
+        """**行为级**：两个窗口的时点**必须互不重叠**。
+
+        ⚠️ 不能只断言"参数存在"——必须证明裁剪真的生效。
+        """
+        import importlib.util
+        import json
+        from pathlib import Path
+        import pandas as pd
+
+        root = Path(__file__).resolve().parents[2]
+        spec = importlib.util.spec_from_file_location(
+            "_su_tw", root / "scripts" / "audit_chanlun_screen_usefulness.py")
+        mod = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(mod)
+
+        f = next(p for p in sorted((root / "audit_data").glob("*.json"))
+                 if "sh000300" not in p.name)
+        front = mod.one_symbol(str(f), zs_pos="inside", has_bc="false",
+                               t_hi=750, max_pts=6)
+        back = mod.one_symbol(str(f), zs_pos="inside", has_bc="false",
+                              t_lo=751, max_pts=6)
+        assert front is not None, "❌ 前半段返回 None（很可能又崩了）"
+        assert back is not None, "❌ 后半段返回 None"
+        pf = front["hit_pts"] + front["miss_pts"]
+        pb = back["hit_pts"] + back["miss_pts"]
+        assert max(pf) <= 750, f"t_hi 失效：{max(pf)}"
+        assert min(pb) >= 751, f"t_lo 失效：{min(pb)}"
+
+    def test_out_of_sample_falsification_is_recorded(self) -> None:
+        """⚠️ inside 的 +1.34% 已**样本外证伪**（p=0.9607），
+        这个事实必须留在登记表里，不能只存在于我的对话中。"""
+        reg = (Path(__file__).resolve().parents[2] / "scripts"
+               / "audit_screen_sector_neutral.py").read_text(encoding="utf-8")
+        blk = reg[reg.index("MEASURED_BASES"):reg.index("LEGACY_60_BASES")]
+        assert "0.9607" in blk, "必须留档样本外 p 值"
+        assert "已证伪" in blk
