@@ -151,3 +151,90 @@ class TestTeeth:
         否则会去要 /tmp 缓存，在 CI 上必然 exit 2 ⇒ 假红。"""
         yml = CI_YML.read_text(encoding="utf-8")
         assert "verify_measured_bases.py --structural-only" in yml
+
+
+class TestInsideCriterionFailsCorrection:
+    """⚠️⚠️ `zs_position=inside` 是**唯一**单看显著（p<α）的选股口径。
+
+    五之四十只用了 120 只（入选 134 条，样本太轻）⇒ 标"证据不足"。
+    本轮用**全量 286 只**（入选 292 条）重做，必须钉死结论：
+    即使在 2.4 倍样本上，它**仍然扛不住多重比较校正**。
+    """
+
+    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
+              / "audit_screen_sector_neutral.py")
+
+    def test_uses_full_286_sample_not_the_light_one(self) -> None:
+        """⚠️ 必须用 286 只口径，不能还用 120 只的旧值。"""
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        blk = src[src.index("MEASURED_BASES"):src.index("LEGACY_60_BASES")]
+        assert '("zs_position=inside", +1.34, +2.28, 0.0223)' in blk, \
+            "inside 必须用全量 286 只口径（+1.34% t=+2.28 p=0.0223）"
+
+    def test_documents_that_it_is_not_beta(self) -> None:
+        """⚠️ 关键区分：inside **不是** beta（两个独立控制后仍显著），
+        这与 zs_position=above 的模式**相反**。
+        若后人只看到"不显著"就以为和 above 一样是 beta，会误判。"""
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        blk = src[src.index("MEASURED_BASES"):src.index("LEGACY_60_BASES")]
+        line = [l for l in blk.splitlines() if "zs_position=inside" in l]
+        assert line, "找不到 inside 的登记行"
+        # ⚠️ 必须记录**三个基准**的 p：原始 0.0041 / 减均值 0.0388 /
+        #    减真实指数 0.0065。三个都在注释里才算记全。
+        #    （第一版我用 src[idx-600:idx] 取上下文，600 字符**够不到**
+        #      0.0041 ⇒ 假失败。改为直接在整段 MEASURED_BASES 里找。）
+        for p in ("0.0041", "0.0388", "0.0065"):
+            assert p in blk, f"缺少基准 p={p} 的记录"
+
+    def test_attensuation_is_recorded(self) -> None:
+        """⚠️ 效应随'排除低入选次数'**单调衰减**：
+        全部 t=+2.28 → >=2次 t=+2.05 → >=3次 t=+0.70
+        ⇒ 显著性部分依赖"只被选中一两次"的股票。这必须留档。
+
+        ⚠️⚠️ 第一版只写 `assert "单调衰减" in src`——但**别的文件**
+        （verify_measured_bases.py）里也有这几个字 ⇒ 删掉本文件那段
+        测试照样绿 ⇒ **没有牙齿**。这是本项目第 10 次"错作用域恒真断言"。
+        ⇒ 现在必须在 **MEASURED_BASES 段内**找，且要求三档 t 都在。
+        """
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        blk = src[src.index("MEASURED_BASES"):src.index("LEGACY_60_BASES")]
+        assert "单调衰减" in blk, "MEASURED_BASES 段里必须留档衰减结论"
+        for t in ("+2.28", "+2.05", "+0.70"):
+            assert t in blk, f"衰减三档缺 {t}"
+
+
+class TestAttenuationTeeth:
+    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
+              / "audit_screen_sector_neutral.py")
+
+    @pytest.fixture
+    def broken_file(self):
+        target = (Path(__file__).resolve().parents[2] / "scripts"
+                  / "audit_screen_sector_neutral.py")
+        original = target.read_text(encoding="utf-8")
+
+        def _break(old: str, new: str) -> None:
+            assert old in original, f"待改片段不存在: {old!r}"
+            target.write_text(original.replace(old, new), encoding="utf-8")
+
+        try:
+            yield _break
+        finally:
+            target.write_text(original, encoding="utf-8")
+
+    def test_bite_reverting_inside_to_light_sample(self,
+                                                   broken_file) -> None:
+        """把 inside 改回 120 只的轻样本值 ⇒ 必须被抓。
+
+        ⚠️ 第一版我写成 `assert ... is not None`，
+        而 `_structural_check` **永远**返回 list（空 list 也非 None）
+        ⇒ 恒真、**没有牙齿**。本项目第 9 次"恒真断言"。
+        已改为断言**具体内容**。
+        """
+        broken_file('("zs_position=inside", +1.34, +2.28, 0.0223)',
+                    '("zs_position=inside", +1.44, +1.98, 0.0477)')
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        blk = src[src.index("MEASURED_BASES"):src.index("LEGACY_60_BASES")]
+        assert '("zs_position=inside", +1.34, +2.28, 0.0223)' not in blk, \
+            "⚠️ inside 被改回 120 只轻样本值了（结论会跟着错）"
+        assert '("zs_position=inside", +1.44, +1.98, 0.0477)' in blk
