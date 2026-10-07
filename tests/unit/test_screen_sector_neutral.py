@@ -443,3 +443,40 @@ class TestMultiplicityTeeth:
         src_bad = src.replace('d, pu = kstest(ps, "uniform")',
                               'd, pu = 0.0, 1.0')
         assert 'd, pu = kstest(ps, "uniform")' not in src_bad
+
+
+class TestSignalTypeScreening:
+    """⚠️⚠️ 按**信号类型**筛选——用户实际能选的 `signal_type` 维度。
+
+    ⚠️ 此前只测了默认的 `any_buy` + 结构维度（trend/zs/背驰），
+       **从没测过**按 1buy/2buy/3buy/1sell 筛选。
+       而这才是用户最自然会用的功能（"帮我找出出现1买的股票"）。
+
+    ⚠️ 这个结果**不与择时结论矛盾**，两层口径不同：
+       - 择时层：持有该信号期间，收益 vs **同窗极值基准** → 1buy 6/6 窗正
+       - 选股层：某时点**最新信号**是该类型，持有 20 日 vs **同市场其他股** → 无差异
+       前者是"信号发生时该不该买"，后者是"该买的时候**买哪只**"。
+    """
+
+    def test_all_signal_types_registered(self) -> None:
+        """⚠️ 每加一个可选 signal_type 都要登记，否则 N 被低估、
+        Bonferroni 门槛被放松 ⇒ 更容易出假阳性。"""
+        src = _s()
+        for sig in ("1buy", "2buy", "3buy", "1sell"):
+            assert f"signal_type={sig}" in src, f"漏登记 {sig}"
+
+    def test_endpoint_really_supports_these(self) -> None:
+        """⚠️ 必须核对**端点**真的支持这些取值——
+        否则我测的是一个端点上根本不存在的筛选条件。"""
+        router = (ROOT / "src" / "easy_tdx" / "web" / "routers"
+                  / "screening.py").read_text(encoding="utf-8")
+        assert 'criteria.get("signal_type"' in router
+        for sig in ("1buy", "2buy", "3buy", "1sell"):
+            assert sig in router
+
+    def test_documents_two_layers_are_not_contradictory(self) -> None:
+        """⚠️ 必须写明选股层/择时层**口径不同**、不矛盾。
+        否则读者看到"1buy 择时 6/6 正"又"1buy 筛选无效"会以为矛盾。"""
+        src = _s()
+        assert "择时层" in src
+        assert "买哪只" in src
