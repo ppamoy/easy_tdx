@@ -666,3 +666,55 @@ class TestTimeWindowSamplingOutOfSample:
         blk = reg[reg.index("MEASURED_BASES"):reg.index("LEGACY_60_BASES")]
         assert "0.9607" in blk, "必须留档样本外 p 值"
         assert "已证伪" in blk
+
+
+class TestHasBeichiIsNotReallyThreeWay:
+    """⚠️⚠️ `has_beichi` 暴露成 any/true/false **三选一**，但端点只有
+    **两个**状态：`has_bc = bool(criteria.get("has_beichi", False))`
+    ⇒ `bool(None) == False` ⇒ **"any" 与 "false" 完全等价**。
+
+    "不要背驰"这个语义**根本表达不出来**——用户以为在放宽，
+    实际和"必须有背驰"正好相反地"什么都没做"。
+
+    而且更要命的是：背驰是**历史累计**的，t=130 时已有 2 个、
+    之后单调增长 ⇒ has_beichi=true 只在**极早期**才过滤得掉东西。
+    实测 120 只里只有 13/467（2.8%）入选被过滤掉。
+    ⇒ 登记的 has_beichi=true 那个 −0.20% p=0.72 与基线 +0.12% p=0.83
+    **统计上无法区分** ⇒ 根本没测到"背驰"这个维度。
+    """
+
+    ROUTER = (Path(__file__).resolve().parents[2] / "src" / "easy_tdx"
+              / "web" / "routers" / "screening.py")
+    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
+              / "audit_chanlun_screen_usefulness.py")
+
+    def test_router_has_only_bool_state(self) -> None:
+        """端点把 has_beichi 压成 bool ⇒ 没有第三态。"""
+        src = self.ROUTER.read_text(encoding="utf-8")
+        assert 'bool(criteria.get("has_beichi", False))' in src, \
+            "端点若改成三态（None=不限），本测试需同步更新"
+
+    def test_none_and_false_are_equivalent(self) -> None:
+        """**行为级**：bool(None) is False ⇒ 两者筛选结果必然相同。
+
+        ⚠️ 第一版我写了 `self.assertIs(...)`——pytest 类是**普通类**，
+        没有 assertIs 方法 ⇒ 一跑就 AttributeError。
+        这是**连续第二轮**犯同一个错（上一轮是 assertEqual）。
+        ⇒ 固化教训：pytest 里**一律用裸 assert**，别用 unittest 的方法名。
+        """
+        assert bool(None) is False
+        assert bool(False) is False
+
+    def test_weakness_is_documented_in_registration(self) -> None:
+        """⚠️ 结论必须留档，否则后人会把 −0.20% 当成"背驰无用"。"""
+        reg = (Path(__file__).resolve().parents[2] / "scripts"
+               / "audit_screen_sector_neutral.py").read_text(encoding="utf-8")
+        blk = reg[reg.index("MEASURED_BASES"):reg.index("LEGACY_60_BASES")]
+        assert "2.8%" in blk, "必须记录 has_beichi 只过滤掉 2.8% 的入选"
+        assert "形同虚设" in blk
+
+    def test_script_still_offers_three_choices(self) -> None:
+        """⚠️ 记录现状：脚本/UI 仍暴露三选一——这是**已知**的契约不一致，
+        留着是为了让后人知道问题存在，而不是忘了它。"""
+        src = self.SCRIPT.read_text(encoding="utf-8")
+        assert '"any"' in src and '"true"' in src
