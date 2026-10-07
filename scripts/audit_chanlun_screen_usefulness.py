@@ -58,7 +58,8 @@ def _fwd(c: np.ndarray, i: int) -> float | None:
 def one_symbol(path_str: str, sig: str = "any_buy",
                trend: str = "any", zs_pos: str = "any",
                has_bc: str = "any", min_zs: int = 0,
-               min_quality: int = 0) -> dict | None:
+               min_quality: int = 0, t_lo: int = 0,
+               t_hi: int = 0, max_pts: int = 0) -> dict | None:
     """对一只股票，在每个再平衡时点判定"是否被缠论选股选中"。"""
     from easy_tdx.web.routers.screening import _chanlun_screen
     from easy_tdx.chanlun import ChanlunAnalyser
@@ -80,9 +81,31 @@ def one_symbol(path_str: str, sig: str = "any_buy",
         # ⚠️ 每个时点都要**重跑一遍完整缠论**（PIT 要求不能用未来数据），
         #    800 根K线约 15 个时点 ⇒ 单只很贵。所以限上限并支持分批。
         points = list(range(MIN_BARS, n - H, H))
-        if len(points) > MAX_POINTS:  # 均匀抽样，保留时序分布
-            step = len(points) / MAX_POINTS
-            points = [points[int(k * step)] for k in range(MAX_POINTS)]
+        # ⚠️ 时间窗裁剪：t_lo / t_hi 用于**样本外**检验。
+        #    需求来自五之四十一——13 个口径都测在同一段行情上，
+        #    且 zs_position=inside 是"13 个里 p 最小"才被留意到的
+        #    ⇒ 这本身就有**数据挖掘**嫌疑。必须能在**另一个窗口**复测。
+        #    t=0 表示不限；t_hi=0 表示到结尾。
+        # ⚠️⚠️ 这一段我**第一版写错**：用 `s.replace()` 插入时把上面
+        #    `points = list(range(...))` 那一行**一起吃掉了** ⇒
+        #    后面引用 points 触发 UnboundLocalError，而 one_symbol 外层
+        #    有 `except Exception: return None` ⇒ **静默返回 None**，
+        #    脚本只打印"❌ 无有效样本"，完全看不出是代码崩了。
+        #    ⇒ 这就是本项目**第 11 次**"我自己的探针静默失败"。
+        #    教训：加完参数必须**先行为级验证**（真有结果出来），
+        #          再跑大批量；"无数据"永远先怀疑代码。
+        if t_lo:
+            points = [t for t in points if t >= int(t_lo)]
+        if t_hi:
+            points = [t for t in points if t <= int(t_hi)]
+        if not points:
+            return None
+        # ⚠️ max_pts=0 用默认 MAX_POINTS。分窗检验时要调大，
+        #    否则**每个窗口**都会被抽到只剩 8 个时点，样本太轻。
+        cap = int(max_pts) if max_pts else MAX_POINTS
+        if len(points) > cap:  # 均匀抽样，保留时序分布
+            step = len(points) / cap
+            points = [points[int(k * step)] for k in range(cap)]
         if not points:
             return None
 
@@ -200,6 +223,14 @@ def main() -> int:
                     help="要求至少 N 个中枢")
     ap.add_argument("--min-quality", type=int, default=0,
                     help="要求质量分 >= N（0=不限）")
+    # ⚠️ 时间窗（按 K 线序号，不是日期）：用于样本外/分段复测。
+    #    0 = 不限。
+    ap.add_argument("--t-lo", type=int, default=0,
+                    help="只取时点 >= T_LO（K线序号），0=不限")
+    ap.add_argument("--t-hi", type=int, default=0,
+                    help="只取时点 <= T_HI（K线序号），0=不限")
+    ap.add_argument("--max-points", type=int, default=0,
+                    help="每只股票最多取多少个再平衡时点，0=用默认 8")
     ap.add_argument("--benchmark", default="index",
                     choices=("index", "cross_section"),
                     help="市场基准：index=真实指数(默认，更严谨)；"
@@ -248,7 +279,9 @@ def main() -> int:
             # ⚠️ starmap 在**Pool** 上，不在 Executor 上。
             #    ProcessPoolExecutor.map 无论传 list 还是 tuple 都**不解包**。
             args = [(a.signal_type, a.trend, a.zs_position, a.has_beichi,
-                     a.min_zs_count, a.min_quality) for _ in todo]
+                     a.min_zs_count, a.min_quality, a.t_lo, a.t_hi,
+                     a.max_points)
+                    for _ in todo]
             tasks = [(path, *crit) for path, crit in zip(todo, args)]
             for r in _run_pool(one_symbol, tasks, a.workers):
                 if not r:
