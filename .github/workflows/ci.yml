@@ -88,6 +88,13 @@ jobs:
       # 全量 286 只下 1buy 6/6 正、3sell 0/6 正；两档均已本地实测 exit 0。
       - name: 滚动窗样本外验证（门禁：1buy 各档均为正、3sell 不见正窗）
         run: python scripts/audit_rolling_oos.py
+      # MEASURED_BASES 里 10 个"选股口径"是**手抄**进去的数字。
+      # 手抄会漂：基准口径改了 / 样本换了 / 缓存重跑了，登记值不会自动更新，
+      # 于是报告里印的和实际算的对不上，而**没人会发现**。
+      # 这里只跑**结构自检**（p∈(0,1]、t 与 p 自洽、口径数一致）——
+      # 数值复现需要 10 份审计缓存（重跑约 2.5 小时），放维护时本地跑。
+      - name: 选股口径登记值结构自检（t/p 自洽、口径数一致）
+        run: python scripts/verify_measured_bases.py --structural-only
 
   mypy:
     runs-on: ubuntu-latest
