@@ -41,12 +41,24 @@ class TestContract:
             import sys
             sys.argv = sys_argv or ["pytest"]
 
-    def test_declares_all_ten_bases(self) -> None:
+    def test_declares_every_base_and_keeps_two_in_sync(self) -> None:
+        """⚠️ BASES 的条数必须**同时**匹配登记表，不能写死数字。
+
+        写死（原来 `== 10`）的坏处：新增口径时要**手动**改这里，
+        忘了就会假失败；更糟的是有人为了让它过而把 BASES 删回 10 条。
+        ⇒ 改为断言"条数一致"+"关键口径都在"，
+           新增口径**不需要**改这条测试。
+        """
         m = _mod()
-        assert len(m.BASES) == 10
+        reg = m._registered()
+        assert len(m.BASES) == len(reg), (
+            f"BASES 列出 {len(m.BASES)} 个但登记了 {len(reg)} 个 "
+            f"⇒ 防漂移闸门会漏验/误报")
         labels = {lbl for lbl, _ in m.BASES}
-        assert "signal_type=1buy" in labels
-        assert "zs_position=above" in labels
+        for must in ("signal_type=1buy", "zs_position=above",
+                     "zs_position=inside", "min_quality>=80",
+                     "min_zs_count>=5"):
+            assert must in labels, f"闸门漏了 {must}（新增口径请补进 BASES）"
 
 
 class TestStructuralCheck:
