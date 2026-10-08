@@ -3279,3 +3279,64 @@ $ git push ppamoy main:refs/heads/chanlun-audit-v733
 ⇒ 阻塞是 **token 缺 `workflow` scope**，而 `.github/workflows/ci.yml`
 **远端本来就有**、我这边改过（10 个提交动过它）。
 ⇒ 要推送需给 token 加 `workflow` scope（需用户操作，我无法自助）。
+
+---
+
+## 五之五十：推送阻塞**精确定位**（两侧都实测），且顺带发现 CI 门禁本来全是红的
+
+### 一、推送阻塞 = token 缺 `workflow` scope（**两侧实测**）
+```
+$ curl -I .../repos/ppamoy/easy_tdx | grep -i oauth-scopes
+x-oauth-scopes: repo          ← 只有 repo，没有 workflow
+
+$ git push ppamoy main:refs/heads/chanlun-audit-v733
+! [remote rejected] refusing to allow a PAT to create or update workflow
+  `.github/workflows/ci.yml` without `workflow` scope
+```
+
+⚠️ **不满足于"报错信息这么说"**，做了对照实验（两侧都跑通）：
+
+| 探针 | 内容 | 结果 |
+|---|---|---|
+| A：含 `.github/workflows/` 的改动 | 全部历史 | ❌ remote rejected |
+| B：把 `ci.yml` 恢复成远端版本 | 其余 893 个文件全带上 | ✅ **推送成功**（远端分支已建、已验证、已删除） |
+
+⇒ **证明阻塞仅此一处**，其余 893 个文件没有任何推送障碍。
+⚠️ 注意第一版探针的教训：我以为"排除 `.github/workflows/` 目录"就够了，
+   实测**仍被拒**——因为 `git checkout main -- ':!.github/workflows/'`
+   只影响**工作树内容**，历史里的 workflow 改动照样带过去。
+   ⇒ 必须把 `ci.yml` **内容也回退**才算干净对照。
+
+⇒ **需要用户做的唯一一件事**：给 token 加 `workflow` scope
+（GitHub → Settings → Developer settings → PAT → 编辑 → 勾 workflow）。
+⚠️ 这个权限我无法自助获取，也不能绕过。
+
+### 二、⚠️⚠️ 顺带发现：**CI 的三道门禁本来全是红的**
+既然推上去也过不了 CI，不如先本地跑一遍 CI 的命令：
+```
+ruff check src/ tests/ scripts/       48 errors   ❌
+ruff format --check src/ tests/       57 文件未格式化 ❌
+mypy src/                             1 error    ❌
+```
+⇒ **V731~V733 这些审计提交从没被 CI 验证过**（远端那 32 个提交是别人的，
+   不是我这条线推的）⇒ 就算给足权限推上去，CI 也会立刻红。
+
+⇒ 三道门禁已全部修绿（见 commit `1529c26`）：
+```
+ruff check src/ tests/ scripts/       All checks passed! ✅
+ruff format --check src/ tests/       589 files already formatted ✅
+mypy src/                             Success: 266 source files ✅
+```
+
+⚠️ 三处**不是**纯排版改动，已逐个核实：
+1. `mmd.py` 三个未用变量 → 先用 **AST 统计 Load 次数**确认真未被使用（=0），
+   再改 `_` 前缀（保留"默认档参数表"的对照信息，不删）
+2. `signal_accuracy.py` mypy `no-any-return` → 显式 `float()`，
+   **不用 `type: ignore`**（那会把真类型错误一起藏起来）
+3. E741 `l→ln` 跨行推导式必须**头尾同改**
+   ⚠️ 我第一版只改单行 ⇒ 产出 6 个 `F821 Undefined name l`；
+   第二版改用 AST 取 `Name` 的 `(lineno, col_offset)` 精确定位才修对。
+
+⚠️ 期间我自己的 AST 断言抓到一处漏网（**f-string 里的 `l` 不是 `ast.Name`**），
+是它拦下了我，否则会带着 F821 提交。
+⚠️⇒ 批量改名/改写后**必须** `ast.parse` + `ruff` + 全量单测**三重**校验。
