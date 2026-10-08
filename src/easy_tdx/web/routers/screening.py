@@ -717,11 +717,22 @@ async def chanlun_scan(
     return results
 
 
+@router.post("/screening/verify")
 async def verify_screening(
     req: dict[str, Any],
     client: Any = Depends(get_client),
     mac_client: Any | None = Depends(get_mac_client_optional),
 ) -> dict[str, Any]:
+    """选股结果前瞻收益验证（选中 vs 池平均）。
+
+    请求参数：
+    - date: 选股日 (YYYY-MM-DD)
+    - symbols: 扫描池股票列表（兼容 ``SZ:000001`` / ``SZ000001`` / ``000001``）
+    - selected: 被选中的股票列表（格式同 symbols）
+    - market: 前端传来的市场 (SZ/SH)。**当前实现不读它**：裸 6 位代码统一走
+      ``_market_from_code`` 按前缀推断（与前端 ``detectMarket`` 同口径，
+      避免北交所/9 开头被误判），仅保留该键以兼容既有请求体。
+    """
     from easy_tdx.backtest.screening_verify import compute_screening_verify
 
     date_str = str(req.get("date", ""))
