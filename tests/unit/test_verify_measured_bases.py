@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import ast
 import importlib.util
 from pathlib import Path
 
@@ -246,7 +247,7 @@ class TestBasesDirIsConfigurable:
     为什么要改：/tmp 会被系统清理，一清掉这 13 条基线就无法自动复核，
     漂移闸门只会干巴巴报"缺 13 份缓存，先跑审计脚本"——
     而**那条建议在缓存已被清理后往往等于让重跑 3 小时**。
-    ⇒ 现在：EASY_TDX_BASES_DIR → audit_data/bases/ → /tmp 依次找。
+    ⇒ 现在：EASY_TDX_BASES_DIR → audit_bases/ → /tmp 依次找。
 
     ⚠️ 注意：CI 与"没数据时应报错"的契约不受影响——
        三处都找不到时仍然 exit 2（下面测两侧）。
@@ -279,6 +280,27 @@ class TestBasesDirIsConfigurable:
         body = body[:body.index("\ndef ")]
         assert "BASES_DIR" in body, "必须先找 BASES_DIR"
         assert 'Path("/tmp")' in body, "必须回退到 /tmp"
+
+    def test_bases_dir_not_gitignored(self) -> None:
+        """⚠️ 缓存目录**绝不能**落在被 .gitignore 排除的路径下——
+        否则"改路径"只是把同一个坑换个位置（文件照样不入库、照样会丢）。"""
+        gi = (Path(__file__).resolve().parents[2] / ".gitignore").read_text(
+            encoding="utf-8")
+        for line in gi.splitlines():
+            line = line.strip().rstrip("/")
+            if line and not line.startswith("#"):
+                assert line not in ("audit_bases",), (
+                    f"❌ audit_bases 被 .gitignore 的 '{line}' 匹配，缓存不会入库")
+        import ast as _a
+        tree = _a.parse(self._src())
+        for n in tree.body:
+            if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", "") == "BASES_DIR":
+                seg = _a.get_source_segment(self._src(), n) or ""
+                assert "audit_data" not in seg, (
+                    "❌ BASES_DIR 不该指向 audit_data/（被 gitignore）")
+                break
+        else:
+            pytest.fail("没找到 BASES_DIR 赋值（先怀疑测试）")
 
     def test_env_var_override(self) -> None:
         s = self._src()

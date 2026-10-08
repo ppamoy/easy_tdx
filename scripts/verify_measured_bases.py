@@ -42,9 +42,12 @@ H = 20
 #    现在：EASY_TDX_BASES_DIR 优先 → audit_data/bases/ → /tmp。
 #    ⚠️ 本轮**尚未**把缓存搬进仓库（13 个文件体积待评估），
 #    但至少路径不再是不可配置的硬编码。
+# ⚠️ 故意**不**放 audit_data/bases/：那个目录被 .gitignore 排除
+#    （audit_data/ 48M，CI 自己抓），放进去等于白放——清了就没了。
+#    13 份基线缓存实测总共约 0.1 MB，单独入库完全负担得起。
 BASES_DIR = Path(
     os.environ.get("EASY_TDX_BASES_DIR")
-    or (ROOT / "audit_data" / "bases")
+    or (ROOT / "audit_bases")
 )
 
 
@@ -212,7 +215,7 @@ def main() -> int:
         print(f"   已找过：{BASES_DIR}", file=sys.stderr)
         print(f"   已找过：/tmp", file=sys.stderr)
         print("   先跑 scripts/audit_chanlun_screen_usefulness.py 生成；"
-              "或把缓存放到 audit_data/bases/（或设 EASY_TDX_BASES_DIR）",
+              "或把缓存放到 audit_bases/（或设 EASY_TDX_BASES_DIR）",
               file=sys.stderr)
         return 2
 
