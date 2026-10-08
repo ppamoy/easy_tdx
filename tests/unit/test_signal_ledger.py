@@ -40,22 +40,22 @@ def test_forward_returns_basic() -> None:
     closes = [10.0, 11.0, 12.0, 0.0, 9.0]
     # bar 0, horizon 2: 12/10 - 1 = +20%
     raw, bench, excess = forward_returns(closes, 0, 2)
-    assert raw == pytest.approx(20.0)
+    assert raw == pytest.approx(0.20)
     assert bench is None and excess is None
     # 越界 → 全 None
     assert forward_returns(closes, 3, 5) == (None, None, None)
     # 零基价 → -100%（与面板 _safe_fwd 的退化数据处理一致，不产生 nan）
     raw2, _, _ = forward_returns(closes, 2, 1)
-    assert raw2 == pytest.approx(-100.0)
+    assert raw2 == pytest.approx(-1.0)
 
 
 def test_forward_returns_with_index_benchmark() -> None:
     closes = [10.0, 11.0, 12.0]
     index = [100.0, 102.0, 103.0]
     raw, bench, excess = forward_returns(closes, 0, 2, index)
-    assert raw == pytest.approx(20.0)
-    assert bench == pytest.approx(3.0)
-    assert excess == pytest.approx(17.0)
+    assert raw == pytest.approx(0.20)
+    assert bench == pytest.approx(0.03)
+    assert excess == pytest.approx(0.17)
 
 
 def test_signal_returns_direction_alignment() -> None:
@@ -71,9 +71,9 @@ def test_signal_returns_direction_alignment() -> None:
     assert len(recs) == 2
     buy = next(r for r in recs if r.direction == "buy")
     sell = next(r for r in recs if r.direction == "sell")
-    assert buy.ret_pct == pytest.approx(10.0)  # 涨 10% 对买入是好事
-    assert sell.ret_pct == pytest.approx(-10.0)  # 涨 10% 对卖出是坏事
-    assert buy.raw_ret_pct == pytest.approx(10.0) == sell.raw_ret_pct
+    assert buy.ret_pct == pytest.approx(0.10)  # 涨 10% 对买入是好事
+    assert sell.ret_pct == pytest.approx(-0.10)  # 涨 10% 对卖出是坏事
+    assert buy.raw_ret_pct == pytest.approx(0.10) == sell.raw_ret_pct
 
 
 def test_signal_returns_skips_insufficient() -> None:

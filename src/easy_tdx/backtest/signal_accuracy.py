@@ -79,7 +79,21 @@ def _random_split(n: int, seed: int) -> np.ndarray:
 def _horizon_stats(
     fwd: np.ndarray,
 ) -> dict[str, float]:
-    """压缩一个前瞻收益数组为统计字段。"""
+    """压缩一个前瞻收益数组为统计字段。
+
+    ⚠️ 单位契约（小数，非百分数）：入参 ``fwd`` 与返回的 avg_return /
+    median_return **均为小数** —— 0.0433 表示 +4.33%，不是 4.33。
+
+    与之对接的上游必须同为小数：
+    - ``_safe_fwd``（本文件另一处前瞻收益实现；随机基线与 signal 路径共用）
+    - ``web/signal_ledger.py::forward_returns``（V736 起统一为小数）
+    三者口径一致时 avg_return 与 baseline_avg_return 才可直接相减求超额；
+    历史 bug 里台账返回百分数，喂进来后被放大 100 倍。
+    hit_rate 是 [0,1] 区间的比率（非百分数）。
+
+    变更单位是**破坏性**的：会让
+    ``tests/unit/test_forward_return_unit_contract.py`` 失败（护栏测试）。
+    """
     if len(fwd) == 0:
         return {"count": 0, "hit_rate": 0.0, "avg_return": 0.0, "median_return": 0.0}
     return {
@@ -91,10 +105,15 @@ def _horizon_stats(
 
 
 def _safe_fwd(cur: Any, fwd: Any) -> Any:
-    """前瞻收益 fwd/cur - 1；价格为 0 时按 -100%（避免除零告警）。
+    """前瞻收益 fwd/cur - 1；价格为 0 时按 -1.0（小数口径下的 -100%）。
 
-    零价格属于退化数据（不应出现在真实行情），按 -100% 处理可保持数值稳定，
+    零价格属于退化数据（不应出现在真实行情），按 -1.0 处理可保持数值稳定，
     且不产生 nan 污染后续命中率统计。
+
+    ⚠️ 单位契约（小数，非百分数）：返回值是**小数**，0.0433 == +4.33%。
+    哨兵值是 **-1.0**（不是 -100.0），因为它会被喂进同为小数口径的
+    ``_horizon_stats`` / 与 baseline_avg_return 相减；写成 -100.0 会让
+    「单笔 -100%」在平均值里压过其余样本上百倍。
     """
     cur_arr = np.asarray(cur, dtype=float)
     fwd_arr = np.asarray(fwd, dtype=float)
