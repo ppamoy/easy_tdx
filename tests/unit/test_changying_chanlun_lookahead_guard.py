@@ -1,0 +1,103 @@
+"""长赢缠论前视守卫的行为级回归测试。
+
+使用真实日线 fixture 跑策略初始化和缠论信号生成；测试关注真实候选信号集合，
+不通过源码文本或成员存在性冒充行为验证。
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+from easy_tdx.backtest.strategies import get_registry
+from easy_tdx.backtest.strategies.changying_chanlun import Season
+
+_FIXTURE = Path(__file__).parents[1] / "fixtures" / "chanlun_000001_daily.json"
+
+
+def _fixture_df() -> pd.DataFrame:
+    rows = json.loads(_FIXTURE.read_text(encoding="utf-8"))
+    df = pd.DataFrame(rows)
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    df["amount"] = 0.0
+    return df
+
+
+def _strategy(df: pd.DataFrame, **params: object) -> Any:
+    """构建/绑定/初始化一个长赢缠论策略实例（不跑 next）。"""
+    strategy = get_registry().get("changying_chanlun").build(params)
+    strategy._bind_data(df)
+    strategy._call_init()
+    return strategy
+
+
+def _signals(df: pd.DataFrame, **params: object) -> list[tuple[int, str]]:
+    strategy = _strategy(df, **params)
+    return [(bar_idx, mmd_type) for bar_idx, mmd_type, _confidence in strategy._chanlun_signals]
+
+
+def _emitted_bars(strategy: Any, n: int) -> list[tuple[int, str]]:
+    """按 bar 顺序驱动真实信号消费路径，收集实际发出的 Signal。
+
+    不走 ``next()``（避开每根 K 线重跑缠论分析），只固定季节 + 设置 bar index，
+    然后调用真实的 ``_generate_signals()`` 消费预计算队列并用 ``_clear_signals()``
+    取出真正 push 到引擎的信号。
+    """
+    strategy._current_season = Season.SPRING
+    emitted: list[tuple[int, str]] = []
+    for bar_idx in range(n):
+        strategy._set_bar_index(bar_idx)
+        strategy._generate_signals()
+        for signal in strategy._clear_signals():
+            emitted.append((bar_idx, signal.direction))
+    return emitted
+
+
+def test_guard_off_vs_on_changes_real_signal_count_and_effective_bars() -> None:
+    """守卫必须真实删除伪影并把保留信号延后，而不只是暴露一个参数。"""
+    df = _fixture_df()
+
+    off_strategy = _strategy(df, lookahead_guard=False)
+    on_strategy = _strategy(df, lookahead_guard=True, confirm_lag=3, guard_window=400)
+
+    off = [(b, t) for b, t, _c in off_strategy._chanlun_signals]
+    on = [(b, t) for b, t, _c in on_strategy._chanlun_signals]
+
+    assert off == [
+        (38, "1sell"),
+        (62, "2sell"),
+        (125, "3buy"),
+        (146, "3buy"),
+    ]
+    assert on == [(128, "3buy"), (149, "3buy")]
+    assert len(on) < len(off)
+
+    # 真实发出的策略信号（走队列消费 + 下单路径），守卫开启使生效 bar 延后 lag=3 根
+    assert _emitted_bars(off_strategy, len(df)) == [(125, "BUY")]
+    assert _emitted_bars(on_strategy, len(df)) == [(128, "BUY")]
+
+
+def test_guard_defaults_on_and_matches_explicit_guard() -> None:
+    """默认回测必须走守卫，显式关闭才保留未经前缀复核的候选。"""
+    df = _fixture_df()
+
+    default = _signals(df)
+    explicit = _signals(df, lookahead_guard=True, confirm_lag=3, guard_window=400)
+
+    assert default == explicit == [(128, "3buy"), (149, "3buy")]
+
+
+def test_guarded_signals_reproduce_on_their_confirmation_prefix() -> None:
+    """与 chanlun._apply_lookahead_guard 同口径，防漂移。"""
+    df = _fixture_df()
+    lag = 3
+    guarded = _signals(df, lookahead_guard=True, confirm_lag=lag, guard_window=400)
+
+    for effective_bar, mmd_type in guarded:
+        anchor_bar = effective_bar - lag
+        prefix = df.iloc[: effective_bar + 1].reset_index(drop=True)
+        prefix_signals = _signals(prefix, lookahead_guard=False)
+        assert (anchor_bar, mmd_type) in prefix_signals

@@ -137,10 +137,38 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
             "take_profit_pct", float, default=0.25, min_value=0.0, max_value=0.5, label="止盈比例"
         ),
         Param("max_position", float, default=0.9, min_value=0.1, max_value=1.0, label="最大仓位"),
+        # 前视守卫（与 chanlun._apply_lookahead_guard 同口径，防漂移）
+        Param(
+            "lookahead_guard",
+            bool,
+            default=True,
+            label="前视守卫(前缀复现确认后才发信号)",
+        ),
+        Param(
+            "confirm_lag",
+            int,
+            default=3,
+            min_value=0,
+            max_value=20,
+            label="信号确认延迟(根)",
+        ),
+        Param(
+            "guard_window",
+            int,
+            default=400,
+            min_value=60,
+            max_value=5000,
+            label="守卫滚动复核窗口(根)",
+        ),
     ]
 
     def init(self) -> None:
-        """初始化策略。"""
+        """初始化策略。
+
+        预计算**全量**缠论信号队列（供前视守卫复核 + ``next`` 按生效 bar 消费）；
+        全量分析**不**写入 ``self._chanlun_result``——运行时仍按前缀逐步重算，
+        季节/状态逻辑依赖的是逐步可得的信息。
+        """
         # 缠论分析器
         self._analyser: ChanlunAnalyser | None = None
         self._chanlun_result: Any = None
@@ -167,6 +195,150 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         self._trade_count = 0
         self._win_count = 0
         self._loss_count = 0
+
+        # ── 预计算全量信号队列（3 元组: bar_idx, mmd_type_str, confidence）──
+        self._date_to_bar: dict[str, int] = {}
+        self._full_datetime_strs: list[str] = []
+        self._chanlun_signals: list[tuple[int, str, float]] = []
+        self._signal_ptr = 0
+        df = self._build_full_dataframe()
+        if df is not None:
+            for i, dt_str in enumerate(self._full_datetime_strs):
+                self._date_to_bar[dt_str] = i
+            self._chanlun_signals = self._precompute_signals(df)
+            self._apply_lookahead_guard(df)
+
+    def _build_full_dataframe(self) -> pd.DataFrame | None:
+        """用绑定数据的全量 OHLCVA 构造 DataFrame（与 chanlun.py 同口径）。
+
+        vol/amount 列可能缺失（如纯 OHLC 数据），缺省回退 0，避免初始化崩溃。
+        """
+        try:
+            n = len(self.data.open.raw)
+        except (RuntimeError, AttributeError, KeyError):
+            return None
+        if n == 0:
+            return None
+        try:
+            vol_arr = [float(v) if v else 0.0 for v in self.data.vol.raw]
+        except (KeyError, AttributeError):
+            vol_arr = [0.0] * n
+        try:
+            amount_arr = [float(a) if a else 0.0 for a in self.data.amount.raw]
+        except (KeyError, AttributeError):
+            amount_arr = [0.0] * n
+        df = pd.DataFrame(
+            {
+                "open": self.data.open.raw.tolist(),
+                "close": self.data.close.raw.tolist(),
+                "high": self.data.high.raw.tolist(),
+                "low": self.data.low.raw.tolist(),
+                "vol": vol_arr,
+                "amount": amount_arr,
+            }
+        )
+        if self._datetime_array is not None:
+            df["datetime"] = pd.to_datetime([int(d) for d in self._datetime_array], format="%Y%m%d")
+        else:
+            df["datetime"] = pd.date_range("2000-01-01", periods=n, freq="D")
+        self._full_datetime_strs = [str(v)[:10] for v in df["datetime"]]
+        return df
+
+    def _make_chanlun_analyser(self) -> ChanlunAnalyser:
+        """构造与本策略参数一致的缠论分析器（全量预计算与运行时复用，防口径漂移）。"""
+        config = ChanlunConfig(
+            bi_type=self.p["bi_type"],
+            zs_min_lines=self.p["zs_min_lines"],
+            macd_fast=self.p["macd_fast"],
+            macd_slow=self.p["macd_slow"],
+            macd_signal=self.p["macd_signal"],
+        )
+        return ChanlunAnalyser(code="TEST", frequency="DAILY", config=config)
+
+    def _bi_end_bar_idx(self, bi: Any) -> int:
+        """笔结束分型日期 → bar index。
+
+        与 ``chanlun._bi_end_bar_idx`` 同口径：走 ``mmd.bi.end.k.date`` 的日期→bar
+        映射，**不用** ``end.bar_index``——合并K线后两者会错位。
+        """
+        if bi is None or bi.end is None:
+            return -1
+        end_date_str = str(bi.end.k.date)[:10]
+        return self._date_to_bar.get(end_date_str, -1)
+
+    def _precompute_signals(self, df: pd.DataFrame) -> list[tuple[int, str, float]]:
+        """全量缠论分析 → Changying 专用信号队列 ``(bar_idx, type_str, confidence)``。"""
+        result = self._make_chanlun_analyser().process_klines(df)
+        queue: list[tuple[int, str, float]] = []
+        seen: set[tuple[int, str]] = set()
+        for mmd in sorted(result.mmds or [], key=lambda m: m.bi.index if m.bi else 0):
+            bar_idx = self._bi_end_bar_idx(mmd.bi)
+            if bar_idx < 0:
+                continue
+            key = (bar_idx, mmd.mmd_type.value)
+            if key in seen:
+                continue  # 去重保留首次置信度
+            seen.add(key)
+            queue.append((bar_idx, mmd.mmd_type.value, float(mmd.confidence)))
+        return sorted(queue, key=lambda x: x[0])
+
+    def _apply_lookahead_guard(self, df: pd.DataFrame) -> None:
+        """与 chanlun._apply_lookahead_guard 同口径，防漂移。
+
+        对每个候选 ``(b, type)``，在以 ``b+lag`` 为右端的滚动窗口（默认 400 根）
+        上重跑一次本策略（**关守卫**，避免递归），仍能得到同一 ``(b, type)`` 才保留，
+        并把生效 bar 改为 ``b + lag``；复现不出即为依赖未来数据的伪影，丢弃。
+        数据不足（前缀==全量）时丢弃信号。
+
+        差异说明：本策略信号为 3 元组 ``(b, type, conf)``；复核时只比对
+        ``(b, type)``，conf 沿用首次出现的候选值。
+        """
+        if not bool(self.p.get("lookahead_guard", True)):
+            return
+        lag = max(0, int(self.p.get("confirm_lag", 3) or 0))
+        window = max(60, int(self.p.get("guard_window", 400) or 400))
+        candidates = self._chanlun_signals
+        if not candidates:
+            return
+
+        n = len(df)
+        kept: list[tuple[int, str, float]] = []
+        seen: set[tuple[int, str]] = set()
+        cache: dict[int, set[tuple[int, str]]] = {}
+
+        from easy_tdx.backtest.strategies.registry import get_registry
+
+        entry = get_registry().get("changying_chanlun")
+
+        for bar_idx, mmd_type, conf in candidates:
+            key = (bar_idx, mmd_type)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            # 确认前缀必须严格短于全量数据，否则复核自证恒真
+            k = bar_idx + lag + 1
+            if k <= 0 or k >= n:
+                continue
+            lo = max(0, k - window)
+            if k not in cache:
+                sub = df.iloc[lo:k].reset_index(drop=True)
+                offset = lo  # sub 内 bar_idx + offset = 原 df bar_idx
+                try:
+                    sub_strat = entry.build({**dict(self.p), "lookahead_guard": False})
+                    sub_strat._bind_data(sub)
+                    sub_strat._call_init()
+                    sigs = getattr(sub_strat, "_chanlun_signals", [])
+                    cache[k] = {(b + offset, t) for b, t, _c in sigs}
+                except Exception:  # noqa: BLE001
+                    cache[k] = set()
+                    continue
+
+            if key in cache[k]:
+                # 延后到确认点：第 bar_idx+lag 根才真正可知
+                kept.append((min(bar_idx + lag, n - 1), mmd_type, conf))
+
+        self._chanlun_signals = sorted(kept, key=lambda x: x[0])
 
     def next(self) -> None:
         """每根K线调用。"""
@@ -215,16 +387,8 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         return pd.DataFrame(self._history)
 
     def _analyze_chanlun(self, df: pd.DataFrame) -> None:
-        """执行缠论分析。"""
-        config = ChanlunConfig(
-            bi_type=self.p["bi_type"],
-            zs_min_lines=self.p["zs_min_lines"],
-            macd_fast=self.p["macd_fast"],
-            macd_slow=self.p["macd_slow"],
-            macd_signal=self.p["macd_signal"],
-        )
-
-        analyser = ChanlunAnalyser(code="TEST", frequency="DAILY", config=config)
+        """执行缠论分析（运行时按前缀逐步重算，供季节/状态使用）。"""
+        analyser = self._make_chanlun_analyser()
         self._analyser = analyser
         self._chanlun_result = analyser.process_klines(df)
 
@@ -243,7 +407,7 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         v = df["datetime"].iloc[-1]
         try:
             # 先处理 datetime/Timestamp（pd.Timestamp 的 int() 是纳秒，不能按 YYYYMMDD 解析）
-            if isinstance(v, (pd.Timestamp, datetime)):
+            if isinstance(v, pd.Timestamp | datetime):
                 return pd.to_datetime(v)
             if isinstance(v, str):
                 s2 = v.strip().replace("-", "").replace(" ", "")[:8]
@@ -420,17 +584,18 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         self._trade_count += 1
 
     def _generate_signals(self) -> None:
-        """生成交易信号。"""
-        if self._chanlun_result is None:
-            return
+        """生成交易信号（消费预计算队列，按生效 bar 触发）。
 
-        mmds = self._chanlun_result.mmds
-        if not mmds:
-            return
+        队列 ``self._chanlun_signals`` 是 init 时用全量数据算出的
+        ``(bar_idx, type_str, confidence)``，已经过前视守卫复核并延后到确认 bar。
+        这里只消费**当前 bar 刚好到达**的条目：
+        - 未来条目（``bar_idx > current_idx``）→ 停住等它到期；
+        - 过期条目（``bar_idx < current_idx``）→ 跳过（迟到的信号不再补发）。
 
-        # 获取最新买卖点
-        latest_mmd = max(mmds, key=lambda m: m.bi.index if m.bi else 0) if mmds else None
-        if latest_mmd is None:
+        ``self._chanlun_result`` 仍是运行时按前缀重算的，仅用于季节/状态；
+        信号判定**不再**直接读它，以免把全量未来信息带进决策。
+        """
+        if not self._chanlun_signals:
             return
 
         current_idx = self._bar_index
@@ -438,23 +603,38 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
         # 根据当前周期调整策略
         allowed_types = self._get_allowed_mmd_types()
 
-        if latest_mmd.mmd_type in allowed_types:
+        while self._signal_ptr < len(self._chanlun_signals):
+            bar_idx, mmd_type_str, _confidence = self._chanlun_signals[self._signal_ptr]
+            if bar_idx > current_idx:
+                break  # 未来的信号，尚未生效
+            self._signal_ptr += 1
+            if bar_idx < current_idx:
+                continue  # 过期信号：不补发，避免迟到触发
+
+            try:
+                mmd_type = MMDType(mmd_type_str)
+            except ValueError:
+                continue
+
+            if mmd_type not in allowed_types:
+                continue
+
             # 一类买卖点优先
-            if latest_mmd.mmd_type == MMDType.BUY_1 and current_idx > self._last_buy_1_idx + 5:
+            if mmd_type == MMDType.BUY_1 and current_idx > self._last_buy_1_idx + 5:
                 if self._position == 0:
                     self._open_position("1买")
                     self._last_buy_1_idx = current_idx
-            elif latest_mmd.mmd_type == MMDType.SELL_1 and current_idx > self._last_sell_1_idx + 5:
+            elif mmd_type == MMDType.SELL_1 and current_idx > self._last_sell_1_idx + 5:
                 if self._position > 0:
                     self._close_position("1卖")
                     self._last_sell_1_idx = current_idx
 
             # 三类买卖点作为辅助
-            elif latest_mmd.mmd_type == MMDType.BUY_3 and current_idx > self._last_buy_1_idx + 3:
+            elif mmd_type == MMDType.BUY_3 and current_idx > self._last_buy_1_idx + 3:
                 if self._position == 0:
                     self._open_position("3买")
                     self._last_buy_1_idx = current_idx
-            elif latest_mmd.mmd_type == MMDType.SELL_3 and current_idx > self._last_sell_1_idx + 3:
+            elif mmd_type == MMDType.SELL_3 and current_idx > self._last_sell_1_idx + 3:
                 if self._position > 0:
                     self._close_position("3卖")
                     self._last_sell_1_idx = current_idx
