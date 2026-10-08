@@ -23,7 +23,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import api_base, chromium_path, import_playwright, ui_base  # noqa: E402
+from _pw import api_base, chromium_path, import_playwright, launch_pw, ui_base  # noqa: E402
 
 UI = ui_base()
 API = api_base()
@@ -39,9 +39,7 @@ def main() -> int:
     screen_requests: list[dict] = []
 
     with sync_api.sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            headless=True, executable_path=chromium_path(), args=["--no-sandbox"]
-        )
+        browser = launch_pw(pw)
         page = browser.new_page()
         console_errors: list[str] = []
         page.on(

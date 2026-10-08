@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import chromium_path, import_playwright  # noqa: E402
+from _pw import chromium_path, import_playwright, launch_pw  # noqa: E402
 
 UI = os.environ.get("EASY_TDX_UI", "http://127.0.0.1:3012")
 
@@ -79,9 +79,7 @@ _UNUSED = {
 def main() -> int:
     api = import_playwright()
     with api.sync_playwright() as pw:
-        b = pw.chromium.launch(
-            headless=True, executable_path=chromium_path(), args=["--no-sandbox"]
-        )
+        b = launch_pw(pw)
         pg = b.new_page(viewport={"width": 1600, "height": 1400})
         errors: list[str] = []
         pg.on("pageerror", lambda e: errors.append(str(e)))

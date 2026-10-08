@@ -21,7 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import chromium_path, import_playwright  # noqa: E402
+from _pw import chromium_path, import_playwright, launch_pw  # noqa: E402
 
 UI = os.environ.get("EASY_TDX_UI", "http://127.0.0.1:3012")
 OUT = "/tmp/qt_badge_method.png"
@@ -56,7 +56,7 @@ ANALYZE = {
 def main() -> int:
     pw = import_playwright()
     with pw.sync_playwright() as p:
-        b = p.chromium.launch(executable_path=chromium_path(), args=["--no-sandbox"])
+        b = launch_pw(p)
         pg = b.new_page(viewport={"width": 1600, "height": 900})
 
         # 拦截：bars 走合成（800 根），analyze 走注入

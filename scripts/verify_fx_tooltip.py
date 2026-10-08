@@ -22,7 +22,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import import_playwright, ui_base  # noqa: E402
+from _pw import import_playwright, launch_pw, ui_base  # noqa: E402
 
 sync_api = import_playwright()
 
@@ -57,7 +57,7 @@ def _read_tooltip(pg) -> str:
 
 def main() -> int:
     with sync_api.sync_playwright() as pw:
-        browser = pw.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox"])
+        browser = launch_pw(pw)
         # 视口加高，保证图表完整可见（图表可能高于默认 900）
         pg = browser.new_page(viewport={"width": 1600, "height": 1200})
         try:

@@ -63,6 +63,7 @@ def _load_mmd_ground_truth(fixture: str) -> list[dict]:
 
 
 def main() -> int:
+    from _pw import launch_pw
     from playwright.sync_api import sync_playwright
 
     fixtures = sorted(p.name for p in FIXTURES.glob("chanlun_*.json"))
@@ -74,7 +75,7 @@ def main() -> int:
     checked = 0
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(args=["--no-sandbox"])
+        browser = launch_pw(pw)
         page = browser.new_page(viewport={"width": 1400, "height": 900})
 
         for fixture in fixtures:

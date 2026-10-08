@@ -24,7 +24,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from _pw import chromium_path, import_playwright, ui_base  # noqa: E402
+from _pw import chromium_path, import_playwright, launch_pw, ui_base  # noqa: E402
 
 # 每个 series 该怎么数
 JS = """() => {
@@ -211,9 +211,7 @@ def main() -> int:
     failures: list[str] = []
     skipped: list[str] = []
     with sync.sync_playwright() as pw:
-        browser = pw.chromium.launch(
-            headless=True, executable_path=chromium_path(), args=["--no-sandbox"]
-        )
+        browser = launch_pw(pw)
         try:
             for name in names:
                 pg = browser.new_page(viewport={"width": 1600, "height": 1200})

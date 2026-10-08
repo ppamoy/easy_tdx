@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import chromium_path, import_playwright, ui_base
+from _pw import chromium_path, import_playwright, launch_pw, ui_base
 
 JS = """() => {
   const c=window.__CHANLUN_CHART__;
@@ -27,8 +27,7 @@ JS = """() => {
 def main() -> int:
     api = import_playwright()
     with api.sync_playwright() as pw:
-        b = pw.chromium.launch(headless=True, executable_path=chromium_path(),
-                               args=["--no-sandbox"])
+        b = launch_pw(pw)
         pg = b.new_page(viewport={"width": 1600, "height": 1200})
         pg.goto(ui_base() + "/learn?tab=train", wait_until="domcontentloaded", timeout=45000)
         pg.wait_for_timeout(5000)

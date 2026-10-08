@@ -143,6 +143,7 @@ def build_e2e_page() -> bool:
 
 
 def main() -> int:
+    from _pw import launch_pw
     from playwright.sync_api import sync_playwright
 
     if not build_e2e_page():
@@ -175,7 +176,7 @@ def main() -> int:
             return 1
 
         with sync_playwright() as pw:
-            browser = pw.chromium.launch(args=["--no-sandbox"])
+            browser = launch_pw(pw)
             page = browser.new_page(viewport={"width": 1500, "height": 1000})
             page.on("console", lambda m: None)
 

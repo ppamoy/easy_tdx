@@ -2994,3 +2994,58 @@ pkill -f audit_chanlun_screen_usefulness.py
 ⇒ 剩余 worker: 0；load 6.71（正在衰减）
 ⇒ 守卫复查：卡死 0、超订 0
 ```
+
+---
+
+## 五之四十五：浏览器底座切换到 **moli**（用户指示）
+
+### 做了什么
+用户指示「浏览器我都改成用moli了，不要在用chromium了」。
+
+`scripts/_pw.py` 是 **14 个** `verify_*` / `e2e_*` 脚本的**公共入口**，
+改这一处即可全部切换：
+
+| 改动 | 说明 |
+|------|------|
+| `ensure_moli()` | 幂等 health check + 调 `moli-serve-start`（**内置 `--layout`**，不手写 serve） |
+| `launch_pw(pw)` | drop-in 替代 `pw.chromium.launch(...)` → `connect_over_cdp` |
+| `close_pw()` | 收尾；⚠️ 不 `pw.stop()` 会让进程挂住不退出 |
+| 14 个调用点 | 全部改用 `launch_pw(pw)` |
+
+### ⚠️ CI **故意不动**
+`.github/workflows/ci.yml` 的 `e2e-chanlun-render` 仍用系统 chromium
+—— **这是对的**：ubuntu runner 自带 chromium 且不装 moli。
+本测试只约束**本机**路径。
+
+### ✅ 行为级验证（不是"import 成功"）
+```
+connectOverCDP            ✅
+set_viewport_size         ✅
+canvas bounding_box       ✅ 精确 400×300（不是 stub）
+page.screenshot           ✅ 5887 字节（>2000 才算真渲染）
+```
+⚠️ 按 §1：**不**拿「元素存在/页面能打开」当通过证据。
+
+### ⚠️⚠️ 牙齿抓到我自己的**空转守门**
+第一版守门写成：
+```python
+if "chromium.launch" not in line: continue
+assert "_chromium_fallback" in src     # ← 只要注释里有这个词就恒真
+return                                   # ← 第一次命中就 return
+```
+牙齿把 `launch_pw` 里的 `connect_over_cdp` 换成 `chromium.launch`，
+**守门测试照样 5 passed** ⇒ 门形同虚设。
+
+修正：改用 **AST 逐函数**检查 + `_code_only()`（剥掉 docstring/注释）
++ `_called_attrs()`（只认真被调用的方法名）。
+⚠️ 又踩一个坑：`pw.chromium` 是 **Playwright 的浏览器类型属性**，
+合法写法就是 `pw.chromium.connect_over_cdp(...)`
+⇒ 禁的是 `*.launch(...)`，**不能**只搜 "chromium" 这个词。
+
+### 牙齿实测（修正后）
+- 篡改 `_pw.py` 的 `launch_pw` → **1 failed** ✅
+- 篡改 `verify_ui.py` 的调用点 → **FAILED** ✅
+- 篡改后恢复 → 47 passed，工作区干净 ✅
+
+⇒ 这是第 15 次「自己的探针/守门静默失败」。
+**新增教训：牙齿第一次咬不到时，先怀疑牙齿本身，再怀疑被测代码。**

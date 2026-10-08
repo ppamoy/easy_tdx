@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """playwright 导入与浏览器启动的共享辅助（供 scripts/verify_*.py 使用）。
 
-为什么需要它：playwright 未必装在项目 .venv 里。常见情况有 pip install 到
+⚠️ 2026-10-08 起**默认走 moli（CDP）**，不再直接启动 /usr/bin/chromium。
+   理由见本文件底部「为什么不再用 chromium」。
+
+为什么需要本模块：playwright 未必装在项目 .venv 里。常见情况有 pip install 到
 系统 python（如 ~/.local/lib/python3.11/site-packages）、或 --target=/tmp/pw。
 此前各脚本各自硬编码 ``sys.path.insert(0, "/tmp/pw")``，换个环境就 ImportError，
 用 ``.venv/bin/python scripts/verify_*.py`` 跑不起来。
@@ -12,8 +15,14 @@ from __future__ import annotations
 
 import os
 import site
+import subprocess
 import sys
 
+# ⚠️ moli 的 CDP 端点（Playwright connectOverCDP 用）
+DEFAULT_CDP = "http://127.0.0.1:9222"
+MOLI_SERVE_START = os.path.expanduser("~/.local/bin/moli-serve-start")
+
+# 仅在显式要求回退时才用的本地 chromium（默认**不**走）
 DEFAULT_CHROMIUM = "/usr/bin/chromium"
 
 
@@ -99,19 +108,130 @@ def import_playwright(auto_reexec: bool = True):
         ) from exc
 
 
+def cdp_endpoint() -> str:
+    """moli 的 CDP 端点，可用 MOLI_CDP 环境变量覆盖。"""
+    return os.environ.get("MOLI_CDP", DEFAULT_CDP)
+
+
+def ensure_moli(endpoint: str | None = None) -> str:
+    """确保 moli serve 在跑（幂等），返回 CDP 端点。
+
+    ⚠️ 必须带 ``--layout``：不加时 moli 走 "deterministic compatibility
+    geometry"，后果是 click 超时挂死、boundingBox() 谎报 stub 尺寸、
+    screenshot 直接报 "renderer layout is disabled"——而 goto/evaluate/
+    innerText 照样通过，**只拿这些断言就会误判浏览器可用**。
+    ``moli-serve-start`` 已内置该 flag，这里只调用它。
+    """
+    ep = endpoint or cdp_endpoint()
+    url = ep.replace("http://", "").replace("https://", "")
+    host, _, port = url.partition(":")
+    port = port or "9222"
+    probe = f"http://{host}:{port}/json/version"
+
+    def alive() -> bool:
+        try:
+            r = subprocess.run(  # noqa: S603
+                ["curl", "-sf", "-m", "3", probe],
+                capture_output=True, timeout=5, check=False,
+            )
+            return r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+
+    if alive():
+        return ep
+    if not os.path.exists(MOLI_SERVE_START):
+        raise RuntimeError(
+            f"moli 未在 {probe} 服务，且找不到启动脚本 {MOLI_SERVE_START}\n"
+            "请手动执行：~/.local/bin/moli-serve-start"
+        )
+    subprocess.run([MOLI_SERVE_START], check=True, timeout=60)  # noqa: S603
+    if not alive():
+        raise RuntimeError(f"moli-serve-start 执行后 {probe} 仍不可用")
+    return ep
+
+
 def chromium_path() -> str:
-    """浏览器可执行文件路径，可用 CHROMIUM 环境变量覆盖。"""
+    """⚠️ 仅供**回退**用：本地 chromium 可执行文件路径。
+
+    保留这个函数是因为十几个 verify_*/e2e_* 脚本还在 import 它。
+    浏览器本身请改用 :func:`launch`（走 moli）。
+    """
     return os.environ.get("CHROMIUM", DEFAULT_CHROMIUM)
 
 
 def launch(sync_api, **kwargs):
-    """启动 chromium（默认无沙箱，headless）。"""
-    return sync_api.chromium.launch(
-        headless=True,
-        executable_path=chromium_path(),
-        args=["--no-sandbox"],
-        **kwargs,
-    )
+    """连上 **moli**（CDP）并返回 ``(browser, playwright)``。
+
+    ⚠️ 与旧版不同：CDP 模式下 playwright 必须由
+    ``sync_playwright().start()`` 创建，且**不能**提前关闭，
+    否则 browser 会跟着断。返回 playwright 让调用方负责收尾：
+
+        browser, pw = launch(sync_api)
+        try:
+            ...
+        finally:
+            browser.close()
+            pw.stop()          # ⚠️ 必须 stop，否则进程不退出
+
+    保留 ``**kwargs`` 形参只为兼容旧调用方；CDP 模式下
+    ``headless`` / ``executable_path`` / ``args`` **不再生效**
+    （浏览器早已由 moli-serve-start 拉起）。
+    """
+    if kwargs.get("_chromium_fallback"):
+        kwargs.pop("_chromium_fallback")
+        return sync_api.chromium.launch(  # type: ignore[no-any-return]
+            headless=True, executable_path=chromium_path(), args=["--no-sandbox"],
+        )
+    endpoint = ensure_moli()
+    pw = sync_api.sync_playwright().start()
+    browser = pw.chromium.connect_over_cdp(endpoint)
+    return browser, pw  # type: ignore[return-value]
+
+
+def new_page(browser):
+    """在 moli 上开一个新 page（复用已有 context 以共享 profile）。"""
+    ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+    return ctx, ctx.new_page()
+
+
+def launch_pw(pw, **kwargs):
+    """替代旧的「直接启动本地浏览器」写法的 drop-in。
+
+    老调用点形如::
+
+        browser = pw.chromium.launch(headless=True, executable_path=..., args=[...])
+
+    现在请改成::
+
+        browser = launch_pw(pw)
+
+    ``headless`` / ``executable_path`` / ``args`` 会被**忽略**——
+    浏览器已由 moli-serve-start 拉起，CDP 模式下无从控制这些。
+    保留 ``**kwargs`` 纯粹是为了让老调用点**不必立刻删参数**。
+
+    ⚠️ 若用 ``with sync_playwright() as pw:``，退出 with 时会自动 stop，
+    无需额外收尾；若是 ``sync_playwright().start()``，必须配
+    :func:`close_pw`，否则进程挂住不退出。
+    """
+    endpoint = ensure_moli()
+    return pw.chromium.connect_over_cdp(endpoint)
+
+
+def close_pw(browser, pw=None) -> None:
+    """收尾：关 browser；若 pw 来自 ``sync_playwright().start()`` 还要 stop。
+
+    ⚠️ **不 stop 会让进程挂住不退出**——这是 CDP 模式最容易踩的坑。
+    """
+    try:
+        browser.close()
+    except Exception:  # noqa: BLE001
+        pass
+    if pw is not None:
+        try:
+            pw.stop()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 def ui_base() -> str:

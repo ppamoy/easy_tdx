@@ -18,7 +18,7 @@ import pathlib
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import import_playwright, ui_base  # noqa: E402
+from _pw import import_playwright, launch_pw, ui_base  # noqa: E402
 
 sync_api = import_playwright()
 
@@ -75,7 +75,7 @@ def _sample_markers(pg, scheme: str) -> dict:
 
 def main() -> int:
     with sync_api.sync_playwright() as pw:
-        browser = pw.chromium.launch(executable_path=CHROMIUM, args=["--no-sandbox"])
+        browser = launch_pw(pw)
         pg = browser.new_page(viewport={"width": 1600, "height": 1200})
         try:
             out = {}

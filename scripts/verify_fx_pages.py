@@ -30,7 +30,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import api_base, chromium_path, import_playwright, ui_base  # noqa: E402
+from _pw import api_base, chromium_path, import_playwright, launch_pw, ui_base  # noqa: E402
 
 BASE = ui_base()
 
@@ -310,8 +310,7 @@ def main() -> int:
     skipped: list[str] = []
 
     with sync_api.sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True, executable_path=chromium_path(),
-                                     args=["--no-sandbox"])
+        browser = launch_pw(pw)
         for name, driver in pages.items():
             pg = browser.new_page(viewport={"width": 1600, "height": 1200})
             errs = _setup(pg)

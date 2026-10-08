@@ -28,7 +28,7 @@ import sys
 
 # playwright 装在 /tmp/pw（本机约定），不在项目 venv 里
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import import_playwright, ui_base  # noqa: E402
+from _pw import import_playwright, launch_pw, ui_base  # noqa: E402
 
 sync_api = import_playwright()
 
@@ -179,7 +179,7 @@ def main() -> int:
     failures: list[str] = []
     pending_vision: list[tuple[str, str, bool]] = []
     with sync_api.sync_playwright() as p:
-        browser = p.chromium.launch(headless=True, executable_path=CHROMIUM)
+        browser = launch_pw(p)
         for strategy, exp in cases.items():
             pg = browser.new_page(viewport={"width": 1500, "height": 1200})
             _install_request_probe(pg)
