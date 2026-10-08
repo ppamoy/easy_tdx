@@ -38,6 +38,9 @@ from pathlib import Path
 
 import pandas as pd
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _concurrency import resolve_workers  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -107,13 +110,18 @@ def main() -> int:
         return 2
 
     jobs = [(p.stem, str(p)) for p in files]
-    print(f"缠论未来函数审计 —— {len(jobs)} 只真实标的（进程池 8 并行）\n")
+    # V733 审计：此处原先硬编码 processes=8，在 4 核机上严重超订 ——
+    # 而本脚本是「PIT 生命线闸门」，恰恰是最需要稳定跑完的那个。
+    # 统一取 scripts/_concurrency.py 的约定（默认 2），可用
+    # EASY_TDX_WORKERS=N 覆盖。详见 docs/BG_JOB_SLowness_POSTMORTEM.md。
+    workers = resolve_workers()
+    print(f"缠论未来函数审计 —— {len(jobs)} 只真实标的（进程池 {workers} 并行）\n")
 
     all_fails: list[str] = []
     all_invalid: list[str] = []
     tot_sig = 0
     tot_checks = 0
-    with Pool(processes=8) as pool:
+    with Pool(processes=workers) as pool:
         for code, f, inv, ns, nc in pool.imap_unordered(audit_one, jobs):
             all_fails.extend(f)
             all_invalid.extend(inv)
