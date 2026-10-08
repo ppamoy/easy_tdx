@@ -28,6 +28,11 @@ from easy_tdx.offline.paths import resolve_vipdoc
 
 _A_STOCK_TYPES = frozenset({"SH_A_STOCK", "SZ_A_STOCK"})
 
+# V733：compute_strength_metrics 的最小样本数。原为裸写 65 且注释错写「61」。
+# 65 = ret_60(61 根) 与 rolling(20).std() / _trend_quality(window=60) 的共同下界。
+# 实测：n=64 → None、n=65 → 出结果。改动此值需同步 tests/unit/test_screen_strength.py。
+_MIN_BARS_FOR_METRICS = 65
+
 # ── 预设模式 ──────────────────────────────────────────────────────────────
 
 STRENGTH_PRESETS: dict[str, dict[str, Any]] = {
@@ -136,7 +141,12 @@ def compute_strength_metrics(
         或 None（数据不足）
     """
     n = len(closes)
-    if n < 65:  # 至少需要 61 日算 ret_60，留余量
+    # V733 审计：注释原写「至少需要 61 日算 ret_60，留余量」，与代码 65 不符。
+    # 实测（compute_strength_metrics）：n=64 → None、n=65 → OK，门槛就是 65。
+    # 取 65 而非 61 的真实原因：除 ret_60 需 61 根外，下方
+    # `log_ret.rolling(20).std()` 与 `_trend_quality(window=60)` 也各需足够样本，
+    # 65 是这几项的共同下界（并非随手"留余量"）。
+    if n < _MIN_BARS_FOR_METRICS:  # noqa: PLR2004 - 命名常量
         return None
 
     # 权重归一化
