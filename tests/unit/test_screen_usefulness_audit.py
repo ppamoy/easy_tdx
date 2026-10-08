@@ -682,12 +682,20 @@ class TestTimeWindowSamplingOutOfSample:
 
 
 class TestHasBeichiIsNotReallyThreeWay:
-    """⚠️⚠️ `has_beichi` 暴露成 any/true/false **三选一**，但端点只有
-    **两个**状态：`has_bc = bool(criteria.get("has_beichi", False))`
+    """⚠️ `has_beichi` 在**审计脚本**里是 any/true/false 三选一，
+    但端点只有**两个**状态：
+    `has_bc = bool(criteria.get("has_beichi", False))`
     ⇒ `bool(None) == False` ⇒ **"any" 与 "false" 完全等价**。
 
-    "不要背驰"这个语义**根本表达不出来**——用户以为在放宽，
-    实际和"必须有背驰"正好相反地"什么都没做"。
+    ⚠️⚠️ **更正（2026-10-08 复核，原表述已证伪）**：
+    我原先写"UI 与审计脚本都暴露三选一 ⇒ 契约不一致"——**错**。
+    复核 web-ui/src/views/StockPickView.vue:471 才发现 UI 是
+    `<input v-model="clHasBeichi" type="checkbox" /> 必须有背驰`
+    ⇒ **UI 只有一个复选框**，只会发 true/false，**从不发 None**。
+    ⇒ 所以"假三选一"只是**我自己审计脚本**里的问题，
+      **不是用户能踩到的坑**。别把它当成产品缺陷传下去。
+
+    真正成立的问题是：这个条件**几乎不过滤任何东西**（只挡掉 2.8%）。
 
     而且更要命的是：背驰是**历史累计**的，t=130 时已有 2 个、
     之后单调增长 ⇒ has_beichi=true 只在**极早期**才过滤得掉东西。
@@ -727,8 +735,12 @@ class TestHasBeichiIsNotReallyThreeWay:
         assert "形同虚设" in blk
 
     def test_script_still_offers_three_choices(self) -> None:
-        """⚠️ 记录现状：脚本/UI 仍暴露三选一——这是**已知**的契约不一致，
-        留着是为了让后人知道问题存在，而不是忘了它。"""
+        """⚠️ 记录现状：**审计脚本**仍暴露三选一。
+
+        ⚠️ 只对**审计脚本**成立，**不要**拿它当 UI/产品的缺陷——
+        UI 侧是复选框（见本类 docstring 的更正）。
+        留着是为了让后人知道"any" 是个无意义值，别再拿它做对比实验。
+        """
         src = self.SCRIPT.read_text(encoding="utf-8")
         assert '"any"' in src and '"true"' in src
 
@@ -846,3 +858,49 @@ class TestIncrementalCacheActuallyPersists:
             assert "apply_async" in _called_in(
                 target.read_text(encoding="utf-8"), "_run_pool"), \
                 "❌ 恢复后仍不满足守门（测试没还原干净）"
+
+
+class TestHasBeichiUiIsNotAProductBug:
+    """⚠️⚠️ 锁死我自己的**更正**（2026-10-08）。
+
+    我曾把结论写成"UI 暴露三选一 ⇒ 契约不一致"，复核后**证伪**：
+    UI 只有一个复选框，从不发 None ⇒ 用户根本踩不到"假三选一"。
+
+    这条测试存在的意义：**防止我（或后人）把审计脚本的缺陷
+    升级成产品缺陷传下去**——那会让不该修的地方排上修复优先级。
+    """
+
+    VUE = Path(__file__).resolve().parents[2] / "web-ui" / "src" / "views" / "StockPickView.vue"
+
+    def test_ui_is_a_plain_checkbox(self) -> None:
+        src = self.VUE.read_text(encoding="utf-8")
+        assert 'type="checkbox"' in src and "clHasBeichi" in src, \
+            "⚠️ UI 侧 has_beichi 预期是复选框；若已改成三态选择，本测试需重新评估"
+
+    def test_ui_default_is_boolean_not_none(self) -> None:
+        src = self.VUE.read_text(encoding="utf-8")
+        assert "ref(false)" in src, \
+            "⚠️ clHasBeichi 预期初始化为布尔 false（不是 null/None）"
+
+    def test_docs_do_not_call_it_a_ui_bug(self) -> None:
+        """⚠️ 报告里不得再出现"UI 三选一/UI 契约不一致"这类表述。"""
+        doc = (Path(__file__).resolve().parents[2] / "docs" / "V733_AUDIT_REPORT.md")\
+            .read_text(encoding="utf-8")
+        blk = doc[doc.index("## 五之四十三"):]
+        blk = blk[:blk.index("\n## ", 1)]
+        # ⚠️ 必须允许"引用旧错句再更正"的写法——更正段落本身就要引原文。
+        #    判据：出现该表述的每一行，都必须落在**更正/引用**的上下文里
+        #    （同一行或紧邻行出现 更正/证伪/原表述/复核 等标记）。
+        markers = ("更正", "证伪", "原表述", "复核", "错的")
+        for wrong in ("UI 与审计脚本都暴露", "UI 暴露三选一"):
+            for i, line in enumerate(blk.splitlines()):
+                if wrong not in line:
+                    continue
+                ctx = "\n".join(blk.splitlines()[max(0, i - 3):i + 4])
+                assert any(m in ctx for m in markers), (
+                    f"❌ 报告在**非更正语境**里把审计脚本的缺陷说成 UI 的问题：\n"
+                    f"   {line.strip()}"
+                )
+        # 必须保留更正痕迹，否则后人无从知道这里曾经错过
+        assert "已证伪" in blk or "更正" in blk, \
+            "⚠️ 报告里应保留对该表述的更正说明"

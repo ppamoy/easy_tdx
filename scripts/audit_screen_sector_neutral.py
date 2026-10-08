@@ -239,7 +239,12 @@ MEASURED_BASES: list[tuple[str, float, float, float]] = [
     ("trend=up",           -0.27, -0.39, 0.6933),
     ("trend=down",         +0.56, +0.84, 0.3999),
     # ⚠️⚠️ 几乎**没测到东西**：端点 has_beichi 只有一个 bool，
-    #    `bool(None)==False` ⇒ "any"/"false" **完全等价**（三选一是假的）。
+    #    `bool(None)==False` ⇒ "any"/"false" **完全等价**。
+    #    ⚠️ 更正（2026-10-08，已证伪原表述）：我原写"三选一是假的"并说
+    #    "UI 也暴露三选一"——**错**。UI 是
+    #    `<input v-model="clHasBeichi" type="checkbox" /> 必须有背驰`
+    #    （StockPickView.vue:471），只会发 true/false，**从不发 None**
+    #    ⇒ "假三选一"只是**本审计脚本**的问题，**不是**用户能踩到的坑。
     #    而"背驰"是**历史累计**的，t=130 时已有 2 个、之后单调增长
     #    ⇒ has_beichi=true 只在**极早期**（背驰仍为 0）才过滤得掉东西。
     #    实测：120 只里只有 **13/467（2.8%）** 入选被过滤掉，

@@ -2894,19 +2894,36 @@ UnboundLocalError: cannot access local variable 'points'
 
 ---
 
-## 五之四十三：`has_beichi` 的"三选一"是**假的**
+## 五之四十三：`has_beichi` 这个条件**几乎不起作用**
 
-### ⚠️ 端点只有**两个**状态
+### ⚠️⚠️ 先更正我自己的措辞（2026-10-08 复核，已证伪原表述）
+本节原标题写作「`has_beichi` 的三选一是假的」，正文还写了一句
+"UI 与审计脚本都暴露 any/true/false 三选一 ⇒ 契约不一致"。
+
+**复核后这句话是错的**，已更正：
+```
+web-ui/src/views/StockPickView.vue:471
+  <input v-model="clHasBeichi" type="checkbox" /> 必须有背驰
+web-ui/src/views/StockPickView.vue:104
+  const clHasBeichi = ref(false)
+```
+⇒ **UI 就是一个复选框**（勾 / 不勾），**根本没有**"any/true/false 三选一"。
+⇒ "假三选一"只存在于**我自己的审计脚本**里（我自造的三态 CLI 开关），
+   **不是**用户能踩到的坑。
+⚠️ 这是"先写结论、后补验证"的反例（AGENTS.md §3），已按规矩回头改。
+
+**下面这些实测事实与该更正无关，依然成立。**
+
+### ⚠️ 端点只有**两个**状态（这条成立）
 ```python
+# src/easy_tdx/web/routers/screening.py:568
 has_bc = bool(criteria.get("has_beichi", False))
 ```
 ⇒ `bool(None) == False`
-⇒ **`"any"` 与 `"false"` 完全等价**
+⇒ `"any"` 与 `"false"` 完全等价
 
-"**不要**背驰"这个语义**根本表达不出来**——
-用户以为在放宽条件，实际**什么都没做**。
-
-UI 与审计脚本都暴露 `any / true / false` 三选一 ⇒ **契约不一致**。
+⇒ 但对 UI **无害**：复选框只会发 `true/false`，从不发 `None`。
+⇒ 真正的问题是**下面这条**：这个条件几乎不过滤任何东西。
 
 ### ⚠️ 更要命：背驰是**历史累计**的
 实测 `sh600031_daily`（每时点都重跑缠论）：
