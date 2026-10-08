@@ -28,10 +28,13 @@ class _StopCondition:
     Attributes:
         stop_loss: Price below which a SELL is triggered (None = disabled)
         take_profit: Price above which a SELL is triggered (None = disabled)
+        tag: 归因标签（默认 ""），沿用开仓信号的 tag，使止损/止盈平仓也能
+            归因到开仓信号类型（见 Signal.tag）。
     """
 
     stop_loss: float | None
     take_profit: float | None
+    tag: str = ""
 
 
 class BacktestEngine:
@@ -367,7 +370,9 @@ class BacktestEngine:
                     sig.stop_loss is not None or sig.take_profit is not None
                 ):
                     active_stops.append(
-                        _StopCondition(stop_loss=sig.stop_loss, take_profit=sig.take_profit)
+                        _StopCondition(
+                            stop_loss=sig.stop_loss, take_profit=sig.take_profit, tag=sig.tag
+                        )
                     )
 
             # Clear conditions when a SELL occurs (strategy or SL/TP triggered)
@@ -435,6 +440,12 @@ class BacktestEngine:
                 else:
                     dt_int = int(dt_val)
 
+                # 归因标签沿用开仓信号的 tag（策略侧用 "->" 分隔，保持一致）
+                _tag = cond.tag or "stop"
+                if cond.stop_loss is not None and bar_low <= cond.stop_loss:
+                    _tag = f"{_tag}->stop_loss" if cond.tag else "stop_loss"
+                elif cond.take_profit is not None:
+                    _tag = f"{_tag}->take_profit" if cond.tag else "take_profit"
                 signals.append(
                     Signal(
                         datetime=dt_int,
@@ -442,6 +453,7 @@ class BacktestEngine:
                         size=0,  # full position close
                         price=trigger_price,
                         source="stop",  # 标记为止损/止盈触发，延迟到下一根成交
+                        tag=_tag,
                     )
                 )
             else:
@@ -537,6 +549,7 @@ class BacktestEngine:
                     "pnl",
                     "cost_basis",
                     "rejected",
+                    "tag",
                 ]
             )
 
@@ -551,6 +564,7 @@ class BacktestEngine:
                 "pnl": t.pnl,
                 "cost_basis": t.cost_basis,
                 "rejected": t.rejected,
+                "tag": t.tag,
             }
             for t in trades
         ]

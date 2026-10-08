@@ -28,6 +28,17 @@ class Signal:
         source: 信号来源。"strategy"=策略产生（默认）；
             "stop"=止损/止盈触发。stop 来源的信号不在信号 bar 当根成交，
             而是延迟到下一根开盘（消除用当根 intrabar 触发价成交的前视偏差）。
+        tag: 归因标签（默认 ""）。用途：把成交**归因到具体信号类型**
+            （如缠论的 "1buy"/"3sell"，或 "stop_loss"/"take_profit"）。
+
+            ⚠️ 为什么需要它（V733）：审计发现"回测 trades 只有 BUY/SELL、
+            无信号类型字段"，于是**无法把单笔盈亏归因到具体信号**——
+            信号层测出 3buy/3sell 为负、策略层测出"关掉更差"，
+            两者无法互相解释，只能停在"证据不足，两个方向都不改"。
+            本字段让信号携带来源标签，成交记录沿用同一标签，
+            从而能按标签分组统计单笔收益率。
+
+            只做记录、不参与撮合与收益计算，故对现有策略完全透明。
     """
 
     datetime: int
@@ -37,6 +48,7 @@ class Signal:
     stop_loss: float | None = None
     take_profit: float | None = None
     source: str = "strategy"
+    tag: str = ""
 
 
 # ── 成交记录 ────────────────────────────────────────────────────────────────
@@ -56,6 +68,8 @@ class Trade:
         pnl: 已实现盈亏（仅平仓时计算，绝对金额单位：元）
         cost_basis: SELL 对应的持仓成本基数（元），用于派生单笔收益率 pnl/cost_basis
         rejected: 是否被拒绝（资金不足/不允许做空等）
+        tag: 归因标签（默认 ""），沿用触发它的 Signal.tag。
+            用于把**单笔盈亏**归因到具体信号类型（见 Signal.tag）。
     """
 
     datetime: int
@@ -69,6 +83,7 @@ class Trade:
     # BUY 行恒为 0.0。仅 _compute_pnls 平仓时填入。
     cost_basis: float = 0.0
     rejected: bool = False
+    tag: str = ""
 
 
 # ── 持仓快照 ────────────────────────────────────────────────────────────────

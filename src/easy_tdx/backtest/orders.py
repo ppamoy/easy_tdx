@@ -143,6 +143,7 @@ class OrderSimulator:
                         slippage=0.0,
                         pnl=0.0,
                         rejected=True,
+                        tag=signal.tag,
                     )
                 )
                 continue
@@ -462,6 +463,7 @@ class OrderSimulator:
                     slippage=0.0,
                     pnl=0.0,
                     rejected=True,
+                    tag=signal.tag,
                 )
             return None
 
@@ -482,6 +484,7 @@ class OrderSimulator:
                     slippage=slippage,
                     pnl=0.0,
                     rejected=True,
+                    tag=signal.tag,
                 )
             elif self.reject_policy == "reduce":
                 # reduce 模式：重新计算可买数量
@@ -500,6 +503,7 @@ class OrderSimulator:
                             slippage=slippage,
                             pnl=0.0,
                             rejected=False,
+                            tag=signal.tag,
                         )
                 # 无法买任何数量
                 return None
@@ -513,6 +517,7 @@ class OrderSimulator:
             slippage=slippage,
             pnl=0.0,
             rejected=False,
+            tag=signal.tag,
         )
 
     def _execute_sell(
@@ -554,6 +559,7 @@ class OrderSimulator:
                     slippage=0.0,
                     pnl=0.0,
                     rejected=True,
+                    tag=signal.tag,
                 )
             return None
 
@@ -569,6 +575,7 @@ class OrderSimulator:
                     slippage=0.0,
                     pnl=0.0,
                     rejected=True,
+                    tag=signal.tag,
                 )
             # reduce 模式：减少到实际持仓
             size = position
@@ -586,4 +593,5 @@ class OrderSimulator:
             slippage=slippage,
             pnl=0.0,
             rejected=False,
+            tag=signal.tag,
         )

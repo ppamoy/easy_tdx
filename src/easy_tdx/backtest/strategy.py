@@ -233,6 +233,10 @@ class Strategy(ABC):
         self._position_size = 0.0
         self._cash = 0.0
         self._datetime_array: NDArray | None = None
+        # 归因标签：策略在 next() 里设置一次（如 "1buy"），随后本根 bar 内
+        # 产生的所有 buy()/sell() 信号都会沿用它，除非显式传 tag= 覆盖。
+        # 默认 "" 表示不打标签 —— 对不关心的策略完全透明。
+        self.tag: str = ""
 
     # ── 用户实现方法 ─────────────────────────────────────────────────────────────
 
@@ -298,6 +302,7 @@ class Strategy(ABC):
         price: float | None = None,
         stop_loss: float | None = None,
         take_profit: float | None = None,
+        tag: str | None = None,
     ) -> None:
         """生成买入信号。
 
@@ -306,6 +311,8 @@ class Strategy(ABC):
             price: 限价（None = 市价单）
             stop_loss: 止损价（None = 不设置）
             take_profit: 止盈价（None = 不设置）
+            tag: 归因标签（None = 沿用 ``self.tag``）。用于把成交归因到
+                具体信号类型（如缠论 "1buy"），详见 ``Signal.tag``。
         """
         if self._data_proxy is None:
             raise RuntimeError("策略未绑定数据，请先调用 _bind_data()")
@@ -319,6 +326,7 @@ class Strategy(ABC):
             price=price,
             stop_loss=stop_loss,
             take_profit=take_profit,
+            tag=self.tag if tag is None else tag,
         )
         self._signals.append(signal)
 
@@ -328,6 +336,7 @@ class Strategy(ABC):
         price: float | None = None,
         stop_loss: float | None = None,
         take_profit: float | None = None,
+        tag: str | None = None,
     ) -> None:
         """生成卖出信号。
 
@@ -336,6 +345,8 @@ class Strategy(ABC):
             price: 限价（None = 市价单）
             stop_loss: 止损价（None = 不设置）
             take_profit: 止盈价（None = 不设置）
+            tag: 归因标签（None = 沿用 ``self.tag``）。用于把成交归因到
+                具体信号类型（如缠论 "3sell"），详见 ``Signal.tag``。
         """
         if self._data_proxy is None:
             raise RuntimeError("策略未绑定数据，请先调用 _bind_data()")
@@ -349,6 +360,7 @@ class Strategy(ABC):
             price=price,
             stop_loss=stop_loss,
             take_profit=take_profit,
+            tag=self.tag if tag is None else tag,
         )
         self._signals.append(signal)
 

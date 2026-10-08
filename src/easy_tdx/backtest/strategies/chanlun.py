@@ -254,6 +254,7 @@ class ChanlunStrategy(ParametrizedStrategy):
         # 状态
         self._signal_ptr = 0
         self._entry_price: float = 0.0
+        self._entry_tag: str = ""  # 开仓信号的归因标签（供止损/止盈平仓归因）
         self._position_count: int = 0
         self._last_signal_conf: float = 0.0
         self._last_signal_type: str = ""
@@ -356,11 +357,11 @@ class ChanlunStrategy(ParametrizedStrategy):
         if self._v102_active and self._position_count > 0:
             if self._v102_sl > 0 and float(self.data.low[0]) <= self._v102_sl:
                 self._record_trade("SELL", self._v102_sl, "v102_stop_loss", 0.0)
-                self._close_position()
+                self._close_position("v102_stop_loss")
                 return
             if self._v102_tp > 0 and float(self.data.high[0]) >= self._v102_tp:
                 self._record_trade("SELL", self._v102_tp, "v102_take_profit", 0.0)
-                self._close_position()
+                self._close_position("v102_take_profit")
                 return
 
         # 止损/止盈（百分比，V102 建议未激活时生效）
@@ -371,13 +372,13 @@ class ChanlunStrategy(ParametrizedStrategy):
                 1 - self.p["stop_loss_pct"]
             ):
                 self._record_trade("SELL", current_price, "stop_loss", 0.0)
-                self._close_position()
+                self._close_position("stop_loss")
                 return
             if self.p["take_profit_pct"] > 0 and current_price >= self._entry_price * (
                 1 + self.p["take_profit_pct"]
             ):
                 self._record_trade("SELL", current_price, "take_profit", 0.0)
-                self._close_position()
+                self._close_position("take_profit")
                 return
 
         # 消费信号队列
@@ -388,11 +389,14 @@ class ChanlunStrategy(ParametrizedStrategy):
             self._signal_ptr += 1
             self._last_signal_conf = confidence
             self._last_signal_type = mmd_type
+            # 归因标签：本根 bar 内产生的 buy/sell 都带上 mmd 类型（1buy/3sell...）
+            self.tag = mmd_type
 
             if mmd_type in ("1buy", "2buy"):
                 if self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
+                    self._entry_tag = mmd_type
                     self._record_trade("BUY", current_price, mmd_type, confidence)
                     self._do_buy()
 
@@ -400,6 +404,7 @@ class ChanlunStrategy(ParametrizedStrategy):
                 if self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
+                    self._entry_tag = mmd_type
                     self._record_trade("BUY", current_price, mmd_type, confidence)
                     self._do_buy()
 
@@ -411,6 +416,7 @@ class ChanlunStrategy(ParametrizedStrategy):
                 elif self._position_count == 0:
                     self._position_count = 1
                     self._entry_price = current_price
+                    self._entry_tag = mmd_type
                     # V324: 首仓按 V102 建议设定动态止损/止盈位
                     if self.p["use_v102_advice"] and advice:
                         self._v102_active = True
@@ -424,17 +430,17 @@ class ChanlunStrategy(ParametrizedStrategy):
             elif mmd_type in ("1sell", "2sell"):
                 if self._position_count > 0:
                     self._record_trade("SELL", current_price, mmd_type, confidence)
-                    self._close_position()
+                    self._close_position(mmd_type)
 
             elif mmd_type in ("2sell_s",) and self.p["use_2s_signals"]:
                 if self._position_count > 0:
                     self._record_trade("SELL", current_price, mmd_type, confidence)
-                    self._close_position()
+                    self._close_position(mmd_type)
 
             elif mmd_type == "3sell" and self.p["use_3sell"]:
                 if self._position_count > 0:
                     self._record_trade("SELL", current_price, mmd_type, confidence)
-                    self._close_position()
+                    self._close_position(mmd_type)
 
     def _record_trade(
         self,
@@ -454,14 +460,28 @@ class ChanlunStrategy(ParametrizedStrategy):
             }
         )
 
-    def _close_position(self) -> None:
-        """平仓。"""
+    def _close_position(self, reason: str = "") -> None:
+        """平仓。
+
+        Args:
+            reason: 平仓原因（平仓信号类型如 "1sell"/"3sell"，或
+                "stop_loss"/"take_profit"/"v102_*"）。非空时归因标签写为
+                ``<开仓信号>-><reason>``（如 ``1buy->3sell``、
+                ``3buy->stop_loss``），使**平仓**也能回溯到开仓信号类型；
+                为空则沿用开仓信号标签。
+        """
+        tag = (
+            self._entry_tag
+            if not reason
+            else (f"{self._entry_tag}->{reason}" if self._entry_tag else reason)
+        )
         self._position_count = 0
         self._entry_price = 0.0
+        self._entry_tag = ""
         self._v102_active = False
         self._v102_sl = 0.0
         self._v102_tp = 0.0
-        self.sell()
+        self.sell(tag=tag)
 
     @property
     def trade_log(self) -> list[dict[str, Any]]:

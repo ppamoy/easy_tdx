@@ -168,6 +168,7 @@ class ImmediateExecution(ExecutionModel):
                     price=price,
                     commission=comm,
                     slippage=slip,
+                    tag=signal.tag,
                 )
             ]
         elif signal.direction == "SELL":
@@ -193,6 +194,7 @@ class ImmediateExecution(ExecutionModel):
                     price=price,
                     commission=comm,
                     slippage=slip,
+                    tag=signal.tag,
                 )
             ]
 
@@ -301,6 +303,7 @@ class TWAPExecution(ExecutionModel):
                     price=price,
                     commission=comm,
                     slippage=slip,
+                    tag=signal.tag,
                 )
             )
         return trades
@@ -352,6 +355,7 @@ class TWAPExecution(ExecutionModel):
                     price=price,
                     commission=comm,
                     slippage=slip,
+                    tag=signal.tag,
                 )
             )
         return trades
@@ -487,6 +491,7 @@ class VWAPExecution(ExecutionModel):
                     price=price,
                     commission=comm,
                     slippage=slip,
+                    tag=signal.tag,
                 )
             )
         return trades
@@ -537,6 +542,7 @@ class VWAPExecution(ExecutionModel):
                     price=price,
                     commission=comm,
                     slippage=slip,
+                    tag=signal.tag,
                 )
             )
         return trades
@@ -649,6 +655,7 @@ class LimitExecution(ExecutionModel):
                         price=target_price,
                         commission=comm,
                         slippage=slip,
+                        tag=signal.tag,
                     )
                 ]
 

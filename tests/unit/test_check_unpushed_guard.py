@@ -75,8 +75,9 @@ class TestGuardHasTeeth:
           "看当天有没有打 tag" 的随机测试。**不可**直接断言 exit 1。
         """
         moved = []
-        tags = subprocess.run(["git", "tag", "-l", "backup/*"],
-                              cwd=str(ROOT), capture_output=True, text=True).stdout.split()
+        tags = subprocess.run(
+            ["git", "tag", "-l", "backup/*"], cwd=str(ROOT), capture_output=True, text=True
+        ).stdout.split()
         for t in tags:
             subprocess.run(["git", "tag", "-d", t], cwd=str(ROOT), capture_output=True)
             moved.append(t)
@@ -88,7 +89,7 @@ class TestGuardHasTeeth:
             )
             assert "未推送" in r.stdout and "兜底" in r.stdout
         finally:
-            for t in moved:   # 恢复，别把别人的兜底 tag 弄丢
+            for t in moved:  # 恢复，别把别人的兜底 tag 弄丢
                 subprocess.run(["git", "tag", t, "main"], cwd=str(ROOT), capture_output=True)
 
     def test_teeth_exits_zero_once_guarded(self) -> None:
