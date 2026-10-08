@@ -89,7 +89,8 @@ def main() -> int:
         return 1
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(cases, ensure_ascii=False, indent=1), encoding="utf-8")
+    # ⚠️ indent=2 + 末尾换行 = web-ui 的 prettier 风格（indent=1 会被 format:check 判失败）
+    OUT.write_text(json.dumps(cases, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     total = sum(len(c["mmds"]) for c in cases.values())
     print(f"\n✅ 写入 {OUT.relative_to(ROOT)}：{len(cases)} 个用例 / {total} 个买卖点")
     return 0
