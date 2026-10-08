@@ -39,11 +39,20 @@ class TestTypeAccuracyProfitFactor:
 
 
 class TestSignalTypeVerdict:
+    # V736：以下两例原用 count=20，但修复「n=1 也能判显著」后 n=20
+    # （< _MIN_N_FOR_SIGNIFICANCE=30）本就不许判显著 —— 旧用例恰好固化了
+    # 那个 bug。改为 n=200 并补 baseline_hit_rate：
+    #   z = 0.10 / sqrt(0.25/200) ≈ 2.83 ≥ 1.96，三关齐过。
     def test_significant_above_with_good_pf(self) -> None:
         report = {
             "direction": "BUY",
             "horizons": {
-                "5": {"count": 20, "excess_hit_rate": 0.10, "profit_factor": 2.0},
+                "5": {
+                    "count": 200,
+                    "excess_hit_rate": 0.10,
+                    "profit_factor": 2.0,
+                    "baseline_hit_rate": 0.5,
+                },
             },
         }
         v = _signal_type_verdict(report)
@@ -54,7 +63,12 @@ class TestSignalTypeVerdict:
         report = {
             "direction": "BUY",
             "horizons": {
-                "5": {"count": 20, "excess_hit_rate": 0.10, "profit_factor": 0.6},
+                "5": {
+                    "count": 200,
+                    "excess_hit_rate": 0.10,
+                    "profit_factor": 0.6,
+                    "baseline_hit_rate": 0.5,
+                },
             },
         }
         v = _signal_type_verdict(report)

@@ -42,6 +42,29 @@ RANDOM_SAMPLES = 512
 _EXCESS_SIGNIFICANT = 0.05
 _EXCESS_PORTFOLIO_SIGNIFICANT = 0.03
 
+# ── 「显著」二字的统计门槛（V736 元审计修复，P0）──────────────────────────
+# ⚠️ 本轮实测发现的严重误导（必须记住，别再退回）：
+#   修复前 verdict 只做 `excess > 0.05` 的**裸阈值判断**，既不看样本量、
+#   也没有任何 p 值 / 置信区间。实测 **n=1 条信号**就能输出
+#   「信号命中率显著高于随机入场基准」，而该字符串经
+#   web/routers/chanlun.py、stock_pick.py、backtest/engine.py 三处
+#   直接显示在 UI「信号准确度」面板上，前端 ChanlunAccuracyPanel.vue
+#   还明写「绿色 = 显著优于随机」。用户看到绿色「显著」合理推断是
+#   「统计上显著好于抛硬币」——这个推断当时是**错的**。
+#
+# 故「显著」必须同时满足三条，缺一不可：
+#   1. 效应量超过 _EXCESS_SIGNIFICANT（原来的唯一条件）
+#   2. 样本量 ≥ _MIN_N_FOR_SIGNIFICANCE（否则噪声主导，见下）
+#   3. 通过比例 z 检验（|z| ≥ 1.96，即 95% 置信）
+#
+# 第 2 条的依据：随机基线本身只用 RANDOM_SAMPLES=512 次抽样，实测其
+# 命中率标准差约 1.75 个百分点、95% 区间约 ±3.4pp —— 与 5pp 的效应量
+# 门槛只差 2.85 倍。小样本下「超额」极易来自抽样噪声而非真实预测力。
+# 取 30 与本项目其他审计脚本的 MIN_N 口径一致。
+_MIN_N_FOR_SIGNIFICANCE = 30
+# 95% 置信的正态临界值
+_Z_95 = 1.96
+
 
 def _datetime_to_int(arr: np.ndarray) -> np.ndarray:
     """把 datetime 列规整为 YYYYMMDD 整数（与 backtest.strategy 同一口径）。
@@ -124,6 +147,43 @@ def _safe_fwd(cur: Any, fwd: Any) -> Any:
     if np.ndim(out) == 0:
         return float(out)
     return out
+
+
+def _is_significant(
+    excess: float,
+    n: int,
+    baseline_hit_rate: float | None = None,
+) -> bool:
+    """V736：判定「显著优于随机」——必须同时过效应量、样本量、统计检验三关。
+
+    修复前的实现只做 ``excess > _EXCESS_SIGNIFICANT``，导致 n=1 也能宣称
+    「显著优于随机」（实测已复现）。本函数补齐另外两关。
+
+    Args:
+        excess: 超额命中率（信号命中率 − 随机基线命中率）
+        n: 该窗口的信号样本数
+        baseline_hit_rate: 随机基线命中率（用于算标准误；缺失时用 0.5 保守估计）
+
+    Returns:
+        是否可宣称「显著」。
+    """
+    # 第 1 关：效应量（修复前唯一的判断条件）
+    if excess <= _EXCESS_SIGNIFICANT:
+        return False
+    # 第 2 关：样本量。小样本下超额极易来自随机基线的抽样噪声。
+    if n < _MIN_N_FOR_SIGNIFICANCE:
+        return False
+    # 第 3 关：比例 z 检验。H0 = 信号命中率与随机基线无差异。
+    p0 = 0.5 if baseline_hit_rate is None else float(baseline_hit_rate)
+    # 基线退化到 0/1（例如全涨或全跌的样本）时方差为 0，z 检验失去意义 ——
+    # 此时任何 excess 都会算出天文数字的 z 而"显著"。保守处理：不判显著。
+    if p0 <= 1e-6 or p0 >= 1 - 1e-6:
+        return False
+    se = (p0 * (1 - p0) / n) ** 0.5
+    if se <= 0:
+        return False
+    z = excess / se
+    return abs(z) >= _Z_95
 
 
 def _profit_factor(fwd: np.ndarray) -> float:
@@ -292,7 +352,17 @@ def _build_verdict(
     avg = float(h5.get("avg_return", 0.0))
     n = int(h5.get("count", 0))
     parts = [f"买入信号 {n} 个"]
-    if excess > _EXCESS_SIGNIFICANT:
+    baseline = h5.get("baseline_hit_rate")
+    significant = _is_significant(excess, n, baseline)
+    if n < _MIN_N_FOR_SIGNIFICANCE:
+        # V736：样本不足时不许用「显著」二字（实测 n=1 曾判「显著高于」）
+        grade = (
+            "命中率与随机入场基本相当（择时贡献有限）"
+            if excess > -_EXCESS_SIGNIFICANT
+            else "信号命中率低于随机入场（可能有反向择时风险）"
+        )
+        grade += f"（样本仅 {n} 个，不足以判断显著性）"
+    elif significant:
         grade = "信号命中率显著高于随机入场基准"
     elif excess > 0:
         grade = "信号命中率略高于随机入场基准"
@@ -408,7 +478,9 @@ def _signal_type_verdict(report: dict[str, Any]) -> str:
     direction = report.get("direction", "BUY")
     verb = "买入" if direction == "BUY" else "卖出"
     pf_note = f"PF={pf:.2f}" if pf > 0 else ""
-    if excess > _EXCESS_SIGNIFICANT:
+    # V736：n 不足或 z 检验不过时，一律降级为「略优/相当」，不许说「显著」
+    significant = _is_significant(excess, n, h5.get("baseline_hit_rate"))
+    if significant:
         if pf_note and pf < 1.0:
             return (
                 verb
@@ -421,6 +493,16 @@ def _signal_type_verdict(report: dict[str, Any]) -> str:
                 + "）"
             )
         return verb + "点显著优于随机（+" + f"{excess:.1%}" + "，n=" + str(n) + "）"
+    if excess > _EXCESS_SIGNIFICANT:
+        # 效应量够但样本/z 检验不够 —— 明确说明，而不是含糊说「略优」
+        return (
+            verb
+            + "点优于随机但样本不足，尚不能称显著（+"
+            + f"{excess:.1%}"
+            + "，n="
+            + str(n)
+            + f"，需 n≥{_MIN_N_FOR_SIGNIFICANCE} 且通过 z 检验）"
+        )
     if excess > 0:
         if pf_note and pf < 1.0:
             return (
