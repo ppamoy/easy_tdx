@@ -38,12 +38,17 @@ def _bars(n: int) -> pd.DataFrame:
     for i in range(n):
         px = 10.0 + 2.0 * math.sin(i / 11.0) + 0.6 * math.sin(i / 3.0)
         o, c = px, px + 0.05 * math.sin(i / 5.0)
-        rows.append({
-            "datetime": (base + pd.Timedelta(days=i)).strftime("%Y-%m-%d"),
-            "open": round(o, 4), "close": round(c, 4),
-            "high": round(max(o, c) + 0.05, 4), "low": round(min(o, c) - 0.05, 4),
-            "vol": 1000 + (i % 7) * 50, "amount": 10000.0,
-        })
+        rows.append(
+            {
+                "datetime": (base + pd.Timedelta(days=i)).strftime("%Y-%m-%d"),
+                "open": round(o, 4),
+                "close": round(c, 4),
+                "high": round(max(o, c) + 0.05, 4),
+                "low": round(min(o, c) - 0.05, 4),
+                "vol": 1000 + (i % 7) * 50,
+                "amount": 10000.0,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -67,9 +72,7 @@ class TestQualityIsPointInTime:
         ds, dl, early, _latest = ctx
         assert early, "需要至少 1 个早期信号"
         worst = max(abs(_q(m, ds) - _q(m, dl)) for m in early)
-        assert worst == 0, (
-            f"历史信号质量分受后续数据影响（最大偏移 {worst}），存在前视"
-        )
+        assert worst == 0, f"历史信号质量分受后续数据影响（最大偏移 {worst}），存在前视"
 
     def test_grade_letter_also_stable(self, ctx) -> None:
         """评级字母（S/A/B/C/D）同样不得漂移。"""
@@ -123,10 +126,7 @@ class TestLatestSignalInsideWindowIsAllowedToChange:
     def test_only_the_tail_signal_may_move(self, ctx) -> None:
         """至少存在头文件之外的场景：漂移只出现在序列尾部的信号上。"""
         ds, dl, _early, latest = ctx
-        moved = [
-            m.mmd_type.value for m in [latest]
-            if _q(m, ds) != _q(m, dl)
-        ]
+        moved = [m.mmd_type.value for m in [latest] if _q(m, ds) != _q(m, dl)]
         # 不断言必须变/不变（取决于窗口），只断言能算出且分数合法
         v = _q(latest, ds)
         assert 0 <= v <= 100

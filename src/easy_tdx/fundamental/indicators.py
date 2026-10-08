@@ -465,6 +465,7 @@ def pick_report(
             usable.append(row)
     if not usable:
         return None
+
     # V731 排序键修正：此前**只用披露日**排序，同一天披露多期时（实测 gpcw
     # 里 2025-12-31 与 2026-03-31 两期都在 2026-04-29 披露）顺序由
     # iterrows() 原始顺序决定 → 可能取到**较旧**的报告期，等于用过期财报

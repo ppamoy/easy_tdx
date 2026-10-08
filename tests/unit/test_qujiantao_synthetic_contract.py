@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import inspect
 
-
 from easy_tdx.chanlun.qujiantao import compute_qujiantao_cross_period
 
 
@@ -27,13 +26,14 @@ def _mk_mmd_with_bi(buy: bool = True):
     """构造一个带锚定笔的 MMD（足以走到主循环，而非早期 return）。"""
     from datetime import datetime
 
-    from easy_tdx.chanlun.types import BI, FX, FXType, MMD, MMDType
+    from easy_tdx.chanlun.types import BI, FX, MMD, FXType, MMDType
 
     def _fx(index: int, is_top: bool):
         return FX(
             fx_type=FXType.DING if is_top else FXType.DI,
-            k=type("CLK", (), {"k_index": index * 10, "index": index,
-                               "date": datetime(2025, 1, 1)})(),
+            k=type(
+                "CLK", (), {"k_index": index * 10, "index": index, "date": datetime(2025, 1, 1)}
+            )(),
             klines=[],
             val=10.0 + index,
             index=index,
@@ -41,8 +41,7 @@ def _mk_mmd_with_bi(buy: bool = True):
         )
 
     # Line 无 done 字段（完成与否看 end.done），见 types.py
-    bi = BI(start=_fx(0, False), end=_fx(10, True), direction="up",
-            high=12.0, low=10.0)
+    bi = BI(start=_fx(0, False), end=_fx(10, True), direction="up", high=12.0, low=10.0)
     bi.start.bar_index = 0
     bi.end.bar_index = 10
     mmd = MMD(
@@ -67,9 +66,7 @@ class TestSyntheticContract:
         mmd = _mk_mmd_with_bi()
         # 给一份非空低级别容器，确保走到主循环而非早期 return
         low_bi = _mk_mmd_with_bi().bi
-        res = compute_qujiantao_cross_period(
-            [mmd], bis_low=[low_bi], synthetic=True
-        )
+        res = compute_qujiantao_cross_period([mmd], bis_low=[low_bi], synthetic=True)
         assert len(res) == 1
         r = res[0]
         assert isinstance(r, dict)

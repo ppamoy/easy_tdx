@@ -96,8 +96,7 @@ class TestReturnsAtV731:
 
     def _df(self, closes: list[float]) -> pd.DataFrame:
         return pd.DataFrame(
-            {"date": pd.date_range("2026-01-01", periods=len(closes), freq="D"),
-             "close": closes}
+            {"date": pd.date_range("2026-01-01", periods=len(closes), freq="D"), "close": closes}
         )
 
     def test_nan_base_returns_empty(self) -> None:
@@ -115,7 +114,7 @@ class TestReturnsAtV731:
         """缺陷1 另一半：末端 NaN → ret=None（可被 _stats 过滤），不是 nan。"""
         closes = [100.0, 110.0, float("nan"), 130.0, 140.0]
         out = _returns_at(self._df(closes), date(2026, 1, 1), (1, 2))
-        assert out.get("ret_1d") == 10.0       # 有效样本照常算
+        assert out.get("ret_1d") == 10.0  # 有效样本照常算
         # V733：原写成 `out.get("ret_2d") is None` 后紧跟一句 math.isnan 检查 ——
         # 但前者通过时后者恒为真（`is None` 已经排除了 float），是**永远抓不到
         # 东西**的空断言。改为先锁定 None，再对整个产出做 nan 扫描（见下）。
@@ -134,18 +133,15 @@ class TestReturnsAtV731:
         能识别这是"错位基准"样本并剔除，而不是悄悄混进 F9 统计。
         """
         closes = [101.0, 102.0, 105.0, 106.0, 107.0]
-        df = pd.DataFrame(
-            {"date": [date(2026, 1, d) for d in (1, 2, 5, 6, 7)], "close": closes}
-        )
+        df = pd.DataFrame({"date": [date(2026, 1, d) for d in (1, 2, 5, 6, 7)], "close": closes})
         out = _returns_at(df, date(2026, 1, 3), (1,))
         assert out["as_of_close"] == 105.0
         assert out["base_date"] == date(2026, 1, 5)
-        assert out["base_shift_bars"] == 2     # 顺延 2 天，错位可见
+        assert out["base_shift_bars"] == 2  # 顺延 2 天，错位可见
 
     def test_normal_case_has_zero_shift(self) -> None:
         """对照组：target 当日有 K 线 → shift=0，行为与旧版完全一致。"""
-        out = _returns_at(self._df([100.0, 110.0, 120.0, 130.0, 140.0]),
-                          date(2026, 1, 1), (1,))
+        out = _returns_at(self._df([100.0, 110.0, 120.0, 130.0, 140.0]), date(2026, 1, 1), (1,))
         assert out["base_shift_bars"] == 0
         assert out["base_date"] == date(2026, 1, 1)
         assert out["ret_1d"] == 10.0
@@ -155,14 +151,16 @@ class TestReturnsAtV731:
         from easy_tdx.fundamental.pipeline import _summarize_periods
 
         # 构造一个 target 日 close=NaN 的结果（模拟旧版会产出的形态）
-        periods = [{
-            "date": date(2026, 1, 1),
-            "results": [
-                {"category": "tree", "performance": {"ret_20d": float("nan")}},
-                {"category": "tree", "performance": {"ret_20d": 10.0}},
-                {"category": "tree", "performance": {"ret_20d": -5.0}},
-            ],
-        }]
+        periods = [
+            {
+                "date": date(2026, 1, 1),
+                "results": [
+                    {"category": "tree", "performance": {"ret_20d": float("nan")}},
+                    {"category": "tree", "performance": {"ret_20d": 10.0}},
+                    {"category": "tree", "performance": {"ret_20d": -5.0}},
+                ],
+            }
+        ]
         out = _summarize_periods(periods, (20,))
         st = out["by_category"]["tree"]["ret_20d"]
         # 旧实现：avg=nan（一个 NaN 毒化整组）—— 新实现下 NaN 仍在 perf dict
@@ -185,12 +183,12 @@ class TestSummarizePeriodsV731:
     """
 
     def _p(self, rets: list) -> list[dict]:
-        return [{
-            "date": date(2026, 1, 1),
-            "results": [
-                {"category": "tree", "performance": {"ret_20d": v}} for v in rets
-            ],
-        }]
+        return [
+            {
+                "date": date(2026, 1, 1),
+                "results": [{"category": "tree", "performance": {"ret_20d": v}} for v in rets],
+            }
+        ]
 
     def test_nan_no_longer_poisons_group(self) -> None:
         st = _summarize_periods(self._p([float("nan"), 10.0, -5.0]), (20,))
@@ -216,10 +214,16 @@ class TestSummarizePeriodsV731:
     def test_index_nan_excluded_from_alpha_pairing(self) -> None:
         """指数基准为 NaN 的期不得参与 alpha（旧实现 is not None 拦不住）。"""
         periods = [
-            {"date": date(2026, 1, 1), "index": {"ret_20d": float("nan")},
-             "results": [{"category": "tree", "performance": {"ret_20d": 10.0}}]},
-            {"date": date(2026, 2, 1), "index": {"ret_20d": 2.0},
-             "results": [{"category": "tree", "performance": {"ret_20d": 6.0}}]},
+            {
+                "date": date(2026, 1, 1),
+                "index": {"ret_20d": float("nan")},
+                "results": [{"category": "tree", "performance": {"ret_20d": 10.0}}],
+            },
+            {
+                "date": date(2026, 2, 1),
+                "index": {"ret_20d": 2.0},
+                "results": [{"category": "tree", "performance": {"ret_20d": 6.0}}],
+            },
         ]
         b = _summarize_periods(periods, (20,))["beats_index"]["ret_20d"]
         assert b["n_periods"] == 1, f"NaN 指数期应被剔除，实得 {b}"

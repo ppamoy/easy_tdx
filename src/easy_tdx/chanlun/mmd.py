@@ -2104,9 +2104,7 @@ def _find_first_type_mmds(
                 if not _has_meaningful_rebound(rebound_high, last_1buy_low):
                     continue
         # 检查背驰（识别所有有效背驰点）
-        if _is_strong_beichi(
-            bi, bis, zss, closes, _threshold_asof(bi), normalize_by_bars=_norm
-        ):
+        if _is_strong_beichi(bi, bis, zss, closes, _threshold_asof(bi), normalize_by_bars=_norm):
             strength = _get_beichi_strength(bi, bis, zss, closes)
             msg_parts = [
                 f"1买: 底背驰(强度={strength}), 低点={bi.low:.2f} < 中枢下沿={ref_zs.zd:.2f}"
@@ -2333,9 +2331,7 @@ def _find_second_type_mmds(
                     # 周线/月线上同一形态的间隔只有日线的 1/5、1/20，跨周期
                     # 含义完全不同（日线被拒的形态在周线反而通过）。
                     time_span = bi.end.k.k_index - leave_bi_up.end.k.k_index
-                    if time_span < 1 or (
-                        _max_2nd_span > 0 and time_span > _max_2nd_span
-                    ):
+                    if time_span < 1 or (_max_2nd_span > 0 and time_span > _max_2nd_span):
                         continue
 
                     # V8: 与已有买卖点距离检查
@@ -2397,9 +2393,7 @@ def _find_second_type_mmds(
                     pct = max(0.0, pct)
 
                     time_span = bi.end.k.k_index - leave_bi_up.end.k.k_index
-                    if time_span < 1 or (
-                        _max_2nd_span > 0 and time_span > _max_2nd_span
-                    ):
+                    if time_span < 1 or (_max_2nd_span > 0 and time_span > _max_2nd_span):
                         continue
 
                     bi_pos = bi.end.k.k_index
@@ -2472,9 +2466,7 @@ def _find_second_type_mmds(
                     pct = max(0.0, pct)
 
                     time_span = bi.end.k.k_index - leave_bi_down.end.k.k_index
-                    if time_span < 1 or (
-                        _max_2nd_span > 0 and time_span > _max_2nd_span
-                    ):
+                    if time_span < 1 or (_max_2nd_span > 0 and time_span > _max_2nd_span):
                         continue
 
                     bi_pos = bi.end.k.k_index
@@ -2535,9 +2527,7 @@ def _find_second_type_mmds(
                     pct = max(0.0, pct)
 
                     time_span = bi.end.k.k_index - leave_bi_down.end.k.k_index
-                    if time_span < 1 or (
-                        _max_2nd_span > 0 and time_span > _max_2nd_span
-                    ):
+                    if time_span < 1 or (_max_2nd_span > 0 and time_span > _max_2nd_span):
                         continue
 
                     bi_pos = bi.end.k.k_index
@@ -2866,8 +2856,8 @@ def _find_third_type_mmds(
 
     # 默认档（无笔上下文时的回退，保持旧行为）
     vol_adjusted_force_ratio = 1.3
-    vol_adjusted_break_ratio = 0.35
-    vol_adjusted_time_window = 5
+    _vol_adjusted_break_ratio = 0.35  # noqa: F841 —— 默认档记录，当前分支未读取
+    _vol_adjusted_time_window = 5  # noqa: F841 —— 同上
     vol_adjusted_vol_ratio = 1.3
 
     # 预计算MACD数据用于动量确认
@@ -2892,7 +2882,7 @@ def _find_third_type_mmds(
         # 计算平均成交量（用于成交量确认，基准用"中枢自身盘整期均量"）。
         # 突破/跌破相对盘整放量才是合理的量能确认；用数据末端或突破附近的
         # 均量会被后期放量段抬高，导致历史突破误判为未放量。
-        zs_end_idx = zs.end.k.k_index if zs.end else 0
+        _zs_end_idx = zs.end.k.k_index if zs.end else 0  # noqa: F841 —— 均量口径已改用 _calc_zs_avg_volume
         avg_vol_20 = _calc_zs_avg_volume(volumes, zs)
 
         # 找3买：突破中枢后的回踩

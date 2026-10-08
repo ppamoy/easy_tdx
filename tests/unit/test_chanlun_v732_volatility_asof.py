@@ -41,7 +41,9 @@ from easy_tdx.chanlun.mmd_conditions import (  # noqa: E402
 )
 
 
-def _seg(n: int, o: float, c: float, jitter: float = 0.05) -> list[tuple[float, float, float, float]]:
+def _seg(
+    n: int, o: float, c: float, jitter: float = 0.05
+) -> list[tuple[float, float, float, float]]:
     out = []
     for i in range(n):
         t0 = o + (c - o) * (i / n)
@@ -56,8 +58,8 @@ def _mk(
 ) -> pd.DataFrame:
     rows = []
     dt = start or datetime(2024, 1, 2)
-    for o, c, h, l in bars:
-        rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": l, "vol": 1e6})
+    for o, c, h, ln in bars:
+        rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": ln, "vol": 1e6})
         dt += timedelta(days=1)
     return pd.DataFrame(rows)
 
@@ -99,7 +101,9 @@ def _load(name: str) -> pd.DataFrame:
 
 def _sig(result, cap: int) -> set[tuple[str, int]]:
     return {
-        (m.mmd_type.value, m.bi.end.bar_index) for m in result.mmds if m.bi and m.bi.end.bar_index < cap
+        (m.mmd_type.value, m.bi.end.bar_index)
+        for m in result.mmds
+        if m.bi and m.bi.end.bar_index < cap
     }
 
 
@@ -169,9 +173,9 @@ class TestVolatilityFutureImmunity:
             code="600009", frequency="daily", config=ChanlunConfig()
         ).process_klines(pd.concat([base, future], ignore_index=True))
 
-        s, l = _sig(r_short, cap), _sig(r_long, cap)
+        s, ln = _sig(r_short, cap), _sig(r_long, cap)
         assert len(s) >= 3, f"可比信号仅 {len(s)}，样本不足（假通过风险）"
-        assert s == l, f"历史信号被改写  新增={sorted(l - s)}  消失={sorted(s - l)}"
+        assert s == ln, f"历史信号被改写  新增={sorted(ln - s)}  消失={sorted(s - ln)}"
 
     def test_teeth_tail_volatility_breaks_it(self) -> None:
         """牙齿验证：换回尾部口径后，上面那条未来免疫断言**必须**被打破。
@@ -202,12 +206,12 @@ class TestVolatilityFutureImmunity:
             r_long = ChanlunAnalyser(
                 code="600009", frequency="daily", config=ChanlunConfig()
             ).process_klines(pd.concat([base, future], ignore_index=True))
-            s, l = _sig(r_short, cap), _sig(r_long, cap)
-            assert s != l, (
+            s, ln = _sig(r_short, cap), _sig(r_long, cap)
+            assert s != ln, (
                 "退化到尾部口径后竟然仍免疫 —— "
                 "test_real_data_history_not_rewritten 没有牙齿，未覆盖该泄漏"
             )
             # 顺带锁定具体形态：旧实现会凭空多出 1buy@199
-            assert ("1buy", 199) in (l - s), f"预期旧实现多出 1buy@199，实得 {sorted(l - s)}"
+            assert ("1buy", 199) in (ln - s), f"预期旧实现多出 1buy@199，实得 {sorted(ln - s)}"
         finally:
             mmd_mod._calc_atr_volatility_asof = original

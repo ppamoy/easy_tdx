@@ -68,7 +68,9 @@ class ChanlunBiDir(Factor):
             for bi in bis:
                 direction = _direction_sign(bi.direction)
                 if direction is None:
-                    logger.debug("chanlun_bi_dir: 未知笔方向 %r，跳过 bi[%s]", bi.direction, bi.index)
+                    logger.debug(
+                        "chanlun_bi_dir: 未知笔方向 %r，跳过 bi[%s]", bi.direction, bi.index
+                    )
                     continue
                 # k.k_index 已是原始行号（见模块 docstring 实测），闭区间 [start, end]
                 lo = max(0, bi.start.k.k_index)
@@ -80,7 +82,7 @@ class ChanlunBiDir(Factor):
             # 但这里是整段延续，不会出现「末尾 8 格为 0、只有最后 1 格有值」的裂缝）。
             tail = _direction_sign(bis[-1].direction)
             if tail is not None:
-                result.iloc[max(0, bis[-1].end.k.k_index):] = tail
+                result.iloc[max(0, bis[-1].end.k.k_index) :] = tail
 
         except _DATA_ERRORS as exc:
             logger.warning("chanlun_bi_dir: 缠论计算失败，退化为全 0 序列: %s", exc)

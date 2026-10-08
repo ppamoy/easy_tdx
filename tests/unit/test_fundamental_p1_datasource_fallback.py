@@ -70,9 +70,16 @@ class TestSinaFallbackWhenGpcwUnavailable:
             report_date = date(2025, 3, 31)
             disclosure_date = date(2025, 4, 20)  # ≤ TARGET
             indicators = {
-                "eps": 5.0, "roe": 25.0, "gross_margin": 60.0, "net_margin": 30.0,
-                "rev_yoy": 12.0, "np_yoy": 15.0, "debt_ratio": 30.0,
-                "net_profit": 2e9, "revenue": 4e10, "bps": 8.0,
+                "eps": 5.0,
+                "roe": 25.0,
+                "gross_margin": 60.0,
+                "net_margin": 30.0,
+                "rev_yoy": 12.0,
+                "np_yoy": 15.0,
+                "debt_ratio": 30.0,
+                "net_profit": 2e9,
+                "revenue": 4e10,
+                "bps": 8.0,
             }
 
         with (

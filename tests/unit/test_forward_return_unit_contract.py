@@ -147,8 +147,8 @@ def test_ledger_record_fields_are_decimal() -> None:
     # 11/10 - 1 = 0.1 → 小数
     assert buy.ret_pct == pytest.approx(0.1, abs=1e-6)
     assert sell.ret_pct == pytest.approx(-0.1, abs=1e-6)
-    assert buy.raw_ret_pct == pytest.approx(0.1, abs=1e-6) == pytest.approx(
-        sell.raw_ret_pct, abs=1e-6
+    assert (
+        buy.raw_ret_pct == pytest.approx(0.1, abs=1e-6) == pytest.approx(sell.raw_ret_pct, abs=1e-6)
     )
 
 
@@ -229,6 +229,6 @@ def test_panel_matches_ledger_by_type() -> None:
         assert float(ledger_stats["avg_return"]) == pytest.approx(
             float(h5["avg_return"]), abs=1e-4
         ), f"{sig_type}: 台账与面板均值口径不一致（差 100 倍？）"
-        assert ledger_stats["hit_rate"] == pytest.approx(
-            h5["hit_rate"], abs=1e-6
-        ), f"{sig_type}: 命中率口径不一致"
+        assert ledger_stats["hit_rate"] == pytest.approx(h5["hit_rate"], abs=1e-6), (
+            f"{sig_type}: 命中率口径不一致"
+        )

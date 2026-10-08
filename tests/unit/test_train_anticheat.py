@@ -1,5 +1,3 @@
-
-
 import json
 from pathlib import Path
 
@@ -16,8 +14,9 @@ class _FixtureMixin:
         import pandas as pd
 
         rows = json.loads(
-            (Path(__file__).resolve().parents[1] / "fixtures" / "chanlun_000333_daily.json")
-            .read_text(encoding="utf-8")
+            (
+                Path(__file__).resolve().parents[1] / "fixtures" / "chanlun_000333_daily.json"
+            ).read_text(encoding="utf-8")
         )
         cls.df = pd.DataFrame(rows)
         cls.result = ChanlunAnalyser(
@@ -109,16 +108,22 @@ class TestTrainAnticheatV731BarsTruncation:
             p = build_train_session_payload(
                 TestTrainAnticheatV731StructureTruncation.result,
                 TestTrainAnticheatV731StructureTruncation.df,
-                "daily", "medium", 0, reveal_limit=n,
+                "daily",
+                "medium",
+                0,
+                reveal_limit=n,
             )
-            assert len(p["bars"]) == n + 1, f"N={n}: bars 应为 {n+1}，实得 {len(p['bars'])}"
+            assert len(p["bars"]) == n + 1, f"N={n}: bars 应为 {n + 1}，实得 {len(p['bars'])}"
 
     def test_structure_never_exceeds_bars(self) -> None:
         """结构与 bars 同窗：任何条目索引不得越过 bars 末尾（对位不漂移）。"""
         p = build_train_session_payload(
             TestTrainAnticheatV731StructureTruncation.result,
             TestTrainAnticheatV731StructureTruncation.df,
-            "daily", "medium", 0, reveal_limit=50,
+            "daily",
+            "medium",
+            0,
+            reveal_limit=50,
         )
         nb = len(p["bars"])
         assert not [b for b in p["bis"] if b.get("end_index", 0) >= nb]
@@ -136,7 +141,10 @@ class TestTrainAnticheatV731BarsTruncation:
         p0 = build_train_session_payload(
             TestTrainAnticheatV731StructureTruncation.result,
             TestTrainAnticheatV731StructureTruncation.df,
-            "daily", "medium", 0, reveal_limit=87,
+            "daily",
+            "medium",
+            0,
+            reveal_limit=87,
         )
         assert len(p0["bars"]) == 88
 
@@ -145,7 +153,10 @@ class TestTrainAnticheatV731BarsTruncation:
         p = build_train_session_payload(
             TestTrainAnticheatV731StructureTruncation.result,
             TestTrainAnticheatV731StructureTruncation.df,
-            "daily", "medium", 0, reveal_limit=None,
+            "daily",
+            "medium",
+            0,
+            reveal_limit=None,
         )
         assert len(p["bars"]) == len(TestTrainAnticheatV731StructureTruncation.df)
 
@@ -177,9 +188,7 @@ _ALIGNED_SERIES = ("macd", "boll")
 #:   candidates —— 另有 signal 置空闸门（test_signal_answers_still_blanked）
 #:   mmd_outcomes —— 训练模式整段置空（另有测试）
 #:   levels.*.name / *_count —— 标量元数据
-_NON_STRUCTURE_KEYS = frozenset(
-    {"code", "frequency", "category", "candidates", "mmd_outcomes"}
-)
+_NON_STRUCTURE_KEYS = frozenset({"code", "frequency", "category", "candidates", "mmd_outcomes"})
 
 #: 每个结构数组「锚定在哪根 K 线」的字段，与后端截断谓词一一对应。
 #: 大多数是 max(end_index, bar_index)；中枢是**区间**，口径自第 37 轮起
@@ -252,8 +261,7 @@ class TestTrainAnticheatV739AllStructureKeys(_FixtureMixin):
             fields = _anchor_fields_for(path)
             bad = [it for it in arr if (_anchor_of(it, fields) or 0) > 0]
             assert not bad, (
-                f"{path} 在 reveal_limit=0 时泄露 {len(bad)}/{len(arr)} 条未来结构，"
-                f"样例={bad[0]}"
+                f"{path} 在 reveal_limit=0 时泄露 {len(bad)}/{len(arr)} 条未来结构，样例={bad[0]}"
             )
         # 派生本身必须有效：真实 fixture 上至少要覆盖到这些已截断的 key，
         # 否则「零条目 → 零断言」会让本测试退化成空转。
@@ -285,9 +293,7 @@ class TestTrainAnticheatV739AllStructureKeys(_FixtureMixin):
                         ), f"levels.{lname}.{k} 未纳入防作弊断言面"
                 continue
             val = p[key]
-            assert isinstance(val, int | float | str | None) and not isinstance(
-                val, list
-            ), (
+            assert isinstance(val, int | float | str | None) and not isinstance(val, list), (
                 f"payload.key `{key}`（{type(val).__name__}）既不在结构断言面、"
                 f"也不在豁免清单 —— 请登记到 _NON_STRUCTURE_KEYS 或让它可被派生"
             )
@@ -299,9 +305,7 @@ class TestTrainAnticheatV739AllStructureKeys(_FixtureMixin):
             for path, arr in iter_structure_arrays(p):
                 fields = _anchor_fields_for(path)
                 bad = [it for it in arr if (_anchor_of(it, fields) or 0) > n]
-                assert not bad, (
-                    f"N={n}: {path} 泄露 {len(bad)}/{len(arr)} 条，样例={bad[0]}"
-                )
+                assert not bad, f"N={n}: {path} 泄露 {len(bad)}/{len(arr)} 条，样例={bad[0]}"
 
     def test_aligned_series_never_exceed_bars(self) -> None:
         """macd/boll 与 bars 逐根对齐，长度不得超过 bars（= N+1）。"""
@@ -315,9 +319,7 @@ class TestTrainAnticheatV739AllStructureKeys(_FixtureMixin):
                     continue
                 for k, seq in val.items():
                     if isinstance(seq, list):
-                        assert len(seq) <= nb, (
-                            f"N={n}: {key}.{k} 长度 {len(seq)} > bars {nb}"
-                        )
+                        assert len(seq) <= nb, f"N={n}: {key}.{k} 长度 {len(seq)} > bars {nb}"
 
     def test_positive_control_full_reveal_has_items(self) -> None:
         """阳性对照：揭示到末尾时结构**必须**还在（修复不能是「一律清空」）。

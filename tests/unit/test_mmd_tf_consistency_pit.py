@@ -36,12 +36,17 @@ def _bars(n: int) -> pd.DataFrame:
     for i in range(n):
         px = 10.0 + 2.0 * math.sin(i / 11.0) + 0.6 * math.sin(i / 3.0)
         o, c = px, px + 0.05 * math.sin(i / 5.0)
-        rows.append({
-            "datetime": (base + pd.Timedelta(days=i)).strftime("%Y-%m-%d"),
-            "open": round(o, 4), "close": round(c, 4),
-            "high": round(max(o, c) + 0.05, 4), "low": round(min(o, c) - 0.05, 4),
-            "vol": 1000 + (i % 7) * 50, "amount": 10000.0,
-        })
+        rows.append(
+            {
+                "datetime": (base + pd.Timedelta(days=i)).strftime("%Y-%m-%d"),
+                "open": round(o, 4),
+                "close": round(c, 4),
+                "high": round(max(o, c) + 0.05, 4),
+                "low": round(min(o, c) - 0.05, 4),
+                "vol": 1000 + (i % 7) * 50,
+                "amount": 10000.0,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -62,9 +67,7 @@ class TestTFConsistencyIsPointInTime:
         ds, dl, early = ctx
         assert early, "需要至少 1 个早期信号"
         worst = max(abs(_adj(m, ds) - _adj(m, dl)) for m in early)
-        assert worst == 0, (
-            f"confidence_adjust 受后续数据影响（最大 {worst}），存在前视"
-        )
+        assert worst == 0, f"confidence_adjust 受后续数据影响（最大 {worst}），存在前视"
 
     def test_trend_labels_also_stable(self, ctx) -> None:
         """不仅 adjust，趋势标签也必须稳定（否则结论会翻）。
@@ -75,7 +78,9 @@ class TestTFConsistencyIsPointInTime:
         for m in early:
             a = _calc_tf_consistency(m, ds["close"].tolist())
             b = _calc_tf_consistency(m, dl["close"].tolist())
-            assert a["short_term_trend"] == b["short_term_trend"], f"{m.mmd_type.value}: 短期趋势漂移"
+            assert a["short_term_trend"] == b["short_term_trend"], (
+                f"{m.mmd_type.value}: 短期趋势漂移"
+            )
             assert a["mid_term_trend"] == b["mid_term_trend"], f"{m.mmd_type.value}: 中期趋势漂移"
             assert a["consistency"] == b["consistency"], f"{m.mmd_type.value}: 一致性结论漂移"
 

@@ -27,8 +27,10 @@ def _src() -> str:
 @pytest.fixture(scope="module")
 def chanlun_cls():
     import sys
+
     sys.path.insert(0, str(ROOT / "src"))
     from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy
+
     return ChanlunStrategy
 
 
@@ -54,7 +56,7 @@ class TestParamsActuallyApplied:
         """牙齿：证明 setattr 路径确实是错的（否则这测试是摆设）。"""
         st = chanlun_cls()
         before = st.p["stop_loss_pct"]
-        st.stop_loss_pct = 0.2          # noqa: B010 故意走错路径
+        st.stop_loss_pct = 0.2  # noqa: B010 故意走错路径
         assert st.p["stop_loss_pct"] == before, "setattr 不影响 p，证明旧写法无效"
 
     def test_writing_sp_changes_value(self, chanlun_cls) -> None:
@@ -97,8 +99,7 @@ class TestHonestControls:
         """同仓位对照才能排除低暴露假象。"""
         s = _src()
         assert "同仓位" in s
-        assert "position_pct=1.0" in s or "position_pct == 1.0" in s \
-            or "r[2] == 1.0" in s
+        assert "position_pct=1.0" in s or "position_pct == 1.0" in s or "r[2] == 1.0" in s
 
     def test_sweeps_signal_switches_too(self) -> None:
         """不能只扫止损 —— 信号类开关也必须扫。"""

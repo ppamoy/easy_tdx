@@ -22,7 +22,6 @@ from easy_tdx.chanlun.macd import calc_macd_force
 from easy_tdx.chanlun.types import BI, MMD, ZS, Line, MMDType
 from easy_tdx.MyTT import ATR, BIAS, KDJ, MA, OBV, RSI
 
-
 # ── V731 前视修复：as-of 工具（须在模块顶部，因其装饰器被下方助手使用）──
 
 # V733：本模块类型收口。此前 ``_asof_arrays`` / ``_dict_len`` / ``_cut`` /
@@ -99,11 +98,7 @@ def _asof_arrays(fn: Callable[_P, _R]) -> Callable[_P, _R]:
     import inspect as _inspect
 
     sig = _inspect.signature(fn)
-    params = [
-        (i, n)
-        for i, n in enumerate(sig.parameters)
-        if n in _ASOF_PARAM_NAMES
-    ]
+    params = [(i, n) for i, n in enumerate(sig.parameters) if n in _ASOF_PARAM_NAMES]
 
     @functools.wraps(fn)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -146,8 +141,6 @@ def _asof_arrays(fn: Callable[_P, _R]) -> Callable[_P, _R]:
         return fn(*new_args, **kwargs)
 
     return wrapper
-
-
 
 
 def _calc_atr_volatility(closes: list[float] | None, lookback: int = 20) -> float:
@@ -15716,9 +15709,7 @@ def _truncate_to_signal_window(
 
     if macd_data:
         try:
-            macd_data = {
-                k: (v[:end] if isinstance(v, list) else v) for k, v in macd_data.items()
-            }
+            macd_data = {k: (v[:end] if isinstance(v, list) else v) for k, v in macd_data.items()}
         except Exception:
             pass
     return _cut(closes), _cut(highs), _cut(lows), _cut(volumes), macd_data
@@ -16596,10 +16587,7 @@ def _is_strong_beichi(
                     continue
 
                 # 两段离开段方向都必须与趋势方向一致（离开段 = 延续趋势方向的那笔）
-                if (
-                    prev_exit.direction.value != direction
-                    or curr_exit.direction.value != direction
-                ):
+                if prev_exit.direction.value != direction or curr_exit.direction.value != direction:
                     continue
 
                 # 新极值确认：后一中枢离开段须创出更极端价位（否则只是中枢震荡/扩展）
@@ -16608,12 +16596,8 @@ def _is_strong_beichi(
                 else:
                     new_extreme = curr_exit.high > prev_exit.high
 
-                prev_force = _calc_bi_force(
-                    prev_exit, closes, prev_exit.index, normalize_by_bars
-                )
-                curr_force = _calc_bi_force(
-                    curr_exit, closes, curr_exit.index, normalize_by_bars
-                )
+                prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index, normalize_by_bars)
+                curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index, normalize_by_bars)
 
                 if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
                     return True
@@ -16696,7 +16680,7 @@ def _calc_bi_force(
     #    fixture 共 51 个笔全部走 MACD 路径。风险仅在调用方传入被裁剪的 closes
     #    （增量加载/拼接/部分重算）时——实测那样会让背驰命中集合发生漂移。
     if closes is None or len(closes) == 0:
-        return abs(bi.high - bi.low)          # 降级(a)：无收盘价数据
+        return abs(bi.high - bi.low)  # 降级(a)：无收盘价数据
 
     # V617: 用分型极值来源的原始 K 线索引（bar_index）而非合并 K 线的
     # 最后一根索引（k.k_index），使 MACD 力度窗口精确覆盖笔的极值区间。
@@ -16704,7 +16688,7 @@ def _calc_bi_force(
     end_idx = bi.end.bar_index
 
     if start_idx < 0 or end_idx >= len(closes):
-        return abs(bi.high - bi.low)          # 降级(b)：笔超出 closes 范围
+        return abs(bi.high - bi.low)  # 降级(b)：笔超出 closes 范围
 
     try:
         macd_result = calc_macd_force(closes, start_idx, end_idx)
@@ -16713,7 +16697,7 @@ def _calc_bi_force(
         else:
             raw = macd_result["hist_up_sum"]
     except Exception:
-        return abs(bi.high - bi.low)          # 降级(c)：MACD 计算失败
+        return abs(bi.high - bi.low)  # 降级(c)：MACD 计算失败
 
     if normalize_by_bars:
         n_bars = end_idx - start_idx + 1
@@ -22195,7 +22179,7 @@ def _calc_tf_consistency(
             return result
 
         def _ma(n: int) -> float:
-            seg = closes[max(0, end - n):end]
+            seg = closes[max(0, end - n) : end]
             return sum(seg) / len(seg) if seg else 0.0
 
         # 短期趋势：MA5 vs MA20

@@ -101,8 +101,7 @@ class TestRunsThePixelTest:
 
     def test_script_itself_has_teeth(self) -> None:
         """门禁要能真的红：脚本必须自带牙齿，否则 PASS 可能是空转。"""
-        src = (CI.parents[2] / "scripts" / "e2e_chanlun_pixels.py").read_text(
-            encoding="utf-8")
+        src = (CI.parents[2] / "scripts" / "e2e_chanlun_pixels.py").read_text(encoding="utf-8")
         assert "牙齿" in src and "检测器常真" in src
 
 
@@ -115,8 +114,9 @@ class TestNoContinueOnError:
     def test_pixel_step_does_not_continue_on_error(self) -> None:
         for s in _job()["steps"]:
             if "e2e_chanlun_pixels.py" in s.get("run", ""):
-                assert s.get("continue-on-error") in (None, False), \
+                assert s.get("continue-on-error") in (None, False), (
                     "像素渲染门禁不能 continue-on-error，否则画歪了也不拦"
+                )
 
 
 class TestDocumentedLimitation:

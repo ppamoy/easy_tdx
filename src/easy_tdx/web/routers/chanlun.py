@@ -453,16 +453,10 @@ def build_train_session_payload(
             levels_t = {name: _cut_level(lv) for name, lv in levels_t.items()}
         macd_t = d.get("macd")
         if isinstance(macd_t, dict) and macd_t.get("hist") is not None:
-            macd_t = {
-                k: (v[:keep] if isinstance(v, list) else v)
-                for k, v in macd_t.items()
-            }
+            macd_t = {k: (v[:keep] if isinstance(v, list) else v) for k, v in macd_t.items()}
         boll_t = d.get("boll")
         if isinstance(boll_t, dict):
-            boll_t = {
-                k: (v[:keep] if isinstance(v, list) else v)
-                for k, v in boll_t.items()
-            }
+            boll_t = {k: (v[:keep] if isinstance(v, list) else v) for k, v in boll_t.items()}
     else:
         bis_t = d.get("bis", [])
         xds_t = d.get("xds", [])

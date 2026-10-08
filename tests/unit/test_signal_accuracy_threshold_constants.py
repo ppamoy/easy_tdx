@@ -43,8 +43,8 @@ def _report(
 def _portfolio(avg_excess: float) -> dict:
     """构造 _build_portfolio_verdict 所需的最小 portfolio。"""
     return {
-        "symbols": 30,                  # 必填：int(portfolio["symbols"])
-        "symbols_with_accuracy": 30,    # 决定 hit_n > 0，否则命中率段整段跳过
+        "symbols": 30,  # 必填：int(portfolio["symbols"])
+        "symbols_with_accuracy": 30,  # 决定 hit_n > 0，否则命中率段整段跳过
         "avg_excess_hit_rate": avg_excess,
         "avg_hit_rate": 0.5,
         "positive_symbols": 20,
@@ -66,14 +66,10 @@ class TestExcessThresholdFollowsConstant:
         旧断言固化了「裸阈值即显著」的 bug，现改用足够大的 n（500，
         z ≈ 2.24 ≥ 1.96）以检验真正的意图：判定跟随常量而非写死。
         """
-        v = SA._build_verdict(
-            _report(SA._EXCESS_SIGNIFICANT + 1e-9, n=500), buy_hold_return=0.0
-        )
+        v = SA._build_verdict(_report(SA._EXCESS_SIGNIFICANT + 1e-9, n=500), buy_hold_return=0.0)
         assert "显著高于" in v, v
 
-    def test_threshold_moves_when_constant_changes(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_threshold_moves_when_constant_changes(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """牙齿所在：改常量 ⇒ 单标的判定门槛必须跟着移动。
 
         取鉴别值 0.04：
@@ -85,9 +81,7 @@ class TestExcessThresholdFollowsConstant:
         # 对照组（n=1000 让 z 检验不是瓶颈，只考察效应量门槛这一变量）
         # 注：excess=0.04 时需 n ≥ (1.96*0.5/0.04)² ≈ 600 才能让 z ≥ 1.96，
         # 故取 1000（z ≈ 2.53）—— 否则 z 检验会抢先否决，测不到常量门槛。
-        assert "显著高于" not in SA._build_verdict(
-            _report(0.04, n=1000), buy_hold_return=0.0
-        )
+        assert "显著高于" not in SA._build_verdict(_report(0.04, n=1000), buy_hold_return=0.0)
 
         monkeypatch.setattr(SA, "_EXCESS_SIGNIFICANT", 0.02)
         assert "显著高于" in SA._build_verdict(_report(0.04, n=1000), buy_hold_return=0.0), (

@@ -182,7 +182,9 @@ def _is_significant(
     se = (p0 * (1 - p0) / n) ** 0.5
     if se <= 0:
         return False
-    z = excess / se
+    # ⚠️ mypy no-any-return：excess/se 在 numpy 标量语义下推断为 Any。
+    #    显式转 float，别用 type: ignore 掩盖（那条路会把真类型错误一起藏掉）。
+    z = float(excess) / float(se)
     return abs(z) >= _Z_95
 
 

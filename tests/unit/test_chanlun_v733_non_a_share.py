@@ -34,9 +34,10 @@ class TestButtonSideConvention:
     """买卖方向判定必须用 'buy' in st。"""
 
     def test_no_endswith_buy(self) -> None:
-        assert "endswith(\"buy\")" not in _src(), (
+        assert 'endswith("buy")' not in _src(), (
             "禁止 endswith('buy')：'2buy_s'.endswith('buy') 为 False，"
-            "会把类二买误判成卖方向并被取反")
+            "会把类二买误判成卖方向并被取反"
+        )
 
     def test_uses_in_buy(self) -> None:
         assert '"buy" in st' in _src()
@@ -70,10 +71,7 @@ class TestDataSourceSelfCheck:
         "为什么不用它"，第一版我用全文匹配导致误判，已改为排除注释/docstring。
         """
         s = _src()
-        code_lines = [
-            ln for ln in s.splitlines()
-            if not ln.lstrip().startswith("#")
-        ]
+        code_lines = [ln for ln in s.splitlines() if not ln.lstrip().startswith("#")]
         # 去掉模块 docstring（文件开头的三引号块）
         code = "\n".join(code_lines)
         code = code.split('"""', 2)[-1] if code.count('"""') >= 2 else code

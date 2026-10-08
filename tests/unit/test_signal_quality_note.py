@@ -75,9 +75,8 @@ class TestHonestCaveat:
         这正是 AGENTS.md §7 说的"先验证脚本确实能抓到"。
         现在锁死模板里那句原文。"""
         s = _vue()
-        assert '不等于<b>' not in s          # 防止把免责语气改掉
-        assert '不等于"三买三卖必亏"' in s, \
-            "模板里必须有给用户看的免责措辞（不能只存在于代码注释）"
+        assert "不等于<b>" not in s  # 防止把免责语气改掉
+        assert '不等于"三买三卖必亏"' in s, "模板里必须有给用户看的免责措辞（不能只存在于代码注释）"
 
     def test_says_not_proving_chanlun_invalid(self) -> None:
         assert "不代表缠论整体无效" in _vue()
@@ -115,7 +114,7 @@ class TestE2EScript:
         恒为 False ⇒ "有没有三买"永远判成没有。"""
         s = E2E.read_text(encoding="utf-8")
         assert 'any(t in ("3buy", "3sell") for t in types)' in s
-        assert '\'"3buy"\' in' not in s
+        assert "'\"3buy\"' in" not in s
 
     def test_checks_visibility_not_just_presence(self) -> None:
         """AGENTS.md §1：元素存在 ≠ 生效。必须查 getBoundingClientRect + 可见性。"""
@@ -138,8 +137,7 @@ class TestPreExistingBuildErrorsFixed:
 
     def test_dead_function_removed(self) -> None:
         tv = (VIEW.parent / "TrainView.vue").read_text(encoding="utf-8")
-        assert "function clearSavedSession" not in tv, \
-            "残留死代码会让 vue-tsc 报 TS6133 而构建失败"
+        assert "function clearSavedSession" not in tv, "残留死代码会让 vue-tsc 报 TS6133 而构建失败"
 
     def test_rollup_input_is_typed(self) -> None:
         """三元里 mmdE2e 可能不存在，TS 推成 {mmdE2e?:undefined}

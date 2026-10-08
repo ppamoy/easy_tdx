@@ -41,10 +41,8 @@ def _mk(bars: list[tuple[float, float, float, float]]) -> pd.DataFrame:
 
     rows = []
     dt = datetime(2024, 1, 2)
-    for o, c, h, l in bars:
-        rows.append(
-            {"datetime": dt, "open": o, "close": c, "high": h, "low": l, "vol": 1e6}
-        )
+    for o, c, h, ln in bars:
+        rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": ln, "vol": 1e6})
         dt += timedelta(days=1)
     return pd.DataFrame(rows)
 
@@ -74,9 +72,9 @@ def _textbook_downtrend(leave_bars: int = 30, leave_drop: float = 2.5):
     bars += _seg(8, 15.0 - leave_drop, 15.0)
     bars += _seg(6, 15.0, 13.2)
     bars += _seg(8, 13.2, 16.0)
-    return ChanlunAnalyser(
-        code="T", frequency="daily", config=ChanlunConfig()
-    ).process_klines(_mk(bars))
+    return ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        _mk(bars)
+    )
 
 
 class TestZsLeavingSegmentFact:
@@ -97,9 +95,9 @@ class TestZsLeavingSegmentFact:
     )
     def test_plus_one_matches_exit_bi(self, fixture: str) -> None:
         rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
+        )
         closed = [z for z in res.zss if z.exit_bi is not None]
         assert closed, f"{fixture} 无已关闭中枢，用例前提不成立"
         for zs in closed:
@@ -143,8 +141,7 @@ class TestBiForceNormalize:
         fast = calc_macd_force(_ramp(5), 0, 5)["hist_down_sum"]
         slow = calc_macd_force(_ramp(20), 0, 20)["hist_down_sum"]
         assert slow > fast, (
-            f"预期慢段原始 MACD 面积更大（长度偏置），实得 slow={slow:.4f} "
-            f"fast={fast:.4f}"
+            f"预期慢段原始 MACD 面积更大（长度偏置），实得 slow={slow:.4f} fast={fast:.4f}"
         )
 
     def test_normalize_monotonic(self) -> None:
@@ -165,9 +162,7 @@ class TestBiForceNormalize:
 
     def test_flag_off_keeps_history(self) -> None:
         """关闭开关（默认）时行为与历史一致，不引入回归。"""
-        rows = json.loads(
-            (FIXTURES / "chanlun_000333_daily.json").read_text(encoding="utf-8")
-        )
+        rows = json.loads((FIXTURES / "chanlun_000333_daily.json").read_text(encoding="utf-8"))
         got = ChanlunAnalyser(
             code="T", frequency="daily", config=ChanlunConfig(bi_force_normalize=False)
         ).process_klines(pd.DataFrame(rows))
@@ -204,23 +199,17 @@ class TestBiForceNormalize:
             _is_strong_beichi,
         )
 
-        rows = json.loads(
-            (FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8")
+        rows = json.loads((FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
         )
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
         closes = [k.close for k in res.klines]
-        zero_bis = [
-            b
-            for b in res.bis
-            if _calc_bi_force(b, closes, b.index, False) == 0.0
-        ]
+        zero_bis = [b for b in res.bis if _calc_bi_force(b, closes, b.index, False) == 0.0]
         assert zero_bis, "样本中应存在零力度笔，否则本用例失去意义"
         for b in zero_bis:
             assert not _is_strong_beichi(
                 b, res.bis, res.zss, closes, 0.8, normalize_by_bars=True
-            ), f"零力度笔 BI{b.index} 被判为强背驰" 
+            ), f"零力度笔 BI{b.index} 被判为强背驰"
 
 
 class TestZeroForcePrevBiSkipped:
@@ -238,9 +227,7 @@ class TestZeroForcePrevBiSkipped:
         res = _textbook_downtrend()
         closes = [k.close for k in res.klines]
         bi7 = res.bis[7]
-        prev = next(
-            b for b in reversed(res.bis[: bi7.index]) if b.direction.value == "down"
-        )
+        prev = next(b for b in reversed(res.bis[: bi7.index]) if b.direction.value == "down")
         assert _calc_bi_force(prev, closes, prev.index, False) == 0.0, (
             f"前提不成立：BI{prev.index} 力度非 0"
         )
@@ -291,17 +278,13 @@ class TestBreakoutRetestUsesZgZd:
         """前提事实：GG/DD 区间确实比 ZG/ZD 宽（否则本类无意义）。"""
         import json as _json
 
-        rows = _json.loads(
-            (FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8")
+        rows = _json.loads((FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
         )
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
         assert res.zss
         for zs in res.zss:
-            assert (zs.gg - zs.dd) >= (zs.zg - zs.zd), (
-                f"ZS{zs.index}: GG/DD 区间不应窄于 ZG/ZD"
-            )
+            assert (zs.gg - zs.dd) >= (zs.zg - zs.zd), f"ZS{zs.index}: GG/DD 区间不应窄于 ZG/ZD"
 
     def test_validation_boundary_follows_zg_zd(self) -> None:
         """同一信号下，把 gg/dd 换成 zg/zd 会改变结果 ⇒ 证明代码确在用前者。
@@ -313,12 +296,10 @@ class TestBreakoutRetestUsesZgZd:
 
         from easy_tdx.chanlun.mmd import _calc_breakout_retest_validation
 
-        rows = _json.loads(
-            (FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8")
+        rows = _json.loads((FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
         )
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
         closes = [k.close for k in res.klines]
         vols = [getattr(k, "vol", 0) or 0 for k in res.klines]
         checked = 0
@@ -330,12 +311,9 @@ class TestBreakoutRetestUsesZgZd:
             z.gg, z.dd = z.zg, z.zd
             m2 = _copy.copy(m)
             m2.zs = z
-            expect = _calc_breakout_retest_validation(
-                m2, res.bis, res.zss, closes, vols
-            )
+            expect = _calc_breakout_retest_validation(m2, res.bis, res.zss, closes, vols)
             assert got == expect, (
-                f"{m.mmd_type.value}: 实现未按 zg/zd 计算 "
-                f"(got={got} expect={expect})"
+                f"{m.mmd_type.value}: 实现未按 zg/zd 计算 (got={got} expect={expect})"
             )
             checked += 1
         assert checked, "无信号可校验"
@@ -344,18 +322,15 @@ class TestBreakoutRetestUsesZgZd:
         """GG/DD 会显著拉伸区间（记录量级，防止有人把边界改回 gg/dd）。"""
         import json as _json
 
-        rows = _json.loads(
-            (FIXTURES / "chanlun_000001_weekly.json").read_text(encoding="utf-8")
+        rows = _json.loads((FIXTURES / "chanlun_000001_weekly.json").read_text(encoding="utf-8"))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
         )
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
         zs = res.zss[0]
         base = zs.zg - zs.zd
         wide = zs.gg - zs.dd
         assert wide > base * 2, (
-            f"预期 GG/DD 区间显著大于 ZG/ZD（实测应约 +530%），实得 "
-            f"{wide:.2f} vs {base:.2f}"
+            f"预期 GG/DD 区间显著大于 ZG/ZD（实测应约 +530%），实得 {wide:.2f} vs {base:.2f}"
         )
 
 
@@ -373,9 +348,7 @@ class TestSecondTypeSpanWindowConfigurable:
 
     def test_span_gate_actually_applies(self) -> None:
         """设为极小值时应能拦掉信号；不设时不应拦 —— 两侧都要验证。"""
-        rows = json.loads(
-            (FIXTURES / "chanlun_000333_daily.json").read_text(encoding="utf-8")
-        )
+        rows = json.loads((FIXTURES / "chanlun_000333_daily.json").read_text(encoding="utf-8"))
         got_open = ChanlunAnalyser(
             code="T", frequency="daily", config=ChanlunConfig(mmd_2nd_span_max_bars=0)
         ).process_klines(pd.DataFrame(rows))
@@ -385,9 +358,7 @@ class TestSecondTypeSpanWindowConfigurable:
         types_open = [m.mmd_type.value for m in got_open.mmds]
         types_tight = [m.mmd_type.value for m in got_tight.mmds]
         assert "2buy" in types_open, f"不限时 2买 应存在，实得 {types_open}"
-        assert "2buy" not in types_tight, (
-            f"收紧到 1 根时 2买 应被拦掉，实得 {types_tight}"
-        )
+        assert "2buy" not in types_tight, f"收紧到 1 根时 2买 应被拦掉，实得 {types_tight}"
 
     def test_adjacent_bis_share_endpoints(self) -> None:
         """前提事实：相邻笔共享端点 ⇒ 旧的 time_to_leave>30 恒为 0（死代码）。"""
@@ -424,9 +395,9 @@ class TestNonCanonicalHeuristicsAreInert:
             df = pd.DataFrame(rows)
             before = [
                 m.mmd_type.value
-                for m in ChanlunAnalyser(
-                    code="T", frequency="daily", config=ChanlunConfig()
-                ).process_klines(df).mmds
+                for m in ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig())
+                .process_klines(df)
+                .mmds
             ]
             saved = (
                 mmd_mod._MIN_1ST_GAP_BIS,
@@ -437,9 +408,9 @@ class TestNonCanonicalHeuristicsAreInert:
                 mmd_mod._MIN_REBOUND_RATIO = 0.0
                 after = [
                     m.mmd_type.value
-                    for m in ChanlunAnalyser(
-                        code="T", frequency="daily", config=ChanlunConfig()
-                    ).process_klines(df).mmds
+                    for m in ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig())
+                    .process_klines(df)
+                    .mmds
                 ]
             finally:
                 mmd_mod._MIN_1ST_GAP_BIS, mmd_mod._MIN_REBOUND_RATIO = saved
@@ -492,9 +463,9 @@ class TestSecondTypeDependsOnFirstType:
         b += seg(6, 16.0, 17.0) + seg(6, 17.0, 16.0) + seg(6, 16.0, 17.0)
         b += seg(14, 17.0, 14.0)
         b += seg(6, 14.0, 15.0) + seg(6, 15.0, 14.0) + seg(6, 14.0, 15.0)
-        b += seg(30, 15.0, 12.5)   # 背驰离开段，创新低
-        b += seg(8, 12.5, 15.0)    # 反弹（离开笔）
-        b += seg(6, 15.0, 14.0)    # 回调不创新低 → 教科书 2买
+        b += seg(30, 15.0, 12.5)  # 背驰离开段，创新低
+        b += seg(8, 12.5, 15.0)  # 反弹（离开笔）
+        b += seg(6, 15.0, 14.0)  # 回调不创新低 → 教科书 2买
         b += seg(8, 14.0, 16.0)
         return b
 
@@ -520,11 +491,7 @@ class TestSecondTypeDependsOnFirstType:
                     config=ChanlunConfig(bi_force_normalize=norm),
                 ).process_klines(pd.DataFrame(rows))
                 closes = [k.close for k in res.klines]
-                marked = {
-                    m.bi.index
-                    for m in res.mmds
-                    if m.mmd_type.value == "1buy" and m.bi
-                }
+                marked = {m.bi.index for m in res.mmds if m.mmd_type.value == "1buy" and m.bi}
                 cands = set()
                 for bi in res.bis:
                     if bi.direction.value != "down":
@@ -556,21 +523,21 @@ class TestSecondTypeDependsOnFirstType:
 
         rows = []
         dt = datetime(2024, 1, 2)
-        for o, c, h, l in self._case1_bars():
+        for o, c, h, ln in self._case1_bars():
             rows.append(
                 {
                     "datetime": dt,
                     "open": o,
                     "close": c,
                     "high": h,
-                    "low": l,
+                    "low": ln,
                     "vol": 1e6,
                 }
             )
             dt += timedelta(days=1)
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
+        )
         closes = [k.close for k in res.klines]
 
         below = []
@@ -582,31 +549,29 @@ class TestSecondTypeDependsOnFirstType:
             if rz is None or bi.low >= rz.zd:
                 continue
             below.append(bi.index)
-            if _is_strong_beichi(
-                bi, res.bis, res.zss, closes, 0.8, normalize_by_bars=False
-            ):
+            if _is_strong_beichi(bi, res.bis, res.zss, closes, 0.8, normalize_by_bars=False):
                 beichi.append(bi.index)
 
         assert below, f"前置假设失败：应有跌破 zd 的笔，实得 {below}"
         assert beichi == [], (
-            f"norm=False 下应无背驰候选（这才是 1买/2买 消失的真正原因），"
-            f"实得 {beichi}"
+            f"norm=False 下应无背驰候选（这才是 1买/2买 消失的真正原因），实得 {beichi}"
         )
 
     def test_cascade_suppresses_valid_2buy(self) -> None:
         """1买 消失 → 结构合法的 2买 也连带消失（记录偏差）。"""
-        from datetime import datetime as _dt, timedelta as _td
+        from datetime import datetime as _dt
+        from datetime import timedelta as _td
 
         rows = []
         dt = _dt(2024, 1, 2)
-        for o, c, h, l in self._case1_bars():
+        for o, c, h, ln in self._case1_bars():
             rows.append(
                 {
                     "datetime": dt,
                     "open": o,
                     "close": c,
                     "high": h,
-                    "low": l,
+                    "low": ln,
                     "vol": 1e6,
                 }
             )
@@ -619,13 +584,15 @@ class TestSecondTypeDependsOnFirstType:
                 code="T",
                 frequency="daily",
                 config=ChanlunConfig(bi_force_normalize=True),
-            ).process_klines(df).mmds
+            )
+            .process_klines(df)
+            .mmds
         ]
         closed = [
             m.mmd_type.value
-            for m in ChanlunAnalyser(
-                code="T", frequency="daily", config=ChanlunConfig()
-            ).process_klines(df).mmds
+            for m in ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig())
+            .process_klines(df)
+            .mmds
         ]
 
         assert "1buy" in opened, f"归一化开启时应有 1buy，实得 {opened}"
@@ -668,27 +635,23 @@ class TestSecondTypeSpanCrossPeriodEquivalence:
         b += seg(6, 14.0, 15.0) + seg(6, 15.0, 14.0) + seg(6, 14.0, 15.0)
         b += seg(30, 15.0, 12.5)
         b += seg(8, 12.5, 15.0)
-        b += seg(pullback_bars, 15.0, 14.0)   # 回调不创新低 → 2买
+        b += seg(pullback_bars, 15.0, 14.0)  # 回调不创新低 → 2买
         b += seg(8, 14.0, 16.0)
         flat = b
         rows = []
         dt = datetime(2024, 1, 2)
-        for o, c, h, l in flat:
-            rows.append(
-                {"datetime": dt, "open": o, "close": c, "high": h, "low": l, "vol": 1e6}
-            )
+        for o, c, h, ln in flat:
+            rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": ln, "vol": 1e6})
             dt += timedelta(days=1)
         return pd.DataFrame(rows)
 
     def _types(self, pullback_bars: int, span_limit: int) -> list[str]:
-        cfg = ChanlunConfig(
-            bi_force_normalize=True, mmd_2nd_span_max_bars=span_limit
-        )
+        cfg = ChanlunConfig(bi_force_normalize=True, mmd_2nd_span_max_bars=span_limit)
         return [
             m.mmd_type.value
-            for m in ChanlunAnalyser(
-                code="T", frequency="daily", config=cfg
-            ).process_klines(self._bars(pullback_bars)).mmds
+            for m in ChanlunAnalyser(code="T", frequency="daily", config=cfg)
+            .process_klines(self._bars(pullback_bars))
+            .mmds
         ]
 
     def test_long_pullback_rejected_by_daily_limit(self) -> None:
@@ -748,16 +711,14 @@ class TestBiForceNormalizeTradeoff:
         b += seg(6, 16.0, 17.0) + seg(6, 17.0, 16.0) + seg(6, 16.0, 17.0)
         b += seg(14, 17.0, 14.0)
         b += seg(6, 14.0, 15.0) + seg(6, 15.0, 14.0) + seg(6, 14.0, 15.0)
-        b += seg(leaving_bars, 15.0, 12.5)      # 背驰离开段，创新低
-        b += seg(8, 12.5, 15.0)                 # 反弹
-        b += seg(6, 15.0, 14.0)                 # 回调不创新低
+        b += seg(leaving_bars, 15.0, 12.5)  # 背驰离开段，创新低
+        b += seg(8, 12.5, 15.0)  # 反弹
+        b += seg(6, 15.0, 14.0)  # 回调不创新低
         b += seg(8, 14.0, 16.0)
         rows = []
         dt = datetime(2024, 1, 2)
-        for o, c, h, l in b:
-            rows.append(
-                {"datetime": dt, "open": o, "close": c, "high": h, "low": l, "vol": 1e6}
-            )
+        for o, c, h, ln in b:
+            rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": ln, "vol": 1e6})
             dt += timedelta(days=1)
         return pd.DataFrame(rows)
 
@@ -768,7 +729,9 @@ class TestBiForceNormalizeTradeoff:
                 code="T",
                 frequency="daily",
                 config=ChanlunConfig(bi_force_normalize=normalize),
-            ).process_klines(self._case(leaving_bars)).mmds
+            )
+            .process_klines(self._case(leaving_bars))
+            .mmds
         )
 
     def test_normalize_recovers_slow_decline(self) -> None:
@@ -829,9 +792,9 @@ class TestBiForceDimensionMixing:
 
     def _res_and_closes(self, fixture: str = "chanlun_000333_daily.json"):
         rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
+        )
         return res, [k.close for k in res.klines]
 
     def test_no_degraded_path_on_complete_closes(self) -> None:
@@ -843,9 +806,7 @@ class TestBiForceDimensionMixing:
                 for bi in res.bis
                 if bi.start.bar_index < 0 or bi.end.bar_index >= len(closes)
             ]
-            assert degraded == [], (
-                f"{fixture}: 完整 closes 下仍有笔走降级路径 {degraded}"
-            )
+            assert degraded == [], f"{fixture}: 完整 closes 下仍有笔走降级路径 {degraded}"
 
     def test_paths_differ_by_an_order_of_magnitude(self) -> None:
         """两条路径数值确实差很大 —— 记录量级，防止有人以为可互换。"""
@@ -855,7 +816,7 @@ class TestBiForceDimensionMixing:
         ratios = []
         for i, bi in enumerate(res.bis):
             macd_v = _calc_bi_force(bi, closes, i)
-            amp_v = _calc_bi_force(bi, None, i)   # 强制走振幅降级
+            amp_v = _calc_bi_force(bi, None, i)  # 强制走振幅降级
             if macd_v > 0:
                 ratios.append(amp_v / macd_v)
         assert ratios, "无有效笔"
@@ -871,19 +832,15 @@ class TestBiForceDimensionMixing:
         hits_full = [
             bi.index
             for bi in res.bis
-            if bi.direction.value == "down"
-            and _is_strong_beichi(bi, res.bis, res.zss, full, 0.8)
+            if bi.direction.value == "down" and _is_strong_beichi(bi, res.bis, res.zss, full, 0.8)
         ]
         short = full[:40]
         hits_short = [
             bi.index
             for bi in res.bis
-            if bi.direction.value == "down"
-            and _is_strong_beichi(bi, res.bis, res.zss, short, 0.8)
+            if bi.direction.value == "down" and _is_strong_beichi(bi, res.bis, res.zss, short, 0.8)
         ]
-        degraded = sum(
-            1 for bi in res.bis if bi.end.bar_index >= len(short)
-        )
+        degraded = sum(1 for bi in res.bis if bi.end.bar_index >= len(short))
         assert degraded > 0, f"前置假设失败：裁剪后应有降级笔，实得 {degraded}"
         assert hits_full != hits_short, (
             f"裁剪后结果应漂移，实得 full={hits_full} short={hits_short}"
@@ -927,21 +884,18 @@ class TestBlindSpotN16IsGenuineBoundary:
         b += seg(6, 14.0, 15.0) + seg(6, 15.0, 14.0) + seg(6, 14.0, 15.0)
         b += seg(n, 15.0, 12.5)
         b += seg(8, 12.5, 15.0) + seg(6, 15.0, 14.0) + seg(8, 14.0, 16.0)
-        for o, c, h, l in b:
-            rows.append(
-                {"datetime": dt, "open": o, "close": c, "high": h, "low": l, "vol": 1e6}
-            )
+        for o, c, h, ln in b:
+            rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": ln, "vol": 1e6})
             dt += timedelta(days=1)
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
+        )
         closes = [k.close for k in res.klines]
         pos = {bi.index: i for i, bi in enumerate(res.bis)}
         b3, b7 = res.bis[pos[3]], res.bis[pos[7]]
         raw = _calc_bi_force(b7, closes, pos[7]) / _calc_bi_force(b3, closes, pos[3])
-        nrm = (
-            _calc_bi_force(b7, closes, pos[7], normalize_by_bars=True)
-            / _calc_bi_force(b3, closes, pos[3], normalize_by_bars=True)
+        nrm = _calc_bi_force(b7, closes, pos[7], normalize_by_bars=True) / _calc_bi_force(
+            b3, closes, pos[3], normalize_by_bars=True
         )
         amp = abs(b7.high - b7.low) / abs(b3.high - b3.low)
         return raw, nrm, amp, 0.8

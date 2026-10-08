@@ -55,6 +55,7 @@ def _frozen_k(zs) -> int:
         return int(zs.end.k.k_index)
     return 0
 
+
 CASES = [
     ("chanlun_000001_daily.json", "daily"),
     ("chanlun_000333_daily.json", "daily"),
@@ -65,9 +66,7 @@ CASES = [
 
 
 def _load(fname: str, freq: str):
-    df = pd.DataFrame(
-        __import__("json").loads((FIXTURES / fname).read_text(encoding="utf-8"))
-    )
+    df = pd.DataFrame(__import__("json").loads((FIXTURES / fname).read_text(encoding="utf-8")))
     return ChanlunAnalyser(code="T", frequency=freq, config=ChanlunConfig()).process_klines(df)
 
 
@@ -118,7 +117,7 @@ class TestZeroForceNotBeichi:
         closes = [10.0] * 40
         # 构造：prev 力度为正、curr 力度为 0 的极端情形
         # curr_force=0 时旧条件 `0 < prev*threshold` 恒真 → 误判为背驰
-        got = _is_strong_beichi.__wrapped__ if hasattr(_is_strong_beichi, "__wrapped__") else None
+        _got = _is_strong_beichi.__wrapped__ if hasattr(_is_strong_beichi, "__wrapped__") else None  # noqa: F841
         # 该函数依赖 bis/zss 结构较复杂，此处改为直接验证保护条件本身：
         prev_force, curr_force, threshold = 1.0, 0.0, 0.8
         old_result = prev_force > 0 and curr_force < prev_force * threshold
@@ -143,9 +142,7 @@ class TestSignalSanity:
     def test_first_second_type_signals_survive(self) -> None:
         res = _load("chanlun_000001_daily.json", "daily")
         kinds = {m.mmd_type.value for m in res.mmds}
-        assert kinds & {"1buy", "1sell", "2buy", "2sell"}, (
-            f"一/二类买卖点被整体清空，仅剩 {kinds}"
-        )
+        assert kinds & {"1buy", "1sell", "2buy", "2sell"}, f"一/二类买卖点被整体清空，仅剩 {kinds}"
 
 
 class TestSecondTypeBuySellSymmetry:
@@ -163,9 +160,9 @@ class TestSecondTypeBuySellSymmetry:
         from easy_tdx.chanlun.mmd import _find_first_type_mmds, _find_second_type_mmds
 
         rows = _json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig()
-        ).process_klines(pd.DataFrame(rows))
+        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+            pd.DataFrame(rows)
+        )
         cfg = ChanlunConfig()
         closes = [k.close for k in res.klines]
         highs = [k.high for k in res.klines]

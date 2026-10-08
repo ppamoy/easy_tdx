@@ -29,17 +29,18 @@ SCRIPTS = ROOT / "scripts"
 class TestScriptsHaveRealGates:
     """审计脚本必须在违规时返回非 0，否则 CI 里的检查是摆设。"""
 
-    @pytest.mark.parametrize("name", [
-        "audit_future_leak_real",
-        "audit_chanlun_invariants",
-        "audit_rolling_oos",
-    ])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "audit_future_leak_real",
+            "audit_chanlun_invariants",
+            "audit_rolling_oos",
+        ],
+    )
     def test_returns_nonzero_on_violation(self, name: str) -> None:
         src = (SCRIPTS / f"{name}.py").read_text(encoding="utf-8")
         # 必须有 return 1（违规）而不只是 return 0
-        assert "return 1" in src, (
-            f"{name}.py 没有 `return 1` 路径 —— 违规时不会失败，CI 门禁失效"
-        )
+        assert "return 1" in src, f"{name}.py 没有 `return 1` 路径 —— 违规时不会失败，CI 门禁失效"
 
     def test_rolling_oos_mentions_gate(self) -> None:
         src = (SCRIPTS / "audit_rolling_oos.py").read_text(encoding="utf-8")
@@ -79,6 +80,7 @@ class TestChanlunAuditJobBlocksOnGates:
     @staticmethod
     def _job() -> dict:
         import yaml
+
         ci = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
         return ci["jobs"]["chanlun-audit"]
 
@@ -86,8 +88,8 @@ class TestChanlunAuditJobBlocksOnGates:
         """job 级不得有 continue-on-error，否则三个门禁全成摆设。"""
         job = self._job()
         assert not job.get("continue-on-error"), (
-            "chanlun-audit 不得整体允许失败：否则未来函数/不变式/门禁"
-            "红了也不阻塞合并，等于没有门禁")
+            "chanlun-audit 不得整体允许失败：否则未来函数/不变式/门禁红了也不阻塞合并，等于没有门禁"
+        )
 
     def test_only_fetch_step_tolerates_failure(self) -> None:
         steps = self._job()["steps"]
@@ -127,7 +129,10 @@ class TestNoDataIsNotSilentPass:
 
     @staticmethod
     def _run_nodata(script: str, tmp_path: Path) -> int:
-        import subprocess, shutil, sys
+        import shutil
+        import subprocess
+        import sys
+
         d = tmp_path / script.replace(".py", "")
         d.mkdir()
         (d / "scripts").mkdir()
@@ -135,15 +140,21 @@ class TestNoDataIsNotSilentPass:
         (d / "src").symlink_to(ROOT / "src")
         r = subprocess.run(
             [sys.executable, f"scripts/{script}"],
-            cwd=d, capture_output=True, text=True, timeout=120,
+            cwd=d,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         return r.returncode
 
-    @pytest.mark.parametrize("script", [
-        "audit_future_leak_real.py",
-        "audit_chanlun_invariants.py",
-        "audit_rolling_oos.py",
-    ])
+    @pytest.mark.parametrize(
+        "script",
+        [
+            "audit_future_leak_real.py",
+            "audit_chanlun_invariants.py",
+            "audit_rolling_oos.py",
+        ],
+    )
     def test_missing_data_exits_nonzero(self, script: str, tmp_path: Path) -> None:
         """⚠️ 牙齿：真实空目录（非 symlink 逃逸）下必须非 0 退出。"""
         rc = self._run_nodata(script, tmp_path)
@@ -155,8 +166,12 @@ class TestCIJobWiring:
 
     def test_ci_runs_audit_scripts(self) -> None:
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        for s in ("audit_fetch_real_data.py", "audit_future_leak_real.py",
-                  "audit_chanlun_invariants.py", "audit_rolling_oos.py"):
+        for s in (
+            "audit_fetch_real_data.py",
+            "audit_future_leak_real.py",
+            "audit_chanlun_invariants.py",
+            "audit_rolling_oos.py",
+        ):
             assert s in ci, f"CI 未调用 {s}"
 
     def test_ci_continue_on_error_is_documented(self) -> None:
@@ -168,9 +183,7 @@ class TestCIJobWiring:
         ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         assert "continue-on-error" in ci
         # 附近应有中文说明（同一 job 内）
-        assert "外网" in ci or "不阻塞" in ci, (
-            "continue-on-error 需要注释说明为何允许失败"
-        )
+        assert "外网" in ci or "不阻塞" in ci, "continue-on-error 需要注释说明为何允许失败"
 
 
 class TestGateIsSampleSizeAware:
@@ -186,6 +199,7 @@ class TestGateIsSampleSizeAware:
     @staticmethod
     def _gate(per_type: dict[str, list[float]], n_sym: int) -> bool:
         import numpy as np
+
         strict = n_sym >= 200
         min_pos = TestGateIsSampleSizeAware.N_WINDOWS if strict else max(4, 5)
         failed = []
@@ -206,30 +220,25 @@ class TestGateIsSampleSizeAware:
 
     def test_ci_small_sample_5of6_passes(self) -> None:
         """CI 真实情形：30 只、1buy 5/6、中位为正 → 必须通过。"""
-        d = {"1buy": [0.008, 0.007, 0.009, -0.016, 0.049, 0.012],
-             "3sell": [-0.01] * 6}
+        d = {"1buy": [0.008, 0.007, 0.009, -0.016, 0.049, 0.012], "3sell": [-0.01] * 6}
         assert self._gate(d, n_sym=30) is True
 
     def test_full_sample_requires_6of6(self) -> None:
         """全量档：286 只时 5/6 不再够。"""
-        d = {"1buy": [0.008, 0.007, 0.009, -0.016, 0.049, 0.012],
-             "3sell": [-0.01] * 6}
+        d = {"1buy": [0.008, 0.007, 0.009, -0.016, 0.049, 0.012], "3sell": [-0.01] * 6}
         assert self._gate(d, n_sym=286) is False
 
     def test_full_sample_6of6_passes(self) -> None:
-        assert self._gate({"1buy": [0.01] * 6, "3sell": [-0.01] * 6},
-                           n_sym=286) is True
+        assert self._gate({"1buy": [0.01] * 6, "3sell": [-0.01] * 6}, n_sym=286) is True
 
     def test_median_must_be_positive_in_small_tier(self) -> None:
         """小样本档即使 5/6，中位为负也要失败（核心结论不能转负）。"""
-        d = {"1buy": [-0.02, -0.01, 0.001, 0.002, 0.003, -0.03],
-             "3sell": [-0.01] * 6}
+        d = {"1buy": [-0.02, -0.01, 0.001, 0.002, 0.003, -0.03], "3sell": [-0.01] * 6}
         assert self._gate(d, n_sym=30) is False
 
     def test_teeth_threshold_is_not_trivially_permissive(self) -> None:
         """牙齿：小样本档也不能松到 3/6 就放行。"""
-        d = {"1buy": [0.01, 0.01, 0.01, -0.02, -0.02, -0.02],
-             "3sell": [-0.01] * 6}
+        d = {"1buy": [0.01, 0.01, 0.01, -0.02, -0.02, -0.02], "3sell": [-0.01] * 6}
         assert self._gate(d, n_sym=30) is False
 
 
@@ -242,6 +251,7 @@ class TestGateLogicTeeth:
     def _gate(per_type: dict[str, list[float]]) -> bool:
         """与 scripts/audit_rolling_oos.py 中门禁逻辑保持一致。"""
         import numpy as np
+
         failed = []
         for st in ("1buy", "3sell"):
             v = per_type.get(st)
@@ -261,13 +271,17 @@ class TestGateLogicTeeth:
 
     def test_1buy_regression_fails(self) -> None:
         """1buy 出现负窗 → 必须失败（这是最该被抓住的回归）。"""
-        assert self._gate({"1buy": [0.01, -0.02, 0.01, 0.01, 0.01, 0.01],
-                           "3sell": [-0.01] * 6}) is False
+        assert (
+            self._gate({"1buy": [0.01, -0.02, 0.01, 0.01, 0.01, 0.01], "3sell": [-0.01] * 6})
+            is False
+        )
 
     def test_3sell_turning_positive_fails(self) -> None:
         """3sell 若变成多数窗为正 → 说明结论被推翻，必须失败让人来复核。"""
-        assert self._gate({"1buy": [0.01] * 6,
-                           "3sell": [0.01, 0.01, -0.01, -0.01, -0.01, -0.01]}) is False
+        assert (
+            self._gate({"1buy": [0.01] * 6, "3sell": [0.01, 0.01, -0.01, -0.01, -0.01, -0.01]})
+            is False
+        )
 
     def test_insufficient_windows_fails(self) -> None:
         """窗数不足不能静默通过。"""
@@ -277,12 +291,16 @@ class TestGateLogicTeeth:
 class TestScriptSignatures:
     """脚本入口必须把 main() 的返回值传给 SystemExit。"""
 
-    @pytest.mark.parametrize("name", [
-        "audit_future_leak_real", "audit_chanlun_invariants",
-        "audit_rolling_oos", "audit_capacity", "audit_multi_period",
-    ])
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "audit_future_leak_real",
+            "audit_chanlun_invariants",
+            "audit_rolling_oos",
+            "audit_capacity",
+            "audit_multi_period",
+        ],
+    )
     def test_exit_code_propagates(self, name: str) -> None:
         src = (SCRIPTS / f"{name}.py").read_text(encoding="utf-8")
-        assert "raise SystemExit(main())" in src, (
-            f"{name}.py 未把 main() 返回值作为退出码"
-        )
+        assert "raise SystemExit(main())" in src, f"{name}.py 未把 main() 返回值作为退出码"

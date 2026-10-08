@@ -28,11 +28,20 @@ DISCLOSE = date(2026, 4, 29)
 
 def _row(**over) -> pd.Series:
     base = {
-        "code": "600001", "market": "SH",
-        "report_date": REPORT_DATE, "disclosure_date": DISCLOSE,
-        "roe": 20.0, "revenue": 500e8, "gross_margin": 40.0,
-        "net_margin": 15.0, "eps": 2.0, "net_profit": 80e8,
-        "debt_ratio": 35.0, "dividend_yield": 2.0, "pe": 20.0, "pb": 3.0,
+        "code": "600001",
+        "market": "SH",
+        "report_date": REPORT_DATE,
+        "disclosure_date": DISCLOSE,
+        "roe": 20.0,
+        "revenue": 500e8,
+        "gross_margin": 40.0,
+        "net_margin": 15.0,
+        "eps": 2.0,
+        "net_profit": 80e8,
+        "debt_ratio": 35.0,
+        "dividend_yield": 2.0,
+        "pe": 20.0,
+        "pb": 3.0,
     }
     base.update(over)
     return pd.Series(base)
@@ -61,23 +70,24 @@ class TestClassificationTakesMaxScore:
     def test_meeting_tree_roe_can_still_be_grain(self) -> None:
         """实测：tree=64 但 grain=65 → 判为 grain。"""
         s = screen_stock(
-            _row(roe=15.0, revenue=3000e8, gross_margin=70.0,
-                 net_margin=25.0, eps=5.0, net_profit=500e8,
-                 dividend_yield=1.0),
+            _row(
+                roe=15.0,
+                revenue=3000e8,
+                gross_margin=70.0,
+                net_margin=25.0,
+                eps=5.0,
+                net_profit=500e8,
+                dividend_yield=1.0,
+            ),
             pool_size=100,
         )
         scores = s.scores
-        assert scores["grain"] > scores["tree"], (
-            f"构造前提失效: {scores}"
-        )
-        assert s.category == "grain", (
-            f"分类应取最高分项 grain，实际 {s.category} ({scores})"
-        )
+        assert scores["grain"] > scores["tree"], f"构造前提失效: {scores}"
+        assert s.category == "grain", f"分类应取最高分项 grain，实际 {s.category} ({scores})"
 
     def test_category_equals_argmax(self) -> None:
         """一般性地验证 category 就是 argmax(scores)。"""
-        s = screen_stock(_row(roe=25.0, dividend_yield=0.0, debt_ratio=70.0),
-                         pool_size=100)
+        s = screen_stock(_row(roe=25.0, dividend_yield=0.0, debt_ratio=70.0), pool_size=100)
         expected = max(s.scores, key=lambda k: s.scores[k])
         assert s.category == expected, f"{s.category} != argmax {expected}"
 
@@ -87,16 +97,23 @@ class TestNoAbsoluteFloor:
 
     def test_globally_weak_stock_still_gets_a_label(self) -> None:
         s = screen_stock(
-            _row(roe=1.0, revenue=5e8, gross_margin=5.0, net_margin=1.0,
-                 eps=0.02, net_profit=1e7, debt_ratio=85.0,
-                 dividend_yield=0.0, pe=200.0, pb=15.0),
+            _row(
+                roe=1.0,
+                revenue=5e8,
+                gross_margin=5.0,
+                net_margin=1.0,
+                eps=0.02,
+                net_profit=1e7,
+                debt_ratio=85.0,
+                dividend_yield=0.0,
+                pe=200.0,
+                pb=15.0,
+            ),
             pool_size=100,
         )
         assert s.category in {"tree", "grain", "vegetable"}
         # 记录实测值：弱票也被贴了标签（无绝对门槛）
-        assert max(s.scores.values()) < 60, (
-            f"这只票分数应明显偏低，实际 {s.scores}"
-        )
+        assert max(s.scores.values()) < 60, f"这只票分数应明显偏低，实际 {s.scores}"
 
     def test_scores_are_exposed_for_explainability(self) -> None:
         """每条结果必须带三项分值与明细（需求要求"可解释"）。"""

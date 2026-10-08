@@ -3,6 +3,7 @@
 背景：五之二十八 我明确留了缺口——"未做行业中性化，
 若入选组集中在某行业，残留行业 beta 未排除"。本脚本补这个缺口。
 """
+
 from __future__ import annotations
 
 import os
@@ -37,8 +38,7 @@ def _code() -> str:
         for tok in tokenize.tokenize(fh.readline):
             if tok.type in (tokenize.COMMENT, tokenize.STRING):
                 continue
-            if tok.type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT,
-                            tokenize.DEDENT):
+            if tok.type in (tokenize.NL, tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT):
                 continue
             lines.setdefault(tok.start[0], []).append(tok.string)
     return chr(10).join("".join(v) for _, v in sorted(lines.items()))
@@ -51,7 +51,11 @@ class TestNoDataExitsTwo:
     def _run(self, cwd: Path, cache: str) -> subprocess.CompletedProcess:
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--cache", cache],
-            cwd=cwd, capture_output=True, text=True, timeout=300)
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
 
     def test_missing_cache_exits_two(self, tmp_path: Path) -> None:
         r = self._run(ROOT, str(tmp_path / "nope.json"))
@@ -110,7 +114,7 @@ class TestIndustrySource:
     def test_uses_sw_industry(self) -> None:
         """用**申万**行业（industry_sw），不是通达信的粗分类。"""
         src = _s()
-        assert 'industry_sw' in src
+        assert "industry_sw" in src
 
     def test_market_enum_mapping(self) -> None:
         """⚠️ 踩过的坑：API 的 market 是枚举 0=SZ/1=SH，
@@ -134,10 +138,8 @@ class TestTeeth:
 
     def test_bite_overall_mean(self, tmp_path: Path) -> None:
         """把'同行业均值'换成'整体均值' ⇒ 中性化失效。"""
-        src = _s().replace(
-            'groupby("ind")["r"].transform("mean")', '"r".mean()')
-        assert 'groupby("ind")' not in src, \
-            "换成整体均值后必须被 TestNeutralisationIsReal 抓到"
+        src = _s().replace('groupby("ind")["r"].transform("mean")', '"r".mean()')
+        assert 'groupby("ind")' not in src, "换成整体均值后必须被 TestNeutralisationIsReal 抓到"
 
 
 class TestSizeNeutralisation:
@@ -207,9 +209,8 @@ class TestVerdictCoversBoth:
 class TestSizeTeeth:
     def test_bite_overall_mean_instead_of_quintile(self) -> None:
         """换成整体均值 ⇒ 市值中性失效。"""
-        src = _s().replace(
-            'groupby(bins)["r"].transform("mean")', '"r".mean()')
-        assert 'groupby(bins)' not in src
+        src = _s().replace('groupby(bins)["r"].transform("mean")', '"r".mean()')
+        assert "groupby(bins)" not in src
 
     def test_bite_latest_price_instead_of_point_in_time(self) -> None:
         """用最新价（close[-1]）⇒ 引入未来函数。"""
@@ -265,7 +266,8 @@ class TestJointTeeth:
         """联合里只按市值分组 ⇒ 残留行业差异。"""
         src = _s().replace(
             'groupby(["ind", "mcap_bin"],\n                                        observed=True)',
-            'groupby(["mcap_bin"], observed=True)')
+            'groupby(["mcap_bin"], observed=True)',
+        )
         assert '["ind", "mcap_bin"]' not in src
 
 
@@ -295,7 +297,7 @@ class TestFamaMacBeth:
         ⇒ 自由度仅 8，模型**接近饱和**，R²=0.93 是**过拟合**，
         beta 被扭曲成 **+1.25%（符号都反了）**。
         用申万**一级**（前 3 位）后 beta 回到 −1.40%，与分组口径一致。"""
-        assert 'str[:3]' in _s()
+        assert "str[:3]" in _s()
 
     def test_guards_dof_before_fitting(self) -> None:
         """⚠️ 必须检查自由度，否则过拟合会**静默**给出漂亮但假的 R²。"""
@@ -325,7 +327,7 @@ class TestFamaMacBeth:
 class TestFamaMacBethTeeth:
     def test_bite_switching_to_fine_industry(self) -> None:
         """改回**细行业** ⇒ 自由度耗尽/过拟合，必须被测试抓到。"""
-        src = _s().replace('str[:3]', 'str[:6]')
+        src = _s().replace("str[:3]", "str[:6]")
         assert "str[:3]" not in src
 
     def test_bite_removing_dof_guard(self) -> None:
@@ -359,20 +361,25 @@ class TestFamaMacBethTeeth:
 
         rows = []
         for t in range(6):
-            base = 0.01 + 0.001 * t          # 每个时点整体涨一点
+            base = 0.01 + 0.001 * t  # 每个时点整体涨一点
             for i in range(20):
-                rows.append({
-                    "code": f"c{i}", "t": 100 + t * 10,
-                    "r": base,              # ⚠️ 同点内零方差：完全相关
-                    "hit": i < 5, "mcap": 100.0 + i,
-                    "logmcap": float(np.log(100.0 + i)),
-                    "ind": "X110101",
-                })
+                rows.append(
+                    {
+                        "code": f"c{i}",
+                        "t": 100 + t * 10,
+                        "r": base,  # ⚠️ 同点内零方差：完全相关
+                        "hit": i < 5,
+                        "mcap": 100.0 + i,
+                        "logmcap": float(np.log(100.0 + i)),
+                        "ind": "X110101",
+                    }
+                )
         out = mod._fama_macbeth(pd.DataFrame(rows))
         n_tp = out[3]
         assert n_tp == 6, (
             f"应逐时点回归得到 6 个系数，实得 {n_tp}——"
-            f"若为 0 说明退化成了 pooled OLS 或全被自由度守卫筛掉")
+            f"若为 0 说明退化成了 pooled OLS 或全被自由度守卫筛掉"
+        )
 
 
 class TestMultiplicity:
@@ -440,8 +447,7 @@ class TestMultiplicityTeeth:
 
     def test_bite_removing_holm_and_bh(self) -> None:
         """只剩 Bonferroni（最保守）⇒ 漏掉另外两种口径。"""
-        src = _s().replace("Holm-Bonferroni", "x").replace(
-            "Benjamini-Hochberg", "y")
+        src = _s().replace("Holm-Bonferroni", "x").replace("Benjamini-Hochberg", "y")
         assert "Holm-Bonferroni" not in src
 
     def test_bite_dropping_a_registered_basis(self, broken_file) -> None:
@@ -454,10 +460,9 @@ class TestMultiplicityTeeth:
         ⇒ "打偏"和"只改副本"两类错误我都犯过，
            现在统一用 broken_file fixture **真改磁盘**。
         """
-        broken_file('("trend=down",         +0.56, +0.84, 0.3999),', '')
+        broken_file('("trend=down",         +0.56, +0.84, 0.3999),', "")
         src = _s()
-        main = src[src.index("MEASURED_BASES: list"):
-                   src.index("LEGACY_60_BASES")]
+        main = src[src.index("MEASURED_BASES: list") : src.index("LEGACY_60_BASES")]
         assert "trend=down" not in main
 
     def test_bite_removing_uniformity_test(self) -> None:
@@ -469,9 +474,8 @@ class TestMultiplicityTeeth:
         # ⇒ 正确做法：断言的是**调用点**，不是 import 语句。
         #    删掉真正干活的那行 kstest(...) 调用。
         src = _s()
-        assert "d, pu = kstest(ps, \"uniform\")" in src
-        src_bad = src.replace('d, pu = kstest(ps, "uniform")',
-                              'd, pu = 0.0, 1.0')
+        assert 'd, pu = kstest(ps, "uniform")' in src
+        src_bad = src.replace('d, pu = kstest(ps, "uniform")', "d, pu = 0.0, 1.0")
         assert 'd, pu = kstest(ps, "uniform")' not in src_bad
 
 
@@ -498,8 +502,9 @@ class TestSignalTypeScreening:
     def test_endpoint_really_supports_these(self) -> None:
         """⚠️ 必须核对**端点**真的支持这些取值——
         否则我测的是一个端点上根本不存在的筛选条件。"""
-        router = (ROOT / "src" / "easy_tdx" / "web" / "routers"
-                  / "screening.py").read_text(encoding="utf-8")
+        router = (ROOT / "src" / "easy_tdx" / "web" / "routers" / "screening.py").read_text(
+            encoding="utf-8"
+        )
         assert 'criteria.get("signal_type"' in router
         for sig in ("1buy", "2buy", "3buy", "1sell"):
             assert sig in router
@@ -525,8 +530,8 @@ class TestSameSampleCorrection:
     def test_all_bases_are_120_stocks(self) -> None:
         """⚠️ 主表 MEASURED_BASES 必须**全部**同口径。"""
         src = _s()
-        block = src[src.index("MEASURED_BASES: list"):]
-        block = block[:block.index("\n]\n")]
+        block = src[src.index("MEASURED_BASES: list") :]
+        block = block[: block.index("\n]\n")]
         assert "120" in block, "MEASURED_BASES 必须标注 120 只口径"
 
     def test_legacy_results_kept_out_of_correction(self) -> None:
@@ -540,8 +545,7 @@ class TestSameSampleCorrection:
         """⚠️ 主表里**不能**混入 60 只口径的旧数值。
         (-0.41/p=0.6132 是 60 只基线；120 只基线是 +0.12/p=0.8278)"""
         src = _s()
-        main = src[src.index("MEASURED_BASES: list"):
-                   src.index("LEGACY_60_BASES")]
+        main = src[src.index("MEASURED_BASES: list") : src.index("LEGACY_60_BASES")]
         assert "0.6132" not in main, "主表混入了 60 只口径的旧基线"
 
     def test_harmless_but_records_sample_size(self) -> None:
@@ -560,15 +564,22 @@ class TestSampleIdentity:
 
     实测（/tmp 下 10 份缓存）：并集 120 / 交集 120 ⇒ 确实同一批 ✅
     """
+
     # ⚠️ 2026-10-08：从**写死 /tmp** 改为可配置 + 多目录兜底。
     #    起因：/tmp 被系统清理后，这条测试在**任何干净机器上都会红**，
     #    而它红的原因与被测代码无关（脚本一行没改）。
     #    现在按 EASY_TDX_BASES_DIR → audit_bases/ → /tmp 依次找。
     _CACHE_DIRS = (
-        (os.environ.get("EASY_TDX_BASES_DIR")
-         or str(Path(__file__).resolve().parents[2] / "audit_bases"), "u120_*.json"),
-        (os.environ.get("EASY_TDX_BASES_DIR")
-         or str(Path(__file__).resolve().parents[2] / "audit_bases"), "sig_*.json"),
+        (
+            os.environ.get("EASY_TDX_BASES_DIR")
+            or str(Path(__file__).resolve().parents[2] / "audit_bases"),
+            "u120_*.json",
+        ),
+        (
+            os.environ.get("EASY_TDX_BASES_DIR")
+            or str(Path(__file__).resolve().parents[2] / "audit_bases"),
+            "sig_*.json",
+        ),
         ("/tmp", "u120_*.json"),
         ("/tmp", "sig_*.json"),
     )
@@ -590,8 +601,9 @@ class TestSampleIdentity:
 
         with tempfile.TemporaryDirectory() as d:
             Path(d, "x_1.json").write_text("[]", encoding="utf-8")
-            assert list(Path(f"{d}/x_*.json").glob("*")) == [], \
+            assert list(Path(f"{d}/x_*.json").glob("*")) == [], (
                 "前提变了：若绝对 pattern 现在能用，这条需重写"
+            )
             assert len(list(Path(d).glob("x_*.json"))) == 1
 
     def test_verified_caches_cover_identical_universe(self) -> None:
@@ -608,16 +620,21 @@ class TestSampleIdentity:
                     data = json.loads(f.read_text())
                 except Exception:
                     continue
-                if (data and isinstance(data, list)
-                        and isinstance(data[0], dict) and "code" in data[0]):
+                if (
+                    data
+                    and isinstance(data, list)
+                    and isinstance(data[0], dict)
+                    and "code" in data[0]
+                ):
                     sets.append({r["code"] for r in data})
         if not sets:
             pytest.fail(
                 "❌ 匹配不到任何审计缓存 ⇒ 这条验证**根本没跑**，"
-                "不能算通过。先跑 audit_chanlun_screen_usefulness.py。")
+                "不能算通过。先跑 audit_chanlun_screen_usefulness.py。"
+            )
         union = set.union(*sets)
         inter = set.intersection(*sets)
         assert union == inter, (
-            f"口径样本不一致：并集 {len(union)} 只 vs 交集 {len(inter)} 只 "
-            f"⇒ 多重比较前提不成立")
+            f"口径样本不一致：并集 {len(union)} 只 vs 交集 {len(inter)} 只 ⇒ 多重比较前提不成立"
+        )
         assert len(inter) == 120, f"样本量应为 120，实为 {len(inter)}"

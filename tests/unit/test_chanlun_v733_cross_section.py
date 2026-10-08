@@ -66,14 +66,21 @@ def _cross_section(seeds: range) -> pd.DataFrame:
     rows = []
     for s in seeds:
         df = _mk_series(s)
-        res = ChanlunAnalyser(code=f"S{s}", frequency="daily", config=ChanlunConfig()).process_klines(df)
+        res = ChanlunAnalyser(
+            code=f"S{s}", frequency="daily", config=ChanlunConfig()
+        ).process_klines(df)
         c = df["close"].to_numpy(dtype=float)
         n_buy = sum(1 for m in res.mmds if m.mmd_type.value.endswith("buy"))
         n_sell = sum(1 for m in res.mmds if m.mmd_type.value.endswith("sell"))
         t = len(c) - 61
         rows.append(
-            {"n_buy": n_buy, "n_sell": n_sell, "net": n_buy - n_sell,
-             "tot": n_buy + n_sell, "fwd": float(c[-1] / c[t] - 1.0)}
+            {
+                "n_buy": n_buy,
+                "n_sell": n_sell,
+                "net": n_buy - n_sell,
+                "tot": n_buy + n_sell,
+                "fwd": float(c[-1] / c[t] - 1.0),
+            }
         )
     return pd.DataFrame(rows)
 

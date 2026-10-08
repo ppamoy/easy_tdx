@@ -41,16 +41,18 @@ class TestParallelScriptExists:
         """
         s = _src()
         # 单一事实来源：必须从共享模块取值
-        assert "from _concurrency import" in s, \
+        assert "from _concurrency import" in s, (
             "workers 默认值必须来自 scripts/_concurrency.py，不要在各自文件里写死"
+        )
         assert "resolve_workers" in s, "未显式传值时必须经 resolve_workers 兜底"
         # 绝不能再回到硬编码默认值（只查 --workers 那一行，避免误伤别的参数）
         for line in s.splitlines():
             if '"--workers"' not in line:
                 continue
             flat = line.replace(" ", "")
-            assert "default=4" not in flat and "default=8" not in flat, \
+            assert "default=4" not in flat and "default=8" not in flat, (
                 f"禁止硬编码 workers：{line}"
+            )
 
 
 class TestExceptionsAreNotSwallowed:
@@ -74,13 +76,15 @@ class TestResultAlignment:
 
     def test_indexes_by_idx(self) -> None:
         s = _src()
-        assert "out[r[0]] = r" in s or "out[r[0]]" in s, \
+        assert "out[r[0]] = r" in s or "out[r[0]]" in s, (
             "结果必须以 idx 为键存入，不能靠完成顺序 append"
+        )
 
     def test_alignment_slicing_present(self) -> None:
         s = _src()
-        assert "for i in range(len(jobs)) if i in out" in s, \
+        assert "for i in range(len(jobs)) if i in out" in s, (
             "必须按 jobs 顺序重建数组，保证同标的对齐"
+        )
 
     def test_alignment_comment_present(self) -> None:
         s = _src()
@@ -152,8 +156,9 @@ class TestRunBgEnforcesRecycling:
 
     def test_kills_whole_process_group(self) -> None:
         s = self.RUN_BG.read_text(encoding="utf-8")
-        assert "kill -TERM  -$$" in s and "kill -KILL -$$" in s, \
+        assert "kill -TERM  -$$" in s and "kill -KILL -$$" in s, (
             "必须按进程组回收，否则父死了 worker 还活着占核"
+        )
 
     def test_cleanup_runs_on_exit(self) -> None:
         s = self.RUN_BG.read_text(encoding="utf-8")
@@ -167,4 +172,5 @@ class TestRunBgEnforcesRecycling:
 
 if __name__ == "__main__":
     import pytest
+
     raise SystemExit(pytest.main([__file__, "-q"]))

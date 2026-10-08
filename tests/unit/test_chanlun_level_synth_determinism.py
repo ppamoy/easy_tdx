@@ -48,15 +48,9 @@ SEEDS = [20240101, 1, 999]
 def _nested_tuple(fixture: str, seed: int) -> tuple[bool | None, ...]:
     rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
     df = pd.DataFrame(rows)
-    hi = ChanlunAnalyser(
-        code="HI", frequency="daily", config=ChanlunConfig()
-    ).process_klines(df)
-    low = synthesize_lower_level(
-        df, high_level="DAY", low_level="MIN_30", seed=seed
-    )
-    lr = ChanlunAnalyser(
-        code="LOW", frequency="low", config=ChanlunConfig()
-    ).process_klines(low)
+    hi = ChanlunAnalyser(code="HI", frequency="daily", config=ChanlunConfig()).process_klines(df)
+    low = synthesize_lower_level(df, high_level="DAY", low_level="MIN_30", seed=seed)
+    lr = ChanlunAnalyser(code="LOW", frequency="low", config=ChanlunConfig()).process_klines(low)
     qt = compute_qujiantao_cross_period(
         hi.mmds,
         bis_low=lr.bis,
@@ -64,9 +58,7 @@ def _nested_tuple(fixture: str, seed: int) -> tuple[bool | None, ...]:
         bcs_low=lr.bcs,
         mmds_low=lr.mmds,
     )
-    return tuple(
-        (q or {}).get("nested") if isinstance(q, dict) else None for q in qt
-    )
+    return tuple((q or {}).get("nested") if isinstance(q, dict) else None for q in qt)
 
 
 @pytest.mark.parametrize("fixture", SAMPLES)
@@ -94,18 +86,18 @@ def test_low_level_structure_is_seed_independent() -> None:
     shapes = set()
     for s in SEEDS:
         low = synthesize_lower_level(df, high_level="DAY", low_level="MIN_30", seed=s)
-        lr = ChanlunAnalyser(
-            code="LOW", frequency="low", config=ChanlunConfig()
-        ).process_klines(low)
+        lr = ChanlunAnalyser(code="LOW", frequency="low", config=ChanlunConfig()).process_klines(
+            low
+        )
         shapes.add((len(lr.bis), len(lr.zss)))
     assert len(shapes) == 1, f"低级别结构随 seed 变化：{sorted(shapes)}"
 
 
 def test_first_extreme_order_is_deterministic() -> None:
     """单根 bar 展开必须是确定性的：同输入多次调用结果完全一致。"""
-    from easy_tdx.chanlun.level_synth import _expand_ohlc
-
     import numpy as np
+
+    from easy_tdx.chanlun.level_synth import _expand_ohlc
 
     def call(seed: int):
         rng = np.random.default_rng(seed)

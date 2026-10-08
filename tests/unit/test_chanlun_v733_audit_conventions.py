@@ -30,16 +30,20 @@ class TestBuySellClassification:
 
     # 项目里真实的 8 种买卖点类型（见 chanlun/types.py MMDType）
     ALL_TYPES = {
-        "1buy", "2buy", "2buy_s", "3buy",
-        "1sell", "2sell", "2sell_s", "3sell",
+        "1buy",
+        "2buy",
+        "2buy_s",
+        "3buy",
+        "1sell",
+        "2sell",
+        "2sell_s",
+        "3sell",
     }
 
     def test_endswith_buy_is_wrong(self) -> None:
         """牙齿验证：`endswith("buy")` 会漏掉 `2buy_s` —— 这是踩过的坑。"""
         endswith_buy = {t for t in self.ALL_TYPES if t.endswith("buy")}
-        assert "2buy_s" not in endswith_buy, (
-            "前提不成立：endswith('buy') 竟然匹配了 2buy_s"
-        )
+        assert "2buy_s" not in endswith_buy, "前提不成立：endswith('buy') 竟然匹配了 2buy_s"
         # 正确写法：`"buy" in t`（类型名的方向标记在中间）
         contains_buy = {t for t in self.ALL_TYPES if "buy" in t}
         assert contains_buy == {"1buy", "2buy", "2buy_s", "3buy"}
@@ -88,7 +92,7 @@ class TestBuySellClassification:
             pytest.skip(f"{rel} 不存在")
         src = path.read_text(encoding="utf-8")
         assert 'endswith("buy")' not in src, (
-            f"{rel} 仍用 endswith(\"buy\") 判方向 —— 2buy_s 会被误判为卖点"
+            f'{rel} 仍用 endswith("buy") 判方向 —— 2buy_s 会被误判为卖点'
             "（收益取反），应改用 `'buy' in st`"
         )
 

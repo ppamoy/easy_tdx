@@ -49,20 +49,20 @@ TARGET = date(2024, 4, 15)
 
 # report_date 取值空间：≤target / 超 100 天 / 缺失 / 未来
 RD_SPACE: list[object] = [
-    date(2024, 3, 31),   # 报告期 ≤ target 且距今 15 天（近似可用）
+    date(2024, 3, 31),  # 报告期 ≤ target 且距今 15 天（近似可用）
     date(2023, 12, 31),  # 报告期 ≤ target 但距今 106 天 > 100 天（近似越界）
-    date(2024, 5, 1),    # 报告期 > target（未来报告期）
-    None,                # 报告期缺失
+    date(2024, 5, 1),  # 报告期 > target（未来报告期）
+    None,  # 报告期缺失
 ]
 
 # disclosure_date 取值空间：≤target / >target / 真缺失 / 有值但无法解析
 DD_SPACE: list[object] = [
-    date(2024, 4, 1),    # 披露日 ≤ target（可用）
-    date(2024, 6, 1),    # 披露日 > target（未来数据，必须排除）
-    None,                # 真缺失 ⇒ 允许报告期近似
-    "junk",              # 有值但无法解析 ⇒ 保守排除
-    pd.NaT,              # 有值（非 None）但无法解析 ⇒ 保守排除
-    float("nan"),        # 同上
+    date(2024, 4, 1),  # 披露日 ≤ target（可用）
+    date(2024, 6, 1),  # 披露日 > target（未来数据，必须排除）
+    None,  # 真缺失 ⇒ 允许报告期近似
+    "junk",  # 有值但无法解析 ⇒ 保守排除
+    pd.NaT,  # 有值（非 None）但无法解析 ⇒ 保守排除
+    float("nan"),  # 同上
 ]
 
 
@@ -98,8 +98,7 @@ def _selected_tag(frame: pd.DataFrame, target: date, market: str = "SZ") -> floa
 
     rows_repr = frame[["report_date", "disclosure_date", "eps"]].to_dict("records")
     assert a == b, (
-        f"两实现分叉：pick_report={a} pick_reports_bulk={b} "
-        f"target={target} rows={rows_repr}"
+        f"两实现分叉：pick_report={a} pick_reports_bulk={b} target={target} rows={rows_repr}"
     )
     return a
 
@@ -149,7 +148,7 @@ class TestCrossFillDivergence:
 
     def test_mixed_admission_rules_pick_same_row(self) -> None:
         rows = [
-            (date(2024, 3, 31), None, 1.0),           # 走「报告期近似」入选
+            (date(2024, 3, 31), None, 1.0),  # 走「报告期近似」入选
             (date(2024, 1, 31), date(2024, 3, 1), 2.0),  # 走「披露日已知」入选
         ]
         assert _selected_tag(_frame(rows), date(2024, 4, 1)) == 2.0
@@ -164,7 +163,7 @@ class TestCrossFillDivergence:
     def test_selected_row_fields_not_backfilled(self) -> None:
         """选中行 report_date 缺失时，不得被同组后续行的值顶替（groupby.first 坑）。"""
         rows = [
-            (None, date(2024, 4, 10), 1.0),            # 会被选中
+            (None, date(2024, 4, 10), 1.0),  # 会被选中
             (date(2024, 3, 31), date(2024, 4, 1), 2.0),
         ]
         f = _frame(rows)
@@ -200,10 +199,7 @@ class TestExhaustiveEquivalence:
         rng = random.Random(20240415)
         # 24^3 = 13824 太多，取有代表性的 400 组三元组（含大量重复组合）
         for _ in range(400):
-            rows = [
-                (rd, dd, float(i + 1))
-                for i, (rd, dd) in enumerate(rng.sample(combos, 3))
-            ]
+            rows = [(rd, dd, float(i + 1)) for i, (rd, dd) in enumerate(rng.sample(combos, 3))]
             _selected_tag(_frame(rows), TARGET)
 
 
@@ -214,9 +210,7 @@ class TestRandomizedEquivalence:
     def test_random_frame_equivalence(self, seed: int) -> None:
         rng = random.Random(seed)
         n = rng.randint(1, 6)
-        rows = [
-            (rng.choice(RD_SPACE), rng.choice(DD_SPACE), float(i + 1)) for i in range(n)
-        ]
+        rows = [(rng.choice(RD_SPACE), rng.choice(DD_SPACE), float(i + 1)) for i in range(n)]
         got = _selected_tag(_frame(rows), TARGET)
 
         # 顺序无关性：打乱后两实现仍一致、且选中的 tag 不变
@@ -277,10 +271,10 @@ class TestNoFutureDataGuard:
 
     def test_future_disclosures_never_selected(self) -> None:
         rows = [
-            (date(2024, 3, 31), date(2024, 4, 1), 1.0),   # 合法
+            (date(2024, 3, 31), date(2024, 4, 1), 1.0),  # 合法
             (date(2024, 6, 30), date(2024, 8, 26), 2.0),  # 未来披露 + 未来报告期
             (date(2025, 12, 31), date(2026, 4, 29), 3.0),  # 远超 target
-            (date(2024, 3, 31), "junk", 4.0),             # 不可解析
+            (date(2024, 3, 31), "junk", 4.0),  # 不可解析
         ]
         f = _frame(rows)
         self._check_no_future(f, TARGET)

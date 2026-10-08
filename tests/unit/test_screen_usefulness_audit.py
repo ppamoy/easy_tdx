@@ -3,6 +3,7 @@
 ⚠️ 这个脚本测的是一个**功能有没有用**，所以它自己最容易出问题的地方是
    **悄悄测了个寂寞**。这组测试锁住那些会让结论失真的点。
 """
+
 import ast
 from pathlib import Path
 
@@ -10,7 +11,9 @@ import pytest
 
 SRC = Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py"
 VIEW = Path(__file__).resolve().parents[2] / "web-ui" / "src" / "views" / "StockPickView.vue"
-ROUTE = Path(__file__).resolve().parents[2] / "src" / "easy_tdx" / "web" / "routers" / "screening.py"
+ROUTE = (
+    Path(__file__).resolve().parents[2] / "src" / "easy_tdx" / "web" / "routers" / "screening.py"
+)
 
 
 def _s() -> str:
@@ -25,10 +28,12 @@ def _called_in(src: str, func_name: str) -> set[str]:
     守门测试就变成假阳性 —— 我第一版就是这么把自己逼红的。
     """
     tree = ast.parse(src)
-    fn = next(n for n in tree.body
-              if isinstance(n, ast.FunctionDef) and n.name == func_name)
-    return {c.func.attr for c in ast.walk(fn)
-            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)}
+    fn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == func_name)
+    return {
+        c.func.attr
+        for c in ast.walk(fn)
+        if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+    }
 
 
 class TestNoDataMustFail:
@@ -49,7 +54,7 @@ class TestNoDataMustFail:
     def test_endpoint_it_claims_to_test_exists(self) -> None:
         """被审计的端点不能被改名/删掉而测试还绿。"""
         r = ROUTE.read_text(encoding="utf-8")
-        assert '/screening/chanlun-scan' in r
+        assert "/screening/chanlun-scan" in r
         assert "def _chanlun_screen(" in r
 
     def test_ui_tab_exists(self) -> None:
@@ -97,8 +102,7 @@ class TestHonestVerdict:
         #    ⇒ 改为锁定"**只按 p 判定**"，否则这条测试会把 bug 焊死。
         assert "use_p < ALPHA" in s
         assert "ALPHA = 0.05" in s
-        code = "\n".join(l for l in s.splitlines()
-                         if not l.strip().startswith("#"))
+        code = "\n".join(ln for ln in s.splitlines() if not ln.strip().startswith("#"))
         assert "use_t > 2" not in code
         assert "use_t < -2" not in code
         # 且 use_t 必须真的来自"控制后优先、控制前兜底"
@@ -109,8 +113,7 @@ class TestHonestVerdict:
         assert "use_t != use_t" in s
         # ⚠️ 关键：零分支必须真的在代码里，不能只是"某处出现过这个词"
         zero_blk = s.split("elif use_p < ALPHA:")[-1]
-        assert "与零无显著差异" in zero_blk, \
-            "零分支必须真的存在于判定链末端（第一版断言是空的）"
+        assert "与零无显著差异" in zero_blk, "零分支必须真的存在于判定链末端（第一版断言是空的）"
 
     def test_does_not_claim_to_beat_buy_hold(self) -> None:
         """选股检验 ≠ 端到端策略(五之十八未证明跑赢买持)，
@@ -184,8 +187,7 @@ class TestStructuralCriteriaSupported:
     def test_all_endpoint_criteria_exposed(self) -> None:
         """端点 `_chanlun_screen` 支持 4 个维度，之前只测了 1 个。"""
         src = _s()
-        for flag in ("--signal-type", "--trend", "--zs-position",
-                     "--has-beichi"):
+        for flag in ("--signal-type", "--trend", "--zs-position", "--has-beichi"):
             assert flag in src
 
     def test_passes_them_to_endpoint_not_reimplementing(self) -> None:
@@ -216,11 +218,11 @@ class TestStructuralCriteriaSupported:
         src = _s()
         # ⚠️ 必须**只看代码行**（去掉注释），否则我写的"解释这个 bug 的注释"
         #    里那个旧写法会把自己判失败——这是第一版的另一个假失败。
-        code = [ln for ln in src.splitlines()
-                if not ln.lstrip().startswith("#")]
+        code = [ln for ln in src.splitlines() if not ln.lstrip().startswith("#")]
         code_src = chr(10).join(code)
-        assert 'cache_path.name.startswith("screen_audit_cache")' \
-            not in code_src, "条件加 tag 必须去掉（缓存键无条件由内容决定）"
+        assert 'cache_path.name.startswith("screen_audit_cache")' not in code_src, (
+            "条件加 tag 必须去掉（缓存键无条件由内容决定）"
+        )
         assert "if not cache_path.stem.endswith(tag):" in code_src
 
     def test_prints_cache_path_in_use(self) -> None:
@@ -232,8 +234,7 @@ class TestStructuralCriteriaSupported:
         **之前**发出去的，脚本按老逻辑跑。如果启动时打印全部口径，
         一眼就能看出跑的是 zs_position=any。"""
         src = _s()
-        for frag in ("signal_type=", "trend=", "zs_position=",
-                     "has_beichi="):
+        for frag in ("signal_type=", "trend=", "zs_position=", "has_beichi="):
             assert frag in src
 
 
@@ -306,8 +307,9 @@ class TestTimepointAlignmentBehaviour:
         from pathlib import Path
 
         spec = importlib.util.spec_from_file_location(
-            "_su", Path(__file__).resolve().parents[2] /
-            "scripts" / "audit_chanlun_screen_usefulness.py")
+            "_su",
+            Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py",
+        )
         mod = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(mod)
@@ -316,11 +318,13 @@ class TestTimepointAlignmentBehaviour:
         files = sorted(data.glob("*.json"))
         if not files:
             import pytest
+
             pytest.skip("audit_data/ 无数据")
 
         r = mod.one_symbol(str(files[0]))
         if r is None:
             import pytest
+
             pytest.skip(f"{files[0].name} 样本不足")
 
         assert len(r["hit_pts"]) == len(r["hit"]), "hit_pts 与 hit 长度不符"
@@ -331,7 +335,8 @@ class TestTimepointAlignmentBehaviour:
         if r["hit"] and r["miss"]:
             assert r["hit_pts"] and r["miss_pts"], (
                 "命中与未命中**都**有样本时，两组时点都必须有内容；"
-                "只有一组有 ⇒ 说明另一组时点被记错了地方")
+                "只有一组有 ⇒ 说明另一组时点被记错了地方"
+            )
 
 
 class TestParallelArgsActuallyBind:
@@ -357,11 +362,11 @@ class TestParallelArgsActuallyBind:
     def test_does_not_use_bare_map_with_tuple(self) -> None:
         """裸 `ex.map` + tuple 列表 = 参数不会展开。"""
         src = _s()
-        code = [ln for ln in src.splitlines()
-                if not ln.lstrip().startswith("#")]
+        code = [ln for ln in src.splitlines() if not ln.lstrip().startswith("#")]
         code_src = chr(10).join(code)
-        assert "ex.map(one_symbol" not in code_src, \
+        assert "ex.map(one_symbol" not in code_src, (
             "ex.map 不解包 tuple，必须用 starmap 或把参数收进 dict"
+        )
 
     def test_uses_pool_starmap_not_executor(self) -> None:
         """⚠️ `ProcessPoolExecutor` **没有** starmap 方法
@@ -388,14 +393,21 @@ class TestParallelArgsActuallyBind:
         src = _s()
         # ⚠️ 只取**圆括号内**的内容，别把 "args = [(" 也切进来
         idx = src.index("args = [(") + len("args = [(")
-        line = src[idx:src.index(")", idx)]
+        line = src[idx : src.index(")", idx)]
         order = [x.strip() for x in line.split(",")]
         # ⚠️ 2025-10 扩充：min_zs_count / min_quality 是**后来加**的，
         #    顺序必须与 one_symbol 签名**严格一致**——错了不报错，只测错东西。
-        assert order == ["a.signal_type", "a.trend", "a.zs_position",
-                         "a.has_beichi", "a.min_zs_count",
-                         "a.min_quality", "a.t_lo", "a.t_hi",
-                         "a.max_points"], f"参数顺序错：{order}"
+        assert order == [
+            "a.signal_type",
+            "a.trend",
+            "a.zs_position",
+            "a.has_beichi",
+            "a.min_zs_count",
+            "a.min_quality",
+            "a.t_lo",
+            "a.t_hi",
+            "a.max_points",
+        ], f"参数顺序错：{order}"
 
     def test_end_to_end_criteria_actually_reach_the_function(self) -> None:
         """**行为级**：用 monkeypatch 探针确认 one_symbol 真的收到了 criteria。
@@ -406,32 +418,34 @@ class TestParallelArgsActuallyBind:
         from pathlib import Path
 
         spec = importlib.util.spec_from_file_location(
-            "_su2", Path(__file__).resolve().parents[2] /
-            "scripts" / "audit_chanlun_screen_usefulness.py")
+            "_su2",
+            Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py",
+        )
         mod = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(mod)
 
-        seen = []
         orig = mod._chanlun_screen_spy if hasattr(mod, "_chanlun_screen_spy") else None
         assert orig is None  # 探针只验证参数绑定，见下面的直接调用
 
         # 直接按 starmap 的方式调用，验证位置对应关系
         captured = {}
 
-        def fake(path_str, sig="any_buy", trend="any", zs_pos="any",
-                 has_bc="any"):
-            captured.update(path=path_str, sig=sig, trend=trend,
-                            zs_pos=zs_pos, has_bc=has_bc)
+        def fake(path_str, sig="any_buy", trend="any", zs_pos="any", has_bc="any"):
+            captured.update(path=path_str, sig=sig, trend=trend, zs_pos=zs_pos, has_bc=has_bc)
             return None
 
         crit = ("1buy", "up", "above", "true")
         path = "x.json"
         for res in [fake(*((path,) + crit))]:
             assert res is None
-        assert captured == {"path": "x.json", "sig": "1buy", "trend": "up",
-                            "zs_pos": "above", "has_bc": "true"}, \
-            f"starmap 式展开后参数错位：{captured}"
+        assert captured == {
+            "path": "x.json",
+            "sig": "1buy",
+            "trend": "up",
+            "zs_pos": "above",
+            "has_bc": "true",
+        }, f"starmap 式展开后参数错位：{captured}"
 
 
 class TestRealIndexBenchmark:
@@ -507,8 +521,7 @@ class TestVerdictThresholdConsistency:
     ⇒ 判定的唯一依据必须是 **p 与 α 比较**，t 只用于展示。
     """
 
-    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
-              / "audit_chanlun_screen_usefulness.py")
+    SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py"
 
     def _src(self) -> str:
         return self.SCRIPT.read_text(encoding="utf-8")
@@ -516,8 +529,7 @@ class TestVerdictThresholdConsistency:
     def test_no_hardcoded_two_sigma(self) -> None:
         """❌ 不能再出现 `use_t > 2` / `use_t < -2` 这种硬编码。"""
         src = self._src()
-        code = "\n".join(l for l in src.splitlines()
-                         if not l.strip().startswith("#"))
+        code = "\n".join(ln for ln in src.splitlines() if not ln.strip().startswith("#"))
         assert "use_t > 2" not in code, "判定仍在用拍脑袋的 t>2"
         assert "use_t < -2" not in code
 
@@ -565,8 +577,7 @@ class TestMinQualityAndZsThresholds:
     """端点**一直支持** min_quality / min_zs_count，
     但审计脚本此前**压根没有对应开关** ⇒ 从来没被测过。"""
 
-    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
-              / "audit_chanlun_screen_usefulness.py")
+    SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py"
 
     def test_cli_flags_exist(self) -> None:
         src = self.SCRIPT.read_text(encoding="utf-8")
@@ -592,8 +603,14 @@ class TestMinQualityAndZsThresholds:
 
     def test_zs_position_inside_is_measurable(self) -> None:
         """zs_position=inside 也在端点 choices 里，此前也没测。"""
-        router = (Path(__file__).resolve().parents[2] / "src" / "easy_tdx"
-                  / "web" / "routers" / "screening.py").read_text(encoding="utf-8")
+        router = (
+            Path(__file__).resolve().parents[2]
+            / "src"
+            / "easy_tdx"
+            / "web"
+            / "routers"
+            / "screening.py"
+        ).read_text(encoding="utf-8")
         assert "inside" in router
 
 
@@ -612,8 +629,7 @@ class TestTimeWindowSamplingOutOfSample:
     ⇒ 这条测试锁死"时点生成那行必须存在"，且**行为级**验证裁剪生效。
     """
 
-    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
-              / "audit_chanlun_screen_usefulness.py")
+    SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py"
 
     def _src(self) -> str:
         return self.SCRIPT.read_text(encoding="utf-8")
@@ -623,8 +639,9 @@ class TestTimeWindowSamplingOutOfSample:
         src = self._src()
         gen = "points = list(range(MIN_BARS, n - H, H))"
         assert gen in src, "❌ 时点生成那行不见了（会 UnboundLocalError）"
-        assert src.index(gen) < src.index("if t_lo:"), \
+        assert src.index(gen) < src.index("if t_lo:"), (
             "先生成时点、再按窗口裁剪；顺序反了会裁到未定义变量"
+        )
 
     def test_cli_flags_exist(self) -> None:
         src = self._src()
@@ -653,17 +670,17 @@ class TestTimeWindowSamplingOutOfSample:
 
         root = Path(__file__).resolve().parents[2]
         spec = importlib.util.spec_from_file_location(
-            "_su_tw", root / "scripts" / "audit_chanlun_screen_usefulness.py")
+            "_su_tw", root / "scripts" / "audit_chanlun_screen_usefulness.py"
+        )
         mod = importlib.util.module_from_spec(spec)
         assert spec.loader is not None
         spec.loader.exec_module(mod)
 
-        f = next(p for p in sorted((root / "audit_data").glob("*.json"))
-                 if "sh000300" not in p.name)
-        front = mod.one_symbol(str(f), zs_pos="inside", has_bc="false",
-                               t_hi=750, max_pts=6)
-        back = mod.one_symbol(str(f), zs_pos="inside", has_bc="false",
-                              t_lo=751, max_pts=6)
+        f = next(
+            p for p in sorted((root / "audit_data").glob("*.json")) if "sh000300" not in p.name
+        )
+        front = mod.one_symbol(str(f), zs_pos="inside", has_bc="false", t_hi=750, max_pts=6)
+        back = mod.one_symbol(str(f), zs_pos="inside", has_bc="false", t_lo=751, max_pts=6)
         assert front is not None, "❌ 前半段返回 None（很可能又崩了）"
         assert back is not None, "❌ 后半段返回 None"
         pf = front["hit_pts"] + front["miss_pts"]
@@ -674,9 +691,10 @@ class TestTimeWindowSamplingOutOfSample:
     def test_out_of_sample_falsification_is_recorded(self) -> None:
         """⚠️ inside 的 +1.34% 已**样本外证伪**（p=0.9607），
         这个事实必须留在登记表里，不能只存在于我的对话中。"""
-        reg = (Path(__file__).resolve().parents[2] / "scripts"
-               / "audit_screen_sector_neutral.py").read_text(encoding="utf-8")
-        blk = reg[reg.index("MEASURED_BASES"):reg.index("LEGACY_60_BASES")]
+        reg = (
+            Path(__file__).resolve().parents[2] / "scripts" / "audit_screen_sector_neutral.py"
+        ).read_text(encoding="utf-8")
+        blk = reg[reg.index("MEASURED_BASES") : reg.index("LEGACY_60_BASES")]
         assert "0.9607" in blk, "必须留档样本外 p 值"
         assert "已证伪" in blk
 
@@ -704,16 +722,22 @@ class TestHasBeichiIsNotReallyThreeWay:
     **统计上无法区分** ⇒ 根本没测到"背驰"这个维度。
     """
 
-    ROUTER = (Path(__file__).resolve().parents[2] / "src" / "easy_tdx"
-              / "web" / "routers" / "screening.py")
-    SCRIPT = (Path(__file__).resolve().parents[2] / "scripts"
-              / "audit_chanlun_screen_usefulness.py")
+    ROUTER = (
+        Path(__file__).resolve().parents[2]
+        / "src"
+        / "easy_tdx"
+        / "web"
+        / "routers"
+        / "screening.py"
+    )
+    SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py"
 
     def test_router_has_only_bool_state(self) -> None:
         """端点把 has_beichi 压成 bool ⇒ 没有第三态。"""
         src = self.ROUTER.read_text(encoding="utf-8")
-        assert 'bool(criteria.get("has_beichi", False))' in src, \
+        assert 'bool(criteria.get("has_beichi", False))' in src, (
             "端点若改成三态（None=不限），本测试需同步更新"
+        )
 
     def test_none_and_false_are_equivalent(self) -> None:
         """**行为级**：bool(None) is False ⇒ 两者筛选结果必然相同。
@@ -724,13 +748,14 @@ class TestHasBeichiIsNotReallyThreeWay:
         ⇒ 固化教训：pytest 里**一律用裸 assert**，别用 unittest 的方法名。
         """
         assert bool(None) is False
-        assert bool(False) is False
+        assert False is False
 
     def test_weakness_is_documented_in_registration(self) -> None:
         """⚠️ 结论必须留档，否则后人会把 −0.20% 当成"背驰无用"。"""
-        reg = (Path(__file__).resolve().parents[2] / "scripts"
-               / "audit_screen_sector_neutral.py").read_text(encoding="utf-8")
-        blk = reg[reg.index("MEASURED_BASES"):reg.index("LEGACY_60_BASES")]
+        reg = (
+            Path(__file__).resolve().parents[2] / "scripts" / "audit_screen_sector_neutral.py"
+        ).read_text(encoding="utf-8")
+        blk = reg[reg.index("MEASURED_BASES") : reg.index("LEGACY_60_BASES")]
         assert "2.8%" in blk, "必须记录 has_beichi 只过滤掉 2.8% 的入选"
         assert "形同虚设" in blk
 
@@ -755,8 +780,9 @@ class TestWorkersFollowSharedConvention:
 
     def test_workers_default_is_shared(self) -> None:
         s = _s()
-        assert "from _concurrency import" in s, \
+        assert "from _concurrency import" in s, (
             "workers 默认值必须来自 scripts/_concurrency.py（单一事实来源）"
+        )
 
     def test_workers_resolved_via_helper(self) -> None:
         s = _s()
@@ -767,8 +793,9 @@ class TestWorkersFollowSharedConvention:
         for line in _s().splitlines():
             if '"--workers"' not in line:
                 continue
-            assert "default=None" in line.replace(" ", ""), \
+            assert "default=None" in line.replace(" ", ""), (
                 f"--workers 不得硬编码数字，应 default=None + resolve_workers：{line}"
+            )
 
 
 class TestIncrementalCacheActuallyPersists:
@@ -786,8 +813,7 @@ class TestIncrementalCacheActuallyPersists:
 
     def test_pool_is_streaming_not_blocking(self) -> None:
         s = _s()
-        assert "apply_async" in s, \
-            "❌ 必须用 apply_async + 逐个 get 才能边跑边存"
+        assert "apply_async" in s, "❌ 必须用 apply_async + 逐个 get 才能边跑边存"
         # ⚠️ 必须查**代码**而非全文 grep：docstring 里为了说明
         #    "原先用的是阻塞 starmap"也会出现这个词，直接 grep 会假阳性
         #    （我第一版就踩了：自己写的反例说明把守门测试逼红了）。
@@ -795,12 +821,13 @@ class TestIncrementalCacheActuallyPersists:
         # ⚠️ 实测打脸记录：imap_unordered **不解包** tuple；
         #   imap_unordered(fn, pool.starmap(...)) 也不行（会再套一层）⇒ TypeError。
         #   唯一实测可行：apply_async(按位置展开) + 逐个 get(流式)。
-        assert "starmap" not in called, \
+        assert "starmap" not in called, (
             "❌ 不得直接用阻塞的 starmap（list(...) 会等全部算完 ⇒ 落盘永不执行）"
-        assert "apply_async" in called, \
+        )
+        assert "apply_async" in called, (
             "❌ 必须用 apply_async 提交（它按位置展开 tuple，且可流式 get）"
-        assert "get" in called, \
-            "❌ 必须逐个 ar.get() 流式取回，否则仍会退化成阻塞"
+        )
+        assert "get" in called, "❌ 必须逐个 ar.get() 流式取回，否则仍会退化成阻塞"
 
     def test_pool_unpacks_tuples_positionally(self) -> None:
         """⚠️ 参数必须**按位置展开**给 one_symbol(path, *crit)。
@@ -811,10 +838,10 @@ class TestIncrementalCacheActuallyPersists:
         """
         called = _called_in(_s(), "_run_pool")
         assert "apply_async" in called
-        assert "imap_unordered" not in called, \
+        assert "imap_unordered" not in called, (
             "❌ imap_unordered 不解包 tuple（实测），用它会 TypeError"
-        assert "itertools.starmap" not in called, \
-            "不要手动套 starmap——会多一层包装"
+        )
+        assert "itertools.starmap" not in called, "不要手动套 starmap——会多一层包装"
 
     def test_cache_save_wired_to_callback(self) -> None:
         """落盘必须发生在**每只完成时**，而不是全部跑完之后。"""
@@ -822,10 +849,9 @@ class TestIncrementalCacheActuallyPersists:
         assert "on_result" in s, "回调形参不见了，落盘又退回阻塞写法"
         # 写盘语句必须在 def _save 内，且 _run_pool 必须真的传了它
         assert "def _save(" in s, "缺少逐只落盘的 _save"
-        call = s[s.rindex("_run_pool("):]
-        call = call[:call.index("\n")]
-        assert "on_result=_save" in call, \
-            f"_run_pool 没接上落盘回调：{call!r}"
+        call = s[s.rindex("_run_pool(") :]
+        call = call[: call.index("\n")]
+        assert "on_result=_save" in call, f"_run_pool 没接上落盘回调：{call!r}"
 
     def test_teeth_reverting_to_starmap_is_caught(self) -> None:
         """⚠️ 牙齿：把 imap_unordered 改回 starmap，守门断言必须 FAIL。
@@ -836,12 +862,12 @@ class TestIncrementalCacheActuallyPersists:
         """
         target = SRC
         original = target.read_text(encoding="utf-8")
-        assert "apply_async" in original, \
-            "⚠️ 前提不成立：源里没有 apply_async（先怀疑牙齿）"
+        assert "apply_async" in original, "⚠️ 前提不成立：源里没有 apply_async（先怀疑牙齿）"
         try:
             broken = original.replace(
                 "pending = [pool.apply_async(fn, t) for t in tasks]",
-                "pending = [pool.apply_async(fn, (t,)) for t in tasks]")
+                "pending = [pool.apply_async(fn, (t,)) for t in tasks]",
+            )
             assert broken != original, "替换没生效（先怀疑牙齿）"
             target.write_text(broken, encoding="utf-8")
 
@@ -853,11 +879,12 @@ class TestIncrementalCacheActuallyPersists:
         finally:
             target.write_text(original, encoding="utf-8")
             import ast as _ast
+
             _ast.parse(target.read_text(encoding="utf-8"))
             # 恢复后守门必须重新为真，否则牙齿没还原干净
-            assert "apply_async" in _called_in(
-                target.read_text(encoding="utf-8"), "_run_pool"), \
+            assert "apply_async" in _called_in(target.read_text(encoding="utf-8"), "_run_pool"), (
                 "❌ 恢复后仍不满足守门（测试没还原干净）"
+            )
 
 
 class TestHasBeichiUiIsNotAProductBug:
@@ -874,20 +901,21 @@ class TestHasBeichiUiIsNotAProductBug:
 
     def test_ui_is_a_plain_checkbox(self) -> None:
         src = self.VUE.read_text(encoding="utf-8")
-        assert 'type="checkbox"' in src and "clHasBeichi" in src, \
+        assert 'type="checkbox"' in src and "clHasBeichi" in src, (
             "⚠️ UI 侧 has_beichi 预期是复选框；若已改成三态选择，本测试需重新评估"
+        )
 
     def test_ui_default_is_boolean_not_none(self) -> None:
         src = self.VUE.read_text(encoding="utf-8")
-        assert "ref(false)" in src, \
-            "⚠️ clHasBeichi 预期初始化为布尔 false（不是 null/None）"
+        assert "ref(false)" in src, "⚠️ clHasBeichi 预期初始化为布尔 false（不是 null/None）"
 
     def test_docs_do_not_call_it_a_ui_bug(self) -> None:
         """⚠️ 报告里不得再出现"UI 三选一/UI 契约不一致"这类表述。"""
-        doc = (Path(__file__).resolve().parents[2] / "docs" / "V733_AUDIT_REPORT.md")\
-            .read_text(encoding="utf-8")
-        blk = doc[doc.index("## 五之四十三"):]
-        blk = blk[:blk.index("\n## ", 1)]
+        doc = (Path(__file__).resolve().parents[2] / "docs" / "V733_AUDIT_REPORT.md").read_text(
+            encoding="utf-8"
+        )
+        blk = doc[doc.index("## 五之四十三") :]
+        blk = blk[: blk.index("\n## ", 1)]
         # ⚠️ 必须允许"引用旧错句再更正"的写法——更正段落本身就要引原文。
         #    判据：出现该表述的每一行，都必须落在**更正/引用**的上下文里
         #    （同一行或紧邻行出现 更正/证伪/原表述/复核 等标记）。
@@ -896,11 +924,9 @@ class TestHasBeichiUiIsNotAProductBug:
             for i, line in enumerate(blk.splitlines()):
                 if wrong not in line:
                     continue
-                ctx = "\n".join(blk.splitlines()[max(0, i - 3):i + 4])
+                ctx = "\n".join(blk.splitlines()[max(0, i - 3) : i + 4])
                 assert any(m in ctx for m in markers), (
-                    f"❌ 报告在**非更正语境**里把审计脚本的缺陷说成 UI 的问题：\n"
-                    f"   {line.strip()}"
+                    f"❌ 报告在**非更正语境**里把审计脚本的缺陷说成 UI 的问题：\n   {line.strip()}"
                 )
         # 必须保留更正痕迹，否则后人无从知道这里曾经错过
-        assert "已证伪" in blk or "更正" in blk, \
-            "⚠️ 报告里应保留对该表述的更正说明"
+        assert "已证伪" in blk or "更正" in blk, "⚠️ 报告里应保留对该表述的更正说明"

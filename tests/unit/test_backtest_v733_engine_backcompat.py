@@ -31,21 +31,23 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "audit_data"
-FIX_COMMIT = "6b2b2eb"          # position_pct 修复所在的 commit
+FIX_COMMIT = "6b2b2eb"  # position_pct 修复所在的 commit
 ENGINE_REL = "src/easy_tdx/backtest/orders.py"
 N_SYMBOLS = 6
 
 
 def _have_data() -> bool:
-    return any(p.stem.split("_")[0] not in ("sh000300", "sh000001")
-               for p in DATA.glob("*.json"))
+    return any(p.stem.split("_")[0] not in ("sh000300", "sh000001") for p in DATA.glob("*.json"))
 
 
 def _old_engine_src() -> str | None:
     try:
         out = subprocess.run(
             ["git", "show", f"{FIX_COMMIT}^:{ENGINE_REL}"],
-            cwd=ROOT, capture_output=True, text=True, timeout=60,
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
     except Exception:
         return None
@@ -67,17 +69,19 @@ class TestEngineFixIsBackwardCompatible:
             shutil.copytree(ROOT / "src", tree / "src")
         (old_t / ENGINE_REL).write_text(old_src, encoding="utf-8")
         # 确认两份确实不同，否则对比毫无意义
-        assert (old_t / ENGINE_REL).read_text(encoding="utf-8") != \
-            (new_t / ENGINE_REL).read_text(encoding="utf-8"), \
-            "新旧引擎内容相同 —— 本测试会变成空转"
+        assert (old_t / ENGINE_REL).read_text(encoding="utf-8") != (new_t / ENGINE_REL).read_text(
+            encoding="utf-8"
+        ), "新旧引擎内容相同 —— 本测试会变成空转"
         return new_t, old_t
 
     @pytest.fixture(scope="class")
     def results(self, trees) -> dict[str, list]:
         new_t, old_t = trees
-        files = [p for p in sorted(DATA.glob("*.json"))
-                 if p.stem.split("_")[0] not in ("sh000300", "sh000001")
-                 ][:N_SYMBOLS]
+        files = [
+            p
+            for p in sorted(DATA.glob("*.json"))
+            if p.stem.split("_")[0] not in ("sh000300", "sh000001")
+        ][:N_SYMBOLS]
         assert files, "没有可用行情"
         script = r"""
 import sys, json, warnings
@@ -99,26 +103,28 @@ for path in sys.argv[2:]:
                 repr(float(r.performance["max_drawdown"]))])
 print("@@RESULT@@" + json.dumps(out))
 """
+
         def run(tree: Path) -> list:
             p = subprocess.run(
-                [sys.executable, "-c", script, str(tree / "src")]
-                + [str(f) for f in files],
-                capture_output=True, text=True, timeout=1800,
+                [sys.executable, "-c", script, str(tree / "src")] + [str(f) for f in files],
+                capture_output=True,
+                text=True,
+                timeout=1800,
             )
             assert p.returncode == 0, f"回测失败: {p.stderr[-800:]}"
-            line = next(l for l in p.stdout.splitlines() if l.startswith("@@RESULT@@"))
-            return json.loads(line[len("@@RESULT@@"):])
+            line = next(ln for ln in p.stdout.splitlines() if ln.startswith("@@RESULT@@"))
+            return json.loads(line[len("@@RESULT@@") :])
 
         return {"new": run(new_t), "old": run(old_t)}
 
     def test_default_params_results_are_identical(self, results) -> None:
         """⚠️ 核心断言：默认参数下，新旧引擎结果必须**逐位相同**。"""
         assert len(results["new"]) == len(results["old"]) == N_SYMBOLS
-        diff = [(i, a, b) for i, (a, b)
-                in enumerate(zip(results["new"], results["old"])) if a != b]
+        diff = [(i, a, b) for i, (a, b) in enumerate(zip(results["new"], results["old"])) if a != b]
         assert not diff, (
             f"{len(diff)}/{N_SYMBOLS} 只标的结果变了，例: {diff[:2]}；"
-            "修复本应只影响显式指定 size 的场景 ⇒ 此前审计数字需重算")
+            "修复本应只影响显式指定 size 的场景 ⇒ 此前审计数字需重算"
+        )
 
     def test_symbol_order_preserved(self, results) -> None:
         """结果必须逐标的配对（不能只比聚合值，否则可能抵消）。"""
@@ -132,9 +138,10 @@ print("@@RESULT@@" + json.dumps(out))
         # 默认 position_pct 必须是 1.0，否则默认路径会走显式 size 分支
         sys.path.insert(0, str(ROOT / "src"))
         from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy
+
         assert float(ChanlunStrategy().p.get("position_pct", 1.0)) == 1.0, (
-            "默认仓位不是 1.0 ⇒ 默认路径不再走 self.buy() 全仓，"
-            "向后兼容结论需重新评估")
+            "默认仓位不是 1.0 ⇒ 默认路径不再走 self.buy() 全仓，向后兼容结论需重新评估"
+        )
 
 
 if __name__ == "__main__":

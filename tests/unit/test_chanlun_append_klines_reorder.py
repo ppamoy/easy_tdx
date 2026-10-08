@@ -27,22 +27,57 @@ from easy_tdx.chanlun import ChanlunAnalyser
 
 def _rows() -> list[dict]:
     return [
-        {"datetime": "2025-01-02T15:00:00", "open": 10.0, "close": 10.2,
-         "high": 10.3, "low": 9.9, "vol": 100, "amount": 1000.0},
-        {"datetime": "2025-01-03T15:00:00", "open": 10.2, "close": 10.5,
-         "high": 10.6, "low": 10.1, "vol": 100, "amount": 1000.0},
-        {"datetime": "2025-01-06T15:00:00", "open": 10.5, "close": 10.1,
-         "high": 10.7, "low": 10.0, "vol": 100, "amount": 1000.0},
+        {
+            "datetime": "2025-01-02T15:00:00",
+            "open": 10.0,
+            "close": 10.2,
+            "high": 10.3,
+            "low": 9.9,
+            "vol": 100,
+            "amount": 1000.0,
+        },
+        {
+            "datetime": "2025-01-03T15:00:00",
+            "open": 10.2,
+            "close": 10.5,
+            "high": 10.6,
+            "low": 10.1,
+            "vol": 100,
+            "amount": 1000.0,
+        },
+        {
+            "datetime": "2025-01-06T15:00:00",
+            "open": 10.5,
+            "close": 10.1,
+            "high": 10.7,
+            "low": 10.0,
+            "vol": 100,
+            "amount": 1000.0,
+        },
     ]
 
 
 def _backfill() -> list[dict]:
     """含一条**更早**日期（回补）与一条更新的。"""
     return [
-        {"datetime": "2025-01-01T15:00:00", "open": 9.8, "close": 9.9,
-         "high": 10.0, "low": 9.7, "vol": 100, "amount": 1000.0},
-        {"datetime": "2025-01-07T15:00:00", "open": 10.1, "close": 10.8,
-         "high": 10.9, "low": 10.0, "vol": 100, "amount": 1000.0},
+        {
+            "datetime": "2025-01-01T15:00:00",
+            "open": 9.8,
+            "close": 9.9,
+            "high": 10.0,
+            "low": 9.7,
+            "vol": 100,
+            "amount": 1000.0,
+        },
+        {
+            "datetime": "2025-01-07T15:00:00",
+            "open": 10.1,
+            "close": 10.8,
+            "high": 10.9,
+            "low": 10.0,
+            "vol": 100,
+            "amount": 1000.0,
+        },
     ]
 
 
@@ -103,8 +138,15 @@ class TestAppendKlinesNormalPathUnchanged:
         r0 = a.process_klines(pd.DataFrame(_rows()))
         n0 = len(r0.klines)
         newer = [
-            {"datetime": "2025-01-07T15:00:00", "open": 10.1, "close": 10.8,
-             "high": 10.9, "low": 10.0, "vol": 100, "amount": 1000.0},
+            {
+                "datetime": "2025-01-07T15:00:00",
+                "open": 10.1,
+                "close": 10.8,
+                "high": 10.9,
+                "low": 10.0,
+                "vol": 100,
+                "amount": 1000.0,
+            },
         ]
         r1 = a.append_klines(pd.DataFrame(newer))
         assert len(r1.klines) == n0 + 1

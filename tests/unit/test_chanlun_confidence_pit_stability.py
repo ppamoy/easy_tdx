@@ -48,12 +48,17 @@ def _bars(n: int) -> pd.DataFrame:
     for i in range(n):
         px = 10.0 + 2.0 * math.sin(i / 11.0) + 0.6 * math.sin(i / 3.0)
         o, c = px, px + 0.05 * math.sin(i / 5.0)
-        rows.append({
-            "datetime": (base + pd.Timedelta(days=i)).strftime("%Y-%m-%d"),
-            "open": round(o, 4), "close": round(c, 4),
-            "high": round(max(o, c) + 0.05, 4), "low": round(min(o, c) - 0.05, 4),
-            "vol": 1000 + (i % 7) * 50, "amount": 10000.0,
-        })
+        rows.append(
+            {
+                "datetime": (base + pd.Timedelta(days=i)).strftime("%Y-%m-%d"),
+                "open": round(o, 4),
+                "close": round(c, 4),
+                "high": round(max(o, c) + 0.05, 4),
+                "low": round(min(o, c) - 0.05, 4),
+                "vol": 1000 + (i % 7) * 50,
+                "amount": 10000.0,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -64,8 +69,9 @@ def ctx():
     rl = ChanlunAnalyser(code="000001", frequency="daily").process_klines(dfl)
 
     def pick(r):
-        return {(m.mmd_type.value, m.bi.end.k.k_index): m
-                for m in r.mmds if m.bi.end.k.k_index < 250}
+        return {
+            (m.mmd_type.value, m.bi.end.k.k_index): m for m in r.mmds if m.bi.end.k.k_index < 250
+        }
 
     return dfs, dfl, rs, rl, pick(rs), pick(rl)
 
@@ -79,8 +85,15 @@ def _conf(mmd, df, zss) -> float:
     此前 `_conf(mmd, dfl, rl)` 把 rl.zss 也换了进去，等于把结构再分析混进了判定。
     """
     return _calc_confidence_v47(
-        mmd, 0.5, df["vol"].tolist(), df["close"].tolist(),
-        None, 0.02, zss, df["high"].tolist(), df["low"].tolist(),
+        mmd,
+        0.5,
+        df["vol"].tolist(),
+        df["close"].tolist(),
+        None,
+        0.02,
+        zss,
+        df["high"].tolist(),
+        df["low"].tolist(),
     )
 
 
@@ -114,9 +127,7 @@ class TestHistoricalConfidenceStability:
         mmd = short_m[key]
         a = _check_post_signal_price_follow_through(mmd, dfs["close"].tolist())
         b = _check_post_signal_price_follow_through(mmd, dfl["close"].tolist())
-        assert a["confidence_adjust"] == b["confidence_adjust"], (
-            "后确认函数重新引入了前视"
-        )
+        assert a["confidence_adjust"] == b["confidence_adjust"], "后确认函数重新引入了前视"
 
     def test_probe_data_has_comparable_signals(self, ctx) -> None:
         """反向锁定：确认构造的数据真能比出差异（否则上面是空跑）。"""

@@ -37,9 +37,11 @@ DATA_DIR = Path(__file__).resolve().parent.parent.parent / "audit_data"
 def to_weekly(df: pd.DataFrame) -> pd.DataFrame:
     """日线 → 周线真实聚合。"""
     d = df.set_index("datetime")
-    agg = d.resample("W").agg(
-        {"open": "first", "close": "last", "high": "max", "low": "min", "vol": "sum"}
-    ).dropna()
+    agg = (
+        d.resample("W")
+        .agg({"open": "first", "close": "last", "high": "max", "low": "min", "vol": "sum"})
+        .dropna()
+    )
     return agg.reset_index()
 
 
@@ -88,8 +90,10 @@ def _real_files(limit: int = 4) -> list[Path]:
     return out
 
 
-@pytest.mark.skipif(not DATA_DIR.exists() or not list(DATA_DIR.glob("*.json")),
-                    reason="需要 audit_data/ 真实数据（跑 scripts/audit_fetch_real_data.py）")
+@pytest.mark.skipif(
+    not DATA_DIR.exists() or not list(DATA_DIR.glob("*.json")),
+    reason="需要 audit_data/ 真实数据（跑 scripts/audit_fetch_real_data.py）",
+)
 class TestQujiantaoCausality:
     """追加数据不得改写已有信号的确认结论。"""
 
@@ -137,8 +141,7 @@ class TestQujiantaoCausality:
         full_keys = {(10, "1buy")}  # (20,'1sell') 在追加数据后"消失"
         missing = [k for k in part_keys if k not in full_keys]
         assert missing == [(20, "1sell")], (
-            "自检失败：子集检查逻辑本身没识别出被撤销的确认 —— "
-            "上面的主断言可能根本没有牙齿"
+            "自检失败：子集检查逻辑本身没识别出被撤销的确认 —— 上面的主断言可能根本没有牙齿"
         )
 
     def test_confirmation_rate_is_low_not_zero(self) -> None:
@@ -157,9 +160,13 @@ class TestQujiantaoCausality:
             df["datetime"] = pd.to_datetime(df["datetime"])
             if len(df) < 500:
                 continue
-            rd = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(df)
+            rd = ChanlunAnalyser(
+                code="T", frequency="daily", config=ChanlunConfig()
+            ).process_klines(df)
             wdf = to_weekly(df)
-            rw = ChanlunAnalyser(code="T", frequency="weekly", config=ChanlunConfig()).process_klines(wdf)
+            rw = ChanlunAnalyser(
+                code="T", frequency="weekly", config=ChanlunConfig()
+            ).process_klines(wdf)
             cf = compute_qujiantao_cross_period(
                 rd.mmds, bis_low=rw.bis, zss_low=rw.zss, bcs_low=rw.bcs, mmds_low=rw.mmds
             )

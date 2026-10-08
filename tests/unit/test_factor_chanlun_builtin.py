@@ -27,8 +27,8 @@ import pandas as pd
 import pytest
 
 from easy_tdx.chanlun.analyser import ChanlunAnalyser
-from easy_tdx.factor.builtin.chanlun import ChanlunBiDir, ChanlunMMD
 from easy_tdx.factor.base import FACTORY_REGISTRY
+from easy_tdx.factor.builtin.chanlun import ChanlunBiDir, ChanlunMMD
 
 FIXTURE = Path(__file__).parent.parent / "fixtures" / "chanlun_000333_daily.json"
 
@@ -70,7 +70,9 @@ def test_fixture_has_real_signals(fixture_df: pd.DataFrame, chanlun_result) -> N
 # ── ChanlunMMD ────────────────────────────────────────────────────────────
 
 
-def test_mmd_nonzero_count_equals_engine_mmd_count(fixture_df: pd.DataFrame, chanlun_result) -> None:
+def test_mmd_nonzero_count_equals_engine_mmd_count(
+    fixture_df: pd.DataFrame, chanlun_result
+) -> None:
     """核心断言：非零格数 == 引擎算出的买卖点数。
 
     bug 版本在这里必挂：预期 3，实际 0。
@@ -127,7 +129,9 @@ def test_bi_dir_has_more_than_one_distinct_value(fixture_df: pd.DataFrame) -> No
     assert len(distinct) > 1, f"笔方向序列恒定/退化: distinct={distinct}"
 
 
-def test_bi_dir_last_value_equals_last_bi_direction(fixture_df: pd.DataFrame, chanlun_result) -> None:
+def test_bi_dir_last_value_equals_last_bi_direction(
+    fixture_df: pd.DataFrame, chanlun_result
+) -> None:
     """最后一个值必须等于最后一笔方向（+1 / -1），不能是兜底的 0 或常量。"""
     out = ChanlunBiDir().compute(fixture_df)
     last_bi = chanlun_result.bis[-1]
@@ -157,7 +161,9 @@ def test_bi_dir_paints_each_bi_over_its_own_span(fixture_df: pd.DataFrame, chanl
         )
 
 
-def test_bi_dir_covers_bi_extension_not_just_last_bar(fixture_df: pd.DataFrame, chanlun_result) -> None:
+def test_bi_dir_covers_bi_extension_not_just_last_bar(
+    fixture_df: pd.DataFrame, chanlun_result
+) -> None:
     """最后一笔结束后到帧尾（无新已完成笔）应延续末笔方向，而不是只值最后一根。"""
     out = ChanlunBiDir().compute(fixture_df)
     tail_start = chanlun_result.bis[-1].end.k.k_index

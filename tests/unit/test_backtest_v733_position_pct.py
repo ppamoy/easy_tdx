@@ -38,16 +38,20 @@ ROOT = Path(__file__).resolve().parents[2]
 @pytest.fixture(scope="module")
 def engine_cls():
     import sys
+
     sys.path.insert(0, str(ROOT / "src"))
     from easy_tdx.backtest.engine import BacktestEngine
+
     return BacktestEngine
 
 
 @pytest.fixture(scope="module")
 def strategy_cls():
     import sys
+
     sys.path.insert(0, str(ROOT / "src"))
     from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy
+
     return ChanlunStrategy
 
 
@@ -61,6 +65,7 @@ def bars() -> pd.DataFrame:
     若该文件缺失则跳过（audit_data 已被 .gitignore，不入库）。
     """
     import json
+
     p = ROOT / "audit_data" / "sh600000_daily.json"
     if not p.exists():
         pytest.skip(f"缺少真实行情 {p}（先跑 scripts/audit_fetch_real_data.py）")
@@ -92,22 +97,22 @@ class TestPositionPctIsActuallyHonored:
         assert full == full, "sanity"
         assert not (half == full), (
             f"position_pct=0.5 与 1.0 成交股数相同（{full}）—— "
-            "仓位参数被引擎 position_mode='full' 丢弃了")
+            "仓位参数被引擎 position_mode='full' 丢弃了"
+        )
 
     def test_half_position_is_materially_smaller(self, engine_cls, strategy_cls, bars) -> None:
         full = _first_buy_size(engine_cls, strategy_cls, bars, 1.0)
         half = _first_buy_size(engine_cls, strategy_cls, bars, 0.5)
         assert half < full * 0.75, f"半仓 {half} 应显著小于全仓 {full}"
 
-    def test_lower_position_means_lower_drawdown(
-        self, engine_cls, strategy_cls, bars
-    ) -> None:
+    def test_lower_position_means_lower_drawdown(self, engine_cls, strategy_cls, bars) -> None:
         """仓位越低回撤应越小 —— 这是 position_pct 生效的直接后果。"""
+
         def dd(pct: float) -> float:
             s = strategy_cls()
             s.p["position_pct"] = pct
-            return float(engine_cls(s, cash=1_000_000.0).run(
-                bars).performance["max_drawdown"])
+            return float(engine_cls(s, cash=1_000_000.0).run(bars).performance["max_drawdown"])
+
         assert dd(0.3) < dd(1.0), "30% 仓位的回撤应小于 100% 仓位"
 
 
@@ -116,8 +121,10 @@ class TestStrategyStillComputesSizeCorrectly:
 
     def test_do_buy_computes_scaled_size(self, strategy_cls, bars) -> None:
         import sys
+
         sys.path.insert(0, str(ROOT / "src"))
         from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy
+
         seen: list[int] = []
         orig = ChanlunStrategy._do_buy
 
@@ -147,16 +154,19 @@ class TestEngineRespectsExplicitSize:
 
     def test_calculate_buy_size_keeps_signal_size(self, bars) -> None:
         import sys
+
         sys.path.insert(0, str(ROOT / "src"))
         from easy_tdx.backtest.orders import OrderSimulator
-        sim = OrderSimulator(bars, commission=0.0003, min_commission=5.0,
-                             stamp_tax=0.001, slippage=0.0)
+
+        sim = OrderSimulator(
+            bars, commission=0.0003, min_commission=5.0, stamp_tax=0.001, slippage=0.0
+        )
         got = sim._calculate_buy_size(
-            signal_size=500.0, price=10.0, cash=1_000_000.0,
-            position_mode="full")
+            signal_size=500.0, price=10.0, cash=1_000_000.0, position_mode="full"
+        )
         assert got == 500.0, (
-            f"引擎把策略指定的 500 股改成了 {got} —— "
-            "显式仓位被 position_mode='full' 覆盖")
+            f"引擎把策略指定的 500 股改成了 {got} —— 显式仓位被 position_mode='full' 覆盖"
+        )
 
 
 if __name__ == "__main__":

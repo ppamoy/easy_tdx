@@ -350,7 +350,6 @@ def _v102_rr_bonus(mmd: Any) -> tuple[int, str]:
     return 0, f"RR={rr_f:.1f}"
 
 
-
 def _log1p(x: int) -> float:
     """log(1+x) 的轻量实现（避免为一个分数把 numpy 引进 web 层）。"""
     try:

@@ -70,9 +70,7 @@ class TestTrainModeHidesFuture:
     def test_no_outcomes_when_training(self) -> None:
         """训练模式下 mmd_outcomes 必须为空 —— 那是未来走势。"""
         p = _payload(10)
-        assert p["mmd_outcomes"] == [], (
-            f"训练模式不应下发未来收益，实得 {p['mmd_outcomes']}"
-        )
+        assert p["mmd_outcomes"] == [], f"训练模式不应下发未来收益，实得 {p['mmd_outcomes']}"
 
     def test_no_answer_before_reveal(self) -> None:
         """尚未揭示到的信号点，其 signal 答案不得下发。"""
@@ -80,8 +78,7 @@ class TestTrainModeHidesFuture:
         for c in p["candidates"]:
             if c["index"] > 10:
                 assert c["signal"] is None, (
-                    f"候选点 {c['index']} 尚未揭示（limit=10）却带答案 "
-                    f"{c['signal']}"
+                    f"候选点 {c['index']} 尚未揭示（limit=10）却带答案 {c['signal']}"
                 )
 
     def test_past_candidates_still_available(self) -> None:
@@ -185,6 +182,4 @@ class TestHttpEndpointGate:
         """对照组：mode=review 必须保持全量（F2 复盘需要未来收益）。"""
         d = self._post(mode="review")
         assert d["mmd_outcomes"], "复盘模式的 mmd_outcomes 被误删"
-        assert [c for c in d["candidates"] if c["signal"] is not None], (
-            "复盘模式的答案被误删"
-        )
+        assert [c for c in d["candidates"] if c["signal"] is not None], "复盘模式的答案被误删"

@@ -4,6 +4,7 @@
 ⇒ 存在**选择偏差/幸存者偏差**，多重比较校正**并不能**消除它。
 本脚本用**从未被碰过**的 228 只全新标的做样本外复核。
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -62,22 +63,44 @@ class TestContract:
         （这是本项目的硬规矩：审计脚本无数据时报警而非假装通过。）"""
         p = subprocess.run(
             [sys.executable, str(SCRIPT), "--cache", "/tmp/__nonexistent.json"],
-            capture_output=True, text=True, cwd=ROOT, timeout=180)
-        assert p.returncode == 2, (
-            f"缺缓存应 exit 2，实得 {p.returncode}；"
-            f"stderr={p.stderr[-300:]}")
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            timeout=180,
+        )
+        assert p.returncode == 2, f"缺缓存应 exit 2，实得 {p.returncode}；stderr={p.stderr[-300:]}"
 
     def test_exits_two_without_audit_data(self, tmp_path) -> None:
         """⚠️ 缺 audit_data/ 也必须 exit 2。"""
         cache = tmp_path / "c.json"
-        cache.write_text(json.dumps([{"code": "sh600000_daily",
-                                      "hit_pts": [1], "hit": [0.01],
-                                      "miss_pts": [], "miss": []}]),
-                         encoding="utf-8")
+        cache.write_text(
+            json.dumps(
+                [
+                    {
+                        "code": "sh600000_daily",
+                        "hit_pts": [1],
+                        "hit": [0.01],
+                        "miss_pts": [],
+                        "miss": [],
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
         p = subprocess.run(
-            [sys.executable, str(SCRIPT), "--cache", str(cache),
-             "--audit-root", str(tmp_path / "empty")],
-            capture_output=True, text=True, cwd=ROOT, timeout=180)
+            [
+                sys.executable,
+                str(SCRIPT),
+                "--cache",
+                str(cache),
+                "--audit-root",
+                str(tmp_path / "empty"),
+            ],
+            capture_output=True,
+            text=True,
+            cwd=ROOT,
+            timeout=180,
+        )
         assert p.returncode == 2
 
 
@@ -95,18 +118,32 @@ class TestFutureFunctionGuard:
         """行为级：t+H 越界的观测必须被**丢掉**，不能进结果。"""
         m = _mod()
         import tempfile
+
         with tempfile.TemporaryDirectory() as d:
             d = Path(d)
             (d / "audit_data").mkdir()
             # 只有 5 根K线，H=20 ⇒ 任何 t 都会越界
             (d / "audit_data" / "sh600000_daily.json").write_text(
-                json.dumps([{"datetime": f"2024-01-{i+1:02d}",
-                             "close": 10.0 + i} for i in range(5)]),
-                encoding="utf-8")
+                json.dumps(
+                    [{"datetime": f"2024-01-{i + 1:02d}", "close": 10.0 + i} for i in range(5)]
+                ),
+                encoding="utf-8",
+            )
             cache = d / "c.json"
-            cache.write_text(json.dumps([
-                {"code": "sh600000_daily", "hit_pts": [0], "hit": [0.01],
-                 "miss_pts": [1], "miss": [0.02]}]), encoding="utf-8")
+            cache.write_text(
+                json.dumps(
+                    [
+                        {
+                            "code": "sh600000_daily",
+                            "hit_pts": [0],
+                            "hit": [0.01],
+                            "miss_pts": [1],
+                            "miss": [0.02],
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
             orig = m.ROOT
             try:
                 m.ROOT = d
@@ -114,8 +151,8 @@ class TestFutureFunctionGuard:
             finally:
                 m.ROOT = orig
         assert df.empty, (
-            f"K线不足 {5} 根而 H=20，却仍返回 {len(df)} 条观测"
-            " ⇒ 越界数据没被剔除 ⇒ 未来函数！")
+            f"K线不足 {5} 根而 H=20，却仍返回 {len(df)} 条观测 ⇒ 越界数据没被剔除 ⇒ 未来函数！"
+        )
 
 
 class TestBetaControl:
@@ -180,6 +217,7 @@ class TestTeeth:
         src = _s()
         assert "return 0" in src and "return 2" not in src
 
+
 class TestPoolingBias:
     """⚠️ 五之三十四标的缺口：池化入选占比 16.7%~100% 差异极大，
     **池化结论可信吗**？
@@ -210,8 +248,8 @@ class TestPoolingBias:
 
     def test_behaviourally_runs_on_synthetic(self) -> None:
         """行为级：真数据跑一次，确认三种加权都出数、且能报一致/分歧。"""
-        import io
         import contextlib
+        import io
 
         m = _mod()
         n_per = 6
@@ -221,7 +259,7 @@ class TestPoolingBias:
             for t in range(8):
                 codes.append(f"c{c}")
                 ts.append(t)
-                hits.append(t < 4)          # 每只都被选中一半
+                hits.append(t < 4)  # 每只都被选中一半
                 rs.append(rng.normal(0.0, 0.01))
         df = pd.DataFrame({"code": codes, "t": ts, "r": rs, "hit": hits})
         rel = df["r"].to_numpy(float)

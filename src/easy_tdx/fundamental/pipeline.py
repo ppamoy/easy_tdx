@@ -464,9 +464,7 @@ def _summarize_periods(
             ]
             if not ov_vals:
                 continue  # 该期没有个股收益 ⇒ 同样不参与
-            pair_vals.setdefault(f"ret_{h}d", []).append(
-                (sum(ov_vals) / len(ov_vals), bm)
-            )
+            pair_vals.setdefault(f"ret_{h}d", []).append((sum(ov_vals) / len(ov_vals), bm))
 
     beats: dict[str, Any] = {}
     for h in horizons:

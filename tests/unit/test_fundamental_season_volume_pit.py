@@ -30,8 +30,8 @@ import pytest
 
 from easy_tdx.fundamental.season import detect_season
 
-N = 320          # 总 K 线数
-T_IDX = 150      # target 落在第 150 根处
+N = 320  # 总 K 线数
+T_IDX = 150  # target 落在第 150 根处
 BASE = date(2024, 1, 1)
 
 
@@ -55,12 +55,13 @@ class TestVolumeSignalIsPointInTime:
     def test_future_volume_does_not_change_historical_season(self) -> None:
         """核心：追加 target 之后的量能，不得改变 target 处的结论。"""
         dates, closes, vols, target = (
-            _dates(), _closes(), _vols_with_future_spike(), _dates()[T_IDX]
+            _dates(),
+            _closes(),
+            _vols_with_future_spike(),
+            _dates()[T_IDX],
         )
         full = detect_season(dates, closes, target, volumes=vols)
-        truncated = detect_season(
-            dates, closes, target, volumes=vols[: T_IDX + 1]
-        )
+        truncated = detect_season(dates, closes, target, volumes=vols[: T_IDX + 1])
         assert full.signals["vol_score2"] == truncated.signals["vol_score2"], (
             "量能信号受 target 之后的数据影响（前视）"
         )
@@ -182,9 +183,7 @@ class TestAllSeasonSignalsArePointInTime:
             target = dates[t_idx]
             base = self._snapshot(detect_season(dates, closes, target, volumes=vols))
             for mult, vol in ((3.0, 5e7), (0.2, 1e3)):
-                c2 = closes[: t_idx + 1] + [closes[t_idx] * mult] * (
-                    self.N_FULL - t_idx - 1
-                )
+                c2 = closes[: t_idx + 1] + [closes[t_idx] * mult] * (self.N_FULL - t_idx - 1)
                 v2 = vols[: t_idx + 1] + [vol] * (self.N_FULL - t_idx - 1)
                 got = self._snapshot(detect_season(dates, c2, target, volumes=v2))
                 assert got == base, f"t_idx={t_idx} mult={mult}: {base} -> {got}"

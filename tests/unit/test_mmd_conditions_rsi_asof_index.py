@@ -73,9 +73,7 @@ class TestRsiMomentumAsOfIndex:
         # 饱和在 100，动量恒为 0（我头两次都被这个假象骗了 —— 是测试数据错了，
         # 不是代码错了）。实测这个序列动量 = -5.4422，确有变化。
         c = [10.0 + i * 0.1 - (i % 3) * 0.15 for i in range(60)]
-        assert _calc_rsi_momentum(c, PERIOD, idx=59) == pytest.approx(
-            5.4422, abs=1e-3
-        )
+        assert _calc_rsi_momentum(c, PERIOD, idx=59) == pytest.approx(5.4422, abs=1e-3)
 
     def test_tail_appending_does_not_change_past_idx(self) -> None:
         c = [10.0 + (i**1.2) * 0.02 for i in range(60)]
@@ -89,9 +87,7 @@ class TestRsiMomentumAsOfIndex:
 
     def test_idx_none_equals_tail(self) -> None:
         c = [10.0 + (i**1.2) * 0.02 for i in range(60)]
-        assert _calc_rsi_momentum(c, PERIOD) == _calc_rsi_momentum(
-            c, PERIOD, idx=len(c)
-        )
+        assert _calc_rsi_momentum(c, PERIOD) == _calc_rsi_momentum(c, PERIOD, idx=len(c))
 
 
 class TestBackwardCompatibility:

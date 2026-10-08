@@ -28,7 +28,7 @@ import pytest
 
 from easy_tdx.chanlun.beichi import _check_bi_level_beichi
 from easy_tdx.chanlun.mmd_conditions import _calc_bi_force
-from easy_tdx.chanlun.types import BI, FX, FXType, Direction
+from easy_tdx.chanlun.types import BI, FX, Direction, FXType
 
 
 def _real_exhaustion_closes() -> list[float]:
@@ -78,9 +78,13 @@ def _mk_bi(
         return f
 
     up = direction == "up"
-    b = BI(start=_fx(not up, s_bar), end=_fx(up, e_bar),
-           direction=Direction.UP if up else Direction.DOWN,
-           high=hi, low=lo)
+    b = BI(
+        start=_fx(not up, s_bar),
+        end=_fx(up, e_bar),
+        direction=Direction.UP if up else Direction.DOWN,
+        high=hi,
+        low=lo,
+    )
     b.start.bar_index = s_bar
     b.end.bar_index = e_bar
     b.index = index

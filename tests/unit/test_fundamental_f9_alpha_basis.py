@@ -27,9 +27,7 @@ from easy_tdx.fundamental.pipeline import _summarize_periods
 
 def _period(stock_ret, index_ret, n: int = 1):
     return {
-        "results": [
-            {"category": "tree", "performance": {"ret_20d": stock_ret}} for _ in range(n)
-        ],
+        "results": [{"category": "tree", "performance": {"ret_20d": stock_ret}} for _ in range(n)],
         "index": {"ret_20d": index_ret},
     }
 

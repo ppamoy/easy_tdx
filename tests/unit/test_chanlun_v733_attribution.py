@@ -76,8 +76,7 @@ class TestMirrorMetric:
         assert cand_dd, "回撤匹配也应有候选（所以错用了也不会报错——必须靠断言拦住）"
         # 关键：两组候选的**位置**必须不同，否则说明镜像量没起作用
         assert set(cand_runup) != set(cand_dd), (
-            "涨幅匹配与回撤匹配选出了同一批 bar —— 镜像量没起作用，"
-            "卖点仍在被回撤（反向）筛选"
+            "涨幅匹配与回撤匹配选出了同一批 bar —— 镜像量没起作用，卖点仍在被回撤（反向）筛选"
         )
         assert np.mean(cand_runup) < np.mean(cand_dd), (
             f"涨幅匹配候选应在更早（上涨段），实得均值 {np.mean(cand_runup):.1f} vs "

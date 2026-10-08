@@ -3,10 +3,10 @@
 ⚠️ 这组测试的价值全在"牙齿"上——**如果它们没有牙齿，就是又一轮自我安慰**。
 每一项都标明了对应的坏版本。
 """
+
 from pathlib import Path
 
-SRC = (Path(__file__).resolve().parents[2] /
-       "src" / "easy_tdx" / "web" / "routers" / "screening.py")
+SRC = Path(__file__).resolve().parents[2] / "src" / "easy_tdx" / "web" / "routers" / "screening.py"
 
 
 def _s() -> str:
@@ -55,10 +55,12 @@ class TestSaturationFixed:
         若有人改回 5.0/7.0/5.0/2.5，这里必须红。
         ⚠️ 牙齿实测：改回旧系数后本测试**确实报失败**。"""
         s = _quality_fn()
-        for coef in ("1.9 * _log1p(bi_count)",
-                     "3.1 * _log1p(zs_count)",
-                     "1.6 * _log1p(mmd_count)",
-                     "1.0 * _log1p(bc_count)"):
+        for coef in (
+            "1.9 * _log1p(bi_count)",
+            "3.1 * _log1p(zs_count)",
+            "1.6 * _log1p(mmd_count)",
+            "1.0 * _log1p(bc_count)",
+        ):
             assert coef in s, f"缺少数据反推的系数：{coef}"
 
     def test_caps_still_present(self) -> None:

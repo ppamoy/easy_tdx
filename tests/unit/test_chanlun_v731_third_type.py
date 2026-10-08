@@ -32,8 +32,8 @@ from easy_tdx.chanlun.config import ChanlunConfig  # noqa: E402
 def _mk(bars) -> pd.DataFrame:
     rows = []
     dt = datetime(2024, 1, 2)
-    for o, c, h, l in bars:
-        rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": l, "vol": 1e6})
+    for o, c, h, ln in bars:
+        rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": ln, "vol": 1e6})
         dt += timedelta(days=1)
     return pd.DataFrame(rows)
 
@@ -87,7 +87,9 @@ class TestThirdTypeRecall:
         assert hits, "教科书 3卖 未被识别（召回失败）"
         assert hits[0].mmd_type.value == "3sell"
         zd = hits[0].zs.zd
-        assert hits[0].bi.high < zd, f"3卖 定位错误：高点未在中枢下沿之下 ({hits[0].bi.high} >= {zd})"
+        assert hits[0].bi.high < zd, (
+            f"3卖 定位错误：高点未在中枢下沿之下 ({hits[0].bi.high} >= {zd})"
+        )
 
 
 class TestThirdTypeNoEarlyTermination:

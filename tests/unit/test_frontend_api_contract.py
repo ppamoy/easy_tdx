@@ -50,9 +50,7 @@ _BASE_LITERAL = "${BASE}"
 
 # 抓 `/api/v1/...` 或 `${BASE}/...` 起始的字面量。终止于引号/反引号/空白/右括号等，
 # 避免把紧随其后的 `body: JSON.stringify(...)` 之类代码吞进来。
-_PATH_LITERAL_RE = re.compile(
-    r"(?:/api/v1|" + re.escape(_BASE_LITERAL) + r")/[A-Za-z0-9_\-/{}$.]*"
-)
+_PATH_LITERAL_RE = re.compile(r"(?:/api/v1|" + re.escape(_BASE_LITERAL) + r")/[A-Za-z0-9_\-/{}$.]*")
 
 # 模板插值段：${taskId} / ${market} / ${code.value} / ${encodeURIComponent(x)}
 _INTERP_RE = re.compile(r"\$\{[^}]*\}")
@@ -330,9 +328,7 @@ def test_dynamic_paths_are_matched(
     dynamic = [c for c in frontend_calls if c.n_interp > 0]
     assert dynamic, "未抽取到任何含 ${...} 插值的动态路径——正则可能已失效"
 
-    unmatched = [
-        c for c in dynamic if _match_backend_path(c.path, backend_path_list) is None
-    ]
+    unmatched = [c for c in dynamic if _match_backend_path(c.path, backend_path_list) is None]
     unexpected = [c for c in unmatched if c.loc not in KNOWN_MISSING]
 
     assert not unexpected, (
@@ -361,17 +357,14 @@ def test_known_missing_allowlist_is_not_stale(
 
     if stale:
         warnings.warn(
-            "KNOWN_MISSING 白名单已过期，请删除这些条目让断言重新生效: "
-            + "; ".join(stale),
+            "KNOWN_MISSING 白名单已过期，请删除这些条目让断言重新生效: " + "; ".join(stale),
             UserWarning,
             stacklevel=2,
         )
 
     # 白名单必须指向真实存在的源码位置，否则等于写错了豁免
     ghosts = [loc for loc in KNOWN_MISSING if loc not in by_loc]
-    assert not ghosts, (
-        "KNOWN_MISSING 里的位置在前端源码中不存在，豁免写错了: " + ", ".join(ghosts)
-    )
+    assert not ghosts, "KNOWN_MISSING 里的位置在前端源码中不存在，豁免写错了: " + ", ".join(ghosts)
 
 
 # ── 本次修复的具体端点：路由存在且真的进到处理函数 ───────────────────────────

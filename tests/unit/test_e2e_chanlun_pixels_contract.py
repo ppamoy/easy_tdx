@@ -29,16 +29,18 @@ class TestNoDependencyOnUnexposedInternals:
 
     def test_does_not_require_window_echarts(self) -> None:
         s = _src()
-        assert "window.echarts.getInstanceByDom" not in s, \
+        assert "window.echarts.getInstanceByDom" not in s, (
             "本项目用 echarts/core 按需引入，不挂 window.echarts；依赖它会恒定失败"
+        )
 
     def test_does_not_require_ec_inner_attr(self) -> None:
         """文档里可以提这个坑，但**探针 JS 里不能用**。"""
         s = _src()
         # 只允许出现在模块 docstring（说明为什么不用它）
         body = s.split('"""', 2)[-1]
-        assert "__ec_inner_" not in body, \
+        assert "__ec_inner_" not in body, (
             "实测容器 DOM 上没有 __ec_inner_（实例存在组件局部变量里），不能依赖"
+        )
 
     def test_reads_real_pixels(self) -> None:
         s = _src()
@@ -89,13 +91,12 @@ class TestAssertionsAreZoomIndependent:
 
     def test_does_not_assert_on_segment_spacing(self) -> None:
         s = _src()
-        assert "相邻蜡烛左缘间距" not in s, \
-            "该断言依赖缩放级别，曾误判为'x 轴映射错位'"
+        assert "相邻蜡烛左缘间距" not in s, "该断言依赖缩放级别，曾误判为'x 轴映射错位'"
 
     def test_waits_for_stable_render(self) -> None:
         """连续两次扫描一致才算稳定，避开动画中途。"""
         s = _src()
-        assert "还在动画" in s or "p2.get(\"red\") != p1" in s
+        assert "还在动画" in s or 'p2.get("red") != p1' in s
 
 
 class TestTeethTest:
@@ -164,23 +165,22 @@ class TestResolutionGateHonesty:
         若它把 ok 置 False，CI 就会因为一个测不了的检查而常红，
         那还不如不测。这条锁死它只 WARN 不 FAIL。"""
         src = _src()
-        blk = src[src.index("逐点核对**不可判定**"):]
-        blk = blk[:blk.index("else:")]
-        assert "ok = False" not in blk, \
+        blk = src[src.index("逐点核对**不可判定**") :]
+        blk = blk[: blk.index("else:")]
+        assert "ok = False" not in blk, (
             "不可判定分支不得置 ok=False，否则 CI 会因测不了的检查而常红"
+        )
 
     def test_real_failures_still_fail(self) -> None:
         """但真正的失败（配色缺失/牙齿不成立）必须仍然会红。"""
-        assert _src().count("ok = False") >= 3, \
-            "必须保留真正的失败出口，不能把门禁改成永绿"
+        assert _src().count("ok = False") >= 3, "必须保留真正的失败出口，不能把门禁改成永绿"
 
     def test_does_not_count_pixel_columns_as_segments(self) -> None:
         """⚠️ cols 是每列一个色值，非零列数≈像素宽，**不是 K 线段数**。
         我第一版就是这么算错的，导致门槛失效、仍报 70.2% 假准确率。"""
         s = _src()
         wrong = 'sum(1 for c in (cols.get("cols") or []) if c)'
-        assert wrong not in s, (
-            "非零列数是像素宽不是段数，会让分辨率门槛失效")
+        assert wrong not in s, "非零列数是像素宽不是段数，会让分辨率门槛失效"
 
 
 class TestAlignmentUsesRealChartData:
@@ -196,7 +196,7 @@ class TestAlignmentUsesRealChartData:
     def test_derives_colors_from_real_ohlc(self) -> None:
         s = _src()
         assert "expected_colors" in s
-        assert "float(b[\"open\"])" in s or "b['open']" in s
+        assert 'float(b["open"])' in s or "b['open']" in s
 
     def test_red_is_up_per_frontend_theme(self) -> None:
         """红涨绿跌取自 echarts-setup.ts 的 UP_COLOR。"""
@@ -238,4 +238,5 @@ class TestExitCodes:
 
 if __name__ == "__main__":
     import pytest
+
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -24,21 +24,25 @@ class TestCodeNormalization:
 
     def test_strip_prefix(self) -> None:
         """audit_data 风格的代码要能剥成裸码。"""
-        for code, bare in [("sh600000", "600000"), ("sz000001", "000001"),
-                           ("600519", "600519")]:
+        for code, bare in [("sh600000", "600000"), ("sz000001", "000001"), ("600519", "600519")]:
             b = code[2:] if code[:2] in ("sh", "sz", "bj") else code
             assert b == bare, f"{code} → {b}，期望 {bare}"
 
     def test_prefix_rule(self) -> None:
         """6/5/9 开头 → sh；其余 → sz。"""
-        for bare, pfx in [("600000", "sh"), ("601398", "sh"), ("510300", "sh"),
-                          ("000001", "sz"), ("300750", "sz")]:
+        for bare, pfx in [
+            ("600000", "sh"),
+            ("601398", "sh"),
+            ("510300", "sh"),
+            ("000001", "sz"),
+            ("300750", "sz"),
+        ]:
             p = "sh" if bare[0] in ("6", "5", "9") else "sz"
             assert p == pfx, f"{bare} → {p}，期望 {pfx}"
 
     def test_teeth_double_prefix_is_invalid(self) -> None:
         """牙齿：证明不剥前缀确实会产生非法代码（否则本测试无意义）。"""
-        bad = "sh" + "sh600000"        # 第一版的行为
+        bad = "sh" + "sh600000"  # 第一版的行为
         assert bad != "sh600000"
         assert len(bad[2:]) != 6, "不剥前缀后裸码长度不是 6，新浪必然返回空"
 
@@ -69,19 +73,26 @@ class TestScaleMapping:
 class TestDirectionAndBaseline:
     """方向判定与极值基准的口径（与其它审计脚本保持一致）。"""
 
-    @pytest.mark.parametrize("st,expected", [
-        ("1buy", True), ("1sell", False),
-        ("2buy_s", True), ("2sell_s", False),   # 类二买/卖：endswith 会漏
-        ("3buy", True), ("3sell", False),
-    ])
+    @pytest.mark.parametrize(
+        "st,expected",
+        [
+            ("1buy", True),
+            ("1sell", False),
+            ("2buy_s", True),
+            ("2sell_s", False),  # 类二买/卖：endswith 会漏
+            ("3buy", True),
+            ("3sell", False),
+        ],
+    )
     def test_is_buy(self, st: str, expected: bool) -> None:
         assert amp._is_buy(st) is expected
 
     def test_pivot_low_selected_at_minimum(self) -> None:
         """局部低点基准：应在窗口最小值处。"""
         import numpy as np
+
         c = np.array([10, 9, 8, 7, 8, 9, 10, 9, 8, 7, 8], dtype=float)
         idx = amp.pivot_indices(c, 2, low=True, lo=0, hi=len(c))
         assert len(idx) >= 1
         for i in idx:
-            assert c[i] == c[max(0, i - 2): i + 3].min()
+            assert c[i] == c[max(0, i - 2) : i + 3].min()

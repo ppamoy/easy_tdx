@@ -99,6 +99,4 @@ class TestRealLowLevelObjectsExposed:
         assert len(res) == len(mmds)
         for r in res:
             if isinstance(r, dict):
-                assert r["synthetic"] is False, (
-                    "真实低级别数据路径不得被标为合成"
-                )
+                assert r["synthetic"] is False, "真实低级别数据路径不得被标为合成"

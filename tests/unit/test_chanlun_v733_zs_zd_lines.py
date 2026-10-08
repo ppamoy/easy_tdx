@@ -31,7 +31,7 @@ from __future__ import annotations
 import pytest
 
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.types import BI, CLKline, Direction, FX, FXType
+from easy_tdx.chanlun.types import BI, FX, CLKline, Direction, FXType
 from easy_tdx.chanlun.zs import find_zss
 
 
@@ -39,18 +39,36 @@ def _bi(index: int, direction: str, high: float, low: float) -> BI:
     start_fx = FX(
         fx_type=FXType.DI if direction == "up" else FXType.DING,
         k=CLKline(
-            k_index=index * 10, date=None, open=low, close=high,  # type: ignore[arg-type]
-            high=high, low=low, amount=0.0, index=index,
+            k_index=index * 10,
+            date=None,
+            open=low,
+            close=high,  # type: ignore[arg-type]
+            high=high,
+            low=low,
+            amount=0.0,
+            index=index,
         ),
-        klines=[], val=low if direction == "up" else high, index=index, done=True,
+        klines=[],
+        val=low if direction == "up" else high,
+        index=index,
+        done=True,
     )
     end_fx = FX(
         fx_type=FXType.DING if direction == "up" else FXType.DI,
         k=CLKline(
-            k_index=index * 10 + 5, date=None, open=low, close=high,  # type: ignore[arg-type]
-            high=high, low=low, amount=0.0, index=index,
+            k_index=index * 10 + 5,
+            date=None,
+            open=low,
+            close=high,  # type: ignore[arg-type]
+            high=high,
+            low=low,
+            amount=0.0,
+            index=index,
         ),
-        klines=[], val=high if direction == "up" else low, index=index, done=True,
+        klines=[],
+        val=high if direction == "up" else low,
+        index=index,
+        done=True,
     )
     return BI(
         index=index,
