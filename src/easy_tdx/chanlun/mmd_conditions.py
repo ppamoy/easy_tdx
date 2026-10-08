@@ -12,8 +12,9 @@ mmd.py 顶层通过惰性再导出保持既有导入兼容。
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ParamSpec, TypeVar, cast
 
 import numpy as np
 
@@ -24,6 +25,41 @@ from easy_tdx.MyTT import ATR, BIAS, KDJ, MA, OBV, RSI
 
 # ── V731 前视修复：as-of 工具（须在模块顶部，因其装饰器被下方助手使用）──
 
+# V733：本模块类型收口。此前 ``_asof_arrays`` / ``_dict_len`` / ``_cut`` /
+# ``_truncate_to_signal_window`` 均无注解，mypy strict 下每个被装饰函数都报
+# ``untyped-decorator``（实测 64 处），掩盖了真正的类型缺陷。这里用
+# ParamSpec/TypeVar 让装饰器**透传被装饰函数的签名与返回类型** —— 既是
+# CI 的硬要求，也让 @_asof_arrays 不再使下游丧失类型信息。
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+# 被 as-of 裁剪的数组形参名（见 _asof_arrays 的裁切口径）。
+_ASOF_PARAM_NAMES = ("closes", "highs", "lows", "volumes", "macd_data")
+
+
+def _mmd_signal_index(mmd: Any) -> int | None:
+    """从"疑似买卖点"对象里取信号所在 bar 的原始 K 行号；取不到返回 None。
+
+    V733：这是原先两处 ``mmd.bi.end.k.k_index`` 匿名 try/except 的**唯一**命名
+    版本 —— 提取出来是为了把"为什么这里必须有异常兜底"讲清在一处。
+
+    为什么不能只判 ``mmd.bi is None``：这个形参虽然叫 mmd，但**部分助手传进来
+    的其实是 BI**（笔），而 BI 上**没有** ``.bi`` 属性 —— 旧代码正是靠
+    ``try/except Exception`` 捕获这条 AttributeError 才退回"不裁剪"。实测确认
+    ``BI(start=None, end=None, direction=None).bi`` → AttributeError。若误改成
+    只判 None，这类调用会在bara属性访问处抛出 AttributeError 崩溃。
+    故这里保留宽兜底，并显式写明是为了兼容 BI 实参（而非偷懒）。
+    """
+    try:
+        sig_idx = mmd.bi.end.k.k_index
+    except Exception:
+        # mmd 是 BI / None / 半成品 MMD（如缺少 end.k）⇒ 无法定位 ⇒ 不裁剪。
+        return None
+    if not isinstance(sig_idx, int) or sig_idx < 0:
+        return None
+    return sig_idx
+
+
 def _asof_end(mmd: MMD, n: int) -> int:
     """返回"截至该信号"的切片右端点（exclusive），供 `seq[:end]` 使用。
 
@@ -31,23 +67,20 @@ def _asof_end(mmd: MMD, n: int) -> int:
         `sig_idx + 1 + _POST_SIGNAL_WINDOW`，夹在 `[0, n]` 之间。
         取不到信号 index 时返回 n（= 序列尾部，保持旧行为）。
     """
-    try:
-        sig_idx = mmd.bi.end.k.k_index
-    except Exception:
-        return n
-    if not isinstance(sig_idx, int) or sig_idx < 0:
+    sig_idx = _mmd_signal_index(mmd)
+    if sig_idx is None:
         return n
     return max(0, min(sig_idx + 1 + _POST_SIGNAL_WINDOW, n))
 
 
-def _dict_len(d) -> int:
+def _dict_len(d: dict[str, Any]) -> int:
     for v in d.values():
         if isinstance(v, list):
             return len(v)
     return 0
 
 
-def _asof_arrays(fn):
+def _asof_arrays(fn: Callable[_P, _R]) -> Callable[_P, _R]:
     """把助手的数组入参裁剪到"截至信号"的位置（V731 前视修复）。
 
     一批助手会读 `closes[-5:]`、`closes[-20:]`、`volumes[-N:]` 之类的**序列尾部**。
@@ -69,24 +102,29 @@ def _asof_arrays(fn):
     params = [
         (i, n)
         for i, n in enumerate(sig.parameters)
-        if n in ("closes", "highs", "lows", "volumes", "macd_data")
+        if n in _ASOF_PARAM_NAMES
     ]
 
     @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         if not params:
             return fn(*args, **kwargs)
-        mmd = None
+        mmd: MMD | None = None
         try:
-            mmd = sig.bind_partial(*args, **kwargs).arguments.get("mmd")
+            # bind_partial(...).arguments 是运行时才成形的 dict[str, Any]，
+            # 其 value 静态类型无法收敛（同一位置不同助手会传 MMD / BI / None 三种
+            # 实参），先降到 Any 再取键，避免 mypy 把 union 退化成 object。
+            bound: Any = sig.bind_partial(*args, **kwargs)
+            mmd = bound.arguments.get("mmd")
         except Exception:
-            mmd = kwargs.get("mmd")
+            # 兜底路径：bind_partial 失败时按关键字名直接取，值类型同样是 Any。
+            mmd = cast("MMD | None", kwargs.get("mmd"))
         # 只有"mmd 是买卖点"时才裁剪。有些函数的 mmd 形参其实是 BI，
         # 没有 .bi.end.k.k_index —— _asof_end 内部已兜底，这里再做一道保险。
         if mmd is None:
             return fn(*args, **kwargs)
 
-        def _cut(seq):
+        def _cut(seq: Any) -> Any:
             if seq is None:
                 return None
             if isinstance(seq, dict):
@@ -97,7 +135,9 @@ def _asof_arrays(fn):
             except Exception:
                 return seq
 
-        new_args = list(args)
+        # new_args 是 *args 的元素级重建列表，静态上不可能保留 ParamSpec 的元素
+        # 类型（不同助手的形参类型各异），故降到 Any 后再交给 fn 还原。
+        new_args: list[Any] = list(args)
         for idx, name in params:
             if idx < len(new_args):
                 new_args[idx] = _cut(new_args[idx])
@@ -15633,7 +15673,13 @@ def _truncate_to_signal_window(
     lows: list[float] | None,
     volumes: list[float] | None,
     macd_data: dict[str, list[float]] | None = None,
-):
+) -> tuple[
+    list[float] | None,
+    list[float] | None,
+    list[float] | None,
+    list[float] | None,
+    dict[str, list[float]] | None,
+]:
     """把输入数组裁到「截至信号 bar + 后确认窗口」。
 
     V731 前视修复的核心。下游十多个指标各自读序列尾部（`closes[-N:]`），
@@ -15648,18 +15694,19 @@ def _truncate_to_signal_window(
         裁剪后的 (closes, highs, lows, volumes, macd_data)。
         取不到信号 index、或信号本就位于序列尾部时，原样返回（实时打分不受影响）。
     """
-    try:
-        sig_idx = mmd.bi.end.k.k_index
-    except Exception:
+    # V733：复用统一的取下标助手（含 mmd 实为 BI 的兜底），替代原先重复的
+    # try/except。语义逐一对齐：取不到 index ⇒ 原样返回（不裁剪）。
+    sig_idx = _mmd_signal_index(mmd)
+    if sig_idx is None:
         return closes, highs, lows, volumes, macd_data
-    if closes is None or not isinstance(sig_idx, int) or sig_idx < 0:
+    if closes is None:
         return closes, highs, lows, volumes, macd_data
 
     end = sig_idx + 1 + _POST_SIGNAL_WINDOW
     if len(closes) <= end:
         return closes, highs, lows, volumes, macd_data  # 信号在窗口内，无需裁剪
 
-    def _cut(seq):
+    def _cut(seq: list[float] | None) -> list[float] | None:
         if seq is None:
             return None
         try:

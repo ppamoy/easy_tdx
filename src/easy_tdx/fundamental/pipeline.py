@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import math
 from datetime import date, datetime
-from typing import Any
+from typing import Any, TypeGuard
 
 import pandas as pd
 
@@ -328,7 +328,7 @@ def _valuation(
         ``{"pe": float|None, "pb": float|None}``；无价格/亏损/无净资产时对应项为 None。
     """
     out: dict[str, float | None] = {"pe": None, "pb": None}
-    if close is None or not isinstance(close, (int, float)) or close <= 0:
+    if close is None or not isinstance(close, int | float) or close <= 0:
         return out
     eps = ind.get("eps")
     bps = ind.get("bps")
@@ -389,7 +389,12 @@ def _summarize_periods(
     """汇总多个历史时点的验证结果：按分类 + 总体 + 指数基准 + 是否跑赢。"""
     cats = ["tree", "grain", "vegetable"]
 
-    def _finite(v: Any) -> bool:
+    # V733 CI 收口：原先返回 bool，mypy strict 下无法把过滤后的 Any 收窄成
+    # float，idx_vals / pair_vals 的 append 因此报 arg-type。改 TypeGuard[float]
+    # 后 `_finite(v)` 为真即静态保证 v 是 float —— 这与本函数语义严格等价
+    # （返回 True ⇒ v 必然是被 isinstance 确认过的 int/float 且 isfinite），
+    # 没有引入任何新的"信任"，反而把下游的类型假设固定了下来。
+    def _finite(v: Any) -> TypeGuard[float]:
         """有效收益样本：数值类型且有限（NaN/Inf 视同缺数据）。
 
         V731（第 36 轮）：旧过滤只有 `is not None`，而 round-35 虽已让
@@ -398,7 +403,7 @@ def _summarize_periods(
         并把 NaN>0==False 的样本计入 hit_rate 分母，静默稀释胜率。
         防御收口在出口处，不依赖每个上游都记得堵。
         """
-        return isinstance(v, (int, float)) and math.isfinite(v)
+        return isinstance(v, int | float) and math.isfinite(v)
 
     def _stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
         st: dict[str, Any] = {"count": len(rows)}
