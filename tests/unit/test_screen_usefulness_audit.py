@@ -718,3 +718,29 @@ class TestHasBeichiIsNotReallyThreeWay:
         留着是为了让后人知道问题存在，而不是忘了它。"""
         src = self.SCRIPT.read_text(encoding="utf-8")
         assert '"any"' in src and '"true"' in src
+
+
+class TestWorkersFollowSharedConvention:
+    """并行度不得硬编码 —— 2026-10-07 事故的根因之一。
+
+    该脚本原先把 `--workers` 写死成 4，在 4 核机上与 web 服务 /
+    pytest / agent 正面抢核，导致"每个后台任务都非常久"。
+    详见 docs/BG_JOB_SLowness_POSTMORTEM.md。
+    """
+
+    def test_workers_default_is_shared(self) -> None:
+        s = _s()
+        assert "from _concurrency import" in s, \
+            "workers 默认值必须来自 scripts/_concurrency.py（单一事实来源）"
+
+    def test_workers_resolved_via_helper(self) -> None:
+        s = _s()
+        assert "resolve_workers" in s, "未显式传值时必须经 resolve_workers 兜底"
+
+    def test_no_hardcoded_worker_count(self) -> None:
+        """只针对 --workers 这一行 —— 不能误伤 --limit 的 default=80。"""
+        for line in _s().splitlines():
+            if '"--workers"' not in line:
+                continue
+            assert "default=None" in line.replace(" ", ""), \
+                f"--workers 不得硬编码数字，应 default=None + resolve_workers：{line}"

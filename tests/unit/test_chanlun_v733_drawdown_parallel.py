@@ -31,8 +31,26 @@ class TestParallelScriptExists:
         assert "ProcessPoolExecutor" in s
         assert "ThreadPool" not in s, "多线程对 CPU 密集回测无效"
 
-    def test_defaults_workers_to_cpu_count(self) -> None:
-        assert "cpu_count" in _src()
+    def test_defaults_workers_from_shared_convention(self) -> None:
+        """并行度默认值取自共享约定，不得硬编码。
+
+        2026-10-07 事故：本脚本与 audit_chanlun_screen_usefulness.py 都写死
+        `--workers 4`，在 4 核机上与 web 服务 / pytest / agent 正面抢核，
+        表现为"每个后台任务都非常久"。现统一取 scripts/_concurrency.py
+        的 DEFAULT_WORKERS（默认 2），详见 docs/BG_JOB_SLowness_POSTMORTEM.md。
+        """
+        s = _src()
+        # 单一事实来源：必须从共享模块取值
+        assert "from _concurrency import" in s, \
+            "workers 默认值必须来自 scripts/_concurrency.py，不要在各自文件里写死"
+        assert "resolve_workers" in s, "未显式传值时必须经 resolve_workers 兜底"
+        # 绝不能再回到硬编码默认值（只查 --workers 那一行，避免误伤别的参数）
+        for line in s.splitlines():
+            if '"--workers"' not in line:
+                continue
+            flat = line.replace(" ", "")
+            assert "default=4" not in flat and "default=8" not in flat, \
+                f"禁止硬编码 workers：{line}"
 
 
 class TestExceptionsAreNotSwallowed:
@@ -114,6 +132,37 @@ class TestHonestLimitations:
     def test_position_pct_is_parameterized(self) -> None:
         s = _src()
         assert "--position-pct" in s, "仓位必须可调（修复后才有意义）"
+
+
+class TestRunBgEnforcesRecycling:
+    """scripts/run_bg.sh 必须存在且具备强制回收能力。
+
+    这是 2026-10-07 事故的治本项：后台任务"结束时必须回收"，
+    否则卡死的 worker 会长期占核，把所有后台任务都拖慢。
+    """
+
+    RUN_BG = SCRIPTS / "run_bg.sh"
+
+    def test_script_present(self) -> None:
+        assert self.RUN_BG.exists(), f"缺少 {self.RUN_BG}"
+
+    def test_forces_timeout(self) -> None:
+        s = self.RUN_BG.read_text(encoding="utf-8")
+        assert "timeout -k 10" in s, "必须强制超时，-k 保证先礼后兵"
+
+    def test_kills_whole_process_group(self) -> None:
+        s = self.RUN_BG.read_text(encoding="utf-8")
+        assert "kill -TERM  -$$" in s and "kill -KILL -$$" in s, \
+            "必须按进程组回收，否则父死了 worker 还活着占核"
+
+    def test_cleanup_runs_on_exit(self) -> None:
+        s = self.RUN_BG.read_text(encoding="utf-8")
+        assert "trap cleanup EXIT" in s, "被杀也要能兜底回收，不能只靠正常退出"
+
+    def test_propagates_exit_code(self) -> None:
+        """不能被 tee / subshell 吞掉退出码。"""
+        s = self.RUN_BG.read_text(encoding="utf-8")
+        assert "exit $RC" in s, "退出码必须透传，否则超时/失败会被误报成成功"
 
 
 if __name__ == "__main__":
