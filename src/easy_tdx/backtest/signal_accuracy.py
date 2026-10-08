@@ -29,6 +29,19 @@ DEFAULT_HORIZONS: tuple[int, ...] = (1, 3, 5, 10, 20)
 # 随机基准采样次数（每窗口）
 RANDOM_SAMPLES = 512
 
+# ── "超额命中率"显著性档位阈值（V733 审计命名）────────────────────────
+# 这些数字此前**散落 3 处裸写**（0.05 / -0.05 / 0.03），且 0.03 与 0.05 并存，
+# 读起来像"写错了却说不清哪个对"。实测两处语义确实不同，故**都命名、不强行
+# 合并**，让差异显式化：
+#
+#   _EXCESS_SIGNIFICANT = 0.05          单标的/单方向判定
+#   _EXCESS_PORTFOLIO_SIGNIFICANT = 0.03 组合口径（多标的加权平均）
+#     组合跨标的平均后噪声被平滑，故可用更严（更小）的门槛。
+#
+# ⚠️ 若日后认为两者应统一，改为引用同一常量即可 —— 关键是**别再裸写数字**。
+_EXCESS_SIGNIFICANT = 0.05
+_EXCESS_PORTFOLIO_SIGNIFICANT = 0.03
+
 
 def _datetime_to_int(arr: np.ndarray) -> np.ndarray:
     """把 datetime 列规整为 YYYYMMDD 整数（与 backtest.strategy 同一口径）。
@@ -260,11 +273,11 @@ def _build_verdict(
     avg = float(h5.get("avg_return", 0.0))
     n = int(h5.get("count", 0))
     parts = [f"买入信号 {n} 个"]
-    if excess > 0.05:
+    if excess > _EXCESS_SIGNIFICANT:
         grade = "信号命中率显著高于随机入场基准"
     elif excess > 0:
         grade = "信号命中率略高于随机入场基准"
-    elif excess > -0.05:
+    elif excess > -_EXCESS_SIGNIFICANT:
         grade = "命中率与随机入场基本相当（择时贡献有限）"
     else:
         grade = "信号命中率低于随机入场（可能有反向择时风险）"
@@ -376,7 +389,7 @@ def _signal_type_verdict(report: dict[str, Any]) -> str:
     direction = report.get("direction", "BUY")
     verb = "买入" if direction == "BUY" else "卖出"
     pf_note = f"PF={pf:.2f}" if pf > 0 else ""
-    if excess > 0.05:
+    if excess > _EXCESS_SIGNIFICANT:
         if pf_note and pf < 1.0:
             return (
                 verb
@@ -402,7 +415,7 @@ def _signal_type_verdict(report: dict[str, Any]) -> str:
                 + "）"
             )
         return verb + "点略优于随机（+" + f"{excess:.1%}" + "，n=" + str(n) + "）"
-    if excess > -0.05:
+    if excess > -_EXCESS_SIGNIFICANT:
         return verb + "点与随机相当（" + f"{excess:+.1%}" + "，n=" + str(n) + "）"
     return verb + "点弱于随机（" + f"{excess:+.1%}" + "，n=" + str(n) + "）"
 
@@ -687,7 +700,7 @@ def _build_portfolio_verdict(portfolio: dict[str, Any]) -> str:
         avg_hit = float(portfolio.get("avg_hit_rate", 0.0))
         parts.append(f"{hit_n} 只有命中率数据")
         parts.append(f"加权平均 5 根命中率 {avg_hit:.1%}")
-        if avg_excess > 0.03:
+        if avg_excess > _EXCESS_PORTFOLIO_SIGNIFICANT:
             parts.append("整体命中率高于随机入场基准，模型择时具备参考价值")
         elif avg_excess > 0:
             parts.append("整体命中率略高于随机基准，择时贡献为正但有限")
