@@ -98,7 +98,11 @@ def _coerce_date(v: Any) -> date | None:
         return None
     if ts is None or pd.isna(ts):
         return None
-    return ts.date()
+    # V733 CI 收口：``ts.date()`` 在 pandas 的类型标注里是 Any，strict 模式下
+    # 不能直接当 ``date | None`` 返回。上面的 isna 已排掉 NaT，这里按 (y, m, d)
+    # 重建一个真正的 date —— 比起 type: ignore，同时也**顺带保证**返回值不可能是
+    # NaT 之类的 Timestamp 退化对象。
+    return date(int(ts.year), int(ts.month), int(ts.day))
 
 
 def _dt(v: Any) -> date | None:
@@ -419,11 +423,14 @@ def pick_report(
 ) -> pd.Series | None:
     """Point-in-time：从某只股票的多期记录中挑出「截至 target 已披露的最新一期」。
 
-    规则（杜绝未来函数）：
-    1. 只考虑 disclosure_date ≤ target 的记录（缺失披露日的用 report_date 近似，
-       且要求 report_date 与 target 相差不超过 100 天，避免用未披露数据）；
-    2. 同报告期优先选披露日确定的那条；
-    3. 返回披露日最新的一期。
+    规则（杜绝未来函数）——V732 已与 :func:`pick_reports_bulk` 逐条对齐，并由
+    tests/unit/test_fundamental_pit_bulk_equivalence.py 的穷举/随机等价测试锁定：
+    1. 只考虑 disclosure_date ≤ target 的记录（披露日**真正缺失**时用 report_date
+       近似，且要求 report_date 与 target 相差不超过 100 天）；
+    2. **披露日有值但无法解析（如 "junk"）⇒ 保守排除**，绝不退回报告期近似 ——
+       读不懂日期的记录无法证明其已在 target 公开，放行即引入未来数据（PIT
+       生命线，见 docs/PRODUCT_REQUIREMENTS.md §5）；
+    3. 排序取 (披露日, 报告期) 复合降序，同披露日取报告期更新的那期。
     """
     sub = frame[frame["code"] == code]
     if sub.empty:
@@ -465,7 +472,7 @@ def pick_report(
     # pick_reports_bulk 的 groupby.first() 不一致 —— 实测 400 只里 94 只
     # （23.5%）两者结果分叉，说明两者都在"碰运气"。
     # 复合键：(披露日, 报告期) 降序 —— 同披露日取报告期更新的那期。
-    def _pit_sort_key(r: pd.Series) -> tuple:
+    def _pit_sort_key(r: pd.Series) -> tuple[date, date]:
         d = _coerce_date(r.get("disclosure_date"))
         p = _coerce_date(r.get("report_date"))
         return (d or date.min, p or date.min)
@@ -480,11 +487,38 @@ def pick_reports_bulk(
     *,
     markets: set[str] | None = None,
 ) -> pd.DataFrame:
-    """批量 Point-in-time：对整张指标帧一次精出每只股票「截至 target 已披露的最新一期」。
+    """批量 Point-in-time：对整张指标帧一次筛出每只股票「截至 target 已披露的最新一期」。
 
-    规则与 :func:`pick_report` 完全一致（披露日 ≤ target；缺失披露日的用报告期
-    近似且相差 ≤100 天），但向量化实现：全市场几千只股票一次完成截断与去重，
-    替代逐股调用 pick_report 的 O(N²) 遍历。返回每只股票一行（code+market 唯一）。
+    与 :func:`pick_report`（逐股版）**语义一致**，但向量化：全市场几千只股票
+    一次完成截断与去重，替代逐股调用的 O(N²) 遍历。
+
+    入选规则（与 pick_report 逐条对应）：
+    1. 披露日已知（可解析）⇒ 披露日 ≤ target；
+    2. 披露日**真正缺失**（pick_report 判定为 ``dd_raw is None``，即只有真 None）
+       ⇒ 用报告期近似：报告期 ≤ target 且相差 ≤100 天；
+    3. **PIT 保守排除（关键）**：披露日「有值但无法解析」（``"junk"`` / NaN /
+       NaT / NA ⇒ 都是「有值」，但解析不出日期）⇒ 直接排除，**不**退回报告期
+       近似。因为一条我们读不懂日期的记录无法证明其在 target 时已公开，若按
+       「缺失」处理并放行，等于用未来数据回填 —— 违反本项目的 point-in-time
+       生命线（见 docs/PRODUCT_REQUIREMENTS.md §5）。
+
+    排序与 pick_report 的复合键 ``(披露日, 报告期)`` 降序一致：披露日缺失的行
+    其披露日键为 NaT（等价于 pick_report 里的 ``date.min``，排序时垫底），因此
+    **不做** ``dd.fillna(rd)`` / ``rd.fillna(dd)`` 交叉填充 —— 交叉填充会让
+    两条不同规则入选的行互相借用对方的日期，排序结果分叉（实测：一行 dd 缺失
+    rd=2024-03-31、另一行 dd=2024-03-01 rd=2024-01-31，逐股选后者，交叉填充
+    的批量版选前者）。
+
+    一致性由 tests/unit/test_fundamental_pit_bulk_equivalence.py 的穷举/随机
+    等价测试锁定（不是靠 docstring 声称）。
+
+    注意事项（性能）：日期归一化走 ``Series.map(_coerce_date)``（逐值 Python
+    调用），比纯 ``pd.to_datetime`` 慢约 3 倍（实测 50 万行 754ms vs 265ms）。
+    这是为**与 pick_report 逐值语义完全一致**付出的代价：pick_report 判定
+    「缺失」用的是 ``dd_raw is not None``（只有**真 None** 算缺失，NaN/NaT/NA
+    都算「有值但无法解析」⇒ 保守排除），这与 ``Series.isna()`` 不同。若改成
+    纯向量化的 ``isna()``，NaN/NaT 披露日的行会被误判为缺失而退回报告期近似
+    —— 实测复现该分歧。全市场规模（约 1.6 万行）下这档开销可接受。
 
     Args:
         frame: ``build_indicator_frame`` 输出（含 code/market/report_date/disclosure_date）。
@@ -502,26 +536,47 @@ def pick_reports_bulk(
     if sub.empty:
         return sub
 
-    dd = pd.to_datetime(sub["disclosure_date"], errors="coerce")
-    rd = pd.to_datetime(sub["report_date"], errors="coerce")
-    target_ts = pd.Timestamp(target)
+    # 与 pick_report 共用同一个归一化函数，逐值语义才可能一致。
+    # dd_present = pick_report 里的 `dd_raw is not None`（只有真 None 算缺失）。
+    dd_present = sub["disclosure_date"].map(lambda v: v is not None)
+    dd = sub["disclosure_date"].map(_coerce_date)  # None = 缺失或无法解析
+    rd = sub["report_date"].map(_coerce_date)
+    dd_ok = dd.map(lambda v: v is not None)
+    rd_ok = rd.map(lambda v: v is not None)
 
-    # 披露日已知：披露日 ≤ target 即可用
-    usable_dd = dd.notna() & (dd <= target_ts)
-    # 披露日缺失：报告期 ≤ target 且相差 ≤100 天（近似，避免用未披露数据）
+    # 规则1：披露日已知且 ≤ target
+    usable_dd = dd_ok & (dd <= target)
+    # 规则2：披露日真正缺失(真 None) ⇒ 报告期近似，且相差 ≤100 天
     usable_rd = (
-        rd.notna() & dd.isna() & (rd <= target_ts) & ((target_ts - rd) <= pd.Timedelta(days=100))
+        (~dd_present)
+        & rd_ok
+        & (rd <= target)
+        & (rd.map(lambda r: (target - r).days <= 100 if r is not None else False))
     )
+    # 规则3（PIT 保守排除）：dd 有值但解析失败 ⇒ usable_dd/usable_rd 都不成立，
+    # 自动出局，绝不退回报告期近似。
     usable = usable_dd | usable_rd
     sub = sub[usable]
     if sub.empty:
         return sub
+    dd = dd[usable]
+    rd = rd[usable]
 
-    # 排序键：(披露日, 报告期)。V731：此前只用披露日，同日披露多期时
-    # 由 groupby.first() 取原顺序第一条（不确定），与 pick_report 的
-    # iterrows() 顺序分叉（实测 23.5% 不一致）。加报告期作次级键后两者一致。
-    sub = sub.assign(_pit_dd=dd.fillna(rd), _pit_rd=rd.fillna(dd))
-    sub = sub.sort_values(["_pit_dd", "_pit_rd"], ascending=False)
-    out = sub.groupby(["code", "market"], as_index=False).first()
-    out = out.drop(columns=["_pit_dd", "_pit_rd"])
+    # 排序键：(披露日, 报告期) 降序 —— 同披露日取报告期更新的那期。
+    # V731：此前只用披露日，同日披露多期时由 groupby.first() 取原顺序第一条
+    # （不确定），与 pick_report 的 iterrows() 顺序分叉（实测 23.5% 不一致）。
+    # V732 两处修正：
+    #  (a) 去掉 fillna 交叉填充（见 docstring 第 4 段）—— 交叉填充会让两条
+    #      按不同规则入选的行互相借用对方日期，排序结果分叉（实测复现）。
+    #  (b) kind="mergesort"：稳定排序，(dd, rd) 完全相同时回退到原行序，与
+    #      pick_report 的 Python 稳定 sort(reverse=True) 一致。
+    # 键为 object 列的 date|None，None 在降序时排末尾 —— 正对应 pick_report
+    # 排序键里的 ``d or date.min``。
+    sub = sub.assign(_pit_dd=dd, _pit_rd=rd)
+    sub = sub.sort_values(["_pit_dd", "_pit_rd"], ascending=False, kind="mergesort")
+    # head(1) 而非 first()：first(skipna=True) 会**逐列**跳过 NaN，把后几行的
+    # 字段填进第一行（实测：选中行 report_date=None 时会被下一行的值顶替），
+    # 与 pick_report「整行原样返回」不一致。head(1) 是纯取行、无列级回填。
+    out = sub.groupby(["code", "market"], as_index=False).head(1)
+    out = out.reset_index(drop=True).drop(columns=["_pit_dd", "_pit_rd"])
     return out

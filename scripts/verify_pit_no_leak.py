@@ -18,6 +18,10 @@
         最容易悄悄漂移，漂移即意味着某条路径漏了 PIT 截断。
   判据3（自检/反向锁定）：故意注入一行「未来披露」的记录，检测器必须报警；
         若注入后仍然"通过"，说明检测逻辑本身失效（假阴性）。
+  判据4（V732 新增·不可解析披露日）：注入 disclosure_date **有值但无法解析**
+        的行（"junk"/NaT/NaN），两个实现都必须**排除**，而不是退回 report_date
+        近似放行。这是实测复现过的真实泄漏路径（向量化版曾把 coerce 出的 NaT
+        当成"披露日缺失"而放行 → 未来数据），必须常驻守卫。
 
 用法：  .venv/bin/python scripts/verify_pit_no_leak.py
 数据：  用 ~/.easy_tdx/gpcw_cache/ 下的真实财报 zip（无网络也能跑）。
@@ -208,6 +212,30 @@ def main() -> int:
         ok = False
     else:
         print("✅ 自检通过：注入未来数据后两个实现都被拦下")
+
+    # ── 判据4：不可解析披露日 —— 必须排除，不得退回报告期近似 ────────
+    print("\n判据4：注入「披露日有值但无法解析」的行，两实现都必须排除")
+    t4 = date(2026, 6, 1)
+    for bad in ["junk", pd.NaT, float("nan")]:
+        f = sample.iloc[[0]].copy()
+        f["code"] = "__PIT_UNPARSABLE__"
+        f["report_date"] = pd.Timestamp("2026-03-31")
+        f["disclosure_date"] = bad
+        f2 = pd.concat([sample, f], ignore_index=True)
+
+        r4 = pick_report(f2, "__PIT_UNPARSABLE__", t4, market=f["market"].iloc[0])
+        b4 = pick_reports_bulk(f2, t4)
+        leaked4 = b4[b4["code"] == "__PIT_UNPARSABLE__"] if not b4.empty else b4
+        single_ok = r4 is None
+        bulk_ok4 = leaked4.empty
+        if single_ok and bulk_ok4:
+            print(f"  {bad!r}: 两实现均已排除 ✅")
+        else:
+            print(
+                f"  {bad!r}: ❌ 泄漏 —— 逐股{'已排除' if single_ok else '放行了'} / "
+                f"批量{'已排除' if bulk_ok4 else '放行了'}"
+            )
+            ok = False
 
     print("\n结论:", "✅ PIT 无泄漏，两实现一致" if ok else "❌ 存在泄漏/漂移")
     return 0 if ok else 1
