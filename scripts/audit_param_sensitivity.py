@@ -94,7 +94,11 @@ def run(dfs: list[pd.DataFrame], **kw) -> tuple[np.ndarray, np.ndarray, list[int
             # （"参数敏感性"名存实亡）。必须直接写 s.p[k]。
             for k, v in kw.items():
                 if k not in s.p:
-                    unknown.append(k)
+                    # ⚠️ V733 审计：此处原先 `unknown.append(k)` 引用的是 main()
+                    # 里的**局部变量**，在本函数作用域是未解析的全局名（F821）
+                    # —— 一旦真的传入未知参数就会 NameError 崩掉。
+                    # 改为显式告警，不再依赖跨作用域变量。
+                    print(f"⚠️ 未知参数 {k!r}（不在策略 s.p 中），本次变体可能无效")
                 s.p[k] = v
             r = BacktestEngine(s, cash=100000.0).run(df)
             dds.append(float(r.performance["max_drawdown"]))

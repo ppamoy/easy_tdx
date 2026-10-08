@@ -31,21 +31,18 @@ from __future__ import annotations
 
 import random
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import pandas as pd  # noqa: E402
 
 from easy_tdx.chanlun.analyser import ChanlunAnalyser  # noqa: E402
 from easy_tdx.chanlun.config import ChanlunConfig  # noqa: E402
 
 from audit_3rd_type_accuracy import (  # noqa: E402
     _mk,
-    _seg,
     build_3buy_case,
     build_3sell_case,
 )

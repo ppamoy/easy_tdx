@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date
 from types import SimpleNamespace
 
@@ -104,15 +105,23 @@ class TestReturnsAtV731:
         closes = [float("nan"), 110.0, 120.0, 130.0, 140.0]
         out = _returns_at(self._df(closes), date(2026, 1, 1), (1, 2))
         assert out == {}, f"NaN 基准应返回空，实得 {out}"
-        assert not any(isinstance(v, float) and math.isnan(v) for v in out.values())
+        # ⚠️ V733 审计：上面这行才是真正有牙齿的断言（左侧为空 dict 时被引用错了口径，
+        #     直接用 `for v in out.values()` 是写对了也感受不到 —— 空 dict 下循环不执行）。
+        #     这里显式声明「就是要把 nan 抓出来」，避免后人读成噪音删掉。
+        nan_keys = [k for k, v in out.items() if isinstance(v, float) and math.isnan(v)]
+        assert nan_keys == [], f"产出里混进了 nan（键={nan_keys}），应被空 dict 拦截"
 
     def test_nan_tail_gives_none_not_nan(self) -> None:
         """缺陷1 另一半：末端 NaN → ret=None（可被 _stats 过滤），不是 nan。"""
         closes = [100.0, 110.0, float("nan"), 130.0, 140.0]
         out = _returns_at(self._df(closes), date(2026, 1, 1), (1, 2))
         assert out.get("ret_1d") == 10.0       # 有效样本照常算
-        assert out.get("ret_2d") is None       # NaN 末端 → None，可被过滤
-        assert not (isinstance(out.get("ret_2d"), float) and math.isnan(out["ret_2d"]))
+        # V733：原写成 `out.get("ret_2d") is None` 后紧跟一句 math.isnan 检查 ——
+        # 但前者通过时后者恒为真（`is None` 已经排除了 float），是**永远抓不到
+        # 东西**的空断言。改为先锁定 None，再对整个产出做 nan 扫描（见下）。
+        v2 = out.get("ret_2d")
+        assert v2 is None, f"NaN 末端应产出 None（可被 _stats 过滤），实得 {v2!r}"
+        assert not isinstance(v2, float), "None 之外不允许混进浮点（含 nan）"
 
     def test_inf_base_also_rejected(self) -> None:
         closes = [float("inf"), 110.0, 120.0, 130.0, 140.0]

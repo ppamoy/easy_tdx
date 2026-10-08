@@ -39,7 +39,6 @@ import pandas as pd
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from easy_tdx.chanlun.analyser import ChanlunAnalyser  # noqa: E402
 from easy_tdx.chanlun import mmd_conditions as MC  # noqa: E402
 
 SHORT, LONG = 400, 500

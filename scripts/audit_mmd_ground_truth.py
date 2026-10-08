@@ -25,7 +25,6 @@ sys.path.insert(0, "src")
 
 from easy_tdx.chanlun.analyser import ChanlunAnalyser  # noqa: E402
 from easy_tdx.chanlun.config import ChanlunConfig  # noqa: E402
-from easy_tdx.chanlun.types import MMDType  # noqa: E402
 
 
 def _mk(bars: list[tuple[float, float, float, float]]) -> pd.DataFrame:

@@ -41,7 +41,7 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest tests/unit/ -v --tb=short --cov src/easy_tdx --cov-fail-under=70
-      - run: ruff check src/ tests/
+      - run: ruff check src/ tests/ scripts/
       - run: ruff format --check src/ tests/
 
   # ── 缠论模型审计（V733）───────────────────────────────────────────────

@@ -81,6 +81,33 @@ select = ["E", "F", "I", "UP"]
 "src/easy_tdx/web/routers/chanlun.py" = ["E501"]
 "src/easy_tdx/web/routers/monitor.py" = ["E501"]
 "tests/unit/test_chanlun_v52.py" = ["E501"]
+# ── scripts/ 一次性纳入 CI lint（V733）───────────────────────────────
+# 背景：CI 此前只 lint `src/ tests/`，scripts/ 全目录**无门禁** —— 而本项目
+# 大量**审计探针**就住在 scripts/ 里。探针自己写错 → 输出假的审计结论，
+# 比产品 bug 更危险（V733 报告里的「静默失败」已多次栽在这上面）。
+# 实测纳入前 scripts/ 有 180 处报错，含 4 个 F821（未定义名 = 真崩溃）。
+# 处置：真缺陷类（F821/F401/F841 等）已逐个修掉；下面只豁免**排版类**，
+# 保证"新增真错误一定红"，同时不让存量排版噪声阻塞 CI。
+"scripts/**" = [
+    "E501",  # 长行：诊断输出/表格打印，拆行收益极低
+    "E701",  # 冒号后同行语句：紧凑 CLI 排版习惯
+    "E702",
+    "E741",  # 歧义变量名 l/I：诊断脚本循环变量
+    "E731",  # lambda 赋值
+    "E402",  # 模块级 import 不在顶部：脚本需先补 sys.path 才能 import
+    "E401",
+    "I001",  # import 排序：暂不强制，避免大面积无意义 diff
+    "UP031", # % 格式化：printf 风格打印
+    "UP038",
+    "UP034",
+    "F541",  # 无占位 f-string：打印模板常见
+    "F841",  # 局部赋值未用：多为「为可读性先行解包」与调试残留，逐修收益低
+]
+# ⚠️ 边界（重要）：**F821 绝不豁免**。那正是
+# scripts/audit_param_sensitivity.py 里 `unknown.append(k)` 引用了 main()
+# 的局部变量、触发 NameError 的那一类 —— 也是本次把它纳入 CI 的直接动机。
+# 本机实测验证：`ruff check scripts/`（pinned 0.11.11）⇒ All checks passed；
+# 而随手写一行未定义名会立刻报 F821 ⇒ 门禁有牙。
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

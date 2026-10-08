@@ -9,7 +9,7 @@
       .venv/bin/python scripts/coverage_gaps.py /tmp/cov.json [--top 15]
 """
 from __future__ import annotations
-import argparse, json, sys
+import argparse, json
 
 def main() -> int:
     ap = argparse.ArgumentParser()

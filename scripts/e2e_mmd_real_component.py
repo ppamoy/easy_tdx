@@ -106,7 +106,6 @@ def build_e2e_page() -> bool:
     产物比任一源码文件旧 → 拒绝跳过并强制重建。
     """
     import os
-    import time
 
     dist_html = WEB / "dist" / "mmd-e2e.html"
     if os.environ.get("SKIP_BUILD") == "1":

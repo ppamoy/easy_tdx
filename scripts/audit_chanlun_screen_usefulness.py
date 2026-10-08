@@ -32,6 +32,15 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor
 from math import erfc, sqrt
 from pathlib import Path
+from typing import Any
+
+# 以子进程方式被 pytest 调用时，scripts/ 不一定在 sys.path 上，
+# 这里显式补上，保证 `from _concurrency import ...` 始终可用。
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from _concurrency import DEFAULT_WORKERS, resolve_workers
 
 import numpy as np
 import pandas as pd
@@ -205,7 +214,11 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="audit_data")
     ap.add_argument("--limit", type=int, default=80)
-    ap.add_argument("--workers", type=int, default=4)
+    # 默认 2：本机仅 4 核，还要同时跑 web 服务 / pytest / agent。
+    # 硬编码 4 会与其它后台任务正面抢核，表现为"每个后台任务都非常久"
+    # （见 docs/BG_JOB_SLowness_POSTMORTEM.md 的 2026-10-07 事故）。
+    ap.add_argument("--workers", type=int, default=None,
+                    help="并行进程数（默认 %d，见 scripts/_concurrency.py）" % DEFAULT_WORKERS)
     ap.add_argument("--out", default="")
     ap.add_argument("--cache", default="/tmp/screen_audit_cache.json")
     ap.add_argument("--signal-type", default="any_buy",
@@ -236,6 +249,7 @@ def main() -> int:
                     help="市场基准：index=真实指数(默认，更严谨)；"
                          "cross_section=样本横截面均值")
     a = ap.parse_args()
+    a.workers = resolve_workers(a.workers)
 
     files = sorted(Path(a.data).glob("*.json"))[: a.limit]
     # ⚠️⚠️ 这里原来写成 `if cache_path.name.startswith("screen_audit_cache")`

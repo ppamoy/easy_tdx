@@ -25,8 +25,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
-from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-from easy_tdx.chanlun.types import MMDType
+from easy_tdx.chanlun import ChanlunAnalyser
 
 
 def _synthetic_uptrend(n: int = 300, seed: int = 42) -> pd.DataFrame:

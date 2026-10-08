@@ -122,8 +122,10 @@ def _risk_flags(sr: ScreenResult) -> list[str]:
     elif float(np) <= 0:
         flags.append("最近报告期亏损")
     debt = ind.get("debt_ratio")
-    if debt is not None and float(debt) > 60:
-        flags.append("资产负债率偏高（超过60%）")
+    # V733 审计：此处原先写死 60，与上面已存在的 _DEBT_MED 重复且脱钩 ——
+    # 改 _DEBT_MED 不会改动这个提示，语义会悄悄分叉。统一引用常量。
+    if debt is not None and float(debt) > _DEBT_MED:
+        flags.append(f"资产负债率偏高（超过{_DEBT_MED:.0f}%）")
     ocf_ps = ind.get("ocf_ps") if ind.get("ocf_ps") is not None else ind.get("ocf")
     if ocf_ps is not None and float(ocf_ps) <= 0:
         flags.append("每股经营现金流非正")

@@ -13,8 +13,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
-from easy_tdx.chanlun.mmd import find_mmds, _calc_ma_slope, _calc_boll_position
+from easy_tdx.chanlun import ChanlunAnalyser
 
 
 def generate_trending_data(

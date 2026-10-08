@@ -26,11 +26,18 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
+
+# 以子进程方式被 pytest 调用时，scripts/ 不一定在 sys.path 上，
+# 这里显式补上，保证 `from _concurrency import ...` 始终可用。
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from _concurrency import DEFAULT_WORKERS, resolve_workers
 
 import numpy as np
 import pandas as pd
@@ -85,10 +92,12 @@ def _one(args: tuple[int, str, str]) -> tuple:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=60)
-    ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    ap.add_argument("--workers", type=int, default=None,
+                    help="并行进程数（默认 %d，见 scripts/_concurrency.py）" % DEFAULT_WORKERS)
     ap.add_argument("--position-pct", type=float, default=1.0,
                     help="仓位；默认 1.0（满仓），此时不传显式 size")
     a = ap.parse_args()
+    a.workers = resolve_workers(a.workers)
 
     fs = [p for p in sorted(DATA.glob("*.json"))
           if p.stem.split("_")[0] not in EXCLUDE]
