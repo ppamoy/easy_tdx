@@ -310,3 +310,46 @@ class TestBasesDirIsConfigurable:
         """⚠️ 报错必须说清**找过哪些目录**，否则看到的人无从下手。"""
         s = self._src()
         assert "已找过" in s, "缺缓存时必须报出尝试过的目录"
+
+
+class TestRegenScriptSampleSizes:
+    """⚠️⚠️ 重算脚本必须**逐口径**用对样本量（2026-10-08 修）。
+
+    起因：`u120_*` / `sig_*` 这些口径的**登记数字是按 120 只算出来的**，
+    而 `full_inside` / `mq_*` 是 286 只口径。
+    我第一版 regen 脚本对 13 条**一律用 286** ⇒
+    重算出来的 u120_* 是 286 只口径，与登记的 t/p **对不上**
+    ⇒ 漂移闸门会报一堆"漂移"，而后人根本不知道是自己的重算口径错了，
+    还是原始测量就错了。
+
+    ⇒ 这条测试锁死"按文件名分流样本量"。
+    """
+
+    REGEN = Path(__file__).resolve().parents[2] / "scripts" / "regen_measured_bases.sh"
+
+    def test_script_exists(self) -> None:
+        assert self.REGEN.exists(), "缺少重建基线缓存的脚本"
+
+    def test_uses_two_sample_sizes(self) -> None:
+        s = self.REGEN.read_text(encoding="utf-8")
+        assert "LIMIT_120" in s, "必须区分 120 只口径与 286 只口径"
+        assert "LIMIT=286" in s
+
+    def test_u120_and_sig_use_120(self) -> None:
+        s = self.REGEN.read_text(encoding="utf-8")
+        assert "u120_*|sig_*)" in s, \
+            "⚠️ u120_*/sig_* 必须走 120 只口径（登记数字就是 120 只算的）"
+
+    def test_rejects_empty_cache(self) -> None:
+        """⚠️ 空/残缺缓存比没有缓存更危险——闸门会拿它算出假结论。"""
+        s = self.REGEN.read_text(encoding="utf-8")
+        assert "-lt 1" in s, "必须校验产出条数，空缓存要判失败"
+
+    def test_teeth_using_one_size_for_all_is_caught(self) -> None:
+        """⚠️ 牙齿：退回"一律 286"必须被抓住。"""
+        s = self.REGEN.read_text(encoding="utf-8")
+        assert "u120_*|sig_*)" in s, "⚠️ 前提不成立：脚本里没有分流逻辑（先怀疑牙齿）"
+        broken = s.replace("u120_*|sig_*) limit=\"${LIMIT_120:-120}\" ;;", ";;")
+        assert broken != s, "替换没生效（先怀疑牙齿）"
+        assert "u120_*|sig_*)" not in broken, \
+            "❌ 牙齿没咬到：退回统一口径后分流逻辑仍在"

@@ -17,8 +17,10 @@ set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 LIMIT=286
+LIMIT_120=120
 if [[ "${1:-}" == "--quick" ]]; then
   LIMIT=12
+  LIMIT_120=12
 fi
 
 OUT_DIR="audit_bases"
@@ -35,11 +37,19 @@ fi
 #    格式：<输出文件名>|<传给 audit 的参数...>
 run_one() {
   local out_name="$1"; shift
+  # ⚠️⚠️ **逐口径**决定样本量，别想当然全用 $LIMIT：
+  #    verify_measured_bases.py 里的 u120_*/sig_* 口径是**120 只**口径
+  #    （登记数字就是按 120 只算出来的），而 full_inside/mq_* 是 **286 只**。
+  #    若用 286 去重算 u120_*，登记的 t/p 就对不上了 ⇒ 闸门会误报漂移。
+  local limit="$LIMIT"
+  case "$out_name" in
+    u120_*|sig_*) limit="${LIMIT_120:-120}" ;;
+  esac
   local raw="/tmp/rb_${out_name%.json}"
   echo "=== $out_name ==="
   # 先落到 /tmp（脚本会自己给缓存名加口径 tag），再搬到 audit_bases/
   $PY scripts/audit_chanlun_screen_usefulness.py \
-      --limit "$LIMIT" --cache "$raw" "$@" >/dev/null 2>&1
+      --limit "$limit" --cache "$raw" "$@" >/dev/null 2>&1
   local produced
   produced=$(ls -t /tmp/"$(basename "${raw%.json}")"_*.json 2>/dev/null | head -1)
   if [[ -z "$produced" || ! -s "$produced" ]]; then
