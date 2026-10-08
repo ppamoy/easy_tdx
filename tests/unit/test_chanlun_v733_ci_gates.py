@@ -18,7 +18,6 @@ AGENTS.md §5/§7：能跑真实链路就别只跑单测；发现盲区要写能
 
 from __future__ import annotations
 
-import inspect
 from pathlib import Path
 
 import pytest

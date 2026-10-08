@@ -55,7 +55,6 @@ class TestCostsMatchMarketReality:
 
     def test_sell_cost_exceeds_buy_in_all_markets(self) -> None:
         """三个市场都是卖出更贵（印花税/卖出费只在卖出）。"""
-        import re
         s = _src()
         for mkt in ("美股", "港股", "A股"):
             seg = s.split(f'"{mkt}": (')[1].split(")")[0]

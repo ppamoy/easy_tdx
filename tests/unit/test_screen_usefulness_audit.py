@@ -287,7 +287,6 @@ class TestTimepointAlignmentBehaviour:
         """用一只真实标的跑 one_symbol，验证
         len(hit_pts) == len(hit) 且 len(miss_pts) == len(miss)。"""
         import importlib.util
-        import json
         from pathlib import Path
 
         spec = importlib.util.spec_from_file_location(
@@ -634,9 +633,7 @@ class TestTimeWindowSamplingOutOfSample:
         ⚠️ 不能只断言"参数存在"——必须证明裁剪真的生效。
         """
         import importlib.util
-        import json
         from pathlib import Path
-        import pandas as pd
 
         root = Path(__file__).resolve().parents[2]
         spec = importlib.util.spec_from_file_location(

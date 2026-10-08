@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import inspect
 
-import pytest
 
 from easy_tdx.chanlun.qujiantao import compute_qujiantao_cross_period
 

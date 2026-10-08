@@ -29,7 +29,6 @@ def _code() -> str:
     （那样 "np.linalg.pinv" 会变成三行、断言匹配不到）。
     这里按 **行号**重建代码，保留行内相邻关系。
     """
-    import io
     import tokenize
 
     lines: dict[int, list[str]] = {}
