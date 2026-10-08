@@ -357,3 +357,51 @@ class TestRegenScriptSampleSizes:
         broken = s.replace('u120_*|sig_*) limit="${LIMIT_120:-120}" ;;', ";;")
         assert broken != s, "替换没生效（先怀疑牙齿）"
         assert "u120_*|sig_*)" not in broken, "❌ 牙齿没咬到：退回统一口径后分流逻辑仍在"
+
+
+class TestRegenNamesMatchGate:
+    """⚠️ 锁死：regen 脚本产出的 13 个文件名 == 闸门 `_cache()` 要的 13 个。
+
+    对不上 ⇒ 缓存生成了但闸门找不到 ⇒ **白跑几小时**（13 条 × 每条约 20 分钟）。
+    ⚠️ 这正是"我自己的探针静默失败"的高发区：
+       我第一版找 `BASES`（不存在）⇒ 0 个；
+       第二版找 `MEASURED_BASES`（是 list[tuple]，不是文件名）⇒ 0 个；
+       第三版才找对（`verify_measured_bases.py` 里的 `_cache(...)` 调用）。
+    ⇒ 若断言写成 `assert wanted`（空列表会假通过），就会误报"对不上"。
+    """
+
+    @staticmethod
+    def _produced():
+        import re
+
+        sh = (ROOT / "scripts" / "regen_measured_bases.sh").read_text(encoding="utf-8")
+        return [p for p in re.findall(r"run_one\s+(\S+\.json)", sh) if not p.startswith("$")]
+
+    @staticmethod
+    def _wanted():
+        import ast
+
+        src = (ROOT / "scripts" / "verify_measured_bases.py").read_text(encoding="utf-8")
+        out = []
+        for n in ast.walk(ast.parse(src)):
+            if (
+                isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Name)
+                and n.func.id == "_cache"
+                and n.args
+                and isinstance(n.args[0], ast.Constant)
+            ):
+                v = n.args[0].value
+                if isinstance(v, str) and v.endswith(".json"):
+                    out.append(v)
+        return out
+
+    def test_probe_itself_is_not_broken(self) -> None:
+        """⚠️ 先自证探针有效：两边都必须非空，否则下面全是假通过。"""
+        assert len(self._produced()) == 13, "regen 应产出 13 个"
+        assert len(self._wanted()) == 13, "闸门应需要 13 个（探针若坏会是 0）"
+
+    def test_names_match(self) -> None:
+        p, w = set(self._produced()), set(self._wanted())
+        assert p - w == set(), f"regen 多出（闸门用不到，白跑）: {sorted(p - w)}"
+        assert w - p == set(), f"闸门缺（缓存永远生成不出来）: {sorted(w - p)}"
