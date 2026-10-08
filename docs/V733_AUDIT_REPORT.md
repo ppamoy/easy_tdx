@@ -3585,3 +3585,74 @@ scope，只能由用户去 GitHub Settings 操作。在我这边已无路可试�
 1. 给 PAT 加 `workflow` scope ⇒ 我即可推送（推荐，非破坏性）；
 2. 或由用户确认后改推**不含 workflow 改动**的提交（需先拆分历史，有风险）；
 3. 或维持现状 —— 代码、测试、文档、本地 tag 均在本地，历史完整。
+
+---
+
+## 五之五十五：ECharts **逐点坐标映射**验证（真后端 ground truth × 真组件）
+
+**要补的缺口**：五之十五只核对了「图上标记 vs 模型输出」的**数据层**（ZG/ZD
+10/10、买卖点锚点 22/22、笔 67/67），`e2e_chanlun_pixels.py` 核对了**聚合像素**
+（非背景占比、红/绿像素数）。但两者都**没有逐点**验证：
+
+> 第 i 个买卖点，它画在屏幕上的那个点，是否真的对应第 `bar_index[i]` 根 K 线、
+> 价格 `anchor_val[i]`？
+
+坐标轴映射写错、series 用了另一份 dates 数组、`coord` 取错字段，都会让
+「总数对、位置错」。本节就是挖这一层。
+
+### 为什么没走「浏览器里读 `__CHANLUN_CHART__`」这条路
+
+先试了，走不通，三条实测结论（别再重复踩）：
+
+1. `window.__CHANLUN_CHART__` 只在 `import.meta.env.DEV` 下暴露
+   （`ChanlunChart.vue:298`），`grep __CHANLUN_CHART__ web-ui/dist/assets/*.js`
+   **无匹配** ⇒ 生产构建必然拿不到；
+2. 起了 vite dev server（:3012，DEV 模式，实测 `/src/main.ts` 200）后，
+   缠论页在 **`/learn?tab=analysis`**（`/chanlun` 会 redirect 过去；
+   开根路径拿到的是「回测」页，placeholder 完全不同），
+   canvas 确实渲染出来了（1371×760），但 `window.__CHANLUN_CHART__` 仍为 false；
+3. Moli 上该页的 `evaluate` 反复挂住（重启 Moli 后依旧）⇒ 这条路性价比太低。
+
+### 实际做法：把真后端的 ground truth 灌进真组件
+
+1. 新增 `scripts/gen_chanlun_gt.py`：用**真 `ChanlunAnalyser`** 跑真 fixture，
+   输出每个买卖点的 `bar_index` / `anchor_val`，连同 K 线写进
+   `web-ui/src/components/__tests__/__fixtures__/chanlun_gt.json`
+   （4 个用例 / 11 个买卖点：`000001` 的 30min+daily+weekly、`000333` daily；
+   `600519` 无买卖点故跳过）。
+2. 新增 `web-ui/src/components/__tests__/chanlun-coord-mapping.test.ts`（6 例）：
+   挂载**真 `ChanlunChart`**，取出渲染出的 option 里「买点/卖点」两条 scatter 的
+   `value:[x,y]`，**逐点**断言 `x == bar_index`、`y ≈ anchor_val`。
+3. 与既有 `mmd-chart-contract.test.ts` 的分工：那个用**人造单调 K 线**
+   （bar_index 与下标一一对应），只能锁「字段有没有被搬运」；本测试用**真数据**，
+   能暴露真实错位、日期回退分支、anchor_val 落在极值之外等真实情况。
+
+### 牙齿验证（先证伪，再相信）
+
+| 注入的破坏 | 结果 |
+|---|---|
+| 价格退化为 `low*0.995`（复现 V731 漏映射 `anchor_val`） | **4 红** ✅ 抓到 |
+| 横轴 `bar_index + 3`（模拟帧长漂移） | **1 红**（`3sell 112 != 119`）✅ 抓到 |
+| 还原后 | **6 绿** ✅ |
+
+另有「对照组」用例：抹掉 `anchor_val` ⇒ 断言价格**必须**偏离 anchor_val
+（至少 1 处），同时正常组必须**全部**精确命中 —— 双向锁死，防止判据形同虚设。
+
+### 全量回归
+
+- 前端 `npx vitest run`：**155 passed**（原 149，+6 为本节新增），无失败；
+- `prettier --check` 通过；CI 的 `format:check` 覆盖 `src/`，已满足。
+
+### 仍未验证（如实声明）
+
+- **没有**在真实浏览器里逐点比对像素坐标（Moli 上该页 evaluate 挂住 +
+  DEV 全局拿不到，见上）⇒「数据 → ECharts option 坐标」这一段**已锁死**，
+  但「option 坐标 → 屏幕像素」这一段**未验证**（ECharts 自己的职责，
+  且 `convertToPixel` 未跑通）。
+- 只覆盖 **4 个 fixture / 11 个买卖点**，且只有日线/周线/30min 三档；
+  月线、1min/5min 未覆盖。
+- 只验了买卖点；笔端点、中枢 ZG/ZD、背驰标记的**逐点**坐标未做
+  （五之十五验的是它们的数据层）。
+
+**本节不改变任何结论**：它证明的是「画在哪」是对的，
+**不等于**缠论信号本身有效（信号层结论见五之二十一/五之二十五）。
