@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import pandas as pd
@@ -36,6 +37,59 @@ from easy_tdx.web.deps import get_client, get_mac_client_optional
 from easy_tdx.web.task_runner import get_runner
 
 router = APIRouter(tags=["backtest"])
+
+logger = logging.getLogger(__name__)
+
+# 标的数据不完整的显式标记（见 _fetch_portfolio_bars / _fetch_multi_strategy_bars）。
+# 翻页取数中途失败时不再是 silent break —— 该标的的 K 线会在 df.attrs 打上此标记，
+# 并由 _collect_incomplete_symbols 汇总进回测结果的 data_incomplete / warnings，
+# 让调用方能感知"这段历史是残缺的"，而不是拿到一份看似完整的回测结论。
+BARS_TRUNCATED_ATTR = "bars_truncated"
+
+
+def _collect_incomplete_symbols(items: list[Any]) -> list[str]:
+    """从 StockData/StrategySlot 列表中挑出被截断的标的标识。
+
+    约定两种来源：
+    - ``df.attrs[BARS_TRUNCATED_ATTR] is True``（翻页中途失败留下的标记）
+    - 对象自身带 ``bars_truncated=True`` 属性（便于测试/调用方直接构造）
+    """
+    symbols: list[str] = []
+    for item in items:
+        df = getattr(item, "df", None)
+        truncated = False
+        if df is not None and bool(getattr(df, "attrs", {}).get(BARS_TRUNCATED_ATTR, False)):
+            truncated = True
+        if bool(getattr(item, "bars_truncated", False)):
+            truncated = True
+        if not truncated:
+            continue
+        symbol = getattr(item, "symbol", None)
+        if symbol is None:
+            market = getattr(item, "market", "")
+            symbol = f"{market}{getattr(item, 'code', '')}"
+        symbols.append(str(symbol))
+    return symbols
+
+
+def _annotate_incomplete(result_dict: dict[str, Any], symbols: list[str]) -> None:
+    """把"取数被截断"写进回测结果，让调用方能感知。
+
+    只做**新增**字段（data_incomplete / incomplete_symbols / warnings），
+    不改动既有字段，因此不影响现有 API 契约与前端解析。
+    """
+    if not symbols:
+        return
+    result_dict["data_incomplete"] = True
+    result_dict["incomplete_symbols"] = symbols
+    warnings = result_dict.get("warnings")
+    if not isinstance(warnings, list):
+        warnings = []
+    warnings.append(
+        "取数被截断：以下标的中途翻页失败，K 线历史不完整，"
+        f"回测结论可能失真（缺段而非空洞）：{', '.join(symbols)}"
+    )
+    result_dict["warnings"] = warnings
 
 
 # ── 策略枚举 ───────────────────────────────────────────────────────────────────
@@ -478,6 +532,9 @@ def _run_portfolio_backtest(
     result = engine.run()
     result_dict = serialize_result(result)
 
+    # 取数截断可见化：翻页中途失败会让该标的少掉一段历史，必须让调用方知道
+    _annotate_incomplete(result_dict, _collect_incomplete_symbols(stock_data_list))
+
     # V99: 组合级准确度聚合（逐标的 signal_accuracy + 绩效加权汇总）
     try:
         from easy_tdx.backtest.signal_accuracy import aggregate_portfolio_accuracy
@@ -619,6 +676,12 @@ async def _fetch_portfolio_bars(
 
     当 start_date 超出单次 800 根覆盖范围时，自动翻页拉取（与前端 fetchBars
     同逻辑）。单个标的取数失败时跳过（不中断整个组合），全部失败返回空列表。
+
+    翻页**中途**失败（已拿到若干页，某一页抛异常）时该标的的 K 线会少掉一段
+    历史。此处不能只静默 break —— 那会让回测跑在残缺数据上且调用方毫无察觉。
+    改为：记录 warning 日志，并在返回的 df 上打 ``df.attrs["bars_truncated"]=True``
+    标记，由 :func:`_collect_incomplete_symbols` / :func:`_annotate_incomplete`
+    汇总进结果的 ``data_incomplete``/``incomplete_symbols``/``warnings``。
     """
     from easy_tdx.backtest.portfolio_engine import StockData
     from easy_tdx.web.klines import fetch_qfq_klines
@@ -628,6 +691,7 @@ async def _fetch_portfolio_bars(
     for symbol in stocks:
         market_str, code = symbol.split(":", 1)
         frames: list[pd.DataFrame] = []
+        truncated = False
         for page in range(max_pages):
             try:
                 page_df = await fetch_qfq_klines(
@@ -640,7 +704,19 @@ async def _fetch_portfolio_bars(
                     800,
                 )
             except Exception:
-                break  # 单页失败则停止该标的的翻页
+                # 单页失败则停止该标的的翻页，但必须留下可见痕迹：
+                # 已取到的页仍会参与回测，若不标记就变成"静默丢失一段历史"。
+                if frames:
+                    truncated = True
+                    logger.warning(
+                        "标的 %s 第 %d 页取数失败，该标的 K 线历史不完整（已取 %d 页），"
+                        "回测结论可能失真",
+                        symbol,
+                        page,
+                        len(frames),
+                        exc_info=True,
+                    )
+                break
             if len(page_df) == 0:
                 break
             frames.append(page_df)
@@ -673,9 +749,11 @@ async def _fetch_portfolio_bars(
             df = df[mask]
         if len(df) < 2:
             continue
-        stock_data_list.append(
-            StockData(code=code, market=market_str, df=df.reset_index(drop=True))
-        )
+        df = df.reset_index(drop=True)
+        if truncated:
+            # attrs 经 reset_index/布尔掩码/concat 保留，可安全带到下游
+            df.attrs[BARS_TRUNCATED_ATTR] = True
+        stock_data_list.append(StockData(code=code, market=market_str, df=df))
     return stock_data_list
 
 
@@ -705,6 +783,7 @@ async def _fetch_multi_strategy_bars(
         # 2. 逐页取行情（覆盖 start_date，最多 10 页 = 8000 根）
         market_str, code = item.symbol.split(":", 1)
         frames: list[pd.DataFrame] = []
+        truncated = False
         for page in range(10):
             try:
                 page_df = await fetch_qfq_klines(
@@ -717,6 +796,17 @@ async def _fetch_multi_strategy_bars(
                     800,
                 )
             except Exception:
+                # 同 _fetch_portfolio_bars：翻页中途失败必须留下可见痕迹
+                if frames:
+                    truncated = True
+                    logger.warning(
+                        "策略槽位 %s 第 %d 页取数失败，该标的 K 线历史不完整"
+                        "（已取 %d 页），回测结论可能失真",
+                        item.symbol,
+                        page,
+                        len(frames),
+                        exc_info=True,
+                    )
                 break
             if len(page_df) == 0:
                 break
@@ -740,6 +830,8 @@ async def _fetch_multi_strategy_bars(
             df = _filter_df_by_date(df, item.start_date, item.end_date)
         if len(df) < 2:
             continue
+        if truncated:
+            df.attrs[BARS_TRUNCATED_ATTR] = True
         # 3. 构造策略实例（参数非法跳过该条）
         try:
             strategy = entry.build(item.params)
@@ -767,6 +859,9 @@ def _run_multi_strategy_backtest(
     )
     result = engine.run()
     result_dict = serialize_result(result)
+
+    # 取数截断可见化（多策略槽位同样可能因翻页失败少掉一段历史）
+    _annotate_incomplete(result_dict, _collect_incomplete_symbols(slots))
 
     # V99: 多策略组合级准确度聚合
     try:

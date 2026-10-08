@@ -47,15 +47,40 @@ def merge_fundamentals(
     合并进它的 OHLCV DataFrame。之后即可对 ``pe_ratio``/``pb_ratio``
     做截面计算（V495 价值因子落地）。
 
+    .. warning:: **前视偏差（look-ahead bias）默认开启。**
+
+       ``point_in_time`` 默认 ``False``，含义是：把该股票**最新一期**的
+       eps/bps 当作常量广播给**所有历史 K 线**。于是 2015 年的每根 K 线
+       都会带上 2024 年报的 EPS —— 历史截面里混入了尚未披露的未来数据。
+
+       这只对「当前日期的单一截面」是安全的（此时"最新一期"确实已披露）。
+       **任何历史回测 / 历史截面因子计算 / 样本外验证都必须显式传
+       ``point_in_time=True``**，否则 PE/PB 因子用的是未来财报，回测结论
+       会系统性失真（表现为价值因子假装有超额收益）。
+
+       该默认值是 V529 的历史行为，为兼容既有调用方而保留；本函数目前
+       **没有生产调用方**（仅 ``tests/unit/test_factor_engine.py`` 使用），
+       因此改默认值不会立刻影响线上，但仍可能因"大面积行为变化"波及未来的
+       接线方，故此处只加警告、不改默认值。
+
     Args:
         data: {code: OHLCV DataFrame}（须含 close 列）
         frame: 基本面指标帧（缺省/空则原样返回副本）
         point_in_time: True 时按披露日逐根做 point-in-time 截断（每股收益/净资产
             取「截至该 K 线日期已披露」的最新一期，历史截面无前视偏差）；False
-            时取最新一期作为常量列（仅适用于当前日期截面，V529 旧行为）。
+            时取最新一期作为常量列（**含未来数据**，仅适用于当前日期截面，
+            V529 旧行为）。
 
     Returns:
         每只股票 df 追加了 eps/bps 列（无对应财报时为 NaN）的新字典。
+
+    给生产接线方的用法::
+
+        # 历史回测 / 截面因子：必须显式开启，否则泄漏未来财报
+        merged = merge_fundamentals(data, frame, point_in_time=True)
+
+        # 只有"就用今天的最新财报估当前 PE/PB"时才可不传（默认 False）
+        merged = merge_fundamentals(data, frame)
     """
     if frame is None or frame.empty:
         return {k: v.copy() for k, v in data.items()}
