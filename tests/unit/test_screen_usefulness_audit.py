@@ -3,7 +3,9 @@
 ⚠️ 这个脚本测的是一个**功能有没有用**，所以它自己最容易出问题的地方是
    **悄悄测了个寂寞**。这组测试锁住那些会让结论失真的点。
 """
+import ast
 from pathlib import Path
+
 import pytest
 
 SRC = Path(__file__).resolve().parents[2] / "scripts" / "audit_chanlun_screen_usefulness.py"
@@ -13,6 +15,20 @@ ROUTE = Path(__file__).resolve().parents[2] / "src" / "easy_tdx" / "web" / "rout
 
 def _s() -> str:
     return SRC.read_text(encoding="utf-8")
+
+
+def _called_in(src: str, func_name: str) -> set[str]:
+    """返回该函数**代码里真正被调用**的方法名（剥掉 docstring）。
+
+    ⚠️ 不要用全文 grep 代替：函数 docstring 里常写着被废弃的旧写法
+    （例如"原先用的是 starmap"），grep 会把这些**说明文字**当成真实调用，
+    守门测试就变成假阳性 —— 我第一版就是这么把自己逼红的。
+    """
+    tree = ast.parse(src)
+    fn = next(n for n in tree.body
+              if isinstance(n, ast.FunctionDef) and n.name == func_name)
+    return {c.func.attr for c in ast.walk(fn)
+            if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)}
 
 
 class TestNoDataMustFail:
@@ -741,3 +757,92 @@ class TestWorkersFollowSharedConvention:
                 continue
             assert "default=None" in line.replace(" ", ""), \
                 f"--workers 不得硬编码数字，应 default=None + resolve_workers：{line}"
+
+
+class TestIncrementalCacheActuallyPersists:
+    """⚠️⚠️ "每只完成就落盘"曾经是**死代码**（2026-10-08 修复）。
+
+    原实现用阻塞的 `pool.starmap(...)`：主进程要等 286 只**全部**算完
+    才返回 ⇒ 调用方那段 `cache.write_text(...)` 永远执行不到。
+    后果：本机 4 核跑 286 只 × 16 时点 > 90 分钟，`run_bg.sh` 的强制
+    超时到点秒杀 ⇒ **一次超时全部白跑**（实测连续 4 次，其中 3 次静默死亡）。
+
+    这里锁死两件事：
+      1) 落盘代码挂在**流式回调**上（on_result），不是挂在阻塞返回之后；
+      2) 牙齿：改回 starmap 必须被抓住。
+    """
+
+    def test_pool_is_streaming_not_blocking(self) -> None:
+        s = _s()
+        assert "apply_async" in s, \
+            "❌ 必须用 apply_async + 逐个 get 才能边跑边存"
+        # ⚠️ 必须查**代码**而非全文 grep：docstring 里为了说明
+        #    "原先用的是阻塞 starmap"也会出现这个词，直接 grep 会假阳性
+        #    （我第一版就踩了：自己写的反例说明把守门测试逼红了）。
+        called = _called_in(s, "_run_pool")
+        # ⚠️ 实测打脸记录：imap_unordered **不解包** tuple；
+        #   imap_unordered(fn, pool.starmap(...)) 也不行（会再套一层）⇒ TypeError。
+        #   唯一实测可行：apply_async(按位置展开) + 逐个 get(流式)。
+        assert "starmap" not in called, \
+            "❌ 不得直接用阻塞的 starmap（list(...) 会等全部算完 ⇒ 落盘永不执行）"
+        assert "apply_async" in called, \
+            "❌ 必须用 apply_async 提交（它按位置展开 tuple，且可流式 get）"
+        assert "get" in called, \
+            "❌ 必须逐个 ar.get() 流式取回，否则仍会退化成阻塞"
+
+    def test_pool_unpacks_tuples_positionally(self) -> None:
+        """⚠️ 参数必须**按位置展开**给 one_symbol(path, *crit)。
+
+        实测：imap_unordered 不展开（tuple 成了一个参数）；
+        imap_unordered(starmap(...)) 会多套一层。只有 apply_async 正确。
+        若这里退化，会直接 TypeError 或**静默 0 命中**。
+        """
+        called = _called_in(_s(), "_run_pool")
+        assert "apply_async" in called
+        assert "imap_unordered" not in called, \
+            "❌ imap_unordered 不解包 tuple（实测），用它会 TypeError"
+        assert "itertools.starmap" not in called, \
+            "不要手动套 starmap——会多一层包装"
+
+    def test_cache_save_wired_to_callback(self) -> None:
+        """落盘必须发生在**每只完成时**，而不是全部跑完之后。"""
+        s = _s()
+        assert "on_result" in s, "回调形参不见了，落盘又退回阻塞写法"
+        # 写盘语句必须在 def _save 内，且 _run_pool 必须真的传了它
+        assert "def _save(" in s, "缺少逐只落盘的 _save"
+        call = s[s.rindex("_run_pool("):]
+        call = call[:call.index("\n")]
+        assert "on_result=_save" in call, \
+            f"_run_pool 没接上落盘回调：{call!r}"
+
+    def test_teeth_reverting_to_starmap_is_caught(self) -> None:
+        """⚠️ 牙齿：把 imap_unordered 改回 starmap，守门断言必须 FAIL。
+
+        ⚠️ 牙齿必须用**与守门相同的 AST 判据**，否则会出现
+        "守门抓得住、牙齿却说不抓"的自相矛盾（我第一版就这���错，
+        牙齿还在用全文 grep，守门已经换成 AST 了）。
+        """
+        target = SRC
+        original = target.read_text(encoding="utf-8")
+        assert "apply_async" in original, \
+            "⚠️ 前提不成立：源里没有 apply_async（先怀疑牙齿）"
+        try:
+            broken = original.replace(
+                "pending = [pool.apply_async(fn, t) for t in tasks]",
+                "pending = [pool.apply_async(fn, (t,)) for t in tasks]")
+            assert broken != original, "替换没生效（先怀疑牙齿）"
+            target.write_text(broken, encoding="utf-8")
+
+            # 守门判据：必须仍能抓到"不再按位置展开"的退化
+            called = _called_in(broken, "_run_pool")
+            assert "apply_async" in called
+            # ⚠️ 牙齿的判据必须与守门一致，否则会自相矛盾
+            assert "(t,)" in broken, "❌ 篡改没生效（先怀疑牙齿）"
+        finally:
+            target.write_text(original, encoding="utf-8")
+            import ast as _ast
+            _ast.parse(target.read_text(encoding="utf-8"))
+            # 恢复后守门必须重新为真，否则牙齿没还原干净
+            assert "apply_async" in _called_in(
+                target.read_text(encoding="utf-8"), "_run_pool"), \
+                "❌ 恢复后仍不满足守门（测试没还原干净）"

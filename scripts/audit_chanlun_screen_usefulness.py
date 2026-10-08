@@ -196,18 +196,43 @@ def _benchmark_by_t(a: Any, res: list[dict]) -> dict[int, float]:
     return {t: float(np.mean(v)) for t, v in by_t.items() if len(v) >= 5}
 
 
-def _run_pool(fn: Any, tasks: list[tuple[Any, ...]], workers: int) -> list[dict]:
+def _run_pool(fn: Any, tasks: list[tuple[Any, ...]], workers: int,
+              on_result: Any = None) -> list[dict]:
     """把 (path, crit...) 这样的**位置参数组**正确分发到多进程。
 
-    ⚠️ `ProcessPoolExecutor.map` **不会解包** tuple 列表 ——
-    它会把整个 tuple 当作**第一个**参数传给 fn。
-    要按位置展开，必须用 `multiprocessing.Pool.starmap`。
+    ⚠️ `ProcessPoolExecutor.map` / `Pool.imap_unordered` **都不会解包** tuple 列表 ——
+    它们会把整个 tuple 当作**第一个**参数传给 fn。
+    要按位置展开，用 `multiprocessing.Pool.starmap`（惰性迭代器，可流式消费）。
     （`ProcessPoolExecutor` 本身**没有** starmap 方法。）
+
+    ⚠️⚠️ 2026-10-08 修复：原先用 `list(pool.starmap(...))`，它是**阻塞**的
+    —— 主进程一直等到 286 只**全部**算完才返回，于是调用方那段
+    "每只完成就落盘" 的保存逻辑**永远执行不到**。
+    后果：本机 4 核跑 286 只 × 16 时点 > 90 分钟，`run_bg.sh` 的强制超时
+    会在到点秒杀 ⇒ **一次超时全部白跑**（实测连续 4 次，其中 3 次静默死亡）。
+    现在改成流式取回，每完成一只立刻回调落盘 ⇒ 超时也能保住已完成部分。
     """
     import multiprocessing as mp
 
+    out: list[dict] = []
     with mp.Pool(processes=workers) as pool:
-        return list(pool.starmap(fn, tasks))
+        # ⚠️⚠️ 这里踩了**两次**实测打脸的坑（2026-10-08），记下来别再犯：
+        #
+        #   ① p.imap_unordered(f, [('x',1)]) ⇒ f 收到 (( 'x', 1 ),)
+        #      —— **不解包**，整个 tuple 成了一个参数。
+        #   ② 把 starmap 套进 imap_unordered 里（我以为能兼得两边）也不行：
+        #      imap_unordered 会把 starmap 的**返回值**再当参数发一次 ⇒ TypeError。
+        #
+        #   ⇒ 正确做法：**apply_async(按位置展开) + 逐个 get(流式取回)**。
+        #      实测确认：第 3 个结果在 get 第 3 个之前就已经算好了，
+        #      所以"边算边存"是真的（不是等全部算完才返回）。
+        pending = [pool.apply_async(fn, t) for t in tasks]
+        for ar in pending:
+            r = ar.get()
+            out.append(r)
+            if on_result is not None:
+                on_result(r)
+    return out
 
 
 def main() -> int:
@@ -297,13 +322,18 @@ def main() -> int:
                      a.max_points)
                     for _ in todo]
             tasks = [(path, *crit) for path, crit in zip(todo, args)]
-            for r in _run_pool(one_symbol, tasks, a.workers):
+
+            # ⚠️ 每完成一只立刻落盘（2026-10-08 修）：
+            #    此前用阻塞的 starmap，这段保存逻辑**永远执行不到**，
+            #    一超时就是全部白跑。现在改成流式回调，真能存下来。
+            def _save(r: Any) -> None:
                 if not r:
-                    continue
+                    return
                 res.append(r)
-                # ⚠️ 每只完成就落盘：否则一次超时就**全部白跑**（本次就这么丢过一次）
                 cache.write_text(json.dumps(res, ensure_ascii=False),
                                  encoding="utf-8")
+
+            _run_pool(one_symbol, tasks, a.workers, on_result=_save)
 
     if not res:
         print("❌ 无有效样本")

@@ -3049,3 +3049,64 @@ return                                   # ← 第一次命中就 return
 
 ⇒ 这是第 15 次「自己的探针/守门静默失败」。
 **新增教训：牙齿第一次咬不到时，先怀疑牙齿本身，再怀疑被测代码。**
+
+---
+
+## 五之四十六：⚠️ "边跑边存"曾是**死代码**——一次超时全部白跑
+
+### ⚠️ 现象
+后半段对照基线（286 只 × 16 时点）**连续 4 次**没跑完：
+3 次**静默死亡**（无 traceback、无缓存），1 次被 `run_bg.sh` 的 90 分钟
+强制超时秒杀，**缓存一个字节都没留下**。
+
+### 根因：阻塞的 starmap
+```python
+for r in _run_pool(one_symbol, tasks, a.workers):   # ← starmap 阻塞到全部算完
+    res.append(r)
+    cache.write_text(...)                          # ← 永远执行不到
+```
+`_run_pool` 内部是 `list(pool.starmap(...))`：**主进程一直等到
+286 只全部算完才返回**。于是那段"每只完成就落盘"的保存逻辑
+**一次都没执行过** —— 它是**死代码**，却看起来像有容错。
+
+### ✅ 修法：`apply_async` + 逐个 `get`
+```python
+pending = [pool.apply_async(fn, t) for t in tasks]
+for ar in pending:
+    r = ar.get()          # 流式：拿到一个落一个
+    out.append(r); on_result(r)
+```
+
+### ⚠️⚠️⚠️ 我在这里**连错两次**，都是实测打脸
+| 尝试 | 结果 |
+|------|------|
+| `imap_unordered(fn, tasks)` | **不解包** tuple ⇒ `TypeError: ... not 'tuple'` |
+| `imap_unordered(fn, pool.starmap(...))` | **多套一层** ⇒ `TypeError: ... not 'dict'` |
+| `apply_async(fn, t)` + 逐个 `get()` | ✅ 正确 |
+
+我曾**断言**"imap_unordered 与 starmap 一样按位置展开"——**错的**。
+实测：
+```
+p.imap_unordered(f, [('x',1)]) ⇒ f 收到 (('x',1),)   # 整个 tuple 成了一个参数
+p.starmap(f,        [('x',1)]) ⇒ f 收到 ('x',1)      # 正确展开
+```
+⇒ **这是第 16 次"我的探针/推理静默失败"**，
+也是最险的一次：**我差点把一个 TypeError 版本当成"修好了"写进文档**。
+
+### ✅ 行为级验证（不是看代码）
+```
+跑到一半 SIGKILL 整个进程组
+⇒ 缓存里仍有 22 只的结果（旧实现是 0）
+```
+这才是"边跑边存"为真的**唯一**证据。
+
+### 牙齿
+把 `apply_async(fn, t)` 改成 `apply_async(fn, (t,))`（正是我踩的坑）
+⇒ **1 failed** ✅；恢复 ⇒ 5 passed，工作区干净。
+
+### ⚠️ 附带发现
+`verify_measured_bases.py` 漂移闸门此时报 `❌ 缺 13 份缓存`
+—— 因为 `/tmp` 被系统清理过。这说明**闸门是对的**（数据没了就该红），
+但也暴露一个事实：**审计结论的可复现性依赖 /tmp 缓存**，
+/tmp 一清，13 条基线就无法自动复核。⚠️ 建议把基线缓存移进仓库
+（`audit_data/bases/`），本轮**未做**（会新增 ~13 个大文件）。
