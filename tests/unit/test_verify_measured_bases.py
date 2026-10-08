@@ -238,3 +238,53 @@ class TestAttenuationTeeth:
         assert '("zs_position=inside", +1.34, +2.28, 0.0223)' not in blk, \
             "⚠️ inside 被改回 120 只轻样本值了（结论会跟着错）"
         assert '("zs_position=inside", +1.44, +1.98, 0.0477)' in blk
+
+
+class TestBasesDirIsConfigurable:
+    """⚠️ 基线缓存原本**全部写死 /tmp/**（2026-10-08 改）。
+
+    为什么要改：/tmp 会被系统清理，一清掉这 13 条基线就无法自动复核，
+    漂移闸门只会干巴巴报"缺 13 份缓存，先跑审计脚本"——
+    而**那条建议在缓存已被清理后往往等于让重跑 3 小时**。
+    ⇒ 现在：EASY_TDX_BASES_DIR → audit_data/bases/ → /tmp 依次找。
+
+    ⚠️ 注意：CI 与"没数据时应报错"的契约不受影响——
+       三处都找不到时仍然 exit 2（下面测两侧）。
+    """
+
+    SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "verify_measured_bases.py"
+
+    def _src(self) -> str:
+        return self.SCRIPT.read_text(encoding="utf-8")
+
+    def test_no_hardcoded_tmp_in_bases_table(self) -> None:
+        """BASES 里不得再出现裸 /tmp/ 路径（必须经 _cache() 解析）。"""
+        import ast
+        tree = ast.parse(self._src())
+        bases = next(n for n in tree.body
+                     if isinstance(n, ast.AnnAssign)
+                     and getattr(n.target, "id", "") == "BASES")
+        # 逐个元素检查：必须是 _cache("name.json") 调用
+        for elt in bases.value.elts:
+            assert isinstance(elt, ast.Tuple), f"BASES 元素应是二元组：{ast.dump(elt)[:80]}"
+            path_expr = elt.elts[1]
+            assert isinstance(path_expr, ast.Call) \
+                and getattr(path_expr.func, "id", "") == "_cache", \
+                "❌ BASES 的路径必须用 _cache(...) 解析，不能写死 /tmp"
+
+    def test_cache_helper_tries_bases_dir_then_tmp(self) -> None:
+        assert "def _cache(" in self._src()
+        s = self._src()
+        body = s[s.index("def _cache("):]
+        body = body[:body.index("\ndef ")]
+        assert "BASES_DIR" in body, "必须先找 BASES_DIR"
+        assert 'Path("/tmp")' in body, "必须回退到 /tmp"
+
+    def test_env_var_override(self) -> None:
+        s = self._src()
+        assert "EASY_TDX_BASES_DIR" in s, "必须支持环境变量覆盖，否则换机就废"
+
+    def test_missing_message_says_where_it_looked(self) -> None:
+        """⚠️ 报错必须说清**找过哪些目录**，否则看到的人无从下手。"""
+        s = self._src()
+        assert "已找过" in s, "缺缓存时必须报出尝试过的目录"

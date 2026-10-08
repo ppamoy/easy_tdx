@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from math import erfc, sqrt
@@ -35,22 +36,46 @@ H = 20
 # ⚠️ 口径名 -> 缓存文件。**必须**是跑审计脚本时真实写出的路径。
 #    基准口径统一为 `--benchmark index`（真实沪深300），
 #    因为那是 audit_chanlun_screen_usefulness.py 的**默认值**。
+# ⚠️ 缓存目录（2026-10-08 改为可配置）。
+#    原来全部写死 /tmp/xxx.json —— 而 /tmp 会被系统清理，
+#    一清掉这 13 条基线就无法自动复核（漂移闸门直接报"缺 13 份缓存"）。
+#    现在：EASY_TDX_BASES_DIR 优先 → audit_data/bases/ → /tmp。
+#    ⚠️ 本轮**尚未**把缓存搬进仓库（13 个文件体积待评估），
+#    但至少路径不再是不可配置的硬编码。
+BASES_DIR = Path(
+    os.environ.get("EASY_TDX_BASES_DIR")
+    or (ROOT / "audit_data" / "bases")
+)
+
+
+def _cache(name: str) -> str:
+    """按固定优先级找一份基线缓存，返回**第一个**存在的路径。
+
+    ⚠️ 必须报出**试过哪些地方**，否则"缺缓存"时人根本不知道去哪找。
+    """
+    cands = [BASES_DIR / name, Path("/tmp") / name]
+    for c in cands:
+        if c.exists():
+            return str(c)
+    return str(cands[0])
+
+
 BASES: list[tuple[str, str]] = [
-    ("any_buy 基线",      "/tmp/u120_base_any_buy_any_any_false.json"),
-    ("zs_position=above", "/tmp/u120_above_any_buy_any_above_false.json"),
-    ("trend=up",          "/tmp/u120_tup_any_buy_up_any_false.json"),
-    ("trend=down",        "/tmp/u120_tdown_any_buy_down_any_false.json"),
-    ("has_beichi=true",   "/tmp/u120_bc_any_buy_any_any_true.json"),
-    ("zs_position=below", "/tmp/u120_below_any_buy_any_below_false.json"),
-    ("signal_type=1buy",  "/tmp/sig_1buy_1buy_any_any_any.json"),
-    ("signal_type=2buy",  "/tmp/sig_2buy_2buy_any_any_any.json"),
-    ("signal_type=3buy",  "/tmp/sig_3buy_3buy_any_any_any.json"),
-    ("signal_type=1sell", "/tmp/sig_1sell_1sell_any_any_any.json"),
+    ("any_buy 基线",      _cache("u120_base_any_buy_any_any_false.json")),
+    ("zs_position=above", _cache("u120_above_any_buy_any_above_false.json")),
+    ("trend=up",          _cache("u120_tup_any_buy_up_any_false.json")),
+    ("trend=down",        _cache("u120_tdown_any_buy_down_any_false.json")),
+    ("has_beichi=true",   _cache("u120_bc_any_buy_any_any_true.json")),
+    ("zs_position=below", _cache("u120_below_any_buy_any_below_false.json")),
+    ("signal_type=1buy",  _cache("sig_1buy_1buy_any_any_any.json")),
+    ("signal_type=2buy",  _cache("sig_2buy_2buy_any_any_any.json")),
+    ("signal_type=3buy",  _cache("sig_3buy_3buy_any_any_any.json")),
+    ("signal_type=1sell", _cache("sig_1sell_1sell_any_any_any.json")),
     # ⚠️ 端点一直支持、审计脚本此前**没有开关**的 3 个口径
     # ⚠️ inside 已升级为**全量 286 只**口径
-    ("zs_position=inside", "/tmp/full_inside_any_buy_any_inside_false.json"),
-    ("min_quality>=80",    "/tmp/mq_q80_any_buy_any_any_any.json"),
-    ("min_zs_count>=5",    "/tmp/mq_zs5_any_buy_any_any_any.json"),
+    ("zs_position=inside", _cache("full_inside_any_buy_any_inside_false.json")),
+    ("min_quality>=80",    _cache("mq_q80_any_buy_any_any_any.json")),
+    ("min_zs_count>=5",    _cache("mq_zs5_any_buy_any_any_any.json")),
 ]
 
 SCRIPT = ROOT / "scripts" / "audit_screen_sector_neutral.py"
@@ -182,7 +207,13 @@ def main() -> int:
     missing = [p for _, p in BASES if not Path(p).exists()]
     if missing:
         print(f"❌ 缺 {len(missing)} 份缓存：{missing[:3]} …", file=sys.stderr)
-        print("   先跑 scripts/audit_chanlun_screen_usefulness.py", file=sys.stderr)
+        # ⚠️ 必须说清"去哪儿找过"，否则看到这条报错的人无从下手
+        #    （原实现写死 /tmp，而 /tmp 会被系统清理 ⇒ 这条错误经常无解）
+        print(f"   已找过：{BASES_DIR}", file=sys.stderr)
+        print(f"   已找过：/tmp", file=sys.stderr)
+        print("   先跑 scripts/audit_chanlun_screen_usefulness.py 生成；"
+              "或把缓存放到 audit_data/bases/（或设 EASY_TDX_BASES_DIR）",
+              file=sys.stderr)
         return 2
 
     print(f"{'口径':<20}{'重算%':>8}{'登记%':>8}{'重算t':>8}{'登记t':>7}"
