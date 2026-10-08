@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -559,7 +560,18 @@ class TestSampleIdentity:
 
     实测（/tmp 下 10 份缓存）：并集 120 / 交集 120 ⇒ 确实同一批 ✅
     """
-    _CACHE_DIRS = (("/tmp", "u120_*.json"), ("/tmp", "sig_*.json"))
+    # ⚠️ 2026-10-08：从**写死 /tmp** 改为可配置 + 多目录兜底。
+    #    起因：/tmp 被系统清理后，这条测试在**任何干净机器上都会红**，
+    #    而它红的原因与被测代码无关（脚本一行没改）。
+    #    现在按 EASY_TDX_BASES_DIR → audit_bases/ → /tmp 依次找。
+    _CACHE_DIRS = (
+        (os.environ.get("EASY_TDX_BASES_DIR")
+         or str(Path(__file__).resolve().parents[2] / "audit_bases"), "u120_*.json"),
+        (os.environ.get("EASY_TDX_BASES_DIR")
+         or str(Path(__file__).resolve().parents[2] / "audit_bases"), "sig_*.json"),
+        ("/tmp", "u120_*.json"),
+        ("/tmp", "sig_*.json"),
+    )
 
     def test_limit_selects_deterministically(self) -> None:
         """⚠️ 必须**排序**后截断，否则 glob 顺序随文件系统变化。"""
