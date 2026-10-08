@@ -66,13 +66,30 @@ class TestGuardHasTeeth:
         assert not args, "❌ rev-list 带 --max-count ⇒ 未推送数量会被截断成假数字"
 
     def test_reports_unpushed_in_real_repo(self) -> None:
-        """⚠️ 行为级：本仓库**确实**有大量未推送提交，守门必须 exit 1。"""
-        r = _run()
-        assert r.returncode == 1, (
-            f"❌ 守门没咬到：本仓库有未推送提交，期望 exit 1，实为 {r.returncode}\n"
-            f"   stdout={r.stdout[:200]}"
-        )
-        assert "未推送" in r.stdout and "兜底" in r.stdout
+        """⚠️ 行为级：本仓库**确实**有大量未推送提交。
+
+        ⚠️ 结果取决于"当前有没有兜底 tag"——两者都是**正确行为**：
+           · 有兜底 ⇒ exit 0（已安全）
+           · 无兜底 ⇒ exit 1（需告警）
+        ⇒ 必须**先测无兜底**那侧（临时移走 tag），否则这个测试会退化成
+          "看当天有没有打 tag" 的随机测试。**不可**直接断言 exit 1。
+        """
+        moved = []
+        tags = subprocess.run(["git", "tag", "-l", "backup/*"],
+                              cwd=str(ROOT), capture_output=True, text=True).stdout.split()
+        for t in tags:
+            subprocess.run(["git", "tag", "-d", t], cwd=str(ROOT), capture_output=True)
+            moved.append(t)
+        try:
+            r = _run()
+            assert r.returncode == 1, (
+                f"❌ 守门没咬到：本仓库有未推送提交且无兜底，期望 exit 1，"
+                f"实为 {r.returncode}\n   stdout={r.stdout[:200]}"
+            )
+            assert "未推送" in r.stdout and "兜底" in r.stdout
+        finally:
+            for t in moved:   # 恢复，别把别人的兜底 tag 弄丢
+                subprocess.run(["git", "tag", t, "main"], cwd=str(ROOT), capture_output=True)
 
     def test_teeth_exits_zero_once_guarded(self) -> None:
         """⚠️ 牙齿的**另一侧**：有兜底时必须 exit 0（否则就是只会报红）。"""
@@ -91,10 +108,22 @@ class TestGuardHasTeeth:
             )
 
     def test_teeth_detects_dangerous_state_without_tag(self) -> None:
-        """⚠️ 兜底 tag 被删掉 ⇒ 必须立刻重新报红（证明它真在检测，不是缓存）。"""
-        subprocess.run(
-            ["git", "tag", "backup/tmp-teeth", "main"], cwd=str(ROOT), capture_output=True
-        )
-        subprocess.run(["git", "tag", "-d", "backup/tmp-teeth"], cwd=str(ROOT), capture_output=True)
-        r = _run()
-        assert r.returncode == 1, "删掉兜底后守门应当重新报红"
+        """⚠️ 兜底 tag 被删掉 ⇒ 必须立刻重新报红（证明它真在检测，不是缓存）。
+
+        ⚠️ 必须**先清掉所有 backup tag**，否则仓库里真有兜底 tag 时
+        永远 exit 0，这条测试就退化成恒真
+        （我今天已栽过两次"守卫恒真、坏状态下也全绿"）。
+        """
+        moved = subprocess.run(
+            ["git", "tag", "-l", "backup/*"], cwd=str(ROOT), capture_output=True, text=True
+        ).stdout.split()
+        for t in moved:
+            subprocess.run(["git", "tag", "-d", t], cwd=str(ROOT), capture_output=True)
+        try:
+            r = _run()
+            assert r.returncode == 1, (
+                f"删掉兜底后守门应重新报红，实为 {r.returncode}\n{r.stdout[:200]}"
+            )
+        finally:
+            for t in moved:  # 恢复，别把别人的兜底 tag 弄丢
+                subprocess.run(["git", "tag", t, "main"], cwd=str(ROOT), capture_output=True)
