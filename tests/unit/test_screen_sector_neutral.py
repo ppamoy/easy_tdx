@@ -638,3 +638,46 @@ class TestSampleIdentity:
             f"口径样本不一致：并集 {len(union)} 只 vs 交集 {len(inter)} 只 ⇒ 多重比较前提不成立"
         )
         assert len(inter) == 120, f"样本量应为 120，实为 {len(inter)}"
+
+
+class TestBidirectionalFalsificationIsInReport:
+    """⚠️ 防止**关键结论只留在代码注释里**（2026-10-08 自查发现）。
+
+    `inside` 的后半段结果（−0.95% / t=−2.24 / p=0.0251）是本项目
+    "选股不可用"**最有力**的一条证据（符号翻转且显著），
+    但当时只写在 `audit_screen_sector_neutral.py` 的注释里，
+    **报告正文完全没提** ⇒ 读报告的人会严重低估结论强度。
+
+    ⚠️ 自查：`grep -c "0.0251" docs/V733_AUDIT_REPORT.md` ⇒ **0 次**。
+
+    ⇒ 这条测试锁死：**三个窗口的数字都必须在报告里**。
+    """
+
+    DOC = Path(__file__).resolve().parents[2] / "docs" / "V733_AUDIT_REPORT.md"
+
+    def _doc(self) -> str:
+        return self.DOC.read_text(encoding="utf-8")
+
+    def test_all_three_windows_documented(self) -> None:
+        doc = self._doc()
+        # 全段（发现窗口）
+        assert "1.34" in doc and "0.0223" in doc, "缺全段数字"
+        # 前半段（归零）
+        assert "0.9607" in doc, "缺前半段 p=0.9607"
+        # ⚠️ 后半段（显著为负）—— 就是这条当年漏了
+        assert "0.0251" in doc, "❌ 报告缺后半段 p=0.0251（曾只留在代码注释里，结论强度被低估）"
+        assert "−0.95" in doc or "-0.95" in doc, "缺后半段超额 −0.95%"
+
+    def test_says_sign_flipped_not_just_insignificant(self) -> None:
+        """⚠️ 必须说清"符号翻转"，不能只写"不显著"——
+        前者比后者强得多，弱化表述会误导读者。"""
+        doc = self._doc()
+        blk = doc[doc.index("## 五之五十二") :]
+        assert "翻转" in blk, "必须明确指出符号**翻转**"
+        assert "显著为负" in blk, "必须写明后半段**显著为负**"
+
+    def test_conservative_caveat_present(self) -> None:
+        """⚠️ 也不能过度解读：后半段为负不等于"必然亏钱"，要留保守说明。"""
+        doc = self._doc()
+        blk = doc[doc.index("## 五之五十二") :]
+        assert "不等于证明" in blk or "保守表述" in blk, "必须保留保守说明，别把结论说过头"
