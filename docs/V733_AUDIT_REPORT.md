@@ -3226,3 +3226,56 @@ p.starmap(f,        [('x',1)]) ⇒ f 收到 ('x',1)      # 正确展开
 每份产出**校验条数**（空/残缺缓存比没有缓存更危险——
 闸门会拿它算出假结论）；并行度走 `_concurrency` 的默认值，不硬编码；
 支持 `--quick` 冒烟。
+
+---
+
+## 五之四十九：⚠️⚠️ 我差点把本轮 8 个提交 **`git reset --hard` 掉**
+
+### 我干了什么
+为验证"推送到底卡在哪"，我在一个**探针分支**上跑了
+```
+git reset --hard ppamoy/main
+```
+想对比远端和本地内容差异。**而当时 `main` 和我未推送的 8 个提交
+只靠分支指针维系，没有 tag、没有 stash。**
+`reset --hard` 之后 `main` 被指到 `6412880`，我 8 个提交**从分支上消失**。
+
+### 靠什么救回来的
+对象仍在 `.git` 里（未 gc），`git reflog` 留有每一条 `commit:` 记录：
+```
+git branch -f main 20abea5 && git checkout main
+```
+⇒ 8/8 提交全部回来（逐个 `merge-base --is-ancestor` 验过 ✅），
+文件、测试、文档一个不少，基线任务也没受影响（105/286 继续跑）。
+
+### ⚠️ 我**同时**犯了一个更隐蔽的错，并差点据此下结论
+`reset` 之后我跑 `git diff ppamoy/main main` 得到"**空**"，
+就据此写下了"两边内容完全一致、早就推上去了"——
+**那是拿 `main` 和它自己比**。若不是接着去查
+`git merge-base --is-ancestor 81557bb ppamoy/main`（结果 ❌），
+我就会把一个**建立在自我对比上的假结论**写进汇报。
+
+⚠️⇒ **同一个错，产出了两个互相矛盾的结论**：
+`git diff A B` 空 → "内容一致"；`merge-base --is-ancestor` ❌ → "不在远端"。
+若只看前者，就会误报"已推送完成"。
+
+### 纪律（新增）
+1. **任何 `reset --hard` / `checkout -B` 之前先确认工作区归属**：
+   未推送的提交必须有 tag 或备份分支兜底，不能只靠分支指针。
+2. **`git diff X Y` 为空**不等于"内容相同即已同步"——
+   必须配一个 `merge-base --is-ancestor` 或 `git cherry` 才能下同步结论。
+3. ⇒ `origin` 这个远端配置（`handsomejustin/easy_tdx`，404 无权限）
+   **本轮已加 `ppamoy` 远端**，推送权限实测具备（HTTP 200）。
+
+### ⚠️ 推送的真实阻塞点已定位（不是分叉）
+token 权限只有 `repo`：
+```
+$ curl -I .../repos/ppamoy/easy_tdx | grep -i oauth-scopes
+x-oauth-scopes: repo
+$ git push ppamoy main:refs/heads/chanlun-audit-v733
+! [remote rejected] refusing to allow a PAT to create or update workflow
+   `.github/workflows/ci.yml` without `workflow` scope
+```
+⇒ 阻塞是 **token 缺 `workflow` scope**，而 `.github/workflows/ci.yml`
+**远端本来就有**、我这边改过（10 个提交动过它）。
+⇒ 要推送需给 token 加 `workflow` scope（需用户操作，我无法自助）。
