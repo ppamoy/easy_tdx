@@ -1254,11 +1254,20 @@ function startPricePoll() {
     try {
       const market = detectMarket(code.value)
       const lastBar = bars.value[bars.value.length - 1]
-      const resp = await fetch(`/api/v1/bars/${market}/${code.value}/${category.value}?count=1`)
+      // V733：后端 /bars 的 market/code/category/count **全是 Query 参数**，
+      // 不存在 `/bars/{m}/{code}/{cat}` 这种路径参数版本 —— 旧写法恒 404，
+      // 而它被包在 30s 轮询 + `catch {}` 里，于是「实时价格永不更新」且
+      // 没有任何用户可见反馈。改为 Query 形式，并去掉静默吞错。
+      // 响应体是 { data: [...] }（DataFrameResponse），旧代码读 data.bars 也错。
+      const resp = await fetch(
+        `/api/v1/bars?market=${market}&code=${code.value}` +
+          `&category=${category.value}&count=1`,
+      )
       if (resp.ok) {
         const data = await resp.json()
-        if (data.bars && data.bars.length > 0) {
-          const latest = data.bars[data.bars.length - 1]
+        const rows = data.data ?? []
+        if (rows.length > 0) {
+          const latest = rows[rows.length - 1]
           bars.value[bars.value.length - 1] = {
             ...lastBar,
             open: latest.close ?? lastBar.open,
@@ -1267,9 +1276,12 @@ function startPricePoll() {
             low: latest.low ?? lastBar.low,
           }
         }
+      } else {
+        // 轮询失败也要留下痕迹，别再静默（AGENTS.md：静默失败是本项目头号 bug 源）
+        console.warn(`[ChanlunView] 实时价格轮询失败: HTTP ${resp.status}`)
       }
-    } catch {
-      // 静默失败
+    } catch (e) {
+      console.warn('[ChanlunView] 实时价格轮询异常:', e)
     }
   }, 30000)
 }
