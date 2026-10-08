@@ -34,10 +34,15 @@ import argparse
 import json
 import sys
 import warnings
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# 并行度统一取项目约定（默认 2，本机 4 核），禁止硬编码 4/8
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _concurrency import resolve_workers  # noqa: E402
 
 warnings.filterwarnings("ignore")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -68,76 +73,176 @@ def t_stat(d: np.ndarray) -> float:
     return float(d.mean() / d.std() * np.sqrt(len(d)))
 
 
-def collect(fs: list[Path], **kw) -> pd.DataFrame:
-    """跑一批回测，返回带 tag 的**已平仓**交易（SELL 且 pnl 有意义）。"""
-    rows: list[dict] = []
-    for p in fs:
+def _run_one(path_str: str, kw: dict) -> dict:
+    """跑单只标的，返回可 pickle 的纯 dict（顶层函数，供 ProcessPoolExecutor）。
+
+    ⚠️ 异常必须**向上抛**而不是吞掉：静默 continue 会让"全部失败"伪装成
+    "样本少"，是本脚本最危险的失败模式（见下方 _parallel 的失败计数牙齿）。
+    """
+    p = Path(path_str)
+    df = pd.DataFrame(json.loads(p.read_text(encoding="utf-8")))
+    df["datetime"] = pd.to_datetime(df["datetime"])
+    r = BacktestEngine(ChanlunStrategy(**kw), cash=100000.0).run(df)
+    tr = r.trades
+    if not isinstance(tr, pd.DataFrame) or tr.empty:
+        return {
+            "symbol": p.stem.split("_")[0],
+            "rows": [],
+            "total_ret": None,
+            "n_trades": 0,
+            "err": None,
+        }
+    if "tag" not in tr.columns:
+        # 牙齿：tag 缺失说明跑在旧代码上，聚合会全空 ⇒ 不能静默通过
+        raise RuntimeError("trades 缺少 tag 列 —— 请确认 backtest 代码已升级")
+    closes = tr[(tr["direction"] == "SELL") & (~tr["rejected"]) & (tr["cost_basis"] > 0)]
+    rows = [
+        {
+            "symbol": p.stem.split("_")[0],
+            "tag": str(row["tag"]),
+            # 单笔收益率 = 已实现盈亏 / 该笔持仓成本
+            "ret": float(row["pnl"]) / float(row["cost_basis"]),
+        }
+        for _, row in closes.iterrows()
+    ]
+    return {
+        "symbol": p.stem.split("_")[0],
+        "rows": rows,
+        "total_ret": float(closes["pnl"].sum()) / 100000.0 if not closes.empty else None,
+        "n_trades": len(closes),
+        "err": None,
+    }
+
+
+def _cache_key(symbol: str, kw: dict) -> str:
+    """缓存键 = 标的 + 参数（参数不同必须分开存，否则消融两组会互相污染）。"""
+    return json.dumps({"symbol": symbol, "kw": kw}, sort_keys=True)
+
+
+def _parallel(
+    fs: list[Path],
+    kw: dict,
+    workers: int,
+    label: str,
+    cache_path: Path | None = None,
+) -> tuple[list[dict], int]:
+    """并行跑一批标的，返回 (结果列表, 失败数)。
+
+    牙齿：失败数 > 0 要**显式报告**。串行版用 `except: continue` 会把
+    "全部标的都失败"伪装成"样本少"，跑到全 286 只时尤其危险。
+    """
+    # ── 缓存：已跑过的标的直接复用，支持超时后续跑 ──
+    cache: dict[str, dict] = {}
+    if cache_path is not None:
         try:
-            df = pd.DataFrame(json.loads(p.read_text(encoding="utf-8")))
-            df["datetime"] = pd.to_datetime(df["datetime"])
-            r = BacktestEngine(ChanlunStrategy(**kw), cash=100000.0).run(df)
-            tr = r.trades
-            if not isinstance(tr, pd.DataFrame) or tr.empty:
-                continue
-            if "tag" not in tr.columns:
-                # 牙齿：tag 缺失说明本脚本跑在旧代码上，聚合会全空 ⇒ 不能静默通过
-                raise RuntimeError("trades 缺少 tag 列 —— 请确认 backtest 代码已升级")
-            closes = tr[(tr["direction"] == "SELL") & (~tr["rejected"]) & (tr["cost_basis"] > 0)]
-            for _, row in closes.iterrows():
-                rows.append(
-                    {
-                        "symbol": p.stem.split("_")[0],
-                        "tag": str(row["tag"]),
-                        # 单笔收益率 = 已实现盈亏 / 该笔持仓成本
-                        "ret": float(row["pnl"]) / float(row["cost_basis"]),
-                    }
-                )
-        except Exception:
-            continue
+            if cache_path.exists():
+                cache = json.loads(cache_path.read_text(encoding="utf-8"))
+                print(f"  缓存：已载入 {len(cache)} 条（{cache_path}）", flush=True)
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ 缓存损坏，从头跑：{e}", flush=True)
+            cache = {}
+
+    todo: list[Path] = []
+    out: list[dict] = []
+    for p in fs:
+        key = _cache_key(p.stem.split("_")[0], kw)
+        if key in cache:
+            out.append(cache[key])
+        else:
+            todo.append(p)
+    if todo:
+        print(f"  待跑 {len(todo)} 只（{len(fs) - len(todo)} 只命中缓存）", flush=True)
+
+    nerr = 0
+
+    def _save() -> None:
+        if cache_path is None:
+            return
+        try:
+            cache_path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+        except Exception as e:  # noqa: BLE001
+            print(f"  ⚠️ 缓存写入失败：{e}", flush=True)
+
+    if workers <= 1 or len(todo) <= 1:
+        for p in todo:
+            try:
+                r = _run_one(str(p), kw)
+                cache[_cache_key(p.stem.split("_")[0], kw)] = r
+                out.append(r)
+                _save()
+            except Exception as e:  # noqa: BLE001
+                nerr += 1
+                print(f"  ⚠️ {p.stem} 失败：{type(e).__name__}: {e}", flush=True)
+    else:
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            futs = {ex.submit(_run_one, str(p), kw): p for p in todo}
+            done = 0
+            for fut, p in futs.items():
+                try:
+                    r = fut.result()
+                    cache[_cache_key(p.stem.split("_")[0], kw)] = r
+                    out.append(r)
+                    done += 1
+                    # 每 10 只落盘一次，超时也不丢进度
+                    if done % 10 == 0:
+                        _save()
+                        print(f"    进度 {done}/{len(todo)}", flush=True)
+                except Exception as e:  # noqa: BLE001
+                    nerr += 1
+                    print(f"  ⚠️ {p.stem} 失败：{type(e).__name__}: {e}", flush=True)
+        _save()
+
+    if nerr:
+        print(f"  ❌【{label}】{nerr}/{len(fs)} 只失败 —— 结论样本已缺失，不可外推", flush=True)
+    return out, nerr
+
+
+def collect(fs: list[Path], workers: int = 0, cache_path: Path | None = None, **kw) -> pd.DataFrame:
+    """跑一批回测，返回带 tag 的**已平仓**交易（SELL 且 pnl 有意义）。"""
+    w = workers or resolve_workers(None)
+    res, _ = _parallel(fs, kw, w, "collect", cache_path=cache_path)
+    rows: list[dict] = []
+    for r in res:
+        rows.extend(r["rows"])
     return pd.DataFrame(rows)
 
 
-def total_returns(fs: list[Path], **kw) -> pd.DataFrame:
+def total_returns(
+    fs: list[Path], workers: int = 0, cache_path: Path | None = None, **kw
+) -> pd.DataFrame:
     """跑一批回测，返回每只标的的**策略总收益率**（用于消融实验）。
 
-    注意：这里用总资产口径（含未实现浮盈的近似由 PerformanceAnalyzer 处理），
-    与 `collect()` 的"单笔等权收益率"**不是同一个东西**，故分开采。
+    注意：这里用总资产口径（与 `collect()` 的"单笔等权收益率"**不是同一个东西**），
+    故分开采。并行度同 `collect()`。
     """
+    w = workers or resolve_workers(None)
+    res, _ = _parallel(fs, kw, w, "total_returns", cache_path=cache_path)
     rows: list[dict] = []
-    for path in fs:
-        try:
-            df = pd.DataFrame(json.loads(path.read_text(encoding="utf-8")))
-            df["datetime"] = pd.to_datetime(df["datetime"])
-            r = BacktestEngine(ChanlunStrategy(**kw), cash=100000.0).run(df)
-            tr = r.trades
-            if not isinstance(tr, pd.DataFrame) or tr.empty:
-                continue
-            closes = tr[(tr["direction"] == "SELL") & (~tr["rejected"]) & (tr["cost_basis"] > 0)]
-            if closes.empty:
-                continue
-            rows.append(
-                {
-                    "symbol": path.stem.split("_")[0],
-                    # 逐笔收益率按 Symbol 合并成一条资金曲线（各标的独立、等权累加再取均值）
-                    "total_ret": float(closes["pnl"].sum()) / 100000.0,
-                    "n_trades": len(closes),
-                }
-            )
-        except Exception:
+    for r in res:
+        if r.get("total_ret") is None:
             continue
+        rows.append(
+            {
+                "symbol": r["symbol"],
+                # 逐笔收益率按 Symbol 合并成一条资金曲线（各标的独立、等权累加再取均值）
+                "total_ret": r["total_ret"],
+                "n_trades": r["n_trades"],
+            }
+        )
     return pd.DataFrame(rows)
 
 
-def ablation(fs: list[Path], label: str) -> None:
+def ablation(fs: list[Path], label: str, workers: int = 0, cache_path: Path | None = None) -> None:
     """真正的**干预差**：把某个信号关掉，端到端对比总收益。
 
     ⚠️ 这才回答"关掉 X 会更好吗"。上面的 `report()` 只能给条件差。
     """
-    print(f"\n{'=' * 78}\n【干预实验｜{label}】每组 {len(fs)} 只")
+    w = workers or resolve_workers(None)
+    print(f"\n{'=' * 78}\n【干预实验｜{label}】每组 {len(fs)} 只，并行度 {w}")
 
     kw = {"use_3sell": False}
-    base = total_returns(fs)
-    alt = total_returns(fs, **kw)
+    base = total_returns(fs, workers=w, cache_path=cache_path)
+    alt = total_returns(fs, workers=w, cache_path=cache_path, **kw)
     if base.empty or alt.empty:
         print("  ❌ 某组无结果，无法比较")
         return
@@ -232,7 +337,18 @@ def report(X: pd.DataFrame, label: str) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--limit", type=int, default=40)
+    ap.add_argument("--limit", type=int, default=40, help="标的数量上限，0=全部")
+    ap.add_argument(
+        "--cache",
+        default="/tmp/attr_cache.json",
+        help="逐标的缓存（可按 --limit 增量续跑，超时/中断后不丢已完成部分）",
+    )
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=0,
+        help="并行度，0=取项目默认（_concurrency.resolve_workers，本机 2）",
+    )
     ap.add_argument(
         "--ablation", action="store_true", help="跑真正的干预实验（关掉 3sell 端到端对比总收益）"
     )
@@ -253,7 +369,8 @@ def main() -> int:
 
     # ⚠️ 单笔归因要跑一遍全样本回测；干预实验要再跑两遍（默认组 + 开关组）。
     #    本机 4 核，两者叠起来会顶到 run_bg 超时 ⇒ 支持 --only-ablation 只跑后者。
-    X = collect(fs) if not a.only_ablation else pd.DataFrame()
+    cp = Path(a.cache)
+    X = collect(fs, workers=a.workers, cache_path=cp) if not a.only_ablation else pd.DataFrame()
     if not a.only_ablation:
         if X.empty:
             print("❌ 没有任何已平仓交易 —— 归因无法进行")
@@ -277,7 +394,9 @@ def main() -> int:
         report(X, "默认(3buy/3sell 开)")
 
     if a.ablation or a.only_ablation:
-        ablation(fs, "3sell")
+        # ⚠️ 必须传 cache_path：消融两组（默认 / use_3sell=False）靠 kw 区分缓存键，
+        #    不传就完全没有缓存，跑到全样本超时时进度全丢。
+        ablation(fs, "3sell", workers=a.workers, cache_path=cp)
 
     print("\n" + "=" * 78)
     print("⚠️ 怎么读这个结果（别过度解读）")

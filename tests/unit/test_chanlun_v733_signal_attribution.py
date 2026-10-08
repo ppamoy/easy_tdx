@@ -133,3 +133,71 @@ class TestAblation:
         s = _src()
         bad = re.findall(r"workers\s*=\s*\d+|default\s*=\s*[48]\b", s)
         assert bad == [], f"硬编码了并行度/样本量回落值：{bad}"
+
+
+class TestParallelEquivalence:
+    """并行化后必须锁住：并行结果 == 串行结果，且失败要显式报数。
+
+    背景：全 286 只串行要 ~70 分钟，故改成 ProcessPoolExecutor 并行。
+    但并行化最容易引入两类静默错误：
+      1. 结果随并行度变化（顺序依赖 / 共享状态污染）⇒ 结论不可复现；
+      2. 异常被吞 ⇒ "全部标的失败"伪装成"样本少"。
+    """
+
+    def test_run_one_is_top_level_picklable(self) -> None:
+        """worker 必须是顶层函数，否则 ProcessPoolExecutor 无法 pickle。"""
+        s = _src()
+        assert "def _run_one(" in s, "缺少顶层 worker 函数 _run_one"
+        # 顶层：行首无缩进
+        lines = [ln for ln in s.splitlines() if ln.startswith("def _run_one(")]
+        assert lines, "_run_one 必须是顶层函数（不能是嵌套/方法）"
+
+    def test_parallel_counts_failures_loudly(self) -> None:
+        """失败必须计数并打印，不能 continue 吞掉。"""
+        s = _src()
+        assert "nerr" in s, "必须统计失败数"
+        assert "只失败" in s, "失败数必须显式打印（否则全失败会伪装成样本少）"
+
+    def test_workers_defaults_to_project_convention(self) -> None:
+        """并行度取 _concurrency.resolve_workers，不得硬编码。"""
+        s = _src()
+        assert "from _concurrency import resolve_workers" in s
+        assert "resolve_workers(None)" in s
+
+    def test_has_workers_flag(self) -> None:
+        assert '"--workers"' in _src() or "'--workers'" in _src()
+
+    def test_serial_and_parallel_same_code_path(self) -> None:
+        """串行与并行必须共用同一个 _run_one，避免两套逻辑算出不同结果。"""
+        s = _src()
+        assert "_run_one(" in s
+        # 串行分支（workers<=1）与并行分支都要调 _run_one
+        assert s.count("_run_one(") >= 2, "串行/并行两条路径都要走 _run_one"
+
+
+class TestCacheResumability:
+    """全 286 只串行 ~70 分钟、并行 ~36 分钟，超过常见 timeout ⇒ 必须可续跑。
+
+    踩过的坑（本轮实测）：`ablation(fs, "3sell")` 忘了传 `cache_path`，
+    结果消融那两组**完全没有缓存**，跑到超时进度全丢。这里锁死。
+    """
+
+    def test_ablation_call_passes_cache_path(self) -> None:
+        s = _src()
+        assert 'ablation(fs, "3sell", workers=a.workers, cache_path=cp)' in s, (
+            "消融必须传 cache_path，否则该组无缓存，超时后进度全丢"
+        )
+
+    def test_cache_key_includes_kw(self) -> None:
+        """缓存键必须含 kw，否则默认组与 use_3sell=False 组会互相污染。"""
+        s = _src()
+        assert "def _cache_key" in s
+        assert '"kw"' in s and '"symbol"' in s, "缓存键需同时含 symbol 与 kw"
+
+    def test_periodic_save(self) -> None:
+        """必须周期性落盘，不能只在最后写一次（超时就全丢）。"""
+        s = _src()
+        assert "% 10 ==" in s or "% 10 == 0" in s, "需每 10 只落盘一次"
+
+    def test_cache_arg_exists(self) -> None:
+        assert '"--cache"' in _src()
