@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -96,7 +96,20 @@ def _closes(
     """只保留 <= target 的 (date, close)，并按时间升序。"""
     pairs: list[tuple[date, float]] = []
     for d, c in zip(dates, closes):
-        dd = pd.to_datetime(d).date() if not isinstance(d, date) else d
+        # ⚠️ V733 实测陷阱：``pd.Timestamp`` **是** ``datetime.date`` 的子类，
+        # 所以原先的 ``isinstance(d, date)`` 会对 Timestamp 判 True 而**跳过
+        # 转换**，随后 ``Timestamp <= date`` 直接 TypeError 崩
+        # （实测：Cannot compare Timestamp with datetime.date）。
+        # 现有调用方（pipeline.py:668/685）都先做了 ``.dt.date`` 才没炸，
+        # 但任何传原始 Timestamp 的新调用方都会踩。改为显式排除 Timestamp。
+        if isinstance(d, pd.Timestamp):
+            dd = d.date()
+        elif isinstance(d, datetime):
+            dd = d.date()
+        elif isinstance(d, date):
+            dd = d
+        else:
+            dd = pd.to_datetime(d).date()
         if dd <= target and c == c:
             pairs.append((dd, float(c)))
     pairs.sort(key=lambda x: x[0])

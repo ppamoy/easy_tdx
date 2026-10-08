@@ -50,13 +50,13 @@ def _to_json_safe(obj: Any) -> Any:
 
     if isinstance(obj, dict):
         return {k: _to_json_safe(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
+    if isinstance(obj, list | tuple):
         return [_to_json_safe(item) for item in obj]
     if isinstance(obj, np.bool_):
         return bool(obj)
-    if isinstance(obj, (np.integer,)):
+    if isinstance(obj, np.integer):
         return int(obj)
-    if isinstance(obj, (np.floating,)):
+    if isinstance(obj, np.floating):
         return float(obj)
     if isinstance(obj, np.ndarray):
         return obj.tolist()
@@ -353,32 +353,104 @@ def build_train_session_payload(
     if reveal_limit is not None:
         bars = bars[: reveal_limit + 1]
 
-    # ── V731 防作弊闸门（第 37 轮扩展）：训练模式必须**服务端截断**全部
-    # 描述「reveal_limit 之后」的结构数据。此前只置空了 candidates[].signal
-    # 与 mmd_outcomes，但 bis/xds/zss/fractals/valid_fractals/macd/boll 等
-    # 数组仍携带全量未来结构 —— 前端的 revealIndex 只是**显示层**过滤，
-    # F12 网络面板可直接读到：训练开局即可看到「未来还有 7/10 笔、每笔的
-    # 端点价格、中枢将延伸到第 106/152 根、40/62 个未来分型」。逐步揭示
-    # 训练失去意义。实测（000333 日线，160 根）：
-    #   reveal_limit=30: 笔 9/10、中枢 2/2、分型 50/62 泄露
-    #   reveal_limit=50: 笔 7/10、中枢 2/2、分型 40/62 泄露
-    #   reveal_limit=80: 笔 6/10、中枢 2/2、分型 31/62 泄露
-    # 截断口径：保留 end/bar_index <= reveal_limit 的条目；macd/boll 是
-    # 对齐 bars 的序列，直接切到前 N+1 个点。复盘模式（reveal_limit=None）
-    # 不受影响，仍返回全量。
+    # ── V731 防作弊闸门（第 37 轮扩展 / 第 39 轮补全）：训练模式必须
+    # **服务端截断**全部描述「reveal_limit 之后」的结构数据。
+    #
+    # 第 37 轮只截了 bis/xds/zss/fractals/valid_fractals/macd/boll，
+    # 漏掉 **mmds / bcs / zsds / qsds / levels**（levels 里还整份重复了
+    # 一套 bis/xds/zss/mmds/bcs/zsds/qsds）。第 39 轮实测（000333 日线
+    # 160 根，reveal_limit=0，即训练开局）泄露量：
+    #   mmds 3/3（含 type/date/price/confidence/grade —— 就是标准答案）
+    #   bcs 1/1、zsds 2/2、qsds 2/2
+    #   levels.bi.bis 10/10、levels.bi.mmds 3/3、levels.xd.bis 2/2 …
+    # 也就是说：开局一次响应即可读到全部 3 个买卖点的类型/日期/价格/
+    # 置信度 —— 「逐步揭示训练」名存实亡（前端 revealIndex 只是**显示层**
+    # 过滤，F12 网络面板直接可读）。
+    #
+    # 截断口径（与第 37 轮已截数组一致，keep = N+1，索引不漂移）：
+    #   * 线段类（bis/xds/zsds/qsds）：max(end_index, bar_index) < keep
+    #   * 中枢（zss）：start_index < keep（中枢是区间，起点越界即未来）
+    #   * 买卖点（mmds）/ 背驰（bcs）：锚点下标 < keep
+    #   * macd/boll 这类与 bars 对齐的序列：切前 keep 个
+    # 复盘模式（reveal_limit=None）不受影响，仍返回全量。
     if reveal_limit is not None:
         keep = reveal_limit + 1  # 含第 N 根
 
-        def _end_le(c: dict[str, Any]) -> bool:
-            return max(c.get("end_index", 0), c.get("bar_index", 0)) < keep
+        def _idx(c: dict[str, Any], key: str) -> int:
+            """取序列化 dict 里的 bar 下标；缺失 / 非数值按 0 计。
 
-        bis_t = [b for b in d.get("bis", []) if _end_le(b)]
-        xds_t = [b for b in d.get("xds", []) if _end_le(b)]
-        zss_t = [z for z in d.get("zss", []) if z.get("start_index", 0) < keep]
-        fractals_t = [f for f in d.get("fractals", []) if f.get("bar_index", 0) < keep]
-        valid_fractals_t = [
-            f for f in d.get("valid_fractals", []) if f.get("bar_index", 0) < keep
-        ]
+            V733 CI 收口：旧写法 ``max(c.get(key, 0), ...)`` 的两个操作数都是
+            Any（``dict[str, Any].get`` 的返回），strict 模式下 max 的返回值无法
+            判定为 int。把类型显式化的同时，也堵掉了 JSON 里出现
+            ``"end_index": null`` 时 max() 拿 None 与 int 比较会抛 TypeError
+            （进而 500）的隐患 —— null 按缺失处理，落到 0。
+            """
+            v = c.get(key)
+            if isinstance(v, bool) or not isinstance(v, int | float):
+                return 0
+            try:
+                return int(v)
+            except (ValueError, OverflowError):
+                return 0  # NaN / Inf 视同缺失
+
+        def _end_le(c: dict[str, Any]) -> bool:
+            return max(_idx(c, "end_index"), _idx(c, "bar_index")) < keep
+
+        # V731 第 39 轮：结构数组的截断口径集中在这三个谓词里，新增数组
+        # （或 to_dict 新增字段）只需挂到下面的 _CUT_RULES，避免再出现
+        # 「清单里漏一个就漏一路未来」。
+        def _anchor_le(c: dict[str, Any]) -> bool:
+            """买卖点/背驰：只看锚点下标（bar_index / anchor_bar_index）。"""
+            return max(_idx(c, "bar_index"), _idx(c, "anchor_bar_index")) < keep
+
+        def _zs_start_le(c: dict[str, Any]) -> bool:
+            return _idx(c, "start_index") < keep
+
+        def _cut(items: Any, pred: Any) -> list[Any]:
+            return [x for x in (items or []) if pred(x)]
+
+        bis_t = _cut(d.get("bis"), _end_le)
+        xds_t = _cut(d.get("xds"), _end_le)
+        zss_t = _cut(d.get("zss"), _zs_start_le)
+        fractals_t = _cut(d.get("fractals"), _end_le)
+        valid_fractals_t = _cut(d.get("valid_fractals"), _end_le)
+        # 买卖点 = 训练答案本体（type/date/anchor_val/confidence/grade）
+        mmds_t = _cut(d.get("mmds"), _anchor_le)
+        bcs_t = _cut(d.get("bcs"), _anchor_le)
+        zsds_t = _cut(d.get("zsds"), _end_le)
+        qsds_t = _cut(d.get("qsds"), _end_le)
+
+        # levels：笔/线段（含递归）级别里整套重复了一遍上述结构，同样截断。
+        # 只截 *_count 之外的数组键 —— count 是标量，且前端训练页不消费。
+        _LEVEL_ARRAYS = {
+            "bis": _end_le,
+            "xds": _end_le,
+            "zss": _zs_start_le,
+            "mmds": _anchor_le,
+            "bcs": _anchor_le,
+            "zsds": _end_le,
+            "qsds": _end_le,
+        }
+
+        def _cut_level(lv: Any) -> Any:
+            if not isinstance(lv, dict):
+                return lv
+            out = dict(lv)
+            for k, pred in _LEVEL_ARRAYS.items():
+                if k in out:
+                    out[k] = _cut(out.get(k), pred)
+            # *_count 是「全量」计数（如 bi_count=10、mmd_count=3），与
+            # 截断后的数组长度不一致会让前端/用户直接读出「未来还有多少
+            # 结构」，同样属于泄题 —— 按截断后的数组重算，保持自洽。
+            if isinstance(out.get("bi_count"), int):
+                out["bi_count"] = len(out.get("bis") or [])
+            if isinstance(out.get("mmd_count"), int):
+                out["mmd_count"] = len(out.get("mmds") or [])
+            return out
+
+        levels_t = d.get("levels")
+        if isinstance(levels_t, dict):
+            levels_t = {name: _cut_level(lv) for name, lv in levels_t.items()}
         macd_t = d.get("macd")
         if isinstance(macd_t, dict) and macd_t.get("hist") is not None:
             macd_t = {
@@ -397,6 +469,11 @@ def build_train_session_payload(
         zss_t = d.get("zss", [])
         fractals_t = d.get("fractals", [])
         valid_fractals_t = d.get("valid_fractals", [])
+        mmds_t = d.get("mmds", [])
+        bcs_t = d.get("bcs", [])
+        zsds_t = d.get("zsds", [])
+        qsds_t = d.get("qsds", [])
+        levels_t = d.get("levels")
         macd_t = d.get("macd")
         boll_t = d.get("boll")
 
@@ -411,7 +488,7 @@ def build_train_session_payload(
                 "bis": bis_t,
                 "xds": xds_t,
                 "zss": zss_t,
-                "mmds": d.get("mmds", []),
+                "mmds": mmds_t,
                 "fractals": fractals_t,
                 # V-HOTFIX: valid_fractals 在上面 d["valid_fractals"] 已算好，
                 # 但这里手工列字段时漏了它 —— 前端 train 页拿到的恒为空，
@@ -419,7 +496,7 @@ def build_train_session_payload(
                 # 教训与 stock_pick._run_timing_one 的同类漏传一致：算过的
                 # 字段必须在 return 处再核对一遍，别只靠手写清单。
                 "valid_fractals": valid_fractals_t,
-                "bcs": d.get("bcs", []),
+                "bcs": bcs_t,
                 "boll": boll_t,
                 # macd 与 valid_fractals 同批漏传：to_dict 明确给出完整序列
                 # 供前端副图展示，这里手工清单却漏了 —— train 页 MACD 副图
@@ -428,9 +505,9 @@ def build_train_session_payload(
                 # levels（笔/线段递归级别）与 zsds/qsds 同样来自 to_dict，
                 # 手工清单漏了 levels 会让 train 页线段级别切换退化为空图
                 # （data.levels.xd 恒 undefined，笔/分型/买卖点清空后无从恢复）。
-                "levels": d.get("levels"),
-                "zsds": d.get("zsds", []),
-                "qsds": d.get("qsds", []),
+                "levels": levels_t,
+                "zsds": zsds_t,
+                "qsds": qsds_t,
                 "candidates": candidates,
                 "mmd_outcomes": mmd_outcomes,
             }
