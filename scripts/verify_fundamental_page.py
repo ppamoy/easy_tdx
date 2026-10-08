@@ -23,7 +23,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import api_base, chromium_path, import_playwright, launch_pw, ui_base  # noqa: E402
+from _pw import api_base, import_playwright, launch_pw, ui_base  # noqa: E402
 
 UI = ui_base()
 API = api_base()

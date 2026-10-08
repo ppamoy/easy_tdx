@@ -10,7 +10,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import chromium_path, import_playwright, launch_pw, ui_base
+from _pw import import_playwright, launch_pw, ui_base
 
 JS = """() => {
   const c=window.__CHANLUN_CHART__;

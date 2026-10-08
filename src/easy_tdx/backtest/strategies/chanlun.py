@@ -45,6 +45,12 @@ class ChanlunStrategy(ParametrizedStrategy):
       即把更高级别线段当作「笔」识别出的买卖点），级别不存在时无信号。
     """
 
+    # ⚠️ 类级默认值：`_close_position()` 里会读 `_entry_tag`，而部分调用方
+    # （如单测）不走经 `init()` 的完整构造路径就直接调 `next()`。
+    # 只写在 `init()` 里会在那些路径上抛 AttributeError（我引入过这个 bug，
+    # 被 tests/unit/test_chanlun_strategy.py::TestV102Advice 当场抓住）。
+    _entry_tag: str = ""
+
     params = [
         Param("bi_type", str, default="new", choices=("new", "old", "simple"), label="笔类型"),
         Param("zs_min_lines", int, default=3, min_value=3, max_value=5, label="中枢最少笔数"),
@@ -254,7 +260,7 @@ class ChanlunStrategy(ParametrizedStrategy):
         # 状态
         self._signal_ptr = 0
         self._entry_price: float = 0.0
-        self._entry_tag: str = ""  # 开仓信号的归因标签（供止损/止盈平仓归因）
+        self._entry_tag = ""  # 开仓信号的归因标签（供止损/止盈平仓归因）
         self._position_count: int = 0
         self._last_signal_conf: float = 0.0
         self._last_signal_type: str = ""

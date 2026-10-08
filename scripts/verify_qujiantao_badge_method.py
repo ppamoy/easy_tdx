@@ -21,7 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _pw import chromium_path, import_playwright, launch_pw  # noqa: E402
+from _pw import import_playwright, launch_pw  # noqa: E402
 
 UI = os.environ.get("EASY_TDX_UI", "http://127.0.0.1:3012")
 OUT = "/tmp/qt_badge_method.png"
