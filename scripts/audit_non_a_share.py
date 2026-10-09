@@ -66,15 +66,47 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from easy_tdx.chanlun.analyser import ChanlunAnalyser  # noqa: E402
 from easy_tdx.chanlun.config import ChanlunConfig  # noqa: E402
 
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0 Safari/537.36")
+UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+)
 CACHE = Path(__file__).resolve().parents[1] / "audit_data_nona"
 
 # 美股蓝筹 + 港股主要标的（分散行业，避免全选科技股）
-US = ["AAPL", "MSFT", "KO", "JNJ", "XOM", "JPM", "PG", "WMT", "MCD", "BA",
-      "CAT", "MMM", "CVX", "PFE", "T", "VZ", "IBM", "GE", "HD", "DIS"]
-HK = ["0700.HK", "1299.HK", "0005.HK", "0939.HK", "1398.HK", "0388.HK",
-      "2318.HK", "0941.HK", "0001.HK", "0011.HK"]
+US = [
+    "AAPL",
+    "MSFT",
+    "KO",
+    "JNJ",
+    "XOM",
+    "JPM",
+    "PG",
+    "WMT",
+    "MCD",
+    "BA",
+    "CAT",
+    "MMM",
+    "CVX",
+    "PFE",
+    "T",
+    "VZ",
+    "IBM",
+    "GE",
+    "HD",
+    "DIS",
+]
+HK = [
+    "0700.HK",
+    "1299.HK",
+    "0005.HK",
+    "0939.HK",
+    "1398.HK",
+    "0388.HK",
+    "2318.HK",
+    "0941.HK",
+    "0001.HK",
+    "0011.HK",
+]
 
 HORIZON = 20
 PIVOT = 5
@@ -118,7 +150,7 @@ def _is_buy(st: str) -> bool:
 def pivot_indices(c: np.ndarray, k: int, low: bool, lo: int, hi: int) -> np.ndarray:
     out: list[int] = []
     for i in range(max(lo, k), min(hi, len(c) - k)):
-        seg = c[i - k: i + k + 1]
+        seg = c[i - k : i + k + 1]
         if low and c[i] == seg.min():
             out.append(i)
         elif (not low) and c[i] == seg.max():
@@ -136,8 +168,7 @@ def fetch(symbol: str, years: int = 5, retries: int = 3) -> list[dict]:
         except Exception:
             pass
     rng = "10y" if years >= 10 else ("5y" if years >= 5 else "2y")
-    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-           f"?range={rng}&interval=1d")
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range={rng}&interval=1d"
     for a in range(retries):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA})
@@ -158,9 +189,16 @@ def fetch(symbol: str, years: int = 5, retries: int = 3) -> list[dict]:
                 v = (q.get("volume") or [0] * len(ts))[i]
                 if None in (c, h, lo, o):
                     continue  # 停牌/缺失
-                rows.append({"datetime": pd.to_datetime(t, unit="s").strftime("%Y-%m-%dT%H:%M:%S"),
-                             "open": float(o), "high": float(h), "low": float(lo),
-                             "close": float(c), "vol": float(v or 0)})
+                rows.append(
+                    {
+                        "datetime": pd.to_datetime(t, unit="s").strftime("%Y-%m-%dT%H:%M:%S"),
+                        "open": float(o),
+                        "high": float(h),
+                        "low": float(lo),
+                        "close": float(c),
+                        "vol": float(v or 0),
+                    }
+                )
             if rows:
                 cf.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
             return rows
@@ -185,8 +223,9 @@ def run(symbols: list[str], label: str, horizon: int) -> dict[str, list[float]]:
         c = df["close"].to_numpy(dtype=float)
         n = len(c)
         try:
-            res = ChanlunAnalyser(code=sym, frequency="daily",
-                                  config=ChanlunConfig()).process_klines(df)
+            res = ChanlunAnalyser(
+                code=sym, frequency="daily", config=ChanlunConfig()
+            ).process_klines(df)
         except Exception:
             print(f"   ⚠️ {sym} 分析失败，跳过")
             continue
@@ -207,8 +246,7 @@ def run(symbols: list[str], label: str, horizon: int) -> dict[str, list[float]]:
             r = c[i + horizon] / c[i] - 1.0
             if not is_buy:
                 r = -r
-            cand = pivot_indices(c, PIVOT, low=is_buy,
-                                 lo=int(edges[w]), hi=int(edges[w + 1]))
+            cand = pivot_indices(c, PIVOT, low=is_buy, lo=int(edges[w]), hi=int(edges[w + 1]))
             cand = cand[(cand + horizon) < n]
             if len(cand) < 5:
                 continue
@@ -225,9 +263,13 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="每市场标的数量上限（0=全部）")
     ap.add_argument("--horizon", type=int, default=HORIZON)
-    ap.add_argument("--scenarios", nargs="+", default=["零成本(对照)", "零售实际", "保守加倍"],
-                    choices=list(COST_MODELS),
-                    help="要跑的成本档（可多选）")
+    ap.add_argument(
+        "--scenarios",
+        nargs="+",
+        default=["零成本(对照)", "零售实际", "保守加倍"],
+        choices=list(COST_MODELS),
+        help="要跑的成本档（可多选）",
+    )
     a = ap.parse_args()
     if a.scenarios is None or not a.scenarios:
         a.scenarios = ["零售实际"]
@@ -235,8 +277,10 @@ def main() -> int:
     us = US[: a.limit] if a.limit else US
     hk = HK[: a.limit] if a.limit else HK
 
-    print(f"\n非 A 股样本审计：美股 {len(us)} 只 + 港股 {len(hk)} 只，"
-          f"前瞻 {a.horizon} 根，同窗局部极值基准")
+    print(
+        f"\n非 A 股样本审计：美股 {len(us)} 只 + 港股 {len(hk)} 只，"
+        f"前瞻 {a.horizon} 根，同窗局部极值基准"
+    )
     print("口径与 A 股完全一致（同一 ChanlunAnalyser/ChanlunConfig，未调参）")
     print("=" * 96)
 
@@ -251,8 +295,10 @@ def main() -> int:
         rows = json.loads(_aapl.read_text(encoding="utf-8"))
         last = float(rows[-1]["close"])
         if not (50.0 < last < 2000.0):
-            print(f"\n⚠️ 可疑：AAPL 末价 {last:.2f} 不在合理区间(50~2000)，"
-                  f"取到的可能不是美股数据 —— 结果不可信")
+            print(
+                f"\n⚠️ 可疑：AAPL 末价 {last:.2f} 不在合理区间(50~2000)，"
+                f"取到的可能不是美股数据 —— 结果不可信"
+            )
         else:
             print(f"\n✅ 数据源抽检：AAPL 末价 {last:.2f}、{len(rows)} 根，符合美股")
     else:
@@ -275,7 +321,7 @@ def main() -> int:
 
     for scen in scen_names:
         cm = COST_MODELS[scen]
-        print(f"\n{'='*96}\n【{scen}】")
+        print(f"\n{'=' * 96}\n【{scen}】")
 
         if isinstance(cm, dict):
             print(f"\n{'市场':<8}{'n':>6}" + "".join(f"{t:>9}" for t in types))
@@ -294,9 +340,11 @@ def main() -> int:
                         bc, sc, _ = cm[label]
                         # 买入信号只付买入费；卖出信号付买入+卖出两笔
                         net = g - (bc if t in BUY else bc + sc)
-                        line += f"{net*100:>9.2f}"
+                        line += f"{net * 100:>9.2f}"
                 print(line)
-            print(f"  （成本：{ {k: (round(v[0]*100,4), round(v[1]*100,4)) for k, v in cm.items()} } % 单边）")
+            print(
+                f"  （成本：{ {k: (round(v[0] * 100, 4), round(v[1] * 100, 4)) for k, v in cm.items()} } % 单边）"
+            )
         else:
             print("  零成本 = 毛超额，仅作方向参考")
 
@@ -314,7 +362,7 @@ def main() -> int:
                 else:
                     net = g
                 mark = "✅" if net > 0 else "❌"
-                out.append(f"{label} {net*100:+.2f}%{mark} (n={_n(d,t)})")
+                out.append(f"{label} {net * 100:+.2f}%{mark} (n={_n(d, t)})")
             print(f"    {t:<6} " + "   ".join(out))
 
     # ── 牙齿：成本模型本身也要能抓住"忘扣成本"的坏状态 ──
@@ -323,23 +371,37 @@ def main() -> int:
     print("\n" + "=" * 96)
     print("【牙齿：成本模型不是空操作】")
     diffs = 0
+    checked = 0
     for t in ("1buy", "1sell"):
         for label, d in markets:
             g = _mean(d, t)
             if g is None:
                 continue
+            checked += 1
             bc, sc, _ = COST_MODELS["零售实际"][label]
             net = g - (bc if t in BUY else bc + sc)
             if abs(net - g) > 1e-12:
                 diffs += 1
+    # ⚠️ 必须区分「成本真的没生效」与「样本不足根本没测到」：
+    #    --limit 3 时 1buy/1sell 全是"样本不足" ⇒ checked==0 ⇒ 原来会
+    #    打印"牙齿不成立"（成本模型没生效）而**误导人去查成本代码**。
+    #    实测 --limit 8 时 checked=4、diffs=4 ⇒ 成本模型是好的。
+    if checked == 0:
+        print(
+            "⚠️ 牙齿未执行：1buy/1sell 样本不足（--limit 太小？）"
+            " ⇒ 本轮无法确认成本模型生效，净结论置信度降低"
+        )
+        return 0
     if diffs == 0:
-        print("❌ 牙齿不成立：扣成本前后结果完全相同 ⇒ 成本模型没生效，净结论不可信")
+        print(f"❌ 牙齿不成立：{checked} 个组合扣成本前后完全相同 ⇒ 成本模型没生效，净结论不可信")
         return 1
-    print(f"✅ 扣成本后 {diffs} 个（市场×信号）组合的净超额确实低于毛超额 ⇒ 成本模型生效")
+    print(f"✅ 扣成本后 {diffs}/{checked} 个（市场×信号）组合的净超额确实低于毛超额 ⇒ 成本模型生效")
 
     print("\n⚠️ 局限：")
-    print("   - 成本为**比例模型**，未建模最低佣金（美股$3/港股$3）——"
-          "小额账户上最低佣金占比更高，真实净超额会**低于**此处结果；")
+    print(
+        "   - 成本为**比例模型**，未建模最低佣金（美股$3/港股$3）——"
+        "小额账户上最低佣金占比更高，真实净超额会**低于**此处结果；"
+    )
     print("   - 未建模冲击成本/滑点、汇率、股息税、港股印花税对**基金/ETF**的差异；")
     print("   - 港股/美股无涨跌停、T+0，制度差异本身就可能改变结论，成本模型覆盖不到；")
     print("   - 样本量远小于 A 股（286 只），单市场结论置信度较低。")
