@@ -221,14 +221,36 @@ def main() -> int:
 
         inp = page.locator('input[placeholder="如 000001"]').first
         inp.fill(a.code)
-        inp.press("Enter")  # 回车即触发分析
+        # ⚠️⚠️ 实测证伪："回车即触发分析"是**错的**（原注释写错了）。
+        #    该输入框没有 keyup.enter 处理，且 ChanlunView 的 watch 只监听
+        #    category/analysisLevel/recursionDepth —— **不监听 code**。
+        #    ⇒ fill + Enter 不会触发分析，必须点「开始分析」按钮。
+        #    证据：换 600519 时原实现拿到 0 个标记（后端 14 个）却仍打印
+        #    "页面确实在展示 600519" —— 输入框的值对了，图上的数据没换。
+        #    这类 bug 静默误判，最危险。
+        page.locator("button.analyze-btn").first.click()
         page.wait_for_timeout(3000)
-        # ⚠️ 牙齿：必须确认页面真的在用我们指定的代码（应用会默认加载 000001，
-        #    只 fill 不校验 ⇒ 拿到的 ground truth 与图上标的不是同一只票，
-        #    数量判据会假失败/假通过）
+        # 牙齿：确认页面真的在用我们指定的代码
         actual = inp.input_value()
         if actual != a.code:
             print(f"❌ 输入框实际值 {actual!r} != 指定 {a.code!r} ⇒ 比对的是两只票")
+            return 2
+        # ⚠️ 再加一道牙：光看输入框不够（值对了≠数据换了），
+        #    必须等到图上真的出现买卖点标记，且数量与后端一致。
+        for _i in range(15):
+            _n = page.evaluate(
+                "() => { const inst = window.__CHANLUN_CHART__; if (!inst) return -1;"
+                " const o = inst.getOption(); if (!o || !o.series) return -1;"
+                " let n = 0; for (const s of o.series) {"
+                "   const nm = String(s.name || '');"
+                "   if (nm === '买点' || nm === '卖点') n += (s.data || []).length; }"
+                " return n; }"
+            )
+            if _n == truth["mmd_count"]:
+                break
+            page.wait_for_timeout(2000)
+        else:
+            print(f"❌ 等待超时：图上买卖点数 {_n} != 后端 {truth['mmd_count']}")
             return 2
         print(f"✅ 页面确实在展示 {actual}（与 ground truth 同一只票）")
 
