@@ -56,7 +56,6 @@ sys.path.insert(0, str(ROOT_HINT / "scripts"))
 
 from _concurrency import resolve_workers  # noqa: E402
 
-from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
 from easy_tdx.backtest.strategies.builtin import (  # noqa: E402
     BbiStrategy,
     BollBreakoutStrategy,
@@ -95,8 +94,14 @@ BEAR_CUT = -0.10  # 买持 <= -10% 视为"下跌票"
 STRATS: dict[str, type] = {CHANLUN[0]: CHANLUN[1], **{lab: c for lab, c in CONTROL}}
 
 
-def _run_one(sym: str, path_str: str, label: str) -> tuple[str, str, float | None]:
-    """顶层 worker：跑一只票的一个策略。返回 (symbol, label, ret|None)。
+def _run_one(sym: str, path_str: str, label: str) -> tuple[str, str, float | None, float | None]:
+    """顶层 worker：跑一只票的一个策略。
+
+    返回 (symbol, label, total_return|None, max_drawdown|None)。
+
+    ⚠️ 为什么**连 max_drawdown 一起返回**：原先脚本在末尾又串行跑一遍
+    全部标的只为取回撤，等于把同样的回测做了两遍（286 只 ⇒ 多花约 20 分钟）。
+    回撤本来就在同一份 `r.performance` 里，一次跑完顺手带回即可。
 
     必须是顶层函数 —— ProcessPoolExecutor 要求 worker 可 pickle。
     ret 为 None 表示该策略在这只票上失败（调用方按 symbol 丢弃）。
@@ -112,11 +117,16 @@ def _run_one(sym: str, path_str: str, label: str) -> tuple[str, str, float | Non
         df = pd.DataFrame(json.loads(Path(path_str).read_text(encoding="utf-8")))
         df["datetime"] = pd.to_datetime(df["datetime"])
         if len(df) <= 200:
-            return sym, label, None
+            return sym, label, None, None
         r = BacktestEngine(cls(), cash=100000.0).run(df)
-        return sym, label, float(r.performance["total_return"])
+        return (
+            sym,
+            label,
+            float(r.performance["total_return"]),
+            float(r.performance["max_drawdown"]),
+        )
     except Exception:
-        return sym, label, None
+        return sym, label, None, None
 
 
 def sign_test(pairs: np.ndarray) -> tuple[float, int, int]:
@@ -143,8 +153,11 @@ def run_all(items: list[tuple[str, pd.DataFrame]], workers: int = 0) -> dict[str
         缠论[2]=+75.16% 来自 sh600016，买持[2]=+48.84% 来自 sh600011  ← 错配
     改成按 symbol 对齐后，缺失的标的会被**安全丢弃**（两侧都丢），
     宁可少样本也不能错配。
+
+    返回 (收益表, 最大回撤表) —— 两者同批跑出，避免末尾再串行重跑一遍。
     """
     out: dict[str, dict[str, float]] = {label: {} for label, _ in [CHANLUN] + CONTROL}
+    dds: dict[str, dict[str, float]] = {label: {} for label, _ in [CHANLUN] + CONTROL}
     # worker 需 ⟨symbol, 文件路径, label⟩；文件路径比 DataFrame 轻，跨进程传得快
     tmpdir = Path(tempfile.mkdtemp(prefix="regime_"))
     paths: dict[str, str] = {}
@@ -158,16 +171,18 @@ def run_all(items: list[tuple[str, pd.DataFrame]], workers: int = 0) -> dict[str
     with ProcessPoolExecutor(max_workers=w) as ex:
         futs = {ex.submit(_run_one, sym, pa, la): (sym, la) for sym, pa, la in jobs}
         for fut in as_completed(futs):
-            sym, label, ret = fut.result()
+            sym, label, ret, dd = fut.result()
             if ret is None:
                 nfail += 1
                 print(f"  ⚠️ {label} 在 {sym} 上失败，已跳过该标的", flush=True)
                 continue
             out[label][sym] = ret
+            if dd is not None:
+                dds[label][sym] = dd
     if nfail:
         print(f"  （共 {nfail} 个「策略×标的」组合失败，已按 symbol 安全丢弃）", flush=True)
     shutil.rmtree(tmpdir, ignore_errors=True)
-    return out
+    return out, dds
 
 
 def group_report(name: str, strat: np.ndarray, bh: np.ndarray) -> None:
@@ -222,7 +237,7 @@ def main() -> int:
     print(f"中位数口径 + 分行情的策略比较 —— {len(items)} 只 A 股日线，默认参数，同成本模型")
     print("=" * 78)
 
-    res = run_all(items, workers=a.workers)
+    res, dd_res = run_all(items, workers=a.workers)
     bh_map = {sym: float(d["close"].iloc[-1] / d["close"].iloc[0] - 1) for sym, d in items}
     df_map = dict(items)
 
@@ -299,19 +314,15 @@ def main() -> int:
     # ── 回撤对比（全样本，最稳健的一条）──
     print("\n" + "=" * 78)
     print("最大回撤：缠论策略 vs 同票买入持有")
+    # ✅ 回撤与收益同批产出（见 _run_one 说明），不再串行重跑一遍
+    dd_strat = dd_res[CHANLUN[0]]
     dds = []
     for sym, df in items:
-        if sym not in res[CHANLUN[0]]:
+        if sym not in dd_strat:
             continue  # 该标的策略没跑出来 ⇒ 不留半条数据
-        try:
-            r = BacktestEngine(CHANLUN[1](), cash=100000.0).run(df)
-            px = df["close"].to_numpy(float)
-            peak = np.maximum.accumulate(px)
-            dds.append(
-                (float(r.performance["max_drawdown"]), float((peak - px).max() / peak.max()))
-            )
-        except Exception:
-            continue
+        px = df["close"].to_numpy(float)
+        peak = np.maximum.accumulate(px)
+        dds.append((float(dd_strat[sym]), float((peak - px).max() / peak.max())))
     if dds:
         da = np.array(dds)
         print(

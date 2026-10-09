@@ -158,7 +158,7 @@ class TestNoPositionalPairing:
     def test_drawdown_skips_unrun_symbols(self) -> None:
         """回撤对比同样要跳过策略没跑出来的标的。"""
         s = _src()
-        assert "if sym not in res[CHANLUN[0]]:" in s
+        assert "if sym not in dd_strat:" in s
 
     def test_failure_is_reported_not_silent(self) -> None:
         s = _src()
@@ -188,15 +188,14 @@ class TestParallelization:
         assert after.startswith("def _run_one("), "_run_one 必须是顶层（无缩进）"
 
     def test_worker_returns_symbol_labeled_result(self) -> None:
-        """worker 返回值必须带 symbol ⇒ 结果按 symbol 归并，不依赖提交顺序。"""
+        """worker 返回值必须带 symbol ⇒ 结果按 symbol 归并，不依赖完成顺序。"""
         s = _src()
-        # worker 的每条出口都必须是 return sym, label, <ret|None>
-        # （不为 None 时即具体收益），任一只 adopting 顺序归并都会错配
-        assert "return sym, label, None" in s and "return sym, label, float(" in s, (
-            "worker 每条出口都必须返回 (symbol, label, ret)，"
-            "否则并发下按提交/完成顺序归并会错配不同标的"
+        # 失败出口：None；成功出口：带回 total_return 与 max_drawdown
+        assert "return sym, label, None, None" in s, (
+            "worker 的失败出口必须返回 (symbol, label, None, None)"
         )
-        assert "sym, label, ret = fut.result()" in s, (
+        assert 'float(r.performance["total_return"])' in s, "worker 的成功出口必须带回 total_return"
+        assert "sym, label, ret, dd = fut.result()" in s, (
             "必须解包 worker 的 symbol 再归位，不能依赖 as_completed 的完成顺序"
         )
 
@@ -211,4 +210,36 @@ class TestParallelization:
         assert "STRATS[label]" in s
         assert "STRATS: dict[str, type] = {}" not in s, (
             "STRATS 必须包含 CHANLUN + CONTROL，空 dict 会让 worker 全 KeyError"
+        )
+
+
+class TestNoDuplicateBacktestPass:
+    """回撤必须复用 run_all 的产出，不许末尾再串行重跑一遍。
+
+    原实现在末尾 `for df in dfs: BacktestEngine(...).run(df)` 只为了取
+    max_drawdown —— 等于把同样的回测做了两遍（286 只约多花 20 分钟）。
+    而 max_drawdown 本来就在同一份 r.performance 里，一次跑完带回即可。
+    """
+
+    def test_worker_returns_drawdown(self) -> None:
+        s = _src()
+        assert "max_drawdown" in s, "worker 必须顺带带回 max_drawdown"
+
+    def test_run_all_returns_two_maps(self) -> None:
+        s = _src()
+        assert "return out, dds" in s, "run_all 必须同时返回 (收益表, 回撤表)"
+
+    def test_drawdown_section_reuses_results(self) -> None:
+        """末尾不得再有 `BacktestEngine(...).run(df)` 的重复回测。"""
+        s = _src()
+        # 只有 worker 里允许出现 .run(df)；main 里不得再有
+        body = s[s.index("def main(") :]
+        assert "BacktestEngine(" not in body, (
+            "main() 里不许再跑 BacktestEngine —— 回撤应复用 run_all 的结果"
+        )
+
+    def test_drawdown_uses_dd_res(self) -> None:
+        s = _src()
+        assert "dd_res = run_all(" in s or "res, dd_res = run_all(" in s, (
+            "main 必须接收 run_all 返回的第二张表（回撤）"
         )
