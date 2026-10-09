@@ -124,3 +124,42 @@ if __name__ == "__main__":
     import pytest
 
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+class TestNoPositionalPairing:
+    """⚠️ 本轮实测抓到的真 bug：配对必须按 symbol，**不能按位置**。
+
+    原 `run_all()` 用 `vals.append()` + 失败时 `continue`，某个策略在某只票上
+    抛异常后该列表就比别人短；而 main() 用 `bh_all[:len(ch)]` **按位置截断**
+    ⇒ 从第 k 只起，"策略收益"与"买持收益"来自**不同股票**，配对超额全错。
+
+    实测证据（注入"缠论在第 3 只票失败"）：
+        缠论[2]=+75.16% 来自 sh600016，买持[2]=+48.84% 来自 sh600011
+    """
+
+    def test_run_all_returns_symbol_keyed_mapping(self) -> None:
+        s = _src()
+        assert "dict[str, dict[str, float]]" in s, "run_all 必须返回 {策略: {symbol: ret}}"
+        assert "vals[sym] = " in s, "必须按 symbol 存，不能 append 到 list"
+
+    def test_no_bh_positional_truncation(self) -> None:
+        """`bh_all[: len(ch)]` 这种按位置截断是 bug 本体，不许再出现。"""
+        s = _src()
+        assert "bh_all[: len(ch)]" not in s, (
+            "禁止按位置截断买持 —— 策略跑出部分时会把不同股票配对在一起"
+        )
+        assert "bh_all[:k]" not in s
+
+    def test_pair_by_symbol_intersection(self) -> None:
+        s = _src()
+        assert "def pair(" in s, "必须有按 symbol 求交集的配对函数"
+        assert "for s in bh_map if s in sm and s in df_map" in s, "配对必须取双侧的 symbol 交集"
+
+    def test_drawdown_skips_unrun_symbols(self) -> None:
+        """回撤对比同样要跳过策略没跑出来的标的。"""
+        s = _src()
+        assert "if sym not in res[CHANLUN[0]]:" in s
+
+    def test_failure_is_reported_not_silent(self) -> None:
+        s = _src()
+        assert "上失败，已跳过该标的" in s, "策略在某标的失败必须打印，不能静默"
