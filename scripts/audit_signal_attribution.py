@@ -357,6 +357,14 @@ def main() -> int:
         action="store_true",
         help="只跑干预实验，跳过单笔归因报告（后者要再跑一遍全样本回测，很慢）",
     )
+    ap.add_argument(
+        "--enable-2s",
+        action="store_true",
+        help=(
+            "开 use_2s_signals=True 后再归因。⚠️ 必须显式开：该开关默认 False，"
+            "默认参数下 2buy_s/2sell_s 一笔都不会出现（实测不是 n 小，是 n=0）"
+        ),
+    )
     a = ap.parse_args()
     fs = files(a.limit)
     if not fs:
@@ -370,7 +378,16 @@ def main() -> int:
     # ⚠️ 单笔归因要跑一遍全样本回测；干预实验要再跑两遍（默认组 + 开关组）。
     #    本机 4 核，两者叠起来会顶到 run_bg 超时 ⇒ 支持 --only-ablation 只跑后者。
     cp = Path(a.cache)
-    X = collect(fs, workers=a.workers, cache_path=cp) if not a.only_ablation else pd.DataFrame()
+    # ⚠️ 2buy_s/2sell_s 在默认参数下根本不触发（use_2s_signals 默认 False，n=0 而非 n 小）。
+    #    要归因它们就必须显式开这个开关 —— 且开了之后 cnt=60 门槛要相应放宽。
+    main_kw = {"use_2s_signals": True} if a.enable_2s else {}
+    if main_kw:
+        print(f"⚠️ 已开 {main_kw} —— 注意这与「默认参数」口径不同，不可直接对比默认组")
+    X = (
+        collect(fs, workers=a.workers, cache_path=cp, **main_kw)
+        if not a.only_ablation
+        else pd.DataFrame()
+    )
     if not a.only_ablation:
         if X.empty:
             print("❌ 没有任何已平仓交易 —— 归因无法进行")
