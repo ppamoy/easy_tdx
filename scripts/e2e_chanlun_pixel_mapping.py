@@ -143,15 +143,31 @@ PIXEL_EYE = r"""
     Math.abs(a[2] - b[2]) <= tol;
 
   const res = [];
+  let offView = 0;
   for (const s of (inst.getOption().series || [])) {
     if (s.name !== '买点' && s.name !== '卖点') continue;
     for (const d of (s.data || [])) {
       const [xi, yv] = d.value;
       const px = inst.convertToPixel({ gridIndex: 0 }, [xi, yv]);
       if (!px) continue;
+      // ⚠️ 视口外的标记**没有像素可查**，必须跳过而不是算失败：
+      //    dataZoom 未覆盖全段时（实测 600519 有 5/14 在视口外），
+      //    把它们计入分母会让命中率假性暴跌（43% ⇒ 误判"真没画"）。
+      //    坐标/有限值判据已覆盖这些点，像素复核只看视口内的。
+      const _sz0 = Math.max(10, Number(d.symbolSize) || 14);
+      const _r0 = Math.max(7, Math.round(_sz0 * 0.9));
+      const inView = px[0] >= _r0 && px[1] >= _r0 &&
+                     px[0] <= cv.clientWidth - _r0 && px[1] <= cv.clientHeight - _r0;
+      if (!inView) { offView++; continue; }
       const want = parse(d.itemStyle && d.itemStyle.color);
-      const x0 = Math.round((px[0] - 7) * dpr), y0 = Math.round((px[1] - 7) * dpr);
-      const w = Math.round(14 * dpr), h = Math.round(14 * dpr);
+      // ⚠️ 采样窗口必须**随标记尺寸自适应**：实测 3sell 的 symbolSize 只有 11，
+      //    而 1sell 是 22 —— 固定 ±7px(14×14) 的窗口在 11px 的小三角上
+      //    几乎采不到实心像素（抗锯齿 + 被 K 线遮挡），6/14 假"没画"。
+      //    按 symbolSize 取窗口后命中率恢复正常。
+      const sz = Math.max(10, Number(d.symbolSize) || 14);
+      const r = Math.max(7, Math.round(sz * 0.9));
+      const x0 = Math.round((px[0] - r) * dpr), y0 = Math.round((px[1] - r) * dpr);
+      const w = Math.round(2 * r * dpr), h = Math.round(2 * r * dpr);
       let got = null;
       try {
         const img = ctx.getImageData(x0, y0, w, h).data;
@@ -164,7 +180,7 @@ PIXEL_EYE = r"""
       res.push({ name: d.name, dimX: xi, want, got });
     }
   }
-  return { dpr, res };
+  return { dpr, res, offView };
 }
 """
 
@@ -354,8 +370,42 @@ def main() -> int:
             "() => window.__CHANLUN_CHART__.dispatchAction({type:'dataZoom', start:0, end:100})"
         )
         page.wait_for_timeout(3000)
+        # ── 牙齿：注入"标记根本不存在"的坏版本，判据必须能抓到 ──
+        # ⚠️ 为什么不用 opacity:0：实测 ECharts 对 scatter 设 opacity:0
+        #    **标记依然取到颜色像素**（17/17 照过）⇒ 该注入方式无效，
+        #    会让人误以为判据有牙。必须真的删掉 series.data。
+        if os.environ.get("INJECT_BROKEN"):
+            page.evaluate(
+                """() => {
+                  const inst = window.__CHANLUN_CHART__; const opt = inst.getOption();
+                  const series = (opt.series || []).map(s => {
+                    if (s.name !== '买点' && s.name !== '卖点') return s;
+                    // ⚠️ 注入方式必须是「把标记挪走」而不是 opacity:0 /
+                    //    symbolSize:0 —— 后两者实测 **ECharts 完全无视**
+                    //    （仍 22/22 命中）⇒ 那种注入会让人误以为判据有牙。
+                    //    挪走后：data 与 mmd_count 不变（牙齿1 仍过），
+                    //    但原坐标处已无标记 ⇒ 像素复核必须失败。
+                    const c = Object.assign({}, s);
+                    c.data = (c.data || []).map((d) => {
+                      const e = Object.assign({}, d);
+                      e.value = [d.value[0], d.value[1] * 1.5 + 500];
+                      return e;
+                    });
+                    return c;
+                  });
+                  inst.setOption({ series }, { replaceMerge: ['series'] });
+                  return true;
+                }"""
+            )
+            page.wait_for_timeout(2500)
         eye = page.evaluate(PIXEL_EYE)
         colored = [e for e in eye["res"] if isinstance(e.get("got"), list)]
+        _off = eye.get("offView", 0)
+        if _off:
+            print(
+                f"  （{_off} 个标记在 dataZoom 视口外，无像素可查 ⇒ "
+                f"不计入像素复核分母；其坐标/有限值判据已单独覆盖）"
+            )
         print(
             f"\n✅ 像素复核：{len(colored)}/{len(eye['res'])} 个标记在其坐标处"
             f"确有**该标记自己的颜色**（dpr={eye['dpr']}）"
