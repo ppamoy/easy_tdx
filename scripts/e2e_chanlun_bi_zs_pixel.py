@@ -482,6 +482,14 @@ def main() -> int:
                    中点则一定落在笔的虚线本体 / 中枢的填充最实处。
                 """
                 mids = page.evaluate(MIDPOINTS, names)
+                # ── 牙齿开关（§7：判据必须能抓到 bug）──
+                # ⚠️ 注入方式必须用 HIDE_TOGGLE（真的把 markLine/markArea 清空），
+                #    不要用 opacity:0 / symbolSize:0 —— 实测 ECharts 对这两者
+                #    **完全无视**（买卖点脚本上验证过：仍 17/17、22/22 命中），
+                #    那种注入会让人误以为判据有牙。
+                if os.environ.get("INJECT_BROKEN"):
+                    page.evaluate(HIDE_TOGGLE, names)
+                    page.wait_for_timeout(800)
                 if not mids:
                     return 0, 0
                 ORIG = page.evaluate(SAVE_SERIES, names)
