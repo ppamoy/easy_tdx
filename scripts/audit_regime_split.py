@@ -41,13 +41,20 @@ import argparse
 import json
 import sys
 import warnings
+import shutil
+import tempfile
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 warnings.filterwarnings("ignore")
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+ROOT_HINT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_HINT / "src"))
+sys.path.insert(0, str(ROOT_HINT / "scripts"))
+
+from _concurrency import resolve_workers  # noqa: E402
 
 from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
 from easy_tdx.backtest.strategies.builtin import (  # noqa: E402
@@ -84,6 +91,34 @@ BULL_CUT = 0.20  # 买持 >= +20% 视为"上涨票"
 BEAR_CUT = -0.10  # 买持 <= -10% 视为"下跌票"
 
 
+# 策略标签 -> 类，供 worker 里反查（顶层，保证可 pickle）
+STRATS: dict[str, type] = {CHANLUN[0]: CHANLUN[1], **{lab: c for lab, c in CONTROL}}
+
+
+def _run_one(sym: str, path_str: str, label: str) -> tuple[str, str, float | None]:
+    """顶层 worker：跑一只票的一个策略。返回 (symbol, label, ret|None)。
+
+    必须是顶层函数 —— ProcessPoolExecutor 要求 worker 可 pickle。
+    ret 为 None 表示该策略在这只票上失败（调用方按 symbol 丢弃）。
+    """
+    import warnings as _w
+
+    _w.filterwarnings("ignore")
+    sys.path.insert(0, str(ROOT_HINT / "src"))
+    from easy_tdx.backtest.engine import BacktestEngine
+
+    cls = STRATS[label]
+    try:
+        df = pd.DataFrame(json.loads(Path(path_str).read_text(encoding="utf-8")))
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        if len(df) <= 200:
+            return sym, label, None
+        r = BacktestEngine(cls(), cash=100000.0).run(df)
+        return sym, label, float(r.performance["total_return"])
+    except Exception:
+        return sym, label, None
+
+
 def sign_test(pairs: np.ndarray) -> tuple[float, int, int]:
     """符号检验：返回 (比例为正, 正数个数, 总数)。
 
@@ -95,7 +130,7 @@ def sign_test(pairs: np.ndarray) -> tuple[float, int, int]:
     return pos / len(pairs), pos, len(pairs)
 
 
-def run_all(items: list[tuple[str, pd.DataFrame]]) -> dict[str, dict[str, float]]:
+def run_all(items: list[tuple[str, pd.DataFrame]], workers: int = 0) -> dict[str, dict[str, float]]:
     """跑所有策略，返回 {策略名: {标的符号: 总收益率}}。
 
     ⚠️ 为什么**必须按 symbol 建 dict 而不是位置 list**（实测抓到的真 bug）：
@@ -109,18 +144,29 @@ def run_all(items: list[tuple[str, pd.DataFrame]]) -> dict[str, dict[str, float]
     改成按 symbol 对齐后，缺失的标的会被**安全丢弃**（两侧都丢），
     宁可少样本也不能错配。
     """
-    out: dict[str, dict[str, float]] = {}
-    for label, cls in [CHANLUN] + CONTROL:
-        vals: dict[str, float] = {}
-        for sym, df in items:
-            try:
-                r = BacktestEngine(cls(), cash=100000.0).run(df)
-                vals[sym] = float(r.performance["total_return"])
-            except Exception:
-                # 按 symbol 存 ⇒ 这里丢一个不会带偏其余元素的下标
+    out: dict[str, dict[str, float]] = {label: {} for label, _ in [CHANLUN] + CONTROL}
+    # worker 需 ⟨symbol, 文件路径, label⟩；文件路径比 DataFrame 轻，跨进程传得快
+    tmpdir = Path(tempfile.mkdtemp(prefix="regime_"))
+    paths: dict[str, str] = {}
+    for sym, df in items:
+        fp = tmpdir / f"{sym}.json"
+        fp.write_text(df.to_json(orient="records", date_format="iso"), encoding="utf-8")
+        paths[sym] = str(fp)
+    jobs = [(sym, path, label) for sym, path in paths.items() for label, _ in [CHANLUN] + CONTROL]
+    nfail = 0
+    w = resolve_workers(workers) if workers else resolve_workers()
+    with ProcessPoolExecutor(max_workers=w) as ex:
+        futs = {ex.submit(_run_one, sym, pa, la): (sym, la) for sym, pa, la in jobs}
+        for fut in as_completed(futs):
+            sym, label, ret = fut.result()
+            if ret is None:
+                nfail += 1
                 print(f"  ⚠️ {label} 在 {sym} 上失败，已跳过该标的", flush=True)
                 continue
-        out[label] = vals
+            out[label][sym] = ret
+    if nfail:
+        print(f"  （共 {nfail} 个「策略×标的」组合失败，已按 symbol 安全丢弃）", flush=True)
+    shutil.rmtree(tmpdir, ignore_errors=True)
     return out
 
 
@@ -146,6 +192,12 @@ def group_report(name: str, strat: np.ndarray, bh: np.ndarray) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=30)
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=0,
+        help="并行度；0 = 用 scripts/_concurrency.py 解析（默认 2）",
+    )
     a = ap.parse_args()
     fs = [p for p in sorted(DATA.glob("*.json")) if p.stem.split("_")[0] not in EXCLUDE]
     if a.limit:
@@ -170,7 +222,7 @@ def main() -> int:
     print(f"中位数口径 + 分行情的策略比较 —— {len(items)} 只 A 股日线，默认参数，同成本模型")
     print("=" * 78)
 
-    res = run_all(items)
+    res = run_all(items, workers=a.workers)
     bh_map = {sym: float(d["close"].iloc[-1] / d["close"].iloc[0] - 1) for sym, d in items}
     df_map = dict(items)
 

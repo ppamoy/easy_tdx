@@ -140,7 +140,7 @@ class TestNoPositionalPairing:
     def test_run_all_returns_symbol_keyed_mapping(self) -> None:
         s = _src()
         assert "dict[str, dict[str, float]]" in s, "run_all 必须返回 {策略: {symbol: ret}}"
-        assert "vals[sym] = " in s, "必须按 symbol 存，不能 append 到 list"
+        assert "out[label][sym] = ret" in s, "必须按 symbol 键写入，不能 append"
 
     def test_no_bh_positional_truncation(self) -> None:
         """`bh_all[: len(ch)]` 这种按位置截断是 bug 本体，不许再出现。"""
@@ -163,3 +163,52 @@ class TestNoPositionalPairing:
     def test_failure_is_reported_not_silent(self) -> None:
         s = _src()
         assert "上失败，已跳过该标的" in s, "策略在某标的失败必须打印，不能静默"
+
+
+class TestParallelization:
+    """并行化后的契约：必须串行等价、必须有 --workers、必须有可 pickle 的顶层 worker。"""
+
+    def test_has_workers_flag(self) -> None:
+        s = _src()
+        assert '"--workers"' in s, "应支持 --workers"
+        assert "resolve_workers(" in s, "并行度必须走 _concurrency，不能硬编码 4/8"
+
+    def test_no_hardcoded_worker_count(self) -> None:
+        s = _src()
+        for bad in ("max_workers=4", "max_workers=8", "workers=4", "workers=8"):
+            assert bad not in s, f"不许硬编码并发数 {bad} —— 一律走 scripts/_concurrency.py"
+
+    def test_worker_is_top_level(self) -> None:
+        """ProcessPoolExecutor 要求 worker 是**顶层**函数（非嵌套/非 lambda）。"""
+        s = _src()
+        assert "\ndef _run_one(" in s, "_run_one 必须在模块顶层，否则无法 pickle"
+        # 前面的字符是换行 ⇒ 顶格定义，不是缩进的嵌套函数
+        idx = s.index("\ndef _run_one(")
+        after = s[idx + 1 :]
+        assert after.startswith("def _run_one("), "_run_one 必须是顶层（无缩进）"
+
+    def test_worker_returns_symbol_labeled_result(self) -> None:
+        """worker 返回值必须带 symbol ⇒ 结果按 symbol 归并，不依赖提交顺序。"""
+        s = _src()
+        # worker 的每条出口都必须是 return sym, label, <ret|None>
+        # （不为 None 时即具体收益），任一只 adopting 顺序归并都会错配
+        assert "return sym, label, None" in s and "return sym, label, float(" in s, (
+            "worker 每条出口都必须返回 (symbol, label, ret)，"
+            "否则并发下按提交/完成顺序归并会错配不同标的"
+        )
+        assert "sym, label, ret = fut.result()" in s, (
+            "必须解包 worker 的 symbol 再归位，不能依赖 as_completed 的完成顺序"
+        )
+
+    def test_tempdir_cleanup(self) -> None:
+        s = _src()
+        assert "shutil.rmtree(tmpdir" in s, "临时目录必须清理"
+        assert "tempfile.mkdtemp" in s
+
+    def test_strats_populated_for_worker(self) -> None:
+        """worker 里用 STRATS[label] 反查类 ⇒ STRATS 必须预先填好，不能是空 dict。"""
+        s = _src()
+        assert "STRATS[label]" in s
+        assert "STRATS: dict[str, type] = {}" not in s, (
+            "STRATS 必须包含 CHANLUN + CONTROL，空 dict 会让 worker 全 KeyError"
+        )
