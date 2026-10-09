@@ -152,6 +152,9 @@ PROBE = r"""
 PIXEL_EYE = r"""
 () => {
   const inst = window.__CHANLUN_CHART__;
+  if (!inst) return { bi: [], zs: [], dpr: 1 };
+  const _o0 = inst.getOption();
+  if (!_o0 || !_o0.series) return { bi: [], zs: [], dpr: 1 };
   const cv = inst.getDom().querySelector('canvas');
   const ctx = cv.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
@@ -227,6 +230,9 @@ PIXEL_EYE = r"""
 HIDE_TOGGLE = """
 (namesCsv) => {
   const inst = window.__CHANLUN_CHART__;
+  if (!inst) return false;
+  const _oh = inst.getOption();
+  if (!_oh || !_oh.series) return false;
   const names = namesCsv.split('|');
   const opt = inst.getOption();
   const series = (opt.series || []).map((s) => {
@@ -246,6 +252,7 @@ HIDE_TOGGLE = """
 SAMPLE_POINTS = """
 (namesCsv) => {
   const inst = window.__CHANLUN_CHART__;
+  if (!inst) return [];
   const opt = inst.getOption();
   const names = namesCsv.split('|');
   const cv = inst.getDom().querySelector('canvas');
@@ -294,6 +301,9 @@ SAMPLE_AT = """
 (args) => {
   const names = args[0].split('|'), coords = args[1];
   const inst = window.__CHANLUN_CHART__;
+  if (!inst) return coords.map((c) => ({ coord: c, sig: null }));
+  const _os = inst.getOption();
+  if (!_os || !_os.series) return coords.map((c) => ({ coord: c, sig: null }));
   const cv = inst.getDom().querySelector('canvas');
   const ctx = cv.getContext('2d');
   const dpr = window.devicePixelRatio || 1;
@@ -325,7 +335,9 @@ SAMPLE_AT = """
 MIDPOINTS = """
 (namesCsv) => {
   const inst = window.__CHANLUN_CHART__;
+  if (!inst) return [];
   const opt = inst.getOption();
+  if (!opt || !opt.series) return [];
   const names = namesCsv.split('|');
   const out = [];
   for (const s of (opt.series || [])) {
@@ -344,6 +356,30 @@ MIDPOINTS = """
     }
   }
   return out;
+}
+"""
+
+SAVE_SERIES = """
+(namesCsv) => {
+  const inst = window.__CHANLUN_CHART__;
+  if (!inst) return null;
+  const opt = inst.getOption();
+  if (!opt || !opt.series) return null;
+  // ⚠️ 必须存**全部** series：replaceMerge 是按 name 全量替换的，
+  //    只写回过滤后的几条 ⇒ 其余系列会被删掉（实测中枢因此变 0/0）。
+  return opt.series;
+}
+"""
+
+RESTORE_SERIES = """
+(args) => {
+  const inst = window.__CHANLUN_CHART__;
+  if (!inst) return false;
+  const _oh = inst.getOption();
+  if (!_oh || !_oh.series) return false;
+  const series = args[1];
+  inst.setOption({ series }, { replaceMerge: ['series'] });
+  return true;
 }
 """
 
@@ -379,8 +415,39 @@ def main() -> int:
         )
         try:
             page = browser.new_page(viewport={"width": 1600, "height": 1000})
-            page.goto(f"{UI}{CHANLUN_PAGE}", wait_until="networkidle", timeout=120000)
+            page.goto(f"{UI}{CHANLUN_PAGE}", wait_until="domcontentloaded", timeout=60000)
+            # ⚠️ 必须真的把页面切到指定标的：应用默认加载 000001，
+            #    只发 ground truth 请求而不切页面 ⇒ 图上画的是另一只票，
+            #    坐标比对会直接 0/132（第一版就漏了这一步，实测踩到）。
+            if page.locator('input[placeholder="如 000001"]').count() == 0:
+                print(f"❌ {CHANLUN_PAGE} 上找不到缠论代码输入框 ⇒ 页面不对")
+                return 2
+            inp = page.locator('input[placeholder="如 000001"]').first
+            inp.fill(a.code)
+            # ⚠️ 该输入框**没有 keyup.enter 处理**，且 `watch` 只监听
+            #    category/analysisLevel/recursionDepth —— 不监听 code。
+            #    只 fill + Enter 不会触发分析（实测仍请求上一只票的代码）。
+            #    必须点「开始分析」按钮。
+            page.locator("button.analyze-btn").first.click()
+            page.wait_for_timeout(3000)
+            if inp.input_value() != a.code:
+                print(f"❌ 输入框实际值 {inp.input_value()!r} != {a.code!r}")
+                return 2
+            print(f"✅ 页面确实在展示 {inp.input_value()}（与 ground truth 同一只票）")
             page.wait_for_function("() => !!window.__CHANLUN_CHART__", timeout=120000)
+            # ⚠️ 实例可能存在但**还是上一只票的数据**（切换后异步重算）。
+            #    必须等到笔的 markLine 真的出现，否则拿到 0 条。
+            for _ in range(20):
+                # 重分析会重建组件 ⇒ 实例可能瞬间为 null，探针必须容错
+                cnt = page.evaluate(
+                    "() => { const inst = window.__CHANLUN_CHART__; if (!inst) return -1;"
+                    " const o = inst.getOption(); if (!o || !o.series) return -1; "
+                    "const s = (o.series||[]).find(x => String(x.name||'').includes('笔')); "
+                    "return s && s.markLine && s.markLine.data ? s.markLine.data.length : 0; }"
+                )
+                if cnt > 0:
+                    break
+                page.wait_for_timeout(2000)
             page.wait_for_timeout(1500)
 
             # ── 通道自检（防空转）──
@@ -417,13 +484,16 @@ def main() -> int:
                 mids = page.evaluate(MIDPOINTS, names)
                 if not mids:
                     return 0, 0
+                ORIG = page.evaluate(SAVE_SERIES, names)
                 before = page.evaluate(SAMPLE_AT, [names, mids])
                 page.evaluate(HIDE_TOGGLE, names)
                 page.wait_for_timeout(800)
                 after = page.evaluate(SAMPLE_AT, [names, mids])
-                page.reload(wait_until="networkidle", timeout=120000)
-                page.wait_for_function("() => !!window.__CHANLUN_CHART__", timeout=120000)
-                page.wait_for_timeout(1200)
+                # ⚠️ 不能 reload 恢复：reload 会清掉代码/分析结果，
+                #    而且重分析要重新点按钮 —— 后续 interventional 全废。
+                #    直接把原始 series setOption 回去即可（replaceMerge 可逆）。
+                page.evaluate(RESTORE_SERIES, [names, ORIG])
+                page.wait_for_timeout(800)
                 n = min(len(before), len(after))
                 valid = 0
                 chg = 0
