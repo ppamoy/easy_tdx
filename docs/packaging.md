@@ -87,23 +87,29 @@ dist/easy-tdx.exe serve --no-open-browser
 
 ---
 
-## GitHub Actions 自动发版
+## GitHub Actions 自动发版（⚠️ 2026-10-14 已停用）
 
-打 tag 触发：
+`.github/workflows/` 已整体删除，包括 `release.yml`（Windows EXE）与
+`publish.yml`（PyPI）。**打 tag 不会再自动构建或发布。**
+
+停用原因：本地 PAT 只有 `repo` scope（无 `workflow`），GitHub 拒绝更新
+workflow 文件，导致推送被反复拒绝；且断言 CI 内容的契约测试会因 CI 被临时
+还原而连带变红。详见 `docs/CHANLUN_FIDELITY_AUDIT_V735.md` §44。
+
+需要发版时改为本地手工执行（步骤即原 `release.yml` 内容）：
 
 ```bash
-git tag v1.19.0
-git push origin v1.19.0
+# 1. 构建前端（PyInstaller 把它收进 web_dist，app.py 从
+#    sys._MEIPASS/web_dist 读）
+cd web-ui && npm ci && npm run build && cd ..
+
+# 2. 打包成单 EXE
+pip install -e ".[web]" pyinstaller
+pyinstaller easy_tdx.spec --noconfirm      # 产出 dist/easy-tdx.exe
+
+# 3. 重命名后手工上传 GitHub Release
+mv dist/easy-tdx.exe dist/easy-tdx-<版本>-windows.exe
 ```
-
-`.github/workflows/release.yml` 会自动：
-
-1. 在 `windows-latest` runner 上构建前端 + EXE
-2. 重命名为 `easy-tdx-<版本>-windows.exe`
-3. 创建 GitHub Release 并上传 EXE
-
-该 workflow 与 `publish.yml`（PyPI）**完全独立**：即使 PyPI 发布失败，EXE
-照样能发布。两个 workflow 共享 `v*` tag 触发器但互不依赖。
 
 ---
 

@@ -3082,3 +3082,93 @@ lifespan 启动 `QuoteStreamer`。merge 远程 main 时 `app.py` 按 ours 取
    在其中的 `include_router` / lifespan 启动代码一起丢掉，而**被注册的
    模块文件**因不冲突被保留 ⇒ 半套功能。`test_frontend_api_contract`
    这类"前端调用的路径后端必须注册"的契约测试正是抓这个的，价值得到验证。
+
+---
+
+## 44. 本项目不使用 GitHub Actions —— `.github/workflows/` 整体删除
+
+### 44.1 用户确认
+
+用户原话：「我的项目不需要 github 做什么 workflow 吧，为什么总是有这个问题？」
+
+### 44.2 根因：三件事叠在一起
+
+1. **本地 PAT 只有 `repo` scope**（实测 `x-oauth-scopes: repo`，无 `workflow`）。
+   GitHub 对无 `workflow` scope 的 PAT **一律拒绝**创建/更新
+   `.github/workflows/*`，推送报
+   `! [remote rejected] refusing to allow a Personal Access Token to create
+    or update workflow .github/workflows/ci.yml without workflow scope`。
+2. **为放行推送，我两次把 ci.yml 还原为远程版**（§40.2/§43.1），
+   而仓库里有断言 CI 内容的契约测试 ⇒ 连带弄红 20+ 个测试。
+3. **没人看 CI**：`README.md` 无 CI 徽章；`actions/runs` 全部 9 次 run
+   都是失败（最新 7 次全红），没人因此采取行动。
+
+⇒ 这套 CI 既是**推送阻塞源**又是**测试红源**，却不提供任何实际价值。
+
+### 44.3 顺带修掉的真 bug：`package-lock.json` 与 `package.json` 不同步
+
+查 CI 失败原因时下载 job 日志，发现所有 job 都死在第一步：
+
+```
+npm error `npm ci` can only install packages when your package.json and
+package-lock.json or npm-shrinkwrap.json are in sync.
+npm error Missing: fake-indexeddb@6.2.5 from lock file
+```
+
+定位：`955674d`（缠论视图接入浏览器端 bars 缓存）往 `package.json` 加了
+`fake-indexeddb@^6.2.5`，但**没有跑 `npm install` 更新 lock**。此后每次
+CI 都必红，且本地 `npm test` 用的是已有 `node_modules`，完全感知不到。
+
+修复：`npm install --package-lock-only` 重新生成 lock。差异极小——
+只多 `node_modules/fake-indexeddb` 一个条目（`diff` 后 13 行）。
+验证：在干净目录 `/tmp/citest` 只放 `package.json` + `package-lock.json`，
+真跑 `npm ci` ⇒ `added 245 packages`，exit 0。
+
+⇒ 这个 bug 与 CI 存废无关，**即使删了 CI 也该修**：任何新人
+`git clone && cd web-ui && npm ci` 都会撞上。
+
+### 44.4 删除内容
+
+```
+D  .github/workflows/ci.yml       （199 行，含 chanlun-audit / e2e-chanlun-render 等 6 job）
+D  .github/workflows/publish.yml  （PyPI 发布）
+D  .github/workflows/release.yml  （Windows 单 EXE 发布）
+```
+
+`.github/` 目录已不存在。
+
+### 44.5 契约测试的处理：文件不存在则跳过，不是删测试
+
+三组断言 CI 内容的测试（共 79 项）改为 `pytest.mark.skipif(not CI_YML.exists())`：
+
+| 文件 | 总项 | 跳过 | 照常跑 |
+|---|---|---|---|
+| `test_ci_e2e_render_job.py` | 20 | 20 | 0 |
+| `test_chanlun_v733_ci_gates.py` | 31 | 4（两个读 ci.yml 的类） | 27 |
+| `test_verify_measured_bases.py` | 28 | 1（`TestTeeth` 里那一项） | 27 |
+
+实测：**51 passed / 28 skipped / 0 failed**。
+
+为什么保留而不是删：
+- 断言 `scripts/` 守门脚本行为的部分（如「改坏登记值必须报错」）
+  **与 CI 无关**，那些脚本没 CI 也值得手工跑 ⇒ 必须继续跑。
+- 断言 CI 的部分留成 skip：将来若重新引入 workflow，把文件放回
+  `.github/workflows/ci.yml` 就自动恢复全部断言，不用重写。
+
+### 44.6 文档同步修正（防止留下错误指引）
+
+- `docs/packaging.md`：「GitHub Actions 自动发版」节标注停用，并给出
+  **手工发版**步骤（前端 build → `pyinstaller easy_tdx.spec` → 上传）。
+  写这段时我一开始凭印象写了 `src/easy_tdx/cli.py`、`[build]` 组、
+  `web/static`，**三个全是错的**（实测：入口是 `easy_tdx.cli:cli`、
+  可选组叫 `packaging`、前端产物在 `web-ui/dist`）。已按 `easy_tdx.spec`
+  的真实内容改正 —— 又一次验证「先实测再写结论」。
+- `docs/CHANLUN_HEALTH_GATE.md`：CI 那条划掉，改指 crontab + 手工命令。
+- 审计报告 `V733_AUDIT_REPORT.md` 等历史文档里的 ci.yml 引用属**历史记录**，
+  不改写（它们描述的是当时的真实状态）。
+
+### 44.7 后续影响
+
+- 推送不再被 workflow scope 拒绝。
+- `tests/unit` 失败集合从 35 降到 21（20 个 ci_e2e_render_job + 1 个
+  verify_measured_bases 牙齿转为 skip，另 14 个既有失败不变）。

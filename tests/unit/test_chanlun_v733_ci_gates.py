@@ -14,6 +14,11 @@ AGENTS.md §5/§7：能跑真实链路就别只跑单测；发现盲区要写能
    一步，审计三步阻塞合并**（见 TestChanlunAuditJobBlocksOnGates）。
 
 本测试直接对**门禁逻辑**做断言，并含牙齿测试（坏输入必须判失败）。
+
+⚠️ 2026-10-14：本项目**不使用 GitHub Actions**（用户明确确认），
+`.github/workflows/` 已整体删除。断言 CI 文件内容的用例在文件不存在时
+**跳过**（而非失败）；断言 `scripts/` 守门脚本行为的部分照常运行 ——
+那些脚本即使没有 CI 也值得手工跑。详见审计文档 §44。
 """
 
 from __future__ import annotations
@@ -24,6 +29,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPTS = ROOT / "scripts"
+CI_YML = ROOT / ".github" / "workflows" / "ci.yml"
+
+requires_ci = pytest.mark.skipif(
+    not CI_YML.exists(),
+    reason=f"项目不使用 GitHub Actions，{CI_YML} 不存在 ⇒ 无 CI 契约可断言（见审计文档 §44）",
+)
 
 
 class TestScriptsHaveRealGates:
@@ -69,6 +80,7 @@ class TestNoDataDirsCommitted:
         assert "audit_data/" not in "# nothing here\n", "断言应能区分为空内容"
 
 
+@requires_ci
 class TestChanlunAuditJobBlocksOnGates:
     """chanlun-audit 必须**阻塞合并**；只容忍联网抓数一步。
 
@@ -161,6 +173,7 @@ class TestNoDataIsNotSilentPass:
         assert rc != 0, f"{script} 在无数据时返回 0 —— 会在 CI 里静默通过"
 
 
+@requires_ci
 class TestCIJobWiring:
     """CI 里确实挂了审计脚本。"""
 

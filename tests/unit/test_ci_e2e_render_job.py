@@ -9,13 +9,27 @@
 
 AGENTS.md §5：能跑真实链路就别只跑单测。本文件把
 "CI 里的命令必须在本机实跑验证过"锁成可执行断言。
+
+⚠️ 2026-10-14：本项目**不使用 GitHub Actions**（用户明确确认）。
+`.github/workflows/` 已整体删除，故本文件所有用例在 CI 文件不存在时
+**跳过**（而非失败）。删除理由与取回方式见
+docs/CHANLUN_FIDELITY_AUDIT_V735.md §44。
+若将来重新引入 workflow，把文件放回 `.github/workflows/ci.yml`
+即可自动恢复这些断言。
 """
 
 from pathlib import Path
 
-import yaml
+import pytest
+
+yaml = pytest.importorskip("yaml")
 
 CI = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "ci.yml"
+
+pytestmark = pytest.mark.skipif(
+    not CI.exists(),
+    reason=f"项目不使用 GitHub Actions，{CI} 不存在 ⇒ 无 CI 契约可断言（见审计文档 §44）",
+)
 
 
 def _ci() -> dict:

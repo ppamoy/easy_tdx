@@ -64,8 +64,12 @@ BLOCK 级失败会**早停**（后面的检查没必要跑）。
 
 ## 自动化
 
-- **CI**（`.github/workflows/ci.yml`）：先 `--selftest` 再 `--quick --json`，
-  在 future_leak / invariants 之前跑。
+- ~~**CI**（`.github/workflows/ci.yml`）：先 `--selftest` 再 `--quick --json`，
+  在 future_leak / invariants 之前跑。~~
+  ⚠️ **2026-10-14 已停用**：本项目不使用 GitHub Actions，
+  `.github/workflows/` 已整体删除（见 `docs/packaging.md` 与审计文档 §44）。
+  健康门禁改由下面的 crontab 承担，需要时手工跑：
+  `.venv/bin/python scripts/chanlun_health_gate.py --quick --json`
 - **定时任务**（crontab，每周一 05:00）：
   ```
   0 5 * * 1 .../scripts/run_bg.sh 5400 chanlun-health-weekly \

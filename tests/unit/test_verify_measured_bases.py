@@ -3,6 +3,10 @@
 ⚠️ 这个脚本的**存在理由**是：MEASURED_BASES 里的 10 个数字是**手抄**的
 （从审计脚本控制台输出 grep 出来的）。手抄会漂，而漂了没人会发现。
 本测试保证这个"防漂移闸门"**自己没坏**。
+
+⚠️ 2026-10-14：本项目**不使用 GitHub Actions**（用户明确确认），
+`.github/workflows/` 已整体删除。仅 `TestTeeth` 里断言 ci.yml 内容的
+那一项在文件不存在时**跳过**，其余全部照常运行。详见审计文档 §44。
 """
 
 from __future__ import annotations
@@ -16,6 +20,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "scripts" / "verify_measured_bases.py"
 CI_YML = ROOT / ".github" / "workflows" / "ci.yml"
+
+requires_ci = pytest.mark.skipif(
+    not CI_YML.exists(),
+    reason=f"项目不使用 GitHub Actions，{CI_YML} 不存在 ⇒ 无 CI 契约可断言（见审计文档 §44）",
+)
 
 
 def _mod():
@@ -150,6 +159,7 @@ class TestTeeth:
         broken_file('("trend=up",           -0.27, -0.39, 0.6933),\n', "")
         assert m._structural_check(m._registered()), "漏登记竟然没被抓到 ⇒ 闸门失效"
 
+    @requires_ci
     def test_bite_dropping_structural_flag_breaks_ci(self) -> None:
         """⚠️ CI 里那一步必须带 --structural-only，
         否则会去要 /tmp 缓存，在 CI 上必然 exit 2 ⇒ 假红。"""
