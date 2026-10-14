@@ -416,6 +416,13 @@ class ChanlunResult:
                     # 缠论原文：中枢的进入段/离开段（用于背驰与画图标注）
                     "enter_bi_index": zs.enter_bi.index if zs.enter_bi else None,
                     "exit_bi_index": zs.exit_bi.index if zs.exit_bi else None,
+                    # V853 原文第20课定理二 / 第33课：中枢升级标记。
+                    # "level": 1 = 当前分析级别；>1 = 由低级中枢升级而来。
+                    # "upgraded": True 表示该中枢是升级产物。
+                    # "upgrade_from": 由哪些低级中枢升级而来（index 列表）。
+                    "level": zs.level,
+                    "upgraded": zs.upgraded,
+                    "upgrade_from": list(zs.upgrade_from),
                     # v89: 中枢质量评分
                     "quality_score": (
                         round(zs.quality_score, 2) if hasattr(zs, "quality_score") else None
