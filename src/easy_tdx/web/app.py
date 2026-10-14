@@ -117,6 +117,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     app.state.tdx_client = client
 
+    # --- 实时行情 SSE 推送器（共享轮询 + fan-out）---
+    # ⚠️ 与上面 include_router(stream_router) 同因：33d44ba 引入，
+    #    merge 远程 main 时本文件按 ours 取而丢失。缺这段时路由虽注册，
+    #    但 streamer 未启动，前端 EventSource 拿到
+    #    {"detail":"行情推送服务未启动"} —— 页面显示"连接中"后静默失败。
+    try:
+        from easy_tdx.models.enums import Market
+        from easy_tdx.web.quote_streamer import QuoteStreamer
+        from easy_tdx.web.watchlist_store import get_watchlist_store
+
+        store = get_watchlist_store()
+
+        async def _watch_symbols():
+            # SQLite 存 "SH"/"SZ"/"BJ" 字符串，轮询器需要 Market 枚举
+            return [(Market[mkt], code) for mkt, code in store.symbols()]
+
+        streamer = QuoteStreamer(client.get_security_quotes, _watch_symbols)
+        streamer.start()
+        app.state.quote_streamer = streamer
+    except Exception:
+        logger.warning("QuoteStreamer 启动失败 — SSE 推送不可用", exc_info=True)
+        app.state.quote_streamer = None
+
     # --- MAC 协议客户端 ---
     mac_client = None
     enable_mac = getattr(app.state, "enable_mac", True)
@@ -270,6 +293,7 @@ def _create_app(
     from easy_tdx.web.routers.sina import router as sina_router
     from easy_tdx.web.routers.stock_pick import router as stock_pick_router
     from easy_tdx.web.routers.strategies import router as strategies_router
+    from easy_tdx.web.routers.stream import router as stream_router
 
     app.include_router(market_router, prefix="/api/v1")
     app.include_router(bars_router, prefix="/api/v1")
@@ -279,6 +303,12 @@ def _create_app(
     app.include_router(block_router, prefix="/api/v1")
     app.include_router(chanlun_router, prefix="/api/v1")
     app.include_router(realtime_router, prefix="/api/v1")
+    # SSE 实时行情推送（/api/v1/stream/quotes，前端 stores/quotes.ts 的 EventSource）。
+    # ⚠️ 33d44ba 引入时注册在 app.py；merge 远程 main 时本文件按 ours 取，
+    #    把这段 include_router 冲掉了，而 routers/stream.py 与前端 store 都在
+    #    ⇒ /api/v1/stream/quotes 变成 404，test_frontend_api_contract 抓到。
+    #    这不是新功能，是补回被 merge 丢掉的注册。
+    app.include_router(stream_router, prefix="/api/v1")
     # MAC 协议路由
     app.include_router(board_mac_router, prefix="/api/v1")
     app.include_router(mac_data_router, prefix="/api/v1")
