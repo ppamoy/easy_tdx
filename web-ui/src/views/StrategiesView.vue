@@ -297,6 +297,13 @@ const reverifyId = ref<string | null>(null)
 const reverifyMsg = ref('')
 async function onReverify(s: SavedStrategy) {
   if (reverifyId.value) return
+  // ⚠️ 旧版本保存的记录可能没有 strategy 字段。实测 2026-10-10：
+  //    直传会让 /backtest/run 返回 422 {loc:["body","strategy"],"Field required"}，
+  //    用户只看到一个裸 422 不知道发生了什么。这里提前拦下并说清楚。
+  if (!s.strategy) {
+    reverifyMsg.value = '该保存记录缺少 strategy（策略名），可能是旧版本保存的，请删除后重新保存'
+    return
+  }
   const ctx = s.context || {}
   const category = (ctx.category as string) || 'DAY'
   const cashN = (s.trade_config?.cash as number) ?? 1000000

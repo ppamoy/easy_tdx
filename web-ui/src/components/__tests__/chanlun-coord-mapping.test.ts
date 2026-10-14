@@ -45,6 +45,9 @@ vi.mock('../../echarts-setup', () => {
     UP_COLOR: '#ef4146',
     DOWN_COLOR: '#18a058',
     FX_COLOR: '#ffffff',
+    // 必须与真实 echarts-setup.ts 保持一致（分型 = 笔端点用小圆点，
+    // 见 scripts/check_fx_symbol.py）。少导出会让 ChanlunChart 在测试里直接抛错。
+    FX_SYMBOL: 'circle',
     FX_BORDER_COLOR: '#1f2430',
   }
 })

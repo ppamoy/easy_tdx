@@ -3212,3 +3212,40 @@ export interface AdviceSimulateResult {
   message?: string
   error?: string
 }
+
+// ── K线数据缓存 ──────────────────────────────────────────────────────
+export interface CacheLevel {
+  category: string
+  label: string
+  bar_count: number
+  start_date: string
+  end_date: string
+  file_size?: number
+  file_path?: string
+}
+
+export interface CacheStock {
+  symbol: string
+  market: string
+  code: string
+  levels: CacheLevel[]
+  level_count: number
+  total_bars: number
+}
+
+export interface CacheOverview {
+  total_stocks: number
+  total_files: number
+  total_bars: number
+  categories: string[]
+  stocks: CacheStock[]
+}
+
+export interface CacheDetail {
+  symbol: string
+  market: string
+  code: string
+  levels: CacheLevel[]
+  level_count: number
+  total_bars: number
+}

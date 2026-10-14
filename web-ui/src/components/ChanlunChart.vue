@@ -3,7 +3,7 @@
 // 遵循缠论理论：笔用细虚线，线段用细实线。
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import echarts, { FX_BORDER_COLOR, FX_COLOR } from '../echarts-setup'
+import echarts, { FX_BORDER_COLOR, FX_COLOR, FX_SYMBOL } from '../echarts-setup'
 import { colorScheme, downColor, upColor } from '../colors'
 import { fmt2 } from '../format'
 import type { Bar } from '../types'
@@ -132,6 +132,11 @@ interface ChanlunMmd {
   bar_index?: number
   /** 触发笔终点分型极值价（买点=底分型低点，卖点=顶分型高点），标注必须用该值 */
   anchor_val?: number | null
+  /** V735 第29课背驰-转折定理后置验证：
+   *  true=反弹触及中枢DD/GG（符合定理）
+   *  false=未触及（该点可能不是真背驰，⚠️标注）
+   *  null/undefined=数据不足（最新信号，未知） */
+  rebound_verified?: boolean | null
 }
 
 interface ChanlunFx {
@@ -474,8 +479,11 @@ function buildOption(): echarts.EChartsCoreOption {
             return {
               coord: [idx, price],
               itemStyle: { color: FX_COLOR },
-              symbol: 'triangle',
-              fxType: fx.fx_type, // 顶=ding→系列级旋转180°，底=di→不旋转
+              // 用户要求：笔端点（分型）用小圆点，不用三角形。
+              // 圆点是旋转对称的，symbolRotate 对它无效 → 顶/底改用 y 轴偏移区分：
+              // 顶分型画在最高价**上方**（symbolOffset 负 y），底分型画在最低价**下方**。
+              symbol: FX_SYMBOL,
+              fxType: fx.fx_type,
               symbolSize: props.compact ? 5 : 8,
               label: {
                 show: props.showFractalLabels === true && !props.compact,
@@ -651,6 +659,9 @@ function buildOption(): echarts.EChartsCoreOption {
               price = props.bars[idx].low * (1 - 0.005)
             }
             const v = mmdVisual(m.type)
+            // V735 第29课：1买/1卖后置验证未通过（反弹未触及中枢DD/GG）
+            // ⇒ 标记⚠，提示该点可能不是真背驰
+            const showWarn = m.rebound_verified === false
             return {
               name: m.type,
               coord: [idx, price],
@@ -660,7 +671,9 @@ function buildOption(): echarts.EChartsCoreOption {
               },
               symbol: v.symbol,
               symbolSize: v.size,
-              label: { show: false },
+              label: showWarn
+                ? { show: true, formatter: '⚠', color: '#e74c3c', fontSize: 14, position: 'inside' }
+                : { show: false },
             }
           })
           .filter(Boolean)
@@ -683,6 +696,8 @@ function buildOption(): echarts.EChartsCoreOption {
               price = props.bars[idx].high * (1 + 0.005)
             }
             const v = mmdVisual(m.type)
+            // V735 第29课：1买/1卖后置验证未通过（反弹未触及中枢DD/GG）
+            const showWarn = m.rebound_verified === false
             return {
               name: m.type,
               coord: [idx, price],
@@ -692,7 +707,9 @@ function buildOption(): echarts.EChartsCoreOption {
               },
               symbol: v.symbol,
               symbolSize: v.size,
-              label: { show: false },
+              label: showWarn
+                ? { show: true, formatter: '⚠', color: '#e74c3c', fontSize: 14, position: 'inside' }
+                : { show: false },
             }
           })
           .filter(Boolean)
@@ -857,10 +874,12 @@ function buildOption(): echarts.EChartsCoreOption {
     ],
     dataZoom: [
       {
-        // 滚轮缩放：以鼠标所在 K 线为中心放大/缩小（ECharts inside dataZoom 默认行为）。
+        // 滚轮缩放：以鼠标所在 K 线为中心放大/缩小。
+        // 初始显示最后 ~150 根K线（含 TDX 追加的最新数据），
+        // 用户可滚轮缩放、底部滑块拖动平移查看任意区间。
         type: 'inside',
         xAxisIndex: [0, 1],
-        start: 50,
+        start: props.bars.length > 150 ? 100 - (150 / props.bars.length) * 100 : 0,
         end: 100,
         zoomOnMouseWheel: true,
         moveOnMouseWheel: false,
@@ -869,7 +888,7 @@ function buildOption(): echarts.EChartsCoreOption {
       {
         type: 'slider',
         bottom: 8,
-        start: 50,
+        start: props.bars.length > 150 ? 100 - (150 / props.bars.length) * 100 : 0,
         end: 100,
         textStyle: { color: '#5c6370' },
         xAxisIndex: [0, 1],
@@ -991,17 +1010,20 @@ function buildOption(): echarts.EChartsCoreOption {
         },
       },
       // 分型标记：顶/底拆成两个独立 scatter 序列，各自用 series 级固定 symbol。
-      // 顶=向下三角▼(symbolRotate:180)，底=向上三角▲
+      // 用户要求（2026-10-10）：笔端点改用**小圆点**（FX_SYMBOL='circle'），不用三角形。
+      // 圆点是旋转对称的，旋转属性对其无效 → 顶/底改由 symbolOffset 的 y 方向区分：
+      // 顶分型往上偏（负 y，落在最高价上方）、底分型往下偏（正 y，落在最低价下方）。
       // 颜色顶/底统一白色（FX_COLOR）：分型是结构端点而非多空信号，红/绿只给买卖点用。
       {
         name: '顶分型',
         type: 'scatter',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        symbol: 'triangle',
-        symbolRotate: 180, // 顶→向下 ▼
-        // 放大 + 深色描边：顶标记锚在K线最高点上，白三角压在白系高亮上易糊，
-        // 加一圈深色描边保证与浅色背景/上影线都能分离。
+        symbol: FX_SYMBOL,
+        // 圆形无法通过 symbolRotate 区分朝向，改用「往极值外侧再偏一格」表达顶/底：
+        // 顶分型在最高价上方 → y 负方向偏移。
+        symbolOffset: [0, props.compact ? -4 : -6],
+        // 深色描边：白点压在白系高亮/上影线上易糊，加一圈描边保证能分离。
         symbolSize: props.compact ? 7 : 10,
         itemStyle: { color: FX_COLOR, borderColor: FX_BORDER_COLOR, borderWidth: 1 },
         data: (fxPoints as any[])
@@ -1024,7 +1046,9 @@ function buildOption(): echarts.EChartsCoreOption {
         type: 'scatter',
         xAxisIndex: 0,
         yAxisIndex: 0,
-        symbol: 'triangle', // 底→向上 ▲
+        symbol: FX_SYMBOL,
+        // 底分型在最低价下方 → y 正方向偏移（与顶分型对称）。
+        symbolOffset: [0, props.compact ? 4 : 6],
         symbolSize: props.compact ? 7 : 10,
         itemStyle: { color: FX_COLOR, borderColor: FX_BORDER_COLOR, borderWidth: 1 },
         data: (fxPoints as any[])
@@ -1240,6 +1264,11 @@ watch(colorScheme, render)
         <div class="mmd-legend-item"><span class="ic bc">▭</span> 背驰(主图)</div>
         <div class="mmd-legend-item"><span class="ic bc-sub">▭</span> 背驰(副图 MACD)</div>
       </template>
+      <div class="legend-sep"></div>
+      <div class="mmd-legend-item">
+        <span class="ic" style="color: #e74c3c; font-size: 14px">⚠</span>
+        1买/1卖后置验证未通过(反弹未触及中枢DD/GG)
+      </div>
     </aside>
   </div>
 </template>

@@ -17,7 +17,10 @@ function handleKeydown(e: KeyboardEvent) {
 
 // 软隐藏旧页：主导航收敛后仍保留 URL 直达，但给非核心页一个非阻断提示。
 const route = useRoute()
-const CORE_PATHS = ['/', '/stock-pick', '/learn', '/today']
+const CORE_PATHS = ['/', '/stock-pick', '/pick', '/learn', '/today', '/signal-check']
+// ⚠️ 准确性审计（/audit）已从主导航移除：它的功能与 /signal-check 的
+// 「准不准」面板重复，且口径更旧（无 Bonferroni 校正）。保留 URL 直达
+// 以免破坏已有书签，但入口收敛到 5 个。
 const isSoftHidden = computed(
   () => !CORE_PATHS.some((p) => route.path === p || route.path.startsWith(p)),
 )
@@ -33,9 +36,12 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
       <nav class="app-nav">
         <RouterLink to="/" active-class="active">回测</RouterLink>
         <RouterLink to="/stock-pick" active-class="active">选股</RouterLink>
+        <RouterLink to="/pick" active-class="active">缠论选股</RouterLink>
+        <RouterLink to="/hybrid" active-class="active">吴伟志+缠论</RouterLink>
+        <RouterLink to="/watchlist" active-class="active">自选股看板</RouterLink>
         <RouterLink to="/today" active-class="active">今日可操作</RouterLink>
+        <RouterLink to="/signal-check" active-class="active">买卖点核对</RouterLink>
         <RouterLink to="/learn" active-class="active">缠论测试学习</RouterLink>
-        <RouterLink to="/audit" active-class="active">准确性审计</RouterLink>
       </nav>
     </header>
     <main class="app-main">
@@ -47,6 +53,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
     <footer class="app-footer">
       <RouterLink to="/display-settings" class="settings-link" title="显示设置">🎨 显示设置</RouterLink>
       <RouterLink to="/settings" class="settings-link" title="服务器设置">⚙ 服务器设置</RouterLink>
+      <RouterLink to="/data-cache" class="settings-link" title="K线数据缓存">📊 数据缓存</RouterLink>
     </footer>
     <WatchlistPanel />
   </div>

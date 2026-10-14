@@ -31,11 +31,15 @@ vi.mock('../../echarts-setup', () => {
     DOWN_COLOR: '#18a058',
     FX_COLOR: '#ffffff',
     FX_BORDER_COLOR: '#1f2430',
+    // 必须与真实 echarts-setup.ts 保持一致。测试用 instanceof 之外的方式断言分型形状，
+    // 这里写死 'circle' 是为了让「有人把分型改回 triangle」在**测试**里也立刻变红
+    // （scripts/check_fx_symbol.py 是第二道闸）。
+    FX_SYMBOL: 'circle',
   }
 })
 
 import ChanlunChart from '../ChanlunChart.vue'
-import { UP_COLOR, DOWN_COLOR, FX_COLOR } from '../../echarts-setup'
+import { UP_COLOR, DOWN_COLOR, FX_COLOR, FX_SYMBOL } from '../../echarts-setup'
 import { setColorScheme } from '../../colors'
 
 function bar(i: number) {
@@ -650,7 +654,7 @@ describe('ChanlunChart 结构渲染', () => {
     expect(fx?.data[0].value[0]).toBe(88)
   })
 
-  test('顶/底分型拆成两序列、series 级固定 symbol（顶▼向下三角 / 底▲向上三角）', () => {
+  test('顶/底分型拆成两序列、series 级固定 symbol（均为小圆点，靠上下偏移区分顶/底）', () => {
     // 顶=向下三角▼(symbolRotate:180)，底=向上三角▲(不旋转)
     // 两个独立 scatter 序列、series 级 symbol 固定，100% 可靠。
     mount(ChanlunChart, {
@@ -673,19 +677,31 @@ describe('ChanlunChart 结构渲染', () => {
 
     const fxTop = findSeries('顶分型')
     const fxBot = findSeries('底分型')
-    // 顶分型序列：1 个点（ding@140），series symbol=triangle + rotate180=向下▼
+    // 顶分型序列：1 个点（ding@140）。
+    // 用户要求（2026-10-10）：笔端点（分型）用小圆点，不用三角形。
+    // 圆点旋转对称 → rotate 失效，顶/底改由 symbolOffset 的 y 符号区分
+    // （顶在最高价上方=负 y，底在最低价下方=正 y）。
     expect(fxTop?.data).toHaveLength(1)
-    expect(fxTop?.symbol).toBe('triangle')
-    expect(fxTop?.symbolRotate).toBe(180) // 顶→向下 ▼
+    expect(fxTop?.symbol).toBe(FX_SYMBOL)
+    expect(fxTop?.symbol).toBe('circle')
+    expect(fxTop?.symbolRotate).toBeUndefined() // 圆点不再需要旋转
+    // 顶在极值上方（负 y）；且不能退化成 0（那样顶底会重合在同一个点上）
+    expect((fxTop?.symbolOffset as number[])?.[1]).toBeLessThan(0)
     // 顶/底统一白色，不跟随涨跌配色（红/绿只给买卖点用）
     expect(fxTop?.itemStyle.color).toBe(FX_COLOR)
     expect(fxTop?.data[0].value[0]).toBe(140)
-    // 底分型序列：2 个点（di@88, di@150），series symbol=triangle 无旋转=向上▲
+    // 底分型序列：2 个点（di@88, di@150）
     expect(fxBot?.data).toHaveLength(2)
-    expect(fxBot?.symbol).toBe('triangle')
-    expect(fxBot?.symbolRotate).toBeUndefined() // 底→向上 ▲（不旋转）
+    expect(fxBot?.symbol).toBe(FX_SYMBOL)
+    expect(fxBot?.symbol).toBe('circle')
+    expect(fxBot?.symbolRotate).toBeUndefined()
+    expect((fxBot?.symbolOffset as number[])?.[1]).toBeGreaterThan(0)
+    // 顶底 offset 必须反向，否则画在同一个位置无法区分
+    expect((fxBot?.symbolOffset as number[])?.[1]).toBe(
+      -((fxTop?.symbolOffset as number[])?.[1] as number),
+    )
     expect(fxBot?.itemStyle.color).toBe(FX_COLOR)
-    // 顶底同色，靠朝向（▼/▲）区分，不靠颜色
+    // 顶底同色，靠 offset（上/下）区分，不靠颜色
     expect(fxBot?.itemStyle.color).toBe(fxTop?.itemStyle.color)
     expect(fxBot?.data[0].value[0]).toBe(88)
     expect(fxBot?.data[1].value[0]).toBe(150)

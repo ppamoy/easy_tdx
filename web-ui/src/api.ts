@@ -154,6 +154,12 @@ export async function fetchBars(
   const cached = await loadBarsSeries(key)
   // 窗口起点落在缓存范围内即可走缓存：endDate 早于缓存末日 = 窗口完全在
   // 缓存内（直接用）；endDate 晚于缓存末日 = 增量校准到 endDate 为止。
+  // 窗口起点落在缓存范围内即可走缓存（endDate 早于缓存末日 = 窗口完全在
+  // 缓存内，直接用；晚于末日 = 增量校准到 endDate 为止）。
+  // ⚠️ 但窗口起点**早于缓存起点**时不能用缓存：缓存里存的是「最新窗口」
+  //    的序列，用它 + 尾部增量永远补不出更老的历史段，必须走服务端
+  //    fetch_bars_range 直达（否则用户选 2024 年看到的仍是 2026 年数据）。
+  //    窗口完全落在缓存内（startDate >= 缓存首日）依然 0 请求。
   const cacheUsable =
     cached !== null && (!startDate || startDate >= cacheDay(cached[0]))
 
@@ -225,6 +231,18 @@ function applyBarsWindow(cached: Bar[], startDate?: string, endDate?: string, ma
 }
 
 /** 常规翻页直取（原 fetchBars 主体，未走缓存的路径）。 */
+/** /bars 单页上限（后端 le=800，TDX 协议限制）。 */
+const MAX_BARS_PER_PAGE = 800
+
+/**
+ * 前端可提交给 /backtest/run 的最大 K 线根数。
+ *
+ * ⚠️ 必须与后端 `BacktestRequest.ohlcv` 的 `max_length=2000` 对齐
+ *    （backtest_schemas.py:112）。实测 2026-10-13：超过即 422
+ *    `List should have at most 2000 items after validation, not 15000`。
+ */
+export const MAX_INLINE_OHLCV = 2000
+
 async function fetchBarsDirect(
   market: string,
   code: string,
@@ -234,14 +252,28 @@ async function fetchBarsDirect(
   maxCount?: number,
 ): Promise<Bar[]> {
   let allBars: Bar[] = []
+  let prevPage: Bar[] | null = null
   for (let page = 0; page < MAX_PAGES; page++) {
+    // V723: 给了日期区间就走服务端范围取数 —— 后端 /bars 的 start_date/
+    // end_date 由 fetch_bars_range 循环翻页直达历史区间。
+    // ⚠️ 不能只靠本地分页：TDX 协议取数锚定最新 bar 往回翻，
+    //    请求 2024 年窗口时本地翻页拿到的全是 2026 年数据，
+    //    再被 applyBarsWindow 过滤 ⇒ 结果为空（实测 3000 根变 0 根可用）。
+    // ⚠️ count 必须 ≤ 800：后端 /bars 的 Query(800, ge=1, le=800)
+    //    （bars.py:74，TDX 协议单页上限）。实测 2026-10-10 日志里出现过
+    //    "GET /bars?...count=4000" → 422 less_than_equal(le=800)，
+    //    前端只显示一个裸 422。这里钳到 MAX_BARS_PER_PAGE 兜底，
+    //    宁可多翻一页也不要 422。
+    const perPage = Math.min(800, MAX_BARS_PER_PAGE)
     const params = new URLSearchParams({
       market,
       code,
       category,
-      count: '800',
-      start: String(page * 800),
+      count: String(perPage),
+      start: String(page * perPage),
     })
+    if (startDate) params.set('start_date', startDate)
+    if (endDate) params.set('end_date', endDate)
     const resp = await fetch(`${BASE}/bars?${params}`)
     if (!resp.ok) await throwError(resp)
     const body = (await parseJson(resp)) as { data: Record<string, unknown>[] }
@@ -250,12 +282,27 @@ async function fetchBarsDirect(
 
     allBars = allBars.concat(pageBars)
 
-    // 若已覆盖到 startDate（本页最早一根 ≤ startDate），停止翻页
+    // V724-fix: 日期区间取数不再盲目翻 10 页。
+    // 后端 /bars?start_date= 走 fetch_bars_range（klines.py:259），它自己从
+    // 最新 bar 翻页并按区间切片，**忽略前端的 start 参数** —— 每页都返回整个
+    // 区间的同一份数据。旧代码把 10 页全部 concat ⇒ 1500 根被重复 10 遍成
+    // 15000 根，POST /backtest/run 触发
+    //   `422 List should have at most 2000 items after validation, not 15000`
+    // （实测 2026-10-13 复现：10 次 /bars 请求后必 422，用户报「回测选择
+    //  缠论报错」——缠论页默认区间 2020-01-06 起，正好命中该路径）。
+    //
+    // 停止条件按**数据本身**判定，不假设后端一定忽略 start：
+    //   a) 本页最早一根 ≤ startDate：已覆盖到窗口起点（TDX 真分页语义）；
+    //   b) 本页与上一页内容完全相同：服务端已忽略分页，区间一次拿全。
+    //     再翻只会拿重复数据，必须停（否则就是 422 那条路）。
     if (startDate && pageBars.length > 0) {
       const oldest = pageBars[pageBars.length - 1].datetime.slice(0, 10)
       if (oldest <= startDate) break
+      if (page > 0 && sameBars(prevPage, pageBars)) break
     }
-    // 不足 800 根说明已到数据起点
+    prevPage = pageBars
+
+    // 无 startDate（最新窗口）：TDX 协议按 start 偏移真分页，不足 800 根即到头
     if (pageBars.length < 800) break
   }
 
@@ -263,7 +310,32 @@ async function fetchBarsDirect(
   // （page1=最新段，page2=更旧段），concat 后需排序保证整体正序，
   // 否则引擎/图表只正确处理第一页的数据。
   allBars.sort((a, b) => a.datetime.localeCompare(b.datetime))
+  // V724-fix: 双保险去重 —— 万一某后端版本对区间请求也按 start 分页返回
+  // 重叠段，按日期去重后再交给调用方，保证不把重复 K 线灌进回测/图表
+  // （重复 K 线会让缠论笔/中枢与回测信号整体错位）。
+  allBars = dedupeByDay(allBars)
   return applyBarsWindow(allBars, startDate, endDate, maxCount)
+}
+
+/** 两段 K 线内容是否完全一致（逐根比 datetime，长度不同即 false）。 */
+function sameBars(prev: Bar[] | null, next: Bar[]): boolean {
+  if (prev === null || prev.length !== next.length) return false
+  for (let i = 0; i < prev.length; i++) {
+    if (prev[i].datetime !== next[i].datetime) return false
+  }
+  return true
+}
+
+/** 按 datetime 去重（保留首次出现），保持传入顺序。 */
+function dedupeByDay(bars: Bar[]): Bar[] {
+  const seen = new Set<string>()
+  const out: Bar[] = []
+  for (const b of bars) {
+    if (seen.has(b.datetime)) continue
+    seen.add(b.datetime)
+    out.push(b)
+  }
+  return out
 }
 
 /**
@@ -287,12 +359,18 @@ export async function loadEarlierBars(
   const collected: Bar[] = []
   let page = 0
   while (page < MAX_PAGES) {
+    // ⚠️ count 必须 ≤ 800：后端 /bars 的 Query(800, ge=1, le=800)
+    //    （bars.py:74，TDX 协议单页上限）。实测 2026-10-10 日志里出现过
+    //    "GET /bars?...count=4000" → 422 less_than_equal(le=800)，
+    //    前端只显示一个裸 422。这里钳到 MAX_BARS_PER_PAGE 兜底，
+    //    宁可多翻一页也不要 422。
+    const perPage = Math.min(800, MAX_BARS_PER_PAGE)
     const params = new URLSearchParams({
       market,
       code,
       category,
-      count: '800',
-      start: String(page * 800),
+      count: String(perPage),
+      start: String(page * perPage),
     })
     const resp = await fetch(`${BASE}/bars?${params}`)
     if (!resp.ok) await throwError(resp)
@@ -357,6 +435,15 @@ export async function fetchBarsRange(
 
 /** 同步回测（内联 OHLCV，快速）。 */
 export async function runBacktest(req: BacktestRequest): Promise<BacktestResult> {
+  // ⚠️ 前端预校验：strategy 是后端 BacktestRequest 的**必填**字段
+  //    （backtest_schemas.py:69 `strategy: str = Field(...)`）。
+  //    实测 2026-10-10 出现 422 {loc:["body","strategy"],msg:"Field required"}
+  //    —— 来源是「已保存策略」重验路径：localStorage 里的旧记录可能没有
+  //    strategy 字段（如旧版本保存的 / 手动编辑过），直传就 422。
+  //    与其让用户看一个裸 422，不如在这里就报清楚是哪条策略缺字段。
+  if (!req.strategy) {
+    throw new Error('回测请求缺少 strategy（策略名）——该记录可能来自旧版本保存，请重新保存策略后再回测')
+  }
   const resp = await fetch(`${BASE}/backtest/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -963,4 +1050,19 @@ export async function chanlunScreen(req: {
   })
   if (!resp.ok) await throwError(resp)
   return (await parseJson(resp)) as ChanlunScreenResponse
+}
+
+// ── K线数据缓存 ──────────────────────────────────────────────────────
+import type { CacheOverview, CacheDetail } from './types'
+
+export async function fetchCacheOverview(): Promise<CacheOverview> {
+  const resp = await fetch(`${BASE}/cache/overview`)
+  if (!resp.ok) await throwError(resp)
+  return (await parseJson(resp)) as CacheOverview
+}
+
+export async function fetchCacheDetail(market: string, code: string): Promise<CacheDetail> {
+  const resp = await fetch(`${BASE}/cache/detail/${market}/${code}`)
+  if (!resp.ok) await throwError(resp)
+  return (await parseJson(resp)) as CacheDetail
 }
