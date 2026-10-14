@@ -121,6 +121,15 @@ class ChanlunCache:
             col = f"{k}_json"
             if col in row.keys() and row[col] is not None:
                 d[k] = json.loads(row[col])
+        # ⚠️ 历史空壳清理：put() 曾不校验空结果，库里可能已有 kline_count=0
+        # 的条目（版本指纹照样匹配 ⇒ 会被永久当成有效缓存返回）。
+        # 这里一并挡掉并删掉，让下次请求重新取数。见 put() 的踩坑记录。
+        if not d.get("bars"):
+            self._conn.execute(
+                "DELETE FROM chanlun_cache WHERE id=?", (row["id"],)
+            )
+            self._conn.commit()
+            return None
         d["kline_count"] = row["kline_count"]
         d["cached"] = True
         return d
@@ -133,8 +142,31 @@ class ChanlunCache:
         code: str,
         category: str,
         data: dict[str, Any],
-    ) -> None:
-        """存入分析结果（data 应包含 bars, bis, zss, mmds, macd 等字段）。"""
+    ) -> bool:
+        """存入分析结果（data 应包含 bars, bis, zss, mmds, macd 等字段）。
+
+        返回 True = 已写入；False = 拒绝写入（空结果，见下）。
+
+        ⚠️ **不要缓存空结果**（2026-10-14 实测踩坑）：
+
+        取数偶发失败（TDX 断线 / 分页翻车 / 上游返回空 DataFrame）时，
+        分析结果会是 ``bars=[] bis=[] zss=[] ...``。这份"空壳"一旦写入，
+        因为版本指纹（``_compute_version`` 只哈希 chanlun/*.py 源码）
+        **照样匹配**，``get()`` 会把它当有效缓存返回，且**永久有效**——
+        之后同一 (market, code, category) 的请求全部拿到空图，
+        重启服务、改前端都没用，只能手工删库。
+
+        实测复现：``audit_data/chanlun_cache.db`` 里 ``SZ/000001/DAY``
+        就是一条 2026-10-14 07:01 写进的空壳（kline_count=0），导致该股
+        无论怎么请求都是 ``bars: 0 | bis: 0 | cached: True``；而同一只
+        股票**带日期范围**请求却能正常返回 167 bars / 13 bis / 4 zss
+        —— 数据源没问题，纯粹是缓存被空壳污染。
+
+        ⇒ 空结果直接**不写**，让下次请求重新取数。
+        """
+        klines = data.get("bars")
+        if not klines:
+            return False
         keys = [
             "bars", "bis", "xds", "zss", "mmds", "bcs",
             "fractals", "valid_fractals", "macd", "boll",
@@ -144,7 +176,7 @@ class ChanlunCache:
             f"{k}_json": json.dumps(data.get(k), ensure_ascii=False) if data.get(k) is not None else None
             for k in keys
         }
-        vals["kline_count"] = data.get("kline_count", 0)
+        vals["kline_count"] = len(klines)
         vals["version"] = self.version
 
         cols = ["market", "code", "category"] + list(vals.keys())
@@ -155,6 +187,7 @@ class ChanlunCache:
         )
         self._conn.execute(sql, [market, code, category, *vals.values()])
         self._conn.commit()
+        return True
 
     # ── 删 ──
 
