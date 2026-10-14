@@ -281,6 +281,7 @@ def ex_daily(
             "high": b.high,
             "low": b.low,
             "close": b.close,
+            "amount": b.amount,
             "vol": b.vol,
             "settlement": b.settlement,
         }
@@ -557,6 +558,13 @@ def _sync_one_daily(client: TdxClient, filepath: Path) -> tuple[int, str]:
     # 检测证券类型获取系数
     sec_type = _detect_security_type(filepath.name)
     price_coeff, vol_coeff = _SECURITY_COEFFICIENTS.get(sec_type, (0.01, 0.01))
+
+    # 协议返回的成交量单位是股；encode_daily_bar 在 vol_coeff=0.01 时按 ×100
+    # 写入（.day 原始字段为股，读取端 ×0.01 还原为手），故写入前须换算为手。
+    # 否则日成交 > 4295 万股（如招商银行等大盘股）的 bar 会溢出 uint32。
+    if vol_coeff == 0.01:
+        for b in bars:
+            b.vol /= 100
 
     # 追加写入
     written = append_daily_bars(filepath, bars, price_coeff, vol_coeff)

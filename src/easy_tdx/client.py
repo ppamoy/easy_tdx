@@ -39,7 +39,6 @@ from .commands.base import BaseCommand
 from .commands.block_info import GetBlockInfoCmd, GetBlockInfoMetaCmd
 from .commands.company_info import GetCompanyInfoCategoryCmd, GetCompanyInfoContentCmd
 from .commands.finance_info import GetFinanceInfoCmd
-from .commands.fund_flow import GetHistoryFundFlowCmd
 from .commands.minute_time import GetHistoryMinuteTimeDataCmd
 from .commands.report_file import GetReportFileCmd
 from .commands.security_bars import GetIndexBarsCmd, GetSecurityBarsCmd
@@ -85,6 +84,26 @@ _DAILY_PLUS = frozenset(
 
 def _today_in_shanghai() -> int:
     return int(datetime.now(_SHANGHAI_TZ).strftime("%Y%m%d"))
+
+
+def _fund_flow_df_with_net(df: pd.DataFrame) -> pd.DataFrame:
+    """为资金流 DataFrame 物化主力净额列。
+
+    ``HistoricalFundFlow.main_net_inflow`` / ``FundFlow.main_net_inflow`` 是
+    dataclass property，``_to_df`` 的 asdict 会静默丢弃（Issue #52：用户
+    "取不到主力净额"的直接原因），这里显式物化为 ``main_net_inflow`` 列
+    （单位：元，正=净流入）。放在 date 列之后（无 date 时放首列）。
+    """
+    if df.empty or "super_in" not in df.columns:
+        return df
+    out = df.copy()
+    pos = 1 if "date" in out.columns else 0
+    out.insert(
+        pos,
+        "main_net_inflow",
+        (out["super_in"] + out["large_in"]) - (out["super_out"] + out["large_out"]),
+    )
+    return out
 
 
 def _record_signature(
@@ -893,31 +912,40 @@ class TdxClient:
         return all_recs
 
     def get_fund_flow(self, market: Market, code: str) -> pd.DataFrame:
-        """获取个股当日资金流向分布（基于 L1 逐笔数据统计）。"""
+        """获取个股当日资金流向分布（基于 L1 逐笔数据统计）。
+
+        返回列含 ``main_net_inflow``（主力净流入，单位元）。
+
+        口径限制（Issue #55）：分档基于 0x0fb5 逐笔接口返回的"单笔成交额"，
+        而该接口的记录是交易所真实逐笔**聚合**后的（实测 000001.SZ 单日
+        约 17:1），且分档看的是成交额、不是挂单额。高价股单笔普遍被聚合
+        推过 100 万/20 万阈值，小单档可不足成交额 1%、主力档常占 95%+——
+        ``main_net_inflow`` 实质更接近"当日主动买卖总失衡"，与东财/同花顺
+        基于 L2 逐笔委托挂单额的"主力净流入"**不可比**，勿混用于同一张
+        表或同一个因子。
+        """
         records = self._collect_transaction_records(
             lambda start, page_size: self._execute(
                 GetTransactionDataCmd(market, code, start, page_size)
             ),
             2000,
         )
-        return _to_df(_classify_fund_flow(records))
+        return _fund_flow_df_with_net(_to_df(_classify_fund_flow(records)))
 
     def _fetch_fund_flow_records(
         self, market: Market, code: str, start: int, count: int
     ) -> list[HistoricalFundFlow]:
-        """在当前 host 上获取资金流记录（直连 + K 线回退）。
+        """在当前 host 上获取资金流记录（日 K 线取日期 + 逐笔成交重算）。
 
-        优先走 Category 22 直连接口；空则回退为"日 K 线取日期 + 历史逐笔成交重算"。
-        返回空列表代表该 host 既无直连数据也无 K 线数据（或解析失败）。
+        通达信标准行情服务器没有"历史资金流向"专用指令：曾经的 Category 22
+        直连请求实测在全部已知服务器上仅返回 2 字节空包（Issue #52），已移除。
+        资金流一律由逐笔成交重算：历史日期走历史逐笔接口；当日成交在历史逐笔
+        接口里要收盘清算后才有，当日 bar 盘中改走当日实时逐笔接口——此前当日
+        行恒为全 0，用户"取不到最新主力净额"的直接原因（Issue #52）。
+        返回空列表代表该 host 无 K 线数据（或解析失败）。
         """
-        try:
-            direct = self._execute(GetHistoryFundFlowCmd(market, code, start, count))
-        except Exception:
-            direct = []
-        if direct:
-            return list(direct)
-
         bars = self._execute(GetSecurityBarsCmd(market, code, KlineCategory.DAY, start, count))
+        today = _today_in_shanghai()
         results: list[HistoricalFundFlow] = []
         for bar in bars:
             date = _date_from_bar(bar)
@@ -926,9 +954,12 @@ class TdxClient:
             def _fetch_page(
                 page_start: int, page_size: int, _d: int = date
             ) -> list[TransactionRecord]:
-                return self._execute(
-                    GetHistoryTransactionDataCmd(market, code, _d, page_start, page_size)
-                )
+                cmd: BaseCommand[list[TransactionRecord]]
+                if _d == today:
+                    cmd = GetTransactionDataCmd(market, code, page_start, page_size)
+                else:
+                    cmd = GetHistoryTransactionDataCmd(market, code, _d, page_start, page_size)
+                return self._execute(cmd)
 
             records = self._collect_transaction_records(_fetch_page, 800)
             results.append(_historical_fund_flow_from_records(date, records))
@@ -939,28 +970,39 @@ class TdxClient:
     ) -> pd.DataFrame:
         """获取个股历史日线资金流向序列。
 
-        优先走 Category 22 直连接口；若服务器返回空列表，则自动回退为
-        "日 K 线取日期 + 历史逐笔成交重算资金流"的兼容实现。
+        实现："日 K 线取日期 + 逐笔成交重算资金流"。通达信标准服务器无
+        资金流专用指令（Category 22 实测全空，见 Issue #52）；当日 bar 盘中
+        走当日实时逐笔接口，收盘清算后走历史逐笔接口。
 
-        空数据故障转移（v1.20.5，Issue #41）：当前 host 直连与 K 线回退均空时，
+        返回列含 ``main_net_inflow``（主力净流入 = 超大单+大单净额，单位元）。
+
+        空数据故障转移（v1.20.5，Issue #41）：当前 host 无 K 线数据时，
         按延迟顺序逐台实测找首台返回有效数据的服务器。部分服务器对常见标的也会
         返回 ret_count 撒谎的空 body（日志"K线响应为空（声称 800 条...）"），
         此前直接返回空 DataFrame，用户拿不到数据；现复用 K 线故障转移的同源逻辑。
         注意：真·无历史数据（如新股）所有服务器都返回空，此时换台仍为空，直接
         返回空 DataFrame 而非 raise——避免把"该股票本就没数据"误报为故障。
+
+        口径限制（Issue #55）：分档基于 0x0fb5 逐笔接口返回的"单笔成交额"，
+        而该接口的记录是交易所真实逐笔**聚合**后的（实测 000001.SZ 单日
+        约 17:1），且分档看的是成交额、不是挂单额。高价股单笔普遍被聚合
+        推过 100 万/20 万阈值，小单档可不足成交额 1%、主力档常占 95%+——
+        ``main_net_inflow`` 实质更接近"当日主动买卖总失衡"，与东财/同花顺
+        基于 L2 逐笔委托挂单额的"主力净流入"**不可比**，勿混用于同一张
+        表或同一个因子（实证两口径选股信号重合度仅约 14%）。
         """
         results = self._fetch_fund_flow_records(market, code, start, count)
         # 空数据故障转移：与 get_security_bars / get_index_bars 同源逻辑。
         if not results and self._auto_reconnect:
             results = self._fund_flow_failover(market, code, start, count)
-        return _to_df(results)
+        return _fund_flow_df_with_net(_to_df(results))
 
     def _fund_flow_failover(
         self, market: Market, code: str, start: int, count: int
     ) -> list[HistoricalFundFlow]:
         """资金流空数据故障转移：逐台实测找首台返回有效数据的服务器。
 
-        与 ``_find_host_returning_data`` 区别：资金流获取涉及多命令（直连 / K 线 +
+        与 ``_find_host_returning_data`` 区别：资金流获取涉及多命令（K 线 +
         逐笔），无法用单个 cmd 复用泛化版；这里以内联 ``_try`` 在每台候选上跑完
         整 ``_fetch_fund_flow_records``，返回首台非空结果。全失败返回空列表。
         """
@@ -1591,33 +1633,33 @@ class AsyncTdxClient(AsyncHeartbeatMixin):
         return all_recs
 
     async def get_fund_flow(self, market: Market, code: str) -> pd.DataFrame:
-        """获取个股当日资金流向分布（基于 L1 逐笔数据统计）。"""
+        """获取个股当日资金流向分布（基于 L1 逐笔数据统计，async）。
+
+        返回列含 ``main_net_inflow``（主力净流入，单位元）。
+        口径限制同同步版（Issue #55）：0x0fb5 逐笔为聚合记录、按成交额而非
+        挂单额分档，值更接近"主动买卖总失衡"，与东财/同花顺不可比。
+        """
         records = await self._collect_transaction_records(
             lambda start, page_size: self._execute(
                 GetTransactionDataCmd(market, code, start, page_size)
             ),
             2000,
         )
-        return _to_df(_classify_fund_flow(records))
+        return _fund_flow_df_with_net(_to_df(_classify_fund_flow(records)))
 
     async def _fetch_fund_flow_records(
         self, market: Market, code: str, start: int, count: int
     ) -> list[HistoricalFundFlow]:
-        """在当前 host 上获取资金流记录（直连 + K 线回退，async）。
+        """在当前 host 上获取资金流记录（日 K 线取日期 + 逐笔成交重算，async）。
 
-        优先走 Category 22 直连接口；空则回退为"日 K 线取日期 + 历史逐笔成交重算"。
-        返回空列表代表该 host 既无直连数据也无 K 线数据（或解析失败）。
+        同步版说明：无 Category 22 直连（实测全空，Issue #52）；当日 bar 盘中
+        走当日实时逐笔接口，收盘清算后走历史逐笔接口。
+        返回空列表代表该 host 无 K 线数据（或解析失败）。
         """
-        try:
-            direct = await self._execute(GetHistoryFundFlowCmd(market, code, start, count))
-        except Exception:
-            direct = []
-        if direct:
-            return list(direct)
-
         bars = await self._execute(
             GetSecurityBarsCmd(market, code, KlineCategory.DAY, start, count)
         )
+        today = _today_in_shanghai()
         results: list[HistoricalFundFlow] = []
         for bar in bars:
             date = _date_from_bar(bar)
@@ -1626,9 +1668,12 @@ class AsyncTdxClient(AsyncHeartbeatMixin):
             async def _fetch_page(
                 page_start: int, page_size: int, _d: int = date
             ) -> list[TransactionRecord]:
-                return await self._execute(
-                    GetHistoryTransactionDataCmd(market, code, _d, page_start, page_size)
-                )
+                cmd: BaseCommand[list[TransactionRecord]]
+                if _d == today:
+                    cmd = GetTransactionDataCmd(market, code, page_start, page_size)
+                else:
+                    cmd = GetHistoryTransactionDataCmd(market, code, _d, page_start, page_size)
+                return await self._execute(cmd)
 
             records = await self._collect_transaction_records(_fetch_page, 800)
             results.append(_historical_fund_flow_from_records(date, records))
@@ -1639,24 +1684,28 @@ class AsyncTdxClient(AsyncHeartbeatMixin):
     ) -> pd.DataFrame:
         """获取个股历史日线资金流向序列。
 
-        优先走 Category 22 直连接口；若服务器返回空列表，则自动回退为
-        "日 K 线取日期 + 历史逐笔成交重算资金流"的兼容实现。
+        实现："日 K 线取日期 + 逐笔成交重算资金流"；当日 bar 盘中走当日实时
+        逐笔接口。返回列含 ``main_net_inflow``（主力净流入，单位元）。
 
-        空数据故障转移（v1.20.5，Issue #41）：当前 host 直连与 K 线回退均空时，
+        口径限制同同步版（Issue #55）：0x0fb5 逐笔为聚合记录、按成交额而非
+        挂单额分档，值更接近"主动买卖总失衡"，与东财/同花顺不可比。
+
+        空数据故障转移（v1.20.5，Issue #41）：当前 host 无 K 线数据时，
         按延迟顺序逐台实测找首台返回有效数据的服务器。
         """
         results = await self._fetch_fund_flow_records(market, code, start, count)
         if not results and self._auto_reconnect:
             results = await self._fund_flow_failover(market, code, start, count)
-        return _to_df(results)
+        return _fund_flow_df_with_net(_to_df(results))
 
     async def _fund_flow_failover(
         self, market: Market, code: str, start: int, count: int
     ) -> list[HistoricalFundFlow]:
         """资金流空数据故障转移（async）：逐台实测找首台返回有效数据的服务器。
 
-        与 ``_find_host_returning_data`` 区别：资金流获取涉及多命令，无法用单个
-        cmd 复用泛化版；这里以内联 ``_try`` 在每台候选上跑完整 ``_fetch_fund_flow_records``。
+        与 ``_find_host_returning_data`` 区别：资金流获取涉及多命令（K 线 +
+        逐笔），无法用单个 cmd 复用泛化版；这里以内联 ``_try`` 在每台候选上
+        跑完整 ``_fetch_fund_flow_records``。
         """
         bad_host = self._host
         ranked = await asyncio.to_thread(ping_all, get_known_hosts(), self._port, 5.0)
