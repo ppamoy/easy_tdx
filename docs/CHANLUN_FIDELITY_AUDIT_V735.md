@@ -3003,3 +3003,82 @@ zs3 level=4 upgraded=True  from=[2,1,0]
   `1529c26` 逐一复现（V851 之前就红），但**未**在最新 HEAD 复跑确认
   数量不变（等 `bash-102` 结果）。
 - ci.yml 富版因 PAT 缺 workflow scope 未推送（见 §40.2）。
+
+---
+
+## 43. 全量回归 35 failed 的逐一定位（AGENTS.md §2 集合级 diff）
+
+`tests/unit` 全量（`bash-102`，31 分 42 秒）：
+**35 failed / 5064 passed / 6 skipped**。基线（V851 前 `1529c26`）为
+17 failed / 4984 passed。差 18 —— 逐一定位如下。
+
+### 43.1 20 个：ci.yml 被还原所致（已修）
+
+推送时本地 PAT 缺 `workflow` scope（实测 `x-oauth-scopes: repo`），
+GitHub 拒绝更新 workflow 文件，故两次把 ci.yml 还原为远程 78 行版。
+而仓库里有**断言 CI 内容**的契约测试：
+
+| 测试文件 | 项数 | 断言的 CI 内容 |
+|---|---|---|
+| `test_ci_e2e_render_job.py` | 19 | `e2e-chanlun-render` job 存在、用 console script、curl 健康检查、像素步骤无 `continue-on-error` 等 |
+| `test_verify_measured_bases.py::TestTeeth` | 1 | ci.yml 含 `verify_measured_bases.py --structural-only` |
+| `test_chanlun_v733_ci_gates.py` | 7 | `chanlun-audit` job、审计步骤阻塞合并、滚动窗注释不陈旧 |
+| `test_check_unpushed_guard.py`（部分相关） | — | 未推送兜底 tag |
+
+已从提交 `354a9ad` 取回 199 行富版：
+`test_ci_e2e_render_job` **20 passed**、`test_chanlun_v733_ci_gates` **31 passed**、
+`test_verify_measured_bases` 全过。
+
+⇒ 这 20 个**不是模型回归**，是"为放行推送而临时还原 CI 配置"的直接后果。
+本地富版在 `27c805d`；推送它需带 `workflow` scope 的 PAT。
+
+### 43.2 1 个：merge 丢失 SSE 注册（真缺陷，已修）
+
+`test_frontend_api_contract::test_every_frontend_path_exists_as_route`
+抓到前端调了后端未注册的 `/api/v1/stream/quotes`。
+
+定位：`33d44ba`（行情终端升级）在 `app.py` 注册了 `stream_router` 并在
+lifespan 启动 `QuoteStreamer`。merge 远程 main 时 `app.py` 按 ours 取
+⇒ **两段全丢**，而 `routers/stream.py`、`quote_streamer.py`、
+`watchlist_store.py`、前端 `stores/quotes.ts` 都在。
+
+这是 AGENTS.md §1 的典型案例：DOM 里控件照常渲染、用户点下去才拿到 404。
+修复并实测：
+
+```
+修复前：GET /api/v1/stream/quotes → {"detail":"行情推送服务未启动"}
+修复后：data: {"type": "hello", "subscribers": 1}
+```
+
+另用假 DataFrame 直接验证 fan-out（订阅队列收到 quotes 消息、
+`_df_to_dicts` 转换、`subscriber_count`、stop 清理）。
+交易时段门已单测：14:00 周三 True、09:30 周三 True、周六 False、
+15:11 False（当前 15:14 已过门，故不推行情 —— 门逻辑正确）。
+
+### 43.3 14 个：既有失败（已用 worktree 复现，非本次引入）
+
+| 测试 | 复现证据 |
+|---|---|
+| `test_check_unpushed_guard` ×3 | `1529c26` 与 `f31a77f` **均 3 failed**。成因：仓库已全部推到 ppamoy ⇒ 守卫正确判"无未推送"而 exit 0，测试却期望 exit 1 |
+| `test_optimizer::test_heatmap_2_params` | `1529c26` 亦 1 failed（7 vs 8） |
+| `test_diagnosis_router` ×3 | `1529c26` 复现 |
+| `test_screening_router` ×1 | `1529c26` 复现 |
+| `test_screen_sector_neutral` ×1 | `1529c26` 复现 |
+| `test_screen_usefulness_audit` ×1 | `1529c26` 复现 |
+| `test_v721_fixes` ×5 | `1529c26` 复现 |
+
+### 43.4 净结论
+
+35 failed = 20（ci.yml 还原，已修）+ 1（merge 丢 SSE 注册，已修）
++ 14（既有失败，与本次改动无关）。
+修复后本地复测相关 3 组共 **49 passed**。
+
+### 43.5 教训（沉淀）
+
+1. **"推送被迫还原文件"会造成二次破坏**：为放行推送而还原 ci.yml，
+   连带弄红 20 个 CI 契约测试。下次遇 PAT scope 不足，应**先记录**
+   （本次已在 §40.2/§43.1 记录取回命令），并尽快补 scope。
+2. **merge 取 ours 会静默丢注册**：`app.py` 整文件取 ours，把远程提交
+   在其中的 `include_router` / lifespan 启动代码一起丢掉，而**被注册的
+   模块文件**因不冲突被保留 ⇒ 半套功能。`test_frontend_api_contract`
+   这类"前端调用的路径后端必须注册"的契约测试正是抓这个的，价值得到验证。
