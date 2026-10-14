@@ -2928,3 +2928,78 @@ fullreg853 ...`），结果见 §41。
 
 正向对照（证明修复真的生效，不是测试放水）：把 `v-if` 改成恒 false ⇒
 图例回到 8 项（测试通过）；改回无条件 ⇒ 立刻 9 项、4 项测试红。
+
+---
+
+## 42. V853b：to_dict 漏字段 + 浏览器 e2e（AGENTS.md §1/§5）
+
+### 42.1 发现：Web API 拿不到升级标记
+
+V853 只在 `ChanlunResult._zs_dict`（`analyser.py:223`）加了
+`level/upgraded/upgrade_from`，但 **Web API 走的是另一份**：
+`ChanlunResult.to_dict`（`analyser.py:397`）里有独立的 zs dict。
+
+实测（真实后端 `easy-tdx serve` + curl）：
+
+```
+GET/POST /api/v1/chanlun/analyze  →  zss[].level = null
+                                    zss[].upgraded = null
+                                    zss[].upgrade_from = null
+```
+
+⇒ 前端拿到的是 null，升级标记等于没暴露。这是典型的
+「改了 A 处就以为改完了」——AGENTS.md §5「单测通过 ≠ 系统可用」。
+
+### 42.2 修复与实测
+
+`to_dict` 的 zs dict 补同三字段后，同一真实请求：
+
+```
+zs0 level=1 upgraded=False from=[]
+zs1 level=2 upgraded=True  from=[0]
+zs2 level=3 upgraded=True  from=[1,0]
+zs3 level=4 upgraded=True  from=[2,1,0]
+```
+
+### 42.3 浏览器 e2e（本仓库首个 Moli e2e）
+
+`scripts/e2e_zs_upgrade_marker.mjs`，Moli + Playwright over CDP
+（复用 vn-editor 的 `loadPlaywright.mjs` helper）。10 项**行为级**断言：
+
+| # | 断言 | 类型 |
+|---|---|---|
+| 1 | POST /api/v1/chanlun/analyze 真返回 200 | 行为 |
+| 2 | 响应含非空 zss 数组 | 行为 |
+| 3 | 每个中枢都带 level | 行为 |
+| 4 | 至少一个 upgraded=true | 行为 |
+| 5 | 升级者都带非空 upgrade_from | 行为 |
+| 6 | level 单调不减（原文传递性） | 行为 |
+| 7 | 未升级者 level=1 且 from 为空 | 行为（反向对照） |
+| 8 | upgrade_from 只引用更早的中枢 | 行为（反向对照） |
+| 9 | 缠论页面可打开 | 行为 |
+| 10 | Vue 已挂载（#app 有子节点） | 行为 |
+
+**牙齿验证（已实测）**：把 `config.zs_mark_upgrade` 默认改成 False
+⇒ 第 4 项立刻红（"0 个升级"），其余 9 项仍过 ⇒ 证明断言真的在读
+升级标记，不是恒定 PASS。已还原默认 True，复测 **10/10**。
+
+### 42.4 本轮验证清单（AGENTS.md §6 如实汇报）
+
+| 验证项 | 结果 |
+|---|---|
+| `tests/unit -k "chanlun or changying"` | **2213 passed / 4 skipped / 0 failed**（修复前 6 failed） |
+| `tests/unit` 全量 | 后台 `bash-102` 跑完见 §43 |
+| `npm test`（vitest 183 例） | **26 files / 183 tests 全过**（修复前 6 failed） |
+| `npx vue-tsc --noEmit` | exit 0 |
+| 浏览器 e2e（Moli，真实后端） | **10/10**（含牙齿对照） |
+| 第38课同级别分解守门 | 4 fixture 全过，exit 0（含牙齿） |
+| 开关两侧对照（zs_mark_upgrade on/off） | bis/xds/zss/mmds/bcs 五项全不变 |
+
+**未做/限制**：
+- 浏览器 e2e 只验了「接口数据 + 页面可打开 + Vue 挂载」，
+  **未**做像素级渲染截图比对（仓库有 `scripts/e2e_chanlun_pixels.py`，
+  但需完整 chromium，Moli 的 layout 缺陷见全局 AGENTS.md §9）。
+- `tests/unit` 全量基线 17 failed 中的 11 个非缠论失败已用 worktree
+  `1529c26` 逐一复现（V851 之前就红），但**未**在最新 HEAD 复跑确认
+  数量不变（等 `bash-102` 结果）。
+- ci.yml 富版因 PAT 缺 workflow scope 未推送（见 §40.2）。
