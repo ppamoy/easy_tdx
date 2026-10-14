@@ -53,7 +53,7 @@ def _downtrend_df() -> pd.DataFrame:
 
 
 def test_config_defaults_do_not_drop_extremes() -> None:
-    cfg = ChanlunConfig()
+    cfg = ChanlunConfig(zs_from_xd=False)
     assert cfg.bi_fractal_confirm is False
     assert cfg.bi_weak_skip is False
 
@@ -91,7 +91,7 @@ def test_mmd_and_bc_anchor_fields_present_and_aligned() -> None:
 def test_config_bi_fractal_confirm_true_keeps_endpoint_geometry() -> None:
     df = _downtrend_df()
     res = ChanlunAnalyser(
-        "SZ000001", "daily", ChanlunConfig(bi_fractal_confirm=True)
+        "SZ000001", "daily", ChanlunConfig(bi_fractal_confirm=True, zs_from_xd=False)
     ).process_klines(df)
     d = res.to_dict()
     bars = df.to_dict(orient="records")
@@ -109,6 +109,6 @@ def test_config_bi_fractal_confirm_true_keeps_endpoint_geometry() -> None:
 def test_config_bi_fractal_confirm_toggle_runs() -> None:
     df = _downtrend_df()
     ok = ChanlunAnalyser(
-        "SZ000001", "daily", ChanlunConfig(bi_fractal_confirm=True)
+        "SZ000001", "daily", ChanlunConfig(bi_fractal_confirm=True, zs_from_xd=False)
     ).process_klines(df)
     assert ok.bis  # 不崩溃且产出笔

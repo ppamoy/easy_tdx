@@ -48,9 +48,9 @@ SEEDS = [20240101, 1, 999]
 def _nested_tuple(fixture: str, seed: int) -> tuple[bool | None, ...]:
     rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
     df = pd.DataFrame(rows)
-    hi = ChanlunAnalyser(code="HI", frequency="daily", config=ChanlunConfig()).process_klines(df)
+    hi = ChanlunAnalyser(code="HI", frequency="daily", config=ChanlunConfig(zs_from_xd=False)).process_klines(df)
     low = synthesize_lower_level(df, high_level="DAY", low_level="MIN_30", seed=seed)
-    lr = ChanlunAnalyser(code="LOW", frequency="low", config=ChanlunConfig()).process_klines(low)
+    lr = ChanlunAnalyser(code="LOW", frequency="low", config=ChanlunConfig(zs_from_xd=False)).process_klines(low)
     qt = compute_qujiantao_cross_period(
         hi.mmds,
         bis_low=lr.bis,
@@ -86,7 +86,7 @@ def test_low_level_structure_is_seed_independent() -> None:
     shapes = set()
     for s in SEEDS:
         low = synthesize_lower_level(df, high_level="DAY", low_level="MIN_30", seed=s)
-        lr = ChanlunAnalyser(code="LOW", frequency="low", config=ChanlunConfig()).process_klines(
+        lr = ChanlunAnalyser(code="LOW", frequency="low", config=ChanlunConfig(zs_from_xd=False)).process_klines(
             low
         )
         shapes.add((len(lr.bis), len(lr.zss)))

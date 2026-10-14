@@ -104,6 +104,14 @@ class ChanlunPairStrategy(ParametrizedStrategy):
             label="熔断止损(0=关闭,仅极端保护)",
         ),
         Param(
+            "exit_trailing_stop_pct",
+            float,
+            default=0.0,
+            min_value=0.0,
+            max_value=0.5,
+            label="移动止盈(0=关闭,从最高点回撤X%出场)",
+        ),
+        Param(
             "allow_pyramid",
             bool,
             default=False,
@@ -157,6 +165,54 @@ class ChanlunPairStrategy(ParametrizedStrategy):
             default=False,
             label="线段趋势向上时持有过2卖3卖(级别联用)",
         ),
+        Param(
+            "zs_from_xd",
+            bool,
+            default=False,
+            label="中枢由线段构成(True=原文第91课,False=笔构中枢)",
+        ),
+        Param(
+            "use_seg_mmd",
+            bool,
+            default=False,
+            label="线段级别买卖点(参考chan.py,在线段末端检测)",
+        ),
+        Param(
+            "seg_mmd_hybrid",
+            bool,
+            default=False,
+            label="混合模式(T1线段级别+T2T3笔级别)",
+        ),
+        Param(
+            "seg_divergence_rate",
+            float,
+            default=1.5,
+            label="线段级别背驰率阈值",
+        ),
+        Param(
+            "bs1_peak",
+            bool,
+            default=False,
+            label="一类买卖点要求创新极值",
+        ),
+        Param(
+            "bsp2_follow_1",
+            bool,
+            default=False,
+            label="二类买卖点必须跟随一类",
+        ),
+        Param(
+            "bsp3_follow_1",
+            bool,
+            default=False,
+            label="三类买卖点必须跟随一类",
+        ),
+        Param(
+            "max_bs2_rate",
+            float,
+            default=1.0,
+            label="二类买卖点最大回踩率",
+        ),
     ]
 
     def init(self) -> None:
@@ -203,6 +259,14 @@ class ChanlunPairStrategy(ParametrizedStrategy):
             macd_slow=self.p["macd_slow"],
             macd_signal=self.p["macd_signal"],
             recursion_depth=max(1, analysis_level),
+            zs_from_xd=bool(self.p.get("zs_from_xd", False)),
+            use_seg_mmd=bool(self.p.get("use_seg_mmd", False)),
+            seg_mmd_hybrid=bool(self.p.get("seg_mmd_hybrid", False)),
+            seg_divergence_rate=float(self.p.get("seg_divergence_rate", 1.5)),
+            bs1_peak=bool(self.p.get("bs1_peak", False)),
+            bsp2_follow_1=bool(self.p.get("bsp2_follow_1", False)),
+            bsp3_follow_1=bool(self.p.get("bsp3_follow_1", False)),
+            max_bs2_rate=float(self.p.get("max_bs2_rate", 1.0)),
         )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=config)
         result = analyser.process_klines(df)
@@ -308,6 +372,7 @@ class ChanlunPairStrategy(ParametrizedStrategy):
         self._entry_conf: float = 0.0
         self._entry_nested: bool | None = None
         self._in_position = False
+        self._highest_since_entry: float = 0.0
         self._trade_log: list[dict[str, Any]] = []
         self._pair_log: list[dict[str, Any]] = []
 
@@ -484,6 +549,13 @@ class ChanlunPairStrategy(ParametrizedStrategy):
                 macd_fast=self.p["macd_fast"],
                 macd_slow=self.p["macd_slow"],
                 macd_signal=self.p["macd_signal"],
+            zs_from_xd=bool(self.p.get("zs_from_xd", False)),
+            use_seg_mmd=bool(self.p.get("use_seg_mmd", False)),
+            seg_mmd_hybrid=bool(self.p.get("seg_mmd_hybrid", False)),
+            seg_divergence_rate=float(self.p.get("seg_divergence_rate", 1.5)),
+            bs1_peak=bool(self.p.get("bs1_peak", False)),
+            bsp2_follow_1=bool(self.p.get("bsp2_follow_1", False)),
+            bsp3_follow_1=bool(self.p.get("bsp3_follow_1", False)),
             )
             low_result = ChanlunAnalyser(code="LOW", frequency="low", config=cfg).process_klines(
                 low_df
@@ -565,6 +637,7 @@ class ChanlunPairStrategy(ParametrizedStrategy):
         self._entry_bar = self._bar_index
         self._entry_conf = conf
         self._entry_nested = nested
+        self._highest_since_entry = price  # 移动止盈跟踪
         self._trade_log.append(
             {
                 "bar_index": self._bar_index,
@@ -614,6 +687,7 @@ class ChanlunPairStrategy(ParametrizedStrategy):
         self._entry_type = ""
         self._entry_conf = 0.0
         self._entry_nested = None
+        self._highest_since_entry = 0.0
         self.sell()
 
     def next(self) -> None:
@@ -625,6 +699,17 @@ class ChanlunPairStrategy(ParametrizedStrategy):
         if self._in_position and sl > 0 and self._entry_price > 0:
             if current_price <= self._entry_price * (1 - sl):
                 self._exit(current_price, "fuse_stop_loss")
+                return
+
+        # 移动止盈（默认 0=关闭）。从持仓最高点回撤 X% 时出场，锁定利润。
+        tsp = float(self.p.get("exit_trailing_stop_pct", 0.0) or 0.0)
+        if self._in_position and tsp > 0:
+            hi = getattr(self, "_highest_since_entry", current_price)
+            if current_price > hi:
+                self._highest_since_entry = current_price
+                hi = current_price
+            if hi > 0 and current_price <= hi * (1 - tsp):
+                self._exit(current_price, "trailing_stop")
                 return
 
         while self._signal_ptr < len(self._chanlun_signals):

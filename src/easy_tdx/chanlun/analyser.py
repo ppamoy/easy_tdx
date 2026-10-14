@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -491,6 +491,9 @@ class ChanlunResult:
                     ),
                     "v102_signal_quality": getattr(mmd, "_signal_quality_scorecard", None),
                     "v102_decision_support": getattr(mmd, "_decision_support", None),
+                    "v102_decision_quality_score": getattr(
+                        mmd, "_decision_quality_score", None
+                    ),
                     "v102_pattern_match": getattr(mmd, "_historical_pattern_match", None),
                     # V68 条件205 区间套（多级别共振一致性）：字面意义的「区间套」
                     # ——仅 3 类买卖点计算（需 >=40 根 K 线），含 multi_level_score
@@ -499,6 +502,11 @@ class ChanlunResult:
                     # 真·区间套（统一实现）：与条件205 单级别伪区间套区分开。
                     # 无递归级别时 _qujiantao 为 None，前端据此不显示「真区间套」卡片。
                     "qujiantao": getattr(mmd, "_qujiantao", None),
+                    # V735 第29课背驰-转折定理后置验证：
+                    # True=反弹触及中枢DD/GG（符合定理）
+                    # False=未触及（可能不是真背驰）
+                    # null=数据不足（最新信号，未知）
+                    "rebound_verified": getattr(mmd, "_rebound_verified", None),
                 }
                 for mmd in self.mmds
             ],
@@ -569,6 +577,93 @@ class ChanlunResult:
 
     def valid_fractals_to_dict(self) -> list[dict[str, Any]]:
         return [self._fx_to_dict(fx) for fx in self.valid_fractals]
+
+
+def _remap_cross_zs_indices(cross_zss: list, bis: list) -> int:
+    """V851：把次级别（如30min）线段的 `.index` 重写为日线笔下标。
+
+    `find_zss(lower_xds)` 产出的 `ZS.lines[*].index` 是**次级别线段序号**，
+    而 `mmd.py` 的 9 处（2874/2891/2928/3124/3125/3148/3356/3477/3686）
+    把它当**日线笔下标**用。两者是不同尺度的序列，混用会让
+    `bis[zs.lines[-1].index + 1]` 取到时间上相差数年的笔。
+
+    做法：对每条次级别线段 L，令 `L.index` = 「终点时间 >= L 终点的
+    第一根日线笔」的下标（若日线笔终点都早于 L，则取最后一根）。
+    保证 `bis[idx + 1]` 不早于该线段结束。
+
+    返回被改写的线条数（便于测试断言）。
+    """
+    if not bis or not cross_zss:
+        return 0
+
+    bi_ts: list = []
+    for b in bis:
+        k = getattr(getattr(b, "end", None), "k", None)
+        ts = getattr(k, "date", None) if k is not None else None
+        bi_ts.append(pd.Timestamp(ts) if ts is not None else None)
+
+    remapped = 0
+    for zs in cross_zss:
+        for line in zs.lines:
+            k = getattr(getattr(line, "end", None), "k", None)
+            ts = getattr(k, "date", None) if k is not None else None
+            if ts is None:
+                continue
+            ts = pd.Timestamp(ts)
+            target = len(bis) - 1
+            for i, bts in enumerate(bi_ts):
+                if bts is not None and bts >= ts:
+                    target = i
+                    break
+            if line.index != target:
+                line.index = target
+                remapped += 1
+    return remapped
+
+
+def _verify_rebound_touches_zs_extreme(
+    mmds: list[MMD],
+    klines: list,
+    zss: list,
+) -> None:
+    """V735：第29课「背驰-转折定理」后置验证。
+
+    原文（第29课，定理级）：
+      「缠中说禅背驰-转折定理：某级别趋势的背驰将导致该趋势最后一个中枢
+        的级别扩展、该级别更大级别的盘整或该级别以上级别的反趋势。」
+      「该反弹**一定触及**最后一个中枢的 DD=min(dn)，也就是围绕该中枢
+        震荡的最低点。」
+
+    对每个 1买：检查其后 30 根 K 线内的反弹最高价是否 ≥ 所参照中枢的 DD。
+    对每个 1卖：检查其后 30 根 K 线内的回落最低价是否 ≤ 所参照中枢的 GG。
+    未触及 ⇒ 设 `_rebound_verified = False`（该点可能不是真背驰）。
+    数据不足（最新信号）⇒ 设 `None`（未知）。
+
+    ⚠️ 后置验证，不改变信号的有无，只设质量标记。
+    """
+    n = len(klines)
+    for mmd in mmds:
+        if mmd.mmd_type.value not in ("1buy", "1sell"):
+            continue
+        if mmd.bi is None or mmd.bi.end is None or mmd.bi.end.k is None:
+            continue
+        if mmd.zs is None:
+            continue
+        bi_end_idx = int(mmd.bi.end.k.k_index)
+        if bi_end_idx >= n:
+            mmd._rebound_verified = None
+            continue
+        # 向后看 30 根 K 线（约 1.5 个月日线 / 15 小时 30min）
+        seg = klines[bi_end_idx : min(bi_end_idx + 30, n)]
+        if len(seg) < 5:
+            mmd._rebound_verified = None
+            continue
+        if mmd.mmd_type.value == "1buy":
+            rebound_high = max(k.high for k in seg)
+            mmd._rebound_verified = rebound_high >= mmd.zs.dd
+        else:  # 1sell
+            rebound_low = min(k.low for k in seg)
+            mmd._rebound_verified = rebound_low <= mmd.zs.gg
 
 
 class ChanlunAnalyser:
@@ -675,7 +770,17 @@ class ChanlunAnalyser:
         self._result.valid_fractals = valid
 
         # Step 5: 中枢计算
-        zss = find_zss(bis, self._config)
+        # V735 原文第91课：「笔是不能构成中枢的」——能构成中枢的是
+        #   **线段**以及各种级别的走势类型。
+        # 默认仍用笔（既有行为，信号密度高）；config.zs_from_xd=True 时
+        #   改用线段构中枢（第91课口径，中枢/信号会更少更粗）。
+        if getattr(self._config, "zs_from_xd", False):
+            # 线段要先算（Step 7 会复用这里的结果）
+            xds_for_zs = find_xds(bis, self._config)
+            # XD 与 BI 同构，按 BI 传入既有算法（recursive.py 同款做法）
+            zss = find_zss(cast(list[BI], xds_for_zs), self._config)
+        else:
+            zss = find_zss(bis, self._config)
         self._result.zss = zss
 
         # Step 6: MACD 计算
@@ -734,7 +839,58 @@ class ChanlunAnalyser:
             highs=highs,
             lows=lows,
         )
+        # V736: 线段级别买卖点检测（参考 chan.py CBSPointList）
+        # use_seg_mmd=True 时，在**线段（走势类型）末端**检测买卖点，
+        # 替代笔级别买卖点。更符合原文：一类买卖点是走势类型结束的背驰点。
+        # seg_mmd_hybrid=True: T1用线段级别(更可靠)，T2/T3用笔级别(更多信号)
+        if getattr(self._config, "use_seg_mmd", False):
+            from easy_tdx.chanlun.seg_mmd import find_mmds_seg
+            from easy_tdx.chanlun.types import MMDType
+            seg_mmds = find_mmds_seg(
+                bis=bis,
+                xds=xds,
+                zss=zss,
+                closes=closes,
+                config=self._config,
+                macd_data=self._result.macd,
+            )
+            if getattr(self._config, "seg_mmd_hybrid", False):
+                # 混合模式：T1(BUY_1/SELL_1)来自线段级别，T2/T3来自笔级别
+                t1_types = {MMDType.BUY_1, MMDType.SELL_1}
+                bi_non_t1 = [m for m in mmds if m.mmd_type not in t1_types]
+                seg_t1 = [m for m in seg_mmds if m.mmd_type in t1_types]
+                mmds = bi_non_t1 + seg_t1
+                mmds.sort(key=lambda m: m.bi.index if m.bi else 0)
+            else:
+                mmds = seg_mmds
         self._result.mmds = mmds
+
+        # V735 Step 8.5：第29课「背驰-转折定理」后置验证。
+        # 原文：「该反弹**一定触及**最后一个中枢的 DD=min(dn)」
+        # 这是必然性定理——真 1买/1卖 后的反弹/回落必须触及所参照中枢的 DD/GG。
+        # 未触及 ⇒ 该点不是真正的趋势背驰点。
+        # ⚠️ 后置验证（要等反弹走完才知道），不能前置过滤。
+        #   只设质量标记，不改信号有无；最新信号标 None（未知）。
+        _verify_rebound_touches_zs_extreme(mmds, klines, zss)
+
+        # V735 Round 8：第29课后置验证 → 信号可信度扣分（不前置过滤）。
+        # _rebound_verified=False 的 1买/1卖，decision_score 扣减 rebound_penalty 分。
+        # 不改信号有无——只降评分，让用户看到「该点可能非真背驰」。
+        penalty = getattr(self._config, "rebound_penalty", 15.0)
+        if penalty > 0:
+            for mmd in mmds:
+                if getattr(mmd, "_rebound_verified", None) is not False:
+                    continue
+                dq = getattr(mmd, "_decision_quality_score", None)
+                if not dq or not isinstance(dq, dict):
+                    continue
+                old_score = dq.get("decision_score", 50.0)
+                dq["decision_score"] = round(max(0.0, old_score - penalty), 1)
+                factors = dq.get("factors", {})
+                if isinstance(factors, dict):
+                    factors["rebound_verified"] = False
+                    factors["rebound_penalty"] = -penalty
+                dq["factors"] = factors
 
         # Step 9: 背驰判断（传入收盘价用于MACD面积计算）
         bcs = check_bi_beichi(bis, zss, closes=closes, config=self._config)
@@ -788,6 +944,117 @@ class ChanlunAnalyser:
                 pass
 
         return self._result
+
+    def process_klines_cross_timeframe(
+        self,
+        daily_df: pd.DataFrame,
+        lower_tf_df: pd.DataFrame,
+    ) -> ChanlunResult:
+        """V735 Round 9：原文第17课精确口径——用次级别线段构中枢。
+
+        原文第17课：「缠中说禅走势中枢由至少三个连续次级别走势类型的
+        重叠部分构成。」原文第91课：「笔是不能构成中枢的。」
+
+        当前默认用**同级别笔**构中枢（第91课说不行）。
+        zs_from_xd=True 改用**同级别线段**（第91课允许，但非「次级别」）。
+        本方法用**次级别（如30min）线段**构中枢 = 原文精确口径。
+
+        流程：
+          1. 分析次级别 K线 → 获取次级别线段
+          2. 用次级别线段构中枢（find_zss）
+          3. 分析日线 → 获取日线笔/closes/MACD
+          4. 用日线笔 + 次级别中枢 检测买卖点 + 背驰
+          5. 返回替换后的结果
+        """
+        # 1. 分析次级别
+        lower = ChanlunAnalyser(config=self._config)
+        lower_result = lower.process_klines(lower_tf_df)
+        lower_xds = lower_result.xds
+        if len(lower_xds) < 3:
+            # 次级别线段不足，退回默认
+            return self.process_klines(daily_df)
+
+        # 2. 用次级别线段构中枢
+        cross_zss = find_zss(lower_xds, config=self._config)
+
+        # 3. 分析日线（正常流程）
+        result = self.process_klines(daily_df)
+        bis = result.bis
+        if not bis:
+            return result
+
+        # 3.5 V851 索引口径修正（本轮修复）
+        #
+        # `find_zss(lower_xds)` 产出的 `ZS.lines` 是 **30min 线段对象**，
+        # 其 `.index` 是 30min 线段序号；而 `mmd.py` 有 9 处把 `zs.lines[*].index`
+        # 当**日线笔下标**用（mmd.py:2874/2891/2928/3124/3125/3148/3356/3477/3686），
+        # 例如 `bis[zs.lines[-1].index + 1]` 取回试段。
+        #
+        # 前一轮实测：直接混用导致日期差 **3930–4365 天**（拿 2026 年的 30min
+        # 线段末段去索引日线笔数组，取到 2014 年的笔），回试段完全错位。
+        #
+        # 修法：在边界上把每条次级别线段的 `.index` 重写为「终点时间之后
+        # 第一根日线笔」的下标。`mmd.py` 无需改动，语义即恢复正确：
+        #   - `zs.lines[-1].index` → 中枢在日线笔序列中的位置
+        #   - `bis[last_idx + 1]`   → 中枢之后的第一根日线笔（回试段）
+        #   - `_calc_bi_force(line, closes, line.index)` → 用日线 closes（原意图）
+        #
+        # 实测（scripts/audit_cross_timeframe_index_remap.py，4 只标的）：
+        #   修复前最大日期差 4054–4382 天；修复后 13–31 天（残余为粒度差）。
+        _remap_cross_zs_indices(cross_zss, bis)
+
+        # 4. 用日线笔 + 次级别中枢 检测买卖点
+        klines = result.klines
+        closes = [k.close for k in klines]
+        volumes = [k.amount for k in klines]
+        highs = [k.high for k in klines]
+        lows = [k.low for k in klines]
+
+        cross_mmds = find_mmds_v44(
+            bis,
+            cross_zss,
+            closes=closes,
+            config=self._config,
+            volumes=volumes,
+            macd_data=result.macd,
+            volatility=None,
+            highs=highs,
+            lows=lows,
+        )
+
+        # 5. 重新背驰判断
+        cross_bcs = check_bi_beichi(
+            bis, cross_zss, closes=closes, config=self._config
+        )
+
+        # 6. 后置验证（第29课反弹触及 DD/GG）
+        _verify_rebound_touches_zs_extreme(cross_mmds, klines, cross_zss)
+
+        # 7. 信号可信度扣分（第29课）
+        penalty = getattr(self._config, "rebound_penalty", 15.0)
+        if penalty > 0:
+            for mmd in cross_mmds:
+                if getattr(mmd, "_rebound_verified", None) is not False:
+                    continue
+                dq = getattr(mmd, "_decision_quality_score", None)
+                if not dq or not isinstance(dq, dict):
+                    continue
+                old_score = dq.get("decision_score", 50.0)
+                dq["decision_score"] = round(max(0.0, old_score - penalty), 1)
+                factors = dq.get("factors", {})
+                if isinstance(factors, dict):
+                    factors["rebound_verified"] = False
+                    factors["rebound_penalty"] = -penalty
+                dq["factors"] = factors
+
+        # 8. 更新结果
+        result.zss = cross_zss
+        result.mmds = cross_mmds
+        result.bcs = cross_bcs
+        # 保存次级别线段供前端展示
+        result.xds_l1 = lower_xds
+
+        return result
 
     def append_klines(self, df_new: pd.DataFrame) -> ChanlunResult:
         """增量追加 K 线数据并重新计算。

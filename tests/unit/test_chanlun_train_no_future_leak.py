@@ -45,7 +45,7 @@ FIXTURE = "chanlun_000333_daily.json"
 def _payload(reveal_limit=None):
     rows = json.loads((FIXTURES / FIXTURE).read_text(encoding="utf-8"))
     df = pd.DataFrame(rows)
-    res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(df)
+    res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig(zs_from_xd=False)).process_klines(df)
     if reveal_limit is None:
         return build_train_session_payload(res, df, "train")
     return build_train_session_payload(res, df, "train", reveal_limit=reveal_limit)

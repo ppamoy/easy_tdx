@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from easy_tdx.chanlun.bi import find_bis
+from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.fractal import find_fractals
 from easy_tdx.chanlun.types import CLKline, Kline
 
@@ -63,8 +64,8 @@ class TestMultiLevel:
         df_30min = _make_df(200)
 
         mla = MultiLevelAnalyser()
-        mla.add_level("daily", ChanlunAnalyser(code="SZ000001", frequency="DAILY"))
-        mla.add_level("30min", ChanlunAnalyser(code="SZ000001", frequency="30MIN"))
+        mla.add_level("daily", ChanlunAnalyser(code="SZ000001", frequency="DAILY", config=ChanlunConfig(zs_from_xd=False)))
+        mla.add_level("30min", ChanlunAnalyser(code="SZ000001", frequency="30MIN", config=ChanlunConfig(zs_from_xd=False)))
 
         mla.process("daily", df_daily)
         mla.process("30min", df_30min)
@@ -84,8 +85,8 @@ class TestMultiLevel:
         df_30min = _make_df(200)
 
         mla = MultiLevelAnalyser()
-        mla.add_level("daily", ChanlunAnalyser(code="SZ000001", frequency="DAILY"))
-        mla.add_level("30min", ChanlunAnalyser(code="SZ000001", frequency="30MIN"))
+        mla.add_level("daily", ChanlunAnalyser(code="SZ000001", frequency="DAILY", config=ChanlunConfig(zs_from_xd=False)))
+        mla.add_level("30min", ChanlunAnalyser(code="SZ000001", frequency="30MIN", config=ChanlunConfig(zs_from_xd=False)))
 
         mla.process("daily", df_daily)
         mla.process("30min", df_30min)
@@ -117,7 +118,7 @@ class TestIncrementalUpdate:
         from easy_tdx.chanlun.analyser import ChanlunAnalyser
 
         df1 = _make_df(30)
-        analyser = ChanlunAnalyser(code="SZ000001")
+        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(zs_from_xd=False))
         analyser.process_klines(df1)
         bi_count_1 = len(analyser.result.bis)
 
@@ -138,7 +139,7 @@ class TestIncrementalUpdate:
         df1 = _make_df(50)
         df2 = _make_df(100)
 
-        analyser = ChanlunAnalyser(code="SZ000001")
+        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(zs_from_xd=False))
         analyser.process_klines(df1)
         count1 = len(analyser.result.klines)
 
@@ -153,7 +154,7 @@ class TestIncrementalUpdate:
         from easy_tdx.chanlun.analyser import ChanlunAnalyser
 
         df1 = _make_df(30)
-        analyser = ChanlunAnalyser(code="SZ000001")
+        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(zs_from_xd=False))
         analyser.process_klines(df1)
         count1 = len(analyser.result.klines)
 
@@ -172,7 +173,7 @@ class TestIncrementalUpdate:
         """未初始化时调用 append_klines 应抛异常。"""
         from easy_tdx.chanlun.analyser import ChanlunAnalyser
 
-        analyser = ChanlunAnalyser(code="SZ000001")
+        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(zs_from_xd=False))
         df_new = _make_df(10)
 
         with pytest.raises(RuntimeError, match="请先调用 process_klines"):

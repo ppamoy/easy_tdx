@@ -113,6 +113,20 @@ STRATEGY_PRESETS: dict[str, dict[str, list[Any]]] = {
         "n_obv": [10, 14, 20],
         "n_price": [15, 20, 30],
     },  # 9
+    # ── 缠论多级别联立 ────────────────────────────────────────────────────────
+    # ⚠️ **实测无效，暂不登记**。
+    #    全量 285 只回测（scripts/audit_chanlun_full_theory.py +
+    #    audit_chanlun_full_theory60.py + audit_chanlun_ml_oos.py）：
+    #    11 个方案（含区间套、本级别买→次级别卖、各买点组合）
+    #    **没有一个**通过三条判据（vsBH 显著 / vsA1 为正 / vsRND 为正且显著）；
+    #    次级别用 30min 或 60min 都一样；样本外**符号翻转**（样本内全负、
+    #    样本外全正）⇒ 那是仓位/市场状态效应，不是选股能力。
+    #    详见 docs/CHANLUN_MULTI_LEVEL_FULL_THEORY.md。
+    #
+    #    按「只保留实测有效的方案」的纪律，这里**不给网格**，
+    #    避免用户在 UI 里一键跑到已被证伪的参数上。
+    #    待有方案实测通过后再登记，并在注释里写明依据。
+    # "chanlun_ml": {...},
 }
 
 

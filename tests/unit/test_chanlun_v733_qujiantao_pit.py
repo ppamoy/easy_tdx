@@ -47,9 +47,9 @@ def to_weekly(df: pd.DataFrame) -> pd.DataFrame:
 
 def _confirmed_keys(df: pd.DataFrame) -> set[tuple[int, str]]:
     """返回该数据下所有被区间套确认的信号键 (bar_index, type)。"""
-    rd = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(df)
+    rd = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig(zs_from_xd=False)).process_klines(df)
     wdf = to_weekly(df)
-    rw = ChanlunAnalyser(code="T", frequency="weekly", config=ChanlunConfig()).process_klines(wdf)
+    rw = ChanlunAnalyser(code="T", frequency="weekly", config=ChanlunConfig(zs_from_xd=False)).process_klines(wdf)
     cf = compute_qujiantao_cross_period(
         rd.mmds, bis_low=rw.bis, zss_low=rw.zss, bcs_low=rw.bcs, mmds_low=rw.mmds
     )
@@ -161,11 +161,11 @@ class TestQujiantaoCausality:
             if len(df) < 500:
                 continue
             rd = ChanlunAnalyser(
-                code="T", frequency="daily", config=ChanlunConfig()
+                code="T", frequency="daily", config=ChanlunConfig(zs_from_xd=False)
             ).process_klines(df)
             wdf = to_weekly(df)
             rw = ChanlunAnalyser(
-                code="T", frequency="weekly", config=ChanlunConfig()
+                code="T", frequency="weekly", config=ChanlunConfig(zs_from_xd=False)
             ).process_klines(wdf)
             cf = compute_qujiantao_cross_period(
                 rd.mmds, bis_low=rw.bis, zss_low=rw.zss, bcs_low=rw.bcs, mmds_low=rw.mmds

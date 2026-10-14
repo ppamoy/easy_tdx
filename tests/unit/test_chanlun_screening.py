@@ -44,7 +44,7 @@ def _mk_df(n: int = 260, seed: int = 7) -> pd.DataFrame:
 
 
 def _result(df):
-    cfg = ChanlunConfig()
+    cfg = ChanlunConfig(zs_from_xd=False)
     return ChanlunAnalyser(code="TEST", frequency="daily", config=cfg).process_klines(df)
 
 

@@ -146,6 +146,80 @@ DEFAULT_PATTERN = re.compile(
     re.I,
 )
 
+# ⚠️⚠️ **常驻服务**——绝不能被"卡死"误判杀掉（实测 2026-10-10 事故）。
+#
+# 背景：dev 后端（scripts/dev_backend.sh，8001 + --reload）被 cron 守卫
+# 当卡死进程杀掉两次（22:00:01、23:00:02），连带 reload 期间的请求全部 502，
+# 前端只看到 "Failed to load resource: 502 (Bad Gateway)"。
+# 22:00:01 那次还顺手杀了 **Vite 前端**（pid=1427316）。
+#
+# 误判链条（三条同时成立）：
+#   1. `resource_tracker` 是 uvicorn spawn 出来的守护子进程，职责是监听
+#      pipe 回收共享资源 —— **天生 CPU 增量=0**，永远不可能有 CPU 消耗；
+#   2. 它的命令行含 easy_tdx 路径 ⇒ 命中 DEFAULT_PATTERN；
+#   3. kill_stalled 用 `os.killpg(f.pgid)` **按进程组杀** ⇒ 一次带走整个
+#      dev 后端（reloader + server + tracker）。
+# 同理 Vite dev server 空闲时 CPU 增量也是 0（22:00:01 已实测被杀）。
+#
+# 所以这里做的是**进程级豁免**，而不是放宽 CPU 判据：
+#   - `--reload` / 常驻 web 服务（uvicorn）
+#   - Vite dev server（vite / node vitepress 等）
+#   - resource_tracker 自身
+# ⚠️ 只匹配**自己**的命令行是不够的（实测踩过，牙齿测试复现）：
+#   uvicorn --reload 会 spawn 出真正的 server 进程，其命令行是
+#     `python -c from multiprocessing.spawn import spawn_main; ... --multiprocessing-fork`
+#   **不含 "uvicorn" 字面量** ⇒ 只看自己会漏掉它，豁免形同虚设
+#   （我用 --kill-stalled 实测：8001 直接被杀没）。
+#   所以判据是**沿 ppid 链向上查祖先**，命中即豁免整组。
+SERVICE_PATTERN = re.compile(
+    r"("
+    r"uvicorn"                      # dev/prod 后端（含 --reload）
+    r"|multiprocessing\.resource_tracker"  # uvicorn 的守护子进程
+    r"|multiprocessing\.spawn"      # --reload spawn 出的 server 本体
+    r"|vite(/|\s|$)"                # 前端 dev server（HMR）
+    r"| next-server"                # 其他常驻前端
+    r")",
+    re.I,
+)
+
+# 向上最多查几代（防 ppid 成环 / 异常）
+_ANCESTOR_MAX_DEPTH = 8
+
+
+def _ppid_of(pid: int) -> int | None:
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            data = f.read()
+    except OSError:
+        return None
+    tail = data[data.rfind(")") + 1:].split()
+    try:
+        return int(tail[1])
+    except (IndexError, ValueError):
+        return None
+
+
+def is_service(cl: str, pid: int | None = None) -> bool:
+    """命令行（或其任一祖先）属于常驻服务 → 豁免"卡死"清理。
+
+    传 pid 时沿 ppid 链上溯：--reload 派生的 server 进程命令行里没有
+    uvicorn 字样，只看自己必然漏（实测 2026-10-10 牙齿测试复现并修复）。
+    """
+    if SERVICE_PATTERN.search(cl):
+        return True
+    if pid is None:
+        return False
+    seen = {pid}
+    cur = _ppid_of(pid)
+    for _ in range(_ANCESTOR_MAX_DEPTH):
+        if cur is None or cur <= 1 or cur in seen:
+            return False
+        seen.add(cur)
+        if SERVICE_PATTERN.search(cmdline(cur)):
+            return True
+        cur = _ppid_of(cur)
+    return False
+
 
 def scan(pattern: re.Pattern, sample_s: float) -> tuple[list[Finding], dict]:
     """采样两次 CPU，判定卡死。返回 (findings, stats)。"""
@@ -158,6 +232,12 @@ def scan(pattern: re.Pattern, sample_s: float) -> tuple[list[Finding], dict]:
         pid = int(name)
         cl = cmdline(pid)
         if not cl or "guard_bg_jobs" in cl:
+            continue
+        # ⚠️ 常驻服务豁免（uvicorn / vite / resource_tracker）：它们空闲时
+        #    CPU 增量天然为 0，判"卡死"必误杀（实测 2026-10-10 两次事故）。
+        #    必须传 pid：--reload 派生的 server 命令行不含 uvicorn 字样，
+        #    只看自己会漏（牙齿测试实测复现过）。
+        if is_service(cl, pid):
             continue
         if not pattern.search(cl):
             continue
@@ -251,6 +331,12 @@ def kill_stalled(findings: list[Finding], min_age_min: float) -> list[dict]:
     killed = []
     for f in findings:
         if f.kind != "stalled" or f.elapsed_min < min_age_min:
+            continue
+        # 🔒 兜底复核：即使 findings 是从别处（如旧版 state/外部脚本）传进来的，
+        #    也不能让常驻服务被进程组杀掉。 os.killpg 会把整组带走，
+        #    误杀代价太高（dev 后端 + Vite 一起没），这里必须再挡一次。
+        #    同理传 f.pid 走祖先链判定（只看自己命令行会漏 spawn_main）。
+        if is_service(f.cmd, f.pid):
             continue
         # 只杀进程组，避免留下孤儿 worker
         for sig in (signal.SIGTERM, signal.SIGKILL):

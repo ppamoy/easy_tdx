@@ -35,6 +35,7 @@ import pandas as pd
 import pytest
 
 from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.mmd_conditions import _calc_confidence_v47
 
 SHORT, LONG = 400, 500
@@ -65,8 +66,8 @@ def _bars(n: int) -> pd.DataFrame:
 @pytest.fixture(scope="module")
 def ctx():
     dfs, dfl = _bars(SHORT), _bars(LONG)
-    rs = ChanlunAnalyser(code="000001", frequency="daily").process_klines(dfs)
-    rl = ChanlunAnalyser(code="000001", frequency="daily").process_klines(dfl)
+    rs = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False)).process_klines(dfs)
+    rl = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False)).process_klines(dfl)
 
     def pick(r):
         return {

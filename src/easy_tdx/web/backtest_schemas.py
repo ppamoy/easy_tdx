@@ -133,6 +133,24 @@ class BacktestRequest(BaseModel):
     def _check_data_source(self) -> BacktestRequest:
         if self.ohlcv is None and self.symbol is None:
             raise ValueError("必须提供 ohlcv（内联数据）或 symbol（标的代码）之一")
+        # V724: 重复日期防御——实测 2026-10-13 前端 fetchBars 翻页循环把同一
+        # 区间重复 concat 10 遍（后端 /bars?start_date= 忽略 start，每页返回整个
+        # 区间），1500 根变 15000 根：先是 422 too_long，修完前端后若再出现重复
+        # 段（页间重叠），会让缠论笔/中枢与回测信号整体错位。
+        # 这里按 datetime 去重并明确报错，比静默跑一份错位回测要好。
+        if self.ohlcv:
+            seen: set[str] = set()
+            dup: list[str] = []
+            for row in self.ohlcv:
+                key = str(row.get("datetime") or row.get("date") or "")
+                if key in seen:
+                    dup.append(key)
+                seen.add(key)
+            if dup:
+                raise ValueError(
+                    f"ohlcv 含 {len(dup)} 条重复日期（如 {dup[0]}）："
+                    "同一日期出现多次会让回测信号与缠论结构整体错位，请检查取数分页逻辑"
+                )
         return self
 
 

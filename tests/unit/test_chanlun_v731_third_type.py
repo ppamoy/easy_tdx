@@ -58,6 +58,7 @@ def _build(pts: list[float], seg_len: int = 9) -> pd.DataFrame:
 
 
 def _run(df: pd.DataFrame, **cfg):
+    cfg.setdefault("zs_from_xd", False)
     conf = ChanlunConfig(**cfg)
     return ChanlunAnalyser(code="T", frequency="daily", config=conf).process_klines(df)
 
@@ -126,7 +127,7 @@ class TestThirdTypeWindow:
 
     def test_window_configurable_and_zero_means_unlimited(self) -> None:
         """mmd_3rd_retest_max_bars 应可配置；0（默认）= 不限制。"""
-        conf = ChanlunConfig()
+        conf = ChanlunConfig(zs_from_xd=False)
         assert conf.mmd_3rd_retest_max_bars == 0, "默认应为 0（纯原文口径，不限制）"
         assert conf.to_dict()["mmd_3rd_retest_max_bars"] == 0
 

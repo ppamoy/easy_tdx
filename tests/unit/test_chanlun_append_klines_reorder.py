@@ -23,6 +23,7 @@ import pandas as pd
 import pytest
 
 from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun.config import ChanlunConfig
 
 
 def _rows() -> list[dict]:
@@ -97,11 +98,11 @@ class TestAppendKlinesReordersAfterDedup:
     def test_backfill_matches_full_recompute(self) -> None:
         base = _rows()
         # 参照：一次性按时间排序后算
-        expect = ChanlunAnalyser(code="000001", frequency="daily").process_klines(
+        expect = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False)).process_klines(
             pd.DataFrame(sorted(base + _backfill(), key=lambda r: r["datetime"]))
         )
 
-        a = ChanlunAnalyser(code="000001", frequency="daily")
+        a = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
         a.process_klines(pd.DataFrame(base))
         got = a.append_klines(pd.DataFrame(_backfill()))
 
@@ -111,7 +112,7 @@ class TestAppendKlinesReordersAfterDedup:
 
     def test_sequence_is_monotonic_after_append(self) -> None:
         """直接断言：内部保留的 K 线序列必须按时间递增。"""
-        a = ChanlunAnalyser(code="000001", frequency="daily")
+        a = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
         a.process_klines(pd.DataFrame(_rows()))
         a.append_klines(pd.DataFrame(_backfill()))
         times = [str(k.date) for k in a._result.klines]
@@ -123,7 +124,7 @@ class TestAppendKlinesReordersAfterDedup:
         b2 = list(reversed(b1))
 
         def run(new_rows: list[dict]) -> tuple:
-            a = ChanlunAnalyser(code="000001", frequency="daily")
+            a = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
             a.process_klines(pd.DataFrame(_rows()))
             return _signature(a.append_klines(pd.DataFrame(new_rows)))
 
@@ -134,7 +135,7 @@ class TestAppendKlinesNormalPathUnchanged:
     """对照组：只追加更新的 K 线时，行为与修复前一致。"""
 
     def test_append_newer_only_still_works(self) -> None:
-        a = ChanlunAnalyser(code="000001", frequency="daily")
+        a = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
         r0 = a.process_klines(pd.DataFrame(_rows()))
         n0 = len(r0.klines)
         newer = [
@@ -153,7 +154,7 @@ class TestAppendKlinesNormalPathUnchanged:
 
     def test_duplicate_datetime_is_deduped(self) -> None:
         """同日重复追加：不应变长（keep=last 覆盖旧值）。"""
-        a = ChanlunAnalyser(code="000001", frequency="daily")
+        a = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
         r0 = a.process_klines(pd.DataFrame(_rows()))
         n0 = len(r0.klines)
         same = [dict(_rows()[0], close=99.0)]  # 同一天，改收盘价
@@ -161,6 +162,6 @@ class TestAppendKlinesNormalPathUnchanged:
         assert len(r1.klines) == n0, "重复 datetime 应被去重而非追加"
 
     def test_append_requires_init(self) -> None:
-        a = ChanlunAnalyser(code="000001", frequency="daily")
+        a = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
         with pytest.raises(RuntimeError):
             a.append_klines(pd.DataFrame(_rows()))

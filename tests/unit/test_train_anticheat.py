@@ -20,7 +20,7 @@ class _FixtureMixin:
         )
         cls.df = pd.DataFrame(rows)
         cls.result = ChanlunAnalyser(
-            code="000333", frequency="daily", config=ChanlunConfig()
+            code="000333", frequency="daily", config=ChanlunConfig(zs_from_xd=False)
         ).process_klines(cls.df)
 
 

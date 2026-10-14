@@ -660,12 +660,18 @@ def detect_season_for_date(
             return result
 
     # V713: MAC 优先（~1.3s，标准协议空响应重试要 ~5s），标准协议回退。
+    # P0-2：当日信号额外获取涨跌家数（历史日期无法获取，跳过）
+    breadth = None
+    if target >= now.date():
+        from easy_tdx.fundamental.market_breadth import fetch_breadth_ratio
+        breadth = fetch_breadth_ratio()
+
     mdf = _mac_index_bars()
     if mdf is not None and not mdf.empty:
         dates = list(pd.to_datetime(mdf["datetime"]).dt.date)
         closes = [float(x) for x in mdf["close"].tolist()]
         vols = [float(x) for x in mdf["vol"].tolist()] if "vol" in mdf.columns else None
-        result = detect_season(dates, closes, target, volumes=vols)
+        result = detect_season(dates, closes, target, volumes=vols, breadth_ratio=breadth)
         _SEASON_CACHE[key] = (result, now, ttl_hours)
         return result
     if client is None:
@@ -682,7 +688,7 @@ def detect_season_for_date(
     dates = list(pd.to_datetime(df["date"]).dt.date)
     closes = [float(x) for x in df["close"].tolist()]
     vols = [float(x) for x in df["vol"].tolist()] if "vol" in df.columns else None
-    result = detect_season(dates, closes, target, volumes=vols)
+    result = detect_season(dates, closes, target, volumes=vols, breadth_ratio=breadth)
     _SEASON_CACHE[key] = (result, now, ttl_hours)
     return result
 

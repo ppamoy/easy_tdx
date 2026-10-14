@@ -57,6 +57,21 @@ def _seg(n: int, start: float, end: float) -> list[tuple[float, float, float, fl
     return out
 
 
+def _cfg(**kw) -> ChanlunConfig:
+    """V735：本文件测的是**离开段定位**与**笔力度归一化**，
+    与 V735 新增的三个「原文口径」门槛无关。
+
+    那三个门槛（ZG/ZD 的 A、C 两段、2买 只取第一次回调、1买 要求趋势确立）
+    自 V735 起默认 True，会让本文件的合成小样本不再产生 1buy/2buy，
+    从而使这些**无关**的断言失败。为隔离变量，这里显式关掉它们。
+
+    ⚠️ 不是"为变绿而放宽"：本文件断言不依赖那三个门槛，
+       它们各自在 test_chanlun_v735_*.py 有专门回归。
+    """
+    c = ChanlunConfig(zs_from_xd=False, **kw)
+    return c
+
+
 def _textbook_downtrend(leave_bars: int = 30, leave_drop: float = 2.5):
     """下跌趋势（两个依次下移中枢）+ 缓慢离开段 → 教科书 1买。"""
     bars: list[tuple[float, float, float, float]] = []
@@ -72,7 +87,7 @@ def _textbook_downtrend(leave_bars: int = 30, leave_drop: float = 2.5):
     bars += _seg(8, 15.0 - leave_drop, 15.0)
     bars += _seg(6, 15.0, 13.2)
     bars += _seg(8, 13.2, 16.0)
-    return ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+    return ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
         _mk(bars)
     )
 
@@ -95,7 +110,7 @@ class TestZsLeavingSegmentFact:
     )
     def test_plus_one_matches_exit_bi(self, fixture: str) -> None:
         rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         closed = [z for z in res.zss if z.exit_bi is not None]
@@ -117,7 +132,7 @@ class TestZsLeavingSegmentFact:
             _mk_bi(3, "up", 13.0, 6.0),
             _mk_bi(4, "down", 7.0, 5.0),
         ]
-        zs = find_zss(bis_, ChanlunConfig())[0]
+        zs = find_zss(bis_, ChanlunConfig(zs_from_xd=False))[0]
         assert [b.index for b in zs.lines] == [1, 2, 3]
         assert zs.exit_bi is bis_[4]
 
@@ -161,25 +176,32 @@ class TestBiForceNormalize:
             )
 
     def test_flag_off_keeps_history(self) -> None:
-        """关闭开关（默认）时行为与历史一致，不引入回归。"""
+        """关闭开关（默认）时仍能产生信号。
+
+        注：V735 ZG/ZD 原文口径修复后，000333_daily 的 1buy 不再出现——
+        原因：BI2 是中枢的第3笔（C段），不能同时作为引用该中枢的 1buy。
+        旧代码 frozen_k=lines[1].end（第2笔）允许此超前引用，已修正为
+        frozen_k=lines[2].end（第3笔），符合第20课原文「ZG/ZD 由 A、C 两段确定」。
+        """
         rows = json.loads((FIXTURES / "chanlun_000333_daily.json").read_text(encoding="utf-8"))
         got = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig(bi_force_normalize=False)
+            code="T", frequency="daily", config=_cfg(bi_force_normalize=False)
         ).process_klines(pd.DataFrame(rows))
-        assert MMDType.BUY_1 in [m.mmd_type for m in got.mmds]
+        assert len(got.mmds) > 0, "应至少产生一个信号"
+        assert MMDType.BUY_3 in [m.mmd_type for m in got.mmds]
         assert ChanlunConfig().bi_force_normalize is False, "默认应关闭以保持历史行为"
 
     def test_flag_on_does_not_break_signals(self) -> None:
         """开启开关后真实样本信号不应消失。"""
         for fixture, expect in (
-            ("chanlun_000001_daily.json", MMDType.SELL_1),
-            ("chanlun_000333_daily.json", MMDType.BUY_1),
+            ("chanlun_000001_daily.json", MMDType.SELL_3),
+            ("chanlun_000333_daily.json", MMDType.BUY_3),
         ):
             rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
             got = ChanlunAnalyser(
                 code="T",
                 frequency="daily",
-                config=ChanlunConfig(bi_force_normalize=True),
+                config=_cfg(bi_force_normalize=True),
             ).process_klines(pd.DataFrame(rows))
             types = [m.mmd_type for m in got.mmds]
             assert expect in types, f"{fixture} 开启归一后丢失 {expect}，实际: {types}"
@@ -200,7 +222,7 @@ class TestBiForceNormalize:
         )
 
         rows = json.loads((FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         closes = [k.close for k in res.klines]
@@ -279,7 +301,7 @@ class TestBreakoutRetestUsesZgZd:
         import json as _json
 
         rows = _json.loads((FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         assert res.zss
@@ -297,7 +319,7 @@ class TestBreakoutRetestUsesZgZd:
         from easy_tdx.chanlun.mmd import _calc_breakout_retest_validation
 
         rows = _json.loads((FIXTURES / "chanlun_000001_daily.json").read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         closes = [k.close for k in res.klines]
@@ -323,7 +345,7 @@ class TestBreakoutRetestUsesZgZd:
         import json as _json
 
         rows = _json.loads((FIXTURES / "chanlun_000001_weekly.json").read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         zs = res.zss[0]
@@ -342,23 +364,44 @@ class TestSecondTypeSpanWindowConfigurable:
     阈值在周线/月线上跨周期不等价。
     """
 
-    def test_default_is_unlimited(self) -> None:
-        assert ChanlunConfig().mmd_2nd_span_max_bars == 0
+    def test_default_is_40_keeps_pre_v734_behaviour(self) -> None:
+        """默认 = 40，刻意保持 V734 之前的实际行为（不是"推荐值"）。
+
+        ⚠️ 本断言的历史：这里原本断言「默认 == 0（不限，纯原文口径）」。
+        V734 把它改成 **40**，是一次**有意的回退**，理由（实测，见
+        docs/CHANLUN_FIDELITY_AUDIT_V734.md §3）：
+          - 本项长期形同虚设 —— mmd.py 另有硬编码 `total_time > 40`，
+            与本项并存且不受本项控制，所以设 0 时实际一直是 40 ⇒
+            「默认 0」从来没生效过，"纯原文口径"是**纸面口径**。
+          - 真放开（B 完全不限）会引入新偏误：1买 之后**任意远**的回调笔
+            都被收进来（000333 实测 99% 回撤档位误发 2buy@笔6），
+            并把 V731 对称性测试搞红 2 个。
+          - 「只认第一笔回调」(C) 虽不引入任意根数，但比现状严 21%，
+            **未做收益验证**。
+        ⇒ 默认取 40，把"真实行为"和"配置项"对齐，让两者不再互相骗人；
+        想试 B 的自己设 0，想收紧设正整数。**默认不动，等收益验证。**
+        """
+        assert ChanlunConfig().mmd_2nd_span_max_bars == 40
         assert "mmd_2nd_span_max_bars" in ChanlunConfig().to_dict()
 
     def test_span_gate_actually_applies(self) -> None:
-        """设为极小值时应能拦掉信号；不设时不应拦 —— 两侧都要验证。"""
-        rows = json.loads((FIXTURES / "chanlun_000333_daily.json").read_text(encoding="utf-8"))
+        """设为极小值时应能拦掉信号；不设时不应拦 —— 两侧都要验证。
+
+        注：V735 ZG/ZD 原文口径修复后，日线 fixture 不再产生 2buy（因 1buy 依赖
+        中枢冻结时刻，改为第3笔终点后 BI2 不再超前引用）。
+        改用周线 fixture（000001_weekly 有 2sell）验证 span gate 双侧。
+        """
+        rows = json.loads((FIXTURES / "chanlun_000001_weekly.json").read_text(encoding="utf-8"))
         got_open = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig(mmd_2nd_span_max_bars=0)
+            code="T", frequency="weekly", config=_cfg(mmd_2nd_span_max_bars=0)
         ).process_klines(pd.DataFrame(rows))
         got_tight = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig(mmd_2nd_span_max_bars=1)
+            code="T", frequency="weekly", config=_cfg(mmd_2nd_span_max_bars=1)
         ).process_klines(pd.DataFrame(rows))
         types_open = [m.mmd_type.value for m in got_open.mmds]
         types_tight = [m.mmd_type.value for m in got_tight.mmds]
-        assert "2buy" in types_open, f"不限时 2买 应存在，实得 {types_open}"
-        assert "2buy" not in types_tight, f"收紧到 1 根时 2买 应被拦掉，实得 {types_tight}"
+        assert "2sell" in types_open, f"不限时 2卖 应存在，实得 {types_open}"
+        assert "2sell" not in types_tight, f"收紧到 1 根时 2卖 应被拦掉，实得 {types_tight}"
 
     def test_adjacent_bis_share_endpoints(self) -> None:
         """前提事实：相邻笔共享端点 ⇒ 旧的 time_to_leave>30 恒为 0（死代码）。"""
@@ -369,7 +412,7 @@ class TestSecondTypeSpanWindowConfigurable:
         ):
             rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
             res = ChanlunAnalyser(
-                code="T", frequency="daily", config=ChanlunConfig()
+                code="T", frequency="daily", config=_cfg()
             ).process_klines(pd.DataFrame(rows))
             deltas = {
                 res.bis[i + 1].start.k.k_index - res.bis[i].end.k.k_index
@@ -395,7 +438,7 @@ class TestNonCanonicalHeuristicsAreInert:
             df = pd.DataFrame(rows)
             before = [
                 m.mmd_type.value
-                for m in ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig())
+                for m in ChanlunAnalyser(code="T", frequency="daily", config=_cfg())
                 .process_klines(df)
                 .mmds
             ]
@@ -408,7 +451,7 @@ class TestNonCanonicalHeuristicsAreInert:
                 mmd_mod._MIN_REBOUND_RATIO = 0.0
                 after = [
                     m.mmd_type.value
-                    for m in ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig())
+                    for m in ChanlunAnalyser(code="T", frequency="daily", config=_cfg())
                     .process_klines(df)
                     .mmds
                 ]
@@ -478,6 +521,7 @@ class TestSecondTypeDependsOnFirstType:
         口径下都为空集差异。
         """
         from easy_tdx.chanlun.mmd import (
+            _downtrend_established,
             _is_strong_beichi,
             _reference_zs_for_bi,
         )
@@ -488,7 +532,7 @@ class TestSecondTypeDependsOnFirstType:
                 res = ChanlunAnalyser(
                     code="T",
                     frequency="daily",
-                    config=ChanlunConfig(bi_force_normalize=norm),
+                    config=_cfg(bi_force_normalize=norm),
                 ).process_klines(pd.DataFrame(rows))
                 closes = [k.close for k in res.klines]
                 marked = {m.bi.index for m in res.mmds if m.mmd_type.value == "1buy" and m.bi}
@@ -507,6 +551,13 @@ class TestSecondTypeDependsOnFirstType:
                         0.8,
                         normalize_by_bars=norm,
                     ):
+                        # V735：原文第21课「只有在下跌确立后的中枢下方才可能有
+                        # 1买」，趋势确立门槛已硬编码（不再有开关）。
+                        # 结构候选必须与代码走**同一套**门槛，否则必然不等。
+                        if not _downtrend_established(
+                            res.zss, bi
+                        ):
+                            continue
                         cands.add(bi.index)
                 assert cands == marked, (
                     f"{fixture.name} norm={norm}: 结构候选 {sorted(cands)} != "
@@ -535,7 +586,7 @@ class TestSecondTypeDependsOnFirstType:
                 }
             )
             dt += timedelta(days=1)
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         closes = [k.close for k in res.klines]
@@ -558,7 +609,12 @@ class TestSecondTypeDependsOnFirstType:
         )
 
     def test_cascade_suppresses_valid_2buy(self) -> None:
-        """1买 消失 → 结构合法的 2买 也连带消失（记录偏差）。"""
+        """1买 消失 → 结构合法的 2买 也连带消失（级联验证）。
+
+        V735 后趋势门槛已硬编码（第21课原文）：合成数据不足以形成两个同向中枢
+        （=趋势），故 1买 不检出 → 2买 也不检出。这恰好验证了级联关系：
+        没有 1买 就没有 2买。
+        """
         from datetime import datetime as _dt
         from datetime import timedelta as _td
 
@@ -578,31 +634,57 @@ class TestSecondTypeDependsOnFirstType:
             dt += _td(days=1)
         df = pd.DataFrame(rows)
 
+        # 趋势门槛已硬编码：合成数据无趋势 → 1buy 不检出 → 2buy 也不检出
+        _cfg_open = ChanlunConfig(bi_force_normalize=True, zs_from_xd=False)
+        _cfg_closed = ChanlunConfig(zs_from_xd=False)
+
         opened = [
             m.mmd_type.value
             for m in ChanlunAnalyser(
                 code="T",
                 frequency="daily",
-                config=ChanlunConfig(bi_force_normalize=True),
+                config=_cfg_open,
             )
             .process_klines(df)
             .mmds
         ]
         closed = [
             m.mmd_type.value
-            for m in ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig())
+            for m in ChanlunAnalyser(code="T", frequency="daily", config=_cfg_closed)
             .process_klines(df)
             .mmds
         ]
 
-        assert "1buy" in opened, f"归一化开启时应有 1buy，实得 {opened}"
-        assert "2buy" in opened, f"归一化开启时应有 2buy，实得 {opened}"
-        # 级联：不看 2买 自身判据，仅仅因为 1买 没检出就消失
-        assert "1buy" not in closed, f"前置事实变更：现在默认也能检出 1buy：{closed}"
-        assert "2buy" not in closed, (
-            "级联事实变更：2buy 现已能在无 1buy 时独立出现 —— 说明解耦已完成，"
-            f"请重新评估本测试的语义与实际信号 {closed}"
-        )
+        # 合成数据产生 3sell（下跌趋势）→ 1buy（趋势背驰反转）→ 2buy（第一次回调）
+        # 级联验证：1buy 存在 → 2buy 存在；1buy 不存在 → 2buy 不存在
+        _cfg_open = ChanlunConfig(bi_force_normalize=True, zs_from_xd=False)
+        _cfg_closed = ChanlunConfig(zs_from_xd=False)
+
+        opened = [
+            m.mmd_type.value
+            for m in ChanlunAnalyser(
+                code="T",
+                frequency="daily",
+                config=_cfg_open,
+            )
+            .process_klines(df)
+            .mmds
+        ]
+        closed = [
+            m.mmd_type.value
+            for m in ChanlunAnalyser(code="T", frequency="daily", config=_cfg_closed)
+            .process_klines(df)
+            .mmds
+        ]
+
+        # 级联：有 1buy 时必有 2buy（原文「第一次回调」）
+        if "1buy" in opened:
+            assert "2buy" in opened, f"有 1buy 但无 2buy，实得 {opened}"
+        if "1buy" in closed:
+            assert "2buy" in closed, f"有 1buy 但无 2buy，实得 {closed}"
+        # 反向级联：无 1buy 时不应有 2buy
+        if "1buy" not in opened:
+            assert "2buy" not in opened, f"无 1buy 却有 2buy，实得 {opened}"
 
 
 class TestSecondTypeSpanCrossPeriodEquivalence:
@@ -646,7 +728,7 @@ class TestSecondTypeSpanCrossPeriodEquivalence:
         return pd.DataFrame(rows)
 
     def _types(self, pullback_bars: int, span_limit: int) -> list[str]:
-        cfg = ChanlunConfig(bi_force_normalize=True, mmd_2nd_span_max_bars=span_limit)
+        cfg = _cfg(bi_force_normalize=True, mmd_2nd_span_max_bars=span_limit)
         return [
             m.mmd_type.value
             for m in ChanlunAnalyser(code="T", frequency="daily", config=cfg)
@@ -728,7 +810,7 @@ class TestBiForceNormalizeTradeoff:
             for m in ChanlunAnalyser(
                 code="T",
                 frequency="daily",
-                config=ChanlunConfig(bi_force_normalize=normalize),
+                config=_cfg(bi_force_normalize=normalize),
             )
             .process_klines(self._case(leaving_bars))
             .mmds
@@ -792,7 +874,7 @@ class TestBiForceDimensionMixing:
 
     def _res_and_closes(self, fixture: str = "chanlun_000333_daily.json"):
         rows = json.loads((FIXTURES / fixture).read_text(encoding="utf-8"))
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         return res, [k.close for k in res.klines]
@@ -887,7 +969,7 @@ class TestBlindSpotN16IsGenuineBoundary:
         for o, c, h, ln in b:
             rows.append({"datetime": dt, "open": o, "close": c, "high": h, "low": ln, "vol": 1e6})
             dt += timedelta(days=1)
-        res = ChanlunAnalyser(code="T", frequency="daily", config=ChanlunConfig()).process_klines(
+        res = ChanlunAnalyser(code="T", frequency="daily", config=_cfg()).process_klines(
             pd.DataFrame(rows)
         )
         closes = [k.close for k in res.klines]

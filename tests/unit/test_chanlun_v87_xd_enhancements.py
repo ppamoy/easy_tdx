@@ -126,7 +126,7 @@ class TestFindXds:
                 bis.append(_make_bi(i, "down", base + 2, base, base + 3, base - 1))
             base += 1
 
-        config = ChanlunConfig()
+        config = ChanlunConfig(zs_from_xd=False)
         xds = find_xds(bis, config)
         for i in range(1, len(xds)):
             assert xds[i].direction != xds[i - 1].direction, f"线段 {i - 1} 和 {i} 方向相同"
@@ -137,7 +137,7 @@ class TestFindXds:
             _make_bi(0, "up", 10, 15, 16, 9),
             _make_bi(1, "down", 15, 12, 16, 11),
         ]
-        config = ChanlunConfig()
+        config = ChanlunConfig(zs_from_xd=False)
         xds = find_xds(bis, config)
         assert len(xds) == 0
 
@@ -158,7 +158,7 @@ class TestSegmentDirectionConsistency:
             _make_bi(2, "down", 12, 8, 14, 7),
             _make_bi(3, "up", 8, 14, 15, 7),
         ]
-        config = ChanlunConfig()
+        config = ChanlunConfig(zs_from_xd=False)
         xds = find_xds(bis, config)
         for xd in xds:
             if xd.direction == Direction.UP:
@@ -174,7 +174,7 @@ class TestSegmentDirectionConsistency:
             _make_bi(2, "up", 18, 22, 23, 17),
             _make_bi(3, "down", 22, 16, 24, 15),
         ]
-        config = ChanlunConfig()
+        config = ChanlunConfig(zs_from_xd=False)
         xds = find_xds(bis, config)
         for xd in xds:
             if xd.direction == Direction.DOWN:

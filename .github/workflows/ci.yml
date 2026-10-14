@@ -79,6 +79,14 @@ jobs:
             echo "抓取失败 —— 后续审计将用仓库内已有数据；若无数据会显式失败"
             echo "FETCH_OK=0" >> "$GITHUB_ENV"
           fi
+      - name: 缠论模型统一门禁（先过牙齿自检，再跑 BLOCK 检查）
+        run: |
+          python scripts/chanlun_health_gate.py --selftest
+          python scripts/chanlun_health_gate.py --quick --json
+      - name: 买卖点类型判定守门（禁止 endswith("buy") 漏判 2buy_s）
+        run: python scripts/check_mmd_type_guard.py
+      - name: 分型标记守门（笔端点必须是小圆点，不得回到三角形）
+        run: python scripts/check_fx_symbol.py
       - name: 未来函数检测（必须为 0 违反）
         run: python scripts/audit_future_leak_real.py
       - name: 结构不变式检测（I1-I12 必须为 0 违反）

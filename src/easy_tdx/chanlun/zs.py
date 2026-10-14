@@ -20,8 +20,11 @@ from typing import Any
 from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import BI, FX, ZS
 
-# V730 P1-6：中枢延伸段数上限（含初始3段）。原文允许中枢任意延伸，
-# 但工程上无限延伸会让中枢吞没后续行情、买卖点定位漂移，故设上限。
+# V735 原文第33课：「中枢的延伸不能超过5段，也就是一旦出现6段的延伸，
+# 加上形成中枢本身那三段，就构成更大级别的中枢了。」
+# ⇒ 3（形成）+ 5（延伸）= 8 段为正常上限；第 9 段触发升级。
+# 工程上：9 段时关闭当前中枢（而非原地升级为更大级别——那需递归架构），
+# 让后续 笔/线段 形成新中枢。与原文阈值一致（3+6=9），但升级方式是近似。
 _MAX_ZS_SEGMENTS = 9
 
 
@@ -156,26 +159,75 @@ def _calc_zs_quality(
     }
 
 
+def _merge_overlapping_zss(zss: list[ZS]) -> list[ZS]:
+    """合并相邻 [ZD, ZG] 重叠的中枢。
+
+    ⚠️ V851 重核（推翻 V735 的"第19课"引文）：
+    原注释引「第19课定理一：前后两个中枢不能有任何重叠，否则就只是一个
+    更大级别的盘整」—— 该句在 108 课原文里 **grep 不到**。
+
+    已全文检索「不能有任何重叠」，唯一命中是 **第20课 line 4**：
+      「而在趋势里，同级别的前后缠中说禅走势中枢是不能有任何重叠的……
+        如果三个连续次级别走势类型的重叠区间虽然不和前面的走势中枢有
+        任何重叠，但围绕该中枢产生的波动触及前面走势中枢延续时的某个
+        瞬间波动区间，这时候，就不能认为该走势类型是趋势，而只是产生
+        一个**更大级别的**缠中说禅走势中枢。」
+    ⇒ 原文口径：前后中枢重叠 ⇒ **升级为更大级别中枢**。
+
+    本函数做的是 `prev.lines.extend(zs.lines)`：把两个**同级别**中枢的
+    段数相加，造出同级别的超长中枢。这
+      1) 违反第33课 line 7 的 3+6=9 段上限；
+      2) 也不是第20课的"升级为更大级别"。
+
+    实测（scripts/audit_g1_merge_overlap_impact.py，12 只真实日线 332 中枢）：
+      A 无限延伸+合并开: >9段 81 (24.4%)，最长 37 段，合并触发 3 对
+      B 硬关闭  +合并开: >9段 58 (17.8%)，最长 32 段，合并触发 77 对
+      C 硬关闭  +合并关: >9段 0  ( 0.0%)，最长  9 段
+
+    V851 决策：`zs_merge_overlap` 默认改为 False，本函数默认不再执行。
+    保留本函数 + 开关，便于显式恢复旧行为与做对照组。
+    """
+    if len(zss) < 2:
+        return zss
+    result: list[ZS] = []
+    for zs in zss:
+        if result:
+            prev = result[-1]
+            if prev.zd < zs.zg and zs.zd < prev.zg:
+                prev.lines.extend(zs.lines)
+                prev.gg = max(prev.gg, zs.gg)
+                prev.dd = min(prev.dd, zs.dd)
+                prev.end = zs.end
+                prev.done = zs.done
+                continue
+        result.append(zs)
+    for i, zs in enumerate(result):
+        zs.index = i
+    return result
+
+
 def find_zss(
     bis: list[BI],
     config: ChanlunConfig | None = None,
 ) -> list[ZS]:
-    """从笔列表中计算中枢（V730 原文口径版）。
+    """从笔列表中计算中枢（第20课原文口径）。
 
-    缠论原文口径（第17/20/35课）：
-    1. 中枢 = 至少三个连续次级别走势的重叠区间；ZG/ZD 由这三个走势共同确定
-       （ZG = min(g1,g2,g3)，ZD = max(d1,d2,d3)）后即冻结。
-    2. 之后每个同级别走势若与 [ZD, ZG] 有重叠（overlap_high > overlap_low，
+    原文（第20课）：
+        「再定义 ZG=min(g1、g2)，ZD=max(d1、d2)，显然，[ZD，ZG] 就是
+        缠中说禅走势中枢的区间」
+    其中 g1/d1、g2/d2 是**与中枢形成方向一致的两个 Z 走势段（A 段、C 段）**
+    —— 即**第 1 笔和第 3 笔**，中间的反向笔（B 段）**不参与**。
+    原文里**没有 g3**。
+
+    中枢判定规则：
+    1. 中枢 = 至少三个连续次级别走势的重叠区间。
+    2. ZG/ZD 由第 1 笔和第 3 笔的重叠确定（min(高), max(低)），之后冻结。
+    3. 之后每个同级别走势若与 [ZD, ZG] 有重叠（overlap_high > overlap_low，
        无比例阈值——原文只要求「重叠」，不要求达到某个百分比），
        则为中枢延伸，只更新 GG/DD，不改变 ZG/ZD。
-    3. 某走势与 [ZD, ZG] 完全无重叠 → 中枢结束。
-    4. 中枢震荡延伸达 _MAX_ZS_SEGMENTS 段后关闭（工程上限，防止无限延伸
+    4. 某走势与 [ZD, ZG] 完全无重叠 → 中枢结束。
+    5. 中枢震荡延伸达 _MAX_ZS_SEGMENTS 段后关闭（工程上限，防止无限延伸
        吞没后续行情；原文允许任意延伸，但同样可用「走势终完美」判断结束）。
-
-    V733 I8 修复：ZG/ZD 的「冻结笔数」由 config.zs_zd_lines 控制。
-      3（默认，原文口径）：前三笔共同决定 ZG/ZD，第4笔起只更新 GG/DD。
-      2（旧行为）：前两笔决定，第3笔起只更新 GG/DD —— 实测使中枢系统性
-      偏宽（557 个中枢中 52.2% 变窄、0% 变宽），3买/3卖 阈值偏松。
 
     Args:
         bis: 笔列表
@@ -186,10 +238,6 @@ def find_zss(
     """
     if config is None:
         config = ChanlunConfig()
-
-    # V733：ZG/ZD 参与确定的笔数（3=原文口径，2=旧行为）
-    zd_lines = int(getattr(config, "zs_zd_lines", 3) or 3)
-    zd_lines = max(2, min(zd_lines, int(config.zs_min_lines or 3)))
 
     if len(bis) < 3:
         return []
@@ -218,19 +266,43 @@ def find_zss(
         if overlap_high > overlap_low:
             # 有重叠，加入中枢候选
             candidate_lines.append(bi)
-            # V733 I8：ZG/ZD 由前 `zd_lines` 笔共同确定后冻结，之后只更新 GG/DD。
-            # zd_lines=3（默认）＝ 缠论原文「三个连续次级别走势的重叠」。
-            if len(candidate_lines) <= zd_lines:
+
+            # 第20课原文：ZG = min(g1, g2)，ZD = max(d1, d2)
+            # g1/d1 = 第1笔(A段)，g2/d2 = 第3笔(C段)，中间反向笔(B段)不参与。
+            # 前2笔时用运行重叠（尚未形成中枢），第3笔加入时按原文重算并冻结。
+            if len(candidate_lines) >= 3:
+                a_bi = candidate_lines[0]
+                c_bi = candidate_lines[2]
+                zg_candidate = min(a_bi.high, c_bi.high)
+                zd_candidate = max(a_bi.low, c_bi.low)
+            else:
                 zg_candidate = overlap_high
                 zd_candidate = overlap_low
             gg_candidate = max(gg_candidate, bi.high)
             dd_candidate = min(dd_candidate, bi.low)
             candidate_end = bi.end
 
-            # V730 P1-6：延伸上限——中枢震荡延伸达 _MAX_ZS_SEGMENTS 段后关闭，
-            # 之后的笔开启新的中枢候选（防止无限延伸吞没后续行情）。
+            # V735/V850 原文第33课：「中枢的延伸不能超过5段，一旦出现6段的延伸，
+            # 加上形成中枢本身那三段，就构成更大级别的中枢了。」
+            # ⇒ 上限 = 3（形成）+ 6（延伸）= **9 段**（总段数，不是 8 段）。
+            #    第32课「延伸不能超过9个次级别……9个30分钟的延伸，每三个又构成
+            #    日线级别，三个日线级别自然就是周线级别」的算术自证 9 = 3+6；
+            #    第59/36/99课同口径（见 docs/CHANLUN_108_LESSONS_RULE_TABLE_V850.md §3.1）。
+            #
+            # ⚠️ 实测偏离（scripts/guard_chanlun_lesson33_zs_extension_v850.py）：
+            #    zs_no_hard_close=True 下 12 只真实日线 332 个中枢，81 个（24.4%）
+            #    超过 9 段，最长 37 段 —— 即"中枢无限延伸"本身违反第33课。
+            #    原文要求的是**升级为更大级别中枢**（需走势类型级递归），
+            #    代码做不到，只能用工程上限兜底。
+            #
+            # 口径说明（V850 更正，原注释写反了）：
+            #   zs_no_hard_close=True（默认）＝ **偏离原文**的工程折衷：
+            #       不硬关闭，让中枢自然延伸到笔真正离开 [ZD,ZG]。
+            #   zs_no_hard_close=False ＝ 9 段硬关闭（工程上限，数字贴近第33课，
+            #       但仍非原文的"升级"语义）。
             if (
-                len(candidate_lines) >= config.zs_min_lines
+                not getattr(config, "zs_no_hard_close", True)
+                and len(candidate_lines) >= config.zs_min_lines
                 and len(candidate_lines) >= _MAX_ZS_SEGMENTS
             ):
                 zs = ZS(
@@ -336,6 +408,11 @@ def find_zss(
                     zs.grade = quality["grade"]
                     zs.width_pct = quality["width_pct"]
                     zss.append(zs)
+
+    # V735 原文第19课：前后两个中枢不能有重叠，否则只是一个更大级别的盘整。
+    # 合并相邻 [ZD, ZG] 重叠的中枢（消除残余 1.3% 重叠，无需次级别数据）。
+    if getattr(config, "zs_merge_overlap", True):
+        zss = _merge_overlapping_zss(zss)
 
     # 缠论原文：中枢 = 进入段 + 重叠段 + 离开段。显式记录两端，
     # 便于背驰/前端直接使用「进入笔/离开笔」而不必再隐式索引。

@@ -438,7 +438,17 @@ def test_reference_zs_point_in_time_no_future() -> None:
 
 
 def test_find_zss_golden() -> None:
-    """四笔重叠形成中枢、离开笔关闭中枢：应得到 1 个中枢，zg=11 zd=9 gg=12 dd=8。"""
+    """四笔重叠形成中枢、离开笔关闭中枢：应得到 1 个中枢。
+
+    V850 口径修正（第20课 A/C 口径，原文优先）：
+        第20课：「特别地，再定义`ZG=min(g1、g2)`, `ZD=max(d1、d2)`」
+        + 「A、C段，其方向与中枢形成的方向是一致的……
+           以后都把这些与中枢方向一致的次级别走势类型称为`Z走势段`」
+        ⇒ Z走势段只含 A(笔0)、C(笔2)，B(笔1) 按定义**不是** Z走势段。
+        ⇒ zg = min(笔0.high, 笔2.high) = min(12, 12) = 12
+           zd = max(笔0.low,  笔2.low)  = max( 8,  8) = 8
+        （旧断言 zg==11 是第18课三端口径 min(12,11,12)，已按第20课修正）
+    """
     bis = [
         _mk_bi(0, "up", 12.0, 8.0),
         _mk_bi(1, "down", 11.0, 9.0),
@@ -450,8 +460,9 @@ def test_find_zss_golden() -> None:
     assert len(zss) == 1
     zs = zss[0]
     assert zs.line_count == 4
-    assert zs.zg == 11.0  # min(high) = 上沿
-    assert zs.zd == 9.0  # max(low) = 下沿
+    # V850：第20课 A/C 口径 —— 只取笔0、笔2，B 段（笔1）不参与
+    assert zs.zg == 12.0  # min(g1,g2) = min(笔0.high, 笔2.high) = min(12,12)
+    assert zs.zd == 8.0  # max(d1,d2) = max(笔0.low,  笔2.low)  = max( 8, 8)
     assert zs.gg == 12.0
     assert zs.dd == 8.0
     assert zs.done is True
@@ -585,7 +596,14 @@ def test_find_zss_records_enter_exit_bi() -> None:
 def test_find_zss_extension_keeps_zg_zd() -> None:
     """缠论原文：中枢区间由前三个走势确定并冻结，第4笔起延伸只更新 gg/dd。
 
-    V733：冻结笔数 2 → 3（原文「三个连续次级别走势的重叠」）。
+    V850 口径修正（第20课 A/C 口径）：
+        第20课：「特别地，再定义`ZG=min(g1、g2)`, `ZD=max(d1、d2)`」
+        + 「A、C段，其方向与中枢形成的方向是一致的……
+           以后都把这些与中枢方向一致的次级别走势类型称为`Z走势段`」
+        ⇒ Z走势段只含 A(笔0)、C(笔2)，B(笔1) 按定义不是 Z走势段。
+        ⇒ zg = min(笔0.high, 笔2.high) = min(12, 12) = 12
+           zd = max(笔0.low,  笔2.low)  = max( 8,  8) = 8
+        （旧断言 zg==11 是第18课三端口径 min(12,11,12)，已按第20课修正）
     """
     bis = [
         _mk_bi(0, "up", 12.0, 8.0),
@@ -597,9 +615,9 @@ def test_find_zss_extension_keeps_zg_zd() -> None:
     zss = find_zss(bis, ChanlunConfig())
     assert len(zss) == 1
     zs = zss[0]
-    # 前三笔共同确定：ZG=min(12,11,12)=11, ZD=max(8,9,8)=9
-    assert zs.zg == 11.0
-    assert zs.zd == 9.0
+    # V850：A/C 口径 —— 只取笔0、笔2，B 段（笔1）不参与
+    assert zs.zg == 12.0  # min(12, 12)
+    assert zs.zd == 8.0  # max(8, 8)
     assert zs.gg == 12.0
     assert zs.dd == 8.0
     assert zs.line_count == 4

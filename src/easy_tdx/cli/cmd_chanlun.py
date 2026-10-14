@@ -74,7 +74,7 @@ def chanlun(
             adjust=parse_adjust(adjust),
         )
 
-        config = ChanlunConfig(recursion_depth=max(1, recursion_depth))
+        config = ChanlunConfig(recursion_depth=max(1, recursion_depth), zs_from_xd=False)
         analyser = ChanlunAnalyser(code=code, frequency=period, config=config)
         result = analyser.process_klines(df)
 

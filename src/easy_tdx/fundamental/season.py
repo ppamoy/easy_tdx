@@ -148,14 +148,17 @@ def detect_season(
     target: date,
     *,
     volumes: Sequence[Any] | None = None,
+    breadth_ratio: float | None = None,
 ) -> SeasonResult:
     """从截至 target 的指数日线判断四季。
 
-    信号（与 changying_chanlun._update_season 对齐，纯向量计算）：
+    信号（PRD F7：大盘走势 + 估值分位 + 涨跌家数 + 成交额）：
     - 价格趋势：60 日涨跌幅分档 → -2..2
     - 均线系统：MA20 与 MA60 关系 → -1..1
     - 波动率：近 20 日波动率相对近 60 日 → -1..1
     - 量能：近 5 日均量相对近 60 日均量 → -1..1
+    - 估值分位：当前价在近 250 日分位 → -1..1
+    - 涨跌家数：当日上涨股票占比（外部传入）→ -1..1
 
     总分四季区间：>=3 summer，>=1 spring，>=-1 autumn，else winter。
     """
@@ -214,7 +217,27 @@ def detect_season(
             if v60 > 0:
                 vol_score2 = 1 if v5 / v60 > 1.2 else -1 if v5 / v60 < 0.8 else 0
 
+    # ── 估值分位：当前价在近 250 日价格区间的分位 ──
+    # 价格越低 → 估值越低 → 偏多（+1）；价格越高 → 估值越高 → 偏空（-1）
+    lookback_val = min(n, 250)
+    val_window = cs[-lookback_val:]
+    val_rank = 0.0
+    if val_window:
+        below = sum(1 for p in val_window if p < cs[-1])
+        val_rank = below / len(val_window)  # 0=最低, 1=最高
+    val_score = 1 if val_rank < 0.25 else -1 if val_rank > 0.75 else 0
+
+    # ── 涨跌家数：当日上涨股票占比（外部传入，无则跳过）──
+    # >55% 上涨 → 偏多（+1）；<45% 上涨 → 偏空（-1）
+    breadth_score = 0
+    if breadth_ratio is not None:
+        breadth_score = 1 if breadth_ratio > 0.55 else -1 if breadth_ratio < 0.45 else 0
+
     total = price_score + ma_score + vol_score + vol_score2
+    # 估值分位与涨跌家数是状态信号（水平），不是趋势信号（方向）。
+    # 它们用于辅助判断和前端展示，不直接加入趋势总分——否则
+    # 在下跌趋势中「估值低」会给 +1，把冬季误判为秋季。
+    # （趋势信号看方向，状态信号看位置；两者性质不同不能简单相加。）
     trend_20 = (cs[-1] - cs[-20]) / cs[-20] if n >= 20 and cs[-20] else 0
     sig.update(
         {
@@ -225,6 +248,10 @@ def detect_season(
             "ma_score": ma_score,
             "vol_score": vol_score,
             "vol_score2": vol_score2,
+            "val_percentile": round(val_rank * 100, 1),
+            "val_score": val_score,
+            "breadth_ratio": round(breadth_ratio, 3) if breadth_ratio is not None else None,
+            "breadth_score": breadth_score,
             "total_score": total,
         }
     )

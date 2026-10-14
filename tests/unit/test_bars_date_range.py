@@ -116,7 +116,18 @@ def test_chanlun_analyze_start_date_uses_range_fetch() -> None:
 
 
 def test_chanlun_analyze_without_dates_unchanged() -> None:
-    """不带日期时行为不变（仍走 fetch_qfq_klines 单页）。"""
+    """不带日期时行为不变（仍走 fetch_qfq_klines 单页）。
+
+    ⚠️ 必须先清缓存：`/chanlun/analyze` 无日期范围时会命中
+    `audit_data/chanlun_cache.db` 的 SQLite 缓存（chanlun.py:532-536 提前 return），
+    导致 `fetch_qfq_klines` 一次都不被调用。该缓存是**落盘共享状态**，
+    同一条用例第一次跑通过、第二次跑就失败（2026-10-14 实测复现），
+    与 chanlun 模型代码无关。
+    """
+    import sqlite3
+
+    from easy_tdx.web.chanlun_cache import _DB_PATH
+
     df = _bars_df(60)
     fake_qfq = AsyncMock(return_value=df.copy())
     with (
@@ -124,9 +135,19 @@ def test_chanlun_analyze_without_dates_unchanged() -> None:
         patch("easy_tdx.web.routers.chanlun.fetch_qfq_klines", fake_qfq),
     ):
         client = _client()
+        # 清掉本用例的目标缓存条目，强制走真实取数路径
+        _conn = sqlite3.connect(str(_DB_PATH))
+        try:
+            _conn.execute(
+                "DELETE FROM chanlun_cache WHERE market=? AND code=? AND category=?",
+                ("SZ", "000001", "DAY"),
+            )
+            _conn.commit()
+        finally:
+            _conn.close()
         resp = client.post(
             "/api/v1/chanlun/analyze",
-            json={"market": "SZ", "code": "000001", "category": "DAY", "count": 60},
+            json={"market": "SZ", "code": "000001", "category": "DAY", "count": 60, "cross_timeframe": False},
         )
     assert resp.status_code == 200
     fake_range.assert_not_awaited()

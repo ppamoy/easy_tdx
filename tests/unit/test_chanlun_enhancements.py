@@ -3472,7 +3472,7 @@ class TestV27MultiTFConfluence:
 
     def test_multi_tf_confluence_bullish(self):
         """测试多头趋势下的区间套共振。"""
-        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.mmd_conditions import _calc_multi_level_confluence_verification
         from easy_tdx.chanlun.types import MMD, MMDType
 
         # 创建上升趋势数据
@@ -3488,7 +3488,7 @@ class TestV27MultiTFConfluence:
 
     def test_multi_tf_confluence_bearish(self):
         """测试空头趋势下的区间套共振。"""
-        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.mmd_conditions import _calc_multi_level_confluence_verification
         from easy_tdx.chanlun.types import MMD, MMDType
 
         # 创建下降趋势数据
@@ -3506,7 +3506,7 @@ class TestV27MultiTFConfluence:
 
     def test_multi_tf_confluence_mixed(self):
         """测试混合趋势下的区间套共振。"""
-        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.mmd_conditions import _calc_multi_level_confluence_verification
         from easy_tdx.chanlun.types import MMD, MMDType
 
         # 创建震荡数据（先涨后跌）
@@ -3519,7 +3519,7 @@ class TestV27MultiTFConfluence:
 
     def test_multi_tf_confluence_short_data(self):
         """测试数据不足时的处理。"""
-        from easy_tdx.chanlun.mmd import _calc_multi_level_confluence_verification
+        from easy_tdx.chanlun.mmd_conditions import _calc_multi_level_confluence_verification
         from easy_tdx.chanlun.types import MMD, MMDType
 
         closes = [10 + i * 0.1 for i in range(30)]

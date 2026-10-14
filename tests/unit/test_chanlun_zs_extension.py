@@ -45,11 +45,16 @@ def _bi(
 
 
 def test_zs_extension_keeps_zg_zd_updates_gg_dd() -> None:
-    """前三笔重叠确定 ZG/ZD 并冻结；第4笔起延伸只更新 GG/DD。
+    """A、C 两段确定 ZG/ZD 并冻结；第4笔起延伸只更新 GG/DD。
 
-    V733（原文「三个连续次级别走势的重叠区间」）：
-    bi0 [10,14]、bi1 [11,13]、bi2 [9,12] → ZG=min(14,13,12)=12, ZD=max(10,11,9)=11；
-    bi3 为延伸（与 [11,12] 重叠 [11,12]），ZG/ZD 不再变化，只更新 GG/DD。
+    V733/V735（原文第20课「A、C 两段」口径）：
+    bi0(A) [10,14]、bi1(B) [11,13]、bi2(C) [9,12]
+      → ZG=min(A.high=14, C.high=12)=12, ZD=max(A.low=10, C.low=9)=10；
+    bi3 为延伸（与 [10,12] 重叠），ZG/ZD 不再变化，只更新 GG/DD。
+
+    ⚠️ 原断言 ZD=11 用的是「前三笔」max(10,11,9)，是**第20课之前**的旧口径。
+    第20课明确：ZG=min(g1,g2)、ZD=max(d1,d2) 只取 A、C 两段（B 段不参与）。
+    故 ZD 应为 max(10,9)=10。
     """
     bis = [
         _bi(0, "up", 10.0, 14.0, 14.0, 10.0),
@@ -61,7 +66,7 @@ def test_zs_extension_keeps_zg_zd_updates_gg_dd() -> None:
     assert len(zss) == 1
     zs = zss[0]
     assert zs.zg == 12.0
-    assert zs.zd == 11.0
+    assert zs.zd == 10.0
     assert zs.gg == 15.0
     assert zs.dd == 8.0
     assert zs.line_count == 4

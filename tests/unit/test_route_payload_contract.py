@@ -61,7 +61,7 @@ def _make_df(n: int = 120, seed: int = 7) -> pd.DataFrame:
 def analyse_result():
     """跑一次真实分析，模块内复用。"""
     analyser = ChanlunAnalyser(
-        code="TEST", frequency="daily", config=ChanlunConfig(recursion_depth=1)
+        code="TEST", frequency="daily", config=ChanlunConfig(recursion_depth=1, zs_from_xd=False)
     )
     return analyser, analyser.process_klines(_make_df())
 

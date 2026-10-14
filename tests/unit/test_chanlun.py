@@ -282,7 +282,7 @@ class TestFindBis:
             _ck(5, "2025-01-09", 15, 10, 15, 8.5),
         ]
         fxs = find_fractals(cks)
-        bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))  # 基础顶底交替测试
+        bis = find_bis(fxs, ChanlunConfig(bi_type="simple", zs_from_xd=False))  # 基础顶底交替测试
         # ding(1) → di(3) 向下笔, di(3) → ding(4) 向上笔
         assert len(bis) >= 2
         assert bis[0].direction == Direction.DOWN  # 顶→底
@@ -358,7 +358,7 @@ class TestFindBis:
         ]
         merged = merge_klines(klines)
         fxs = find_fractals(merged)
-        bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))
+        bis = find_bis(fxs, ChanlunConfig(bi_type="simple", zs_from_xd=False))
         assert len(bis) >= 1
 
     def test_fractal_trap_regression(self) -> None:
@@ -392,7 +392,7 @@ class TestFindBis:
         fxs = find_fractals(cks)
         assert len(fxs) >= 6, f"应产生至少6个分型，实际 {len(fxs)}"
 
-        bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))
+        bis = find_bis(fxs, ChanlunConfig(bi_type="simple", zs_from_xd=False))
 
         # 关键断言：密集交替分型不应导致算法卡死
         assert len(bis) >= 2, (
@@ -425,7 +425,7 @@ class TestFindZss:
             _ck(6, "2025-01-10", 10, 5, 10, 5),  # 底
         ]
         fxs = find_fractals(cks)
-        bis = find_bis(fxs, ChanlunConfig(bi_type="simple"))
+        bis = find_bis(fxs, ChanlunConfig(bi_type="simple", zs_from_xd=False))
         zss = find_zss(bis)
         assert len(zss) >= 1
         zs = zss[0]
@@ -519,7 +519,7 @@ class TestChanlunAnalyser:
         from easy_tdx.chanlun.analyser import ChanlunAnalyser
 
         df = pd.DataFrame(columns=["datetime", "open", "close", "high", "low", "vol"])
-        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(bi_type="simple"))
+        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(bi_type="simple", zs_from_xd=False))
         result = analyser.process_klines(df)
         assert len(result.klines) == 0
         assert len(result.bis) == 0
@@ -625,7 +625,7 @@ class TestChanlunAnalyser:
                 "vol": [1000] * n,
             }
         )
-        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(bi_type="simple"))
+        analyser = ChanlunAnalyser(code="SZ000001", config=ChanlunConfig(bi_type="simple", zs_from_xd=False))
         d = analyser.process_klines(df).to_dict()
 
         date_re = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -757,7 +757,7 @@ class TestChanlunAnalyser:
         )
         d = (
             ChanlunAnalyser(
-                code="SZ000001", frequency="DAILY", config=ChanlunConfig(bi_type="simple")
+                code="SZ000001", frequency="DAILY", config=ChanlunConfig(bi_type="simple", zs_from_xd=False)
             )
             .process_klines(df)
             .to_dict()

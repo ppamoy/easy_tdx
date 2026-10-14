@@ -28,19 +28,90 @@ class ChanlunConfig:
     zs_type: str = "standard"
     # 中枢最少重叠线段数（标准中枢 = 3）
     zs_min_lines: int = 3
+    # V735/V850 原文第33课：「中枢的延伸不能超过5段，一旦出现6段的延伸，
+    # 加上形成中枢本身那三段，就构成更大级别的中枢了。」
+    # ⇒ 上限 = 3 + 6 = **9 段**（总段数；第32课算术自证 + 第59/36/99课一致）。
+    # 原文的"升级"需要走势类型级递归（架构级改动），代码用笔级近似。
+    #
+    # ⚠️ V850 更正：原注释把 True 写成"原文口径"，**是错的**。
+    #   **zs_no_hard_close=True（默认）＝ 偏离原文的工程折衷**：
+    #     不在9段时硬关闭中枢，让其自然延伸直到笔真正离开[ZD,ZG]。
+    #     实测偏离（scripts/guard_chanlun_lesson33_zs_extension_v850.py，
+    #     12 只真实日线 332 个中枢）：**81 个（24.4%）超过 9 段，最长 37 段**。
+    #     收益侧实测（6 只日线）：重叠从 20→1 对（95%减少）、
+    #     中枢从 100→80（20%减少，消除了人工拆分产生的假"趋势"）。
+    #   zs_no_hard_close=False：9 段硬关闭（工程上限；数字贴近第33课，
+    #     但仍非原文的"升级为更大级别中枢"语义）。
+    #
+    # V851 决策（与 zs_merge_overlap=False 配套）：
+    #   原默认 True（不硬关闭）实测 24.4% 中枢超 9 段、最长 37 段。
+    #   单独改成 False 不够（>9段仍有 17.8%、最长 32 段），因为硬关闭
+    #   造出的相邻中枢会被 `_merge_overlapping_zss` 立刻重新拼成长中枢
+    #   （合并触发对数从 3 暴涨到 77）。
+    #   两项配套后（scripts/audit_g1_merge_overlap_impact.py，12 只日线 332 中枢）：
+    #     >9段：81 (24.4%) → 0 (0.0%)
+    #     最长：37 段 → 9 段（= 第33课上限 3+6）
+    #     信号：658 → 650（-1.2%，可接受）
+    #   按 AGENTS.md §4「改开关必须测两侧」：
+    #     False（新默认）= 符合原文；True = 偏离原文的工程折衷，显式可开。
+    zs_no_hard_close: bool = False
+    # V842 重核（原判定错误，已修正）：第91课「笔是不能构成中枢的」
+    #   禁的是**同级别笔**构**同级别**中枢。
+    #   第83课 line 4：「我们是可以设计这样的程序，也就是用笔当成构成
+    #     最小中枢的零件，但这样构造出来的系统，其稳定性极差。」
+    #     ⇒ 第83课说笔**可以**构中枢，反对理由是稳定性（一笔受错单/
+    #        老鼠仓等偶然因素影响大），不是逻辑不可能。
+    #   第53课 line 6：「站在30分钟级别的角度，5分钟的走势都可以看成
+    #     就是一个线段」⇒ **笔/线段是相对级别的**。
+    #   第17课 line 20：「被至少三个连续次级别走势类型所重叠的部分」
+    #     ⇒ 用次级别周期的笔构大级别中枢，那些笔就是次级别走势，
+    #        原文允许。所以 find_zss(bis) 本身**不是原文偏离**。
+    # 真正的缺口：第17课「次级别走势类型重叠」未精确实现
+    #   （zs_cross_timeframe=True 是近似，默认 False）——
+    #   这与第33课 8 段上限超限是**同一个架构缺口**（缺次级别递归）。
+    zs_from_xd: bool = False
+    # V851 重核（推翻 V735 的"第19课定理一"引文）：
+    #
+    # 原注释引「第19课定理一：前后两个中枢不能有任何重叠，否则就只是一个
+    # 更大级别的盘整」——该句在 108 课原文里 **grep 不到**。已全文检索
+    # 「不能有任何重叠」，唯一命中是 **第20课 line 4**：
+    #   「而在趋势里，同级别的前后缠中说禅走势中枢是不能有任何重叠的……
+    #     如果三个连续次级别走势类型的重叠区间虽然不和前面的走势中枢没有
+    #     任何重叠，但围绕该中枢产生的波动触及前面走势中枢延续时的某个
+    #     瞬间波动区间，这时候，就不能认为该走势类型是趋势，而只是产生
+    #     一个更大级别的缠中说禅走势中枢。」
+    # ⇒ 前后中枢重叠 ⇒ **更大级别的中枢（升级）**，不是同级别更长的中枢。
+    #
+    # 而 `_merge_overlapping_zss` 做的是 `prev.lines.extend(zs.lines)`：
+    # 把两个**同级别**中枢的段数相加，造出同级别的超长中枢。这
+    #   1) 违反第33课 line 7 的 3+6=9 段上限；
+    #   2) 也不是第20课的"升级为更大级别"。
+    #
+    # 实测（scripts/audit_g1_merge_overlap_impact.py，12 只真实日线 332 中枢）：
+    #   A 当前（无限延伸+合并开）: >9段 81 (24.4%)，最长 37 段
+    #   B 硬关闭+合并开:           >9段 58 (17.8%)，最长 32 段 ← 只改开关不够
+    #   C 硬关闭+合并关:           >9段 0  (0.0%)，最长  9 段 ← 符合原文
+    #   注意 B 的合并触发对数从 A 的 3 暴涨到 77 —— 硬关闭造出的相邻中枢
+    #   立刻被合并重新拼成长中枢，**关闭合并是 G1 的必要条件**。
+    #
+    # V851 决策：默认改为 False（关闭同级别合并），同时 zs_no_hard_close
+    # 默认改为 False（9 段硬关闭）。两者配合使 >9 段从 24.4% 降到 0.0%，
+    # 与第33课上限严格一致。信号数 658 → 650（-1.2%，可接受）。
+    # 若要恢复旧行为，显式设 zs_merge_overlap=True（会重新引入超限）。
+    zs_merge_overlap: bool = False
+    # V735 Round 9：原文第17课「中枢 = 3 个连续次级别走势类型的重叠区间」。
+    # 当前默认（zs_from_xd=False）用**同级别笔**构中枢，第91课说「笔不能构中枢」。
+    # zs_from_xd=True 改用**同级别线段**（第91课允许），但仍非「次级别」。
+    # zs_cross_timeframe=True 进一步改用**次级别（30min）线段**构中枢，
+    # 是原文第17课的精确口径。需要 30min K线数据。
+    # 实测（6 只日线）：中枢 56→9（84%减）、信号 138→21（15%保留）。
+    # 默认 False（保持实用性），用户可显式开启获得原文精确口径。
+    zs_cross_timeframe: bool = False
     # 中枢区间来源: "dd" 用顶底点, "ck" 用缠论K线高低, "k" 用原始K线高低
     zs_qujian: str = "dd"
-    # V733：ZG/ZD 由前几笔的重叠确定后冻结。
-    #   3 = 缠论原文口径（第17/20/35课，**默认**）：中枢 = **三个**连续次级别
-    #       走势的重叠区间，故 ZG/ZD 应由前三笔共同确定
-    #       （ZG=min(g1,g2,g3)，ZD=max(d1,d2,d3)），第4笔起只更新 GG/DD。
-    #   2 = 旧行为（V730 起）：ZG/ZD 由前两笔确定，第3笔起只更新 GG/DD。
-    #   实测（V733，30 只日线 557 个含≥3笔的中枢）：
-    #       改 3 后 52.2% 的中枢**变窄**（中位 -4.0%，均值 -19.0%），
-    #       47.8% 不变，**0% 变宽**；按 3 笔规则**无**中枢变为非法。
-    #       ⇒ 旧行为（2）让中枢系统性**偏宽**（高估震荡区间），
-    #         3 买/3 卖 依赖 ZG/ZD 的突破/回踩阈值因此偏松。
-    zs_zd_lines: int = 3
+
+    # ZG/ZD 按缠论原文第20课：ZG=min(g1,g2)、ZD=max(d1,d2)，只用第 1、3 笔（A、C段）。
+    # 中间反向笔（B段）不参与。原文没有 g3。
 
     # ── 分型配置 ────────────────────────────────────────────────────────
     # 是否使用严格分型（顶底不能互相包含）
@@ -65,6 +136,13 @@ class ChanlunConfig:
     # 1买/1卖 是否启用「结构去重启发式」（相邻间隔5笔 + 3%反弹/回落）。
     # 默认 True；设为 False 时严格按缠论原文（趋势背驰点即可），不去重。
     mmd_1st_dedup: bool = True
+
+    # V735 Round 8：第29课后置验证 → 信号可信度扣分。
+    # 原文（第29课定理）：「该反弹一定触及最后一个中枢的 DD=min(dn)」。
+    # 后置验证测出 _rebound_verified=False 的 1买/1卖，其 decision_score
+    # 扣减此分数（默认 15 分，不改信号有无 = 不前置过滤）。
+    # 设为 0 则禁用扣分（仅保留 rebound_verified 标记）。
+    rebound_penalty: float = 15.0
 
     # 3类买卖点是否启用「技术指标增强过滤」（RSI/KDJ/BOLL/量能/MACD零轴等）。
     # 默认 False：严格遵循缠论原文，3买=突破中枢上沿+回踩不破、3卖=跌破下沿+反抽不破，
@@ -121,7 +199,65 @@ class ChanlunConfig:
     # 间隔中 13 个 > 15 根）；且它是**绝对根数**，同一形态在周线/月线上对应
     # 的间隔只有日线的约 1/5、1/20，跨周期含义完全不同。
     # 默认 0 = 不限制（纯原文口径）；设为正整数可按周期收紧。
-    mmd_2nd_span_max_bars: int = 0
+    #
+    # ⚠️ V734（2026-10-11 实测）：本项**曾经形同虚设** —— mmd.py 里另有一处
+    # 硬编码 `if total_time > 40: break`（V8 遗留），与本项并存且不受本项控制，
+    # 导致本项设 0「不限」时实际上仍被 40 根截住。现已统一由本项控制。
+    #
+    # 默认 40 = **刻意保持修复前的实际行为**，不是"推荐值"。
+    # 25 只日线三口径实测（A/B/C 定义见 docs/CHANLUN_FIDELITY_AUDIT_V734.md §3）：
+    #     类型        A 原始≤40   B 完全不限   C 只第一笔回调
+    #     2buy            32          90           19
+    #     2buy_s          36          54           33
+    #     2sell           44          78           34
+    #     2sell_s         23          41           21
+    #     合计           135         263          107
+    # B 会把 1买 之后**任意远**的回调笔都收进来（000333 实测：99% 回撤档位里
+    #   笔4 被正确拒绝后，扫描走到笔6 误发 2buy）⇒ 搞红 V731 对称性测试 2 个。
+    # C 不引入任意根数、与原文精神更合，但**比 A 严 21%**，是否更准/更赚**未验证**。
+    # ⇒ 两者都**没有做收益验证**，所以默认不动，仍走 A 的行为（= 40）。
+    #   想放开的自己设 0（此时**真的**不限）；想收紧设正整数。
+    #
+    # ⚠️ 记录两个我自己犯的错（别重蹈）：
+    # 1. 第一版 A/B 只替换了「带注释的买侧那行」，卖侧那行没有注释、锚点不匹配，
+    #    于是得出「卖侧 0% 被砍」的**假结论**。做字符串替换式 A/B 时，
+    #    必须**先断言锚点命中数**（买卖各 1 处）。
+    # 2. 复核脚本用 `ChanlunAnalyser.process_klines` 跑对照，但它内部用的是
+    #    **已安装**的 mmd 模块，不是我 exec 出来的副本 ⇒ 两组其实跑的是同一份代码，
+    #    得出「A 与 C 完全一致」的假结论。A/B 必须**直接调被 patch 的模块函数**。
+    mmd_2nd_span_max_bars: int = 40
+
+    # ── 线段级别买卖点配置（seg_mmd）────────────────────────────────────
+    # use_seg_mmd=True: 使用线段末端买卖点检测（参考 chan.py 的 CBSPointList）
+    #   一类买卖点在线段末端检测背驰（而非每根笔末端），更符合原文。
+    #   False（默认）：使用 find_mmds_v44 笔级别买卖点。
+    use_seg_mmd: bool = False
+    # seg_mmd_hybrid=True: T1来自线段级别(更可靠), T2/T3来自笔级别(更多信号)
+    seg_mmd_hybrid: bool = False
+    # 背驰率阈值：exit 笔 MACD 指标 ≤ divergence_rate × enter 笔 MACD 指标
+    seg_divergence_rate: float = 1.5
+    # 最少中枢数：线段至少包含这么多中枢才是一类买卖点
+    seg_min_zs_cnt: int = 1
+    # 一类买卖点只算多笔中枢（排除一笔中枢）
+    bsp1_only_multibi_zs: bool = True
+    # 一类买卖点要求创新极值
+    bs1_peak: bool = True
+    # 二类买卖点最大回踩率
+    max_bs2_rate: float = 0.8
+    # 二类必须跟随一类
+    bsp2_follow_1: bool = True
+    # 三类买卖点必须跟随一类
+    bsp3_follow_1: bool = True
+    # 三类买卖点严格模式
+    strict_bsp3: bool = False
+    # 三类买卖点要求突破中枢极值
+    bsp3_peak: bool = False
+    # 三类A最多扫描几个中枢
+    bsp3a_max_zs_cnt: int = 1
+    # 类二买卖点最大层级
+    max_bsp2s_lv: int | None = None
+    # MACD 背驰算法: "peak" 取峰值, "area" 取面积
+    seg_macd_algo: str = "peak"
 
     # ── MACD 配置 ───────────────────────────────────────────────────────
     macd_fast: int = 12
@@ -135,8 +271,12 @@ class ChanlunConfig:
             "bi_fractal_confirm": self.bi_fractal_confirm,
             "zs_type": self.zs_type,
             "zs_min_lines": self.zs_min_lines,
+            "zs_no_hard_close": self.zs_no_hard_close,
+            "zs_from_xd": self.zs_from_xd,
+            "zs_merge_overlap": self.zs_merge_overlap,
+            "rebound_penalty": self.rebound_penalty,
+            "zs_cross_timeframe": self.zs_cross_timeframe,
             "zs_qujian": self.zs_qujian,
-            "zs_zd_lines": self.zs_zd_lines,
             "fx_strict": self.fx_strict,
             "bi_qujian": self.bi_qujian,
             "xd_bi_pohuai": self.xd_bi_pohuai,
@@ -150,4 +290,18 @@ class ChanlunConfig:
             "macd_fast": self.macd_fast,
             "macd_slow": self.macd_slow,
             "macd_signal": self.macd_signal,
+            "use_seg_mmd": self.use_seg_mmd,
+            "seg_mmd_hybrid": self.seg_mmd_hybrid,
+            "seg_divergence_rate": self.seg_divergence_rate,
+            "seg_min_zs_cnt": self.seg_min_zs_cnt,
+            "bsp1_only_multibi_zs": self.bsp1_only_multibi_zs,
+            "bs1_peak": self.bs1_peak,
+            "max_bs2_rate": self.max_bs2_rate,
+            "bsp2_follow_1": self.bsp2_follow_1,
+            "bsp3_follow_1": self.bsp3_follow_1,
+            "strict_bsp3": self.strict_bsp3,
+            "bsp3_peak": self.bsp3_peak,
+            "bsp3a_max_zs_cnt": self.bsp3a_max_zs_cnt,
+            "max_bsp2s_lv": self.max_bsp2s_lv,
+            "seg_macd_algo": self.seg_macd_algo,
         }

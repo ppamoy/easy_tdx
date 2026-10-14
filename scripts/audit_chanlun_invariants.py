@@ -18,12 +18,16 @@ I5  笔端点锚定真实 K 线极值：buy 类 anchor_val == klines[bar_index].
     sell 类 == high（顶分型）；且该 bar 确实是笔端点局部极值
 I6  笔区间极值正确：bi.high == max(区间内原始K线 high)，bi.low == min(low)
 I7  中枢 ZG > ZD；GG >= ZG；DD <= ZD；中枢至少 zs_min_lines 笔
-I8  中枢 ZG/ZD 必须等于「前三个次级别走势」的重叠区间（ZG=min(g1,g2,g3)，
-    ZD=max(d1,d2,d3)）—— 缠论原文第17课「至少三个连续次级别走势的重叠区间」。
-    当前 zs.py 用**前两笔**就冻结 ZG/ZD（len(candidate_lines)<=2），与原文差一段。
-    实测（591 个中枢 / 32 只真实日线）：303 个（51.3%）区间被放宽，
-    中位宽度 2.56 → 3.32（+30%），最大 +215%。
-    ⚠️ 注意：构成笔与 [ZD,ZG] 有重叠这一条**实测 0 违反**（591 个中枢全部满足），
+I8  中枢 ZG/ZD 必须等于 **A段与C段**（Z走势段 Z1/Z3，即 lines[0] 与 lines[2]）
+    的重叠区间 —— 缠论原文第20课：
+      「特别地，再定义 ZG=min(g1、g2)，ZD=max(d1、d2)，显然 [ZD，ZG] 就是
+        缠中说禅走势中枢的区间」
+    其中 g1/d1 = A段(Z1)、g2/d2 = C段(Z3)，中间的反向笔（B段）**不参与**，
+    原文 108 课里**没有 g3**。
+    ⚠️ 本准则曾写成「前三个次级别走势 min(high)/max(low)」，那会把中间的反向笔
+      也算进去 —— 是对原文的误读（V840 已更正）。按误读口径实测的「303 个
+      中枢区间被放宽 / 51.3%」因此**全部作废**，不是代码缺陷。
+    ⚠️ 另注：构成笔与 [ZD,ZG] 有重叠这一条**实测 0 违反**（591 个中枢全部满足），
       故 I8 只检定义段口径，不检「每笔都必须落在 [ZD,ZG] 内」（那是对原文的误读：
       原文只要求重叠，GG/DD 可以超出 ZG/ZD）。
 I8b 中枢的每条构成笔都必须与 [ZD,ZG] 有重叠（原文延伸判据：无重叠则中枢结束）
@@ -56,7 +60,8 @@ BUY_TYPES = {"1buy", "2buy", "3buy", "buy", "l2buy", "l3buy"}
 SELL_TYPES = {"1sell", "2sell", "3sell", "sell", "l2sell", "l3sell"}
 
 
-def load_all() -> list[tuple[str, pd.DataFrame]]:
+def load_all(limit: int = 0) -> list[tuple[str, pd.DataFrame]]:
+    """加载真实日线。limit>0 时只取前 N 只（供 --selftest / 日常快速跑）。"""
     out: list[tuple[str, pd.DataFrame]] = []
     for p in sorted(DATA_DIR.glob("*.json")):
         code = p.name.split("_")[0]
@@ -66,6 +71,8 @@ def load_all() -> list[tuple[str, pd.DataFrame]]:
         df = pd.DataFrame(rows)
         df["datetime"] = pd.to_datetime(df["datetime"])
         out.append((code, df))
+        if limit and len(out) >= limit:
+            break
     return out
 
 
@@ -76,6 +83,23 @@ def audit_one(code: str, df: pd.DataFrame) -> tuple[dict[str, int], list[str]]:
     details: list[str] = []
 
     res = ChanlunAnalyser(code=code, frequency="daily", config=ChanlunConfig()).process_klines(df)
+
+    # ── 坏状态注入（仅供 chanlun_health_gate.py --selftest 验证"牙齿"）──
+    # 动机（AGENTS.md §7）：一个**从不会变红**的门禁等于没有门禁。
+    # 这里故意构造一条违反 I2/I3 的笔（复制末笔 → 同向且端点不连续），
+    # 若审计在这种情况下仍返回 0 违反，说明判据在空转，必须修。
+    # ⚠️ 默认关闭；CI 正常跑完全不受影响。
+    import os as _os
+
+    if _os.environ.get("INJECT_BROKEN") == "1":
+        _bs = list(res.bis)
+        if len(_bs) >= 2:
+            import copy as _copy
+
+            res.bis = _bs + [_copy.copy(_bs[-1])]
+        else:
+            v["I2"] += 1
+            details.append(f"{code} INJECT 笔数不足，无法注入坏状态")
 
     kls = res.klines
     high_by_bar = {k.index: k.high for k in kls}
@@ -168,20 +192,26 @@ def audit_one(code: str, df: pd.DataFrame) -> tuple[dict[str, int], list[str]]:
         if zs.line_count < 3:
             v["I7"] += 1
             details.append(f"{code} I7 中枢{zs.index} 仅 {zs.line_count} 笔")
-        # I8：ZG/ZD 必须等于**前三个**次级别走势的重叠区间（原文第17课）。
-        # 只在恰好 3 笔及以上时检（不足 3 笔本身由 I7 报出）。
+        # I8：ZG/ZD 必须等于 **A段(Z1) 与 C段(Z3)** 的重叠区间（原文第20课
+        # 「ZG=min(g1、g2)，ZD=max(d1、d2)」——只用第1笔和第3笔，中间反向笔
+        # 不参与，原文里没有 g3）。V840 前本准则误用「前3笔 min/max」，
+        # 把中间反向笔算进去，报出的违规是准则错误而非代码缺陷。
         if len(zs.lines) >= 3:
-            zg3 = min(ln.high for ln in zs.lines[:3])
-            zd3 = max(ln.low for ln in zs.lines[:3])
-            if abs(zs.zg - zg3) > 1e-6:
+            a_ln = zs.lines[0]   # A 段 = Z1
+            c_ln = zs.lines[2]   # C 段 = Z3（中间 lines[1] 是反向笔，不参与）
+            zg_ac = min(a_ln.high, c_ln.high)
+            zd_ac = max(a_ln.low, c_ln.low)
+            if abs(zs.zg - zg_ac) > 1e-6:
                 v["I8"] += 1
                 details.append(
-                    f"{code} I8 中枢{zs.index} ZG{zs.zg:.3f} != 原文前3笔 min(high){zg3:.3f}"
+                    f"{code} I8 中枢{zs.index} ZG{zs.zg:.3f} != 原文 min(g1,g2)={zg_ac:.3f} "
+                    f"(A段笔{a_ln.index} high={a_ln.high:.3f}, C段笔{c_ln.index} high={c_ln.high:.3f})"
                 )
-            if abs(zs.zd - zd3) > 1e-6:
+            if abs(zs.zd - zd_ac) > 1e-6:
                 v["I8"] += 1
                 details.append(
-                    f"{code} I8 中枢{zs.index} ZD{zs.zd:.3f} != 原文前3笔 max(low){zd3:.3f}"
+                    f"{code} I8 中枢{zs.index} ZD{zs.zd:.3f} != 原文 max(d1,d2)={zd_ac:.3f} "
+                    f"(A段笔{a_ln.index} low={a_ln.low:.3f}, C段笔{c_ln.index} low={c_ln.low:.3f})"
                 )
         # I8b：构成笔必须与 [ZD,ZG] 有重叠（原文延伸判据；GG/DD 可超出，不检）
         for ln in zs.lines:
@@ -227,7 +257,13 @@ def audit_one(code: str, df: pd.DataFrame) -> tuple[dict[str, int], list[str]]:
 
 
 def main() -> int:
-    data = load_all()
+    import argparse as _ap
+
+    _p = _ap.ArgumentParser()
+    _p.add_argument("--limit", type=int, default=0, help="只审前 N 只（快速自检用）")
+    _a = _p.parse_args()
+
+    data = load_all(limit=_a.limit)
     if not data:
         print(f"❌ {DATA_DIR} 无数据，请先跑 scripts/audit_fetch_real_data.py")
         return 2

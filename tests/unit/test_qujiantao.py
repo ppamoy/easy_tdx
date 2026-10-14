@@ -169,7 +169,7 @@ class TestIntegration:
             }
         )
         r = ChanlunAnalyser(
-            code="T", frequency="daily", config=ChanlunConfig(recursion_depth=2)
+            code="T", frequency="daily", config=ChanlunConfig(recursion_depth=2, zs_from_xd=False)
         ).process_klines(df)
         assert len(r.recursive_levels) >= 1
         for m in r.mmds:

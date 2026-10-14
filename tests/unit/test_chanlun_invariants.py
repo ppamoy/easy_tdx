@@ -108,26 +108,32 @@ def test_bi_direction_alternates(result) -> None:
 
 # ── 中枢：zg>zd / gg>=zg / dd<=zd / ZG/ZD 由前 zs_zd_lines 笔冻结 ──────────
 
-# V733：冻结笔数由 2 改为 3（缠论原文「三个连续次级别走势的重叠区间」）。
-# 与 ChanlunConfig.zs_zd_lines 保持一致；若只含 2 笔则退化用 2 笔。
+# ⚠️ V735 更正：上面「冻结笔数 3 = 缠论原文」的说法**是错的**。
+# 原文第20课原文是「ZG=min(g1、g2)、ZD=max(d1、d2)」—— 只有 **A、C 两段**
+# （第 1、3 笔）参与，中间那笔（B）不参与，**原文里没有 g3**。
+# V735 起 zs_zd_original_ac 默认 True ⇒ 走 A、C 两段；本文件按原文改。
 _ZD_LINES = 3
 
 
 def test_zs_geometry_invariants(result) -> None:
-    """中枢几何不变量：zg>zd，gg>=zg，dd<=zd，且 zg/zd 由前 zs_zd_lines 笔冻结。"""
+    """中枢几何不变量：zg>zd，gg>=zg，dd<=zd，且 zg/zd 由 A、C 两段确定。
+
+    V735：判据改用原文第20课的 A、C 两段（见上方注释）。
+    """
     for z in result.zss:
         assert z.zg > z.zd, f"中枢[{z.index}] zg={z.zg} 必须 > zd={z.zd}"
         assert z.gg >= z.zg - _TOL, f"中枢[{z.index}] gg={z.gg} 必须 >= zg={z.zg}"
         assert z.dd <= z.zd + _TOL, f"中枢[{z.index}] dd={z.dd} 必须 <= zd={z.zd}"
-        if len(z.lines) >= 2:
-            first = z.lines[: min(_ZD_LINES, len(z.lines))]
-            ezg = min(ln.high for ln in first)
-            ezd = max(ln.low for ln in first)
+        if len(z.lines) >= 3:
+            # 原文第20课：ZG=min(g1、g2)、ZD=max(d1、d2) —— A、C 两段
+            a_seg, c_seg = z.lines[0], z.lines[2]
+            ezg = min(a_seg.high, c_seg.high)
+            ezd = max(a_seg.low, c_seg.low)
             assert abs(z.zg - ezg) < _TOL, (
-                f"中枢[{z.index}] zg={z.zg}≠前{len(first)}笔min(high)={ezg}"
+                f"中枢[{z.index}] zg={z.zg}≠A、C两段min(high)={ezg}（原文第20课）"
             )
             assert abs(z.zd - ezd) < _TOL, (
-                f"中枢[{z.index}] zd={z.zd}≠前{len(first)}笔max(low)={ezd}"
+                f"中枢[{z.index}] zd={z.zd}≠A、C两段max(low)={ezd}（原文第20课）"
             )
             # gg/dd 覆盖全部走势极值
             assert abs(z.gg - max(ln.high for ln in z.lines)) < _TOL, (

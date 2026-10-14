@@ -252,6 +252,7 @@ class ChangyingChanlunStrategy(ParametrizedStrategy):
             macd_fast=self.p["macd_fast"],
             macd_slow=self.p["macd_slow"],
             macd_signal=self.p["macd_signal"],
+        zs_from_xd=False,
         )
         return ChanlunAnalyser(code="TEST", frequency="DAILY", config=config)
 

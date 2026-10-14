@@ -67,7 +67,7 @@ def _cross_section(seeds: range) -> pd.DataFrame:
     for s in seeds:
         df = _mk_series(s)
         res = ChanlunAnalyser(
-            code=f"S{s}", frequency="daily", config=ChanlunConfig()
+            code=f"S{s}", frequency="daily", config=ChanlunConfig(zs_from_xd=False)
         ).process_klines(df)
         c = df["close"].to_numpy(dtype=float)
         n_buy = sum(1 for m in res.mmds if m.mmd_type.value.endswith("buy"))

@@ -336,7 +336,7 @@ def audit_chanlun(
             analyser = ChanlunAnalyser(
                 code=f"{r['market']}{r['code']}",
                 frequency="daily",
-                config=ChanlunConfig(),
+                config=ChanlunConfig(zs_from_xd=False),
             )
             try:
                 result = analyser.process_klines(df)

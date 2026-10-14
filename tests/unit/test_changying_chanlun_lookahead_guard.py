@@ -66,14 +66,21 @@ def test_guard_off_vs_on_changes_real_signal_count_and_effective_bars() -> None:
     off = [(b, t) for b, t, _c in off_strategy._chanlun_signals]
     on = [(b, t) for b, t, _c in on_strategy._chanlun_signals]
 
+    # V735 重新标定：切缠论原文口径后，原 (38,"1sell")、(62,"2sell") 被去掉。
+    # 依据原文第21课：「一个**上涨趋势确定后**，不可能再有第一类与第二类买点」
+    # （对卖点同理）—— 1卖/2卖 要求此前已形成**两个依次同向向上**的中枢
+    # （原文第17课：趋势 = ≥2 个依次同向中枢）。该样本在 bar 38/62 处不满足，
+    # 只剩符合原文第20课的 3sell。⇒ 这是按原文收紧，不是回归。
     assert off == [
-        (38, "1sell"),
-        (62, "2sell"),
+        (62, "3sell"),
         (125, "3buy"),
         (146, "3buy"),
     ]
-    assert on == [(128, "3buy"), (149, "3buy")]
-    assert len(on) < len(off)
+    assert on == [(65, "3sell"), (128, "3buy"), (149, "3buy")]
+    # V735：信号数不再减少（原 1sell/2sell 已被原文第21课去掉，off/on 都是 3 个），
+    # 但守卫的**真实作用**是「把保留信号延后 lag 根」，不是减少个数。
+    # 故改断言「生效 bar 整体后移」，延后由下面 _emitted_bars(125→128) 钉死。
+    assert [b for b, _ in on] == [b + 3 for b, _ in off], "守卫应把每个信号延后 lag=3 根"
 
     # 真实发出的策略信号（走队列消费 + 下单路径），守卫开启使生效 bar 延后 lag=3 根
     assert _emitted_bars(off_strategy, len(df)) == [(125, "BUY")]
@@ -87,7 +94,8 @@ def test_guard_defaults_on_and_matches_explicit_guard() -> None:
     default = _signals(df)
     explicit = _signals(df, lookahead_guard=True, confirm_lag=3, guard_window=400)
 
-    assert default == explicit == [(128, "3buy"), (149, "3buy")]
+    # V735：同上，bar 65 的 3sell 保留；原 1sell/2sell 因不符原文第21课被去掉
+    assert default == explicit == [(65, "3sell"), (128, "3buy"), (149, "3buy")]
 
 
 def test_guarded_signals_reproduce_on_their_confirmation_prefix() -> None:

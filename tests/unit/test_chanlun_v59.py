@@ -375,6 +375,7 @@ class TestFindMMDsV59Integration:
         import pandas as pd
 
         from easy_tdx.chanlun import ChanlunAnalyser
+        from easy_tdx.chanlun.config import ChanlunConfig
 
         # 生成模拟上涨数据
         n = 200
@@ -398,7 +399,7 @@ class TestFindMMDsV59Integration:
             }
         )
 
-        analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+        analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
         result = analyser.process_klines(df)
 
         # 验证V59字段存在于结果中

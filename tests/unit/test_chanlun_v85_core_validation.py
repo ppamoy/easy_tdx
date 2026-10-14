@@ -19,6 +19,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
 
 from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import BI, FX, CLKline, Direction, FXType
 
 # ── 测试1：_calc_confidence_v47 只有一个定义且含V47逻辑 ──────────────────────
@@ -95,7 +96,7 @@ def _synthetic_trending_df(n: int = 400, seed: int = 42) -> pd.DataFrame:
 def test_pipeline_completes_without_error():
     """完整缠论管道应正常执行不报错。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
     assert result.klines
     assert result.cklines
@@ -108,7 +109,7 @@ def test_pipeline_completes_without_error():
 def test_to_dict_mmds_include_v102_fields():
     """序列化的 mmds 每项都带 V102 决策支持字段（条件264-267）。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
     d = result.to_dict()
 
@@ -124,7 +125,7 @@ def test_to_dict_mmds_include_v102_fields():
 def test_fractal_bar_index_anchor_matches_date():
     """分型的 bar_index 与 date 必须指向同一根原始K线。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     for fx in result.fractals:
@@ -142,7 +143,7 @@ def test_fractal_bar_index_anchor_matches_date():
 def test_bi_endpoints_match_fractal_bar_index():
     """笔的起止分型 bar_index 与笔的 start_index/end_index 一致。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     for bi in result.bis:
@@ -157,7 +158,7 @@ def test_bi_endpoints_match_fractal_bar_index():
 def test_zs_endpoints_match_fractal_bar_index():
     """中枢的起止分型 bar_index 与序列化结果一致。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
     d = result.to_dict()
 
@@ -174,7 +175,7 @@ def test_zs_endpoints_match_fractal_bar_index():
 def test_mmd_bar_index_consistent():
     """买卖点的 bar_index 与笔终点 bar_index 一致。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
     d = result.to_dict()
 
@@ -190,7 +191,7 @@ def test_mmd_bar_index_consistent():
 def test_mmd_dates_are_valid():
     """所有买卖点日期不为空且格式合法。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
     d = result.to_dict()
 
@@ -280,7 +281,7 @@ def test_find_bis_single_fractal():
 def test_bi_direction_alternates():
     """笔的方向必须严格交替。"""
     df = _synthetic_trending_df(400)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     for i in range(1, len(result.bis)):
@@ -309,7 +310,7 @@ def test_bi_gap_requirement_new_mode():
     fx1 = FX(fx_type=FXType.DING, k=ck1, klines=[ck1, ck2, ck3], val=12.0, index=0, done=True)
     fx2 = FX(fx_type=FXType.DI, k=ck3, klines=[ck1, ck2, ck3], val=8.0, index=1, done=True)
 
-    config = ChanlunConfig(bi_type="new")
+    config = ChanlunConfig(bi_type="new", zs_from_xd=False)
     bis = find_bis([fx1, fx2], config)
     # 中间无独立K线，gap=0，新笔要求>=1，不应成笔
     assert len(bis) == 0, f"gap=0时应无笔，实际: {len(bis)}"
@@ -323,7 +324,7 @@ def test_find_zss_min_lines():
     from easy_tdx.chanlun.config import ChanlunConfig
     from easy_tdx.chanlun.zs import find_zss
 
-    config = ChanlunConfig(zs_min_lines=3)
+    config = ChanlunConfig(zs_min_lines=3, zs_from_xd=False)
     # 构造2笔
     ck1 = CLKline(
         k_index=0, date=datetime(2025, 1, 1), open=10, close=10, high=12, low=8, amount=1e6, index=0
@@ -363,7 +364,7 @@ def test_zs_done_flag():
             "vol": vol,
         }
     )
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     assert len(result.zss) >= 1, "盘整数据应至少形成一个中枢"
@@ -379,7 +380,7 @@ def test_find_xds_requires_min_bis():
     from easy_tdx.chanlun.config import ChanlunConfig
     from easy_tdx.chanlun.xd import find_xds
 
-    config = ChanlunConfig()
+    config = ChanlunConfig(zs_from_xd=False)
     # 只有2笔
     ck1 = CLKline(
         k_index=0, date=datetime(2025, 1, 1), open=10, close=10, high=12, low=8, amount=1e6, index=0

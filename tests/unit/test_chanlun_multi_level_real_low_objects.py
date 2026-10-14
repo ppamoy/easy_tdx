@@ -27,6 +27,7 @@ from pathlib import Path
 import pandas as pd
 
 from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.multi_level import MultiLevelAnalyser
 from easy_tdx.chanlun.types import BI, ZS
 
@@ -39,8 +40,8 @@ def _daily_df() -> pd.DataFrame:
 
 
 def _mla_with_both_levels() -> tuple[MultiLevelAnalyser, object]:
-    high_analyser = ChanlunAnalyser(code="000001", frequency="daily")
-    low_analyser = ChanlunAnalyser(code="000001", frequency="daily")
+    high_analyser = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
+    low_analyser = ChanlunAnalyser(code="000001", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     high_result = high_analyser.process_klines(_daily_df())
     low_analyser.process_klines(_daily_df())
     mla = MultiLevelAnalyser()

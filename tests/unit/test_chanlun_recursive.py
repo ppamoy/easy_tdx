@@ -112,7 +112,11 @@ def test_recursive_level_golden_counts() -> None:
     # 实测（V733）：ZG=112.0（前三笔 min(high) 仍为 112，与两笔口径一致），
     # ZD=100.0（前三笔 max(low)=100 > 两笔口径的 98 —— 第3笔抬高了下沿，
     # 中枢因此变窄，符合「多求一次交集必然不宽」）。
-    # V730 P1-6：延伸达 9 段上限后中枢关闭，第 10 段归入新候选（不足 3 段不成中枢）。
+    # V851：zs_no_hard_close 默认改为 False（9 段硬关闭，第33课上限 3+6），
+    # 同时 zs_merge_overlap 默认改为 False（关闭同级别合并；依据见
+    # config.py V851 注释 + 第20课 line 4「产生一个更大级别的走势中枢」）。
+    # ⇒ 中枢 line_count = 9（恰好等于原文上限）。
+    # 旧值 10 是 V735「不硬关闭 + 合并」下的产物，已超第33课 9 段上限。
     assert len(result.zss) == 1
     assert result.zss[0].zg == 112.0
     assert result.zss[0].zd == 100.0

@@ -16493,6 +16493,34 @@ def _deduplicate_mmds(mmds: list[MMD]) -> list[MMD]:
     return result
 
 
+def _find_leaving_bi(bis: list[BI], zs: ZS, direction: str) -> int:
+    """定位中枢的「离开段」：中枢之后第一笔与趋势同向的笔，返回其 index。
+
+    缠论原文（第24课）趋势背驰比较的是 A/B/C 段中的**离开段**（c 段）：
+    中枢完成后，走势离开中枢、延续趋势方向的那一段。
+
+    为什么不能简单取 `zs.lines[-1].index + 1`：
+    笔方向必然交替，中枢末笔之后那一笔**方向一定相反**（回抽），
+    只有在中枢末笔方向与趋势相反时才恰好是离开段。实测 96 个中枢里
+    57 个（59%）因此被错判为「离开段方向不符」而丢掉。
+
+    Args:
+        bis: 全部笔列表
+        zs: 中枢
+        direction: 趋势方向，"down" / "up"
+
+    Returns:
+        离开段在 bis 中的 index；找不到（尚未走完）返回 -1
+    """
+    if not zs.lines:
+        return -1
+    start = zs.lines[-1].index + 1
+    for i in range(start, len(bis)):
+        if bis[i].direction.value == direction:
+            return i
+    return -1
+
+
 def _is_strong_beichi(
     bi: BI,
     bis: list[BI],
@@ -16551,9 +16579,20 @@ def _is_strong_beichi(
                 return True
             break
 
-    # 注意：一买/一卖 只认"趋势背驰"（笔背驰或两中枢趋势背驰），
-    # 不把"盘整背驰"（中枢内力度衰竭）算作一买——盘整背驰更适合标记二买/类二买。
-    # 这样震荡市中的反复下探不会被误标为 1买。
+    # ⚠️ V734（2026-10-11 实测更正）：上面这条注释**与代码实际行为不符**，
+    # 别再照着它理解代码。
+    #
+    # 注释说「一买/一卖 只认趋势背驰」，但**笔背驰分支在上面先跑、命中即
+    # return True、且完全不要求任何中枢** ⇒ 零中枢/单中枢照样出 1买。
+    # 而下面的"趋势背驰"分支经实测**从不触发**（见下方 V734 注释）。
+    # ⇒ 当前的 1买/1卖 **100% 来自笔背驰**，不是原文的趋势背驰。
+    #
+    # 这是**刻意保留**的现状，不是漏修：20 只日线扣成本对照显示，
+    # 改成纯趋势背驰后每笔收益虽从 +2.73% 升到 +7.06%，但笔数从 177 掉到 67、
+    # 且 1买 彻底消失，总贡献（483 vs 473）**基本抵消** ⇒ 不划算。
+    # 详见 docs/CHANLUN_FIDELITY_AUDIT_V734.md §4。
+    #
+    # （原文偏好：趋势背驰或两中枢趋势背驰；盘整背驰更适合标 2买/类二买。）
 
     # 3. 趋势背驰检查（两个同向中枢之间离开笔力度衰减 + 新极值）
     if len(zss) >= 2:
@@ -16566,17 +16605,30 @@ def _is_strong_beichi(
             ) or (direction == "up" and curr_zs.zg > prev_zs.zg and curr_zs.zd > prev_zs.zd)
 
             if is_same_trend:
-                # V730（缠论原文口径修正）：趋势背驰比较的是「离开段」（中枢之后的
-                # 那一笔，即 bis[lines[-1].index + 1]），而非中枢内的末笔。
+                # ⚠️ V734：V730 这条「修正」**本身是错的**，别再照它改。
+                # 实测（6 只日线 / 96 个中枢）：中枢末笔之后的那一笔
+                # **100% 是反向回抽**（同向 0/96），从来不是离开段。
+                # ⇒ `curr_exit.direction != direction` 恒真 ⇒ 本分支
+                # **在任何真实数据上都不可能触发**（实测 446 次调用命中 0 次）。
+                # 真正离开段应再往后取，或按"离开 ZG/ZD 区间"判定。**未修**：
+                # 修好后 1买 会大变，需先做收益对照（见 docs 同章节 §4）。
+                #
+                # V730 原文（留档）：趋势背驰比较的是「离开段」而非中枢内末笔。
                 # 原文（第24课）：趋势背驰 = 两个同向中枢之间，后一离开段（c 段）
                 # 相对前一离开段（a/b 段）力度衰减。中枢末笔仍在中枢重叠区间内，
                 # 不是离开段；且「末笔方向奇偶校验」会让奇数笔中枢该分支永不成立。
                 # 与 beichi.py:_check_qs_beichi 的离开段取法保持一致。
                 if not prev_zs.lines or not curr_zs.lines:
                     continue
-                prev_exit_idx = prev_zs.lines[-1].index + 1
-                curr_exit_idx = curr_zs.lines[-1].index + 1
-                if prev_exit_idx >= len(bis) or curr_exit_idx >= len(bis):
+                # V734 修正：离开段 = 中枢之后**第一笔与趋势同向**的笔。
+                # 笔方向天然交替，所以「末笔之后那一笔」不等于离开段：
+                #   末笔 down → 下一笔 up（回抽）⇒ 需再往后一笔
+                #   末笔 up   → 下一笔 down（离开）⇒ 就是它
+                # 实测 96 个中枢里 57 个属前者 ⇒ 旧写法在 ~59% 情况下取错，
+                # 命中「离开段方向不符」而 continue ⇒ 本分支恒不触发。
+                prev_exit_idx = _find_leaving_bi(bis, prev_zs, direction)
+                curr_exit_idx = _find_leaving_bi(bis, curr_zs, direction)
+                if prev_exit_idx < 0 or curr_exit_idx < 0:
                     continue  # 离开段尚未完成，无法判定
                 prev_exit = bis[prev_exit_idx]
                 curr_exit = bis[curr_exit_idx]

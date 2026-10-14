@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import json as _json
 import logging
+from pathlib import Path
 from typing import Any, cast
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import Field
 
 from easy_tdx.web.deps import get_client, get_mac_client_optional
@@ -519,8 +521,19 @@ async def chanlun_analyze(
 
     自动从 TDX 服务器获取 K 线数据，运行完整缠论计算管道，
     返回笔、中枢、线段、买卖点、背驰、分型等分析结果。
+
+    V810: 无 start_date/end_date 时优先查 SQLite 缓存（毫秒级），
+    未命中则全量分析后存入缓存（版本指纹自动失效旧数据）。
     """
     from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+    from easy_tdx.web.chanlun_cache import ChanlunCache
+
+    # V810: 无日期范围时查缓存（全量分析结果）
+    if not req.start_date and not req.end_date:
+        cache = ChanlunCache()
+        cached = cache.get(req.market, req.code, req.category)
+        if cached is not None:
+            return cached
 
     # 1. Fetch kline data（QFQ 前复权，与前端 /bars 同一价格体系）
     df = await _fetch_request_klines(
@@ -556,10 +569,35 @@ async def chanlun_analyze(
         frequency=freq,
         config=ChanlunConfig(recursion_depth=req.recursion_depth),
     )
-    result = analyser.process_klines(df)
+
+    # V735 Round 9：原文第17课精确口径——用次级别线段构中枢。
+    # cross_timeframe=True 时拉取次级别 K线（日线→30min），用次级别线段构中枢。
+    _LOWER_TF_MAP = {"DAY": "MIN_30", "MIN_30": "MIN_5", "MIN_60": "MIN_15", "WEEK": "DAY"}
+    lower_cat = _LOWER_TF_MAP.get(req.category.upper()) if req.cross_timeframe else None
+
+    if lower_cat:
+        try:
+            df_lower = await _fetch_request_klines(
+                mac_client, client, req.market, req.code, lower_cat, 0,
+                min(req.count * 8, 8000),
+            )
+            if len(df_lower) >= 200:
+                result = analyser.process_klines_cross_timeframe(df, df_lower)
+            else:
+                result = analyser.process_klines(df)
+        except Exception:
+            # 次级别数据拉取失败，退回默认
+            result = analyser.process_klines(df)
+    else:
+        result = analyser.process_klines(df)
 
     # 3. 返回完整分析结果，包括分型数据和BOLL
     d = result.to_dict()
+
+    # V810: 返回 bars（与分析同一 df），前端无需单独取 K 线，
+    # 笔/中枢/买卖点索引与 bars 天然对齐，彻底消除索引错位。
+    from easy_tdx.web.schemas import DataFrameResponse
+    d["bars"] = DataFrameResponse.from_dataframe(df).data
 
     # 添加分型数据
     d["fractals"] = [
@@ -603,6 +641,14 @@ async def chanlun_analyze(
     except Exception:  # noqa: BLE001 — 估值失败不阻断缠论分析
         d["valuation"] = None
 
+    # V810: 无日期范围的全量分析结果存入 SQLite 缓存（后续毫秒级读取）
+    if not req.start_date and not req.end_date:
+        try:
+            cache = ChanlunCache()
+            cache.put(req.market, req.code, req.category, d)
+        except Exception:  # noqa: BLE001 — 缓存失败不阻断返回
+            pass
+
     return d
 
 
@@ -611,6 +657,9 @@ class ChanlunMultiLevelRequest(ChanlunRequest):
 
     low_level: str = Field(default="MIN_30", description="低级别周期（如 MIN_30, MIN_5）")
 
+
+# 低级别 K 线上限：见 multi-level 内「低级别 K 线截断（性能护栏）」注释
+LOW_MAX_BARS = 3000
 
 @router.post("/chanlun/multi-level")
 async def chanlun_multi_level(
@@ -646,15 +695,30 @@ async def chanlun_multi_level(
     symbol = f"{req.market}{req.code}"
 
     # 获取高级别数据（QFQ 前复权）
-    df_high = await fetch_qfq_klines(
-        mac_client,
-        client,
-        req.market,
-        req.code,
-        req.category,
-        req.start,
-        req.count,
-    )
+    # ⚠️ 与 analyze 保持同一取数路径：给了 start_date 就走 fetch_bars_range
+    #    分页直达，否则 TDX 协议取数锚定最新 bar，历史窗口会被截断成空
+    #    （实测：2024 上半年窗口下本端点曾返回 low_bi_count=0 ⇒ 区间套全 false）。
+    if req.start_date:
+        df_high = await fetch_bars_range(
+            mac_client,
+            client,
+            req.market,
+            req.code,
+            req.category,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            max_bars=8000,
+        )
+    else:
+        df_high = await fetch_qfq_klines(
+            mac_client,
+            client,
+            req.market,
+            req.code,
+            req.category,
+            req.start,
+            req.count,
+        )
     # 获取低级别数据（需要覆盖高级别的时间范围，否则最新高级别笔的低级别走势为空）
     # 每自然日对应的低级别 K 线数（A股一天约4小时交易时段）
     _bars_per_day = {
@@ -678,15 +742,39 @@ async def chanlun_multi_level(
             low_count = int(min(req.count * low_bars_per_day + 200, 10000))
     except Exception:
         low_count = int(min(req.count * low_bars_per_day + 200, 10000))
-    df_low = await fetch_qfq_klines(
-        mac_client,
-        client,
-        req.market,
-        req.code,
-        req.low_level,
-        req.start,
-        low_count,
-    )
+    # 低级别同理：给了日期就走范围取数，保证与高级别窗口对齐
+    if req.start_date:
+        df_low = await fetch_bars_range(
+            mac_client,
+            client,
+            req.market,
+            req.code,
+            req.low_level,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            max_bars=8000,
+        )
+    else:
+        df_low = await fetch_qfq_klines(
+            mac_client,
+            client,
+            req.market,
+            req.code,
+            req.low_level,
+            req.start,
+            low_count,
+        )
+
+    # ── 低级别 K 线截断（性能护栏）──────────────────────────────────
+    # ChanlunAnalyser.process_klines 实测是**超线性**的：
+    #   500 根 0.6s / 3976 根 30.1s（≈ n^1.6）。而 multi-level 一次要跑
+    #   high + low 两份，low 不截断时整请求 ~32s，超过浏览器 fetch 的
+    #   30s 上限（Moli 实测 "curl request failed ... after 30000ms"），
+    #   前端只能拿到 failed to fetch —— 区间套功能等于不可用。
+    # 区间套只需低级别在**高级别信号时间窗内**的结构，窗口外的历史
+    # 不参与确认，截断不影响结论正确性。保留最近 LOW_MAX_BARS 根。
+    if df_low is not None and len(df_low) > LOW_MAX_BARS:
+        df_low = df_low.tail(LOW_MAX_BARS).reset_index(drop=True)
 
     # 分别分析
     high_analyser = ChanlunAnalyser(code=symbol, frequency=high_freq)
@@ -757,9 +845,47 @@ async def chanlun_multi_level(
                 "low_level_qs": low_qs,
                 # 真·区间套（逐信号、真实低周期确认）；与 confluence 区分
                 "qujiantao": qujiantao,
+                # 次级别数据覆盖边界：供前端提示「该窗口无低周期数据」。
+                # 低级别 K 线取自服务端分页，覆盖范围有限（实测 30min 仅回溯到
+                # 2024-09）。窗口早于该边界时区间套必然全为 false —— 这不是
+                # 模型失效，是数据覆盖不到，必须让用户看见。
+                "low_level_coverage": _low_coverage(df_low),
             }
         ),
     )
+
+
+def _low_coverage(df: Any) -> dict[str, Any]:
+    """次级别数据的实际覆盖范围（供前端判断能否做区间套）。
+
+    返回：
+        {
+          "bar_count": int,        # 窗口内低级别 K 线数
+          "first": str | None,     # 最早时间
+          "last": str | None,      # 最晚时间
+          "has_data": bool,        # 是否有实质数据
+        }
+    """
+    try:
+        n = len(df)
+    except Exception:  # noqa: BLE001
+        return {"bar_count": 0, "first": None, "last": None, "has_data": False}
+    if not n:
+        return {"bar_count": 0, "first": None, "last": None, "has_data": False}
+
+    def _fmt(v: Any) -> str | None:
+        try:
+            return str(pd.Timestamp(v))[:19]
+        except Exception:  # noqa: BLE001
+            return None
+
+    col = "date" if "date" in getattr(df, "columns", []) else "datetime"
+    try:
+        first = _fmt(df[col].iloc[0])
+        last = _fmt(df[col].iloc[-1])
+    except Exception:  # noqa: BLE001
+        first = last = None
+    return {"bar_count": int(n), "first": first, "last": last, "has_data": n > 0}
 
 
 class ChanlunRecommendRequest(ChanlunRequest):
@@ -1235,7 +1361,7 @@ async def chanlun_train_session(
     }
     freq = frequency_map.get(req.category.upper(), req.category)
     analyser = ChanlunAnalyser(
-        code=symbol, frequency=freq, config=ChanlunConfig(recursion_depth=req.recursion_depth)
+        code=symbol, frequency=freq, config=ChanlunConfig(recursion_depth=req.recursion_depth, zs_from_xd=False)
     )
     result = analyser.process_klines(df)
 
@@ -1419,3 +1545,467 @@ async def learn_mistakes_list(
     except Exception as e:  # noqa: BLE001
         logger.exception("learn mistakes list 失败")
         raise HTTPException(status_code=500, detail=f"错题列表失败: {e}") from e
+
+
+class ChanlunSignalStatsRequest(ChanlunRequest):
+    """买卖点统计请求（/chanlun/signal-stats）。"""
+
+    horizons: list[int] = Field(
+        default=[5, 10, 20], description="前瞻根数列表"
+    )
+
+
+@router.post("/chanlun/signal-stats")
+async def chanlun_signal_stats(
+    req: ChanlunSignalStatsRequest,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
+    """买卖点**方向有效性**统计：胜不过随机就不算准。
+
+    与「能不能赚钱」是两件事（行情好时模型错也能赚钱），本接口只回答
+    「信号方向本身有没有信息量」：
+
+      L1 方向对不对：买点后真涨？卖点后真跌？
+      L2 胜过随机吗：与同数量随机入场对照（固定种子 ⇒ 可复现）
+      L3 显著吗：配对 t 检验 + Bonferroni 多重比较校正
+
+    统计口径复用 ``easy_tdx.backtest.signal_stats``（**唯一实现**），
+    与 ``scripts/verify_chanlun_correctness.py`` 共用同一份代码，
+    避免前端与审计脚本给出两个不同的数。
+
+    ⚠️ 单标的样本量小，显著性判定会很保守（这是**特性**不是 bug）：
+       想看可信结论请用脚本跑几十只票。前端应展示 sample_count 让用户
+       自己判断这个数字可不可信 —— n=1 的「100% 命中率」是误导。
+    """
+    from easy_tdx.backtest.signal_stats import (
+        bonferroni_crit,
+        directional,
+        is_buy_type,
+        mean,
+        paired_t,
+        random_baseline,
+    )
+    from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+
+    df = await _fetch_request_klines(
+        mac_client,
+        client,
+        req.market,
+        req.code,
+        req.category,
+        req.start,
+        req.count,
+        start_date=req.start_date,
+        end_date=req.end_date,
+    )
+    if df.empty:
+        raise HTTPException(status_code=404, detail="未取到 K 线数据")
+
+    freq = FREQUENCY_MAP.get(req.category, "daily")
+    result = ChanlunAnalyser(
+        code=f"{req.market}{req.code}",
+        frequency=freq,
+        config=ChanlunConfig(recursion_depth=req.recursion_depth),
+    ).process_klines(df)
+
+    closes = [float(k.close) for k in result.klines]
+    horizons = [h for h in req.horizons if isinstance(h, int) and h > 0] or [5, 10, 20]
+
+    by_type: dict[str, list[int]] = {}
+    for m in result.mmds:
+        bar = int(m.bi.end.bar_index) if m.bi else -1
+        if bar >= 0:
+            by_type.setdefault(str(m.mmd_type.value), []).append(bar)
+
+    n_tests = max(len(by_type) * len(horizons), 1)
+    crit = bonferroni_crit(n_tests)
+
+    out: list[dict[str, Any]] = []
+    for t, bars in sorted(by_type.items()):
+        is_buy = is_buy_type(t)
+        for h in horizons:
+            # 前瞻收益（越界丢弃）
+            fwd = []
+            for b in bars:
+                j = b + h
+                if j < len(closes) and closes[b]:
+                    fwd.append(closes[j] / closes[b] - 1.0)
+            n = len(fwd)
+            if n == 0:
+                continue
+            # 随机基准：同数量、固定种子（含类型与档位 ⇒ 可复现且互不相同）
+            seed = (sum(ord(c) for c in t) * 31 + h * 7919) & 0xFFFFFFFF
+            rb = random_baseline(closes, n, h, seed)
+            sv = mean([directional(is_buy, x) for x in fwd])
+            rv = mean([directional(is_buy, x) for x in rb]) if rb else 0.0
+
+            # 单标的：用逐信号配对做 t 检验（同一档位下信号 vs 随机一一配对）
+            k = min(len(fwd), len(rb))
+            tv = 0.0
+            if k >= 2:
+                tv, diff = paired_t(
+                    [directional(is_buy, x) for x in fwd[:k]],
+                    [directional(is_buy, x) for x in rb[:k]],
+                )
+            else:
+                diff = sv - rv
+
+            out.append({
+                "type": t,
+                "horizon": h,
+                "count": n,
+                # ⚠️ 单位：小数（0.0388 == +3.88%），与 signal_ledger 一致
+                "avg": sv,
+                "rnd": rv,
+                "excess": diff,
+                "t": tv,
+                "critical_t": crit,
+                "significant": bool(tv > crit and sv > 0),
+                "verdict": (
+                    "✅ 方向对且显著" if (tv > crit and sv > 0)
+                    else ("⚠️ 方向对但不显著" if (sv > 0 and diff > 0)
+                          else "❌ 方向错/不显著")
+                ),
+            })
+
+    return {
+        "code": req.code,
+        "market": req.market,
+        "category": req.category,
+        "kline_count": len(closes),
+        "horizons": horizons,
+        "n_tests": n_tests,
+        "critical_t": crit,
+        "stats": out,
+        "note": (
+            "单标的样本量有限，显著性判定偏保守；"
+            "可信结论请用 scripts/verify_chanlun_correctness.py 跑几十只票。"
+        ),
+    }
+
+
+# ── 缠论选股：按日期查找买点标的 ──────────────────────────────────────────
+@router.get("/chanlun/pick")
+async def chanlun_pick(
+    date: str,
+    category: str = "MIN_30",
+) -> dict[str, Any]:
+    """按日期查找有缠论买点的标的。
+
+    从预计算的30min/日线缓存中读取，返回在指定日期有买入信号(1买/2买/3买)的标的，
+    包含所属中枢的ZG(压力)/ZD(支撑)/ZZ(中线)数据。
+    """
+    import pickle
+    from pathlib import Path
+
+    data_dir = Path.cwd() / "audit_data"
+
+    # 根据级别选择缓存
+    if category.upper() in ("MIN_30", "30MIN", "30MIN"):
+        cache_file = data_dir / "hybrid_30min_cache.pkl"
+    else:
+        cache_file = data_dir / "hybrid_analysis_cache.pkl"
+
+    if not cache_file.is_file():
+        return {"date": date, "category": category, "results": [], "error": "缓存不存在，请先运行分析"}
+
+    try:
+        with open(cache_file, "rb") as f:
+            analyses = pickle.load(f)
+    except Exception as e:
+        return {"date": date, "category": category, "results": [], "error": f"缓存读取失败: {e}"}
+
+    # 筛选买点
+    results = []
+    for a in analyses:
+        cat = a.get("category")
+        if cat not in ("tree", "grain"):
+            continue  # 只推荐 tree/grain
+        for s in a.get("signals", []):
+            if not s.get("is_buy"):
+                continue
+            # 兼容 dt（30min缓存，字符串）和 date（日线缓存，Timestamp）两种格式
+            sig_dt = s.get("dt", "")
+            if not sig_dt:
+                raw_date = s.get("date", "")
+                sig_dt = str(raw_date) if raw_date else ""
+            if date not in sig_dt:
+                continue
+            results.append({
+                "code": a["code"],
+                "market": a.get("market", "SH"),
+                "category": cat,
+                "signal_type": s["type"],
+                "signal_dt": sig_dt,
+                "confidence": s.get("confidence", 0),
+                "zg": s.get("zg"),  # 压力位
+                "zd": s.get("zd"),  # 支撑位
+                "zz": s.get("zz"),  # 中枢中线
+            })
+
+    # 按信号类型排序: 1买 > 2买 > 3买
+    type_order = {"1buy": 0, "2buy": 1, "3buy": 2}
+    results.sort(key=lambda r: (type_order.get(r["signal_type"], 9), -r.get("confidence", 0)))
+
+    # 统计可用日期
+    all_dates = set()
+    for a in analyses:
+        for s in a.get("signals", []):
+            if s.get("is_buy"):
+                d = s.get("dt", "")
+                if not d:
+                    d = str(s.get("date", ""))
+                d = d[:10]
+                if d:
+                    all_dates.add(d)
+    available_dates = sorted(all_dates, reverse=True)
+
+    return {
+        "date": date,
+        "category": category,
+        "total": len(results),
+        "results": results,
+        "available_dates": available_dates[:30],  # 最近30个有买点的日期
+    }
+
+
+# ──────────────────────────────────────────────────────────────
+# V810: 缠论分析缓存管理端点
+# ──────────────────────────────────────────────────────────────
+
+
+@router.delete("/chanlun/cache")
+async def delete_chanlun_cache(
+    market: str | None = Query(None, description="市场（留空删全部）"),
+    code: str | None = Query(None, description="代码（留空删该市场全部或全部）"),
+    category: str | None = Query(None, description="周期（留空删全部周期）"),
+) -> dict[str, Any]:
+    """删除缠论分析缓存。可按 market/code/category 精确删除，也可批量。"""
+    from easy_tdx.web.chanlun_cache import ChanlunCache
+
+    cache = ChanlunCache()
+    if market and code and category:
+        n = cache.delete(market, code, category)
+    elif category and not market and not code:
+        n = cache.delete_all(category=category)
+    else:
+        n = cache.delete_all()
+    cache.close()
+    return {"deleted": n}
+
+
+@router.get("/chanlun/cache/list")
+async def list_chanlun_cache(
+    category: str | None = Query(None, description="按周期过滤"),
+) -> dict[str, Any]:
+    """列出所有缓存的缠论分析条目（含版本、创建时间）。"""
+    from easy_tdx.web.chanlun_cache import ChanlunCache
+
+    cache = ChanlunCache()
+    entries = cache.list_entries(category=category)
+    total = cache.count()
+    cache.close()
+    return {"total": total, "entries": entries}
+
+
+# ──────────────────────────────────────────────────────────────
+# V810: 图表数据端点 — 从 JSON K 线缓存读取（与选股缓存同源），
+# 保证图表信号与选股结果一致。分析结果存 SQLite 缓存。
+# ──────────────────────────────────────────────────────────────
+
+_KLINE_DIR_30M = Path("audit_data") / "kline_30min"
+_KLINE_DIR_DAY = Path("audit_data")
+
+
+def _read_kline_json(market: str, code: str, category: str) -> pd.DataFrame | None:
+    """从 JSON 缓存文件读取 K 线（与选股缓存同源）。"""
+    if category.upper() == "MIN_30":
+        fp = _KLINE_DIR_30M / f"{market.lower()}{code}_30min.json"
+    elif category.upper() == "DAY":
+        fp = _KLINE_DIR_DAY / f"{market.lower()}{code}_daily.json"
+    else:
+        return None
+    if not fp.is_file():
+        return None
+    rows = _json.loads(fp.read_text("utf-8"))
+    df = pd.DataFrame(rows)
+    dt_col = "datetime" if "datetime" in df.columns else "date"
+    df["datetime"] = pd.to_datetime(df[dt_col])
+    df = df.sort_values("datetime").reset_index(drop=True)
+    return df
+
+
+@router.get("/chanlun/chart-data")
+async def chanlun_chart_data(
+    request: Request,
+    market: str = Query(..., description="市场: SH, SZ"),
+    code: str = Query(..., description="股票代码"),
+    category: str = Query("MIN_30", description="周期: MIN_30, DAY"),
+) -> dict[str, Any]:
+    """获取图表数据：K线 + 完整缠论分析。
+
+    从 JSON K 线缓存读取（与选股缓存同源），运行缠论分析，
+    结果存入 SQLite 缓存（后续毫秒级读取）。
+    保证图表信号与选股结果一致。
+
+    在缓存分析的基础上，追加 TDX 最新 K 线（实时数据），
+    让用户能看到信号之后的最新走势。
+    """
+    from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
+    from easy_tdx.web.chanlun_cache import ChanlunCache
+    from easy_tdx.web.schemas import DataFrameResponse
+
+    # TDX 客户端（用于追加实时 K 线）
+    tdx_client = getattr(request.app.state, "tdx_client", None)
+    mac_client = getattr(request.app.state, "mac_client", None)
+
+    cache = ChanlunCache()
+    cached = cache.get(market, code, category)
+    if cached is not None:
+        cache.close()
+        # 追加 TDX 最新 K 线
+        cached["bars"] = await _append_tdx_bars(
+            cached.get("bars", []), tdx_client, mac_client, market, code, category
+        )
+        cached["cached"] = True
+        return cached
+
+    # 读 K 线缓存
+    df = _read_kline_json(market, code, category)
+    if df is None or len(df) < 60:
+        cache.close()
+        raise HTTPException(404, f"无 K 线缓存: {market}{code} {category}")
+
+    # 运行缠论分析（与选股缓存脚本同参数）
+    freq = "30min" if category.upper() == "MIN_30" else "daily"
+    cfg = ChanlunConfig(zs_from_xd=False)  # 笔构中枢，按原文
+    analyser = ChanlunAnalyser(code=f"{market}{code}", frequency=freq, config=cfg)
+    result = analyser.process_klines(df)
+
+    d = result.to_dict()
+
+    # 添加 bars（与分析同一 df）
+    d["bars"] = DataFrameResponse.from_dataframe(df).data
+
+    # 添加分型
+    d["fractals"] = [
+        {
+            "fx_type": fx.fx_type.value,
+            "date": result._fmt_dt(result._fx_anchor_datetime(fx)),
+            "val": round(fx.val, 2),
+            "index": fx.index,
+            "bar_index": fx.bar_index,
+        }
+        for fx in result.fractals
+    ]
+    d["valid_fractals"] = result.valid_fractals_to_dict()
+
+    # 信号准确度
+    _attach_signal_accuracy(d, result)
+
+    # 存入缓存（存 JSON 缓存原始 bars，不含 TDX 追加部分）
+    try:
+        cache.put(market, code, category, d)
+    except Exception:  # noqa: BLE001
+        pass
+    cache.close()
+
+    # 追加 TDX 最新 K 线
+    d["bars"] = await _append_tdx_bars(
+        d.get("bars", []), tdx_client, mac_client, market, code, category
+    )
+    d["cached"] = False
+    return d
+
+
+async def _append_tdx_bars(
+    base_bars: list[dict],
+    tdx_client: Any | None,
+    mac_client: Any | None,
+    market: str,
+    code: str,
+    category: str,
+) -> list[dict]:
+    """在 JSON 缓存 K 线末尾追加 TDX 实时 K 线（较新部分）。
+
+    分析（笔/中枢/买卖点）基于 JSON 缓存，bar_index 不变；
+    追加的 TDX bars 在末尾，无分析覆盖，但用户能看到最新走势。
+    """
+    if not base_bars:
+        return base_bars
+    if mac_client is None and tdx_client is None:
+        return base_bars
+    try:
+        import asyncio as _asyncio
+        from easy_tdx.web.convert import (
+            adjust_from_str,
+            category_from_str,
+            market_from_str,
+            market_value_from_str,
+            period_times_from_category,
+        )
+
+        cat = category_from_str(category)
+        if mac_client is not None:
+            # MAC 客户端（与 /bars 端点一致），支持 QFQ 复权
+            period, times = period_times_from_category(cat)
+            tdx_df = await _asyncio.wait_for(
+                mac_client.get_stock_kline(
+                    market_value_from_str(market),
+                    code,
+                    period,
+                    0,
+                    800,
+                    times,
+                    adjust=adjust_from_str("QFQ"),
+                    bar_time="start",
+                ),
+                timeout=5.0,
+            )
+            # 列规整：日线及以上 datetime→date
+            from easy_tdx.models.enums import KlineCategory
+            daily_plus = int(cat) >= int(KlineCategory.DAY)
+            if tdx_df is not None and not tdx_df.empty:
+                if "float_shares" in tdx_df.columns:
+                    tdx_df = tdx_df.drop(columns=["float_shares"])
+                if "datetime" in tdx_df.columns and daily_plus:
+                    tdx_df["datetime"] = pd.to_datetime(tdx_df["datetime"]).dt.normalize()
+                    tdx_df = tdx_df.rename(columns={"datetime": "date"})
+        else:
+            # 回退标准 TdxClient（无复权）
+            tdx_df = await _asyncio.wait_for(
+                tdx_client.get_security_bars(
+                    market_from_str(market), code, cat, 0, 800
+                ),
+                timeout=5.0,
+            )
+        if tdx_df is None or len(tdx_df) == 0:
+            return base_bars
+
+        # JSON 缓存最后一根 K 线的 datetime
+        last_dt = base_bars[-1].get("datetime") or base_bars[-1].get("date")
+        if last_dt:
+            last_dt = str(last_dt).replace("T", " ")[:16]
+
+        # 筛选比 JSON 缓存更新的 TDX bars
+        new_rows = []
+        for _, row in tdx_df.iterrows():
+            row_dt = str(row.get("datetime", "")).replace("T", " ")[:16]
+            if row_dt > last_dt:
+                new_rows.append({
+                    "datetime": str(row["datetime"]),
+                    "open": round(float(row["open"]), 2),
+                    "high": round(float(row["high"]), 2),
+                    "low": round(float(row["low"]), 2),
+                    "close": round(float(row["close"]), 2),
+                    "vol": float(row.get("vol", 0)),
+                    "amount": float(row.get("amount", 0)),
+                })
+
+        if new_rows:
+            return base_bars + new_rows
+    except Exception:  # noqa: BLE001
+        pass
+
+    return base_bars

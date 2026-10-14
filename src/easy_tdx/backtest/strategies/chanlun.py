@@ -172,6 +172,7 @@ class ChanlunStrategy(ParametrizedStrategy):
             macd_signal=self.p["macd_signal"],
             # 请求 N 级递归信号时，需保证多级别递归深度 >= N。
             recursion_depth=max(1, analysis_level),
+            zs_from_xd=False,
         )
         analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=config)
         result = analyser.process_klines(df)

@@ -430,7 +430,7 @@ class TestIntegrationWithChanlun:
     def test_v63_mmds_have_enhanced_fields(self):
         """V63 产生的 MMD 对象应包含增强字段。"""
         df = _make_df(*_make_oscillating_df(400))
-        config = ChanlunConfig()
+        config = ChanlunConfig(zs_from_xd=False)
         analyser = ChanlunAnalyser(code="test", frequency="daily", config=config)
         result = analyser.process_klines(df)
 
@@ -507,7 +507,7 @@ class TestV65MMDFields:
     def test_v65_fields_on_mmd(self):
         """缠论分析产生的 MMD 对象应包含 V65 增强字段。"""
         df = _make_df(*_make_oscillating_df(500))
-        config = ChanlunConfig()
+        config = ChanlunConfig(zs_from_xd=False)
         analyser = ChanlunAnalyser(code="test", frequency="daily", config=config)
         result = analyser.process_klines(df)
 
@@ -604,7 +604,7 @@ class TestV66MMDFields:
         """缠论分析产生的 MMD 对象应包含 V66 增强字段。"""
         np.random.seed(99)
         df = _make_df(*_make_trending_df(300, trend="up"))
-        analyser = ChanlunAnalyser(ChanlunConfig())
+        analyser = ChanlunAnalyser(ChanlunConfig(zs_from_xd=False))
         result = analyser.process_klines(df)
         mmds = result.mmds
         buy_mmds = [m for m in mmds if "buy" in m.mmd_type.value]
@@ -705,7 +705,7 @@ class TestV67MMDFields:
         """缠论分析产生的 MMD 对象应包含 V67 增强字段。"""
         np.random.seed(100)
         df = _make_df(*_make_trending_df(300, trend="up"))
-        analyser = ChanlunAnalyser(ChanlunConfig())
+        analyser = ChanlunAnalyser(ChanlunConfig(zs_from_xd=False))
         result = analyser.process_klines(df)
         mmds = result.mmds
         buy_mmds = [m for m in mmds if "buy" in m.mmd_type.value]

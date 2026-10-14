@@ -52,3 +52,11 @@ tmp/
 audit_data/
 audit_data_multi/
 audit_data_nona/
+
+# 次级别（15/30/60min）审计数据：由 fetch_minute_data.py 抓取，293M，勿入库
+audit_data_min/
+# 审计中间缓存（CPU 密集合成数据，可由脚本重新生成）
+audit_cache/
+audit_cache60/
+audit_mcap.json
+docs/缠论108课/.md

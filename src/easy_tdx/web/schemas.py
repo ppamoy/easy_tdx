@@ -93,6 +93,9 @@ class ChanlunRequest(BaseModel):
     # 前端回测页按 start_date/end_date 截取 K 线，这里同样截断分析窗口。
     start_date: str | None = Field(default=None, description="起始日期 YYYY-MM-DD（闭区间）")
     end_date: str | None = Field(default=None, description="结束日期 YYYY-MM-DD（闭区间）")
+    # V735 Round 10：用户要求「和原文一致」，默认改 True。
+    # True 时自动拉取次级别K线（日线→30min），用次级别线段构中枢。
+    cross_timeframe: bool = Field(default=True, description="用次级别线段构中枢（原文第17课）")
 
 
 class ComputeIndicatorsRequest(BaseModel):

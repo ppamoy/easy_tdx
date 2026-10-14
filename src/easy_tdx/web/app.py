@@ -301,6 +301,16 @@ def _create_app(
     app.include_router(diagnosis_router, prefix="/api/v1")
     app.include_router(verify_router, prefix="/api/v1")
 
+    # K线数据缓存查询路由
+    from easy_tdx.web.routers.cache import router as cache_router
+
+    app.include_router(cache_router, prefix="/api/v1")
+
+    # 吴伟志+缠论融合系统路由
+    from easy_tdx.web.routers.hybrid import router as hybrid_router
+
+    app.include_router(hybrid_router, prefix="/api/v1")
+
     # --- 前端 dist 托管（生产/打包态同源服务，开发态可缺省） ---
     # 必须在所有 API 路由注册之后：StaticFiles(html=True) 挂在 "/" 会吞掉
     # 未匹配路径，放最后保证 /api/v1/* 优先命中路由表。

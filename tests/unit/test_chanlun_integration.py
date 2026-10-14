@@ -74,7 +74,7 @@ def _make_kline_df(
 def test_trend_up_bis_alternate_direction():
     """上升趋势中，笔的方向应严格交替。"""
     df = _make_kline_df(200, base_price=50.0, pattern="trend_up", amplitude=3.0)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     assert len(result.bis) >= 3, f"应产生至少3笔，实际 {len(result.bis)}"
@@ -96,7 +96,7 @@ def test_trend_up_bis_alternate_direction():
 def test_consolidation_zs_recognition():
     """盘整走势中应识别出中枢。"""
     df = _make_kline_df(300, base_price=20.0, pattern="consolidation", amplitude=1.5)
-    config = ChanlunConfig(zs_min_lines=3)
+    config = ChanlunConfig(zs_min_lines=3, zs_from_xd=False)
     analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=config)
     result = analyser.process_klines(df)
 
@@ -112,7 +112,7 @@ def test_consolidation_zs_recognition():
 def test_v_shape_segment_identification():
     """V形反转走势中应识别出线段的转折。"""
     df = _make_kline_df(300, base_price=30.0, pattern="v_shape", amplitude=2.0)
-    config = ChanlunConfig()
+    config = ChanlunConfig(zs_from_xd=False)
     analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=config)
     result = analyser.process_klines(df)
 
@@ -132,8 +132,8 @@ def test_weak_bi_skip_config():
     """验证 bi_weak_skip=True 时弱笔被跳过。"""
     # 生成一个几乎平行的走势（所有笔都很短）
     df = _make_kline_df(100, base_price=10.0, pattern="consolidation", amplitude=0.005)
-    config_strict = ChanlunConfig(bi_weak_skip=False)
-    config_skip = ChanlunConfig(bi_weak_skip=True)
+    config_strict = ChanlunConfig(bi_weak_skip=False, zs_from_xd=False)
+    config_skip = ChanlunConfig(bi_weak_skip=True, zs_from_xd=False)
 
     analyser_strict = ChanlunAnalyser(code="TEST", frequency="daily", config=config_strict)
     result_strict = analyser_strict.process_klines(df)
@@ -151,7 +151,7 @@ def test_mmd_first_type_requires_beichi():
     """一类买卖点应在背驰后出现。"""
     # 生成一个有明显顶底分型的走势
     df = _make_kline_df(400, base_price=50.0, pattern="trend_up", amplitude=5.0)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     # 检查一类买卖点的置信度
@@ -164,7 +164,7 @@ def test_mmd_first_type_requires_beichi():
 def test_mmd_types_distribution():
     """验证买卖点类型的分布合理性。"""
     df = _make_kline_df(500, base_price=25.0, pattern="trend_v", amplitude=2.0)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     type_counts: dict[str, int] = {}
@@ -185,7 +185,7 @@ def test_mmd_types_distribution():
 def test_fractal_anchor_bar_index():
     """验证分型锚定的原始K线索引正确。"""
     df = _make_kline_df(200, base_price=15.0, pattern="trend_up", amplitude=2.0)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     for fx in result.fractals:
@@ -198,7 +198,7 @@ def test_fractal_anchor_bar_index():
 def test_bi_endpoint_anchor_index():
     """验证笔端点锚定的原始K线索引正确。"""
     df = _make_kline_df(200, base_price=15.0, pattern="trend_up", amplitude=2.0)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     for bi in result.bis:
@@ -211,7 +211,7 @@ def test_bi_endpoint_anchor_index():
 def test_zs_start_end_fractal_consistency():
     """验证中枢的start/end分型索引有效。"""
     df = _make_kline_df(300, base_price=30.0, pattern="consolidation", amplitude=2.0)
-    config = ChanlunConfig(zs_min_lines=3)
+    config = ChanlunConfig(zs_min_lines=3, zs_from_xd=False)
     analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=config)
     result = analyser.process_klines(df)
 
@@ -227,7 +227,7 @@ def test_zs_start_end_fractal_consistency():
 def test_result_to_dict_serializable():
     """验证结果可正确序列化为字典。"""
     df = _make_kline_df(200, base_price=20.0, pattern="trend_up", amplitude=2.0)
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df)
 
     d = result.to_dict()
@@ -265,7 +265,7 @@ def test_multi_period_bis():
     """验证不同周期下笔的识别一致性。"""
     # 日线数据
     df_day = _make_kline_df(300, base_price=50.0, pattern="trend_up", amplitude=3.0)
-    analyser_day = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser_day = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result_day = analyser_day.process_klines(df_day)
 
     assert len(result_day.bis) >= 0  # 至少不崩溃
@@ -282,7 +282,7 @@ def test_empty_and_small_input():
     """验证空数据和极小数据的边界处理。"""
     # 空数据
     df_empty = pd.DataFrame(columns=["date", "open", "close", "high", "low", "vol"])
-    analyser = ChanlunAnalyser(code="TEST", frequency="daily")
+    analyser = ChanlunAnalyser(code="TEST", frequency="daily", config=ChanlunConfig(zs_from_xd=False))
     result = analyser.process_klines(df_empty)
     assert len(result.bis) == 0
     assert len(result.zss) == 0

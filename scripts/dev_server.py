@@ -49,8 +49,15 @@ def main():
 
     # 启动后端
     print("\n[1/2] 启动后端服务 (FastAPI, port 8000)...")
+    # ⚠️ 不能写 `python -m easy_tdx.cli serve` —— easy_tdx.cli 是**包**不是
+    #    模块，实测报 "No module named easy_tdx.cli.__main__"，后端起不来。
+    #    正确入口是 uvicorn + easy_tdx.web:create_app（factory 模式）。
+    #    加 --reload 让后端源码改动也热重载。
     backend_proc = run_cmd(
-        [python_bin, "-m", "easy_tdx.cli", "serve", "--host", "0.0.0.0", "--port", "8000"],
+        [
+            python_bin, "-m", "uvicorn", "easy_tdx.web:create_app",
+            "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload",
+        ],
         cwd=project_root,
         env={"EASY_TDX_WEB_DIST": os.path.join(web_ui_dir, "dist")},
     )
@@ -117,7 +124,10 @@ def main():
             if backend_proc.poll() is not None:
                 print("\n后端进程退出，重新启动...")
                 backend_proc = run_cmd(
-                    [python_bin, "-m", "easy_tdx.cli", "serve", "--host", "0.0.0.0", "--port", "8000"],
+                    [
+                        python_bin, "-m", "uvicorn", "easy_tdx.web:create_app",
+                        "--factory", "--host", "0.0.0.0", "--port", "8000", "--reload",
+                    ],
                     cwd=project_root,
                 )
             if frontend_proc.poll() is not None:

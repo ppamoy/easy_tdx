@@ -310,7 +310,7 @@ def _run_timing_one(
         }
 
     freq = "daily"
-    config = ChanlunConfig(recursion_depth=max(1, int(recursion_depth)))
+    config = ChanlunConfig(recursion_depth=max(1, int(recursion_depth)), zs_from_xd=False)
     analyser = ChanlunAnalyser(code=symbol, frequency=freq, config=config)
     result = analyser.process_klines(df)
     d = result.to_dict()

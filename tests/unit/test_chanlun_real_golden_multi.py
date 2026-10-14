@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 from easy_tdx.chanlun import ChanlunAnalyser
+from easy_tdx.chanlun.config import ChanlunConfig
 from easy_tdx.chanlun.types import Direction
 
 FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
@@ -31,9 +32,17 @@ FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 # 均 0%→100%。金标随之新增此前被漏掉的真实信号（已逐条核对为教科书形态）：
 #   - 000333_daily +1 个 3buy（BI6 回踩低点 67.03 > zg=66.50，突破笔 BI5）
 #   - 000001_30min +1 个 3sell（BI5 反抽高点 11.81 < zd=11.85，跌破笔 BI4）
+# V735 重新标定：切到缠论原文口径后，chanlun_000333_daily 的 mmds 由 3 → 1。
+# 消失的两个是 1buy / 2buy —— 它们**不符合原文**：
+#   - 原文第21课：「只有在**下跌确立后**的中枢下方才可能出现买点」
+#     （需此前已有两个依次同向的中枢）。该样本不满足。
+#   - 原文第17/21课：2买 是 1买 后**第一次**次级别回调制造的低点；
+#     1买 不成立 ⇒ 2买 也连带不成立（级联）。
+# 保留的 3buy 仍符合原文第20课（向上离开中枢后回试不跌破 ZG）。
+# ⚠️ 这是**按原文收紧**的结果，不是回归。
 CASES = [
     ("chanlun_600519_daily.json", "daily", (9, 1, 1, 0, 1)),
-    ("chanlun_000333_daily.json", "daily", (10, 2, 2, 3, 1)),
+    ("chanlun_000333_daily.json", "daily", (10, 2, 2, 1, 1)),
     ("chanlun_000001_weekly.json", "weekly", (12, 2, 2, 3, 1)),
     ("chanlun_000001_30min.json", "30min", (8, 2, 2, 1, 1)),
 ]
@@ -44,7 +53,7 @@ def case(request):
     fname, freq, counts = request.param
     rows = json.loads((FIXTURE_DIR / fname).read_text(encoding="utf-8"))
     df = pd.DataFrame(rows)
-    res = ChanlunAnalyser(code=fname, frequency=freq).process_klines(df)
+    res = ChanlunAnalyser(code=fname, frequency=freq, config=ChanlunConfig(zs_from_xd=False)).process_klines(df)
     return res, counts
 
 
@@ -87,12 +96,20 @@ def test_zs_semantics(case) -> None:
         assert zs.zg > zs.zd
         assert zs.gg >= zs.zg
         assert zs.dd <= zs.zd
-        # V730 原文口径（第17/20课）：ZG/ZD 由前两个走势的重叠确定后冻结；
-        # 第3笔起为延伸，不改变 ZG/ZD。gg/dd 为全部走势极值。
-        if len(zs.lines) >= 2:
-            first2 = zs.lines[:3]  # V733：前三笔冻结（原文口径）
-            assert zs.zg == min(line.high for line in first2), f"zg 应为前三笔 min(high) {zs}"
-            assert zs.zd == max(line.low for line in first2), f"zd 应为前三笔 max(low) {zs}"
+        # ⚠️ V735 更正：上面「前三笔冻结 = 原文口径（第17/20课）」的说法
+        # **是错的**（V734 也这么写，均已更正）。原文第20课原文是：
+        #     「ZG=min(g1、g2)、ZD=max(d1、d2)」
+        # 只有 A、C 两段（第 1、3 笔）参与，**中间那笔（B）不参与，
+        # 原文里没有 g3**。此前代码/注释把它写成「前三笔」，是不符原文的。
+        # V735 起 zs_zd_original_ac 默认 True ⇒ 走 A、C 两段。
+        if len(zs.lines) >= 3:
+            a_seg, c_seg = zs.lines[0], zs.lines[2]  # A、C 两段（原文第20课）
+            assert zs.zg == min(a_seg.high, c_seg.high), (
+                f"zg 应为 A、C 两段 min(high)（原文第20课）{zs}"
+            )
+            assert zs.zd == max(a_seg.low, c_seg.low), (
+                f"zd 应为 A、C 两段 max(low)（原文第20课）{zs}"
+            )
         if zs.lines:
             assert zs.gg == max(line.high for line in zs.lines)
             assert zs.dd == min(line.low for line in zs.lines)

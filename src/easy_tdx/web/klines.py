@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -22,6 +23,49 @@ from easy_tdx.web.convert import (
 )
 
 _logger = logging.getLogger(__name__)
+
+
+# ── 分钟线磁盘缓存（read-through）──────────────────────────────────
+# 30min/60min 取数必须逐页翻回历史（TDX 协议锚定最新 bar），实测一次
+# multi-level 请求要 32s —— 超过浏览器 fetch 的 30s 上限（Moli 实测
+# "curl request failed ... after 30000ms"），前端直接拿到 failed to fetch。
+# 而 scripts/fetch_minute_data.py 已经把 30min/60min 全量落到
+# audit_data_min/{market}{code}_{period}.json，直接读盘可秒回。
+_MIN_CACHE_DIR = Path(__file__).resolve().parents[3] / "audit_data_min"
+_MIN_CACHE_PERIODS = {"MIN_30": "30min", "MIN_60": "60min"}
+
+
+def _read_min_cache(market: str, code: str, category: str) -> pd.DataFrame | None:
+    """命中磁盘分钟线缓存则返回 DataFrame，否则 None。"""
+    slug = _MIN_CACHE_PERIODS.get(str(category).upper())
+    if not slug:
+        return None
+    fp = _MIN_CACHE_DIR / f"{str(market).lower()}{code}_{slug}.json"
+    if not fp.is_file():
+        return None
+    try:
+        import json
+
+        rows = json.loads(fp.read_text(encoding="utf-8"))
+        if not isinstance(rows, list) or not rows:
+            return None
+        df = pd.DataFrame(rows)
+        if "datetime" not in df.columns:
+            return None
+        df["datetime"] = pd.to_datetime(df["datetime"])
+        return df.sort_values("datetime").reset_index(drop=True)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _slice_cache(
+    df: pd.DataFrame, start_ts: Any, end_exclusive: Any
+) -> pd.DataFrame:
+    ts = pd.to_datetime(df["datetime"])
+    mask = ts >= start_ts
+    if end_exclusive is not None:
+        mask &= ts < end_exclusive
+    return df.loc[mask].reset_index(drop=True)
 
 
 async def fetch_qfq_klines(
@@ -44,6 +88,14 @@ async def fetch_qfq_klines(
     返回的 DataFrame 列契约与 analyser 兼容（date/datetime + OHLCV）。
     """
     from easy_tdx.models.enums import KlineCategory
+
+    # V735 Round 10：本地缓存优先（30min/60min 已由 fetch_minute_data.py 落盘；
+    # 日线等级别在 fetch_qfq_klines 拉取后也会自动保存）。
+    from easy_tdx.web.kline_cache import read_klines, save_klines
+
+    cached = read_klines(market, code, category)
+    if cached is not None and not cached.empty:
+        return cached
 
     cat = category_from_str(category)
     if mac_client is not None:
@@ -75,11 +127,22 @@ async def fetch_qfq_klines(
                 if daily_plus:
                     out["datetime"] = pd.to_datetime(out["datetime"]).dt.normalize()
                 out = out.rename(columns={"datetime": _time_col})
+            # 保存到本地缓存
+            try:
+                save_klines(market, code, category, out)
+            except Exception:  # noqa: BLE001
+                _logger.debug("缓存保存失败 %s%s %s", market, code, category)
             return out
         _logger.warning("MAC QFQ 返回空，回退标准 TdxClient（不复权）")
     df = await tdx_client.get_security_bars(
         market_from_str(market), code, cat, start, count, bar_time=bar_time
     )
+    # 保存到本地缓存
+    if df is not None and not df.empty:
+        try:
+            save_klines(market, code, category, df)
+        except Exception:  # noqa: BLE001
+            _logger.debug("缓存保存失败 %s%s %s", market, code, category)
     return df
 
 
@@ -185,6 +248,13 @@ async def fetch_bars_range(
         end_ts = pd.to_datetime(end_date, errors="coerce")
         if not pd.isna(end_ts):
             end_ts_exclusive = end_ts + pd.Timedelta(days=1)
+
+    # 分钟线优先读磁盘缓存：逐页翻历史太慢（实测 32s > 浏览器 30s 上限）
+    cached = _read_min_cache(market, code, category)
+    _logger.warning("CACHEPROBE %s %s %s -> %s", market, code, category,
+                    "HIT" if cached is not None else "MISS")
+    if cached is not None:
+        return _slice_cache(cached, start_ts, end_ts_exclusive)
 
     max_pages = max(1, min(int(max_bars), MAX_LOOKBACK) // _PAGE_SIZE)
     frames: list[pd.DataFrame] = []

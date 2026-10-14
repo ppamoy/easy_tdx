@@ -118,7 +118,7 @@ def test_low_level_yields_richer_structure_than_high():
     df = _daily(120, seed=21)
     low = synthesize_lower_level(df, "DAY", "MIN_30")
     assert low is not None
-    cfg = ChanlunConfig()
+    cfg = ChanlunConfig(zs_from_xd=False)
     hi_res = ChanlunAnalyser(code="H", frequency="daily", config=cfg).process_klines(df)
     lo_res = ChanlunAnalyser(code="L", frequency="low", config=cfg).process_klines(low)
     assert len(lo_res.bis) > len(hi_res.bis)

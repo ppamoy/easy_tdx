@@ -79,7 +79,7 @@ class TestEngineFixIsBackwardCompatible:
         new_t, old_t = trees
         files = [
             p
-            for p in sorted(DATA.glob("*.json"))
+            for p in sorted(DATA.glob("*_daily.json"))
             if p.stem.split("_")[0] not in ("sh000300", "sh000001")
         ][:N_SYMBOLS]
         assert files, "没有可用行情"

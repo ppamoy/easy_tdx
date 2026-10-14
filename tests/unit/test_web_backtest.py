@@ -503,21 +503,72 @@ def test_backtest_request_ohlcv_max_length():
     """ohlcv 内联数据必须有上限（防 DoS）。"""
     from easy_tdx.web.backtest_schemas import BacktestRequest
 
-    bar = {
-        "datetime": "2024-01-01",
-        "open": 1,
-        "high": 1,
-        "low": 1,
-        "close": 1,
-        "vol": 1,
-        "amount": 1,
-    }
-    # 2000 条（上限）应接受
-    req = BacktestRequest(strategy="ma_cross", ohlcv=[bar] * 2000)
+    def bar(day: str) -> dict:
+        return {
+            "datetime": day,
+            "open": 1,
+            "high": 1,
+            "low": 1,
+            "close": 1,
+            "vol": 1,
+            "amount": 1,
+        }
+
+    # 2000 条（上限）应接受。
+    # ⚠️ 日期必须互异：V724 起 BacktestRequest 拒绝重复日期（前端分页 concat
+    #    重复段的防御，见 test_backtest_request_ohlcv_rejects_duplicate_dates）。
+    req = BacktestRequest(
+        strategy="ma_cross", ohlcv=[bar(f"2024-01-01+{i}") for i in range(2000)]
+    )
     assert len(req.ohlcv) == 2000
     # 2001 条应拒绝
     with pytest.raises(ValueError):
-        BacktestRequest(strategy="ma_cross", ohlcv=[bar] * 2001)
+        BacktestRequest(
+            strategy="ma_cross", ohlcv=[bar(f"2024-01-01+{i}") for i in range(2001)]
+        )
+
+
+def test_backtest_request_ohlcv_rejects_duplicate_dates():
+    """V724: 重复日期必须拒绝——前端翻页把同一区间 concat 多遍会让回测错位。
+
+    实测 2026-10-13：fetchBars 对 /bars?start_date= 翻 10 页，后端每页都返回
+    整个区间（忽略 start），1500 根被 concat 成 15000 根。前端已修（不再盲目
+    翻页 + 去重），后端再加一层闸：同一 datetime 出现多次直接 422，而不是静默
+    跑一份缠论笔/中枢与信号整体错位的回测。
+    """
+    from easy_tdx.web.backtest_schemas import BacktestRequest
+
+    def bar(day: str) -> dict:
+        return {
+            "datetime": day,
+            "open": 1,
+            "high": 1,
+            "low": 1,
+            "close": 1,
+            "vol": 1,
+            "amount": 1,
+        }
+
+    # 无重复：正常接受
+    ok = [bar(f"2024-01-{i:02d}") for i in range(1, 6)]
+    assert len(BacktestRequest(strategy="ma_cross", ohlcv=ok).ohlcv) == 5
+
+    # 整段重复（真实故障形状：同一区间出现两遍）→ 拒绝
+    dup = ok + ok
+    with pytest.raises(ValueError, match="重复日期"):
+        BacktestRequest(strategy="ma_cross", ohlcv=dup)
+
+    # date 字段同样参与判重
+    def dbar(day: str) -> dict:
+        b = bar(day)
+        del b["datetime"]
+        b["date"] = day
+        return b
+
+    with pytest.raises(ValueError, match="重复日期"):
+        BacktestRequest(
+            strategy="ma_cross", ohlcv=[dbar("2024-01-01"), dbar("2024-01-01")]
+        )
 
 
 # ---------------------------------------------------------------------------

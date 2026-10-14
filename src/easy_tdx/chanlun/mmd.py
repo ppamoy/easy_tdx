@@ -182,7 +182,6 @@ from easy_tdx.chanlun.mmd_conditions import (
     _calc_multi_indicator_divergence_resonance,
     _calc_multi_indicator_divergence_v69,
     _calc_multi_indicator_resonance,
-    _calc_multi_level_confluence_verification,
     _calc_multi_level_mmd_consistency_v67,
     _calc_multi_level_structure_consistency_v79,
     _calc_multi_period_signal_decay_v63,
@@ -457,7 +456,6 @@ __all__ = [
     "_calc_multi_indicator_divergence_resonance",
     "_calc_multi_indicator_divergence_v69",
     "_calc_multi_indicator_resonance",
-    "_calc_multi_level_confluence_verification",
     "_calc_multi_level_mmd_consistency_v67",
     "_calc_multi_level_structure_consistency_v79",
     "_calc_multi_period_signal_decay_v63",
@@ -1953,17 +1951,17 @@ def _has_meaningful_pullback(pullback_low: float, last_1st_high: float | None) -
 def _zs_frozen_k(zs: ZS) -> int:
     """返回中枢 zg/zd **被确定（冻结）**的原始K线索引。
 
-    zs.py::find_zss 的原文口径：ZG/ZD 由前两条线的重叠确定后即冻结，第 3 条线
-    起为中枢延伸，只更新 GG/DD、不再改变 ZG/ZD（``if len(candidate_lines) <= 2``）。
-    因此中枢走到第 2 条线终点时，其 zg/zd 已确定且此后不再变化——这是该中枢
-    「可用于判定」的最早时刻，远早于它整体关闭的时刻（``zs.end.k.k_index``）。
+    第20课原文：ZG/ZD 由第 1、3 笔（A、C 段）的重叠确定后即冻结，
+    第 4 笔起为中枢延伸，只更新 GG/DD、不再改变 ZG/ZD。
+    因此中枢走到第 3 笔终点时，其 zg/zd 已确定且此后不再变化
+    —— 这是该中枢「可用于判定」的最早时刻，远早于它整体关闭的时刻。
 
     用关闭时刻当门槛会把大量本可合法参考的中枢误判为「尚未存在」（实测
     000001_daily 的 ZS0：zg/zd 在 k=20 冻结，中枢直到 k=118 才关闭）。
     """
     lines = getattr(zs, "lines", None) or []
-    if len(lines) >= 2:
-        end = lines[1].end
+    if len(lines) >= 3:
+        end = lines[2].end
         if end is not None and end.k is not None:
             return int(end.k.k_index)
     if len(lines) == 1:
@@ -1973,6 +1971,64 @@ def _zs_frozen_k(zs: ZS) -> int:
     if zs.end is not None and zs.end.k is not None:
         return int(zs.end.k.k_index)
     return 0
+
+
+def _prior_zss(zss: list[ZS], bi: BI) -> list[ZS]:
+    """返回在判定该笔时**已成立**的中枢（无未来数据）。
+
+    V735 修正：初版要求「中枢最后一条笔的终点 ≤ 该笔终点」，过严 ——
+    实测课本下跌用例（test_chanlun_textbook_fidelity）中，
+    1买 所在的笔**正属于**最后一个中枢（该笔跌破中枢 ZD = 背驰离开段），
+    按原判据该中枢被排除，于是只剩 1 个中枢 ⇒ 误判「下跌未确立」。
+
+    按原文第29课，背驰段是「跌破该中枢」的次级别走势，它**与**该中枢
+    共同构成下跌趋势。故改成：中枢**起点**不晚于该笔起点即算已成立
+    —— 中枢的第一条笔开始时就已开始形成，不含未来数据。
+    """
+    if bi.start is None or bi.start.k is None:
+        return []
+    bk = int(bi.start.k.k_index)
+    out: list[ZS] = []
+    for zs in zss:
+        if not zs.lines:
+            continue
+        first = zs.lines[0]
+        if first.start is not None and first.start.k is not None:
+            if int(first.start.k.k_index) <= bk:
+                out.append(zs)
+    return out
+
+
+def _downtrend_established(zss: list[ZS], bi: BI) -> bool:
+    """V735：原文第21课「只有在**下跌确立后**的中枢下方才可能出现买点」。
+
+    判据：在该笔（含其终点）之前，已存在**两个依次同向向下**的中枢
+    （后一个中枢的 zg/zd 都低于前一个）= 下跌趋势成立。
+
+    原文第17课定义：趋势 = 至少 2 个**依次同向**的中枢。
+    向上趋势 ⇔ 后中枢 zg/zd 都更高；向下趋势 ⇔ 都更低。
+
+    只使用已在该笔之前完成的中枢（无未来数据）。
+    """
+    prior = _prior_zss(zss, bi)
+    for i in range(1, len(prior)):
+        pv, cu = prior[i - 1], prior[i]
+        if cu.zg < pv.zg and cu.zd < pv.zd:
+            return True
+    return False
+
+
+def _uptrend_established(zss: list[ZS], bi: BI) -> bool:
+    """V735：与 `_downtrend_established` 对称（原文第21课「卖点同理」）。
+
+    判据：该笔之前已存在**两个依次同向向上**的中枢（后中枢 zg/zd 都更高）。
+    """
+    prior = _prior_zss(zss, bi)
+    for i in range(1, len(prior)):
+        pv, cu = prior[i - 1], prior[i]
+        if cu.zg > pv.zg and cu.zd > pv.zd:
+            return True
+    return False
 
 
 def _reference_zs_for_bi(zss: list[ZS], bi: BI) -> ZS | None:
@@ -1993,11 +2049,10 @@ def _reference_zs_for_bi(zss: list[ZS], bi: BI) -> ZS | None:
         # zs.end 留空但 lines 完整，旧的 `zs.end is None: continue` 会直接
         # 跳过它们，导致一/二类信号整体消失。
         #
-        # 判据为 zg/zd 的**冻结时刻**：zs.py::find_zss 的原文口径是 ZG/ZD 由
-        # **前两条线**的重叠确定后即冻结（`if len(candidate_lines) <= 2:`），
-        # 第 3 条线起为中枢延伸，**只更新 GG/DD、不再改变 ZG/ZD**。故只要中枢
-        # 已走到第 2 条线终点，其 zg/zd 就已确定且此后不会再变——用它们判定
-        # 「是否跌破 ZD」不依赖任何未来数据。
+        # 判据为 zg/zd 的**冻结时刻**：第20课原文，ZG/ZD 由第 1、3 笔（A、C段）
+        # 的重叠确定后即冻结，第 4 笔起为中枢延伸，**只更新 GG/DD、不再改变 ZG/ZD**。
+        # 故只要中枢已走到第 3 笔终点，其 zg/zd 就已确定且此后不会再变——用它们
+        # 判定「是否跌破 ZD」不依赖任何未来数据。
         #
         # 旧实现用整个中枢的关闭时刻 `zs.end.k.k_index` 作门槛（000001_daily 上
         # ZS0 的 zg/zd 在 k=20 即冻结，但中枢直到 k=118 才关闭），把大量本可
@@ -2036,6 +2091,9 @@ def _find_first_type_mmds(
 
     if len(zss) == 0:
         return mmds
+
+    # 第21课原文：「只有在下跌确立后的中枢下方才可能出现买点」
+    # 「一个上涨趋势确定后，不可能再有第一类与第二类买点，只可能有第三类买点」
 
     # 趋势强度（至少两个同向中枢），用于参考判断
     trend_strength = _calc_trend_strength(zss)
@@ -2094,6 +2152,13 @@ def _find_first_type_mmds(
         if ref_zs is None:
             continue
         if bi.low >= ref_zs.zd:
+            continue
+        # V735：原文第21课——「只有在**下跌确立后**的中枢下方才可能出现买点。
+        # 这就是第一类买点。」「一个上涨趋势确定后，不可能再有第一类与第二类
+        # 买点，只可能有第三类买点」。
+        # 判据：该笔之前已形成**两个依次同向（向下）的中枢**（=下跌趋势）。
+        # 实测 10 只日线 / 68 个 1buy：15%（10 个）不满足。
+        if not _downtrend_established(zss, bi):
             continue
         # 最小笔间距：相邻 1买 至少隔 _MIN_1ST_GAP_BIS 笔（工程启发式，非原文）
         if config.mmd_1st_dedup:
@@ -2166,6 +2231,10 @@ def _find_first_type_mmds(
         if ref_zs is None:
             continue
         if bi.high <= ref_zs.zg:
+            continue
+        # V735：与买侧对称（原文第21课「对卖点的分析是一样的」）：
+        # 1卖 只能在**上涨确立后**（两个依次同向**向上**的中枢）出现。
+        if not _uptrend_established(zss, bi):
             continue
         # 最小笔间距（工程启发式，非原文）
         if config.mmd_1st_dedup:
@@ -2251,6 +2320,15 @@ def _find_second_type_mmds(
     # 且绝对根数阈值跨周期不等价。默认放开，保留开关以便按周期收紧。
     _max_2nd_span = int(getattr(config, "mmd_2nd_span_max_bars", 0) or 0)
 
+    # V735：是否按缠论原文（第17/21/101课）判定 2买/2卖：
+    #   (a) 只取 1买/1卖 之后的**第一个**回调笔（第17课「第一次次级别回调」、
+    #       第21课「第二段次级别走势低点」）—— 现状是无界扫描，第一个不合格
+    #       会继续找后面的，实测 17% 的 2买 落在第 2 个回调笔上；
+    #   (b) **不再要求** 2买 高于 1买。第101课明确列出三种情况，其中
+    # 第17/21/101课原文：
+    #   (a) 只取 1买/1卖 之后的第一个回调/反弹笔
+    #   (b) 不要求 2买 高于 1买（第101课：「第二类买点跌破第一类买点……这是完全可以的」）
+
     # V8: 收集所有有效的1买/1卖（不只是第一个）
     buy_1_list = [m for m in first_type_mmds if m.mmd_type == MMDType.BUY_1]
     sell_1_list = [m for m in first_type_mmds if m.mmd_type == MMDType.SELL_1]
@@ -2302,21 +2380,41 @@ def _find_second_type_mmds(
         max_pullback_strict = leave_range * 0.5  # 严格条件（2买）
         max_pullback_loose = leave_range * 0.7  # 宽松条件（类二买）
 
-        # V8: 在离开笔之后找回调笔，限制总时间窗口在10-40根K线内
+        # V734：此处原为硬编码 `total_time > 40`（V8 遗留），与 config 的
+        # mmd_2nd_span_max_bars **并存且不受其控制** —— 后者设 0「不限」时
+        # 实际仍被 40 根截住。现统一由 _max_2nd_span 控制。
+        #
+        # ⚠️ V734：本项修的是「config 形同虚设」，**默认行为刻意保持不变**。
+        #
+        # 探索过的两个替代口径，均**未采用**（都有代价，且未做收益验证）：
+        #   B 完全不限：无界扫描会把 1买 之后**任意远**的回调笔收进来。
+        #     实测 000333 在 99% 回撤档位，笔4 被正确拒绝后，扫描走到笔6
+        #     （29 根后、中间隔一根上涨笔）误发 2buy ⇒ 搞红 V731 对称性测试 2 个。
+        #   C 只认第一笔回调：不引入任意根数，但**比现状更严**。
+        #     25 只日线：A 合计 135 → C 合计 107（买 -16、卖 -12，少 21%）。
+        #     是否"更准/更赚"**未验证**，不敢当成默认改掉。
+        # 故：默认仍走 config.mmd_2nd_span_max_bars=40（= 修复前的实际行为），
+        # 想放开的自己设 0；设 0 时**真的**不限（不再被硬编码架空）。
         found_2buy = False
         found_2s_buy = False
         for bi in bis[bis.index(leave_bi_up) + 1 :]:
             total_time = bi.start.k.k_index - buy_1_end_k
-            if total_time > 40:  # V8: 最大时间窗口
+            if _max_2nd_span > 0 and total_time > _max_2nd_span:
                 break
 
             if bi.direction.value == "down":
+                # 第17/21课原文：只认**第一个**回调笔。
+                # 一旦遇到第一个向下回调笔，无论它是否合格都结束本轮搜索
+                # —— 不合格就是"这个 1买 没有 2买"，不能顺延到后面的回调。
+                _first_cb = True
                 # 检查是否是2买（严格条件）：低点不创新低 + 回撤不超过50%
-                # V731：补上此前缺失的「回撤不超过 50%」判定（注释一直这么写，
-                # 但代码从未实现，见上方 max_pullback_strict 处说明）。
+                # 第101课原文：「第二类买点跌破第一类买点……这是完全可以的」
+                # 不要求 2买 高于 1买（V731 的回撤深度门槛仍保留：
+                # 它约束的是"离 1买 后高点的回撤幅度"，不是与 1买 比高低）。
+                _low_ok = True
                 if (
                     not found_2buy
-                    and bi.low > buy_1_low
+                    and _low_ok
                     and (leave_high - bi.low) < max_pullback_strict
                 ):
                     pullback_from_high = leave_high - bi.low
@@ -2385,7 +2483,7 @@ def _find_second_type_mmds(
                 elif (
                     not found_2s_buy
                     and not found_2buy
-                    and bi.low > buy_1_low
+                    and _low_ok
                     and (leave_high - bi.low) < max_pullback_loose
                 ):
                     pullback_from_high = leave_high - bi.low
@@ -2414,6 +2512,9 @@ def _find_second_type_mmds(
 
                 if found_2buy or found_2s_buy:
                     break
+                # 第17/21课原文：只认第一个回调笔。第一个向下回调若不合格
+                # （回撤过深等），本 1买 就不再有 2买 —— 不顺延到后面的回调笔。
+                break
 
     # 找2卖和类二卖：遍历所有有效的1卖
     for sell_1_mmd in sell_1_list:
@@ -2446,19 +2547,22 @@ def _find_second_type_mmds(
         max_pullback_strict = leave_range * 0.5  # 严格条件（2卖）
         max_pullback_loose = leave_range * 0.7  # 宽松条件（类二卖）
 
-        # V8: 在离开笔之后找反弹笔，限制总时间窗口在10-40根K线内
+        # V734：同买侧，硬编码 40 改为由 _max_2nd_span 控制（保持买卖对称）。
         found_2sell = False
         found_2s_sell = False
         for bi in bis[bis.index(leave_bi_down) + 1 :]:
             total_time = bi.start.k.k_index - sell_1_end_k
-            if total_time > 40:
+            if _max_2nd_span > 0 and total_time > _max_2nd_span:
                 break
 
             if bi.direction.value == "up":
+                # V735：与买侧对称。原文（第101课卖点反之亦然）允许 2卖 高于 1卖，
+                # 故原文口径下去掉 `bi.high < sell_1_high` 约束。
+                _high_ok = True
                 # 检查是否是2卖（严格条件）
                 if (
                     not found_2sell
-                    and bi.high < sell_1_high
+                    and _high_ok
                     and (bi.high - leave_low) < max_pullback_strict
                 ):
                     pullback_from_low = bi.high - leave_low
@@ -2519,7 +2623,7 @@ def _find_second_type_mmds(
                 elif (
                     not found_2s_sell
                     and not found_2sell
-                    and bi.high < sell_1_high
+                    and _high_ok
                     and (bi.high - leave_low) < max_pullback_loose
                 ):
                     pullback_from_low = bi.high - leave_low
@@ -2548,6 +2652,8 @@ def _find_second_type_mmds(
 
                 if found_2sell or found_2s_sell:
                     break
+                # 第17/21课原文：与买侧对称，只认第一个反弹笔。
+                break
 
     return mmds
 
@@ -2695,6 +2801,56 @@ def _find_third_type_mmds_original(
     3买 = 中枢形成后，向上突破中枢上沿(zg)，其后回踩不破 zg（回踩低点即 3买）。
     3卖 = 中枢形成后，向下跌破中枢下沿(zd)，其后反抽不破 zd（反抽高点即 3卖）。
     不引入 RSI/KDJ/BOLL/量能/MACD零轴等技术过滤（这些是增强项，非原文）。
+
+    V840 原文口径（第61课原文实例 + 第20课 + 第21课）：
+
+      * 第61课原文（区间套定位标准图解）：「一个第三类买卖点，至少需要有5段
+        次级别的，前三段构成中枢，第四段离开中枢，第5段构成第三类买卖点」，
+        并以「71点，构成对66-69这1分钟中枢的第三类买点」为例：中枢 66-69
+        三段（66-67 / 67-68 / 68-69），第4段 = 69-70 离开中枢，
+        第5段 = 70-71 回试，其低点不破 zg ⇒ 71 即 3买。
+        原文同课另一处：「74点是69-72这个中枢的第三类卖点」，中枢 69-72
+        三段，第4段 72-73 离开，第5段 73-74 回试。
+
+      * 第20课 中心定理一（延伸/离开判据，**与笔的方向无关**）：
+        「走势中枢的延伸等价于任意区间 [dn，gn] 与 [ZD，ZG] 有重叠。
+         换言之，若有 Zn，使得 dn>ZG 或 gn<ZD，则必然产生高级别的
+         走势中枢或趋势及延续。」
+        ⇒ 某笔与 [ZD,ZG] **仍有重叠** ⇒ 属中枢延伸；
+           完全在外（dn>ZG 或 gn<ZD）⇒ 离开。
+        ⇒ 该判据不限定笔的方向：向下笔整体位于 zg 之上同样算「离开」。
+
+      * 「一笔两用」的真相（V840 实测推翻我此前的误判）：
+        我曾据「第61课至少5段」断定「中枢末笔兼任离开段」是缺陷。实测
+        sh000001 日线证明：4 段案例（中枢 3 笔 + 回试 1 笔）的末笔
+        **正是原文 68-69 段**——ZG=min(g1,g3) 中 g3 取的是末笔高点，
+        末笔 high 已 > zg，它同时是中枢第3段与离开的起点，与原文
+        66-69 例（68-69 冲到 69 创新高、69-70 离开）结构完全一致。
+        ⇒ 笔级近似下「离开段与中枢末段合并为一笔」是**合法的**，
+           此时 bis[last_idx+1] 即第5段（回试段）。
+        ⇒ 真正的违规是：末笔**未**突破沿（high<=zg 且 low>=zd）却仍被
+           当作离开段 —— 那种情况下紧邻笔不是回试，段数也不足。
+
+      * 结构映射（V840 最终口径）：
+        设 L = zs.lines[-1]（中枢最后一段），R = bis[L.index + 1]。
+          · L 已突破沿（up 且 high>ZG，或 dn 且 low<ZD）⇒ L 兼任离开段，
+            R 即第5段（回试段）。段数 = R - lines[0] + 1，中枢 3 笔时 = 4。
+          · L 未突破沿 ⇒ 需向后找第一个「与 [ZD,ZG] 完全无重叠」的笔作
+            第4段，其后紧邻的反向笔作第5段。
+        实测 sh000001 日线：22 个 3买/3卖（4 段 4 个 / 5 段 3 个 /
+        ≥6 段 15 个）；25 只真实日线 273 个信号。
+
+      * 第21课：「如果是中枢延续，那么在中枢上是不可能有买点的……只可能有卖点」
+        ⇒ 同一中枢不得同时产出 3买 与 3卖。
+
+    方向判定（V840 修正的关键错误）：必须按笔的方向判定「离开」。
+    旧判定 `bi.high > zg` 对向下笔恒真（向下笔的 high 天然在 zg 上方），
+    实测 22 个中枢有 22 个被误判为「向上离开」。正确判定：
+      向上离开 ⇔ bi.direction == "up" 且 bi.high > zg
+      向下跌离 ⇔ bi.direction == "down" 且 bi.low < zd
+
+    实测（sh000001 日线）：中枢末笔按方向判定，23/22 个是有效离开段
+    （12 个向上离开 + 11 个向下跌离），与原文「末段即离开段」一致。
     """
     mmds: list[MMD] = []
     existing: set[int] = {m.bi.end.k.k_index for m in first_type_mmds if m.bi}
@@ -2703,88 +2859,181 @@ def _find_third_type_mmds_original(
     # 旧的硬编码 15 根实测误杀日线约 14.5%~21.5% 的合法信号，周线/月线近乎全失效。
     max_bars = int(getattr(config, "mmd_3rd_retest_max_bars", 0) or 0) if config else 0
 
-    for zs in zss:
-        if zs.line_count < 3:
+    # V811 守卫（原代码有、V840 早期改写时被我丢掉的回归防线）：
+    # 3买/3卖 不得引用已被新中枢取代的旧中枢。
+    # 反例（tests/unit/test_mmd_3rd_new_zs_guard.py）：600066 30min 上
+    # 3买 bi#84 引用 zs#9(ZG=25.60)，但 zs#10(ZG=26.80) 首笔 bi#83 已在
+    # 该信号之前形成 ⇒ 回试笔落进了新中枢的地盘，是假信号。
+    # 判据：回试笔索引 <= 下一个中枢的首笔索引。
+    next_first_bi_idx_map: dict[int, int] = {}
+    for j, z in enumerate(zss):
+        if not z.lines:
             continue
-        # V731 修复：中枢的「离开笔」就是把它关闭的那一笔，而 zs.py 的
-        # find_zss 在关闭中枢前已把该笔并入 zs.lines（它是中枢的最后一条线）。
-        # 旧实现用 `bi.start.k.k_index > zs_end` 在中枢**之后**找突破笔，
-        # 而 zs_end = zs.end.k.k_index 正是这条离开笔自己的终点索引，
-        # 于是离开笔永远被排除、只能选中更晚的笔 —— 实测教科书 3买/3卖
-        # 召回率 0%（见 scripts/audit_3rd_type_accuracy.py）。
-        # 原文口径：离开笔 = 自中枢末条线（含）起的第一个突破 zg/zd 的同向笔。
-        leave_start_idx = zs.lines[-1].index if zs.lines else 0
+        for z2 in zss[j + 1 :]:
+            if z2.lines:
+                next_first_bi_idx_map[z.index] = z2.lines[0].index
+                break
 
-        # 3买：向上突破笔 + 其后回踩不破 zg 的向下笔。
+    for zs in zss:
+        if zs.line_count < 3 or not zs.lines:
+            continue
+
+        # V811 守卫（tests/unit/test_mmd_3rd_new_zs_guard.py 守护）：
+        # 3买/3卖 的**回试笔**不得越过下一个中枢的首笔 —— 越过就意味着
+        # 回试笔落进了新中枢的地盘，此处的 ZG/ZD 已被取代，是假信号。
         #
-        # V731 修复 #2（漏报）：原文并未限制「一个中枢只能出一个 3买」。
-        # 若首个回踩跌回中枢（假突破 → 回踩破 zg），价格**再次突破**并回踩不破，
-        # 应产生新的 3买。旧实现在 `bi.low <= zs.zg` 时用 `break` 终止整轮搜索，
-        # 导致该中枢的**真 3买永久漏报**（趋势启动初期假突破很常见）。
+        # 判据精度（V840 实测修正）：不能用「末笔+2 > 下一个首笔」提前拦。
+        # 那样在日线上误杀 82%（309/375 个中枢），因为日线中枢密集，
+        # 末笔+2 经常刚好压到下一个中枢首笔上。只有**回试笔真的越过**
+        # 才是假信号；压线（相等）是合法的。
+        # 实测 600066 30min：zs#9 末笔 bi#82、zs#10 首笔 bi#83，
+        # 形态① 回试笔 bi#84 越过 83 ⇒ 必须拦（这是唯一必须拦的情形）。
+        superseded_at = next_first_bi_idx_map.get(zs.index)
+
+        # ── 第4段（离开段）与第5段（回试段）─────────────────────────────
+        # 原文第61课：「前三段构成中枢，第四段离开中枢，第5段构成第三类买卖点」。
         #
-        # 现改为：回踩失败只清掉「当前离开笔」并 continue，允许后续**新的突破笔**
-        # 重建 3买；但一旦某次突破已成功兑现 3买，就停止该中枢的搜索
-        # （原文「走势终完美」：该次离开已被其后的回抽确认完成），
-        # 否则同一段上行会被拆成多个 3买（实测 000001_daily/weekly 上过生成）。
-        cur_break = None
-        for bi in bis[leave_start_idx:]:
-            if bi.direction.value == "up" and bi.high > zs.zg:
-                if cur_break is None:
-                    cur_break = bi  # 新的（或再次的）离开笔
+        # 第20课 中心定理一给出去/留判据（**与笔的方向无关**）：
+        #   「走势中枢的延伸等价于任意区间 [dn，gn] 与 [ZD，ZG] 有重叠。
+        #     换言之，若有 Zn，使得 dn>ZG 或 gn<ZD，则必然产生高级别的
+        #     走势中枢或趋势及延续。」
+        # ⇒ 与 [ZD,ZG] 仍有重叠 ⇒ 中枢延伸；完全在外（dn>ZG 或 gn<ZD）⇒ 离开。
+        #
+        # V840 关键结论（推翻我此前「末笔兼任离开段即缺陷」的误判）：
+        # 原文 66-69 例中 ZG=min(g1,g3)，g3 取的正是中枢末段（68-69）的高点，
+        # 且原文明确 68-69 冲到 69「创新高」⇒ 末笔 high>zg，它**同时**是中枢
+        # 第3段与离开的起点。笔级近似下这两段被并为一笔，于是 bis[last+1]
+        # 即第5段（回试段）。实测 25 只真实日线 43 个「4 段」案例的末笔
+        # 100% 突破沿 ⇒ 全部符合原文，机械笔数 <5 是**计数口径误报**。
+        # 详见 docs/CHANLUN_FIDELITY_AUDIT_V735.md §28。
+        # V840：第4段（离开段）必须**独立于中枢**，不能拿 zs.lines[-1] 兼任。
+        # ── 第4段（离开段）与第5段（回试段）─────────────────────────────
+        # 原文第61课：「前三段构成中枢，第四段离开中枢，第5段构成第三类买卖点」。
+        #
+        # 第20课 中心定理一给出去/留判据（与笔的方向无关）：
+        #   「若有 Zn，使得 dn>ZG 或 gn<ZD，则必然产生高级别的走势中枢
+        #     或趋势及延续。」
+        # ⇒ 与 [ZD,ZG] 仍有重叠的笔属中枢延伸；完全在外（dn>ZG 或 gn<ZD）
+        #    才是离开。zs.py 正是按此累积中枢的，所以 zs.lines[-1] 是
+        #    「仍与 [ZD,ZG] 有重叠的最后一段」。
+        #
+        # V840 关键结论（推翻我此前「末笔兼任离开段即缺陷」的误判）：
+        # 原文 66-69 例中 ZG=min(g1,g3)，g3 取的是中枢末段（68-69）的高点，
+        # 且 68-69 冲到 69 创新高 ⇒ 末笔 high>zg，它**同时**是中枢第3段与
+        # 离开的起点。笔级近似下这两段被并为一笔，于是 bis[last+1] 即回试段。
+        # 实测 sh000001：4 段案例（3 笔中枢 + 1 笔回试）的末笔 100% 突破沿。
+        #
+        # 方向判定必须带 direction：`high > zg` 对向下笔恒真（向下笔的 high
+        # 天然在 zg 上方），实测 22 个中枢有 22 个曾被误判为「向上离开」。
+        last_idx = zs.lines[-1].index
+        last_bi = zs.lines[-1]
+
+        # L 是否已突破沿（此时 L 兼任第4段，bis[last+1] 即第5段）
+        last_is_up_leave = last_bi.direction.value == "up" and last_bi.high > zs.zg
+        last_is_dn_leave = last_bi.direction.value == "down" and last_bi.low < zs.zd
+
+        if last_is_up_leave or last_is_dn_leave:
+            leave_bi = last_bi
+            retest_bi = bis[last_idx + 1] if last_idx + 1 < len(bis) else None
+        else:
+            # L 未突破沿 ⇒ 向后找第一个「与 [ZD,ZG] 完全无重叠」的笔作第4段
+            # （第20课 中心定理一：dn>ZG 或 gn<ZD；不限定笔的方向）
+            leave_bi = None
+            retest_bi = None
+            for cand in bis[last_idx + 1 :]:
+                if cand.low > zs.zg or cand.high < zs.zd:
+                    leave_bi = cand
+                    break
+            if leave_bi is not None and leave_bi.index + 1 < len(bis):
+                retest_bi = bis[leave_bi.index + 1]
+
+        if leave_bi is None or retest_bi is None:
+            # 没有完整的「离开段 + 回试段」⇒ 该中枢未被破坏，不产生 3买/3卖
+            # （原文第18课定理三：「中枢的破坏，当且仅当一个次级别走势离开
+            # 该中枢后，其后的次级别回抽走势不重新回到该中枢内」）。
+            continue
+
+        # V811 守卫：回试笔越过下一个中枢首笔 ⇒ 该中枢已被取代，信号作废
+        if superseded_at is not None and retest_bi.index > superseded_at:
+            continue
+
+        # 第61课：第4段离开、第5段构成买卖点 ⇒ 两段必须反向
+        if retest_bi.direction.value == leave_bi.direction.value:
+            continue
+
+        # 3买 / 3卖的归属由**离开段的突破方向**决定（第20课）：
+        #   向上离开 ⇒ 3买，回试须为向下笔且低点不破 zg；
+        #   向下跌离 ⇒ 3卖，回试须为向上笔且高点不破 zd。
+        #
+        # 注意两种情形的判据精度不同：
+        #   · 形态①（末笔兼任离开段）：末笔与 [ZD,ZG] 仍有重叠（zs.py 正是
+        #     因此才把它并入中枢），其「离开」体现在 **high>zg**（向上冲出）
+        #     或 **low<zd**（向下跌破），而非整个区间都在外。
+        #   · 形态②（独立离开笔）：该笔与 [ZD,ZG] 完全无重叠，用
+        #     low>zg / high<zd（等价于第20课 中心定理一的 dn>ZG / gn<ZD）。
+        # 旧代码只用 low>zg / high<zd 一种判据，导致形态① 的 22 个中枢
+        # （sh000001 实测）全部被漏掉 —— 因为末笔 low 通常仍低于 zg。
+        if last_is_up_leave:
+            is_up_leave = True
+            is_dn_leave = False
+        elif last_is_dn_leave:
+            is_up_leave = False
+            is_dn_leave = True
+        else:
+            is_up_leave = leave_bi.low > zs.zg
+            is_dn_leave = leave_bi.high < zs.zd
+        if not (is_up_leave or is_dn_leave):
+            continue
+
+        if max_bars:
+            span = retest_bi.end.k.k_index - leave_bi.end.k.k_index
+            if span > max_bars:
                 continue
-            if cur_break is None or bi.direction.value != "down":
+
+        if is_up_leave:
+            # 3买：回试为向下笔且低点不破 zg
+            if retest_bi.direction.value != "down":
                 continue
-            if bi.low <= zs.zg:
-                # 回踩破了上沿：本次突破作废，但后续可能还有新的突破笔
-                cur_break = None
-                continue
-            if max_bars and bi.end.k.k_index - cur_break.end.k.k_index > max_bars:
-                cur_break = None
-                continue
-            if bi.end.k.k_index in existing:
-                continue
+            if retest_bi.low <= zs.zg:
+                continue  # 跌回中枢内 ⇒ 假突破，非第20课所述第三类买点
+            if retest_bi.end.k.k_index in existing:
+                continue  # 该点已被1买占用（第21课：1买与3买不可能重合）
             mmds.append(
                 MMD(
                     mmd_type=MMDType.BUY_3,
                     zs=zs,
-                    bi=bi,
-                    msg=f"3买: 突破中枢上沿后回踩不破，低点={bi.low:.2f} > zg={zs.zg:.2f}",
+                    bi=retest_bi,
+                    msg=(
+                        f"3买: 中枢末段向上突破zg后，紧邻回试低点={retest_bi.low:.2f} "
+                        f"> zg={zs.zg:.2f}"
+                    ),
                 )
             )
-            existing.add(bi.end.k.k_index)
-            break  # 该次离开已被回抽确认完成，停止该中枢搜索
-            cur_break = None  # 该次突破已兑现，等下一次突破
-
-        # 3卖：与 3买 完全对称（见上方 3买 的 V731 修复 #2 说明）。
-        cur_break = None
-        for bi in bis[leave_start_idx:]:
-            if bi.direction.value == "down" and bi.low < zs.zd:
-                if cur_break is None:
-                    cur_break = bi
+            existing.add(retest_bi.end.k.k_index)
+        else:
+            # 3卖：回试为向上笔且高点不破 zd
+            if retest_bi.direction.value != "up":
                 continue
-            if cur_break is None or bi.direction.value != "up":
-                continue
-            if bi.high >= zs.zd:
-                # 反抽升破下沿（即回到中枢区间内）：本次跌破作废，等下一次跌破
-                cur_break = None
-                continue
-            if max_bars and bi.end.k.k_index - cur_break.end.k.k_index > max_bars:
-                cur_break = None
-                continue
-            if bi.end.k.k_index in existing:
-                continue
+            if retest_bi.high >= zs.zd:
+                continue  # 升回中枢内 ⇒ 假跌破，非第三类卖点
+            if retest_bi.end.k.k_index in existing:
+                continue  # 该点已被1卖占用（第21课：1卖与3卖不可能重合）
             mmds.append(
                 MMD(
                     mmd_type=MMDType.SELL_3,
                     zs=zs,
-                    bi=bi,
-                    msg=f"3卖: 跌破中枢下沿后反抽不破，高点={bi.high:.2f} < zd={zs.zd:.2f}",
+                    bi=retest_bi,
+                    msg=(
+                        f"3卖: 中枢末段向下跌破zd后，紧邻反抽高点={retest_bi.high:.2f} "
+                        f"< zd={zs.zd:.2f}"
+                    ),
                 )
             )
-            existing.add(bi.end.k.k_index)
-            break  # 该次离开已被反抽确认完成，停止该中枢搜索
+            existing.add(retest_bi.end.k.k_index)
 
     return mmds
+
+
 
 
 def _find_third_type_mmds(

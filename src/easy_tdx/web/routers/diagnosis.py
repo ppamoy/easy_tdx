@@ -2876,7 +2876,7 @@ async def multi_stock_comparison(
 
             from easy_tdx.chanlun import ChanlunAnalyser, ChanlunConfig
 
-            config = ChanlunConfig()
+            config = ChanlunConfig(zs_from_xd=False)
             analyser = ChanlunAnalyser(code=stock.code, frequency="daily", config=config)
             chanlun_result = analyser.process_klines(df)
 

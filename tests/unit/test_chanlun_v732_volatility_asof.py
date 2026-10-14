@@ -167,10 +167,10 @@ class TestVolatilityFutureImmunity:
         cap = len(base) - 20  # 前瞻缓冲
 
         r_short = ChanlunAnalyser(
-            code="600009", frequency="daily", config=ChanlunConfig()
+            code="600009", frequency="daily", config=ChanlunConfig(zs_from_xd=False)
         ).process_klines(base)
         r_long = ChanlunAnalyser(
-            code="600009", frequency="daily", config=ChanlunConfig()
+            code="600009", frequency="daily", config=ChanlunConfig(zs_from_xd=False)
         ).process_klines(pd.concat([base, future], ignore_index=True))
 
         s, ln = _sig(r_short, cap), _sig(r_long, cap)
@@ -201,10 +201,10 @@ class TestVolatilityFutureImmunity:
                 _calc_atr_volatility(closes, lookback)
             )
             r_short = ChanlunAnalyser(
-                code="600009", frequency="daily", config=ChanlunConfig()
+                code="600009", frequency="daily", config=ChanlunConfig(zs_from_xd=False)
             ).process_klines(base)
             r_long = ChanlunAnalyser(
-                code="600009", frequency="daily", config=ChanlunConfig()
+                code="600009", frequency="daily", config=ChanlunConfig(zs_from_xd=False)
             ).process_klines(pd.concat([base, future], ignore_index=True))
             s, ln = _sig(r_short, cap), _sig(r_long, cap)
             assert s != ln, (
