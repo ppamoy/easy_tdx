@@ -278,7 +278,7 @@ def find_chrome() -> str | None:
     return None
 
 
-async def run(base: str, wait_s: float, diag: bool) -> int:
+async def run(base: str, wait_s: float, diag: bool, code: str = "600000") -> int:
     try:
         import websockets
     except ImportError:
@@ -405,16 +405,19 @@ async def run(base: str, wait_s: float, diag: bool) -> int:
                 print(f"  可点按钮: {btns}")
                 return 0
 
-            filled = await ev(r"""(()=>{
+            # ⚠️ __CODE__ 占位符用 str.replace 注入：直接 f-string 会把 JS
+            # 里的 { } 当成格式化字段炸掉。
+            fill_js = r"""(()=>{
               const inp=[...document.querySelectorAll('input')]
                 .find(i=>(i.placeholder||'').includes('000001'));
               if(!inp) return JSON.stringify('no-input');
               const d=Object.getOwnPropertyDescriptor(
                 Object.getPrototypeOf(inp),'value');
-              if(d&&d.set) d.set.call(inp,'600000'); else inp.value='600000';
+              if(d&&d.set) d.set.call(inp,'__CODE__'); else inp.value='__CODE__';
               inp.dispatchEvent(new Event('input',{bubbles:true}));
               inp.dispatchEvent(new Event('change',{bubbles:true}));
-              return JSON.stringify('filled:'+inp.value);})()""")
+              return JSON.stringify('filled:'+inp.value);})()""".replace("__CODE__", code)
+            filled = await ev(fill_js)
             print(f"  填入股票代码: {filled}")
             clicked = await ev(r"""(()=>{
               const b=[...document.querySelectorAll('button')]
@@ -572,11 +575,13 @@ def main() -> int:
     ap.add_argument("--base", default=DEFAULT_BASE)
     ap.add_argument("--wait", type=float, default=0.0,
                     help="兼容参数（等待逻辑已内置条件轮询）")
+    ap.add_argument("--code", default="600000",
+                    help="要分析的股票代码（默认 600000）")
     ap.add_argument("--diag", action="store_true",
                     help="只观察页面渲染，不点任何按钮")
     a = ap.parse_args()
     try:
-        return asyncio.run(run(a.base, a.wait, a.diag))
+        return asyncio.run(run(a.base, a.wait, a.diag, a.code))
     except KeyboardInterrupt:
         return 2
 
