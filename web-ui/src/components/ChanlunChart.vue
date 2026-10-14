@@ -1268,11 +1268,19 @@ watch(colorScheme, render)
         <div class="mmd-legend-item"><span class="ic bc">▭</span> 背驰(主图)</div>
         <div class="mmd-legend-item"><span class="ic bc-sub">▭</span> 背驰(副图 MACD)</div>
       </template>
-      <div class="legend-sep"></div>
-      <div class="mmd-legend-item">
-        <span class="ic" style="color: #e74c3c; font-size: 14px">⚠</span>
-        1买/1卖后置验证未通过(反弹未触及中枢DD/GG)
-      </div>
+      <template
+        v-if="
+          mmds.some(
+            (m) => m.rebound_verified === false,
+          )
+        "
+      >
+        <div class="legend-sep"></div>
+        <div class="mmd-legend-item">
+          <span class="ic" style="color: #e74c3c; font-size: 14px">⚠</span>
+          1买/1卖后置验证未通过(反弹未触及中枢DD/GG)
+        </div>
+      </template>
     </aside>
   </div>
 </template>

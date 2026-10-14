@@ -781,10 +781,16 @@ describe('V723: 加载更早视口保持（chart-history-navigation spec）', ()
     mockedZoom = undefined
     await w1.setProps({ revealIndex: 100 })
     await flushPromises()
-    // revealIndex 触发的 revealActive 会截断渲染长度（100 根），notMerge 重置 zoom
-    // 为默认 50 —— 这是 ECharts setOption(option, true) 的固有行为，与 prepend
-    // 无关。viewport 保持语义只覆盖「加载更早」这一交互路径。
-    expect(lastOption.dataZoom[0].start).toBe(50)
+    // revealIndex 触发的 revealActive 只影响**渲染窗口**（keys/ohlc 截断到 101 根），
+    // 不影响 dataZoom 默认值 —— 默认值仍由 props.bars.length（200，未截断）算出：
+    //   start = 100 - (150/200)*100 = 25
+    // ⚠️ 原期望硬编码 50 是 b84f0f9 之前的旧默认（f31a77f 及更早 start 恒为 50）。
+    //    b84f0f9 把默认改为「始终显示最后约 150 根」的动态值，但漏改此处断言
+    //    —— 属测试期望过时，非功能回归。动态默认是改进：旧硬编码 50 在 300 根
+    //    时只显示 150 根，在 100 根时反而显示 50 根（各长度下窗口不一致）。
+    //    setOption(option, true) 的 notMerge 重置属 ECharts 固有行为，与 prepend
+    //    无关；viewport 保持语义只覆盖「加载更早」这一交互路径。
+    expect(lastOption.dataZoom[0].start).toBe(25)
     w1.unmount()
   })
 
@@ -797,7 +803,10 @@ describe('V723: 加载更早视口保持（chart-history-navigation spec）', ()
     // 同长度替换（如训练揭示推进），非 prepend
     await w2.setProps({ bars: [...bars] })
     await flushPromises()
-    expect(lastOption.dataZoom[0].start).toBe(50) // 默认值，未被平移逻辑改写
+    // 同长度 ⇒ 不命中 isPrepend 分支 ⇒ zoomKeep 为 null ⇒ 走默认值。
+    // 默认 start = 100 - (150/160)*100 = 6.25（bars 长度 160）。
+    // 原期望 50 同样是 b84f0f9 改动态默认前的旧值（见上一个用例的说明）。
+    expect(lastOption.dataZoom[0].start).toBe(6.25)
     w2.unmount()
   })
 })
