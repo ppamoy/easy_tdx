@@ -45,10 +45,22 @@ def test_counts_locked(result) -> None:
     # 中枢变窄后，原本被并入 zs0 的一段震荡不再与 [ZD,ZG] 重叠 → 中枢提前
     # 结束，故由 2 个变为 3 个（实测确认，非笔/线段变化所致：bis/xds 未变）。
     assert len(result.zss) == 3
-    # V735：切到缠论原文口径后 mmds 由 4 → 3（少了 1 个不符原文的 1buy/2buy）。
-    # 依据同 test_chanlun_real_golden_multi.py：原文第21课要求 1买 必须在
-    # **下跌确立后**（此前已有两个依次同向的中枢），本样本不满足。
-    assert len(result.mmds) == 3
+    # V735→V851：原文口径 + 前视修复后 mmds 由 4 → **2**。
+    # 消失的 2 个（实测）：
+    #   1) SELL_1 @ bi3（high=11.04 > zs0.zg=10.63，顶背驰成立）
+    #   2) BUY_3  @ bi10
+    # 原文依据（第17课）：「缠中说禅趋势：在任何级别的任何走势中，某完成的
+    #   走势类型**至少包含两个以上依次同向**的缠中说禅走势中枢」。
+    # 第21课：「一个上涨趋势确定后，不可能再有第一类与第二类买点」。
+    # ⇒ 1买/1卖 必须建立在已成立的趋势（≥2 个同向中枢）之上。
+    # bi3 时（bar 30→38）只有 zs0 一个中枢（zs0 到 bar 53 才结束），
+    # zs1/zs2 都在**未来** ⇒ 不满足「趋势确立」，SELL_1 被门控挡掉。
+    # ⚠️ 这正是 V851 修掉的**前视**：旧实现 `_calc_trend_strength(zss)` 用
+    #   **全部**中枢算全局强度（含未来的 zs1/zs2），于是 bi3 靠未来的中枢
+    #   「凑出」趋势 → 误报 SELL_1。V851 改为 per-bi `_prior_zss`（只用截至
+    #   该笔已成立的中枢），前视消失，信号随之减少。
+    # bis/xds/zss 三个结构计数**均未变**（12/2/3），只有信号数变化。
+    assert len(result.mmds) == 2
     # V740：笔 high/low 改为区间真实极值后，中枢 zg 上移，盘整背驰力度对比变化，
     # 1 个笔背驰（bi3 力度 < bi1）正确显现。
     # V733：中枢由 2 个变 3 个后，新增中枢[1] 的盘整背驰 → bcs 1→2（实测确认）
@@ -144,7 +156,10 @@ def test_timing_response_novice_fields() -> None:
     # structure 计数与快照一致（V730 原文中枢口径后 zs 3→2）
     assert out["structure"]["bi_count"] == 12
     assert out["structure"]["zs_count"] == 3  # V733：中枢变窄 → 2→3
-    assert out["structure"]["mmd_count"] == 3  # V735：原文口径，去掉不符原文的1买
+    # V851：前视修复（_calc_trend_strength 全局 → per-bi _prior_zss）后，
+    # 用未来中枢「凑趋势」的 SELL_1@bi3 与 BUY_3@bi10 消失，mmd 3→2。
+    # 详见 test_counts_locked 的原文依据（第17/21课）与前视说明。
+    assert out["structure"]["mmd_count"] == 2
     assert out["structure"]["bc_count"] == 2  # V733：中枢变窄多出 1 个盘整背驰
 
 

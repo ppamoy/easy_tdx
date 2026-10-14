@@ -53,9 +53,17 @@ def test_zs_from_xd_default_false() -> None:
 def test_zs_from_xd_reduces_zs_and_signals() -> None:
     """线段构中枢（第91课口径）中枢与信号显著减少。
 
-    钉死绝对值（sh000001 日线）：
-      笔构：23 中枢 / 80 信号（ZG/ZD 改原文第20课口径后的值）
+    钉死绝对值（sh000001 日线，V851 后重测）：
+      笔构：34 中枢 / 68 信号
       线段构：0 中枢 / 0 信号（仅 1 线段，不足以构中枢）
+
+    V851 说明：原钉死值「笔构 23 中枢 / 80 信号」是 V851 配置变更前的实测。
+    V851 把 `zs_no_hard_close` / `zs_merge_overlap` 默认都改为 False 后
+    （第33课 3+6=9 段上限 + 关闭同级别合并），同一份数据重测得 34/68。
+    开关两侧实测（docs/CHANLUN_FIDELITY_AUDIT_V735.md §37.2）：
+      旧默认(True+True) ：332 中枢样本上 >9 段 81 个（24.4%），最长 37 段
+      新默认(False+False)：403 中枢样本上 >9 段 0 个（0.0%），最长 9 段
+    线段构两侧都是 0/0，不受该配置变更影响。
     只断言"更少"没有牙齿（削弱一点仍满足），必须钉死绝对值。
     """
     bi = _result("sh000001_daily.json", False)
@@ -63,11 +71,11 @@ def test_zs_from_xd_reduces_zs_and_signals() -> None:
     n_zs_bi, n_mmds_bi = len(bi.zss), len(bi.mmds)
     n_zs_xd, n_mmds_xd = len(xd.zss), len(xd.mmds)
 
-    assert n_zs_bi == 23, f"笔构中枢 中枢数应为 23，实际 {n_zs_bi}"
-    assert n_mmds_bi == 80, f"笔构中枢 信号数应为 80，实际 {n_mmds_bi}"
+    assert n_zs_bi == 34, f"笔构中枢 中枢数应为 34，实际 {n_zs_bi}"
+    assert n_mmds_bi == 68, f"笔构中枢 信号数应为 68，实际 {n_mmds_bi}"
     assert n_zs_xd == 0, f"线段构中枢 中枢数应为 0，实际 {n_zs_xd}"
     assert n_mmds_xd == 0, f"线段构中枢 信号数应为 0，实际 {n_mmds_xd}"
-    # 线段更粗 ⇒ 中枢更少（0 < 23）
+    # 线段更粗 ⇒ 中枢更少（0 < 34）
     assert n_zs_xd < n_zs_bi
     assert n_mmds_xd < n_mmds_bi
 

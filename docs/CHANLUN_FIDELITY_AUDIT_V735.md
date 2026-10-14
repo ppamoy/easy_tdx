@@ -2619,3 +2619,119 @@ if not req.start_date and not req.end_date:
 - cross_timeframe 守门：把 `if line.index != target:` 改成
   `if False and ...` 让 remap 退化为 no-op ⇒ exit 1、日期差回到 4000+ 天
   ⇒ 脚本真的在读 index、真的在比日期，不是恒定 exit 0
+
+---
+
+## 38. V852：既有 6 个失败定性 + 第38课同级别分解落地（2026-10-14）
+
+### 38.1 六个既有失败的定性结论（全部实测定位，非推理）
+
+目标：逐一定位这 6 个失败是「代码不符原文」还是「测试期望过时」。
+方法：git worktree 逐版本跑 + 截断法前视检验 + 逐字核对原文。
+
+| 失败用例 | 结论 | 证据 |
+|---|---|---|
+| `test_chanlun_fx_display_contract::test_every_chanlun_chart_passes_valid_fxs` | **测试期望过时（正则漏 kebab-case）** | `PickView.vue:438` 明明传了 `:valid-fxs`（Vue 合法 prop 写法），测试正则 `:validFxs\s*=` 匹配不到 ⇒ 假阳性。修正则而非改页面。牙齿：把 `:valid-fxs` 改成 `:IGNORED` ⇒ 测试立刻报错（证明有牙齿）。 |
+| `test_chanlun_v735_zs_from_xd::test_zs_from_xd_reduces_zs_and_signals` | **测试期望过时（V851 配置变更前的钉死值）** | 期望 23 中枢/80 信号是 V851 把 `zs_no_hard_close`/`zs_merge_overlap` 默认改 False **之前**的实测。同数据重测 34/68。线段构两侧都是 0/0 不受影响。已在 docstring 写明 V851 依据。 |
+| `test_chanlun_real_golden::test_counts_locked` + `::test_timing_response_novice_fields` | **代码修掉了前视 ⇒ 期望过时（mmds 3→2）** | 详见 38.2。bis/xds/zss 三个结构计数 12/2/3 **均未变**，只有信号数变化。 |
+| `test_changying_chanlun_lookahead_guard` ×2 | **代码修掉了前视 ⇒ 期望过时（off 3→2 个信号）** | 详见 38.3，用截断法证明 `(146,"3buy")` 依赖 bar>=150 的数据。 |
+
+### 38.2 golden fixture 的 1卖消失 = 前视修复（正确，非回归）
+
+实测结构（`tests/fixtures/chanlun_000001_daily.json`，160 根）：
+
+```
+bis=12 xds=2 zss=3 mmds=2 bcs=2
+zs0: 5段 zg=10.63 zd=10.48 lines=[bi0,bi1,bi2,bi3,bi4]
+zs1: 3段 zg=10.23 zd=9.93  lines=[bi5,bi6,bi7]
+zs2: 4段 zg=12.04 zd=11.72 lines=[bi8,bi9,bi10,bi11]
+mmds: SELL_3@bi5(bar62), BUY_3@bi8(bar125)
+```
+
+旧实现（`1529c26`）报 4 个：`SELL_1@bi3`、`SELL_2@bi5`、`BUY_3@bi8`、`BUY_3@bi10`。
+
+**SELL_1@bi3 为何该消失**（原文依据，逐字核对）：
+
+- 第17课：「缠中说禅趋势：在任何级别的任何走势中，某完成的走势类型
+  **至少包含两个以上依次同向**的缠中说禅走势中枢」
+- 第21课：「一个上涨趋势确定后，不可能再有第一类与第二类买点」
+
+bi3（up，bar 30→38）时只有 zs0 一个中枢，且 zs0 要到 bar 53 才结束
+⇒ **不满足「趋势确立」**，1卖被门控挡掉是**符合原文**的。
+
+**旧实现为何会误报 = 前视**：`_calc_trend_strength(zss)` 吃**全部**中枢
+（含未来的 zs1/zs2），算出全局强度 2/2=1.0 > 0 ⇒ 门控放行。
+即 bi3 靠**未来**的中枢「凑出」趋势。V851 改为 per-bi `_prior_zss`
+（只用截至该笔已成立的中枢）后前视消失、信号随之减少。
+bis/xds/zss 未变（12/2/3）证明这不是笔/线段算法回归。
+
+### 38.3 `(146,"3buy")` = 前视伪影（截断法证明）
+
+```
+数据截断到 bar n  →  旧代码(1529c26) off 信号
+n=140/145/146        [(38,1sell),(62,2sell),(125,3buy)]        ← 无 146
+n=150/153/160        [(38,1sell),(62,2sell),(125,3buy),(146,3buy)]  ← 才出现
+```
+
+⇒ `3buy@146` 只在**用到 bar 147-153 的数据**时才出现 ⇒ 前视伪影。
+原文第20课第三类买卖点定理要求「向上离开中枢，**然后**以一个次级别走势类型
+回试，其低点不跌破 ZG」；bar146 时 zs2（末笔 bi11 要到 bar153 才结束）
+中枢未成立、更没有回试笔 ⇒ 不可能有 3买。
+
+当前代码在所有截断点上都不产生它（正向对照：截断结果恒为 2 个信号）。
+
+### 38.4 第38课「同级别分解」落地（此前 src/ 0 命中）
+
+新增 `src/easy_tdx/chanlun/same_level.py` + 11 个行为级测试
++ 守门脚本 `scripts/guard_chanlun_lesson38_same_level.py`。
+
+原文依据（`docs/缠论108课/38.走势类型连接的同级别分解.md`，逐字）：
+
+1. 「在这种同级别的分解中，是**不需要中枢延伸或扩展的概念**的」
+2. 「只要5分钟级别的**三段**上下上或下上下类型有价格区间的重合就构成中枢」
+3. 「**如果这5分钟次级别延伸出6段，那么就当成两个30分钟盘整类型的连接**，
+   在这种分解中，是允许盘整+盘整情况的」
+4. 「永远只针对一个正在完成着的同级别中枢，一旦该中枢完成，就继续关注下一个」
+
+实现口径：
+
+- 三段重合 ⇒ 一个中枢（ZG/ZD 由前三段重叠确定后冻结，不延伸）；
+- **不定义中枢延伸**：第 4 段起若仍重合 ⇒ 按原文「当成两个盘整类型的连接」
+  ⇒ 立即关闭并新起，而非并入延伸；
+- 因此「盘整+盘整」是合法连接（原文明确允许）；
+- 分解首尾相接、不漏不重（原文「分解具有唯一性」）；
+- 不足三段的零散段单独成段（kind="none"），保持连续覆盖。
+
+⚠️ 原文第38课同时规定「该级别**以下**的所有级别，都允许中枢延伸」——
+同级别分解只作用于被选定的那个级别。本模块只做「给定序列按同级别分解」
+这一层，不递归处理更低级别；更低级别仍走 `find_zss` 的延伸口径。
+
+与非同级别分解的实测差异（`decomposition_diff`）：
+
+| 维度 | 非同级别分解（find_zss） | 同级别分解（same_level） |
+|---|---|---|
+| 单中枢最多段数 | 5（真实 fixture） | **3**（原文「不需要延伸」） |
+| 盘整+盘整连接 | 0 | 1（原文明确允许） |
+| 6 段全重叠序列 | 并成 1 个 6 段中枢 | 切成 2 个 3 段盘整 |
+
+### 38.5 回归结果（集合级 diff）
+
+- `tests/unit -k "chanlun or changying"`：**2202 passed / 4 skipped / 0 failed**
+  （修复前 6 failed / 2196 passed）。
+- `tests/unit` 全量（修复前基线，39 分 41 秒）：**17 failed / 4984 passed / 6 skipped**。
+  其中 11 个失败已用 worktree `1529c26`（V851 之前）**逐一复现**
+  （`test_v721_fixes`×5、`test_diagnosis_router`×3、`test_screening_router`×1、
+  `test_screen_sector_neutral`×1、`test_screen_usefulness_audit`×1）
+  ⇒ 与本次改动无关；本次只碰 4 个缠论测试文件 + 新增 same_level 模块/测试。
+- 未做：浏览器 e2e（本轮未启动 Web 服务，见 §40 待办）。
+
+### 38.6 守门脚本（含牙齿验证）
+
+| 脚本 | 守的规则 | 结果 |
+|---|---|---|
+| `scripts/guard_chanlun_lesson38_same_level.py` | 第38课：同级别分解下中枢 ≤3 段、分解不漏不重 | 4 个 fixture 全过，exit 0 |
+| `scripts/guard_chanlun_lesson33_zs_extension_v850.py` | 第33课 3+6=9 段上限 | 0/403 超限，最长恰好 9 段 |
+| `scripts/guard_chanlun_cross_timeframe_index.py` | 跨周期 index 口径（阈值 90 天） | 14 只标的最大 46 天、0 越界 |
+
+lesson38 守门牙齿（已实测）：伪造 6 段延伸中枢 ⇒ 检出；好样本 ⇒ 通过；
+反向牙齿（上限放大到 99）⇒ 坏样本不再触发 ⇒ 证明判据真的是段数上限。

@@ -50,9 +50,13 @@ def test_every_chanlun_chart_passes_valid_fxs() -> None:
         if not n_fxs:
             continue
         checked += 1
-        n_valid = len(re.findall(r":validFxs\s*=", src))
+        # Vue 模板里 prop 既可能写 camelCase（:validFxs）也可能写 kebab-case
+        # （:valid-fxs）—— 两者对组件是同一个 prop，都算合规。
+        # 曾经的 bug：只匹配 camelCase，于是 PickView.vue 明明传了 :valid-fxs
+        # 却被判为漏传（假阳性），掩盖了真正漏传的页面。
+        n_valid = len(re.findall(r":valid[-_]?[Ff]xs\s*=", src))
         if n_valid < n_fxs:
-            offenders.append(f"{fn}: :fxs×{n_fxs} 但 :validFxs×{n_valid}")
+            offenders.append(f"{fn}: :fxs×{n_fxs} 但 :validFxs/:valid-fxs×{n_valid}")
 
     assert not offenders, (
         "以下页面渲染缠论图却没传 :validFxs，会渲染含重叠的原始分型：\n  " + "\n  ".join(offenders)
