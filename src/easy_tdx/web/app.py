@@ -182,8 +182,23 @@ def _create_app(
     *,
     enable_mac: bool = True,
     enable_ex: bool = False,
+    enable_ui: bool = True,
 ) -> FastAPI:
-    """创建并配置 FastAPI 应用实例。"""
+    """创建并配置 FastAPI 应用实例。
+
+    Args:
+        host: TDX 服务器地址（None = 自动探测最佳主机）
+        port: TDX 服务器端口（None = 默认 7709）
+        timeout: 连接超时秒数
+        enable_mac: 是否启用 MAC 相关能力
+        enable_ex: 是否启用扩展板块能力
+        enable_ui: False 时不托管 Web UI 前端（纯 API 模式，``serve --no-ui``）。
+            远程 release 提交（v1.23.3）在 ``web/__init__.py`` 的 ``create_app``
+            里已透传该参数，但 ``app.py`` 侧漏了对应形参 —— 属远程提交自身的
+            断裂，merge 时按 ours 取本地版本后暴露出来。此处补齐以修复
+            ``TypeError: _create_app() got an unexpected keyword argument
+            'enable_ui'``。
+    """
     from easy_tdx.config import get_best_host, get_port, get_timeout
 
     if host is None:

@@ -99,6 +99,27 @@ class ChanlunConfig:
     # 与第33课上限严格一致。信号数 658 → 650（-1.2%，可接受）。
     # 若要恢复旧行为，显式设 zs_merge_overlap=True（会重新引入超限）。
     zs_merge_overlap: bool = False
+    # V853 原文第20课定理二 + 第33课：标记「升级为更大级别中枢」。
+    #
+    # 原文（第20课「缠中说禅走势中枢中心定理二」，逐字）：
+    #   「后ZG < 前ZD 且后GG >= 前DD，或 后ZD > 前ZG 且 后DD =< 前GG，
+    #     则等价于形成高级别的走势中枢。」
+    # 原文（第33课，逐字）：
+    #   「中枢的延伸不能超过5段，也就是一旦出现6段的延伸，加上形成中枢
+    #     本身那三段，就构成更大级别的中枢了。」
+    #
+    # 实现口径：只做**标记**（ZS.upgraded / ZS.level / ZS.upgrade_from），
+    # **不合并段数、不改 ZG/ZD/lines**。
+    #   - 不合并：合并两个同级别中枢的段数正是 V851 修掉的错误
+    #     （违反第33课 9 段上限，也不是原文的"升级"语义）。
+    #   - 不重算区间：原文的"更大级别中枢"要换一把尺子（用更大级别的次级别
+    #     走势类型重叠定义区间），需走势类型级递归，当前架构做不到。
+    #     mark_upgraded_zss 的 docstring 已明确记录这个差距。
+    #
+    # 默认 True：纯标记 ⇒ 对既有计数（中枢数/信号数）零影响，只是把原文
+    # 明确的"升级"语义显式暴露给下游。实测见
+    # docs/CHANLUN_FIDELITY_AUDIT_V735.md §39。
+    zs_mark_upgrade: bool = True
     # V735 Round 9：原文第17课「中枢 = 3 个连续次级别走势类型的重叠区间」。
     # 当前默认（zs_from_xd=False）用**同级别笔**构中枢，第91课说「笔不能构中枢」。
     # zs_from_xd=True 改用**同级别线段**（第91课允许），但仍非「次级别」。
@@ -274,6 +295,8 @@ class ChanlunConfig:
             "zs_no_hard_close": self.zs_no_hard_close,
             "zs_from_xd": self.zs_from_xd,
             "zs_merge_overlap": self.zs_merge_overlap,
+            # V853 原文第20课定理二 / 第33课：中枢升级标记开关
+            "zs_mark_upgrade": self.zs_mark_upgrade,
             "rebound_penalty": self.rebound_penalty,
             "zs_cross_timeframe": self.zs_cross_timeframe,
             "zs_qujian": self.zs_qujian,

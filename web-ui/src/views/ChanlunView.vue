@@ -60,6 +60,10 @@ interface ChanlunZs {
   start_index?: number
   end_index?: number
   done: boolean
+  // V853 原文第20课定理二 / 第33课：中枢升级标记
+  level?: number
+  upgraded?: boolean
+  upgrade_from?: number[]
 }
 
 interface ChanlunMmdQuality {

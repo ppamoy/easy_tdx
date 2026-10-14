@@ -159,6 +159,59 @@ def _calc_zs_quality(
     }
 
 
+def mark_upgraded_zss(zss: list[ZS]) -> int:
+    """按第20课定理二标记「升级为更大级别中枢」的中枢。
+
+    原文（第20课「缠中说禅走势中枢中心定理二」，逐字）：
+
+      「前后同级别的两个缠中说禅走势中枢，后GG < 前DD 等价于下跌及其延续；
+       后DD > 前GG 等价于上涨及其延续。后ZG < 前ZD 且后GG >= 前DD，
+       或 后ZD > 前ZG 且 后DD =< 前GG，则等价于形成**高级别的走势中枢**。」
+
+    原文（第33课，逐字）：
+
+      「一般来说，中枢的延伸不能超过5段，也就是一旦出现6段的延伸，
+       加上形成中枢本身那三段，就构成**更大级别的中枢**了。」
+
+    实现口径：
+      - 对相邻两中枢，若满足定理二的任一分支 ⇒ 后一个中枢**升级**
+        （``upgraded=True``、``level`` 进一级、``upgrade_from`` 记录来源）；
+      - **不合并段数**（那正是 V851 修掉的「同级别合并」错误：把两个同级别
+        中枢的段数相加，既违反第33课 9 段上限，也不是原文的"升级"语义）；
+      - 只做**标记**，不改 ZG/ZD/lines —— 中枢区间仍由各自的第20课口径确定。
+
+    ⚠️ 与真正的「递归升级」的差距（已实测确认，不是推理）：
+      原文的"更大级别中枢"意味着**换一把尺子**重新看这段走势（用更大级别的
+      次级别走势类型重叠来定义区间），那需要走势类型级递归。
+      本函数只把「这里发生了升级」这件事**显式记录下来**，让下游（买卖点判定、
+      可视化、审计）能按原文口径区分「同级别中枢」与「升级中枢」，
+      但**不重算区间**。这是当前架构下能做到的最接近原文的一步。
+
+    Args:
+        zss: 中枢列表（时间顺序）
+
+    Returns:
+        被标记为升级的中枢个数。
+    """
+    marked = 0
+    for prev, cur in zip(zss, zss[1:]):
+        # 定理二分支一：后ZG < 前ZD 且 后GG >= 前DD
+        cond_a = cur.zg < prev.zd and cur.gg >= prev.dd
+        # 定理二分支二：后ZD > 前ZG 且 后DD <= 前GG
+        cond_b = cur.zd > prev.zg and cur.dd <= prev.gg
+        if cond_a or cond_b:
+            cur.upgraded = True
+            cur.level = prev.level + 1
+            if prev.index not in cur.upgrade_from:
+                cur.upgrade_from.append(prev.index)
+            # 前一个若本身也是升级而来，一并记录来源（传递性）
+            for src in prev.upgrade_from:
+                if src not in cur.upgrade_from:
+                    cur.upgrade_from.append(src)
+            marked += 1
+    return marked
+
+
 def _merge_overlapping_zss(zss: list[ZS]) -> list[ZS]:
     """合并相邻 [ZD, ZG] 重叠的中枢。
 
@@ -413,6 +466,13 @@ def find_zss(
     # 合并相邻 [ZD, ZG] 重叠的中枢（消除残余 1.3% 重叠，无需次级别数据）。
     if getattr(config, "zs_merge_overlap", True):
         zss = _merge_overlapping_zss(zss)
+
+    # V853 原文第20课定理二 / 第33课：满足「后ZG < 前ZD 且 后GG >= 前DD，
+    # 或 后ZD > 前ZG 且 后DD <= 前GG」⇒ 形成**高级别的走势中枢**；
+    # 第33课 9 段延伸超限 ⇒ 「构成更大级别的中枢」。
+    # 默认开启（只打标记，不改区间/段数 ⇒ 不影响既有计数与信号）。
+    if getattr(config, "zs_mark_upgrade", True):
+        mark_upgraded_zss(zss)
 
     # 缠论原文：中枢 = 进入段 + 重叠段 + 离开段。显式记录两端，
     # 便于背驰/前端直接使用「进入笔/离开笔」而不必再隐式索引。

@@ -164,6 +164,15 @@ class ZS:
     # 缠论原文：中枢由「进入段 + 至少3段重叠 + 离开段」构成，显式记录两端
     enter_bi: BI | XD | None = None  # 进入中枢前的那一笔/线段
     exit_bi: BI | XD | None = None  # 离开中枢后的那一笔/线段
+    # ── 级别与升级（第20课定理二 / 第33课）──────────────────────────────
+    # 原文第20课定理二：「后ZG < 前ZD 且后GG >= 前DD，或 后ZD > 前ZG 且
+    # 后DD <= 前GG，则等价于形成**高级别的走势中枢**。」
+    # 原文第33课：「中枢的延伸不能超过5段，也就是一旦出现6段的延伸，加上
+    # 形成中枢本身那三段，就构成**更大级别的中枢**了。」
+    # ⇒ 中枢升级是原文明确的语义，不是工程折衷。
+    level: int = 1  # 中枢级别（1 = 当前分析级别；升级后为 2，即大一级）
+    upgraded: bool = False  # 是否已由低级中枢升级而来（原文「构成更大级别」）
+    upgrade_from: list[int] = field(default_factory=list)  # 由哪些低级中枢升级而来
 
     def add_line(self, line: BI | XD) -> None:
         self.lines.append(line)

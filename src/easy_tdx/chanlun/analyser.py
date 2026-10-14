@@ -235,6 +235,14 @@ class ChanlunResult:
             "done": zs.done,
             "enter_bi_index": zs.enter_bi.index if zs.enter_bi else None,
             "exit_bi_index": zs.exit_bi.index if zs.exit_bi else None,
+            # V853 原文第20课定理二 / 第33课：中枢升级标记。
+            # "level": 1 = 当前分析级别；>1 = 由低级中枢升级而来（原文
+            #   「构成更大级别的中枢」）。
+            # "upgraded": True 表示该中枢是升级产物。
+            # "upgrade_from": 由哪些低级中枢升级而来（index 列表，含传递）。
+            "level": zs.level,
+            "upgraded": zs.upgraded,
+            "upgrade_from": list(zs.upgrade_from),
         }
 
     def _mmd_dict_core(self, mmd: MMD) -> dict[str, Any]:
