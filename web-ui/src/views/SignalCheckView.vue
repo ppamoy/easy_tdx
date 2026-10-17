@@ -64,6 +64,12 @@ const noSubData = computed(
 
 /** 区间套结果：mmd 索引 → 嵌套信息 */
 const qujiantao = ref<Record<number, any>>({})
+/** 次级别 K 线/笔/中枢/买卖点（multi-level 的 low_level.result）——
+ * 点买卖点时画次级别图，让用户「跳转其他周期看区间套」精确定位 */
+const lowBars = ref<Bar[]>([])
+const lowBis = ref<any[]>([])
+const lowZss = ref<any[]>([])
+const lowMmds = ref<Mmd[]>([])
 
 const bars = ref<Bar[]>([])
 const mmds = ref<Mmd[]>([])
@@ -176,6 +182,10 @@ async function load() {
     qujiantao.value = {}
     coverage.value = null
     qtErr.value = ''
+    lowBars.value = []
+    lowBis.value = []
+    lowZss.value = []
+    lowMmds.value = []
     if (subCategory.value) {
       try {
       const q = await fetch('/api/v1/chanlun/multi-level', {
@@ -195,12 +205,26 @@ async function load() {
       if (q.ok) {
         const qd = await q.json()
         coverage.value = qd.low_level_coverage ?? null
+        // 次级别结构数据（画次级别 K 线图，精确定位区间套）
+        const lr = qd.low_level?.result ?? {}
+        lowBars.value = lr.bars ?? []
+        lowBis.value = lr.bis ?? []
+        lowZss.value = lr.zss ?? []
+        lowMmds.value = lr.mmds ?? []
         const arr = qd.qujiantao ?? []
         const map: Record<number, any> = {}
         arr.forEach((v: any, i: number) => {
           if (v) map[i] = v
         })
         qujiantao.value = map
+        // 次级别 K 线（to_dict 不含 bars，单独取，画次级别图）
+        try {
+          const lb = await fetchBars(
+            market.toLowerCase(), code.value, subCategory.value,
+            b[0].datetime.slice(0, 10), b[b.length - 1].datetime.slice(0, 10), 3000,
+          )
+          lowBars.value = lb
+        } catch { lowBars.value = [] }
       } else {
         qtErr.value = `区间套请求失败（HTTP ${q.status}）`
       }
@@ -513,6 +537,20 @@ function qtBadge(q: any | null): { text: string; cls: string } {
         <p v-else-if="selectedIdx >= 0 && subCategory" class="muted">
           该买卖点在所选次级别无区间套数据（可能窗口外无低级别结构）。
         </p>
+
+        <!-- 次级别 K 线图：选了次级别且点了买卖点 → 跳转看该周期的结构 -->
+        <div v-if="subCategory && lowBars.length && selectedIdx >= 0" class="qt-sub-chart">
+          <h3>次级别（{{ subCategory }}）K 线结构</h3>
+          <p class="hint">下图是该买卖点在次级别周期的走势，可看区间套收缩过程（笔/中枢/买卖点）。</p>
+          <ChanlunChart
+            :bars="lowBars"
+            :bis="lowBis"
+            :xds="[]"
+            :zss="lowZss"
+            :mmds="lowMmds"
+            :frequency="subCategory"
+          />
+        </div>
       </section>
 
       <!-- 4. 图 -->
@@ -582,6 +620,8 @@ h1 { font-size: 20px; margin: 0; }
 /* 区间套详情面板 */
 .qt-detail { margin-top: 14px; padding: 12px; background: #f6f8fa; border-radius: 6px; border-left: 4px solid #1f6feb; }
 .qt-detail h3 { font-size: 14px; margin: 0 0 8px; }
+.qt-sub-chart { margin-top: 14px; padding: 12px; background: #fff; border: 1px dashed #1f6feb; border-radius: 6px; }
+.qt-sub-chart h3 { font-size: 14px; margin: 0 0 4px; color: #1f6feb; }
 .qt-msg { font-size: 13px; margin: 0 0 8px; line-height: 1.6; }
 .qt-meta { list-style: none; padding: 0; margin: 0; font-size: 13px; }
 .qt-meta li { padding: 2px 0; }
