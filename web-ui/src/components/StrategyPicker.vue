@@ -24,10 +24,14 @@ const selectedSchema = computed(
 )
 
 // ── 策略分组（optgroup）───────────────────────────────────────────
-// 缠论类策略有 3 个（chanlun / chanlun_pair / changying_chanlun），
-// 混在 28 条普通策略里很难找，而且名字相近容易选错（实测它们行为差异
-// 很大：chanlun 默认带百分比止损止盈，chanlun_pair 只认同级别卖点出场）。
+// 缠论类策略有 2 个（chanlun / changying_chanlun），
+// 混在普通策略里很难找，而且名字相近容易选错（实测它们行为差异
+// 很大：chanlun 默认带百分比止损止盈，changying_chanlun 叠加四季周期过滤）。
 // 这里按「缠论类 / 其他」分组，让缠论的聚在一起。
+//
+// ⚠️ 历史：曾有第三个策略 `chanlun_pair`（同级别买卖点配对，不带止损止盈）。
+//    已废弃删除 —— 它的区间套过滤用 level_synth 合成数据，是伪区间套，
+//    不符合原文；真区间套将放前端页面用真实双周期数据实现。
 //
 // ⚠️ 判定口径：name 含 'chanlun' 或 label 含 '缠'。新增缠论策略会自动归入。
 const CHANLUN_GROUP = '缠论类'
@@ -95,21 +99,20 @@ function updateParam(p: ParamSchema, raw: string | boolean) {
     <p v-if="selectedSchema" class="desc">{{ selectedSchema.description }}</p>
 
     <!-- V102: 缠论策略按建议止损止盈提示 -->
-    <!-- ⚠️ 原来写死 `=== 'chanlun'`，选到 chanlun_pair / changying_chanlun
-         时提示不显示。改用 isChanlun() 覆盖全部缠论策略。 -->
+    <!-- ⚠️ 原来写死 `=== 'chanlun'`，选到 changying_chanlun
+         时提示不显示。改用 isChanlun() 覆盖全部缠论策略。
+         （历史：曾有第三个缠论策略 chanlun_pair，已废弃删除） -->
     <div v-if="selectedSchema && isChanlun(selectedSchema)" class="v102-tip">
       💡 勾选「3买按V102建议止损止盈」：3买 首仓将按 V102
       决策支持的止损价/第一止盈价动态出场（优先于固定百分比止损）。
     </div>
 
-    <!-- 缠论三个策略的差异说明（避免用户选错） -->
+    <!-- 缠论策略的差异说明（避免用户选错） -->
     <div v-if="selectedSchema && isChanlun(selectedSchema)" class="chanlun-diff">
-      <strong>三个缠论策略的区别：</strong>
+      <strong>缠论策略的区别：</strong>
       <ul>
         <li><code>chanlun</code> 缠论买卖点 —— 默认<strong>开启</strong>百分比止损止盈
           （止损 8% / 止盈 25%），可能在同级别卖点出现前就被截断。</li>
-        <li><code>chanlun_pair</code> 缠论买卖点配对 —— 出场<strong>只认同级别卖点</strong>，
-          回归缠论原文口径；并记录 entry/exit 配对供分组统计。</li>
         <li><code>changying_chanlun</code> 长赢缠论综合 —— 叠加吴伟志四季周期
           （播种/成长/收获/储藏）做仓位与过滤。</li>
       </ul>

@@ -331,8 +331,14 @@ def find_zss(
             else:
                 zg_candidate = overlap_high
                 zd_candidate = overlap_low
-            gg_candidate = max(gg_candidate, bi.high)
-            dd_candidate = min(dd_candidate, bi.low)
+            # 第20课 line22 原文：「GG=max(gn)，DD=min(dn)，n遍历中枢中所有Zn」，
+            # Zn = 与中枢方向一致的次级别走势类型（同向段 A/C/E…），反向段（B/D…）不参与。
+            # 中枢方向 = 首笔方向（30课 line142：「一样有方向，例如…方向就是下上下」）。
+            # 故 GG/DD 只累加 bi.direction == candidate_lines[0].direction 的同向段。
+            # （此前对每根笔更新，使 GG 被反向段极值污染——已修；同步改固化测试。）
+            if bi.direction == candidate_lines[0].direction:
+                gg_candidate = max(gg_candidate, bi.high)
+                dd_candidate = min(dd_candidate, bi.low)
             candidate_end = bi.end
 
             # V735/V850 原文第33课：「中枢的延伸不能超过5段，一旦出现6段的延伸，
@@ -366,6 +372,7 @@ def find_zss(
                     dd=dd_candidate,
                     start=candidate_start,
                     end=candidate_end,
+                    direction=candidate_lines[0].direction.value,  # 30课L142 中枢方向=首笔方向
                     index=len(zss),
                     done=True,
                 )
@@ -395,6 +402,7 @@ def find_zss(
                         dd=dd_candidate,
                         start=candidate_start,
                         end=candidate_end,
+                        direction=candidate_lines[0].direction.value,  # 30课L142 中枢方向=首笔方向
                         index=len(zss),
                         done=True,
                     )
@@ -426,6 +434,7 @@ def find_zss(
                 dd=dd_candidate,
                 start=candidate_start,
                 end=candidate_end,
+                direction=candidate_lines[0].direction.value,  # 30课L142 中枢方向=首笔方向
                 index=len(zss),
                 done=False,  # 最后一根K线未确定，中枢未完成
             )
@@ -462,7 +471,8 @@ def find_zss(
                     zs.width_pct = quality["width_pct"]
                     zss.append(zs)
 
-    # V735 原文第19课：前后两个中枢不能有重叠，否则只是一个更大级别的盘整。
+    # V851 重核：原文第20课 line4（非"第19课定理一"——该引文 grep 不到）：
+    # 「同级别的前后缠中说禅走势中枢是不能有任何重叠的……重叠就产生更大级别中枢」。
     # 合并相邻 [ZD, ZG] 重叠的中枢（消除残余 1.3% 重叠，无需次级别数据）。
     if getattr(config, "zs_merge_overlap", True):
         zss = _merge_overlapping_zss(zss)

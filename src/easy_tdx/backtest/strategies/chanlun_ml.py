@@ -26,7 +26,7 @@
         实际上本策略对次级别也走 ChanlunAnalyser 全量分析，但**消费时**只取
         「信号 bar 的 datetime <= 当前日线 bar 的 datetime」的信号，
         因此不会有未来函数。预计算只是提前算出来，消费仍按时间推进。
-        这一点与 ChanlunPairStrategy 的 `_signal_ptr` 推进逻辑同构。
+        这一点与已废弃的 ChanlunPairStrategy 的 `_signal_ptr` 推进逻辑同构。
 """
 
 from __future__ import annotations

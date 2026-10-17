@@ -1,11 +1,14 @@
 // 策略下拉「缠论类 / 技术指标类」分组的牙齿测试。
 //
-// 背景：回测页策略下拉里有 **3 个** 缠论策略（chanlun / chanlun_pair /
-// changying_chanlun），混在 28 条普通策略里难找，且名字相近容易选错 ——
+// 背景：回测页策略下拉里有 **2 个** 缠论策略（chanlun /
+// changying_chanlun），混在普通策略里难找，且名字相近容易选错 ——
 // 而它们行为差异很大（chanlun 默认带 8%/25% 百分比止损止盈，
-// chanlun_pair 只认同级别卖点出场）。
+// changying_chanlun 叠加四季周期过滤）。
 //
-// 本文件锁两件事：① 渲染成 optgroup 分组；② 缠论三个都归到「缠论类」。
+// 历史：曾有第三个缠论策略 chanlun_pair（同级别买卖点配对），已废弃删除 ——
+// 它的区间套过滤用 level_synth 合成数据，是伪区间套不符合原文。
+//
+// 本文件锁两件事：① 渲染成 optgroup 分组；② 缠论两个都归到「缠论类」。
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
@@ -22,7 +25,6 @@ const STRATEGIES: StrategySchema[] = [
   strat('macd', 'MACD 金叉'),
   strat('changying_chanlun', '长赢缠论综合'),
   strat('chanlun', '缠论买卖点'),
-  strat('chanlun_pair', '缠论买卖点配对'),
   strat('boll_breakout', '布林带突破'),
 ]
 
@@ -53,8 +55,9 @@ describe('StrategyPicker 策略分组', () => {
     expect(byLabel.has('缠论类')).toBe(true)
     const chan = byLabel.get('缠论类') ?? []
     expect(chan).toContain('chanlun')
-    expect(chan).toContain('chanlun_pair')
     expect(chan).toContain('changying_chanlun')
+    // 已废弃删除的 chanlun_pair 不应再出现
+    expect(chan).not.toContain('chanlun_pair')
     // 普通策略不能被误分进缠论类
     expect(chan).not.toContain('ma_cross')
     expect(chan).not.toContain('macd')
@@ -66,11 +69,11 @@ describe('StrategyPicker 策略分组', () => {
     expect(all.sort()).toEqual(STRATEGIES.map((s) => s.name).sort())
   })
 
-  it('选中缠论策略时显示三个策略的差异说明（不再只对 chanlun 生效）', () => {
+  it('选中缠论策略时显示策略差异说明（不再只对 chanlun 生效）', () => {
     const w = mount(StrategyPicker, {
-      props: { strategies: STRATEGIES, strategy: 'chanlun_pair', params: {} },
+      props: { strategies: STRATEGIES, strategy: 'changying_chanlun', params: {} },
     })
-    // 原来写死 === 'chanlun' 时，选 chanlun_pair 这块不显示
+    // 原来写死 === 'chanlun' 时，选 changying_chanlun 这块不显示
     expect(w.find('.chanlun-diff').exists()).toBe(true)
   })
 })

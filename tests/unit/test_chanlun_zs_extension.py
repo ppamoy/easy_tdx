@@ -55,6 +55,12 @@ def test_zs_extension_keeps_zg_zd_updates_gg_dd() -> None:
     ⚠️ 原断言 ZD=11 用的是「前三笔」max(10,11,9)，是**第20课之前**的旧口径。
     第20课明确：ZG=min(g1,g2)、ZD=max(d1,d2) 只取 A、C 两段（B 段不参与）。
     故 ZD 应为 max(10,9)=10。
+
+    ⚠️ V856（20课L22/30课L142）：GG/DD 只遍历与中枢方向一致的 Z走势段(同向段 A/C/E…)，
+    反向段(B/D…)不参与。中枢方向=首笔方向。本例首笔 bi0=up ⇒ 中枢方向 up ⇒
+    同向段 = bi0(A)、bi2(C)；bi1(B)、bi3(D) 为反向段，不参与 GG/DD。
+    故 GG=max(A.high=14, C.high=12)=14，DD=min(A.low=10, C.low=9)=9。
+    （旧口径遍历全笔得 GG=15/DD=8，来自反向段 bi3，已修正。）
     """
     bis = [
         _bi(0, "up", 10.0, 14.0, 14.0, 10.0),
@@ -67,6 +73,7 @@ def test_zs_extension_keeps_zg_zd_updates_gg_dd() -> None:
     zs = zss[0]
     assert zs.zg == 12.0
     assert zs.zd == 10.0
-    assert zs.gg == 15.0
-    assert zs.dd == 8.0
+    assert zs.gg == 14.0  # 20课L22: GG=max(gn) 只遍历同向段(A,C) = max(14,12)
+    assert zs.dd == 9.0  # 20课L22: DD=min(dn) 只遍历同向段(A,C) = min(10,9)
+    assert zs.direction == "up"  # 30课L142: 中枢方向=首笔方向
     assert zs.line_count == 4

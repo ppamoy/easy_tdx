@@ -6,16 +6,25 @@
 但我上一轮用的 `ChanlunStrategy` 默认开了 `stop_loss_pct=0.08` /
 `take_profit_pct=0.25`，且这两个检查在消费信号队列**之前**执行并 `return`
 —— 仓位常在卖点出现前就被截断，"买点进卖点出"这条最基本的规则
-**根本没跑出来**。项目自己的 `chanlun_pair.py` 文档就写明了这点。
+**根本没跑出来**。
 
 所以上一轮"胜率 40.9%"有可能是在骂一个**被百分比止损截断的变体**，
-而不是缠论本身。本脚本用 `ChanlunPairStrategy`（纯卖点出场）重测，
-并按**买点类型 / 卖点类型 / 持有期**拆解胜率，定位到底是哪一类信号拖后腿。
+而不是缠论本身。本脚本按原口径（关掉百分比止损止盈）重测，并按
+**买点类型 / 卖点类型 / 持有期**拆解胜率，定位到底是哪一类信号拖后腿。
+
+## ⚠️ 历史变更（chanlun_pair 已废弃删除）
+本脚本原先用 `ChanlunPairStrategy`（纯卖点出场，带 `pair_log`）重测。
+该策略因「区间套过滤用 level_synth 合成数据，是伪区间套不符合原文」
+被整体移除，缠论策略收敛为单一 `chanlun`（`stop_loss_pct` /
+`take_profit_pct` 设为 0 即得原文口径）。现在改用
+`ChanlunStrategy(stop_loss_pct=0, take_profit_pct=0)` + 引擎 `trades`
+的 `tag` 字段自行配对（tag 沿用开仓信号类型，平仓时附 `->stop_loss`
+之类的归因后缀）。
 
 ## 回答的问题
   Q1 纯卖点出场（缠论原口径）的胜率是多少？是否高于带止损止盈的变体？
   Q2 按买点类型拆：1buy / 2buy / 3buy 各自胜率与盈亏比？
-     （缠论原文里 3买 是"中枢突破后回踩"，条件最严格，本应最好）
+     （缠论原文里 3buy 是"中枢突破后回踩"，条件最严格，本应最好）
   Q3 按卖点类型拆：哪种出场最赚？
   Q4 盈亏比：即使胜率 <50%，若盈亏比够高（赚的多、亏的少）仍可盈利。
 
@@ -40,10 +49,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from _concurrency import resolve_workers  # noqa: E402
 from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
 from easy_tdx.backtest.strategies.chanlun import ChanlunStrategy  # noqa: E402
-from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy  # noqa: E402
 
 DATA_DIR = ROOT / "audit_data"
 EXCLUDE = {"sh000300", "sh000001"}
+
+
+def _mk_strategy():
+    """原文口径：买卖点信号进出，关掉百分比止损止盈。"""
+    return ChanlunStrategy(stop_loss_pct=0.0, take_profit_pct=0.0)
 
 
 def _run_pair(args):
@@ -52,13 +65,12 @@ def _run_pair(args):
     p = DATA_DIR / f"{code}_daily.json"
     df = pd.DataFrame(json.loads(p.read_text(encoding="utf-8")))
     df["datetime"] = pd.to_datetime(df["datetime"])
-    S = ChanlunPairStrategy if which == "pair" else ChanlunStrategy
+    S = ChanlunStrategy if which == "pair" else ChanlunStrategy
     try:
-        r = BacktestEngine(S(), cash=100000.0, slippage=slip).run(df)
+        kw = {} if which == "pair" else {}
+        r = BacktestEngine(S(**kw), cash=100000.0, slippage=slip).run(df)
         pf = r.performance
         bh = float(df["close"].iloc[-1] / df["close"].iloc[0] - 1)
-        # 从 trades 里取配对（pair 策略的 pair_log 需从 strategy 实例取，
-        # 这里改用 trade_log 的信号类型配对 —— 更稳妥）
         return {
             "symbol": code, "strat": float(pf["total_return"]),
             "buyhold": bh,
@@ -74,13 +86,48 @@ _SLIP = 0.002   # 子进程用的滑点（由 main 设置）
 
 
 def _pairs_one(code: str, slip: float) -> list[dict]:
-    """取一只标的的逐笔配对（走完整引擎，pair_log 才会填充）。"""
+    """取一只标的的逐笔配对。
+
+    曾经的 chanlun_pair 提供 `pair_log`；该策略已废弃删除，现在从引擎
+    `trades` 自行配对：`tag` 沿用开仓信号类型（平仓时附
+    `->stop_loss` / `->take_profit` 归因后缀），据此拆出入场/出场类型。
+    """
     p = DATA_DIR / f"{code}_daily.json"
     df = pd.DataFrame(json.loads(p.read_text(encoding="utf-8")))
     df["datetime"] = pd.to_datetime(df["datetime"])
-    s = ChanlunPairStrategy()
-    BacktestEngine(s, cash=100000.0, slippage=slip).run(df)
-    return list(s.pair_log)
+    r = BacktestEngine(_mk_strategy(), cash=100000.0, slippage=slip).run(df)
+    t = r.trades
+    if t is None or len(t) == 0:
+        return []
+
+    pairs: list[dict] = []
+    entry_type = ""
+    entry_bar = 0
+    entry_price = 0.0
+    for i, row in enumerate(t.itertuples(index=False)):
+        tag = str(getattr(row, "tag", "") or "")
+        direction = str(row.direction)
+        if direction == "BUY":
+            entry_type = tag.split("->")[0] or "?"
+            entry_bar = i
+            entry_price = float(row.price)
+            continue
+        if direction == "SELL" and entry_type:
+            exit_type = tag.split("->")[0] if "->" in tag else tag
+            exit_type = exit_type or "close"
+            pairs.append({
+                "entry_type": entry_type,
+                "exit_type": exit_type,
+                "entry_bar": entry_bar,
+                "exit_bar": i,
+                "holding_bars": i - entry_bar,
+                "entry_price": entry_price,
+                "exit_price": float(row.price),
+                "pnl_pct": (float(row.price) / entry_price - 1) * 100
+                if entry_price else 0.0,
+            })
+            entry_type = ""
+    return pairs
 
 
 def _pairs_job(code: str) -> list[dict]:
@@ -148,7 +195,7 @@ def main() -> int:
              if p.stem.split("_")[0] not in EXCLUDE]
     codes = codes[:a.limit] if a.limit else codes
 
-    print("缠论原文口径重测：买点进 → 卖点出（不含百分比止损止盈截断）")
+    print("缠论原文口径重测：买点进 → 卖点出（stop_loss/take_profit=0）")
     print(f"样本 {len(codes)} 只   并行度 {workers}\n")
 
     # 逐笔配对（CPU 密集，走进程池）

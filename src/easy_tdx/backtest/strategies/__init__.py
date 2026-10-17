@@ -35,13 +35,11 @@ def _load_builtin() -> None:
         builtin,  # noqa: F401
         changying_chanlun,  # noqa: F401
         chanlun,  # noqa: F401
-        chanlun_pair,  # noqa: F401
     )
 
     # 触发 REF 符号的导入校验（builtin 顶部已导入，这里仅保留语义占位）
     del builtin
     del chanlun
-    del chanlun_pair
     del changying_chanlun
 
 

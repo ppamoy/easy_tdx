@@ -84,8 +84,14 @@ def test_guard_off_vs_on_changes_real_signal_count_and_effective_bars() -> None:
     assert off == [
         (62, "3sell"),
         (125, "3buy"),
+        (153, "3sell"),
     ]
-    assert on == [(65, "3sell"), (128, "3buy")]
+    assert on == [(65, "3sell"), (128, "3buy"), (156, "3sell")]
+    # V857(偏差B)：新增 (153,"3sell")/(156,"3sell")。bi.high/low 回归端点分型值
+    # （62课L20）→ 中枢 ZD 升高（端点值 ≤ 区间极值）→ 跌破 ZD 后回抽不破 ZD 的
+    # 3卖（20课第三类卖点定理）新触发。区间极值覆盖偏离原文（属 bug），端点值是
+    # 原文正确口径，故新增 3卖 是收紧而非回归。守卫仍验证非前视：default==explicit
+    # 且 on bars == off bars + lag(3)（153→156）。
     # V851：信号数由 3 → 2（去掉前视伪影 3buy@146）；守卫的真实作用仍是
     # 「把保留信号延后 lag 根」，延后由下面 _emitted_bars(125→128) 钉死。
     assert [b for b, _ in on] == [b + 3 for b, _ in off], "守卫应把每个信号延后 lag=3 根"
@@ -104,7 +110,8 @@ def test_guard_defaults_on_and_matches_explicit_guard() -> None:
 
     # V851：同上，前视伪影 3buy@146 已被去掉（见上一条用例的截断法证明）。
     # 原 1sell/2sell 因不符原文第21课被去掉，3buy@146 因前视被去掉。
-    assert default == explicit == [(65, "3sell"), (128, "3buy")]
+    # V857(偏差B)：新增 (156,"3sell")（端点值使中枢 ZD 升高→3卖新触发，见上条用例）。
+    assert default == explicit == [(65, "3sell"), (128, "3buy"), (156, "3sell")]
 
 
 def test_guarded_signals_reproduce_on_their_confirmation_prefix() -> None:

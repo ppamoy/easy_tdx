@@ -1,4 +1,4 @@
-"""ChanlunStrategy 前视守卫测试（与 chanlun_pair 守卫测试同语义）。
+"""ChanlunStrategy 前视守卫测试（语义源自已废弃的 chanlun_pair 守卫测试）。
 
 背景（V-AUDIT 审计发现）：笔端点 `bi.end.bar_index` 是事后标签——分型需
 后续反向分型封口才成为笔终点。无守卫的 ChanlunStrategy 在端点当根即用
@@ -12,8 +12,8 @@
 #   - b=38 1sell / b=62 2sell：前缀[:b+4] 复现失败——根因是**窗口太短
 #     （42/66 根不足以稳定成笔）**，而非依赖未来数据；两信号直到前缀右端
 #     k=148（后笔锁定结构）才可复现。守卫固定 lag=3 在短数据+稀疏笔场景
-#     属于**保守丢弃**（宁可少做、不做错），与 chanlun_pair 同款设计取舍，
-#     不是缺陷。金标 fixture 无 amount 列且 datetime 为 ISO 字符串，
+#     属于**保守丢弃**（宁可少做、不做错），与 chanlun_pair（已废弃删除）
+#     同款设计取舍，不是缺陷。金标 fixture 无 amount 列且 datetime 为 ISO 字符串，
 #     直接喂 BacktestEngine 需先 pd.to_datetime + 补 amount。
 
 from __future__ import annotations

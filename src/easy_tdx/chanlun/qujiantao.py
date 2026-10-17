@@ -30,6 +30,7 @@ from __future__ import annotations
 from typing import Any
 
 from easy_tdx.chanlun.types import BC, BI, ZS
+from easy_tdx.chanlun.mmd_conditions import _calc_bi_force
 
 
 def _line_interval(line: Any) -> tuple[int, int]:
@@ -109,6 +110,50 @@ def _low_structures_in_window(
     return out
 
 
+def _find_prev_same_dir_mmd(mmd: Any, mmds_high: list[Any] | None) -> Any | None:
+    """找 ``mmd`` 之前、同方向（买/卖）的最近一个高级别买卖点。
+
+    第61课字面口径「力度大于前者」所需的「前者」= 前一段同向背驰段。
+    优先按锚定笔结束 ``bar_index`` 精确取最近同向（真实 MMD 有此属性）；
+    对象无 ``bar_index``（测试 mock）时回退到 ``mmds_high`` 列表位置序
+    （要求列表时间有序，真实分析器输出即如此）。
+    """
+    if not mmds_high:
+        return None
+    cur_is_buy = "buy" in mmd.mmd_type.value
+
+    def _end_key(m: Any) -> int | None:
+        bi = getattr(m, "bi", None)
+        e = getattr(bi, "end", None)
+        e_idx = getattr(e, "bar_index", None)
+        if e_idx is not None:
+            return e_idx
+        return getattr(bi, "index", None)
+
+    cur_key = _end_key(mmd)
+    prev: Any | None = None
+    if cur_key is not None:
+        best = -1
+        for m in mmds_high:
+            if m is mmd:
+                continue
+            if ("buy" in m.mmd_type.value) != cur_is_buy:
+                continue
+            k = _end_key(m)
+            if k is not None and k < cur_key and k > best:
+                best, prev = k, m
+    if prev is None:
+        # 回退：列表位置序（curr 之前最后一个同向 mmd）
+        try:
+            pos = mmds_high.index(mmd)
+        except ValueError:
+            pos = len(mmds_high)
+        for m in mmds_high[:pos]:
+            if ("buy" in m.mmd_type.value) == cur_is_buy:
+                prev = m
+    return prev
+
+
 def compute_qujiantao(
     mmd: Any,
     *,
@@ -116,6 +161,8 @@ def compute_qujiantao(
     zss_low: list[ZS] | None = None,
     bcs_low: list[BC] | None = None,
     mmds_low: list[Any] | None = None,
+    closes: list[float] | None = None,
+    mmds_high: list[Any] | None = None,
 ) -> dict[str, Any]:
     """计算一个高级别买卖点的区间套确认。
 
@@ -152,6 +199,8 @@ def compute_qujiantao(
     if not has_low and not any_container:
         return {
             "nested": False,
+            "state": "ASSUMED",  # 无低级别数据 ⇒ 待观察（第61课「无证据否定前假设」）
+            "chain": [],
             "score": 0.0,
             "method": "none",
             "confidence_adjust": 0.0,
@@ -162,6 +211,8 @@ def compute_qujiantao(
     if mmd.bi is None:
         return {
             "nested": False,
+            "state": "ASSUMED",
+            "chain": [],
             "score": 0.0,
             "method": "none",
             "confidence_adjust": 0.0,
@@ -229,14 +280,81 @@ def compute_qujiantao(
     else:
         conf = "低级别窗口内无同方向背驰/买卖点确认"
 
+    # V853 第61课区间套状态机：ASSUMED → CONFIRMED / REJECTED（逐重嵌套链）。
+    # 原文第61课：「在没有证据否定背驰之前，就要观察从65开始的一段其内部结构中
+    # 的背驰情况，这种方法可以逐次下去」；「一旦力度大于前者，那么就可以断定
+    # 背驰段不成立」。三态：
+    #   - CONFIRMED：低级别窗口内出现同向背驰（bc）⇒ 力度衰减确认，本重背驰段成立。
+    #   - REJECTED ：低级别已走出结构（≥1 中枢且 ≥3 笔）却无同向背驰 ⇒ 力度未衰减
+    #     到背驰 ⇒ 背驰段不成立（第61课「力度大于前者…背驰段不成立」）。
+    #     字面口径已实现但**休眠**（V854）：调用方暂不传 closes ⇒ 字面分支不触发。
+    #     实测笔级 MACD 面积(curr 背驰笔 vs prev 同向背驰笔)在真数据失真——背驰笔
+    #     本就是走势段最弱笔，比值中位 4.6、36%>10x(退化 prev)，REJECTED 4%→34%
+    #     多为假阳。走势段级力度(整段 MACD 面积)才是第61课原义，待 V855 接 qsds
+    #     + 修 FX/CLKline 端点匹配后启用。现状 REJECTED 用「有结构无背驰」代理。
+    #     真·逐重四重嵌套链（多周期 MACD 逐级收缩）仍待多周期数据接入（见 §2.5）。
+    #   - ASSUMED ：低级别结构不足（<3 笔或无中枢），假设背驰段成立、待观察
+    #     （第61课「在没有证据否定背驰之前」）。
+    # V854：closes=None（调用方未传）⇒ 不调 helper、不算 force，字面分支休眠。
+    prev_mmd = _find_prev_same_dir_mmd(mmd, mmds_high) if closes is not None else None
+    curr_force = prev_force = None
+    if prev_mmd is not None:
+        try:
+            curr_force = _calc_bi_force(mmd.bi, closes, mmd.bi.end.bar_index)
+            prev_force = _calc_bi_force(prev_mmd.bi, closes, prev_mmd.bi.end.bar_index)
+        except Exception:
+            curr_force = prev_force = None
+    rejected_reason = ""
+    if confirmed:
+        state = "CONFIRMED"
+    elif (
+        prev_mmd is not None
+        and curr_force is not None
+        and prev_force is not None
+        and prev_force > 0
+        and curr_force > prev_force
+    ):
+        state = "REJECTED"  # V854 字面(休眠：调用方未传 closes 时不触发)
+        rejected_reason = (
+            f"字面力度对比: curr={curr_force:.2f} > prev={prev_force:.2f}"
+            f" (MACD面积,力度未衰减)"
+        )
+    elif low["zs_count"] >= 1 and low["bi_count"] >= 3:
+        state = "REJECTED"  # 代理：有结构无同向背驰
+        rejected_reason = "代理: 低级别有结构(≥1中枢≥3笔)却无同向背驰"
+    else:
+        state = "ASSUMED"
+
+    # 逐重嵌套链（第61课 65→69→71→71内部 四重）。现状只 1 重（本级别背驰段 +
+    # 低级别确认）；结构就绪，多周期数据接入后逐重扩展（每重一个 {level,state,...}）。
+    chain = [{
+        "level": "次级别",
+        "state": state,
+        "bi_count": low["bi_count"],
+        "zs_count": low["zs_count"],
+        "has_bc_same_dir": bc is not None,
+        "has_mmd_same_dir": low_mmd is not None,
+        "force_curr": round(curr_force, 4) if curr_force is not None else None,
+        "force_prev": round(prev_force, 4) if prev_force is not None else None,
+        "force_ratio": (
+            round(curr_force / prev_force, 4)
+            if curr_force is not None and prev_force not in (None, 0)
+            else None
+        ),
+        "rejected_reason": rejected_reason or None,
+    }]
+
     return {
         "nested": confirmed,
+        "state": state,  # 第61课状态机：ASSUMED/CONFIRMED/REJECTED
+        "chain": chain,  # 第61课逐重嵌套背驰段链（现状 1 重，结构就绪）
         "score": round(score, 3),
         "method": method,
         "confidence_adjust": round(adj, 3),
         "msg": (
-            f"区间套{('确认' if confirmed else '未确认')} | {conf} | "
+            f"区间套[{state}] | {conf} | "
             f"低级别笔={low['bi_count']} 中枢={low['zs_count']}"
+            + (f" | {rejected_reason}" if rejected_reason else "")
         ),
         "detail": {
             "low_bi_count": low["bi_count"],
@@ -269,6 +387,7 @@ def compute_qujiantao_cross_period(
     bcs_low: list[BC] | None = None,
     mmds_low: list[Any] | None = None,
     synthetic: bool = False,
+    closes: list[float] | None = None,
 ) -> list[dict[str, Any] | None]:
     """**真·区间套**：用真实低周期数据逐信号确认（缠论原文语义）。
 
@@ -403,9 +522,63 @@ def compute_qujiantao_cross_period(
         else:
             conf = "低周期窗口内无同方向背驰/买卖点确认"
 
+        # V854 第61课状态机（真跨周期路径）：与 compute_qujiantao 同口径。
+        # 三态见 compute_qujiantao 注释。字面「力度大于前者」分支已实现但休眠
+        # （调用方暂不传 closes ⇒ 不触发；笔级力度实测失真，走势段级待 V855）。
+        # 现状 REJECTED 用「有结构无背驰」代理（低周期 ≥1 中枢 ≥3 笔却无同向背驰）。
+        # V854：closes=None ⇒ 不调 helper、不算 force，字面分支休眠、零开销。
+        prev_mmd = _find_prev_same_dir_mmd(mmd, mmds_high) if closes is not None else None
+        curr_force = prev_force = None
+        if prev_mmd is not None:
+            try:
+                curr_force = _calc_bi_force(mmd.bi, closes, mmd.bi.end.bar_index)
+                prev_force = _calc_bi_force(
+                    prev_mmd.bi, closes, prev_mmd.bi.end.bar_index
+                )
+            except Exception:
+                curr_force = prev_force = None
+        rejected_reason = ""
+        if confirmed:
+            state = "CONFIRMED"
+        elif (
+            prev_mmd is not None
+            and curr_force is not None
+            and prev_force is not None
+            and prev_force > 0
+            and curr_force > prev_force
+        ):
+            state = "REJECTED"  # V854 字面(休眠：调用方未传 closes 时不触发)
+            rejected_reason = (
+                f"字面力度对比: curr={curr_force:.2f} > prev={prev_force:.2f}"
+                f" (MACD面积,力度未衰减)"
+            )
+        elif zs_count >= 1 and bi_count >= 3:
+            state = "REJECTED"  # 代理：有结构无同向背驰
+            rejected_reason = "代理: 低周期有结构(≥1中枢≥3笔)却无同向背驰"
+        else:
+            state = "ASSUMED"
+        chain = [{
+            "level": "次周期",  # 真跨周期低级别（如 30min 对日线）
+            "state": state,
+            "bi_count": bi_count,
+            "zs_count": zs_count,
+            "has_bc_same_dir": bc_hit is not None,
+            "has_mmd_same_dir": mmd_hit is not None,
+            "force_curr": round(curr_force, 4) if curr_force is not None else None,
+            "force_prev": round(prev_force, 4) if prev_force is not None else None,
+            "force_ratio": (
+                round(curr_force / prev_force, 4)
+                if curr_force is not None and prev_force not in (None, 0)
+                else None
+            ),
+            "rejected_reason": rejected_reason or None,
+        }]
+
         out.append(
             {
                 "nested": confirmed,
+                "state": state,  # 第61课状态机
+                "chain": chain,  # 逐重嵌套链（现状 1 重，结构就绪）
                 "score": round(score, 3),
                 "method": "cross_period",
                 # V731 来源标注：True = 低周期数据是合成的近似值，不是真实
@@ -413,8 +586,9 @@ def compute_qujiantao_cross_period(
                 "synthetic": bool(synthetic),
                 "confidence_adjust": round(adj, 3),
                 "msg": (
-                    f"区间套{('确认' if confirmed else '未确认')} | {conf} | "
+                    f"区间套[{state}] | {conf} | "
                     f"低周期笔={bi_count} 中枢={zs_count}"
+                    + (f" | {rejected_reason}" if rejected_reason else "")
                 ),
                 "detail": {
                     "low_bi_count": bi_count,

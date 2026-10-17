@@ -89,6 +89,33 @@ async def test_paged_bars_empty_first_page() -> None:
     assert df.empty
 
 
+async def test_paged_bars_mixed_date_types() -> None:
+    """跨页 date 列类型混杂（str + Timestamp）：归一后 sort 不抛 TypeError。
+
+    实测 MAC 服务器不同页返回 str/Timestamp 混杂，concat 后 sort_values 抛
+    ``'<' not supported between instances of 'str' and 'Timestamp'``
+    （/stock-pick/timing 8/12 标的失败）。修复：concat 后归一为 datetime 再去重排序。
+    """
+
+    def _mixed_fetch(mac, tdx, market, code, category, start, count, bar_time="start"):
+        if start >= _TOTAL:
+            return pd.DataFrame()
+        page = _page(start, count)
+        if start == 0:
+            # 第 1 页：str 日期（MAC 服务器 ISO 字符串）
+            page = page.assign(date=page["date"].astype(str))
+        else:
+            # 第 2 页：Timestamp 日期（另一数据路径）
+            page = page.assign(date=pd.to_datetime(page["date"]))
+        return page
+
+    with patch("easy_tdx.web.klines.fetch_qfq_klines", side_effect=_mixed_fetch):
+        df = await fetch_paged_bars(None, None, "SZ", "000001", "DAY", lookback=1600)
+    dates = df["date"].tolist()
+    assert dates == sorted(dates)
+    assert len(set(dates)) == len(dates)  # 去重后无重复
+
+
 async def test_paged_bars_lookback_clamped() -> None:
     """lookback 超过 MAX_LOOKBACK 被钳制（防御参数滥用）。"""
     seen_counts: list[int] = []

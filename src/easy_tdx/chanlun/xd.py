@@ -43,12 +43,21 @@ def _feature_included(a: BI, b: BI) -> bool:
 
 def _merge_feature_sequence(
     features: list[tuple[int, BI]],
+    seg_dir: Direction,
 ) -> list[tuple[list[int], float, float]]:
     """对特征序列做包含处理。
 
     返回 [(原始笔索引列表, 合并后 high, 合并后 low)]，与 K 线包含处理同构：
     - 向上合并取「高高」；
     - 向下合并取「低低」。
+
+    首次合并方向（偏差E，65课L14）：原文 L14 定义包含方向为「gn>=gn-1→向上；
+    dn<=dn-1→向下」，前提是第 n 根与 n-1 根非包含（即第 n 根是包含链起点）。
+    首次合并时第 n-1 根不存在（features[0] 是第一个），原文对首次合并方向沉默。
+    本实现取 seg_dir（线段方向）作 fallback：特征序列元素是反向笔（向上段→向下
+    回调笔，其顶 g1<g2<…向上；向下段→向上反弹笔，其顶 g1>g2>…向下），故首次
+    合并方向与 seg_dir 一致是符合特征序列整体趋势的合理选择。旧实现硬编码 "up"
+    对向下线段错误（应取低低）。第二特征序列传 opp_dir（反向候选线段方向）。
     """
     if not features:
         return []
@@ -63,13 +72,16 @@ def _merge_feature_sequence(
             prev_high >= bi.high and prev_low <= bi.low
         )
         if included:
-            # 合并方向：与 K 线包含处理一致，看前一未合并元素的方向
+            # 合并方向：与 K 线包含处理一致，看前一未合并元素的方向。
+            # 偏差E（65课L14）：非首次合并看 prev vs merged[-2]（gn vs gn-1）；
+            # 首次合并（len(merged)<2）无 n-1 可比，原文沉默，取 seg_dir 作 fallback
+            # （特征序列是反向笔，向上段→向下回调笔顶 g1<g2 向上→高高；向下段反之）。
             if len(merged) >= 2 and prev_high > merged[-2][1]:
                 direction = "up"
             elif len(merged) >= 2 and prev_high < merged[-2][1]:
                 direction = "down"
             else:
-                direction = "up"
+                direction = "up" if seg_dir == Direction.UP else "down"
             if direction == "up":
                 nh = max(prev_high, bi.high)
                 nl = max(prev_low, bi.low)
@@ -94,10 +106,14 @@ def _merged_feature_fx(
     mid = merged[-2]
     right = merged[-1]
     if seg_dir == Direction.UP:
-        # 向上线段：向下特征序列，中间元素高点最高 → 顶分型
-        return mid[1] > left[1] and mid[1] > right[1]
-    # 向下线段：向上特征序列，中间元素低点最低 → 底分型
-    return mid[2] < left[2] and mid[2] < right[2]
+        # 向上线段：向下特征序列，顶分型 = mid high 最高 且 mid low 最高
+        # （第62课 line16「高点最高且低点也最高」双维度；原单维度查 high 会让
+        # 「high 最高但 low 最低」的矛盾体误判为顶分型，向下传播致线段误判结束）
+        return mid[1] > left[1] and mid[1] > right[1] \
+            and mid[2] > left[2] and mid[2] > right[2]
+    # 向下线段：向上特征序列，底分型 = mid low 最低 且 mid high 最低（双维度）
+    return mid[2] < left[2] and mid[2] < right[2] \
+        and mid[1] < left[1] and mid[1] < right[1]
 
 
 def _valid_segment_end(
@@ -139,6 +155,24 @@ def find_xds(
     while start < len(bis):
         seg_dir = bis[start].direction
         seg_dir_is_up = seg_dir == Direction.UP
+
+        # 偏差D 破坏确认集成（65课L34）—— 三部件配合：
+        #   ① 起点前三笔检查（此处）：线段自身前三笔须重叠方能成形（65课「只要构成有
+        #      重叠部分的前三笔，那么必然会形成一线段」）。不重叠则 start+=1 滑动。由于
+        #      ②③ 保证线段间 chaining（线段延伸而非 orphan 中间笔），此滑动只在数据最
+        #      前端（首线段）产生孤立笔——后续线段的起点前三笔已被上一线段破坏确认保证
+        #      重叠，故不滑动、不 orphan。笔区间用端点分型值（偏差B：62课L20）。
+        #   ② confirmed_end 破坏确认（特征序列分型）：下一线段前三笔无重叠则不确认、延伸。
+        #   ③ provisional_end 破坏确认（笔破坏）：下一线段前三笔可用且无重叠则撤销暂定、延伸。
+        if start + 3 > len(bis):
+            start += 1
+            continue
+        _first3 = bis[start : start + 3]
+        if min(b.high for b in _first3) <= max(b.low for b in _first3):
+            start += 1
+            continue
+
+
         features: list[tuple[int, BI]] = []
         # 两种暂定结束：
         #   confirmed_end   —— 特征序列分型 / 真破坏确认（确认式，立即提交）
@@ -155,6 +189,9 @@ def find_xds(
         #     此为「待定」信号，不立即撤销——须等到收尾时再据真破坏是否确认来裁决。
         breakthrough_extreme: float | None = None
         seg_new = False
+        # 偏差D ③：provisional_end 暂定后，下一线段前三笔是否已校验过重叠（避免每轮重复
+        # 校验同一组固定笔）。provisional_end 重置时一并重置。
+        _prov_first3_checked = False
 
         j = start + 1
         # V730 P1-3/P1-4（缠论第67/71课口径）：
@@ -169,6 +206,27 @@ def find_xds(
         while j < len(bis):
             bi = bis[j]
             same_dir = bi.direction == seg_dir
+
+            # 偏差D ③ 破坏确认（65课L34）：笔破坏暂定后，待下一线段前三笔
+            # bis[provisional_end+1, +2, +3]（即破坏笔及其后两笔）可用时校验重叠。
+            # 无重叠 → 破坏未确认，撤销暂定、线段延伸（内层 loop 继续找后续有效破坏，
+            # 而非落入收尾过度延伸）。下一线段前三笔是固定笔，故每段暂定只校验一次。
+            # provisional_end+1 = 破坏笔；前三笔 = bis[破坏笔, 破坏笔+1, 破坏笔+2]，
+            # 当 j >= provisional_end+3 时三者均已到达。
+            if (
+                provisional_end is not None
+                and confirmed_end is None
+                and not _prov_first3_checked
+                and provisional_end + 3 < len(bis)
+                and j >= provisional_end + 3
+            ):
+                _d3 = bis[provisional_end + 1 : provisional_end + 4]
+                if min(b.high for b in _d3) <= max(b.low for b in _d3):
+                    # 前三笔无重叠：破坏未确认，撤销暂定，线段延伸
+                    provisional_end = None
+                    breakthrough_extreme = None
+                    seg_new = False
+                _prov_first3_checked = True
 
             if gap_pending is not None:
                 # V730 P1-4 第三出口（第71课）：缺口待确认期间，股价直接击穿
@@ -221,10 +279,10 @@ def find_xds(
                     else:
                         second_features.append((j, bi))
                         if len(second_features) >= 3:
-                            m2 = _merge_feature_sequence(second_features)
                             # 第二特征序列属于「反向候选线段」，其结束分型按候选
                             # 方向判定（向上段→候选向下段→其特征序列出底分型）。
                             opp_dir = Direction.DOWN if seg_dir_is_up else Direction.UP
+                            m2 = _merge_feature_sequence(second_features, opp_dir)
                             if _merged_feature_fx(m2, opp_dir):
                                 # 第二特征序列分型成立 → 缺口场景线段结束确认
                                 cand_end = gap_pending - 1
@@ -284,15 +342,17 @@ def find_xds(
                         if _valid_segment_end(bis, start, cand_end, seg_dir):
                             provisional_end = cand_end
                             breakthrough_extreme = breakout_feat.low
+                            _prov_first3_checked = False  # 偏差D ③：新暂定，重置校验
                     elif not seg_dir_is_up and breakout_feat.high > bis[start].start.val:
                         if _valid_segment_end(bis, start, cand_end, seg_dir):
                             provisional_end = cand_end
                             breakthrough_extreme = breakout_feat.high
+                            _prov_first3_checked = False  # 偏差D ③：新暂定，重置校验
 
                 if len(features) >= 3 and gap_pending is None:
                     # V730 P1-4：缺口待确认期间第一特征序列分型检测暂停（否则会把
                     # gap_pending 重置、覆盖第二特征序列的确认进度）。
-                    merged = _merge_feature_sequence(features)
+                    merged = _merge_feature_sequence(features, seg_dir)
                     mid_orig_idx: int | None = None
                     if _merged_feature_fx(merged, seg_dir):
                         # V730 P1-3：缺口判定随分型进行——比较「分型左元素 vs 中元素」
@@ -317,9 +377,22 @@ def find_xds(
                     if mid_orig_idx is not None:
                         cand_end = mid_orig_idx - 1
                         if _valid_segment_end(bis, start, cand_end, seg_dir):
-                            # 特征序列分型 = 确认式结束，立即提交（XD_TIEBREAK_EARLIEST）。
-                            confirmed_end = cand_end
-                            break
+                            # 偏差D ② 破坏确认（65课L34）：「线段破坏的充要条件，就是被
+                            # 另一个线段破坏」——线段在此结束，要求下一线段（起笔=cand_end+1）
+                            # 前三笔 bis[cand_end+1,+2,+3] 有重叠方确认破坏；否则破坏未确认，
+                            # 不提交、不 break，继续 j+=1 扫描（线段延伸）。笔不足（越界）亦延伸。
+                            _destroy_confirmed = True
+                            if cand_end + 3 < len(bis):
+                                _d3 = bis[cand_end + 1 : cand_end + 4]
+                                if min(b.high for b in _d3) <= max(b.low for b in _d3):
+                                    _destroy_confirmed = False
+                            else:
+                                _destroy_confirmed = False
+                            if _destroy_confirmed:
+                                # 特征序列分型 = 确认式结束，立即提交（XD_TIEBREAK_EARLIEST）。
+                                confirmed_end = cand_end
+                                break
+                            # 破坏未确认：不 break，继续扫描（线段延伸）
             j += 1
 
         # 收尾裁决：确认式（特征分型 / 真破坏确认）优先于暂定式（笔破坏）。

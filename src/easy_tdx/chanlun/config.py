@@ -263,8 +263,12 @@ class ChanlunConfig:
     bsp1_only_multibi_zs: bool = True
     # 一类买卖点要求创新极值
     bs1_peak: bool = True
-    # 二类买卖点最大回踩率
+    # 二类买卖点最大回踩率（工程口径，0.8=回撤>80%抑制；仅当 mmd_2nd_max_pullback 非空时作为 fallback）
     max_bs2_rate: float = 0.8
+    # 二类买卖点回撤门槛（101课原文口径）：
+    # None=无门槛（纯原文：第101课「第二类买点跌破第一类买点……这是完全可以的」，总出2buy）
+    # float=retrace_rate > 该值抑制2buy（工程口径，如0.5=回撤>50%抑制）
+    mmd_2nd_max_pullback: float | None = None
     # 二类必须跟随一类
     bsp2_follow_1: bool = True
     # 三类买卖点必须跟随一类
@@ -320,6 +324,7 @@ class ChanlunConfig:
             "bsp1_only_multibi_zs": self.bsp1_only_multibi_zs,
             "bs1_peak": self.bs1_peak,
             "max_bs2_rate": self.max_bs2_rate,
+            "mmd_2nd_max_pullback": self.mmd_2nd_max_pullback,
             "bsp2_follow_1": self.bsp2_follow_1,
             "bsp3_follow_1": self.bsp3_follow_1,
             "strict_bsp3": self.strict_bsp3,

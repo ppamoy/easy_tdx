@@ -11,6 +11,9 @@ sys.path.insert(0, "/home/skp/workspace/easy_tdx/src")
 from easy_tdx.backtest import BacktestEngine
 from easy_tdx.backtest.strategies import get_registry
 
+sys.path.insert(0, "/home/skp/workspace/easy_tdx/scripts")
+from _chanlun_lib import drop_unknown_params  # noqa: E402
+
 CACHE_D = Path("/home/skp/workspace/easy_tdx/audit_data")
 STOCKS = [
     ("SH","600000","浦发银行"), ("SH","600036","招商银行"), ("SH","601318","中国平安"),
@@ -30,7 +33,7 @@ def load(m, c):
 
 def run_test(zfx, guard=True, lag=3):
     reg = get_registry()
-    entry = reg.get("chanlun_pair")
+    entry = reg.get("chanlun")
 
     print(f"\n{'='*100}")
     print(f"zs_from_xd={zfx}  lookahead_guard={guard}  confirm_lag={lag}")
@@ -46,12 +49,12 @@ def run_test(zfx, guard=True, lag=3):
             print(f"{name:10s} | 跳过")
             continue
         t0 = time.time()
-        strategy = entry.build({
+        strategy = entry.build(drop_unknown_params(entry, {
             "bi_type": "new",
             "lookahead_guard": guard,
             "confirm_lag": lag,
             "zs_from_xd": zfx,
-        })
+        }))
         engine = BacktestEngine(
             strategy=strategy, cash=1_000_000,
             commission=0.0003, stamp_tax=0.001, slippage=0.002,

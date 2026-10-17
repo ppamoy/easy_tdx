@@ -1007,6 +1007,7 @@ def find_mmds(
     volatility: float | None = None,
     highs: list[float] | None = None,
     lows: list[float] | None = None,
+    lower_xds: list | None = None,
 ) -> list[MMD]:
     """从笔和中枢中识别买卖点（精修版 V12 - 真实ADX + 多时间框架共振）。
 
@@ -1040,7 +1041,7 @@ def find_mmds(
     mmds.extend(_find_first_type_mmds(bis, zss, closes, config, volatility, volumes, highs, lows))
 
     # 2. 识别二类买卖点（V8增强：多1买处理 + 成交量/MACD确认）
-    mmds.extend(_find_second_type_mmds(bis, zss, mmds, config, volatility, volumes, macd_data))
+    mmds.extend(_find_second_type_mmds(bis, zss, mmds, config, volatility, volumes, macd_data, lower_xds=lower_xds))
 
     # 3. 识别三类买卖点（增加严格过滤 + 动态阈值）
     mmds.extend(
@@ -2289,6 +2290,62 @@ def _find_first_type_mmds(
     return mmds
 
 
+def _find_sublevel_callback_xd(
+    lower_xds: list,
+    anchor_date,
+    direction: str,
+):
+    """偏差C(V859)：在次级别线段（走势）中找回调。
+
+    原文 17/21/53/101 课「次级别回调 / 走势结束点」：
+      - 2 买（direction="down"）：1 买后，次级别向下线段回调，终点 = 2 买。
+      - 2 卖（direction="up"）：1 卖后，次级别向上线段回调，终点 = 2 卖。
+
+    次级别「走势」= 线段（走势类型），非单笔（53 课「5 分钟的走势都可以看成
+    就是一个线段」）。当前默认用**同级别笔**找回调（process_klines），本函数仅在
+    process_klines_cross_timeframe（真实跨周期）传入 lower_xds 时启用——
+    即原文精确口径只在跨周期模式下生效，默认仍走同级别近似（与 czsc 库
+    cxt_second_bs_V240524 用同级别并列的做法一致，不强制默认改）。
+    """
+    import pandas as pd
+
+    anchor_ts = pd.Timestamp(anchor_date) if anchor_date is not None else None
+    for xd in lower_xds:
+        k = getattr(xd.end, "k", None)
+        xd_end_date = getattr(k, "date", None) if k is not None else None
+        if xd_end_date is None:
+            continue
+        if anchor_ts is not None and pd.Timestamp(xd_end_date) < anchor_ts:
+            continue
+        if xd.direction.value == direction:
+            return xd
+    return None
+
+
+def _remap_sublevel_xd_to_daily_bi(xd, bis: list):
+    """偏差C(V859)：次级别线段终点 → 日线笔（对齐）。
+
+    复用 _remap_cross_zs_indices 机制：日线笔中 end.k.date >= 次级别线段
+    终点时间的第一根。保证 MMD.bi 是日线笔尺度（与 existing_positions /
+    后续 _mmd_dict_core 一致），避免次级别 k_index 与日线尺度混用。
+    """
+    import pandas as pd
+
+    k = getattr(xd.end, "k", None)
+    xd_end_date = getattr(k, "date", None) if k is not None else None
+    if xd_end_date is None or not bis:
+        return None
+    xd_ts = pd.Timestamp(xd_end_date)
+    for db in bis:
+        dk = getattr(db.end, "k", None)
+        db_end_date = getattr(dk, "date", None) if dk is not None else None
+        if db_end_date is None:
+            continue
+        if pd.Timestamp(db_end_date) >= xd_ts:
+            return db
+    return bis[-1]
+
+
 def _find_second_type_mmds(
     bis: list[BI],
     zss: list[ZS],
@@ -2298,6 +2355,7 @@ def _find_second_type_mmds(
     volumes: list[float] | None = None,
     macd_data: dict[str, list[float]] | None = None,
     closes: list[float] | None = None,
+    lower_xds: list | None = None,
 ) -> list[MMD]:
     """识别二类买卖点和类二买卖点（V8 增强版）。
 
@@ -2352,6 +2410,40 @@ def _find_second_type_mmds(
         # 1买结束对应的原始K线索引（用于时间窗口的同一尺度比较）
         buy_1_end_k = buy_1_bi.end.k.k_index
 
+        # 偏差C(V859)：2买用次级别走势（线段）回调（原文17/21/53/101课「次级别」）。
+        # 仅在 process_klines_cross_timeframe 传入 lower_xds 时启用；
+        # 默认 process_klines（lower_xds=None）走下方同级别笔回调近似。
+        # 2买 = 1买后第一个次级别向下线段（回调走势）的终点（低点）。
+        # 第101课允许 2买跌破 1买，故不要求 cb_xd.low > buy_1_low。
+        if lower_xds is not None:
+            cb_xd = _find_sublevel_callback_xd(
+                lower_xds, buy_1_bi.end.k.date, "down"
+            )
+            if cb_xd is None:
+                continue  # 原文要求次级别回调；无次级别向下线段 → 本 1买无 2买
+            target_bi = _remap_sublevel_xd_to_daily_bi(cb_xd, bis)
+            if target_bi is None:
+                continue
+            bi_pos = target_bi.end.k.k_index
+            too_close = any(abs(bi_pos - pos) < 3 for pos in existing_positions)
+            if too_close:
+                continue
+            mmds.append(
+                MMD(
+                    mmd_type=MMDType.BUY_2,
+                    zs=buy_1_mmd.zs,
+                    bi=target_bi,
+                    msg=(
+                        f"2买C(V859): 次级别回调(原文17/21/53/101课), "
+                        f"次级别回调低点={cb_xd.low:.2f}, 日线对齐笔={target_bi.low:.2f} "
+                        f"{'<' if cb_xd.low < buy_1_low else '>' if cb_xd.low > buy_1_low else '='}"
+                        f" 1买={buy_1_low:.2f}"
+                    ),
+                )
+            )
+            existing_positions.add(bi_pos)
+            continue  # 跳过下方同级别笔回调判定
+
         # V8: 在1买之后找向上笔（离开笔），限制在30根K线内
         leave_bi_up = None
         for bi in bis[buy_1_idx + 1 :]:
@@ -2377,8 +2469,16 @@ def _find_second_type_mmds(
         # 实测对照（同一市场形态）：买侧 20%→99% 全部产出 2buy；卖侧
         # 20%→2sell、55%→2sell_s、75%→无信号。买卖两侧用同一形态却一放一收，
         # 回测会产生**系统性做多偏误**。现补齐买侧门槛，使两侧对称。
-        max_pullback_strict = leave_range * 0.5  # 严格条件（2买）
-        max_pullback_loose = leave_range * 0.7  # 宽松条件（类二买）
+        # V731→V860：回撤深度门槛。101课原文口径 mmd_2nd_max_pullback=None 时无门槛
+        # （第101课「第二类买点跌破第一类买点……这是完全可以的」，深回调也出2buy）；
+        # float（如0.5）时回撤>该比例×leave_range 抑制2buy（工程口径，V731旧行为）。
+        mmd_2nd_max_pullback = getattr(config, "mmd_2nd_max_pullback", None)
+        if mmd_2nd_max_pullback is not None:
+            max_pullback_strict = leave_range * mmd_2nd_max_pullback  # 严格条件（2买）
+            max_pullback_loose = leave_range * (mmd_2nd_max_pullback + 0.2)  # 宽松条件（类二买）
+        else:
+            max_pullback_strict = float('inf')  # 无门槛（101课原文）
+            max_pullback_loose = float('inf')
 
         # V734：此处原为硬编码 `total_time > 40`（V8 遗留），与 config 的
         # mmd_2nd_span_max_bars **并存且不受其控制** —— 后者设 0「不限」时
@@ -2526,6 +2626,38 @@ def _find_second_type_mmds(
         # 1卖结束对应的原始K线索引（用于时间窗口的同一尺度比较）
         sell_1_end_k = sell_1_bi.end.k.k_index
 
+        # 偏差C(V859)：2卖用次级别走势（线段）回调（原文17/21/53/101课「次级别」，
+        # 卖点反过来就是）。仅在 process_klines_cross_timeframe 传入 lower_xds 时启用。
+        # 2卖 = 1卖后第一个次级别向上线段（反弹走势）的终点（高点）。
+        if lower_xds is not None:
+            cb_xd = _find_sublevel_callback_xd(
+                lower_xds, sell_1_bi.end.k.date, "up"
+            )
+            if cb_xd is None:
+                continue
+            target_bi = _remap_sublevel_xd_to_daily_bi(cb_xd, bis)
+            if target_bi is None:
+                continue
+            bi_pos = target_bi.end.k.k_index
+            too_close = any(abs(bi_pos - pos) < 3 for pos in existing_positions)
+            if too_close:
+                continue
+            mmds.append(
+                MMD(
+                    mmd_type=MMDType.SELL_2,
+                    zs=sell_1_mmd.zs,
+                    bi=target_bi,
+                    msg=(
+                        f"2卖C(V859): 次级别回调(原文17/21/53/101课), "
+                        f"次级别回调高点={cb_xd.high:.2f}, 日线对齐笔={target_bi.high:.2f} "
+                        f"{'>' if cb_xd.high > sell_1_high else '<' if cb_xd.high < sell_1_high else '='}"
+                        f" 1卖={sell_1_high:.2f}"
+                    ),
+                )
+            )
+            existing_positions.add(bi_pos)
+            continue
+
         # V8: 在1卖之后找向下笔（离开笔），限制在30根K线内
         leave_bi_down = None
         for bi in bis[sell_1_idx + 1 :]:
@@ -2544,8 +2676,17 @@ def _find_second_type_mmds(
         if leave_range <= 0:
             continue
 
-        max_pullback_strict = leave_range * 0.5  # 严格条件（2卖）
-        max_pullback_loose = leave_range * 0.7  # 宽松条件（类二卖）
+        # V860：与买侧（L2475-2481）对称。原文第101课 line22「第二类买点
+        # 跌破第一类买点…完全可以」对卖点反之亦然，故 mmd_2nd_max_pullback=None
+        # 时卖侧也无门槛。原硬编码 0.5/0.7 无原文依据，且致 2buy=52 vs 2sell=14
+        # （3.71 倍）的系统性做多偏误。现与买侧统一读 config。
+        mmd_2nd_max_pullback_sell = getattr(config, "mmd_2nd_max_pullback", None)
+        if mmd_2nd_max_pullback_sell is not None:
+            max_pullback_strict = leave_range * mmd_2nd_max_pullback_sell  # 严格条件（2卖）
+            max_pullback_loose = leave_range * (mmd_2nd_max_pullback_sell + 0.2)  # 宽松条件（类二卖）
+        else:
+            max_pullback_strict = float('inf')  # 无门槛（101课卖点反之亦然）
+            max_pullback_loose = float('inf')
 
         # V734：同买侧，硬编码 40 改为由 _max_2nd_span 控制（保持买卖对称）。
         found_2sell = False
@@ -3928,6 +4069,7 @@ def find_mmds_v39(
     volatility: float | None = None,
     highs: list[float] | None = None,
     lows: list[float] | None = None,
+    lower_xds: list | None = None,
 ) -> list[MMD]:
     """V39/V40/V41 版本的 find_mmds：调用 V38 逻辑后再执行 V39 条件 101-105 + V40 条件 106-110 + V41 条件 111-115。
 
@@ -3943,6 +4085,7 @@ def find_mmds_v39(
         volatility=volatility,
         highs=highs,
         lows=lows,
+        lower_xds=lower_xds,
     )
 
     if not mmds or not closes:
@@ -6553,6 +6696,7 @@ def find_mmds_v44(
     volatility: float | None = None,
     highs: list[float] | None = None,
     lows: list[float] | None = None,
+    lower_xds: list | None = None,
 ) -> list[MMD]:
     """V44 版本的 find_mmds：完整集成条件101-125。
 
@@ -6573,6 +6717,7 @@ def find_mmds_v44(
         volatility=volatility,
         highs=highs,
         lows=lows,
+        lower_xds=lower_xds,
     )
 
 

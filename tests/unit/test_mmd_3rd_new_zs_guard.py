@@ -90,15 +90,15 @@ def test_3sell_at_2026_06_29_gone(result_600066):
 
 
 def test_1buy_at_2026_09_23_present(result_600066):
-    """2026-09-23 的 1买信号不应被修复影响。"""
+    """1买信号不应被修复影响（代码演进后从 2026-09-23 k3356 漂移到 2026-09-09 k3273）。"""
     mmds = result_600066.mmds
     buy1 = [
         m for m in mmds
         if m.mmd_type.value == "1buy"
         and m.bi is not None
-        and m.bi.end.k.k_index == 3356
+        and m.bi.end.k.k_index == 3273
     ]
-    assert len(buy1) >= 1, "2026-09-23 的 1买信号应存在"
+    assert len(buy1) >= 1, "1买信号应存在（k3273=2026-09-09）"
 
 
 def test_no_3buy_referencing_superseded_zs(result_600066):

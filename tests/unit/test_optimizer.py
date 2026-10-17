@@ -79,8 +79,9 @@ class TestParamGridOptimizer:
         assert result.heatmap["y_name"] == "slow"
         assert len(result.heatmap["x"]) == 3
         assert len(result.heatmap["y"]) == 3
-        # V550: fast==slow 的无交易网格点被跳过，3×3=9 中少 1 个退化点
-        assert len(result.heatmap["data"]) == 8
+        # V550: fast>=slow 的倒挂/相等组合在 build 时被跳过，
+        # 3×3=9 中少 2 个（fast=20,slow=15 倒挂 + fast=20,slow=20 相等）
+        assert len(result.heatmap["data"]) == 7
 
     def test_skip_degenerate_zero_trade(self) -> None:
         """V550: fast==slow 的无交易网格点被跳过，不被当作最优。"""

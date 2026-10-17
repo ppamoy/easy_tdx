@@ -64,8 +64,11 @@ EXCLUDE = {"sh000300", "sh000001"}   # 指数不做个股择时
 
 
 def load_universe(limit: int) -> list[Path]:
+    # 只选 K 线文件（_daily/_30min/_60min），排除 scan_result.json 等元数据
+    _kline_tags = ("_daily", "_30min", "_60min", "_15min", "_5min", "_week", "_month")
     fs = [p for p in sorted(DATA_DIR.glob("*.json"))
-          if p.stem.split("_")[0] not in EXCLUDE]
+          if p.stem.split("_")[0] not in EXCLUDE
+          and any(tag in p.stem for tag in _kline_tags)]
     return fs[:limit] if limit else fs
 
 

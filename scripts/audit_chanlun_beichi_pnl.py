@@ -64,8 +64,9 @@ def _build(strict_trend: bool) -> types.ModuleType:
 
 def _pairs(code, strict_trend):
     from easy_tdx.backtest.engine import BacktestEngine
-    from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy
     import easy_tdx.chanlun.mmd as M
+
+    from _chanlun_lib import make_original_strategy, pairs_from_trades
 
     mod = _build(strict_trend)
     saved = M._is_strong_beichi
@@ -73,10 +74,10 @@ def _pairs(code, strict_trend):
     try:
         df = pd.DataFrame(json.loads((DATA_DIR / f"{code}_daily.json").read_text(encoding="utf-8")))
         df["datetime"] = pd.to_datetime(df["datetime"])
-        s = ChanlunPairStrategy()
-        BacktestEngine(s, cash=100000.0, commission=COMMISSION,
-                       stamp_tax=STAMP, slippage=SLIPPAGE).run(df)
-        return list(s.pair_log)
+        s = make_original_strategy()
+        r = BacktestEngine(s, cash=100000.0, commission=COMMISSION,
+                           stamp_tax=STAMP, slippage=SLIPPAGE).run(df)
+        return pairs_from_trades(r)
     finally:
         M._is_strong_beichi = saved
 

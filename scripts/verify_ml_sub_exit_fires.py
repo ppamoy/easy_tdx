@@ -45,7 +45,6 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from _ml_precompute import CACHE, load_pair  # noqa: E402
 from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
 from easy_tdx.backtest.strategies.chanlun_ml import ChanlunMLStrategy  # noqa: E402
-from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy  # noqa: E402
 
 SLIP = 0.002
 PLAN = {"entry_types": "1buy,2buy,3buy", "exit_types": "1sell",

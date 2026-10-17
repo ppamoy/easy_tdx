@@ -149,7 +149,7 @@ def _wait_chart(pg, timeout: int = 90000) -> bool:
 
 
 def page_backtest(pg) -> bool:
-    """回测页：跑 chanlun_pair 策略。"""
+    """回测页：跑 chanlun 策略。"""
     pg.goto(BASE + "/", wait_until="domcontentloaded", timeout=45000)
     pg.wait_for_timeout(3000)
     pg.locator('input[placeholder="6位代码（市场自动识别）"]').first.fill("000001")
@@ -159,7 +159,7 @@ def page_backtest(pg) -> bool:
         if sel.locator("option").count() > 1:
             break
         pg.wait_for_timeout(1000)
-    sel.select_option("chanlun_pair")
+    sel.select_option("chanlun")
     pg.locator("button", has_text="开始回测").first.click()
     return _wait_chart(pg, 120000)
 

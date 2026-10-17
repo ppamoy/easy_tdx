@@ -180,6 +180,12 @@ class ChanlunResult:
     # 走势段/趋势段：由线段（XD）合并得到，供更高级别画图与择时参考。
     zsds: list[XD] = field(default_factory=list)
     qsds: list[XD] = field(default_factory=list)
+    # 第38课「走势类型连接的同级别分解」视角：把笔序列按同级别走势类型切开
+    # （三段成中枢 / 不延伸 / 第4段起新起 ⇒ 允许盘整+盘整）。与上面递归多级别
+    # 不同——这是**同一级别**的机械分解，第105课机械操作的基础。
+    # V853：same_level.decompose_same_level 此前为 dead module（0 调用方），
+    # 现接入 process_klines 末尾，默认产出。详见 docs/CHANLUN_FIDELITY_AUDIT_V852.md §2.4。
+    same_level_segments: list[Any] = field(default_factory=list)
 
     def _fmt_dt(self, dt: datetime) -> str:
         """按 frequency 自适应格式化日期。
@@ -251,6 +257,9 @@ class ChanlunResult:
             "date": self._fmt_dt(self._fx_anchor_datetime(mmd.bi.end)) if mmd.bi else None,
             "bar_index": mmd.bi.end.bar_index if mmd.bi else None,
             "anchor_val": round(mmd.bi.end.val, 2) if mmd.bi else None,
+            # V853 工具③：配对中枢 ZG/ZD（第20课 3买回踩不破ZG 判据）
+            "zs_zg": round(mmd.zs.zg, 2) if mmd.zs else None,
+            "zs_zd": round(mmd.zs.zd, 2) if mmd.zs else None,
             "msg": mmd.msg,
             "confidence": round(mmd.confidence, 2),
         }
@@ -459,6 +468,10 @@ class ChanlunResult:
                     # 卖点=顶分型高点。前端标注必须用该值，不能用 bars 的
                     # low/high 乘偏移，否则标注不会精确落在触发笔端点极值上。
                     "anchor_val": round(mmd.bi.end.val, 2) if mmd.bi else None,
+                    # V853 工具③ 第20课：配对中枢 ZG/ZD（3买回踩不破ZG 判据；
+                    # 1买/1卖的中枢即背驰段所在中枢）。前端据此算回踩 vs ZG 安全距离。
+                    "zs_zg": round(mmd.zs.zg, 2) if mmd.zs else None,
+                    "zs_zd": round(mmd.zs.zd, 2) if mmd.zs else None,
                     "msg": mmd.msg,
                     "confidence": round(mmd.confidence, 2),
                     "quality": {
@@ -578,6 +591,63 @@ class ChanlunResult:
                 ),
                 **self._recursive_levels_payload(),
             },
+            # V853 第38课「同级别分解」视角：把笔序列按同级别走势类型切开
+            # （三段成中枢 / 不延伸 / 盘整+盘整）。与 levels（递归多级别）不同——
+            # 这是同一级别的机械分解，第105课机械操作基础。
+            "same_level_segments": [
+                self._same_level_segment_to_dict(seg)
+                for seg in self.same_level_segments
+            ],
+        }
+
+    def _same_level_segment_to_dict(self, seg: Any) -> dict[str, Any]:
+        """第38课 TrendSegment → 前端可用字典。"""
+        lines = getattr(seg, "lines", []) or []
+        zss = getattr(seg, "zss", []) or []
+        first = lines[0] if lines else None
+        last = lines[-1] if lines else None
+        return {
+            "index": getattr(seg, "index", 0),
+            "kind": getattr(seg, "kind", "none"),  # up/down/none
+            "n_segments": len(lines),
+            "is_panzheng": bool(getattr(seg, "is_panzheng", False)),
+            "is_trend": bool(getattr(seg, "is_trend", False)),
+            "has_zs": bool(getattr(seg, "has_zs", False)),
+            "start_val": round(getattr(seg, "start_val", 0.0), 2),
+            "end_val": round(getattr(seg, "end_val", 0.0), 2),
+            "start_date": (
+                self._fmt_dt(self._fx_anchor_datetime(first.start)) if first else None
+            ),
+            "end_date": (
+                self._fmt_dt(self._fx_anchor_datetime(last.end)) if last else None
+            ),
+            "start_index": first.start.bar_index if first else None,
+            "end_index": last.end.bar_index if last else None,
+            # 构成该走势类型的笔（与 bis 同 shape，便于前端复用笔渲染）
+            "lines": [
+                {
+                    "index": bi.index,
+                    "direction": bi.direction.value,
+                    "start_date": self._fmt_dt(self._fx_anchor_datetime(bi.start)),
+                    "end_date": self._fmt_dt(self._fx_anchor_datetime(bi.end)),
+                    "high": round(bi.high, 2),
+                    "low": round(bi.low, 2),
+                    "start_index": bi.start.bar_index,
+                    "end_index": bi.end.bar_index,
+                }
+                for bi in lines
+            ],
+            # 该走势类型内的中枢（第38课：前三段重叠，不延伸）
+            "zss": [
+                {
+                    "zg": round(zs.zg, 2),
+                    "zd": round(zs.zd, 2),
+                    "gg": round(zs.gg, 2),
+                    "dd": round(zs.dd, 2),
+                    "line_count": zs.line_count,
+                }
+                for zs in zss
+            ],
         }
 
     def _fx_to_dict(self, fx: FX) -> dict[str, Any]:
@@ -752,19 +822,13 @@ class ChanlunAnalyser:
 
         # Step 4: 笔计算（传入 cklines 用于分型稳定性校验）
         bis = find_bis(fractals, self._config, cklines=self._result.cklines)
-        # 修正每笔 high/low 为笔区间内原始K线真实极值。
-        # find_bis 用端点分型值 max/min(start.val,end.val) 初始化 high/low，但在
-        # 「区间内存在更高顶/更低底却因 gap 不足未成笔端点」时会漏算——例如两底
-        # 之间的最高顶因 gap 不足无法作为笔端点，其价格仍落在笔区间内，端点 high
-        # 偏低会令中枢 zg 偏窄。缠论原文：笔的极值为笔区间内所有K线的最高/最低价。
-        for bi in bis:
-            si = bi.start.bar_index
-            ei = bi.end.bar_index
-            if 0 <= si <= ei < len(klines):
-                seg = klines[si : ei + 1]
-                if seg:
-                    bi.high = max(k.high for k in seg)
-                    bi.low = min(k.low for k in seg)
+        # 笔的 high/low = 端点分型顶/底（find_bis 已用 max/min(start.val, end.val) 初始化）。
+        # 缠论原文 62课L20：「两个相邻的顶和底之间构成一笔，所谓笔，就是顶和底之间的
+        # 其他波动，都可以忽略不算」——笔极值即端点分型值；区间内未成端点的更高顶/更低底
+        # 属「其他波动」，按原文忽略。此前曾用「区间所有原始K线极值」覆盖端点值（注释自称
+        # 「缠论原文」但查无出处），会使 gn/dn 超过端点分型值，放大中枢 GG/DD 污染。
+        # 与偏差A（GG/DD 同向段 Zn 过滤）配合，两者共同保证 GG/DD = 同向段端点分型值极值，
+        # 即原文 20课L22 口径。V857 修复：移除区间极值覆盖，保留端点分型值。
         self._result.bis = bis
 
         # Step 4.5: 有效分型 = 笔端点分型（去重）。用于前端展示，要求顶底交替且
@@ -958,6 +1022,21 @@ class ChanlunAnalyser:
                 # 区间套是增强信息，失败不影响主流程
                 pass
 
+        # Step 10.6: 第38课「走势类型连接的同级别分解」视角（V853 接入）。
+        # same_level.decompose_same_level 此前为 dead module（0 调用方，见
+        # docs/CHANLUN_FIDELITY_AUDIT_V852.md §2.4），现接入主流程。
+        # 把笔序列按同级别走势类型切开（三段成中枢 / 不延伸 / 第4段起新起 ⇒
+        # 允许盘整+盘整）。**同一级别**的机械分解，不改 bis/zss/mmds，作独立视角
+        # 暴露给前端（第105课机械操作基础）。失败不影响主流程。
+        if bis:
+            try:
+                from easy_tdx.chanlun.same_level import decompose_same_level
+                self._result.same_level_segments = decompose_same_level(
+                    bis, self._config
+                )
+            except Exception:
+                pass
+
         return self._result
 
     def process_klines_cross_timeframe(
@@ -985,6 +1064,8 @@ class ChanlunAnalyser:
         lower = ChanlunAnalyser(config=self._config)
         lower_result = lower.process_klines(lower_tf_df)
         lower_xds = lower_result.xds
+        # 偏差L力度精确化：c=次级别线段的 MACD 面积用次级别收盘价。
+        lower_closes = [k.close for k in lower_result.klines]
         if len(lower_xds) < 3:
             # 次级别线段不足，退回默认
             return self.process_klines(daily_df)
@@ -1035,11 +1116,15 @@ class ChanlunAnalyser:
             volatility=None,
             highs=highs,
             lows=lows,
+            lower_xds=lower_xds,
         )
 
         # 5. 重新背驰判断
+        # 偏差L（37课L10）：cross_zss 是次级别线段中枢（find_zss(lower_xds)），
+        # c 段用次级别线段（XD），非日线笔（83课近似）。力度用振幅降级。
         cross_bcs = check_bi_beichi(
-            bis, cross_zss, closes=closes, config=self._config
+            bis, cross_zss, closes=closes, config=self._config, mmds=cross_mmds,
+            lower_xds=lower_xds, lower_closes=lower_closes,
         )
 
         # 6. 后置验证（第29课反弹触及 DD/GG）

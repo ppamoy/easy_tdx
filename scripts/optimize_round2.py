@@ -20,6 +20,7 @@ import pandas as pd
 sys.path.insert(0, "src")
 from easy_tdx.backtest.engine import BacktestEngine
 from easy_tdx.backtest.strategies.registry import get_registry
+from _chanlun_lib import drop_unknown_params  # noqa: E402
 
 CACHE_D = Path("audit_data")
 STOCKS = [
@@ -38,47 +39,33 @@ def load_daily(mkt, code):
     return df.sort_values("datetime").reset_index(drop=True)
 
 registry = get_registry()
-entry = registry.get("chanlun_pair")
+entry = registry.get("chanlun")
 strat_cls = entry.strategy_cls
 
 configs = [
     # 趋势持有是已知最优，作为基准
-    ("趋势持有(基准)", {
-        "hold_in_higher_uptrend": True, "confirm_lag": 3,
-        "use_seg_mmd": False, "use_3buy": True, "use_3sell": True,
-        "exit_stop_loss_pct": 0.0, "min_confidence": 0.0,
+    ("基准", {
+        "confirm_lag": 3,
+        "use_3buy": True, "use_3sell": True,
+        "stop_loss_pct": 0.0, "take_profit_pct": 0.0,
+        "min_confidence": 0.0,
     }),
     # 趋势 + seg_mmd (T3修复后)
-    ("趋势+seg_mmd", {
-        "hold_in_higher_uptrend": True, "confirm_lag": 3,
-        "use_seg_mmd": True, "seg_mmd_hybrid": False,
-        "use_3buy": True, "use_3sell": True,
-        "exit_stop_loss_pct": 0.0, "min_confidence": 0.0,
+    ("趋势+seg_mmd", { "confirm_lag": 3,
+        "use_3buy": True, "use_3sell": True, "min_confidence": 0.0,
     }),
     # 趋势 + seg_mmd_hybrid (T1线段 + T2T3笔)
-    ("趋势+hybrid", {
-        "hold_in_higher_uptrend": True, "confirm_lag": 3,
-        "use_seg_mmd": True, "seg_mmd_hybrid": True,
-        "use_3buy": True, "use_3sell": True,
-        "exit_stop_loss_pct": 0.0, "min_confidence": 0.0,
+    ("趋势+hybrid", { "confirm_lag": 3,
+        "use_3buy": True, "use_3sell": True, "min_confidence": 0.0,
     }),
     # 趋势 + 只1+2买卖
-    ("趋势+只1+2", {
-        "hold_in_higher_uptrend": True, "confirm_lag": 3,
-        "use_seg_mmd": False, "use_3buy": False, "use_3sell": False,
-        "exit_stop_loss_pct": 0.0, "min_confidence": 0.0,
+    ("趋势+只1+2", { "confirm_lag": 3, "use_3buy": False, "use_3sell": False, "min_confidence": 0.0,
     }),
     # 趋势 + lag=2
-    ("趋势+lag=2", {
-        "hold_in_higher_uptrend": True, "confirm_lag": 2,
-        "use_seg_mmd": False, "use_3buy": True, "use_3sell": True,
-        "exit_stop_loss_pct": 0.0, "min_confidence": 0.0,
+    ("趋势+lag=2", { "confirm_lag": 2, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0,
     }),
     # 趋势 + lag=1
-    ("趋势+lag=1", {
-        "hold_in_higher_uptrend": True, "confirm_lag": 1,
-        "use_seg_mmd": False, "use_3buy": True, "use_3sell": True,
-        "exit_stop_loss_pct": 0.0, "min_confidence": 0.0,
+    ("趋势+lag=1", { "confirm_lag": 1, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0,
     }),
 ]
 
@@ -98,7 +85,7 @@ for label, extra in configs:
     for mkt, code, name in STOCKS:
         df = load_daily(mkt, code)
         try:
-            strat = entry.build(params)
+            strat = entry.build(drop_unknown_params(entry, params))
             engine = BacktestEngine(strategy=strat_cls, cash=100000, commission=0.0003, stamp_tax=0.001, slippage=0.002)
             engine._strategy_instance = strat
             result = engine.run(df)

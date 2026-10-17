@@ -11,6 +11,22 @@ import { formatError } from '../api'
 import type { Bar } from '../types'
 import { fetchBars, loadEarlierBars } from '../api'
 import { useTimeJump } from '../composables/useTimeJump'
+import { qtBadgeClass, qtBadgeLabel, qtBadgeTitle, qtResolvedState } from '../utils/qtBadge'
+import { mmd2Form, mmd2FormClass, mmd2FormLabel, mmd2FormTitle } from '../utils/mmd2Form'
+import {
+  mmd1Status,
+  mmd1StatusLabel,
+  mmd1StatusClass,
+  mmd1StatusTitle,
+  mmd3Status,
+} from '../utils/mmdStatusBadge'
+import {
+  slKindLabel,
+  slKindClass,
+  slTrendLabel,
+  slTrendClass,
+  slMechanicalHint,
+} from '../utils/sameLevelView'
 
 const router = useRouter()
 const code = ref('000001')
@@ -135,7 +151,15 @@ interface ChanlunMmd {
       low_mmd_same_dir?: boolean
       hi_bar_window?: number[]
     } | null
+    state?: string // 第61课三态：ASSUMED/CONFIRMED/REJECTED
+    chain?: any[] // 逐重嵌套链
+    synthetic?: boolean
   } | null
+  // V853 工具①③：第29课后置验证 + 第20课ZG/ZD（诊断面板消费止损/参考位）
+  rebound_verified?: boolean | null
+  anchor_val?: number | null
+  zs_zg?: number | null
+  zs_zd?: number | null
 }
 
 interface ChanlunFx {
@@ -160,6 +184,8 @@ const bis = ref<ChanlunBi[]>([])
 const xds = ref<ChanlunXd[]>([])
 const zss = ref<ChanlunZs[]>([])
 const mmds = ref<ChanlunMmd[]>([])
+// 第38课同级别分解段（V853 §2.4 接线）：to_dict.same_level_segments
+const sameLevelSegments = ref<any[]>([])
 const fxs = ref<ChanlunFx[]>([])
 // 缠论有效分型（笔端点分型，交替且不重叠），用于消除「底-顶-底」挤在连续K线的
 // 重叠分型噪声。展示层优先使用它，原始 fractals 仍保留用于买卖点等计算。
@@ -168,6 +194,23 @@ const bcs = ref<ChanlunBc[]>([])
 const zsds = ref<ChanlunXd[]>([])
 const qsds = ref<ChanlunXd[]>([])
 const macd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
+
+// 多级别联立（切面2）：低级别（30min等）图表数据，与高级别同屏对照。
+// low_level.result 结构（bis/xds/zss/mmds/...）索引对齐 lowBars——按
+// low_level_coverage.bar_count 取最新 N 根（=后端 df_low post-tail），保证对齐。
+const lowBars = ref<Bar[]>([])
+const lowBis = ref<ChanlunBi[]>([])
+const lowXds = ref<ChanlunXd[]>([])
+const lowZss = ref<ChanlunZs[]>([])
+const lowMmds = ref<ChanlunMmd[]>([])
+const lowZsds = ref<ChanlunXd[]>([])
+const lowQsds = ref<ChanlunXd[]>([])
+const lowBcs = ref<ChanlunBc[]>([])
+const lowFxs = ref<ChanlunFx[]>([])
+const lowValidFxs = ref<ChanlunFx[]>([])
+const lowMacd = ref<{ dif: number[]; dea: number[]; hist: number[] } | null>(null)
+const lowLoading = ref(false)
+const lowError = ref('')
 
 // 买卖点分类准确度验证（由 /chanlun/analyze 返回的 signal_accuracy）
 const signalAccuracy = ref<any>(null)
@@ -261,8 +304,15 @@ function mapMmds(raw: any[]): ChanlunMmd[] {
     v102_decision_support: m.v102_decision_support ?? null,
     v102_pattern_match: m.v102_pattern_match ?? null,
     qujiantao: m.qujiantao ?? null,
+    // V853 工具①③：第29课后置验证 + 第20课ZG/ZD（状态徽章消费）
+    rebound_verified: m.rebound_verified ?? null,
+    zs_zg: m.zs_zg ?? null,
+    zs_zd: m.zs_zd ?? null,
   }))
 }
+
+// ── 区间套徽章三态（V853 第61课状态机：ASSUMED/CONFIRMED/REJECTED）──
+// 逻辑抽到 utils/qtBadge.ts（单一真源，供组件 + 测试共用）。
 
 function mapBcs(raw: any[]): ChanlunBc[] {
   return (raw ?? []).map((bc: any) => ({
@@ -297,6 +347,8 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
     zss.value = mapZss(lvl.zss)
     mmds.value = mapMmds(lvl.mmds)
     bcs.value = mapBcs(lvl.bcs)
+    // 递归级别无第38课分解（只 bi 级产出），清空避免残留
+    sameLevelSegments.value = []
     // 递归级别（xd/xd_lN）：后端 levels 里**没有**分型字段（只有 bis/xds/zss/mmds/bcs），
     // 若不同步清空，图上会残留上一级别（bi）的分型——与本级别笔/中枢不匹配，
     // 用户会看到「按 xd 笔划分」却标着「bi 的分型」这种自相矛盾的画面。
@@ -311,11 +363,67 @@ function applyAnalysisLevel(level: AnalysisLevel, data: any) {
   qsds.value = mapXds(data?.qsds)
   zss.value = mapZss(data?.zss)
   mmds.value = mapMmds(data?.mmds)
+  // 第38课同级别分解段（顶层字段，bi 级别产出，§2.4 接线）
+  sameLevelSegments.value = data?.same_level_segments ?? []
   bcs.value = mapBcs(data?.bcs)
   // 回到笔级别：分型只存在于顶层数据（levels 里没有），必须恢复，
   // 否则从 xd 切回 bi 后图上将永久丢失分型标注。
   fxs.value = mapFxs(data?.fractals)
   validFxs.value = mapFxs(data?.valid_fractals)
+}
+
+/**
+ * 切面2：多级别联立同屏——拉低级别 K 线 + 映射结构，供低级别 ChanlunChart 渲染。
+ *
+ * 索引对齐原理：low_level_coverage.bar_count = 后端 df_low post-tail 的 len；
+ * 前端 fetchBars(count=bar_count) 取「最新 bar_count 根」= 后端 df_low（同为最新 N 根），
+ * 故 low_level.result 里的 bis/zss/mmds 等的 bar_index 与 lowBars 下标一致。
+ */
+async function loadLowLevelChart(market: string, data: any) {
+  const lr = data?.low_level?.result
+  const barCount = data?.low_level_coverage?.bar_count ?? 1500
+  if (!lr) {
+    lowBars.value = []
+    lowBis.value = []
+    lowXds.value = []
+    lowZss.value = []
+    lowMmds.value = []
+    lowZsds.value = []
+    lowQsds.value = []
+    lowBcs.value = []
+    lowFxs.value = []
+    lowValidFxs.value = []
+    lowMacd.value = null
+    lowError.value = ''
+    return
+  }
+  lowLoading.value = true
+  lowError.value = ''
+  try {
+    const bars = await fetchBars(market, code.value, lowLevel.value, undefined, undefined, barCount)
+    if (!bars.length) {
+      lowError.value = `未取到 ${market}:${code.value} 的 ${lowLevel.value} 低级别数据`
+      lowBars.value = []
+    } else {
+      lowBars.value = bars
+    }
+    // 结构映射（与 applyAnalysisLevel 同口径，写入 low* refs，不污染高级别视图）
+    lowBis.value = mapBis(lr.bis ?? [])
+    lowXds.value = mapXds(lr.xds ?? [])
+    lowZsds.value = mapXds(lr.zsds ?? [])
+    lowQsds.value = mapXds(lr.qsds ?? [])
+    lowZss.value = mapZss(lr.zss ?? [])
+    lowMmds.value = mapMmds(lr.mmds ?? [])
+    lowBcs.value = mapBcs(lr.bcs ?? [])
+    lowFxs.value = mapFxs(lr.fractals ?? [])
+    lowValidFxs.value = mapFxs(lr.valid_fractals ?? [])
+    lowMacd.value = lr.macd && lr.macd.dif?.length ? lr.macd : null
+  } catch (e: any) {
+    lowError.value = e?.message ?? String(e)
+    lowBars.value = []
+  } finally {
+    lowLoading.value = false
+  }
 }
 
 // 由后端 levels 键推导分析级别选项与展示标签（bi / xd / xd_l2 / xd_l3…）。
@@ -422,6 +530,44 @@ const strongSignals = computed(() => mmds.value.filter((m) => m.confidence >= 0.
 
 // 最新买卖点（用于快速详情展示）
 const latestMmd = computed(() => (mmds.value.length > 0 ? mmds.value[mmds.value.length - 1] : null))
+
+/**
+ * 切面3：买卖点诊断 + 操作建议（区间套确认态 → 可执行建议，指导实盘）。
+ *
+ * 区间套是「确认工具」不是独立信号：买卖点(1/2/3类)本身是入场触发，区间套
+ * CONFIRMED/REJECTED/ASSUMED 决定信号可信度。据此给操作建议（§6 如实，不过度承诺）：
+ *   CONFIRMED(真跨周期) → 可买入/可卖出（本重背驰确认）；
+ *   CONFIRMED(递归口径) → 仅参考（非真跨周期，确认率~3%）；
+ *   REJECTED → 规避（背驰段不成立，力度未衰减）；
+ *   ASSUMED → 观望（待低周期确认）。
+ * 止损/参考位取中枢 ZD(买)/ZG(卖)——原文「不破中枢」边界。
+ */
+const mmdDiagnosis = computed(() => {
+  if (!mmds.value.length) return []
+  return mmds.value.slice(-8).reverse().map((m) => {
+    const qt = m.qujiantao
+    const st = qtResolvedState(qt)
+    const isBuy = String(m.type).includes('buy')
+    let action = ''
+    let actionColor = '#94a3b8'
+    if (st === 'CONFIRMED') {
+      const real = qt?.method === 'cross_period'
+      action = real ? (isBuy ? '可买入' : '可卖出') : '仅参考(递归确认)'
+      actionColor = real ? '#22c55e' : '#f39c12'
+    } else if (st === 'REJECTED') {
+      action = '规避(背驰段不成立)'
+      actionColor = '#ef4444'
+    } else if (st === 'ASSUMED') {
+      action = '观望(待低周期确认)'
+      actionColor = '#94a3b8'
+    } else {
+      action = isBuy ? '参考买入' : '参考卖出'
+    }
+    // 止损/参考位：买取中枢 ZD（不破中枢边界），卖取 ZG
+    const stopLoss = isBuy ? m.zs_zd : m.zs_zg
+    return { m, st, action, actionColor, stopLoss }
+  })
+})
 
 // ── V733 信号质量实测结论（如实告知用户，别把 3买/3卖 当普通信号）──
 //
@@ -987,6 +1133,19 @@ async function analyze() {
   error.value = ''
   multiLevelResult.value = null
   signalAccuracy.value = null
+  // 切面2：低级别视图重置（避免上一标的的低级别结构残留）
+  lowBars.value = []
+  lowBis.value = []
+  lowXds.value = []
+  lowZss.value = []
+  lowMmds.value = []
+  lowZsds.value = []
+  lowQsds.value = []
+  lowBcs.value = []
+  lowFxs.value = []
+  lowValidFxs.value = []
+  lowMacd.value = null
+  lowError.value = ''
   try {
     // 1. 取行情 —— 只取最新 count 根，与研究分析的窗口保持一致，
     //    否则图表会显示 8000 根历史而笔/线段/中枢/买卖点只覆盖最近 800 根。
@@ -1057,6 +1216,9 @@ async function analyze() {
         low_level_qs: data.low_level_qs,
         low_level: data.low_level?.result,
       }
+      // 切面2：多级别联立同屏——拉低级别 K 线（按 low_level_coverage.bar_count，
+      // =后端 df_low post-tail，索引对齐）+ 映射低级别结构。不阻塞主流程（void）。
+      void loadLowLevelChart(market, data)
     } else {
       const resp = await fetch('/api/v1/chanlun/analyze', {
         method: 'POST',
@@ -1732,6 +1894,47 @@ onUnmounted(() => {
       />
     </div>
 
+    <!-- 切面3：买卖点诊断 + 操作建议（区间套确认态 → 可执行建议，指导实盘） -->
+    <div v-if="!loading && mmdDiagnosis.length" class="mmd-diagnosis-panel">
+      <div class="mmd-diagnosis-title">
+        🎯 买卖点诊断 · 操作建议（最近 {{ mmdDiagnosis.length }} 个，区间套确认态驱动）
+      </div>
+      <div class="mmd-diagnosis-grid">
+        <div
+          v-for="d in mmdDiagnosis"
+          :key="d.m.date + d.m.type"
+          class="mmd-diag-card"
+          :style="{ borderLeftColor: MMD_COLORS[d.m.type] ?? '#94a3b8' }"
+        >
+          <div class="mmd-diag-head">
+            <span class="mmd-diag-type" :style="{ color: MMD_COLORS[d.m.type] ?? '#fff' }">{{
+              d.m.type
+            }}</span>
+            <span class="mmd-diag-date">{{ d.m.date ?? '—' }}</span>
+            <span v-if="d.m.anchor_val != null" class="mmd-diag-price"
+              >¥{{ d.m.anchor_val.toFixed(2) }}</span
+            >
+          </div>
+          <div class="mmd-diag-row">
+            <span
+              v-if="d.m.qujiantao"
+              class="qt-badge"
+              :class="qtBadgeClass(d.m.qujiantao)"
+              :title="qtBadgeTitle(d.m.qujiantao)"
+              >{{ qtBadgeLabel(d.m.qujiantao) }}{{ (d.m.qujiantao.score * 100).toFixed(0) }}</span
+            >
+            <span class="mmd-diag-action" :style="{ color: d.actionColor }">{{ d.action }}</span>
+          </div>
+          <div v-if="d.stopLoss != null" class="mmd-diag-stop">
+            {{ d.m.type.includes('buy') ? '止损位' : '参考位' }}: ¥{{ d.stopLoss.toFixed(2) }}
+          </div>
+          <div v-if="d.m.qujiantao?.msg" class="mmd-diag-msg" :title="d.m.qujiantao.msg">
+            {{ d.m.qujiantao.msg }}
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 买卖点列表 -->
     <div v-if="!loading && mmds.length > 0" class="mmd-list">
       <h3>买卖点明细（{{ mmds.length }} 个）</h3>
@@ -1813,41 +2016,76 @@ onUnmounted(() => {
               >
                 V102·{{ m.v102_signal_quality.overall_grade }}
               </span>
-              <!-- 区间套徽章（口径区分）
-                   method='cross_period' = 真实双周期数据（缠论原文语义，可用）；
-                   其他（recursive/single）= 同序列递归或单级别近似，
-                   实测确认率仅 3%（真跨周期 50%），不得当作"真区间套"呈现。
-                   见 docs/区间套现状说明与统一方案.md §七 实测证伪。 -->
+              <!-- 区间套徽章（第61课状态机三态：ASSUMED/CONFIRMED/REJECTED）
+     V853：后端现输出 state 字段，徽章按三态分色——
+     🔗 套(qt-ok 绿)=CONFIRMED 本重背驰确认；
+     🔗✗(qt-reject 红)=REJECTED 背驰段不成立（力度未衰减，别交易）；
+     🔗?(qt-assumed 灰)=ASSUMED 待观察。
+     method='cross_period'=真实双周期（缠论原文语义）；
+     其他=同序列递归/单级别近似（确认率~3%），标 qt-recursive 区分。 -->
+<span
+  v-if="m.qujiantao"
+  class="qt-badge"
+  :class="qtBadgeClass(m.qujiantao)"
+  :title="qtBadgeTitle(m.qujiantao)"
+  >{{ qtBadgeLabel(m.qujiantao) }}{{ (m.qujiantao.score * 100).toFixed(0) }}</span>
+              <!-- 2买/2卖 形态徽章（第101课三情况，V853 §2.3）：
+                   ⚠最弱·破1买(红)=2买跌破1买（原文允许，§2.3 修复前被吞掉）；
+                   一般(灰)=2买高于1买。无配对1买/非2买卖 → 不渲染。 -->
               <span
-                v-if="m.qujiantao"
-                class="qt-badge"
-                :class="
-                  m.qujiantao.method === 'cross_period'
-                    ? m.qujiantao.nested
-                      ? 'qt-ok'
-                      : 'qt-no'
-                    : m.qujiantao.nested
-                      ? 'qt-recursive'
-                      : 'qt-no'
-                "
-                :title="
-                  m.qujiantao.method === 'cross_period'
-                    ? m.qujiantao.msg
-                    : '⚠ 非真跨周期：本标记来自同序列递归级别（或单级别近似），实测确认率约 3%，不能等同于缠论原文的区间套。' + m.qujiantao.msg
-                "
-              >
-                {{
-                  m.qujiantao.method === 'cross_period'
-                    ? m.qujiantao.nested
-                      ? '🔗 套'
-                      : '🔗✗'
-                    : m.qujiantao.nested
-                      ? '🔗 级?'
-                      : '🔗✗'
-                }}{{ (m.qujiantao.score * 100).toFixed(0) }}
-              </span>
+                v-if="mmd2Form(mmds, m)"
+                class="m2-form-badge"
+                :class="mmd2FormClass(mmd2Form(mmds, m))"
+                :title="mmd2FormTitle(mmd2Form(mmds, m))"
+                >{{ mmd2FormLabel(mmd2Form(mmds, m)) }}</span>
+              <!-- 工具① 1买/1卖 背驰确立状态（第29课后置验证，V853）：
+                   ✓背驰确立(绿)=反弹触及中枢DD/GG；⚠疑似背驰(黄)=未触及；?待验证(灰)=数据不足。 -->
+              <span
+                v-if="mmd1Status(m)"
+                class="b1-status-badge"
+                :class="mmd1StatusClass(mmd1Status(m))"
+                :title="mmd1StatusTitle(mmd1Status(m))"
+                >{{ mmd1StatusLabel(mmd1Status(m)) }}</span>
+              <!-- 工具③ 3买/3卖 ZG安全距离（第20课，V853）：
+                   不破ZG/ZD✅ + 安全距离；离ZG越近风险越高。 -->
+              <span
+                v-if="mmd3Status(m)"
+                class="b3-status-badge"
+                :class="mmd3Status(m)!.class"
+                :title="mmd3Status(m)!.title"
+                >{{ mmd3Status(m)!.label }}</span>
             </td>
             <td>{{ m.msg }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 第38课同级别分解 + 第105课机械操作（V853 §2.4）：
+         后端 to_dict.same_level_segments 已接线。按段列走势类型，
+         末段定机械操作（上涨段→持有；下跌段→避开）。 -->
+    <div v-if="!loading && sameLevelSegments.length > 0" class="sl-panel">
+      <h3>🧩 同级别分解（第38课）+ 机械操作（第105课）</h3>
+      <div class="sl-mech-banner" :class="slMechanicalHint(sameLevelSegments).class">
+        <strong>{{ slMechanicalHint(sameLevelSegments).action }}</strong>
+        — {{ slMechanicalHint(sameLevelSegments).reason }}
+      </div>
+      <table class="sl-table">
+        <thead>
+          <tr>
+            <th>#</th><th>方向</th><th>走势类型</th><th>笔数</th>
+            <th>中枢</th><th>起</th><th>止</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="seg in sameLevelSegments" :key="seg.index">
+            <td>{{ seg.index }}</td>
+            <td><span class="sl-kind-badge" :class="slKindClass(seg.kind)">{{ slKindLabel(seg.kind) }}</span></td>
+            <td><span class="sl-trend-badge" :class="slTrendClass(seg)">{{ slTrendLabel(seg) }}</span></td>
+            <td>{{ seg.n_segments }}</td>
+            <td>{{ seg.has_zs ? '有' : '—' }}</td>
+            <td>{{ seg.start_date ?? '-' }}</td>
+            <td>{{ seg.end_date ?? '-' }}</td>
           </tr>
         </tbody>
       </table>
@@ -2092,6 +2330,36 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+      <!-- 切面2：低级别同屏图（与高级别对照——高级别背驰段在低级别先出现背驰/买卖点 = 区间套确认） -->
+      <div v-if="lowBars.length" class="ml-low-chart">
+        <div class="ml-low-chart-header">
+          <span class="ml-detail-title">低级别 {{ lowLevel }} 结构（{{ lowBars.length }} 根 K 线）</span>
+          <span v-if="lowLoading" class="ml-low-loading">⏳ 加载中…</span>
+          <span v-else-if="lowError" class="ml-low-error">⚠ {{ lowError }}</span>
+          <span v-else class="ml-low-hint">放大镜：看高级别背驰段如何在低级别逐笔确认</span>
+        </div>
+        <ChanlunChart
+          :bars="lowBars"
+          :bis="lowBis"
+          :xds="lowXds"
+          :zsds="lowZsds"
+          :qsds="lowQsds"
+          :show-zsds="showZsds"
+          :show-fractals="showFractals"
+          :show-mmds="showMmds"
+          :show-bcs="showBcs"
+          :show-zss="showZss"
+          :show-mmd-labels="showMmdLabels"
+          :zss="lowZss"
+          :mmds="lowMmds"
+          :fxs="lowFxs"
+          :validFxs="lowValidFxs"
+          :bcs="lowBcs"
+          :macd="lowMacd ?? undefined"
+          :frequency="lowLevel"
+          :compact="true"
+        />
+      </div>
     </div>
 
     <!-- 空状态 -->
@@ -2229,6 +2497,84 @@ onUnmounted(() => {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 14px 16px;
+}
+
+/* 切面3：买卖点诊断 + 操作建议 */
+.mmd-diagnosis-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-top: 10px;
+}
+
+.mmd-diagnosis-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+
+.mmd-diagnosis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+}
+
+.mmd-diag-card {
+  border-left: 3px solid;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.mmd-diag-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mmd-diag-type {
+  font-weight: 700;
+  min-width: 36px;
+}
+
+.mmd-diag-date {
+  color: var(--text-muted);
+}
+
+.mmd-diag-price {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.mmd-diag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.mmd-diag-action {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.mmd-diag-stop {
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
+.mmd-diag-msg {
+  color: var(--text-dim);
+  font-size: 10px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mmd-list h3 {
@@ -2624,12 +2970,98 @@ onUnmounted(() => {
   background: #334155;
   color: #94a3b8;
 }
+/* V853 第61课状态机三态（真跨周期口径）：
+   qt-reject 红=REJECTED 背驰段不成立（力度未衰减，别当背驰段交易）；
+   qt-assumed 灰=ASSUMED 待观察（暂无证据，可能继续确认）。 */
+.qt-badge.qt-reject {
+  background: #7f1d1d;
+  color: #fca5a5;
+}
+.qt-badge.qt-assumed {
+  background: #374151;
+  color: #9ca3af;
+}
 /* 同序列递归/单级别近似口径：与"真跨周期"（qt-ok）视觉上区分开，
    避免用户把它当成缠论原文的区间套确认（实测确认率 3% vs 50%）。 */
 .qt-badge.qt-recursive {
   background: #78350f;
   color: #fcd34d;
 }
+/* 2买/2卖 形态徽章（V853 第101课三情况，§2.3 修复可视化） */
+.m2-form-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 4px;
+  cursor: help;
+}
+.m2-form-badge.m2-weakest {
+  background: #7f1d1d; /* 红：第101课最弱（跌破1买），原文允许、§2.3 修复前不可见 */
+  color: #fca5a5;
+}
+.m2-form-badge.m2-general {
+  background: #334155;
+  color: #94a3b8;
+}
+/* 第38课同级别分解面板（V853 §2.4） */
+.sl-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+.sl-panel h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.sl-mech-banner {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  border-left: 4px solid;
+}
+.sl-mech-banner.sl-mech-hold { background: #052e16; color: #86efac; border-left-color: #22c55e; }
+.sl-mech-banner.sl-mech-sell { background: #450a0a; color: #fca5a5; border-left-color: #ef4444; }
+.sl-mech-banner.sl-mech-watch { background: #1f2937; color: #9ca3af; border-left-color: #6b7280; }
+.sl-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sl-table th, .sl-table td {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.sl-kind-badge, .sl-trend-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+}
+.sl-kind-badge.sl-up { background: #052e16; color: #86efac; }
+.sl-kind-badge.sl-down { background: #450a0a; color: #fca5a5; }
+.sl-kind-badge.sl-none { background: #1f2937; color: #9ca3af; }
+.sl-trend-badge.slt-trend { background: #1e3a8a; color: #93c5fd; }
+.sl-trend-badge.slt-panzheng { background: #78350f; color: #fcd34d; }
+.sl-trend-badge.slt-ongoing { background: #334155; color: #94a3b8; }
+/* 工具① 1买背驰确立状态（第29课）+ 工具③ 3买ZG安全距离（第20课），V853 */
+.b1-status-badge, .b3-status-badge {
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  margin-left: 4px;
+  cursor: help;
+}
+.b1-status-badge.b1-confirmed { background: #052e16; color: #86efac; }
+.b1-status-badge.b1-suspect { background: #78350f; color: #fcd34d; }
+.b1-status-badge.b1-pending { background: #334155; color: #94a3b8; }
+.b3-status-badge.b3-ok { background: #052e16; color: #86efac; }
+.b3-status-badge.b3-bad { background: #450a0a; color: #fca5a5; }
 
 /* 操作建议面板 */
 .advice-panel {
@@ -2818,6 +3250,34 @@ onUnmounted(() => {
 .ml-signal-msg {
   color: var(--text-dim);
   flex: 1;
+}
+
+/* 切面2：低级别同屏图 */
+.ml-low-chart {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+
+.ml-low-chart-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.ml-low-loading {
+  color: var(--text-muted);
+}
+
+.ml-low-error {
+  color: #ef4444;
+}
+
+.ml-low-hint {
+  color: var(--text-dim);
+  font-size: 11px;
 }
 
 /* 关键价位参考 */

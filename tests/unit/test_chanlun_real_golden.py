@@ -58,13 +58,15 @@ def test_counts_locked(result) -> None:
     # ⚠️ 这正是 V851 修掉的**前视**：旧实现 `_calc_trend_strength(zss)` 用
     #   **全部**中枢算全局强度（含未来的 zs1/zs2），于是 bi3 靠未来的中枢
     #   「凑出」趋势 → 误报 SELL_1。V851 改为 per-bi `_prior_zss`（只用截至
-    #   该笔已成立的中枢），前视消失，信号随之减少。
-    # bis/xds/zss 三个结构计数**均未变**（12/2/3），只有信号数变化。
-    assert len(result.mmds) == 2
-    # V740：笔 high/low 改为区间真实极值后，中枢 zg 上移，盘整背驰力度对比变化，
-    # 1 个笔背驰（bi3 力度 < bi1）正确显现。
-    # V733：中枢由 2 个变 3 个后，新增中枢[1] 的盘整背驰 → bcs 1→2（实测确认）
-    assert len(result.bcs) == 2
+    #   该笔已成立的中枢），前视消失。
+    # V857 偏差B 修复（笔极值=端点分型值，62课L20「其他波动忽略不算」）后，
+    #   中枢 zg 下移 / zd 上移（端点值严于区间极值），3买/3卖 更易触发：
+    #   新增 SELL_3@bi11（zs2 已关闭，反抽高点11.62 < 端点zd11.72；区间极值
+    #   因 zd 偏低漏算）。bis/xds/zss 计数均未变（12/2/3），信号 2→3。
+    assert len(result.mmds) == 3
+    # V857 偏差B：端点值后盘整背驰力度对比变化，新增 PZ 盘整背驰 bi11 vs bi7
+    #   （zs2 done=True，离开笔力度0.01 < 进入笔3.45，区间极值漏算）。
+    assert len(result.bcs) == 3
 
 
 def test_bi_endpoints_on_extremes(result) -> None:
@@ -86,14 +88,16 @@ def test_zs_semantics(result) -> None:
         assert zs.gg >= zs.zg, f"gg 应 >= zg {zs}"
         assert zs.dd <= zs.zd, f"dd 应 <= zd {zs}"
         # V730 原文口径（第17/20课）：ZG/ZD 由前两个走势的重叠确定后冻结；
-        # 第3笔起为延伸，不改变 ZG/ZD。gg/dd 为全部走势极值。
+        # 第3笔起为延伸，不改变 ZG/ZD。gg/dd 遍历与中枢方向一致的 Z走势段(同向段)（20课L22）。
         if len(zs.lines) >= 2:
             first2 = zs.lines[:3]  # V733：前三笔冻结（原文口径）
             assert zs.zg == min(line.high for line in first2), f"zg 应为前三笔 min(high) {zs}"
             assert zs.zd == max(line.low for line in first2), f"zd 应为前三笔 max(low) {zs}"
         if zs.lines:
-            assert zs.gg == max(line.high for line in zs.lines), f"gg 应为 max(high) {zs}"
-            assert zs.dd == min(line.low for line in zs.lines), f"dd 应为 min(low) {zs}"
+            same_dir = [ln for ln in zs.lines if ln.direction.value == zs.direction]
+            assert same_dir, f"应有同向段(Zn) {zs}"
+            assert zs.gg == max(ln.high for ln in same_dir), f"gg 应为同向段 max(gn)（20课L22）{zs}"
+            assert zs.dd == min(ln.low for ln in same_dir), f"dd 应为同向段 min(dn)（20课L22）{zs}"
 
 
 def test_beichi_force_ratio_and_anchor(result) -> None:
@@ -157,10 +161,11 @@ def test_timing_response_novice_fields() -> None:
     assert out["structure"]["bi_count"] == 12
     assert out["structure"]["zs_count"] == 3  # V733：中枢变窄 → 2→3
     # V851：前视修复（_calc_trend_strength 全局 → per-bi _prior_zss）后，
-    # 用未来中枢「凑趋势」的 SELL_1@bi3 与 BUY_3@bi10 消失，mmd 3→2。
-    # 详见 test_counts_locked 的原文依据（第17/21课）与前视说明。
-    assert out["structure"]["mmd_count"] == 2
-    assert out["structure"]["bc_count"] == 2  # V733：中枢变窄多出 1 个盘整背驰
+    # 用未来中枢「凑趋势」的 SELL_1@bi3 与 BUY_3@bi10 消失。
+    # V857 偏差B（端点分型值，62课L20）后 3买/3卖 更易触发，mmd 2→3（新增
+    #   SELL_3@bi11，非前视，见 test_counts_locked 说明）。
+    assert out["structure"]["mmd_count"] == 3
+    assert out["structure"]["bc_count"] == 3  # V857 偏差B：端点值后多出 1 个盘整背驰
 
 
 def test_bi_end_to_end(result) -> None:

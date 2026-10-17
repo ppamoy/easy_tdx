@@ -247,11 +247,12 @@ def test_compute_recursive_levels_deep_three_levels() -> None:
     res = compute_recursive_levels(xds, depth=5, config=_cfg())
 
     assert len(res) == 3
-    # 级别线段数逐级收敛：基础级 → 56 → 8 → 1（数据决定的确定性金标）。
-    # V730 P1-4：level2 6→8——旧实现对缺口后「第4特征元素创新低/新高」的粗糙
-    # 近似漏判了部分线段终点（欠分段）；按第71课真实价格击穿判定后，158.36 段
-    # 正确止于 390.81 处的特征序列分型并衔接 DOWN 段，末段同理，4 段变 8 段。
-    assert [len(rl.xds) for rl in res] == [56, 8, 1]
+    # 级别线段数逐级收敛：基础级 → 51 → 5 → 1（数据决定的确定性金标）。
+    # V730 P1-4：level2 6→8（旧实现缺口近似漏判，按第71课真实价格击穿修正）。
+    # 偏差D V857：56→51 / 8→5——线段前三笔须重叠（65课L34）+ 破坏须被有效线段破坏
+    # （chaining）。偏差D 破坏确认使无重叠前三笔的线段延伸（而非孤立/违例成段），
+    # 故各级线段数减少、结构更忠实原文。全线段 chaining（end==next.start）不变。
+    assert [len(rl.xds) for rl in res] == [51, 5, 1]
 
     # 每级几何不变量：端点首尾相连、方向交替、区间合理。
     for rl in res:

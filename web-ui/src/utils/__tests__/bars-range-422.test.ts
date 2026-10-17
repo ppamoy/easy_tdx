@@ -12,7 +12,7 @@
 //      `422 List should have at most 2000 items after validation, not 15000`。
 //
 // 用户看到的就是控制台那句 422 + 回测页不出结果。与策略无关（chanlun /
-// chanlun_pair / changying_chanlun / ma_cross 全都复现），只是缠论页默认
+// chanlun / changying_chanlun / ma_cross 全都复现），只是缠论页默认
 // 区间最长（2020 年起），所以用户以为「选缠论才报错」。
 //
 // 本测试用**真实后端契约**（区间请求忽略 start、每页返回同一份数据）做 mock，

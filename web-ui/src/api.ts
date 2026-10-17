@@ -1066,3 +1066,95 @@ export async function fetchCacheDetail(market: string, code: string): Promise<Ca
   if (!resp.ok) await throwError(resp)
   return (await parseJson(resp)) as CacheDetail
 }
+
+// ════════════════════════════════════════════════════════════════════════
+// 实战交易信号（30min 买点入场 / 5min 卖点出场 / 止损止盈）
+// ════════════════════════════════════════════════════════════════════════
+
+export interface TradeSignal {
+  type: string
+  date: string | null
+  price: number | null
+  confirm_date: string | null
+  confirm_price: number | null
+  age_bars: number | null
+  price_deviation_pct: number | null
+  qt_state: string | null
+}
+
+export interface TradeResult {
+  symbol: string
+  current_price: number | null
+  last_date: string | null
+  latest_buy: TradeSignal | null
+  latest_sell_5min: TradeSignal | null
+  action: string
+  action_reason: string
+  stop_loss_price: number | null
+  take_profit_price: number | null
+  stop_loss_pct: number
+  take_profit_pct: number
+  error?: string
+}
+
+export async function chanlunTradeSignals(req: {
+  symbols: { market: string; code: string }[]
+  stop_loss_pct?: number
+  take_profit_pct?: number
+  count?: number
+}): Promise<{ stop_loss_pct: number; take_profit_pct: number; results: TradeResult[] }> {
+  const resp = await fetch(BASE + '/chanlun/trade-signals', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await parseJson(resp)) as { stop_loss_pct: number; take_profit_pct: number; results: TradeResult[] }
+}
+
+// ── 历史回放 ──
+export interface ReplayTrade {
+  buy_type: string
+  buy_date: string
+  buy_price: number
+  exit_date: string
+  exit_price: number
+  exit_reason: string
+  return_pct: number
+  hold_bars: number
+}
+
+export interface ReplaySummary {
+  total: number
+  wins: number
+  losses: number
+  win_rate: number
+  avg_return: number
+  total_return: number
+  max_win: number
+  max_loss: number
+  by_reason: Record<string, { count: number; avg: number }>
+}
+
+export interface ReplayResult {
+  symbol: string
+  trades: ReplayTrade[]
+  summary: ReplaySummary
+  error?: string
+}
+
+export async function chanlunTradeReplay(req: {
+  market: string
+  code: string
+  stop_loss_pct?: number
+  take_profit_pct?: number
+  count?: number
+}): Promise<ReplayResult> {
+  const resp = await fetch(BASE + '/chanlun/trade-replay', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!resp.ok) await throwError(resp)
+  return (await parseJson(resp)) as ReplayResult
+}

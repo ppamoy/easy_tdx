@@ -33,11 +33,11 @@ interface ChanlunMmd {
   quality: { grade: string | null; score: number | null; reasons: string[] | null } | null
 }
 interface ChanlunBc {
-  type: string; bc: string; date: string; msg: string
+  type: 'bi' | 'pz' | 'qs'; bc: boolean; date: string; msg: string
   bar_index: number; anchor_val: number; anchor_bar_index: number
 }
 interface ChanlunFx {
-  fx_type: string; date: string; val: number; bar_index: number
+  fx_type: 'ding' | 'di'; date: string; val: number; bar_index: number
 }
 
 interface PickResult {

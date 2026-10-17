@@ -51,6 +51,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from _chanlun_lib import make_original_strategy, pairs_from_trades  # noqa: E402
 from _concurrency import resolve_workers  # noqa: E402
 # ⚠️ CACHE 必须取自 _ml_precompute60（audit_cache60），不能在这里硬编码成
 #    audit_cache —— 否则次级别数据虽然换成了 60min，**信号仍读 30min 的缓存**，
@@ -58,7 +59,6 @@ from _concurrency import resolve_workers  # noqa: E402
 from _ml_precompute60 import CACHE, load_pair  # noqa: E402
 from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
 from easy_tdx.backtest.strategies.chanlun_ml import ChanlunMLStrategy  # noqa: E402
-from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy  # noqa: E402
 
 D = ROOT / "audit_data"
 SLIP = 0.002
@@ -73,7 +73,7 @@ def _stable_seed(code: str) -> int:
     return int(hashlib.md5(code.encode()).hexdigest()[:8], 16)
 
 # ── 方案矩阵 ────────────────────────────────────────────────────────────
-# (名, ChanlunML 参数)。A0 是同级别对照（走 ChanlunPairStrategy）。
+# (名, ChanlunML 参数)。A0 是同级别对照（走 chanlun 原文口径）。
 ML_PLANS: list[tuple[str, dict]] = [
     # 多级别：本级别买 → 次级别卖
     ("B1 本3买→次1卖", {"entry_types": "3buy", "exit_types": "1sell",
@@ -168,7 +168,7 @@ def _job(code: str) -> dict[str, list]:
 
     # ── 基准 A：同级别配对 ──
     # ⚠️ 两条口径都要跑，否则对照不公平（这是实测发现的坑）：
-    #   ChanlunPairStrategy 默认开 lookahead_guard=True：信号要经 3 根确认期
+    #   chanlun 默认开 lookahead_guard=True：信号要经 3 根确认期
     #   复核、延后到 b+3 才发出（再 next_open 成交 ⇒ 实际 b+4）。
     #   而 chanlun_ml **没有**这套守卫：本级别信号在 bar b 发出、次级别信号
     #   按 30min 时刻消费，都是"下一根日线开盘"成交。
@@ -178,9 +178,9 @@ def _job(code: str) -> dict[str, list]:
     for tag, guard in (("A0 同级别:全买点→全卖点", True),
                       ("A1 同级别同口径(无守卫)", False)):
         try:
-            st = ChanlunPairStrategy(lookahead_guard=guard)
+            st = make_original_strategy(lookahead_guard=guard)
             r = BacktestEngine(st, cash=100000.0, slippage=SLIP).run(d)
-            pl = st.pair_log
+            pl = pairs_from_trades(r)
             out[tag] = [
                 float(r.performance["total_return"]), len(pl),
                 float(np.mean([x["pnl_pct"] for x in pl])) if pl else np.nan,

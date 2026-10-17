@@ -58,8 +58,10 @@ def _expand_ohlc(
 
     # V731：以下两处原本都是**随机**的，实测导致区间套确认结果依赖随机种子
     # （9 个高级别信号中 5 个 = 56% 的 nested 标签随 seed 翻转）。而 nested 是
-    # 布尔，chanlun_pair 在 require_qujiantao=True 时按 `nested is True` 过滤
-    # 交易 ⇒ 随机种子直接决定某笔交易做不做 ⇒ 回测不可复现。故改为确定性。
+    # 布尔，曾经的 chanlun_pair 在 require_qujiantao=True 时按 `nested is True`
+    # 过滤交易 ⇒ 随机种子直接决定某笔交易做不做 ⇒ 回测不可复现。
+    # （chanlun_pair 已废弃删除：区间套喂 level_synth 合成数据，是伪区间套。）
+    # 故改为确定性。
 
     # (1) 先摸高还是先探低：由 OHLC **推断**，不掷硬币。
     #     开盘更靠近高点 → 先延续上冲再回落；更靠近低点 → 先下探再回升。

@@ -97,7 +97,7 @@ BLOCK 级失败会**早停**（后面的检查没必要跑）。
 | `audit_3rd_type_accuracy` | BLOCK | ✅ | 3买/3卖 召回率 **40/40 = 100%**、定位准确率 **100%** |
 | `audit_rolling_oos` | WARN | ✅ | 1buy **6/6 窗为正**（中位 +0.96%）、3sell **0/6 正窗**（中位 -1.29%），与 V733 一致 |
 | `audit_chanlun_vs_local_extreme` | WARN | ✅ | `--limit 3` 可跑：4/4 优于随机、**0/4** 优于局部极值（与全量一致） |
-| `audit_chanlun_pair_winrate` | WARN | ✅ | `--limit 3` 可跑：胜率 50.0%、盈亏比 2.16（与全量 46.4%/1.93 同量级） |
+| `audit_chanlun_pair_winrate` | WARN | ✅ | `--limit 3` 可跑：胜率 50.0%、盈亏比 2.16（与全量 46.4%/1.93 同量级）。⚠️ 该脚本已改用 `ChanlunStrategy(stop_loss_pct=0, take_profit_pct=0)`（`ChanlunPairStrategy` 已废弃删除），脚本名保留仅为兼容健康门禁清单 |
 | `audit_chanlun_excess_by_regime` | WARN | ✅ | 全量已跑：2025 −15.31%(t=−6.17)；熊市 +8.19%(t=+8.60) / 牛市 −9.77%(t=−6.06) |
 
 ⚠️ 后三项 WARN 中，`vs_local_extreme` / `pair_winrate` 的日常门禁跑的是 `--limit 3`

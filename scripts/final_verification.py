@@ -9,6 +9,7 @@
 
 每只股票报告：年化/超额/交易/胜率/回撤/夏普 + 守卫通过率。
 """
+from _chanlun_lib import drop_unknown_params  # noqa: E402
 import json, sys, time
 from pathlib import Path
 import pandas as pd
@@ -33,14 +34,14 @@ def load_daily(mkt, code):
     return df.sort_values("datetime").reset_index(drop=True)
 
 registry = get_registry()
-entry = registry.get("chanlun_pair")
+entry = registry.get("chanlun")
 strat_cls = entry.strategy_cls
 
 def count_signals(df, params):
     """统计守卫前/后的信号数。"""
     # 无守卫 → 候选信号数
     p_no_guard = {**params, "lookahead_guard": False}
-    strat_ng = entry.build(p_no_guard)
+    strat_ng = entry.build(drop_unknown_params(entry, p_no_guard))
     engine_ng = BacktestEngine(strategy=strat_cls, cash=100000, commission=0.0003, stamp_tax=0.001, slippage=0.002)
     engine_ng._strategy_instance = strat_ng
     strat_ng._bind_data(df)
@@ -71,7 +72,7 @@ def run_detailed(label, params):
     for mkt, code, name in STOCKS:
         df = load_daily(mkt, code)
         try:
-            strat = entry.build(params)
+            strat = entry.build(drop_unknown_params(entry, params))
             engine = BacktestEngine(strategy=strat_cls, cash=100000, commission=0.0003, stamp_tax=0.001, slippage=0.002)
             engine._strategy_instance = strat
             result = engine.run(df)
@@ -103,45 +104,33 @@ def run_detailed(label, params):
 t0 = time.time()
 
 # 1. lag=3 基准
-res_a = run_detailed("A. lag=3 基准 (confirm_lag=3)", {
-    "zs_from_xd": False, "use_seg_mmd": False, "lookahead_guard": True,
+res_a = run_detailed("A. lag=3 基准 (confirm_lag=3)", { "lookahead_guard": True,
     "confirm_lag": 3, "min_confidence": 0.0, "use_2s_signals": True,
     "use_3buy": True, "use_3sell": True, "allow_pyramid": False,
-    "exit_stop_loss_pct": 0.0, "exit_trailing_stop_pct": 0.0,
-    "hold_in_higher_uptrend": False,
     "seg_divergence_rate": 1.5, "bs1_peak": False,
     "bsp2_follow_1": False, "bsp3_follow_1": False, "max_bs2_rate": 1.0,
 })
 
 # 2. lag=1 最优
-res_b = run_detailed("B. lag=1 最优 (confirm_lag=1)", {
-    "zs_from_xd": False, "use_seg_mmd": False, "lookahead_guard": True,
+res_b = run_detailed("B. lag=1 最优 (confirm_lag=1)", { "lookahead_guard": True,
     "confirm_lag": 1, "min_confidence": 0.0, "use_2s_signals": True,
     "use_3buy": True, "use_3sell": True, "allow_pyramid": False,
-    "exit_stop_loss_pct": 0.0, "exit_trailing_stop_pct": 0.0,
-    "hold_in_higher_uptrend": False,
     "seg_divergence_rate": 1.5, "bs1_peak": False,
     "bsp2_follow_1": False, "bsp3_follow_1": False, "max_bs2_rate": 1.0,
 })
 
 # 3. 趋势+lag=1
-res_c = run_detailed("C. 趋势+lag=1 (hold_in_higher_uptrend + confirm_lag=1)", {
-    "zs_from_xd": False, "use_seg_mmd": False, "lookahead_guard": True,
+res_c = run_detailed("C. lag=1", { "lookahead_guard": True,
     "confirm_lag": 1, "min_confidence": 0.0, "use_2s_signals": True,
     "use_3buy": True, "use_3sell": True, "allow_pyramid": False,
-    "exit_stop_loss_pct": 0.0, "exit_trailing_stop_pct": 0.0,
-    "hold_in_higher_uptrend": True,
     "seg_divergence_rate": 1.5, "bs1_peak": False,
     "bsp2_follow_1": False, "bsp3_follow_1": False, "max_bs2_rate": 1.0,
 })
 
 # 4. 趋势+lag=1+移动止盈10%
-res_d = run_detailed("D. 趋势+lag=1+移动止盈10%", {
-    "zs_from_xd": False, "use_seg_mmd": False, "lookahead_guard": True,
+res_d = run_detailed("D. 趋势+lag=1+移动止盈10%", { "lookahead_guard": True,
     "confirm_lag": 1, "min_confidence": 0.0, "use_2s_signals": True,
     "use_3buy": True, "use_3sell": True, "allow_pyramid": False,
-    "exit_stop_loss_pct": 0.0, "exit_trailing_stop_pct": 0.10,
-    "hold_in_higher_uptrend": True,
     "seg_divergence_rate": 1.5, "bs1_peak": False,
     "bsp2_follow_1": False, "bsp3_follow_1": False, "max_bs2_rate": 1.0,
 })

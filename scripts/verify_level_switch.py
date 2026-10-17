@@ -132,9 +132,9 @@ def page_backtest(pg) -> bool:
         except Exception:  # noqa: BLE001
             continue
         # 必须选会画缠论结构图的策略（BacktestView 的
-        # CHANLUN_STRUCTURED_STRATEGIES = {chanlun, chanlun_pair}）；
+        # CHANLUN_STRUCTURED_STRATEGIES = {chanlun}；
         # 像 changying_chanlun 虽含 "chanlun" 但不出图，模糊匹配会误选。
-        hit = next((v for v in vals if v in ("chanlun", "chanlun_pair")), None)
+        hit = next((v for v in vals if v == "chanlun"), None)
         if hit:
             s.select_option(hit)
             break

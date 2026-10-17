@@ -47,7 +47,7 @@ POST_BODIES: dict[str, dict] = {
     },
     "/api/v1/bars": {"market": "SZ", "code": "000001", "category": "DAY", "start": 0, "count": 30},
     "/api/v1/backtest/run": {
-        "strategy": "chanlun_pair", "symbol": "SZ:000001", "category": "DAY",
+        "strategy": "chanlun", "symbol": "SZ:000001", "category": "DAY",
         "start_date": "2025-01-01", "end_date": "2025-06-30", "params": {},
     },
 }

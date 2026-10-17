@@ -26,6 +26,7 @@ from easy_tdx.chanlun.types import (
     BI,
     FX,
     MMD,
+    XD,
     ZS,
     BCType,
     CLKline,
@@ -170,14 +171,14 @@ def test_fractal_golden() -> None:
 
 def test_merge_feature_sequence_no_inclusion() -> None:
     features = [(0, _mk_bi(0, "down", 12, 10)), (1, _mk_bi(1, "down", 11, 9))]
-    merged = _merge_feature_sequence(features)
+    merged = _merge_feature_sequence(features, Direction.UP)
     assert len(merged) == 2
 
 
 def test_merge_feature_sequence_inclusion_high_high() -> None:
     # F1 [10,12] 包含 F2 [10.5,11.5] → 向上合并取高高
     features = [(0, _mk_bi(0, "down", 12, 10)), (1, _mk_bi(1, "down", 11.5, 10.5))]
-    merged = _merge_feature_sequence(features)
+    merged = _merge_feature_sequence(features, Direction.UP)
     assert len(merged) == 1
     assert merged[0][1] == 12.0  # 高高
     assert merged[0][2] == 10.5  # 低取较高
@@ -188,11 +189,35 @@ def test_merge_feature_sequence_down_inclusion_low_low() -> None:
     f1 = _mk_bi(0, "down", 14.0, 12.0)
     f2 = _mk_bi(1, "down", 12.0, 10.0)
     f3 = _mk_bi(2, "down", 11.5, 11.0)  # 被 f2 包含
-    merged = _merge_feature_sequence([(0, f1), (1, f2), (2, f3)])
+    merged = _merge_feature_sequence([(0, f1), (1, f2), (2, f3)], Direction.UP)
     assert len(merged) == 2
     # 向下特征序列取低低：high=min(12,11.5)、low=min(10,11)
     assert merged[1][1] == 11.5
     assert merged[1][2] == 10.0
+
+
+def test_merge_feature_sequence_first_merge_seg_dir_down_low_low() -> None:
+    """偏差E（65课L14）：首次合并方向取 seg_dir fallback。
+
+    向下线段（seg_dir=DOWN）首次合并 → direction=down → 取低低。
+    旧硬编码 "up" 会取高高（max high=14.0），属偏离原文的 bug。
+    """
+    f1 = _mk_bi(0, "up", 14.0, 12.0)  # 向下段的特征序列=向上笔
+    f2 = _mk_bi(1, "up", 13.5, 12.5)  # 被 f1 包含
+    merged = _merge_feature_sequence([(0, f1), (1, f2)], Direction.DOWN)
+    assert len(merged) == 1
+    assert merged[0][1] == 13.5  # 低低：min(14.0, 13.5)
+    assert merged[0][2] == 12.0  # 低低：min(12.0, 12.5)
+
+
+def test_merge_feature_sequence_first_merge_seg_dir_up_high_high() -> None:
+    """偏差E 对照组：向上线段（seg_dir=UP）首次合并 → direction=up → 取高高。"""
+    f1 = _mk_bi(0, "down", 14.0, 12.0)  # 向上段的特征序列=向下笔
+    f2 = _mk_bi(1, "down", 13.5, 12.5)  # 被 f1 包含
+    merged = _merge_feature_sequence([(0, f1), (1, f2)], Direction.UP)
+    assert len(merged) == 1
+    assert merged[0][1] == 14.0  # 高高：max(14.0, 13.5)
+    assert merged[0][2] == 12.5  # 高高：max(12.0, 12.5)
 
 
 # ── 特征序列分型金标 ──────────────────────────────────────────────────
@@ -555,21 +580,139 @@ def test_pz_beichi_rejects_opposite_direction() -> None:
 
 
 def test_qs_beichi_exit_stroke_after_zs() -> None:
-    """趋势背驰：离开笔 = 中枢最后一条线之后的那一笔，两段同向且创新低/力度衰减。"""
+    """趋势背驰：离开笔 = 中枢最后一条线之后的那一笔，两段同向且创新低/力度衰减。
+
+    V859：趋势判据改用 GG/DD（20课L25），构造满足「后GG<前DD」（curr.gg=13<prev.dd=16）。
+    """
     bi0 = _mk_bi(0, "up", 22.0, 18.0)
     bi1 = _mk_bi(1, "down", 21.0, 17.0)
     bi2 = _mk_bi(2, "up", 20.0, 16.0)
-    bi3 = _mk_bi(3, "down", 19.0, 15.0)
+    bi3 = _mk_bi(3, "down", 19.0, 18.0)  # low=18 → prev.dd=16
     bi4 = _mk_bi(4, "down", 14.0, 10.0)  # 前中枢离开笔（向下）
-    bi5 = _mk_bi(5, "up", 16.0, 12.0)
-    bi6 = _mk_bi(6, "down", 15.0, 11.0)
-    bi7 = _mk_bi(7, "up", 14.0, 10.0)
-    bi8 = _mk_bi(8, "down", 11.0, 9.0)  # 后中枢离开笔（向下，创新低，力度小）
+    bi5 = _mk_bi(5, "up", 13.0, 9.0)   # high=13 → curr.gg=13
+    bi6 = _mk_bi(6, "down", 12.0, 8.0)
+    bi7 = _mk_bi(7, "up", 11.0, 7.0)
+    bi8 = _mk_bi(8, "down", 8.0, 6.0)  # 后中枢离开笔（向下，创新低6<10，力度衰减振幅2<4*0.8）
     bis = [bi0, bi1, bi2, bi3, bi4, bi5, bi6, bi7, bi8]
-    prev_zs = ZS(lines=[bi1, bi2, bi3], zg=20.0, zd=16.0, gg=21.0, dd=15.0, done=True)
-    curr_zs = ZS(lines=[bi5, bi6, bi7], zg=15.0, zd=11.0, gg=16.0, dd=10.0, done=True)
+    prev_zs = ZS(lines=[bi1, bi2, bi3], zg=20.0, zd=16.0, gg=21.0, dd=16.0, done=True)
+    curr_zs = ZS(lines=[bi5, bi6, bi7], zg=13.0, zd=7.0, gg=13.0, dd=7.0, done=True)
     bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None)
     assert any(bc.bc_type == BCType.QS for bc in bcs)
+
+
+def _mk_trend_beichi_bis_zss():
+    """趋势背驰构造（向下趋势，创新低，力度衰减）。
+
+    V859：趋势判据改用 GG/DD（20课L25），构造满足「后GG<前DD」（curr.gg=13<prev.dd=16）。
+    """
+    bis = [
+        _mk_bi(0, "up", 22.0, 18.0),
+        _mk_bi(1, "down", 21.0, 17.0),
+        _mk_bi(2, "up", 20.0, 16.0),
+        _mk_bi(3, "down", 19.0, 18.0),  # low=18 → prev.dd=16
+        _mk_bi(4, "down", 14.0, 10.0),  # 前中枢离开笔（向下）
+        _mk_bi(5, "up", 13.0, 9.0),   # high=13 → curr.gg=13
+        _mk_bi(6, "down", 12.0, 8.0),
+        _mk_bi(7, "up", 11.0, 7.0),
+        _mk_bi(8, "down", 8.0, 6.0),  # 后中枢离开笔（向下，创新低6<10，力度衰减振幅2<4*0.8）
+    ]
+    prev_zs = ZS(lines=[bis[1], bis[2], bis[3]], zg=20.0, zd=16.0, gg=21.0, dd=16.0, done=True)
+    curr_zs = ZS(lines=[bis[5], bis[6], bis[7]], zg=13.0, zd=7.0, gg=13.0, dd=7.0, done=True)
+    return bis, prev_zs, curr_zs
+
+
+def test_qs_skip_when_level_mismatch_37ke() -> None:
+    """37课L8：A、B 不同级别 → 非趋势非背驰（只是较大中枢的震荡）。
+
+    同一趋势背驰构造，仅把 curr_zs.level 改为 2（不同级别）。
+    原文：「如果 A 的级别比 B 大，就有 a+A+b+B+c = a+A+(b+B+c)」→ 非趋势。
+    """
+    bis, prev_zs, curr_zs = _mk_trend_beichi_bis_zss()
+    curr_zs.level = 2  # 不同级别
+    bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None)
+    assert not any(bc.bc_type == BCType.QS for bc in bcs), (
+        "37课L8：A、B 不同级别不应产出趋势背驰（只是较大中枢震荡）"
+    )
+
+
+def test_qs_pass_when_level_match_37ke() -> None:
+    """对照（§4）：A、B 同级别（默认 level=1）+ 满足条件 → 趋势背驰成立。"""
+    bis, prev_zs, curr_zs = _mk_trend_beichi_bis_zss()
+    # level 相同（默认 1）
+    bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None)
+    assert any(bc.bc_type == BCType.QS for bc in bcs), (
+        "对照：A、B 同级别应产出趋势背驰"
+    )
+
+
+def test_qs_skip_when_c_has_no_third_37ke() -> None:
+    """37课L10：c 不含 B 的第三类买卖点 → 非趋势背驰（只是 B 中枢小级别波动）。
+
+    原文：「c 必然是次级别的，也就是说，c 至少包含对 B 的一个第三类买卖点，
+    否则就可以看成是 B 中枢的小级别波动，完全可以用盘整背驰来处理」。
+    """
+    from easy_tdx.chanlun.types import MMD, MMDType
+
+    bis, prev_zs, curr_zs = _mk_trend_beichi_bis_zss()
+    # mmds 非 None 但无 3买/3卖匹配 curr_zs（只有 1买）
+    mmds_no_third = [MMD(mmd_type=MMDType.BUY_1, zs=curr_zs, bi=bis[0], msg="")]
+    bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None, mmds=mmds_no_third)
+    assert not any(bc.bc_type == BCType.QS for bc in bcs), (
+        "37课L10：c 不含 B 的3买/3卖不应产出趋势背驰"
+    )
+
+
+def test_qs_pass_when_c_has_third_37ke() -> None:
+    """对照（§4）：c 含 B 的第三类买卖点 → 趋势背驰成立。"""
+    from easy_tdx.chanlun.types import MMD, MMDType
+
+    bis, prev_zs, curr_zs = _mk_trend_beichi_bis_zss()
+    # 向下趋势 → B 的 3卖（zs is curr_zs）
+    mmds_has_third = [MMD(mmd_type=MMDType.SELL_3, zs=curr_zs, bi=bis[8], msg="")]
+    bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None, mmds=mmds_has_third)
+    assert any(bc.bc_type == BCType.QS for bc in bcs), (
+        "对照：c 含 B 的3买/3卖应产出趋势背驰"
+    )
+
+
+def test_qs_pass_when_mmds_none_83ke_approx() -> None:
+    """默认 process_klines（mmds=None）→ 83课近似，c=日线笔，不检查3买/3卖。
+
+    83课原文：「我们是可以设计这样的程序，也就是用笔当成构成最小中枢的零件」
+    —— 笔构中枢原文允许（稳定性差但逻辑可能）。默认无 lower_xds，c=日线笔。
+    """
+    bis, prev_zs, curr_zs = _mk_trend_beichi_bis_zss()
+    bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None, mmds=None)
+    assert any(bc.bc_type == BCType.QS for bc in bcs), (
+        "83课近似：mmds=None 应产出趋势背驰"
+    )
+
+
+def test_qs_skip_when_zgzd_trend_but_ggdd_overlap_20ke() -> None:
+    """20课L25：ZG/ZD 不重叠但 GG/DD 重叠 → 形成高级别中枢（非趋势非背驰）。
+
+    原文中心定理二：「后ZG<前ZD 且 后GG>=前DD → 形成高级别走势中枢」。
+    旧 ZG/ZD 判据误判为趋势；GG/DD 判据正确判为非趋势（高级别中枢）。
+    本构造：prev(zg=20,zd=16,gg=21,dd=15) + curr(zg=15,zd=11,gg=16,dd=10)
+    → ZG/ZD 向下排列（旧判据趋势），但 curr.gg=16 >= prev.dd=15（GG/DD 重叠）。
+    """
+    bis = [
+        _mk_bi(0, "up", 22.0, 18.0),
+        _mk_bi(1, "down", 21.0, 17.0),
+        _mk_bi(2, "up", 20.0, 16.0),
+        _mk_bi(3, "down", 19.0, 15.0),  # low=15 → prev.dd=15
+        _mk_bi(4, "down", 14.0, 10.0),  # prev离开（向下）
+        _mk_bi(5, "up", 16.0, 12.0),    # high=16 → curr.gg=16
+        _mk_bi(6, "down", 15.0, 11.0),
+        _mk_bi(7, "up", 14.0, 10.0),
+        _mk_bi(8, "down", 8.0, 6.0),    # curr离开（创新低6<10，力度衰减2<4*0.8）
+    ]
+    prev_zs = ZS(lines=[bis[1], bis[2], bis[3]], zg=20.0, zd=16.0, gg=21.0, dd=15.0, done=True)
+    curr_zs = ZS(lines=[bis[5], bis[6], bis[7]], zg=15.0, zd=11.0, gg=16.0, dd=10.0, done=True)
+    bcs = check_bi_beichi(bis, [prev_zs, curr_zs], closes=None)
+    assert not any(bc.bc_type == BCType.QS for bc in bcs), (
+        "20课L25：ZG/ZD不重叠但GG/DD重叠 → 高级别中枢，非趋势背驰"
+    )
 
 
 def test_find_zss_records_enter_exit_bi() -> None:
@@ -801,8 +944,9 @@ def test_zs_zg_zd_frozen_first_two_no_enter_offset() -> None:
     zs = zss[0]
     assert zs.zg == 9.5  # min(10, 15, 9.5)
     assert zs.zd == 8.5  # max(8, 7, 8.5)
-    assert zs.gg == 15.0  # 全区间最高
-    assert zs.dd == 7.0  # 全区间最低
+    assert zs.gg == 10.0  # 20课L22: 同向段(A,C) max(gn)=max(10,9.5)
+    assert zs.dd == 8.0  # 20课L22: 同向段(A,C) min(dn)=min(8,8.5)
+    assert zs.direction == "up"  # 30课L142: 中枢方向=首笔方向
     assert zs.line_count == 4
 
 
@@ -872,7 +1016,7 @@ def test_qs_beichi_anchored_to_exit_segment() -> None:
     ]
     zss = [
         _mk_zs_raw([bis[1], bis[2], bis[3]], 15.0, 11.0, 15.0, 11.0),
-        _mk_zs_raw([bis[5], bis[6], bis[7]], 11.0, 7.0, 11.0, 7.0, index=1),
+        _mk_zs_raw([bis[5], bis[6], bis[7]], 11.0, 7.0, 10.0, 7.0, index=1),
     ]
     bcs = check_bi_beichi(bis, zss, closes=None)
     qs = [bc for bc in bcs if bc.bc_type == BCType.QS]
@@ -1315,3 +1459,94 @@ def test_execution_window_anchored_to_signal() -> None:
     assert r_calm["volatility_score"] != r_wild["volatility_score"], (
         "平静段与剧烈段的执行窗口评分必须不同（修复前共享末尾结论）"
     )
+
+
+# ---------------------------------------------------------------------------
+# 偏差L（37课L10）：c=次级别走势（线段），cross_timeframe 离开段用 XD
+# ---------------------------------------------------------------------------
+
+
+def _mk_xd(index, direction, high, low, start_val=0.0, end_val=0.0):
+    """构造次级别线段（XD），与 _mk_bi 同构。"""
+    start_fx = FX(
+        fx_type=FXType.DI if direction == "up" else FXType.DING,
+        k=type("CLK", (), {"k_index": index * 10, "index": index, "date": datetime.now()})(),
+        klines=[],
+        val=start_val,
+        index=index,
+        done=True,
+    )
+    end_fx = FX(
+        fx_type=FXType.DING if direction == "up" else FXType.DI,
+        k=type("CLK", (), {"k_index": index * 10 + 5, "index": index, "date": datetime.now()})(),
+        klines=[],
+        val=end_val,
+        index=index,
+        done=True,
+    )
+    return XD(
+        start=start_fx,
+        end=end_fx,
+        direction=Direction.UP if direction == "up" else Direction.DOWN,
+        index=index,
+        high=high,
+        low=low,
+    )
+
+
+def _mk_zs_raw_xd(xds, zg, zd, gg, dd, index=0, done=True):
+    """次级别线段中枢（lines=lower_xds 的子集，元素同一对象）。"""
+    return ZS(lines=list(xds), zg=zg, zd=zd, gg=gg, dd=dd, direction="", index=index, done=done)
+
+
+def test_find_leaving_xd_returns_breakout() -> None:
+    """37课L10：_find_leaving_xd 返回中枢后破边沿的同向次级别线段。"""
+    from easy_tdx.chanlun.mmd_conditions import _find_leaving_xd
+
+    xd0 = _mk_xd(0, "down", 8, 5)
+    xd1 = _mk_xd(1, "up", 9, 6)
+    xd2 = _mk_xd(2, "down", 7, 5)
+    lower_xds = [xd0, xd1, xd2, _mk_xd(3, "up", 8, 6), _mk_xd(4, "down", 6, 4)]
+    zs = _mk_zs_raw_xd([xd0, xd1, xd2], 8.5, 6, 9, 5)
+    leaving = _find_leaving_xd(lower_xds, zs, "down")
+    assert leaving is not None, "应找到离开段"
+    assert leaving.index == 4, "XD4 破 zd=6（low=4）"
+    assert leaving.low < zs.zd, "离开段须破中枢下沿"
+
+
+def test_qs_uses_xd_when_lower_xds_37ke_L10() -> None:
+    """37课L10：cross_timeframe（lower_xds 非空）c=次级别线段，BC.curr 是 XD。
+
+    构造下跌趋势：prev 中枢（gg=21/dd=16）→ curr 中枢（gg=13/dd=10），
+    curr.gg(13) < prev.dd(16) 满足 20课L25 趋势判据；
+    c 段（XD7）振幅 2 < a 段（XD3）振幅 4，力度衰减。
+    """
+    xd0 = _mk_xd(0, "down", 21, 18)
+    xd1 = _mk_xd(1, "up", 20, 19)
+    xd2 = _mk_xd(2, "down", 19, 16)
+    xd3 = _mk_xd(3, "down", 16, 12)  # 离开 prev（down，破 zd=18），振幅 4
+    xd4 = _mk_xd(4, "up", 15, 13)
+    xd5 = _mk_xd(5, "down", 13, 10)
+    xd6 = _mk_xd(6, "up", 11, 10)
+    xd7 = _mk_xd(7, "down", 9, 7)  # 离开 curr（down，破 zd=11），振幅 2 < 3.2
+    lower_xds = [xd0, xd1, xd2, xd3, xd4, xd5, xd6, xd7]
+    prev_zs = _mk_zs_raw_xd([xd0, xd1, xd2], 19.5, 18, 21, 16, index=0)
+    curr_zs = _mk_zs_raw_xd([xd4, xd5, xd6], 11.5, 11, 13, 10, index=1)
+    cross_zss = [prev_zs, curr_zs]
+    bis = [_mk_bi(i, "down", 20 - i, 18 - i) for i in range(8)]
+    bcs = check_bi_beichi(
+        bis, cross_zss, closes=None, config=ChanlunConfig(), mmds=None, lower_xds=lower_xds
+    )
+    qs_bcs = [b for b in bcs if b.bc_type == BCType.QS and b.bc]
+    assert qs_bcs, "37课L10：lower_xds 非空时 c=次级别线段，应检出趋势背驰"
+    assert isinstance(qs_bcs[0].curr, XD), "c 段应是次级别线段（XD），非日线笔（BI）"
+
+
+def test_qs_uses_bi_when_no_lower_xds_83ke() -> None:
+    """83课近似：默认（lower_xds=None）c=日线笔，BC.curr 是 BI。对照组。"""
+    from easy_tdx.chanlun.beichi import _check_qs_beichi
+
+    bis, prev_zs, curr_zs = _mk_trend_beichi_bis_zss()
+    bcs = _check_qs_beichi(bis, [prev_zs, curr_zs], closes=None, mmds=None, lower_xds=None)
+    assert bcs, "83课近似：lower_xds=None 时 c=日线笔，应检出趋势背驰"
+    assert isinstance(bcs[0].curr, BI), "c 段应是日线笔（BI），非次级别线段"

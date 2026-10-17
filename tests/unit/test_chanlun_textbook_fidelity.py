@@ -311,18 +311,48 @@ def test_2buy_shallow_pullback_after_1buy():
     )
 
 
-def test_2buy_suppressed_on_deep_pullback():
-    """2买（深回调，负向）：回撤过深（回到 1买 附近）⇒ 不得标 2买。
+def test_2buy_allowed_on_deep_pullback_lesson101():
+    """2买（深回调 / 跌破 1买）：第101课原文口径下**应**标 2买。
 
-    **这条就是 V731 那个「系统性做多偏误」bug 的回归锁。**
-    旧实现买侧 50% 门槛是死代码，回撤 99% 照样标 2buy；
-    实测：回调到 ≤10（1买 在 8.65，回撤 >50%）时不应有任何 2买族信号。
-    若本例失败而上一例通过，说明买侧门槛又变回死代码了。
+    第101课答疑1（逐字）：「最弱的情况：**第二类买点跌破第一类买点**，也就是
+    第二类买点比第一类买点低，**这是完全可以的**」；第17课「第一类买点出现后
+    **第一次次级别回调**制造的低点……第二类买点」（无任何回撤深度门槛）。
+
+    ⇒ 默认 `mmd_2nd_max_pullback=None`（纯原文口径）时：
+       - 深回调（回到 1买 附近，9.5 > 1买 8.65）⇒ 2买 **应出现**（第一个回调低点即 2买）；
+       - 跌破 1买（8.3 < 1买 8.65，第101课「最弱情况」）⇒ 2买 **也应出现**。
+
+    ⚠️ 本测试取代旧 `test_2buy_suppressed_on_deep_pullback`。那条锁的是 V731
+    「系统性做多偏误」的 50% 回撤门槛——但该门槛在数学上封死了第101课「最弱情况」
+    （行为级实测 scripts/audit_chanlun_fidelity_current.py V3：0.5 时 0/10 低于 1买，
+    None 时 11/26）。原文是判据，回测偏误是结果，不能反过来否决原文（V735 §5）。
+    50% 门槛保留为**可配工程口径**，下面同步锁其旧行为（两侧对照，AGENTS.md §4）。
     """
+    # —— 原文口径（默认 mmd_2nd_max_pullback=None）——
+    # 深回调（9.5，回到 1买 附近但未破）⇒ 2买 应出现
     res = _run(_build(_1BUY_BASE + [9.5], _1BUY_NS + [4]))
     types = _types(res)
     assert "1buy" in types, f"前置条件不成立：无 1buy，{types}"
-    assert not (types & {"2buy", "2buy_s"}), (
-        f"回撤过深（回到 1买 附近）不应标 2买族 —— "
-        f"这会让回测产生系统性做多偏误。实际信号={types}"
+    assert "2buy" in types, (
+        f"第17/101课原文口径：第一次回调低点即 2买，无深度门槛。深回调（9.5）应出 2buy。"
+        f"实际信号={types}"
+    )
+
+    # 第101课「最弱情况」：2买 跌破 1买（8.3 < 1买 8.65）⇒ 2买 仍应出现
+    res_below = _run(_build(_1BUY_BASE + [8.3], _1BUY_NS + [4]))
+    types_below = _types(res_below)
+    assert "1buy" in types_below, f"前置条件不成立：无 1buy，{types_below}"
+    assert "2buy" in types_below, (
+        f"第101课「最弱情况：第二类买点跌破第一类买点……这是完全可以的」。"
+        f"2买跌破 1买（8.3 < 8.65）仍应出 2buy。实际信号={types_below}"
+    )
+
+    # —— 工程口径（mmd_2nd_max_pullback=0.5，旧默认行为）两侧对照 ——
+    # 同一深回调（9.5）在 50% 门槛下 ⇒ 不出 2买（旧行为保留，可显式开启）
+    res_eng = _run(_build(_1BUY_BASE + [9.5], _1BUY_NS + [4]), mmd_2nd_max_pullback=0.5)
+    types_eng = _types(res_eng)
+    assert "1buy" in types_eng, f"前置条件不成立：无 1buy，{types_eng}"
+    assert not (types_eng & {"2buy", "2buy_s"}), (
+        f"工程口径 mmd_2nd_max_pullback=0.5：深回调（>50%）应抑制 2买族（旧行为）。"
+        f"实际信号={types_eng}"
     )

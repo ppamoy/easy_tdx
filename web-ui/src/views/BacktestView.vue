@@ -441,9 +441,12 @@ function fullSymbol(code6: string): string {
 }
 
 // 判断是否为缠论策略。
-// chanlun_pair（缠论买卖点配对）同样跑缠论分析、画缠论结构图，
-// 必须与 chanlun 同等待遇；changying_chanlun 不做结构图（历史约定）。
-const CHANLUN_STRUCTURED_STRATEGIES = new Set(['chanlun', 'chanlun_pair'])
+// chanlun（缠论买卖点）跑缠论分析、画缠论结构图；
+// changying_chanlun 不做结构图（历史约定）。
+// 历史：曾有 chanlun_pair（缠论买卖点配对）也在此集合中，已废弃删除 ——
+// 它的区间套过滤用 level_synth 合成数据，是伪区间套不符合原文，
+// 真区间套将放前端页面用真实双周期数据实现。
+const CHANLUN_STRUCTURED_STRATEGIES = new Set(['chanlun'])
 const isChanlunStrategy = computed(
   () => strategy.value === 'chanlun' || strategy.value === 'changying_chanlun',
 )
@@ -454,7 +457,7 @@ const drawsChanlunChart = computed(() => CHANLUN_STRUCTURED_STRATEGIES.has(strat
 // 缠论图表必须与后端分析窗口对齐：分析接口最多取最近 CHANLUN_MAX_COUNT 根，
 // 若把全部回测 K 线（可能远超 800 根）传给图表，叠加层（笔/线段/中枢/分型/
 // 买卖点/背驰）会全部挤在右侧少数 K 线上，左侧一片空白，视觉上乱七八糟。
-// 仅对真正运行缠论分析并填充结构数据的策略（chanlun / chanlun_pair）截断窗口；
+// 仅对真正运行缠论分析并填充结构数据的策略（chanlun）截断窗口；
 // changying_chanlun 不做缠论结构图（不调 runChanlunAnalysis），
 // 保持全量 K 线由 KlineChart 展示，避免丢失回测区间。
 // V722: 后端 /chanlun/analyze count 上限已放宽到 8000（fetch_paged_bars 分页），

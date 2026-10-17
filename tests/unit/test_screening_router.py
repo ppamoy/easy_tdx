@@ -14,6 +14,15 @@ from fastapi.testclient import TestClient
 # ── 测试夹具 ───────────────────────────────────────────────────────────────────
 
 
+@pytest.fixture(autouse=True)
+def _isolate_kline_cache(monkeypatch):
+    """隔离本地 K 线缓存：本机真实跑过 SZ000001 日线缓存 3000 行，
+    fetch_qfq_klines 会先 read_klines 命中并直接返回缓存，mock_client
+    失效（数据不足等分支测不到）。"""
+    monkeypatch.setattr("easy_tdx.web.kline_cache.read_klines", lambda *a, **kw: None)
+    monkeypatch.setattr("easy_tdx.web.kline_cache.save_klines", lambda *a, **kw: None)
+
+
 def _make_sample_df(n: int = 300) -> pd.DataFrame:
     """生成带趋势的合成 OHLCV DataFrame。"""
     import numpy as np

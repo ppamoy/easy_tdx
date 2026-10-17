@@ -8,6 +8,7 @@
 两组都开启前视守卫，10只股票，日线，~6年。
 """
 
+from _chanlun_lib import drop_unknown_params  # noqa: E402
 import json
 import sys
 import time
@@ -51,7 +52,7 @@ def load_daily(mkt, code):
 def run_backtest(use_seg_mmd, label):
     """跑一组回测。"""
     registry = get_registry()
-    entry = registry.get("chanlun_pair")
+    entry = registry.get("chanlun")
     strat_cls = entry.strategy_cls
 
     results = []
@@ -76,7 +77,6 @@ def run_backtest(use_seg_mmd, label):
             "use_3buy": True,
             "use_3sell": True,
             "allow_pyramid": False,
-            "exit_stop_loss_pct": 0.0,
             "seg_divergence_rate": 1.5,
             "bs1_peak": False,
             "bsp2_follow_1": False,
@@ -95,7 +95,7 @@ def run_backtest(use_seg_mmd, label):
             # 注入策略参数：engine 内部创建策略实例时使用
             # 但 engine 用 strategy class 初始化，参数在 _call_init 里从 self.p 取
             # 需要先创建实例
-            strat = entry.build(params)
+            strat = entry.build(drop_unknown_params(entry, params))
             engine._strategy_instance = strat
             result = engine.run(df)
 

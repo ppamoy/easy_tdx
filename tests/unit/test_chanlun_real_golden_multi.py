@@ -43,8 +43,8 @@ FIXTURE_DIR = Path(__file__).parent.parent / "fixtures"
 CASES = [
     ("chanlun_600519_daily.json", "daily", (9, 1, 1, 0, 1)),
     ("chanlun_000333_daily.json", "daily", (10, 2, 2, 1, 1)),
-    ("chanlun_000001_weekly.json", "weekly", (12, 2, 2, 3, 1)),
-    ("chanlun_000001_30min.json", "30min", (8, 2, 2, 1, 1)),
+    ("chanlun_000001_weekly.json", "weekly", (12, 1, 2, 3, 1)),
+    ("chanlun_000001_30min.json", "30min", (8, 1, 2, 1, 1)),
 ]
 
 
@@ -111,8 +111,15 @@ def test_zs_semantics(case) -> None:
                 f"zd 应为 A、C 两段 max(low)（原文第20课）{zs}"
             )
         if zs.lines:
-            assert zs.gg == max(line.high for line in zs.lines)
-            assert zs.dd == min(line.low for line in zs.lines)
+            # 20课L22：GG/DD 只遍历与中枢方向一致的 Z走势段(同向段)，反向段不参与。
+            same_dir = [ln for ln in zs.lines if ln.direction.value == zs.direction]
+            assert same_dir, f"应有同向段(Zn) {zs}"
+            assert zs.gg == max(ln.high for ln in same_dir), (
+                f"gg 应为同向段 max(gn)（20课L22 遍历Zn）{zs}"
+            )
+            assert zs.dd == min(ln.low for ln in same_dir), (
+                f"dd 应为同向段 min(dn)（20课L22 遍历Zn）{zs}"
+            )
 
 
 def test_beichi_force_ratio_and_anchor(case) -> None:

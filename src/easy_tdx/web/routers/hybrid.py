@@ -187,6 +187,7 @@ async def hybrid_analyze(
                 zss_low=getattr(result, "zss", None),
                 bcs_low=getattr(result, "bcs", None),
                 mmds_low=getattr(result, "mmds", None),
+                synthetic=False,  # 真实次级别行情 → 原文意义真区间套
             )
             qt_confirmed = sum(1 for q in qujiantao_results if q and q.get("nested"))
             logger.info("区间套确认 %s: %d/%d 日线信号被30分钟确认",

@@ -62,9 +62,10 @@ levels/macd/zsds/qsds）；screening 首选 `/bars`+`reanalyseWindow` 同上；v
 在 36 根 K 线左右，只有 2 根笔，切到 xd 笔数不会变 —— 这是页面定位使然、不是缺陷，
 故默认排除（`--page train` 可显式调用）。同理，数据不足时脚本报「跳过」而非「通过」。
 
-另一处坑：回测页只有 `chanlun` / `chanlun_pair` 两个策略会画缠论结构图
+另一处坑：回测页只有 `chanlun` 一个策略会画缠论结构图
 （`CHANLUN_STRUCTURED_STRATEGIES`），`changying_chanlun` 名字里也有 "chanlun"
-但**不出图**——模糊匹配会误选。
+但**不出图**——模糊匹配会误选。（第三个缠论策略 `chanlun_pair` 已废弃删除：
+它的区间套过滤用 level_synth 合成数据，是伪区间套不符合原文。）
 
 ## 前置条件
 

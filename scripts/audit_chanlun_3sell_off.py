@@ -2,7 +2,8 @@
 """检验假设：**3卖（3sell）是拖垮胜率的那类信号**。
 
 ## 假设来源
-`audit_chanlun_pair_winrate.py` 全量 2802 笔配对按卖点类型拆开：
+`audit_chanlun_pair_winrate.py` 全量 2802 笔配对按卖点类型拆开
+（该脚本现走 chanlun 原文口径，配对由 trades 重组）：
 
 | 卖点  | 笔数 | 胜率  | 平均收益 |
 |-------|------|-------|----------|
@@ -10,8 +11,13 @@
 | 2sell |  149 | 14.1% | -5.55%   |
 | **3sell** | **1639** | **26.8%** | **-5.14%** |
 
-3卖 占了 58% 的平仓笔数，却是**负收益**。而 pair 策略是多头只读，
+3卖 占了 58% 的平仓笔数，却是**负收益**。而原口径策略是多头只读，
 3卖 出场 = 在下跌趋势中割肉。这提示：**大部分仓位被最差的那类信号平掉了**。
+
+## ⚠️ 历史变更
+原先用 ``ChanlunPairStrategy``（自带 ``pair_log``）；该策略已废弃删除
+（区间套用 level_synth 合成数据，是伪区间套），现改用
+``_chanlun_lib.make_original_strategy`` + ``pairs_from_trades``。
 
 ## 本脚本验证
 对同一批标的，跑三个口径对比：
@@ -45,9 +51,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from _chanlun_lib import make_original_strategy, pairs_from_trades  # noqa: E402
 from _concurrency import resolve_workers  # noqa: E402
 from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
-from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy  # noqa: E402
 
 DATA_DIR = ROOT / "audit_data"
 
@@ -70,7 +76,7 @@ def _job(code: str) -> tuple[str, dict, float]:
     for lab, kw in VARIANTS:
         try:
             r = BacktestEngine(
-                ChanlunPairStrategy(**kw), cash=100000.0, slippage=_SLIP
+                make_original_strategy(**kw), cash=100000.0, slippage=_SLIP
             ).run(df)
             pf = r.performance
             out[lab] = (float(pf["total_return"]),

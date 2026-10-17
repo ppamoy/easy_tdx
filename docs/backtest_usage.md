@@ -296,7 +296,9 @@ engine = BacktestEngine(MyStrategy, commission=0.00025, min_commission=5.0, stam
 缠论原文语义的区间套 = 「高级别信号笔，在低周期（如 30 分钟）上也有同向
 背驰/买卖点确认」。本项目的统一实现在 `chanlun/qujiantao.py`：
 
-- **回测过滤**：`chanlun_pair` 策略参数 `require_qujiantao=True` 只交易
+- ~~**回测过滤**：`chanlun_pair` 策略参数 `require_qujiantao=True` 只交易~~
+  （**已废弃**：`chanlun_pair` 已整体删除——其区间套用 `level_synth` 合成数据，
+  是伪区间套。真区间套将放前端页面用真实双周期数据实现。）
   nested 确认的信号；`qujiantao_strict=True` 时连「算不出」的也过滤
   （默认宽松放行，避免低级别数据失败导致 0 交易假象）。
 - **回测里的低级别数据是合成的**（`level_synth.py` 由日线 bar 展开 30 分钟

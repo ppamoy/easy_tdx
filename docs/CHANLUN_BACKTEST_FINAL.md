@@ -96,7 +96,8 @@ min_confidence: 0.0         # 不过滤置信度
   - 修复T3方向bug（下跌线段→T3buy, 上涨线段→T3sell）
 - `src/easy_tdx/chanlun/config.py` — 新增配置字段
 - `src/easy_tdx/chanlun/analyser.py` — 集成seg_mmd + 混合模式
-- `src/easy_tdx/backtest/strategies/chanlun_pair.py` — 新增参数 + 移动止盈
+- ~~`src/easy_tdx/backtest/strategies/chanlun_pair.py` — 新增参数 + 移动止盈~~
+  （**已废弃**：该策略文件已删除，见文末「chanlun_pair 移除说明」）
 
 ## 已验证 vs 待验证
 - ✅ 10只股票×6年日线回测
@@ -120,4 +121,4 @@ min_confidence: 0.0         # 不过滤置信度
 - **趋势方向**：`hold_in_higher_uptrend` 使用线段方向判断趋势，线段终点需后续K线确认，
   有轻微前视。但仅用作"持有 vs 卖出"的粗粒度过滤（2卖/3卖时是否持有），
   不影响入场信号、不影响1卖（趋势反转）的无条件离场。
-  代码中已标注此限制（chanlun_pair.py:386-387）。
+  代码中已标注此限制（~~chanlun_pair.py:386-387~~ 该文件已删除）。

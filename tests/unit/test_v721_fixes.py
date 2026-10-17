@@ -252,6 +252,14 @@ def _bars_df() -> pd.DataFrame:
 
 
 class TestD15FetchQfqKlinesFallback:
+    @pytest.fixture(autouse=True)
+    def _isolate_kline_cache(self, monkeypatch):
+        """隔离本地 K 线缓存：本机真实跑过 SZ000001 日线缓存 3000 行，
+        fetch_qfq_klines 会先 read_klines 命中并直接返回缓存，mock 的
+        mac/tdx 永不触发（V721 回退逻辑测不到）。"""
+        monkeypatch.setattr("easy_tdx.web.kline_cache.read_klines", lambda *a, **kw: None)
+        monkeypatch.setattr("easy_tdx.web.kline_cache.save_klines", lambda *a, **kw: None)
+
     @pytest.mark.asyncio
     async def test_mac_exception_falls_back_to_tdx(self) -> None:
         """MAC 客户端抛异常 → 回退 TDX 数据，不向上抛。"""

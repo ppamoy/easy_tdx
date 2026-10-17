@@ -14,7 +14,7 @@
 
 用法：
     python3 scripts/verify_ui.py                 # 全部用例
-    python3 scripts/verify_ui.py --case chanlun_pair
+    python3 scripts/verify_ui.py --case chanlun
     python3 scripts/verify_ui.py --no-vision     # 跳过视觉检查（只用请求级断言）
 
 依赖：playwright（系统 chromium 即可，不需下载浏览器）
@@ -42,7 +42,6 @@ SECTION = "K线 + 买卖点"
 # 期望：缠论结构图（笔/线段/中枢/买卖点叠加）
 CHANLUN_CHART_CASES = {
     "chanlun": {"expect_analyze": True, "expect_overlay": True},
-    "chanlun_pair": {"expect_analyze": True, "expect_overlay": True},
 }
 # 期望：普通 K 线图（不应有缠论叠加）
 PLAIN_CASES = {
@@ -65,7 +64,7 @@ def _run_backtest(pg, strategy: str) -> None:
         pg.wait_for_timeout(1000)
     sel.select_option(strategy)
     pg.locator("button", has_text="开始回测").first.click()
-    # 缠论分析是在回测跑完后才触发的（实测 chanlun_pair 约 20s 后才发请求），
+    # 缠论分析是在回测跑完后才触发的（实测 chanlun 约 20s 后才发请求），
     # 所以必须等到 analyze 请求真的出现，而不是死等固定时长。
     try:
         pg.wait_for_selector(".report-section", timeout=120000)

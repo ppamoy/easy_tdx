@@ -677,7 +677,7 @@ class TestTimeWindowSamplingOutOfSample:
         spec.loader.exec_module(mod)
 
         f = next(
-            p for p in sorted((root / "audit_data").glob("*.json")) if "sh000300" not in p.name
+            p for p in sorted((root / "audit_data").glob("*_daily.json")) if "sh000300" not in p.name
         )
         front = mod.one_symbol(str(f), zs_pos="inside", has_bc="false", t_hi=750, max_pts=6)
         back = mod.one_symbol(str(f), zs_pos="inside", has_bc="false", t_lo=751, max_pts=6)

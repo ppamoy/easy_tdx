@@ -38,7 +38,7 @@ def _sample_markers(pg, scheme: str) -> dict:
     pg.reload(wait_until="domcontentloaded", timeout=45000)
     pg.wait_for_timeout(3000)
     pg.locator('input[placeholder="6位代码（市场自动识别）"]').first.fill(CODE)
-    pg.locator("select").nth(1).select_option("chanlun_pair")
+    pg.locator("select").nth(1).select_option("chanlun")
     pg.locator("button", has_text="开始回测").first.click()
     try:
         pg.wait_for_selector(".chanlun-chart canvas", timeout=90000)

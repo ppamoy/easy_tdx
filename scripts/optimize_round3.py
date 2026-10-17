@@ -14,6 +14,7 @@ import pandas as pd
 sys.path.insert(0, "src")
 from easy_tdx.backtest.engine import BacktestEngine
 from easy_tdx.backtest.strategies.registry import get_registry
+from _chanlun_lib import drop_unknown_params  # noqa: E402
 
 CACHE_D = Path("audit_data")
 STOCKS = [
@@ -32,21 +33,21 @@ def load_daily(mkt, code):
     return df.sort_values("datetime").reset_index(drop=True)
 
 registry = get_registry()
-entry = registry.get("chanlun_pair")
+entry = registry.get("chanlun")
 strat_cls = entry.strategy_cls
 
 # 最优组合探索
 configs = [
     # 已知最优点
-    ("lag=1(基准)", {"confirm_lag": 1, "hold_in_higher_uptrend": False, "exit_trailing_stop_pct": 0.0}),
-    ("趋势+lag=1", {"confirm_lag": 1, "hold_in_higher_uptrend": True, "exit_trailing_stop_pct": 0.0}),
+    ("lag=1(基准)", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.0}),
+    ("趋势+lag=1", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.0}),
     # 移动止盈
-    ("lag=1+移动止盈5%", {"confirm_lag": 1, "hold_in_higher_uptrend": False, "exit_trailing_stop_pct": 0.05}),
-    ("lag=1+移动止盈10%", {"confirm_lag": 1, "hold_in_higher_uptrend": False, "exit_trailing_stop_pct": 0.10}),
-    ("lag=1+移动止盈15%", {"confirm_lag": 1, "hold_in_higher_uptrend": False, "exit_trailing_stop_pct": 0.15}),
-    ("趋势+lag=1+移动止盈10%", {"confirm_lag": 1, "hold_in_higher_uptrend": True, "exit_trailing_stop_pct": 0.10}),
-    ("趋势+lag=1+移动止盈15%", {"confirm_lag": 1, "hold_in_higher_uptrend": True, "exit_trailing_stop_pct": 0.15}),
-    ("趋势+lag=1+移动止盈20%", {"confirm_lag": 1, "hold_in_higher_uptrend": True, "exit_trailing_stop_pct": 0.20}),
+    ("lag=1+移动止盈5%", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.05}),
+    ("lag=1+移动止盈10%", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.10}),
+    ("lag=1+移动止盈15%", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.15}),
+    ("趋势+lag=1+移动止盈10%", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.10}),
+    ("趋势+lag=1+移动止盈15%", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.15}),
+    ("趋势+lag=1+移动止盈20%", {"confirm_lag": 1, "exit_trailing_stop_pct": 0.20}),
 ]
 
 print(f"{'配置':24s} | {'年化':>8s} | {'超额':>8s} | {'交易':>6s} | {'胜率':>6s} | {'回撤':>8s} | {'夏普':>6s}")
@@ -55,11 +56,9 @@ sys.stdout.flush()
 
 for label, extra in configs:
     params = {
-        "zs_from_xd": False, "use_seg_mmd": False,
         "lookahead_guard": True,
         "min_confidence": 0.0, "use_2s_signals": True,
         "use_3buy": True, "use_3sell": True, "allow_pyramid": False,
-        "exit_stop_loss_pct": 0.0,
         "seg_divergence_rate": 1.5, "bs1_peak": False,
         "bsp2_follow_1": False, "bsp3_follow_1": False, "max_bs2_rate": 1.0,
         **extra,
@@ -68,7 +67,7 @@ for label, extra in configs:
     for mkt, code, name in STOCKS:
         df = load_daily(mkt, code)
         try:
-            strat = entry.build(params)
+            strat = entry.build(drop_unknown_params(entry, params))
             engine = BacktestEngine(strategy=strat_cls, cash=100000, commission=0.0003, stamp_tax=0.001, slippage=0.002)
             engine._strategy_instance = strat
             result = engine.run(df)

@@ -75,24 +75,30 @@ def test_bi_endpoints_on_kline_extremes(result) -> None:
             )
 
 
-# ── 笔：high/low = 区间真实极值（含 gap 不足无法成笔端点的中间极值）─────────
+# ── 笔：high/low = 端点分型顶/底（缠论原文 62课L20）─────────────────────────
 
 
-def test_bi_high_low_equal_range_extremes(result) -> None:
-    """笔 high/low 必须等于 [start.bar_index, end.bar_index] 区间内所有K线的极值。
+def test_bi_high_low_equal_endpoint_fractals(result) -> None:
+    """笔 high/low = 端点分型顶/底（缠论原文 62课L20）。
 
-    这是 V740 修复的核心不变量：端点取极值会漏掉「区间内更高顶/更低底但因 gap
-    不足无法成笔端点」的中间极值，导致中枢 zg/zd 偏窄。重算后必须严格相等。
+    62课L20：「两个相邻的顶和底之间构成一笔，所谓笔，就是顶和底之间的其他波动，
+    都可以忽略不算」——笔极值即端点分型值 max/min(start.val, end.val)，
+    区间内未成端点的更高顶/更低底属「其他波动」，按原文忽略。
+
+    此前 V740 曾用「区间所有原始K线极值」覆盖端点值（注释自称原文但查无出处），
+    会使 gn/dn 超过端点分型值，放大中枢 GG/DD 污染。V857 修复：恢复端点分型值。
+    与偏差A（GG/DD 同向段 Zn 过滤）配合，共同保证 GG/DD = 同向段端点分型值极值，
+    即原文 20课L22 口径。
     """
-    ks = result.klines
     for b in result.bis:
-        if not (0 <= b.start.bar_index <= b.end.bar_index < len(ks)):
-            continue
-        seg = ks[b.start.bar_index : b.end.bar_index + 1]
-        hi = max(k.high for k in seg)
-        lo = min(k.low for k in seg)
-        assert abs(b.high - hi) < _TOL, f"bi[{b.index}] high={b.high}≠区间最高{hi}"
-        assert abs(b.low - lo) < _TOL, f"bi[{b.index}] low={b.low}≠区间最低{lo}"
+        ep_high = max(b.start.val, b.end.val)
+        ep_low = min(b.start.val, b.end.val)
+        assert abs(b.high - ep_high) < _TOL, (
+            f"bi[{b.index}] high={b.high}≠端点分型顶{ep_high}（62课L20）"
+        )
+        assert abs(b.low - ep_low) < _TOL, (
+            f"bi[{b.index}] low={b.low}≠端点分型底{ep_low}（62课L20）"
+        )
 
 
 # ── 笔：方向交替 ───────────────────────────────────────────────────────────
@@ -135,12 +141,18 @@ def test_zs_geometry_invariants(result) -> None:
             assert abs(z.zd - ezd) < _TOL, (
                 f"中枢[{z.index}] zd={z.zd}≠A、C两段max(low)={ezd}（原文第20课）"
             )
-            # gg/dd 覆盖全部走势极值
-            assert abs(z.gg - max(ln.high for ln in z.lines)) < _TOL, (
-                f"中枢[{z.index}] gg={z.gg}≠max(high)"
+            # 20课L22：GG=max(gn)、DD=min(dn)，n遍历与中枢方向一致的Z走势段(同向段)；
+            # 反向段(B/D…)不参与。中枢方向=首笔方向(30课L142「一样有方向…下上下」)。
+            assert z.direction in ("up", "down"), (
+                f"中枢[{z.index}] direction={z.direction} 应为 up/down（30课L142）"
             )
-            assert abs(z.dd - min(ln.low for ln in z.lines)) < _TOL, (
-                f"中枢[{z.index}] dd={z.dd}≠min(low)"
+            same_dir = [ln for ln in z.lines if ln.direction.value == z.direction]
+            assert same_dir, f"中枢[{z.index}] 应有同向段(Zn)"
+            assert abs(z.gg - max(ln.high for ln in same_dir)) < _TOL, (
+                f"中枢[{z.index}] gg={z.gg}≠同向段max(gn)（20课L22 GG遍历Zn）"
+            )
+            assert abs(z.dd - min(ln.low for ln in same_dir)) < _TOL, (
+                f"中枢[{z.index}] dd={z.dd}≠同向段min(dn)（20课L22 DD遍历Zn）"
             )
 
 

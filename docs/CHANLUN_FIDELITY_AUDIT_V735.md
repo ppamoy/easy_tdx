@@ -1362,7 +1362,7 @@ Round 9 插入 `process_klines_cross_timeframe` 时，`old_string` 捕获了
 | 文件 | 说明 |
 |------|------|
 | `backtest/strategies/chanlun.py` | 回测策略 |
-| `backtest/strategies/chanlun_pair.py` | 区间套回测（2 处） |
+| ~~`backtest/strategies/chanlun_pair.py`~~ | 区间套回测（2 处）——**已废弃删除**：其区间套用 `level_synth` 合成数据，是伪区间套；真区间套将放前端页面用真实双周期数据 |
 | `backtest/strategies/changying_chanlun.py` | 长赢缠论策略 |
 | `web/routers/stock_pick.py` | 选股路由 |
 | `web/routers/diagnosis.py` | 诊断路由 |

@@ -6,6 +6,7 @@ import pandas as pd
 sys.path.insert(0, "src")
 from easy_tdx.backtest.engine import BacktestEngine
 from easy_tdx.backtest.strategies.registry import get_registry
+from _chanlun_lib import drop_unknown_params  # noqa: E402
 
 CACHE_D = Path("audit_data")
 STOCKS = [
@@ -24,15 +25,15 @@ def load_daily(mkt, code):
     return df.sort_values("datetime").reset_index(drop=True)
 
 registry = get_registry()
-entry = registry.get("chanlun_pair")
+entry = registry.get("chanlun")
 strat_cls = entry.strategy_cls
 
 configs = [
-    ("基准", {"exit_stop_loss_pct": 0.0, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0}),
-    ("止损10%", {"exit_stop_loss_pct": 0.10, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0}),
-    ("止损15%", {"exit_stop_loss_pct": 0.15, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0}),
-    ("只1+2买卖+止损10%", {"exit_stop_loss_pct": 0.10, "use_3buy": False, "use_3sell": False, "min_confidence": 0.0}),
-    ("止损10%+置信0.2", {"exit_stop_loss_pct": 0.10, "use_3buy": True, "use_3sell": True, "min_confidence": 0.2}),
+    ("基准", {"stop_loss_pct": 0.0, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0}),
+    ("止损10%", {"stop_loss_pct": 0.10, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0}),
+    ("止损15%", {"stop_loss_pct": 0.15, "use_3buy": True, "use_3sell": True, "min_confidence": 0.0}),
+    ("只1+2买卖+止损10%", {"stop_loss_pct": 0.10, "use_3buy": False, "use_3sell": False, "min_confidence": 0.0}),
+    ("止损10%+置信0.2", {"stop_loss_pct": 0.10, "use_3buy": True, "use_3sell": True, "min_confidence": 0.2}),
 ]
 
 print(f"{'配置':20s} | {'年化':>8s} | {'超额':>8s} | {'交易':>6s} | {'胜率':>6s} | {'回撤':>8s} | {'夏普':>6s}")
@@ -51,7 +52,7 @@ for label, extra in configs:
     for mkt, code, name in STOCKS:
         df = load_daily(mkt, code)
         try:
-            strat = entry.build(params)
+            strat = entry.build(drop_unknown_params(entry, params))
             engine = BacktestEngine(strategy=strat_cls, cash=100000, commission=0.0003, stamp_tax=0.001, slippage=0.002)
             engine._strategy_instance = strat
             result = engine.run(df)

@@ -538,3 +538,113 @@ class TestChanlunStrategyPositionPct:
         # 半仓买入数量应明显小于全仓（逐笔比较 + 总量比较）
         assert sum(buys_half) < sum(buys_full)
         assert all(h < f for h, f in zip(buys_half, buys_full))
+
+
+class TestChanlunIsTheSingleChanlunStrategy:
+    """缠论策略收敛为单一 chanlun 策略（chanlun_pair 已废弃删除）。
+
+    背景：曾经有两个缠论买卖点策略 —— ``chanlun``（带百分比止损止盈）与
+    ``chanlun_pair``（只认同级别卖点出场）。后者因「区间套过滤用 level_synth
+    合成数据，是伪区间套不符合原文」被整体移除（真区间套将放前端页面用
+    真实双周期数据实现）。本类锁定该收敛不被悄悄回退。
+    """
+
+    def test_registered(self) -> None:
+        """chanlun 必须仍在注册表中。"""
+        from easy_tdx.backtest.strategies import get_registry
+
+        e = get_registry().get("chanlun")
+        assert e is not None
+        assert e.label == "缠论买卖点"
+        names = {p.name for p in e.params}
+        # 完整的单一缠论策略：止损止盈 + 买卖点信号出场
+        assert "stop_loss_pct" in names
+        assert "take_profit_pct" in names
+        assert "lookahead_guard" in names
+
+    def test_chanlun_pair_removed_from_registry(self) -> None:
+        """chanlun_pair 不得再注册（伪区间套策略，已废弃）。"""
+        import pytest
+        from easy_tdx.backtest.strategies import get_registry
+
+        # registry.get 对未知策略抛 KeyError（不返回 None）；
+        # 断言「chanlun_pair 不在可选列表」才是正确的删除验证
+        with pytest.raises(KeyError):
+            get_registry().get("chanlun_pair")
+        assert "chanlun_pair" not in sorted(get_registry()._strategies)
+
+    def test_chanlun_pair_module_gone(self) -> None:
+        """chanlun_pair 模块必须已被删除。"""
+        import importlib.util
+
+        assert importlib.util.find_spec("easy_tdx.backtest.strategies.chanlun_pair") is None
+
+
+class TestStopLossTakeProfitBothSides:
+    """stop_loss_pct / take_profit_pct 开关两侧都要生效（对照组）。
+
+    从已删除的 chanlun_pair 测试迁移而来的关键对照：曾经的 chanlun_pair
+    「关掉止损止盈才与 chanlun 一致」这条回归，现在反过来钉 chanlun 自身 ——
+    止损止盈开启时必须真的截断，关闭时必须不截断。
+    """
+
+    def _trending(self, n: int = 600) -> pd.DataFrame:
+        return _make_trending_df(n, "up")
+
+    def test_disabled_does_not_truncate(self) -> None:
+        """止损止盈设 0 时不因百分比被截断（只由卖点出场）。"""
+        df = self._trending()
+        engine = BacktestEngine(
+            ChanlunStrategy(stop_loss_pct=0.0, take_profit_pct=0.0, lookahead_guard=False),
+            cash=100000,
+        )
+        res = engine.run(df)
+        t = res.trades
+        reasons = set(t["reason"]) if t is not None and "reason" in t else set()
+        assert not any(
+            r and ("stop" in str(r).lower() or "止盈" in str(r) or "止损" in str(r))
+            for r in reasons
+        ), f"关闭止损止盈后仍出现止损/止盈出场：{reasons}"
+
+    def test_enabled_truncates(self) -> None:
+        """对照组：开启止盈时必须真的产生止盈出场（证明开关有效）。"""
+        df = self._trending()
+        engine = BacktestEngine(ChanlunStrategy(lookahead_guard=False), cash=100000)
+        res = engine.run(df)
+        t = res.trades
+        assert t is not None and len(t) > 0, "默认参数下应有交易"
+        # trades 的出场归因列是 "tag"（如 v102_take_profit / stop_loss / 卖点），
+        # 没有 "reason" 列；按 tag 关键字判断是否真触发了止盈/止损截断
+        tags = [str(r) for r in t["tag"]] if "tag" in t else []
+        assert any(
+            "take_profit" in r.lower() or "stop_loss" in r.lower() or "止盈" in r or "止损" in r
+            for r in tags
+        ), f"默认开启止盈但没有任何止盈/止损出场（tags={sorted(set(tags))}）"
+
+    def test_tp_sl_disabled_differs_from_default(self) -> None:
+        """关掉止损止盈的结果必须与默认不同（默认会被提前截断）。"""
+        df = self._trending()
+        ret_default = BacktestEngine(ChanlunStrategy(lookahead_guard=False), cash=100000).run(
+            df
+        ).performance["total_return"]
+        ret_open = (
+            BacktestEngine(
+                ChanlunStrategy(stop_loss_pct=0.0, take_profit_pct=0.0, lookahead_guard=False),
+                cash=100000,
+            )
+            .run(df)
+            .performance["total_return"]
+        )
+        assert ret_open != ret_default, "关闭止损止盈后结果未变 —— 开关可能失效"
+
+    def test_reproducible(self) -> None:
+        """同参数两次运行结果一致（可复现）。"""
+        df = self._trending(400)
+        kw = dict(stop_loss_pct=0.0, take_profit_pct=0.0, lookahead_guard=False)
+        a = BacktestEngine(ChanlunStrategy(**kw), cash=100000).run(df).performance[
+            "total_return"
+        ]
+        b = BacktestEngine(ChanlunStrategy(**kw), cash=100000).run(df).performance[
+            "total_return"
+        ]
+        assert a == b

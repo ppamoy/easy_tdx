@@ -69,11 +69,18 @@ def merge_klines(klines: list[Kline]) -> list[CLKline]:
         # 判断包含关系（双向判断：prev 包含 candidate 或 candidate 包含 prev）
         if _is_included(prev, candidate) or _is_included(candidate, prev):
             # 确定合并方向
-            # 向上：prev.high > prev_prev.high
+            # 向上：prev.high >= prev_prev.high（第65课L14「gn>=gn-1」含等号；
+            # 原严格 > 在并列高点时误判 down，实测真实数据发生率 0.00%，
+            # 但按原文改为 >= 以消除理论偏差）
             if len(result) >= 2:
-                direction = "up" if prev.high > result[-2].high else "down"
+                direction = "up" if prev.high >= result[-2].high else "down"
+            elif prev.direction:
+                # 首组方向已锁定，后续 merge 沿用（偏差G，62课L22：
+                # 首组首次 merge 确定方向后，prev.open/close 已被覆写为末根值，
+                # 若每 merge 重算阴阳会翻转方向，导致同一组前半取高高、后半取低低）
+                direction = prev.direction
             else:
-                # 只有第一根，根据前一根 K 线本身的阴阳判断方向
+                # 首组首次 merge，根据前一根 K 线本身的阴阳判断方向
                 # 阳线（close >= open）→ 向上，阴线 → 向下
                 direction = "up" if prev.close >= prev.open else "down"
 

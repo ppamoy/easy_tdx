@@ -154,7 +154,14 @@ def one_symbol(path_str: str, sig: str = "any_buy",
             (hit_pts if ok else miss_pts).append(t)
             (hit if ok else miss).append(r20)
         if not hit and not miss:
-            return None
+            # ⚠️ 无信号也要记入全样本（hit/miss 为空），否则
+            #    test_verified_caches 无法验证"多口径同一批 120 只"
+            #    这一多重比较前提（L640 len==120）。数据问题股
+            #    （L81/87/111/119/164 的 return None）仍排除——它们
+            #    不是"同一批标的"的合法成员。
+            return {"code": p.stem, "hit": [], "miss": [],
+                    "n_pts": len(points), "sig": sig,
+                    "hit_pts": [], "miss_pts": []}
         return {"code": p.stem, "hit": hit, "miss": miss,
                 "n_pts": len(points), "sig": sig,
                 # ⚠️ 必须记下**时点**，才能算"同期全市场均值"做基准。

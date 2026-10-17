@@ -202,6 +202,10 @@ async def fetch_paged_bars(
         return pd.DataFrame()
     col = "date" if "date" in frames[0].columns else "datetime"
     combined = pd.concat(frames, ignore_index=True)
+    # 归一 date 列类型：跨页 str/Timestamp 混杂会让 sort_values 抛
+    # "'<' not supported between 'str' and 'Timestamp'"（实测 /stock-pick/timing 8/12 标的失败）。
+    # 下游 _df_to_bars 用 str(dt)、_run_timing_one 用 pd.to_datetime，二者对 datetime 均安全。
+    combined[col] = pd.to_datetime(combined[col], errors="coerce")
     combined = combined.drop_duplicates(subset=[col], keep="first")
     combined = combined.sort_values(col).reset_index(drop=True)
     # 截断为最新 lookback 根：翻页以「凑满 lookback」为停页条件，最后一页往往
@@ -288,6 +292,10 @@ async def fetch_bars_range(
     if not frames or col is None:
         return pd.DataFrame()
     combined = pd.concat(frames, ignore_index=True)
+    # 归一 date 列类型：跨页 str/Timestamp 混杂会让 sort_values 抛
+    # "'<' not supported between 'str' and 'Timestamp'"（实测 /stock-pick/timing 8/12 标的失败）。
+    # 下游 _df_to_bars 用 str(dt)、_run_timing_one 用 pd.to_datetime，二者对 datetime 均安全。
+    combined[col] = pd.to_datetime(combined[col], errors="coerce")
     combined = combined.drop_duplicates(subset=[col], keep="first")
     combined = combined.sort_values(col).reset_index(drop=True)
     ts = pd.to_datetime(combined[col])

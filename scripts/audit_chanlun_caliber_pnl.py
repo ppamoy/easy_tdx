@@ -5,7 +5,7 @@
 背景（docs/CHANLUN_FIDELITY_AUDIT_V734.md §3）：
   V734 发现 config.mmd_2nd_span_max_bars 长期形同虚设，真放开后信号数大变：
       A 原始≤40 合计135 / B 完全不限 263 / C 只第一笔 107（25 只日线）
-  但**信号多 ≠ 更赚**。本脚本用 ChanlunPairStrategy（纯买卖点配对，无止损止盈
+  但**信号多 ≠ 更赚**。本脚本用 chanlun 原文口径（纯买卖点配对，止损止盈设 0
   截断）在带成本（佣金0.03% + 印花税0.1% + 滑点0.2%）下实测收益。
 
 ⚠️ 关键纪律（我踩过的坑，见 docs §6 教训 3）：
@@ -74,8 +74,9 @@ def _build_caliber(limit, first_only):
 def _pairs_for_caliber(code, caliber):
     """在指定口径下跑一只标的，返回逐笔配对。"""
     from easy_tdx.backtest.engine import BacktestEngine
-    from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy
     import easy_tdx.chanlun.analyser as A
+
+    from _chanlun_lib import make_original_strategy, pairs_from_trades
 
     mod = _build_caliber(caliber["limit"], caliber["first_only"])
     # patch 到 analyser 实际引用的符号上（教训 3）
@@ -85,11 +86,11 @@ def _pairs_for_caliber(code, caliber):
         p = DATA_DIR / f"{code}_daily.json"
         df = pd.DataFrame(json.loads(p.read_text(encoding="utf-8")))
         df["datetime"] = pd.to_datetime(df["datetime"])
-        s = ChanlunPairStrategy()
-        BacktestEngine(
+        s = make_original_strategy()
+        r = BacktestEngine(
             s, cash=100000.0, commission=COMMISSION, stamp_tax=STAMP, slippage=SLIPPAGE
         ).run(df)
-        return list(s.pair_log)
+        return pairs_from_trades(r)
     finally:
         A.find_mmds_v44 = saved
 

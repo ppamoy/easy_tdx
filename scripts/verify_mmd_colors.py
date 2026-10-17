@@ -36,7 +36,7 @@ def _run(pg, scheme: str) -> dict:
     pg.reload(wait_until="domcontentloaded", timeout=45000)
     pg.wait_for_timeout(3000)
     pg.locator('input[placeholder="6位代码（市场自动识别）"]').first.fill(CODE)
-    pg.locator("select").nth(1).select_option("chanlun_pair")
+    pg.locator("select").nth(1).select_option("chanlun")
     pg.locator("button", has_text="开始回测").first.click()
     # 轮询等图渲染（TDX 拉取耗时波动大，固定 sleep 会偶发误判）
     try:

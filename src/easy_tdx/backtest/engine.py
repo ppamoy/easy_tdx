@@ -199,7 +199,6 @@ class BacktestEngine:
         if self._strategy_cls.__name__ in (
             "ChanlunStrategy",
             "ChangyingChanlunStrategy",
-            "ChanlunPairStrategy",
         ):
             try:
                 from easy_tdx.backtest.signal_accuracy import compute_signal_accuracy_by_type

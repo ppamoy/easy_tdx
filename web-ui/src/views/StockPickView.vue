@@ -161,11 +161,11 @@ async function runChanlunScreen() {
   }
 }
 
-/** 选股→择时→回测闭环：跳转回测页，预填代码 + chanlun_pair 策略。 */
+/** 选股→择时→回测闭环：跳转回测页，预填代码 + chanlun 策略。 */
 function gotoBacktest(item: ChanlunScreenResult) {
   router.push({
     path: '/',
-    query: { symbol: item.code, strategy: 'chanlun_pair' },
+    query: { symbol: item.code, strategy: 'chanlun' },
   })
 }
 // 择时数据来自 /stock-pick/timing（date 语义 = 分析截至日），这里跳转时：

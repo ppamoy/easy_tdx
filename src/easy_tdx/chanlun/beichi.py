@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 from easy_tdx.chanlun.config import ChanlunConfig
-from easy_tdx.chanlun.mmd_conditions import _calc_bi_force
+from easy_tdx.chanlun.mmd_conditions import _calc_bi_force, _find_leaving_bi, _find_leaving_xd, _check_zero_axis_pullback
 from easy_tdx.chanlun.types import BC, BI, ZS, BCType, Direction
 
 
@@ -20,6 +20,9 @@ def check_bi_beichi(
     zss: list[ZS],
     closes: list[float] | None = None,
     config: ChanlunConfig | None = None,
+    mmds: list | None = None,
+    lower_xds: list | None = None,
+    lower_closes: list[float] | None = None,
 ) -> list[BC]:
     """检查笔级别的背驰。
 
@@ -57,7 +60,7 @@ def check_bi_beichi(
 
     # 3. 趋势背驰检查
     if len(zss) >= 2:
-        bcs.extend(_check_qs_beichi(bis, zss, closes))
+        bcs.extend(_check_qs_beichi(bis, zss, closes, mmds=mmds, lower_xds=lower_xds, lower_closes=lower_closes))
 
     return bcs
 
@@ -153,7 +156,7 @@ def _check_pz_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
     return bcs
 
 
-def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -> list[BC]:
+def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None, mmds: list | None = None, lower_xds: list | None = None, lower_closes: list[float] | None = None) -> list[BC]:
     """检查趋势背驰。
 
     连续两个同向中枢，离开力度衰减
@@ -164,25 +167,47 @@ def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
         prev_zs = zss[i - 1]
         curr_zs = zss[i]
 
-        # 判断两个中枢是否形成趋势（同向排列）
-        is_down_trend = prev_zs.zg > curr_zs.zg and prev_zs.zd > curr_zs.zd
-        is_up_trend = prev_zs.zg < curr_zs.zg and prev_zs.zd < curr_zs.zd
+        # 20课L25 中心定理二：趋势判据用 GG/DD（波动区间），非 ZG/ZD（中枢区间）。
+        # 「后GG < 前DD」等价于下跌及其延续；「后DD > 前GG」等价于上涨及其延续。
+        # 若后ZG<前ZD 且 后GG>=前DD（或后ZD>前ZG 且 后DD<=前GG）→形成高级别
+        # 中枢（非趋势），此时中枢区间不重叠但波动区间重叠，原文不视为趋势。
+        is_down_trend = curr_zs.gg < prev_zs.dd
+        is_up_trend = curr_zs.dd > prev_zs.gg
 
         if not (is_down_trend or is_up_trend):
             continue
 
-        # 离开笔 = 中枢最后一条线之后的那一笔（真正的离开段），
-        # 不是中枢内部最后一条线本身（旧实现语义错误）。
+        # 37课L8：A、B 必须是同级别中枢，否则 a+A+b+B+c 只是较大中枢的
+        # 震荡（「如果 A 的级别比 B 大，就有 a+A+b+B+c = a+A+(b+B+c)」），
+        # 非趋势非背驰。ZS.level 默认 1（find_zss），升级后为 2（33课延伸>5段）。
+        if prev_zs.level != curr_zs.level:
+            continue
+
         if not prev_zs.lines or not curr_zs.lines:
             continue
-        if prev_zs.lines[-1].index + 1 >= len(bis):
-            continue
-        if curr_zs.lines[-1].index + 1 >= len(bis):
-            continue
-        prev_exit = bis[prev_zs.lines[-1].index + 1]
-        curr_exit = bis[curr_zs.lines[-1].index + 1]
+        direction = "down" if is_down_trend else "up"
+        if lower_xds is not None:
+            # 37课L10：c=次级别走势（线段）。中枢是次级别线段中枢
+            # （find_zss(lower_xds)），离开段应是次级别线段（XD），非日线笔。
+            # 旧实现用日线笔（83课近似）尺度与中枢不一致：中枢=次级别线段、
+            # c=日线笔，偏离37课L10。此处改用次级别线段作 c 段。
+            prev_exit = _find_leaving_xd(lower_xds, prev_zs, direction)
+            curr_exit = _find_leaving_xd(lower_xds, curr_zs, direction)
+            if prev_exit is None or curr_exit is None:
+                continue  # 离开段尚未完成
+        else:
+            # 83课近似：c=日线笔（笔构中枢允许），力度用 MACD 面积（closes）。
+            # 旧实现用 bis[lines[-1].index+1]（末笔后第一根笔），不检查破边沿，
+            # 取到的常是中枢内震荡笔 / 反向回抽笔 ⇒ 方向校验恒不通过 ⇒ 本函数
+            # 在真实数据上产出 0（背驰审计实测）。与决策侧 _is_strong_beichi 统一。
+            prev_exit_idx = _find_leaving_bi(bis, prev_zs, direction)
+            curr_exit_idx = _find_leaving_bi(bis, curr_zs, direction)
+            if prev_exit_idx < 0 or curr_exit_idx < 0:
+                continue  # 离开段尚未完成
+            prev_exit = bis[prev_exit_idx]
+            curr_exit = bis[curr_exit_idx]
 
-        # 两段离开笔方向都必须与趋势一致
+        # 两段离开笔方向都必须与趋势一致（_find_leaving_bi 已保证同向，此为防御）
         if is_down_trend and (
             prev_exit.direction != Direction.DOWN or curr_exit.direction != Direction.DOWN
         ):
@@ -199,8 +224,37 @@ def _check_qs_beichi(bis: list[BI], zss: list[ZS], closes: list[float] | None) -
         if is_down_trend and curr_exit.low >= prev_exit.low:
             continue
 
-        prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
-        curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index)
+        # 53课 line139 原文铁律：「黄白线都没拉回0轴不是背驰」。
+        # B段（中枢2=curr_zs）须把 DIF 回拉到 0 轴附近，否则非标准趋势背驰。
+        # 偏差L DIF检查尺度一致：cross_timeframe（lower_xds 非空）中枢 lines 是
+        # 次级别线段 XD（bar_index 是次级别 K 线索引），须用次级别收盘价 lower_closes
+        # 算 DIF；默认 process_klines（lower_xds=None）中枢 lines 是日线笔，用日线 closes。
+        dif_closes = lower_closes if (lower_xds is not None and lower_closes) else closes
+        if not _check_zero_axis_pullback(dif_closes, prev_zs, curr_zs):
+            continue
+
+        # 37课L10 原文：「c 必然是次级别的，也就是说，c 至少包含对 B 的一个
+        # 第三类买卖点，否则就可以看成是 B 中枢的小级别波动，完全可以用盘整
+        # 背驰来处理」。c 段须含 B(curr_zs) 的第三类买卖点（3买/3卖）。
+        # 仅在 cross_timeframe（mmds 非空）启用；默认 process_klines 无 lower_xds，
+        # c=日线笔是 83课近似（笔构中枢，原文允许但稳定性差）。
+        if mmds is not None:
+            has_third = any(
+                m.mmd_type.value in ("3buy", "3sell") and m.zs is curr_zs
+                for m in mmds
+            )
+            if not has_third:
+                continue
+
+        if lower_xds is not None:
+            # 37课L10：c=次级别线段。力度优先用次级别 MACD 面积（lower_closes），
+            # XD.start/end.bar_index 是次级别 K 线索引；无 lower_closes 时降级振幅
+            # （closes=None → abs(high-low)），a/c 段同尺度对照。
+            prev_force = _calc_bi_force(prev_exit, lower_closes, 0)
+            curr_force = _calc_bi_force(curr_exit, lower_closes, 0)
+        else:
+            prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index)
+            curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index)
 
         # 严格标准
         if prev_force > 0 and curr_force < prev_force * 0.8 and curr_force > 0:

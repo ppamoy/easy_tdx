@@ -44,8 +44,8 @@ def _load(name: str, d: Path) -> pd.DataFrame:
 def test_cross_tf_produces_fewer_signals() -> None:
     """交叉级别中枢比默认少，信号也少。
 
-    钉死：sh600000 日线，中枢 28→3、信号 53→6。
-    如果交叉级别方法坏了（退回默认），中枢=28≠3，测试会红。
+    钉死：sh600000 日线，中枢 28→4、信号 53→12（V859 偏差B+C 口径）。
+    如果交叉级别方法坏了（退回默认），中枢=28≠4，测试会红。
 
     V851 口径修正：原断言「信号=5」是**索引错位下的产物**。
     `find_zss(lower_xds)` 产出的 `ZS.lines[*].index` 是 30min 线段序号，
@@ -55,6 +55,15 @@ def test_cross_tf_produces_fewer_signals() -> None:
     实测（scripts/audit_cross_timeframe_remap_compare.py，14 只标的）：
     日期差从 3901–4382 天降到 3–46 天，ZG/ZD 区间 14/14 完全不变
     （证明只改 index 口径，不改中枢本身）。
+
+    V859 口径修正（偏差B+C，原文为准）：
+    - **偏差B（62课L20 端点分型值）**：笔 high/low = 端点分型值，移除区间
+      极值覆盖。次级别线段（lower_xds）经 find_xds(bis) 受笔极值口径影响，
+      中枢 3 → 4（原文正确：区间内未成端点的极值属「其他波动」忽略）。
+    - **偏差C（17/21/53/101课 次级别回调）**：2买/2卖用次级别走势（线段）回调，
+      msg 含「次级别回调」。信号 6 → 12（2买/2卖由同级别笔回调近似改原文精确口径，
+      触发点增加）。
+    - 旧断言（3, 6）基于「区间极值覆盖 + 同级别笔回调」旧口径，已被原文证伪。
     """
     df_d = _load("sh600000_daily.json", DATA_DIR)
     df_30 = _load("sh600000_30min.json", MIN_DIR)
@@ -62,8 +71,13 @@ def test_cross_tf_produces_fewer_signals() -> None:
 
     a = ChanlunAnalyser(config=cfg)
     r = a.process_klines_cross_timeframe(df_d, df_30)
-    assert len(r.zss) == 3, f"交叉级别中枢应为 3，实际 {len(r.zss)}"
-    assert len(r.mmds) == 6, f"交叉级别信号应为 6（V851 索引修正后），实际 {len(r.mmds)}"
+    assert len(r.zss) == 4, f"交叉级别中枢应为 4（V859 偏差B 端点分型值），实际 {len(r.zss)}"
+    assert len(r.mmds) == 12, f"交叉级别信号应为 12（V859 偏差B+C），实际 {len(r.mmds)}"
+    # 偏差C：2买/2卖 msg 含「次级别回调」（原文精确口径生效）
+    second = [m for m in r.mmds if m.mmd_type.value in ("2buy", "2sell")]
+    assert second, "应有 2买/2卖（偏差C 次级别回调）"
+    for m in second:
+        assert "次级别回调" in m.msg, f"偏差C：{m.mmd_type.value} msg 应含「次级别回调」，实际 {m.msg[:60]}"
 
 
 def test_cross_tf_zs_from_lower_xd_not_daily_bi() -> None:

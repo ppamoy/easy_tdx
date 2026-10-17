@@ -239,7 +239,7 @@ class ChanlunStrategy(ParametrizedStrategy):
             advice = getattr(mmd, "_decision_support", None) or None
             self._chanlun_signals.append((bar_idx, mmd.mmd_type.value, conf, advice))
 
-        # V-AUDIT: 前视守卫（与 chanlun_pair 同款语义）。
+        # V-AUDIT: 前视守卫（语义源自已废弃的 chanlun_pair，现为 chanlun 独有）。
         # 笔端点 bar_idx 是事后标签：分型需后续反向分型封口才成为笔终点，端点
         # 当根不可知。审计实证（合成日线 seed=11）：无守卫时全部入场落在
         # 「当根不可知」的锚点上（教科书级未来函数）。守卫把每个候选信号放到
@@ -300,8 +300,8 @@ class ChanlunStrategy(ParametrizedStrategy):
     def _apply_lookahead_guard(self, df: pd.DataFrame) -> None:
         """前视守卫：候选信号用"只含历史的前缀"复核，延后到确认点生效。
 
-        语义与 chanlun_pair._apply_lookahead_guard 一致（同一作者序列，防漂移
-        特此对照）：对每个候选 ``(b, type)``，在以 ``b+lag`` 为右端的滚动窗口
+        语义与已废弃的 chanlun_pair._apply_lookahead_guard 一致（同源实现，防漂移
+        特此留存对照）：对每个候选 ``(b, type)``，在以 ``b+lag`` 为右端的滚动窗口
         （默认 400 根）上重跑一次缠论（本策略、关守卫），仍能得到同一
         ``(b, type)`` 才保留，并把生效 bar 改为 ``b + lag``；复现不出即为
         依赖未来数据的伪影，丢弃。数据不足（前缀==全量）时丢弃信号。

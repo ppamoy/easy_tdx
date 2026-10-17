@@ -36,11 +36,11 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from _chanlun_lib import make_original_strategy, pairs_from_trades  # noqa: E402
 from _concurrency import resolve_workers  # noqa: E402
 from _ml_precompute import load_pair  # noqa: E402
 from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
 from easy_tdx.backtest.strategies.chanlun_ml import ChanlunMLStrategy  # noqa: E402
-from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy  # noqa: E402
 
 CACHE = ROOT / "audit_cache"
 SLIP = 0.002
@@ -106,7 +106,7 @@ def _job(args: tuple[str, float, float]) -> dict[str, float]:
     #   只拿 A0 当对照会**高估**多级别；只拿 A1 当对照则 A1 有轻微前视
     #   （PIT 扫描 100 组里 7 组不一致）。所以**两条都报**，看结论 Robust 与否。
     for tag, guard in (("A0 同级别对照", True), ("A1 同级别同口径(无守卫)", False)):
-        st = ChanlunPairStrategy(lookahead_guard=guard)
+        st = make_original_strategy(lookahead_guard=guard)
         out[tag] = float(
             BacktestEngine(st, cash=100000.0, slippage=SLIP).run(sub_d).performance["total_return"])
 

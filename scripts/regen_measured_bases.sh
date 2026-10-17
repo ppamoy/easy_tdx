@@ -45,13 +45,16 @@ run_one() {
   case "$out_name" in
     u120_*|sig_*) limit="${LIMIT_120:-120}" ;;
   esac
-  local raw="/tmp/rb_${out_name%.json}"
+  # ⚠️ out_name 已含 .json 后缀且内嵌完整口径 tag，
+  #    audit 脚本见 stem 已以 tag 结尾则不再追加 tag、直接写该路径。
+  #    故 raw 必须带 .json（否则写的文件无后缀，下面的 _*.json 查找就匹配不到）。
+  local raw="/tmp/rb_${out_name}"
   echo "=== $out_name ==="
   # 先落到 /tmp（脚本会自己给缓存名加口径 tag），再搬到 audit_bases/
   $PY scripts/audit_chanlun_screen_usefulness.py \
       --limit "$limit" --cache "$raw" "$@" >/dev/null 2>&1
   local produced
-  produced=$(ls -t /tmp/"$(basename "${raw%.json}")"_*.json 2>/dev/null | head -1)
+  produced=$(ls -t /tmp/"$(basename "${raw}")" 2>/dev/null | head -1)
   if [[ -z "$produced" || ! -s "$produced" ]]; then
     echo "   ❌ 没产出缓存：$out_name" >&2
     return 1

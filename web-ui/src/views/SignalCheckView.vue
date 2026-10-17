@@ -49,7 +49,7 @@ const HORIZON = 5 // 前瞻根数：买点看 5 根后是否上涨
 
 const code = ref('600519')
 const category = ref<Category>('DAY')
-const preset = ref<'1y' | '3y' | '5y' | 'custom'>('3y')
+const preset = ref<'1y' | '3y' | '5y' | 'custom'>('1y')
 /** 自定义起止日期（preset==='custom' 时生效） */
 const customStart = ref('')
 const customEnd = ref('')
@@ -205,8 +205,9 @@ async function load() {
         qtErr.value = `区间套请求失败（HTTP ${q.status}）`
       }
       } catch (e: any) {
-        // 跨周期取数较重（实测 30s+），失败不能拖垮主流程
-        qtErr.value = `区间套取数失败：${e?.message ?? String(e)}`
+        // 跨周期取数较重（实测：1年≈19s / 3年≈38s，浏览器 30s 超时），
+        // 失败不能拖垮主流程；提示用户缩短区间或换更短次级别
+        qtErr.value = `区间套取数超时/失败：${e?.message ?? String(e)}。区间套需拉低级别全段，3年+30min约38s会超浏览器30s上限，建议选「近1年」或次级别用60分钟（根数少更快）。`
       }
     }
   } catch (e: any) {
@@ -306,6 +307,31 @@ const rangeText = computed(() => {
   if (!bars.value.length) return ''
   return `${bars.value[0].datetime.slice(0, 10)} ~ ${bars.value[bars.value.length - 1].datetime.slice(0, 10)}`
 })
+
+/** 当前选中的买卖点索引（点击明细列表行设置；-1 = 未选）。
+ *  切换股票/周期/时间段/次级别时清空，避免错位。 */
+const selectedIdx = ref(-1)
+watch([code, category, preset, customStart, customEnd, subCategory], () => {
+  selectedIdx.value = -1
+})
+
+/** 选中买卖点的区间套详情（来自后端 qujiantao[idx]）。
+ *  没开区间套 / 没选中 / 该信号无区间套数据时为 null。 */
+const selectedQt = computed<any | null>(() => {
+  if (selectedIdx.value < 0 || !subCategory.value) return null
+  return qujiantao.value[selectedIdx.value] ?? null
+})
+
+/** 区间套徽章文案：nested + method 区分（真跨周期 vs 合成近似 vs 无数据）。
+ *  method='cross_period' = 真区间套（原文语义）；其余只作参考。 */
+function qtBadge(q: any | null): { text: string; cls: string } {
+  if (!q) return { text: '—', cls: 'qt-na' }
+  if (q.nested) {
+    const real = q.method === 'cross_period'
+    return { text: real ? '✅ 真区间套确认' : '☑ 确认(近似)', cls: real ? 'qt-yes' : 'qt-maybe' }
+  }
+  return { text: '✗ 未确认', cls: 'qt-no' }
+}
 </script>
 
 <template>
@@ -328,8 +354,10 @@ const rangeText = computed(() => {
           <span class="tilde">~</span>
           <input v-model="customEnd" class="inp" type="date" />
         </template>
-        <select v-model="subCategory" class="inp" title="次级别周期（区间套）">
+        <select v-model="subCategory" class="inp" title="次级别周期（区间套：大级别背驰在小级别确认）">
           <option value="">不套区间套</option>
+          <option value="MIN_5">次级别 5分钟</option>
+          <option value="MIN_15">次级别 15分钟</option>
           <option value="MIN_30">次级别 30分钟</option>
           <option value="MIN_60">次级别 60分钟</option>
         </select>
@@ -425,10 +453,72 @@ const rangeText = computed(() => {
         </p>
       </section>
 
-      <!-- 3. 图 -->
+      <!-- 3. 买卖点明细（逐个，可点击看区间套） -->
+      <section class="card">
+        <h2>买卖点明细（点击看区间套）</h2>
+        <p class="hint">
+          逐个列出本时段所有买卖点。开启次级别后，每行显示该买卖点的<b>区间套确认状态</b>；
+          点击任一行查看该买卖点在低级别的确认详情。
+          <span v-if="!subCategory" class="warn">（未选次级别 → 无区间套，请上方选 5/15/30/60 分钟）</span>
+        </p>
+        <table v-if="mmds.length" class="tbl detail">
+          <thead>
+            <tr>
+              <th>日期</th>
+              <th>类型</th>
+              <th>方向</th>
+              <th>价格</th>
+              <th>置信度</th>
+              <th v-if="subCategory">区间套</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(m, i) in mmds"
+              :key="i"
+              :class="['row', selectedIdx === i ? 'sel' : '', isBuyType(m.type) ? 'buy' : 'sell']"
+              @click="selectedIdx = selectedIdx === i ? -1 : i"
+            >
+              <td>{{ m.date ?? '—' }}</td>
+              <td class="nm">{{ label(m.type) }}</td>
+              <td>{{ isBuyType(m.type) ? '买入' : '卖出' }}</td>
+              <td>{{ m.anchor_val ?? '—' }}</td>
+              <td>{{ (m.confidence * 100).toFixed(0) }}%</td>
+              <td v-if="subCategory">
+                <span :class="qtBadge(qujiantao[i] ?? null).cls">
+                  {{ qtBadge(qujiantao[i] ?? null).text }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="muted">本时段没有买卖点信号。</p>
+
+        <!-- 选中买卖点的区间套详情 -->
+        <div v-if="selectedQt" class="qt-detail">
+          <h3>区间套确认详情</h3>
+          <p class="qt-msg">{{ selectedQt.msg }}</p>
+          <ul class="qt-meta">
+            <li>确认状态：<b :class="selectedQt.nested ? 'up' : 'dn'">{{ selectedQt.nested ? '已确认' : '未确认' }}</b></li>
+            <li>区间套强度评分：{{ (selectedQt.score * 100).toFixed(0) }}%</li>
+            <li>数据来源：<span :class="selectedQt.method === 'cross_period' ? 'up' : 'muted'">{{ selectedQt.method === 'cross_period' ? '真实跨周期（原文意义）' : selectedQt.method }}</span></li>
+            <li>状态：{{ selectedQt.state ?? '—' }}</li>
+          </ul>
+          <p v-if="selectedQt.detail" class="qt-detail-sub">
+            低级别结构：笔 {{ selectedQt.detail.low_bi_count ?? 0 }} / 中枢 {{ selectedQt.detail.low_zs_count ?? 0 }}
+            / 同向背驰 {{ selectedQt.detail.low_bc_same_dir ? '有' : '无' }}
+            / 同向买卖点 {{ selectedQt.detail.low_mmd_same_dir ? '有' : '无' }}
+          </p>
+        </div>
+        <p v-else-if="selectedIdx >= 0 && subCategory" class="muted">
+          该买卖点在所选次级别无区间套数据（可能窗口外无低级别结构）。
+        </p>
+      </section>
+
+      <!-- 4. 图 -->
       <section class="card">
         <h2>买卖点位置</h2>
-        <p class="hint">点下方列表里的任一信号，会在图上高亮（如果该图组件支持）。</p>
+        <p class="hint">点上方「买卖点明细」里的任一行，会在下方图上高亮该信号位置（选中行变粗）。</p>
         <ChanlunChart
           :bars="bars"
           :bis="bis"
@@ -475,4 +565,25 @@ h1 { font-size: 20px; margin: 0; }
 .muted { color: #57606a; font-size: 13px; }
 .sum { font-size: 13px; margin: 10px 0 0; }
 .warn { color: #cf222e; }
+
+/* 买卖点明细列表 */
+.tbl.detail tbody tr.row { cursor: pointer; transition: background 0.1s; }
+.tbl.detail tbody tr.row:hover { background: #f6f8fa; }
+.tbl.detail tbody tr.row.sel { background: #fff8c5; font-weight: 700; }
+.tbl.detail tbody tr.row.buy td:nth-child(3) { color: #1a7f37; }
+.tbl.detail tbody tr.row.sell td:nth-child(3) { color: #cf222e; }
+
+/* 区间套徽章 */
+.qt-yes { color: #1a7f37; font-weight: 600; }
+.qt-maybe { color: #bf8700; }
+.qt-no { color: #cf222e; }
+.qt-na { color: #57606a; }
+
+/* 区间套详情面板 */
+.qt-detail { margin-top: 14px; padding: 12px; background: #f6f8fa; border-radius: 6px; border-left: 4px solid #1f6feb; }
+.qt-detail h3 { font-size: 14px; margin: 0 0 8px; }
+.qt-msg { font-size: 13px; margin: 0 0 8px; line-height: 1.6; }
+.qt-meta { list-style: none; padding: 0; margin: 0; font-size: 13px; }
+.qt-meta li { padding: 2px 0; }
+.qt-detail-sub { font-size: 12px; color: #57606a; margin: 8px 0 0; }
 </style>

@@ -35,7 +35,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from _concurrency import resolve_workers  # noqa: E402
 from easy_tdx.backtest.engine import BacktestEngine  # noqa: E402
-from easy_tdx.backtest.strategies.chanlun_pair import ChanlunPairStrategy  # noqa: E402
+from _chanlun_lib import make_original_strategy, pairs_from_trades  # noqa: E402
 
 DATA_DIR = ROOT / "audit_data"
 INDEX = "sh000300"
@@ -82,9 +82,9 @@ def _job(args: tuple[str, list]) -> list[dict]:
     if len(df) < MA_N + 60:
         return []
     try:
-        st = ChanlunPairStrategy()
-        BacktestEngine(st, cash=100000.0, slippage=SLIP).run(df)
-        pairs = list(st.pair_log)
+        st = make_original_strategy()
+        r = BacktestEngine(st, cash=100000.0, slippage=SLIP).run(df)
+        pairs = pairs_from_trades(r)
     except Exception:  # noqa: BLE001
         return []
     if not pairs:

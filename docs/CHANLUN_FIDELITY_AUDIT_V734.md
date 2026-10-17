@@ -101,7 +101,8 @@
 
 ### 扣成本收益对照（初步，12 只日线，`scripts/audit_chanlun_caliber_pnl.py`）
 
-用 `ChanlunPairStrategy`（纯买卖点配对，无止损止盈截断）+ 成本
+用 `ChanlunPairStrategy`（纯买卖点配对，无止损止盈截断；**现已废弃删除**，
+同口径改用 `ChanlunStrategy(stop_loss_pct=0, take_profit_pct=0)`）+ 成本
 （佣金 0.03% + 印花 0.1% + 滑点 0.2% ⇒ 往返约 0.56%）：
 
 | 口径 | 配对笔数 | 胜率 | 毛均收益 | **扣成本均** | 盈亏比 |
@@ -245,7 +246,8 @@ V730 的注释写着「修正为取离开段 bis[lines[-1].index + 1]」，
 
 ### 扣成本收益对照（20 只日线，`scripts/audit_chanlun_beichi_pnl.py`）
 
-用 `ChanlunPairStrategy` + 往返成本约 0.56%：
+用 `ChanlunPairStrategy`（**现已废弃删除**，同口径改用
+`ChanlunStrategy(stop_loss_pct=0, take_profit_pct=0)`）+ 往返成本约 0.56%：
 
 | 口径 | 配对笔数 | 胜率 | **每笔扣成本均收益** | 1buy 笔数 |
 |---|---|---|---|---|

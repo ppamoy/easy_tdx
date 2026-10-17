@@ -7,6 +7,8 @@ import echarts, { FX_BORDER_COLOR, FX_COLOR, FX_SYMBOL } from '../echarts-setup'
 import { colorScheme, downColor, upColor } from '../colors'
 import { fmt2 } from '../format'
 import type { Bar } from '../types'
+import { qtResolvedState, qtStateColor, qtStateMark } from '../utils/qtBadge'
+import type { QujiantaoDto } from '../utils/qtBadge'
 
 const props = withDefaults(
   defineProps<{
@@ -141,6 +143,11 @@ interface ChanlunMmd {
    *  false=未触及（该点可能不是真背驰，⚠️标注）
    *  null/undefined=数据不足（最新信号，未知） */
   rebound_verified?: boolean | null
+  /** 区间套三态（V853 第61课状态机，仅多级别联立口径返回）。
+   *  CONFIRMED=背驰段成立(力度衰减确认) / REJECTED=背驰段不成立(力度未衰减) /
+   *  ASSUMED=待观察。method='cross_period' 才是真跨周期（原文语义）。
+   *  图表据此在买卖点 markPoint 加 ring + ✓/✕/? 标记。 */
+  qujiantao?: QujiantaoDto | null
 }
 
 interface ChanlunFx {
@@ -303,9 +310,15 @@ function render() {
     zoomKeep = null
   }
   chart.setOption(option, true)
-  // 开发/调试专用：暴露图表实例供 playwright 等浏览器测试检查内部状态
-  if (import.meta.env.DEV) {
-    ;(window as unknown as Record<string, unknown>).__CHANLUN_CHART__ = chart
+  // 开发/调试专用：暴露图表实例供 playwright 等浏览器测试检查内部状态。
+  // DEV 模式或 ?chartDebug=1 时暴露（prod 默认不污染 window，按需开启）。
+  // 多级别同屏有两个 ChanlunChart 实例：按 frequency 键存入 map，便于分别检查。
+  if (import.meta.env.DEV || new URLSearchParams(location.search).has('chartDebug')) {
+    const w = window as unknown as Record<string, unknown>
+    w.__CHANLUN_CHART__ = chart // back-compat: 最后一个实例
+    const key = String(props.frequency ?? `chart_${Date.now()}`)
+    const prev = (w.__CHANLUN_CHARTS__ as Record<string, unknown> | undefined) ?? {}
+    w.__CHANLUN_CHARTS__ = { ...prev, [key]: chart }
   }
 }
 
@@ -666,18 +679,31 @@ function buildOption(): echarts.EChartsCoreOption {
             // V735 第29课：1买/1卖后置验证未通过（反弹未触及中枢DD/GG）
             // ⇒ 标记⚠，提示该点可能不是真背驰
             const showWarn = m.rebound_verified === false
+            // V853 第61课区间套三态（仅多级别联立口径有）：在买卖点 markPoint
+            // 加 ring（borderColor=三态色）+ ✓/✕/? 标记，让用户一眼分辨
+            // 真背驰(CONFIRMED)/假背驰(REJECTED 力度未衰减)/待观察(ASSUMED)。
+            const qt = m.qujiantao ?? null
+            const qtColor = qtStateColor(qt)
+            const qtMark = qtStateMark(qt)
             return {
               name: m.type,
               coord: [idx, price],
               itemStyle: {
                 color: v.color,
                 opacity: v.opacity,
+                borderColor: qtColor || undefined,
+                borderWidth: qtColor ? 2 : 0,
               },
               symbol: v.symbol,
               symbolSize: v.size,
-              label: showWarn
-                ? { show: true, formatter: '⚠', color: '#e74c3c', fontSize: 14, position: 'inside' }
-                : { show: false },
+              label: qtMark
+                ? { show: true, formatter: qtMark, color: qtColor || '#e74c3c', fontSize: 11, position: 'inside' }
+                : showWarn
+                  ? { show: true, formatter: '⚠', color: '#e74c3c', fontSize: 14, position: 'inside' }
+                  : { show: false },
+              // 区间套说明供 tooltip 读取（hover 显示为何 CONFIRMED/REJECTED）
+              qtState: qtResolvedState(qt),
+              qtMsg: m.qujiantao?.msg ?? '',
             }
           })
           .filter(Boolean)
@@ -702,18 +728,29 @@ function buildOption(): echarts.EChartsCoreOption {
             const v = mmdVisual(m.type)
             // V735 第29课：1买/1卖后置验证未通过（反弹未触及中枢DD/GG）
             const showWarn = m.rebound_verified === false
+            // V853 第61课区间套三态（见 mmdBuyPoints 同名注释）
+            const qt = m.qujiantao ?? null
+            const qtColor = qtStateColor(qt)
+            const qtMark = qtStateMark(qt)
             return {
               name: m.type,
               coord: [idx, price],
               itemStyle: {
                 color: v.color,
                 opacity: v.opacity,
+                borderColor: qtColor || undefined,
+                borderWidth: qtColor ? 2 : 0,
               },
               symbol: v.symbol,
               symbolSize: v.size,
-              label: showWarn
-                ? { show: true, formatter: '⚠', color: '#e74c3c', fontSize: 14, position: 'inside' }
-                : { show: false },
+              label: qtMark
+                ? { show: true, formatter: qtMark, color: qtColor || '#e74c3c', fontSize: 11, position: 'inside' }
+                : showWarn
+                  ? { show: true, formatter: '⚠', color: '#e74c3c', fontSize: 14, position: 'inside' }
+                  : { show: false },
+              // 区间套说明供 tooltip 读取（hover 显示为何 CONFIRMED/REJECTED）
+              qtState: qtResolvedState(qt),
+              qtMsg: m.qujiantao?.msg ?? '',
             }
           })
           .filter(Boolean)
@@ -798,7 +835,14 @@ function buildOption(): echarts.EChartsCoreOption {
           } else if (p.seriesName === '顶分型' || p.seriesName === '底分型') {
             html += `<div>${p.marker} ${p.seriesName}</div>`
           } else if (p.seriesName === '买点' || p.seriesName === '卖点') {
-            html += `<div>${p.marker} ${p.name}</div>`
+            const qtSt = p.data?.qtState
+            const qtMsg = p.data?.qtMsg
+            if (qtSt) {
+              html += `<div>${p.marker} ${p.name} · 区间套[${qtSt}]</div>`
+              if (qtMsg) html += `<div style="color:#9aa0a6;font-size:11px;line-height:1.3">${qtMsg}</div>`
+            } else {
+              html += `<div>${p.marker} ${p.name}</div>`
+            }
           } else if (p.seriesName === '背驰') {
             html += `<div>${p.marker} 背驰</div>`
           } else if (p.seriesName === 'MACD') {
@@ -1082,8 +1126,14 @@ function buildOption(): echarts.EChartsCoreOption {
           value: [p.coord[0], p.coord[1]],
           symbol: p.symbol,
           symbolSize: p.symbolSize,
-          // opacity 必须透传：1/2/3 类的「浓淡」区分全靠它，丢了就只剩大小一维
-          itemStyle: { color: p.itemStyle.color, opacity: p.itemStyle.opacity },
+          // opacity + 区间套 ring(borderColor/borderWidth) 必须透传：
+          // 丢了就只剩 color/opacity，✓/✕/? ring 不渲染。
+          itemStyle: { ...p.itemStyle },
+          // 区间套三态标记(✓/✕/?) 或 rebound ⚠ 透传（per-data 覆盖 series 级 label）
+          label: p.label,
+          // 区间套说明透传给 tooltip（hover 显示为何 CONFIRMED/REJECTED）
+          qtState: p.qtState,
+          qtMsg: p.qtMsg,
         })),
         label: {
           show: props.showMmdLabels === true && !props.compact,
@@ -1107,8 +1157,9 @@ function buildOption(): echarts.EChartsCoreOption {
           value: [p.coord[0], p.coord[1]],
           symbol: p.symbol,
           symbolSize: p.symbolSize,
-          // opacity 必须透传：1/2/3 类的「浓淡」区分全靠它，丢了就只剩大小一维
-          itemStyle: { color: p.itemStyle.color, opacity: p.itemStyle.opacity },
+          // opacity + 区间套 ring(borderColor/borderWidth) 必须透传（见买点注释）
+          itemStyle: { ...p.itemStyle },
+          label: p.label,
         })),
         label: {
           show: props.showMmdLabels === true && !props.compact,

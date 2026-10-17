@@ -329,6 +329,8 @@ def _detect_t2(
     if not t1_mmds or not bis:
         return mmds
 
+    # 101课原文口径：mmd_2nd_max_pullback=None 时无门槛（总出2buy）
+    mmd_2nd_max_pullback = getattr(config, "mmd_2nd_max_pullback", None)
     max_bs2_rate = getattr(config, "max_bs2_rate", 0.8)
     bsp2_follow_1 = getattr(config, "bsp2_follow_1", True)
 
@@ -357,7 +359,8 @@ def _detect_t2(
             continue
         retrace_rate = _bi_amp(bsp2_bi) / break_amp
 
-        if retrace_rate <= max_bs2_rate:
+        # 101课原文：None=无门槛（总出2buy）；有门槛时 retrace<=门槛才出
+        if mmd_2nd_max_pullback is None or retrace_rate <= mmd_2nd_max_pullback:
             is_buy = t1.mmd_type == MMDType.BUY_1
             mmd_type = MMDType.BUY_2 if is_buy else MMDType.SELL_2
             mmd = MMD(
@@ -388,6 +391,7 @@ def _detect_t2s(
     if not t2_mmds or not bis:
         return mmds
 
+    mmd_2nd_max_pullback = getattr(config, "mmd_2nd_max_pullback", None)
     max_bs2_rate = getattr(config, "max_bs2_rate", 0.8)
     max_bsp2s_lv = getattr(config, "max_bsp2s_lv", None)
 
@@ -434,7 +438,8 @@ def _detect_t2s(
                 break
 
             retrace_rate = abs(_bi_end_val(bsp2s_bi) - _bi_end_val(break_bi)) / _bi_amp(break_bi)
-            if retrace_rate > max_bs2_rate:
+            # 101课原文：None=无门槛（不因回撤 break）；有门槛时 retrace>门槛 break
+            if mmd_2nd_max_pullback is not None and retrace_rate > mmd_2nd_max_pullback:
                 break
 
             mmd_type = MMDType.BUY_2S if is_buy else MMDType.SELL_2S

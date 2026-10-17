@@ -47,6 +47,8 @@ if (process.env.CHANLUN_MULTI === '1') {
 await page.click('.analyze-btn').catch(() => {});
 
 await page.waitForFunction(() => !!document.querySelector('.stats-bar') || !!document.querySelector('.error-banner'), { timeout: 150000 }).catch(() => {});
+// 等诊断面板 + 低级别图渲染（多级别模式下低级别 fetchBars 异步，3s 不够）
+await page.waitForSelector('.mmd-diagnosis-panel', { timeout: 20000 }).catch(() => {});
 await page.waitForTimeout(3000);
 
 const tag = `${CODE}_${CATEGORY}_${COUNT}`;

@@ -212,14 +212,21 @@ def decompose_same_level(
 
 
 def _make_zs(lines: list[BI | XD], zd: float, zg: float, index: int) -> ZS:
-    """构造中枢对象（ZG/ZD 由前三段重叠确定后即冻结 —— 同级别分解不延伸）。"""
+    """构造中枢对象（ZG/ZD 由前三段重叠确定后即冻结 —— 同级别分解不延伸）。
+
+    20课L22：GG=max(gn)/DD=min(dn)，n遍历与中枢方向一致的 Z走势段(同向段)，
+    反向段不参与。中枢方向=首段方向(30课L142)。
+    """
+    d = _direction_of(lines)
+    # 只取与中枢方向一致的同向段(Zn)；方向缺失时回落全段（防御）
+    same_dir = [x for x in lines if x.direction.value == d] or lines
     return ZS(
         lines=list(lines),
         zg=zg,
         zd=zd,
-        gg=max(x.high for x in lines),
-        dd=min(x.low for x in lines),
-        direction=_direction_of(lines),
+        gg=max(x.high for x in same_dir),
+        dd=min(x.low for x in same_dir),
+        direction=d,
         index=index,
         done=True,
         start=lines[0].start,

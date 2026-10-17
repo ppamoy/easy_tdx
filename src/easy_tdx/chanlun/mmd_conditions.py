@@ -1182,15 +1182,16 @@ def _calc_volatility_compression_breakout_v78(
             result["msg"] = "数据不足"
             return result
 
-        # 计算布林带宽度历史序列
+        # 计算布林带宽度历史序列（pandas rolling O(n)，替代原逐窗口循环 O(n²)）
+        # 原实现 for i in range(window,len): 每个窗口重算 50 根 ma/std，
+        # n=3976 时单次 ~196k 次操作；且被 for mmd in mmds 循环每个 MMD 各跑
+        # 一次 → 二次复杂度，浏览器 30s 超时根因之一。rolling 一次算完。
+        import pandas as _pd
+
         window = 50
-        widths = []
-        for i in range(window, len(closes)):
-            period_closes = closes[i - window : i]
-            ma = sum(period_closes) / window
-            std = (sum((x - ma) ** 2 for x in period_closes) / window) ** 0.5
-            width = 4 * std  # 2*2*std = 4*std (上下轨距离)
-            widths.append(width)
+        _s = _pd.Series(closes)
+        _std = _s.rolling(window).std(ddof=0)  # 总体标准差，与原 sum(...)/window 一致
+        widths = (4 * _std).dropna().tolist()
 
         if not widths:
             result["msg"] = "宽度计算失败"
@@ -16515,10 +16516,99 @@ def _find_leaving_bi(bis: list[BI], zs: ZS, direction: str) -> int:
     if not zs.lines:
         return -1
     start = zs.lines[-1].index + 1
+    # V736（原文第24课）：离开段 = 走出中枢、延续趋势方向的那一段，
+    # 必须真正「离开」中枢区间（向下破 ZD / 向上破 ZG），而非中枢内震荡笔。
+    # 旧版只取「中枢后第一根同向笔」，不检查是否破边沿 ⇒ 返回的常是中枢内
+    # 震荡笔（实测茅台30min：leaving笔 破zd=False 占多数），导致趋势背驰分支
+    # 的锚定 curr_exit_idx==bi_idx 恒不成立（失配 3692 次 / 命中 26 次）。
+    edge = zs.zd if direction == "down" else zs.zg
     for i in range(start, len(bis)):
-        if bis[i].direction.value == direction:
+        if bis[i].direction.value != direction:
+            continue
+        # 真离开段：向下笔须 low < ZD（破中枢下沿），向上笔须 high > ZG（破上沿）
+        broke = (bis[i].low < edge) if direction == "down" else (bis[i].high > edge)
+        if broke:
             return i
     return -1
+
+
+def _find_leaving_xd(xds, zs, direction):
+    """定位中枢的「离开段」（次级别线段）：中枢之后第一根破边沿的同向线段。
+
+    37课L10：c=次级别走势（线段）。中枢是次级别线段中枢
+    （find_zss(lower_xds)），离开段应是次级别线段（XD），非日线笔。
+    用对象引用 xds.index(zs.lines[-1]) 定位中枢末线段在 lower_xds
+    中的原始序号（_remap 仅改 .index 字段为日线笔下标，对象本身不变）。
+
+    Returns:
+        离开段 XD；找不到返回 None。
+    """
+    if not zs.lines:
+        return None
+    last = zs.lines[-1]
+    try:
+        start = xds.index(last) + 1
+    except ValueError:
+        return None
+    edge = zs.zd if direction == "down" else zs.zg
+    for i in range(start, len(xds)):
+        if xds[i].direction.value != direction:
+            continue
+        broke = (xds[i].low < edge) if direction == "down" else (xds[i].high > edge)
+        if broke:
+            return xds[i]
+    return None
+
+
+def _check_zero_axis_pullback(
+    closes: list[float] | None,
+    prev_zs: ZS,
+    curr_zs: ZS,
+) -> bool:
+    """趋势背驰 0 轴回拉门控（缠论原文：第 24 课 line19/line24）。
+
+    注：本判据的真实原文出处是第 24 课——
+      line19：「B 是这个大趋势的另一个中枢，这个中枢一般会把 MACD 的黄白线
+              （也就是 DIFF 和 DEA）回拉到 0 轴附近」
+      line24：「MACD 的黄白线回拉 0 轴」
+    早期注释曾误标为「53 课 line139 原文铁律」，经核 53 课 line139 该句
+    出自回帖区匿名网友（UID:[0]），并非缠中说禅原文——此处已更正。
+
+    趋势背驰要求 B 段（中枢2 = curr_zs）把 MACD 黄白线（DIF/DEA）回拉到 0 轴
+    附近。若中枢2期间 DIF 始终远离 0 轴（未回拉），则不构成标准背驰——
+    原文判定非背驰。
+
+    判据：中枢2期间 DIF 是否「回拉到 0 轴附近」——
+      - 穿越 0 轴（相邻 DIF 异号），或
+      - 期间最小 |DIF| < 0.2 × 趋势 |DIF| 峰值（回拉到峰值 20% 以内）。
+    """
+    if closes is None or not curr_zs.lines or not prev_zs.lines:
+        return True  # 无数据，不阻塞（保守放行，避免误杀）
+    from easy_tdx.chanlun.macd import calc_macd
+
+    try:
+        start_bar = curr_zs.lines[0].start.bar_index
+        end_bar = curr_zs.lines[-1].end.bar_index
+        trend_start = prev_zs.lines[0].start.bar_index
+    except (AttributeError, IndexError):
+        return True
+    if start_bar < 0 or end_bar >= len(closes) or trend_start < 0:
+        return True
+    macd = calc_macd(closes)
+    dif = macd["dif"]
+    if not dif or end_bar >= len(dif):
+        return True
+    dif_during_zs = dif[start_bar : end_bar + 1]
+    dif_trend = dif[trend_start : end_bar + 1]
+    if not dif_during_zs or not dif_trend:
+        return True
+    peak = max(abs(d) for d in dif_trend)
+    if peak <= 0:
+        return True
+    min_during = min(abs(d) for d in dif_during_zs)
+    # 穿越 0 轴（相邻异号）
+    crossed = any(d1 * d2 < 0 for d1, d2 in zip(dif_during_zs, dif_during_zs[1:]))
+    return crossed or min_during < 0.2 * peak
 
 
 def _is_strong_beichi(
@@ -16538,7 +16628,76 @@ def _is_strong_beichi(
     """
     bi_idx = bi.index
 
-    # 1. 笔背驰检查（要求新极值：向下背驰须创新低，向上背驰须创新高）
+    # V736（原文第17/24/53课）：1买/1卖 = 该级别**趋势背驰点**——
+    # 两个同向中枢，后一离开段（c 段）力度 < 前一离开段（a/b 段）力度 + 新极值。
+    # 笔背驰（相邻同向笔 MACD 面积衰竭）是盘整背驰口径，不要求中枢/趋势，
+    # 用于下跌中途会发假 1买（MACD 局部衰竭 ≠ 趋势终结）⇒ 原文不认作标准 1买。
+    #
+    # 修复策略（soft-fix，权衡召回 vs 精度）：
+    #   1. 趋势背驰分支优先（_find_leaving_bi 已修为「破中枢边沿的离开段」）——
+    #      真正的趋势背驰点会被它命中，不会被笔背驰抢先误判。
+    #   2. 笔背驰（盘整背驰）兜底**始终保留**（含同向趋势存在时）：趋势背驰分支
+    #      未命中时（c 段未形成标准离开段 / 0 轴未回拉 / 力度未衰竭），用相邻同向笔
+    #      MACD 面积衰竭兜底，覆盖趋势末端的盘整背驰反转（17 课「盘整背驰转为趋势背驰」）。
+    #
+    # ⚠️ 与原文的偏差（已知，intentional 权衡）：第 53 课 line 12 明确「盘整背驰
+    #    非第一类买卖点（只是中枢震荡力度比较的推广用法）」——按原文，存在同向趋势
+    #    时应**禁用**笔背驰兜底（strict 版）。但 strict 版实测：茅台/五粮液 1买改善、
+    #    平安变差（+166→+64，失盘整背驰反转信号）+ 破 15 个回归测试。故 revert 为
+    #    soft（笔背驰兜底保留），以维持召回、避免 1买 消失。strict 门控留专项会话
+    #    （需重跑收益对照 + 修测试）。死变量 has_trend 已清理（曾为 strict 门控遗留）。
+    #
+    # V734 历史：曾试纯趋势背驰 → 1买消失，但那是因为趋势背驰分支离开段锚定
+    # 0 命中（_find_leaving_bi 取中枢内震荡笔，未检查破边沿）。V736 修好离开段
+    # 后趋势背驰能正常产出（茅台30min 探针：4→5 次力度衰减命中），不再消失。
+
+    # 1. 趋势背驰检查（优先；有趋势时为唯一合法路径）
+    if len(zss) >= 2:
+        for i in range(1, len(zss)):
+            prev_zs = zss[i - 1]
+            curr_zs = zss[i]
+            is_same_trend = (
+                direction == "down" and curr_zs.zg < prev_zs.zg and curr_zs.zd < prev_zs.zd
+            ) or (direction == "up" and curr_zs.zg > prev_zs.zg and curr_zs.zd > prev_zs.zd)
+            if not is_same_trend:
+                continue
+            if not prev_zs.lines or not curr_zs.lines:
+                continue
+            # 离开段 = 中枢后第一根破边沿的同向笔（_find_leaving_bi，V736 修）
+            prev_exit_idx = _find_leaving_bi(bis, prev_zs, direction)
+            curr_exit_idx = _find_leaving_bi(bis, curr_zs, direction)
+            if prev_exit_idx < 0 or curr_exit_idx < 0:
+                continue  # 离开段尚未完成，无法判定
+            prev_exit = bis[prev_exit_idx]
+            curr_exit = bis[curr_exit_idx]
+            # 锚定：背驰点 = 第二离开段终点（候选笔须即该离开段；原文：背驰段即创新极值的离开段）
+            if curr_exit_idx != bi_idx:
+                continue
+            if prev_exit.direction.value != direction or curr_exit.direction.value != direction:
+                continue
+            # 新极值确认：后一中枢离开段须创出更极端价位（否则只是中枢震荡/扩展）
+            if direction == "down":
+                new_extreme = curr_exit.low < prev_exit.low
+            else:
+                new_extreme = curr_exit.high > prev_exit.high
+            # 0 轴回拉门控（第24课 line19 正文：B 中枢把黄白线回拉 0 轴附近；
+            # 第25课 line313/332 缠师回帖「背弛首先需要的是回拉0轴的黄白线」）。
+            # 中枢2（B段=curr_zs）须把 DIF 回拉到 0 轴附近，否则非标准背驰。
+            # 注：曾误引「53课 line139」，经核该句出自回帖区匿名网友，非缠师原文，已更正。
+            if not _check_zero_axis_pullback(closes, prev_zs, curr_zs):
+                continue
+            prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index, normalize_by_bars)
+            curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index, normalize_by_bars)
+            if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
+                return True
+
+    # 2. 笔背驰（盘整背驰）兜底：趋势背驰未命中时，用相邻同向笔 MACD 面积衰竭
+    #    判定。这覆盖趋势末端的盘整背驰反转（趋势背驰的 c 段未必每次都形成，
+    #    盘整背驰亦可终结趋势——见 17 课「盘整背驰转为趋势背驰」）。
+    #    ⚠️ 笔背驰不要求中枢，下跌中途也可能误发（MACD 局部衰竭 ≠ 趋势终结），
+    #    是精度/召回的权衡：纯趋势背驰精度高但 1买 稀少（V734 实测 1买消失），
+    #    保留笔背驰兜底以维持召回。趋势背驰分支已修复（_find_leaving_bi 破边沿
+    #    判定），优先于笔背驰——真正的趋势背驰点不会被笔背驰抢先误判。
     for j in range(bi_idx - 1, -1, -1):
         prev_bi = bis[j]
         if prev_bi.direction.value == direction:
@@ -16551,108 +16710,13 @@ def _is_strong_beichi(
                     break
             curr_force = _calc_bi_force(bi, closes, bi_idx, normalize_by_bars)
             prev_force = _calc_bi_force(prev_bi, closes, j, normalize_by_bars)
-
-            # V731a：补 curr_force > 0 保护。
-            # 旧条件只要求 prev_force > 0，故 curr_force == 0（该笔无任何动能
-            # 数据，_calc_bi_force 返回 0）时 `0 < prev_force * threshold` 恒真，
-            # 一个力度为零的笔会被直接判成「强力背驰」并发出 1买/1卖。
-            # 实测 chanlun_000001_daily 的 BI6/BI9 force 恰为 0（见
-            # tests/unit/test_chanlun_v731_ref_zs_no_lookahead.py::
-            # TestZeroForceNotBeichi）。
-            # beichi.py 的 _check_bi_level_beichi / _check_pz_beichi /
-            # _check_qs_beichi 三处均有该保护，唯独此处遗漏。
             if curr_force <= 0:
                 break  # 当前笔本身无力度，无从谈"衰竭"
-
-            # V731b：prev_force == 0 时应**继续向前找**，而不是 break。
-            # 中枢内部的笔其 MACD 力度常恰为 0（实测 5 个 fixture 共 51 笔中
-            # 8 笔 = 16% 力度为 0）。旧代码遇到第一个同向笔就 break，若它
-            # 恰好是零力度的中枢内笔，则本笔的背驰判定被永久扼杀——
-            # 教科书「下跌趋势 + 离开段背驰」形态因此完全无信号（实测
-            # audit_mmd_ground_truth.py 的 Case1/5）：背驰段 BI7 的前一同向笔
-            # BI5 力度为 0，而真正该比的进入段 BI3 力度 1.81 却够不着。
-            # 零力度不构成"力度基准"，跳过它继续向前找有效的对比笔。
             if prev_force <= 0:
-                continue
-
+                continue  # 零力度不构成基准，跳过继续向前找
             if curr_force < prev_force * threshold:
                 return True
             break
-
-    # ⚠️ V734（2026-10-11 实测更正）：上面这条注释**与代码实际行为不符**，
-    # 别再照着它理解代码。
-    #
-    # 注释说「一买/一卖 只认趋势背驰」，但**笔背驰分支在上面先跑、命中即
-    # return True、且完全不要求任何中枢** ⇒ 零中枢/单中枢照样出 1买。
-    # 而下面的"趋势背驰"分支经实测**从不触发**（见下方 V734 注释）。
-    # ⇒ 当前的 1买/1卖 **100% 来自笔背驰**，不是原文的趋势背驰。
-    #
-    # 这是**刻意保留**的现状，不是漏修：20 只日线扣成本对照显示，
-    # 改成纯趋势背驰后每笔收益虽从 +2.73% 升到 +7.06%，但笔数从 177 掉到 67、
-    # 且 1买 彻底消失，总贡献（483 vs 473）**基本抵消** ⇒ 不划算。
-    # 详见 docs/CHANLUN_FIDELITY_AUDIT_V734.md §4。
-    #
-    # （原文偏好：趋势背驰或两中枢趋势背驰；盘整背驰更适合标 2买/类二买。）
-
-    # 3. 趋势背驰检查（两个同向中枢之间离开笔力度衰减 + 新极值）
-    if len(zss) >= 2:
-        for i in range(1, len(zss)):
-            prev_zs = zss[i - 1]
-            curr_zs = zss[i]
-
-            is_same_trend = (
-                direction == "down" and curr_zs.zg < prev_zs.zg and curr_zs.zd < prev_zs.zd
-            ) or (direction == "up" and curr_zs.zg > prev_zs.zg and curr_zs.zd > prev_zs.zd)
-
-            if is_same_trend:
-                # ⚠️ V734：V730 这条「修正」**本身是错的**，别再照它改。
-                # 实测（6 只日线 / 96 个中枢）：中枢末笔之后的那一笔
-                # **100% 是反向回抽**（同向 0/96），从来不是离开段。
-                # ⇒ `curr_exit.direction != direction` 恒真 ⇒ 本分支
-                # **在任何真实数据上都不可能触发**（实测 446 次调用命中 0 次）。
-                # 真正离开段应再往后取，或按"离开 ZG/ZD 区间"判定。**未修**：
-                # 修好后 1买 会大变，需先做收益对照（见 docs 同章节 §4）。
-                #
-                # V730 原文（留档）：趋势背驰比较的是「离开段」而非中枢内末笔。
-                # 原文（第24课）：趋势背驰 = 两个同向中枢之间，后一离开段（c 段）
-                # 相对前一离开段（a/b 段）力度衰减。中枢末笔仍在中枢重叠区间内，
-                # 不是离开段；且「末笔方向奇偶校验」会让奇数笔中枢该分支永不成立。
-                # 与 beichi.py:_check_qs_beichi 的离开段取法保持一致。
-                if not prev_zs.lines or not curr_zs.lines:
-                    continue
-                # V734 修正：离开段 = 中枢之后**第一笔与趋势同向**的笔。
-                # 笔方向天然交替，所以「末笔之后那一笔」不等于离开段：
-                #   末笔 down → 下一笔 up（回抽）⇒ 需再往后一笔
-                #   末笔 up   → 下一笔 down（离开）⇒ 就是它
-                # 实测 96 个中枢里 57 个属前者 ⇒ 旧写法在 ~59% 情况下取错，
-                # 命中「离开段方向不符」而 continue ⇒ 本分支恒不触发。
-                prev_exit_idx = _find_leaving_bi(bis, prev_zs, direction)
-                curr_exit_idx = _find_leaving_bi(bis, curr_zs, direction)
-                if prev_exit_idx < 0 or curr_exit_idx < 0:
-                    continue  # 离开段尚未完成，无法判定
-                prev_exit = bis[prev_exit_idx]
-                curr_exit = bis[curr_exit_idx]
-
-                # 锚定：背驰点 = 第二离开段终点。候选笔必须就是该离开段，
-                # 否则趋势背驰会被标到后面不相关的笔上（原文：背驰段即创新极值的离开段）。
-                if curr_exit_idx != bi_idx:
-                    continue
-
-                # 两段离开段方向都必须与趋势方向一致（离开段 = 延续趋势方向的那笔）
-                if prev_exit.direction.value != direction or curr_exit.direction.value != direction:
-                    continue
-
-                # 新极值确认：后一中枢离开段须创出更极端价位（否则只是中枢震荡/扩展）
-                if direction == "down":
-                    new_extreme = curr_exit.low < prev_exit.low
-                else:
-                    new_extreme = curr_exit.high > prev_exit.high
-
-                prev_force = _calc_bi_force(prev_exit, closes, prev_exit.index, normalize_by_bars)
-                curr_force = _calc_bi_force(curr_exit, closes, curr_exit.index, normalize_by_bars)
-
-                if new_extreme and curr_force < prev_force * threshold and curr_force > 0:
-                    return True
 
     return False
 

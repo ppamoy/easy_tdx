@@ -105,3 +105,32 @@ def test_session_mmd_outcomes() -> None:
             assert o[k] is None or -50 <= o[k] <= 200
         if o["max_5d"] is not None and o["min_5d"] is not None:
             assert o["max_5d"] >= o["min_5d"]
+
+
+def test_session_many_mmds_no_zero_division() -> None:
+    """回归（§7）：mmd_cands ≥ target_total(40) 时 distract_max=0，
+    旧代码 `len(fx_cands) / 0` 抛 ZeroDivisionError，整条 /train/session 返回 500、
+    P0 逐步揭示+复盘讲解全断。真数据 600000 日线 3000 根产生 75 个买卖点即触发。
+
+    用真实 audit_data（若有）跑完整管道；无数据则 skip（CI 无缓存时不阻断）。
+    """
+    import json
+    from pathlib import Path
+
+    fixture = Path(__file__).resolve().parents[2] / "audit_data" / "sh600000_daily.json"
+    if not fixture.exists():
+        import pytest
+
+        pytest.skip("audit_data/sh600000_daily.json 不存在（需本地缓存）")
+    df = pd.DataFrame(json.loads(fixture.read_text()))
+    if len(df) < 200:
+        pytest.skip("audit_data 样本过短")
+    result = ChanlunAnalyser(code="SH600000", frequency="daily").process_klines(df)
+    # 确认本 fixture 确实命中 bug 路径（mmd_cands ≥ 40 → distract_max=0）
+    assert len(result.mmds) >= 40, f"fixture 应产生 ≥40 mmd，实得 {len(result.mmds)}"
+    # 旧代码在此抛 ZeroDivisionError；修复后应正常返回
+    p = build_train_session_payload(result, df, "DAY", "medium", 0, reveal_limit=0)
+    assert "candidates" in p and len(p["candidates"]) >= 40
+    # review 模式（reveal_limit=None）同样不应崩
+    p2 = build_train_session_payload(result, df, "DAY", "medium", 0, reveal_limit=None)
+    assert len(p2["mmd_outcomes"]) == len(result.mmds)

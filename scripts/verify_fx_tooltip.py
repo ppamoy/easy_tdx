@@ -7,7 +7,7 @@
 顶分型 series 无数据 → tooltip 永远显示「底分型」。修复：前端改读 `fx_type`。
 
 行为级验证（DSH 纪律第 1 条：看真实渲染行为，不看 DOM 标志）：
-- 打开回测页跑 chanlun_pair，等缠论图渲染；
+- 打开回测页跑 chanlun，等缠论图渲染；
 - 沿图表**可见区域**横向扫描悬停，抓真实 tooltip 文本（ECharts tooltip 是
   position:absolute、z-index:9999999 的无 class div）；
 - 断言 tooltip 里既有「顶分型」也有「底分型」。
@@ -64,7 +64,7 @@ def main() -> int:
             pg.goto(APP, wait_until="domcontentloaded", timeout=45000)
             pg.wait_for_timeout(3000)
             pg.locator('input[placeholder="6位代码（市场自动识别）"]').first.fill(CODE)
-            pg.locator("select").nth(1).select_option("chanlun_pair")
+            pg.locator("select").nth(1).select_option("chanlun")
             pg.locator("button", has_text="开始回测").first.click()
             # 轮询等图渲染（TDX 拉取耗时波动大，固定 sleep 会偶发误判）
             try:

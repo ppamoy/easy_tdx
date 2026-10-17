@@ -8,6 +8,14 @@ import pandas as pd
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolate_kline_cache(monkeypatch):
+    """隔离本机 K 线缓存：fetch_qfq_klines 先读缓存命中会绕过 mock，
+    这里把 read_klines/save_klines 打桩成空，确保测试 mock 生效。"""
+    monkeypatch.setattr("easy_tdx.web.kline_cache.read_klines", lambda *a, **kw: None)
+    monkeypatch.setattr("easy_tdx.web.kline_cache.save_klines", lambda *a, **kw: None)
+
+
 def test_diagnosis_module_imports() -> None:
     """诊断模块可正确导入。"""
     import easy_tdx.web.routers.diagnosis as mod

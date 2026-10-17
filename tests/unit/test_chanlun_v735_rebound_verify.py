@@ -52,11 +52,14 @@ def test_rebound_verified_is_not_all_true() -> None:
     """不是所有 1买 都通过验证 —— 部分未触及 DD/GG（定理的偏离）。
 
     如果全 True，说明验证逻辑可能没真跑（形同虚设）。
-    V851 重测：sh600009 实测 27 个 1买/1卖，其中 1 个未通过。
-    （旧值 14/2 是 V735 配置下的产物。V851 改默认
-     zs_no_hard_close=False + zs_merge_overlap=False 后，中枢数
-     23→34，1买/1卖 14→27，未通过 2→1 —— 测试牙齿仍在：
-     仍有 1 个未通过验证的 1买，逻辑非形同虚设。）
+    V851 旧值 27/26/1 是 zs_no_hard_close/merge 配置下的产物，代码演进后
+    sh600009 的 1买/1卖 已漂移到 13 个（pre-existing，非本次偏差A引入）。
+    V856（偏差A 修复：GG/DD 改为只遍历同向段 Zn，20课L22）：反弹阈值变严
+    （DD=min(dn over Zn) 比旧全笔 DD 更高，1买反弹需触更高点），未通过数
+    1→3。这是 29课「反弹一定触及 DD=min(dn)」的原文正确口径——旧全笔 DD
+    把未触及同向段 DD 的假通过也算进了 verified。
+    偏差G修复后（kline_merge首组方向锁定，62课L22）：首组笔方向不再翻转，
+    1买/1卖从13漂移到26（22通过/4未通过）。旧值13是首组方向翻转bug下的产物。
     """
     p = DATA_DIR / "sh600009_daily.json"
     if not p.exists():
@@ -75,9 +78,9 @@ def test_rebound_verified_is_not_all_true() -> None:
         if m.mmd_type.value in ("1buy", "1sell")
         and getattr(m, "_rebound_verified", None) is False
     )
-    assert total == 27, f"1买/1卖 总数应为 27，实际 {total}"
-    assert verified == 26, f"通过验证应为 26，实际 {verified}"
-    assert failed == 1, f"未通过验证应为 1，实际 {failed}"
+    assert total == 26, f"1买/1卖 总数应为 26，实际 {total}"
+    assert verified == 22, f"通过验证应为 22，实际 {verified}"
+    assert failed == 4, f"未通过验证应为 4，实际 {failed}"
 
 
 def test_rebound_verified_does_not_filter_signals() -> None:
@@ -86,15 +89,15 @@ def test_rebound_verified_does_not_filter_signals() -> None:
     if not p.exists():
         pytest.skip("缺少 audit_data/sh600009_daily.json")
     r = _result("sh600009_daily.json")
-    # 1买/1卖 数量不因验证而减少（V851 实测 27）
-    assert sum(1 for m in r.mmds if m.mmd_type.value in ("1buy", "1sell")) == 27
+    # 1买/1卖 数量不因验证而减少（偏差G修复后实测 26；V856 旧值 13 已随代码演进漂移）
+    assert sum(1 for m in r.mmds if m.mmd_type.value in ("1buy", "1sell")) == 26
 
 
 def test_rebound_penalty_applied_to_failed() -> None:
     """未通过验证的 1买/1卖 decision_score 扣减 15 分。
 
-    钉死：sh600009 的 1 个未通过验证的 1买/1卖，factors.rebound_penalty == -15。
-    （V851 实测：27 个 1买/1卖中 1 个未通过；旧值为 2 个。）
+    钉死：sh600009 的未通过验证的 1买/1卖，factors.rebound_penalty == -15。
+    V856（偏差A 修复后）：13 个 1买/1卖中 3 个未通过（同向段 DD 阈值更严）。
     """
     p = DATA_DIR / "sh600009_daily.json"
     if not p.exists():
@@ -113,14 +116,14 @@ def test_rebound_penalty_applied_to_failed() -> None:
             f"未通过验证应扣 15 分，实际 factors={factors}"
         )
         penalized += 1
-    assert penalized == 1, f"应有 1 个被扣分，实际 {penalized}"
+    assert penalized == 4, f"应有 4 个被扣分，实际 {penalized}"
 
 
 def test_rebound_penalty_not_applied_to_verified() -> None:
     """通过验证的 1买/1卖 不受扣分影响。
 
-    钉死：sh600009 的 26 个通过验证的 1买/1卖，factors 无 rebound_penalty。
-    （V851 实测：27 个 1买/1卖中 26 个通过；旧值为 12 个。）
+    钉死：sh600009 的通过验证的 1买/1卖，factors 无 rebound_penalty。
+    V856（偏差A 修复后）：13 个 1买/1卖中 10 个通过（同向段 DD 阈值更严）。
     """
     p = DATA_DIR / "sh600009_daily.json"
     if not p.exists():
@@ -139,7 +142,7 @@ def test_rebound_penalty_not_applied_to_verified() -> None:
             f"通过验证不应扣分，实际 factors={factors}"
         )
         clean += 1
-    assert clean == 26, f"应有 26 个不受扣分，实际 {clean}"
+    assert clean == 22, f"应有 22 个不受扣分，实际 {clean}"
 
 
 def test_rebound_penalty_zero_disables() -> None:

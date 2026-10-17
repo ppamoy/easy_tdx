@@ -62,7 +62,9 @@ A1（无守卫）+4.63% 但不显著（t=1.26）。
 
 ### 为什么判据 2 用 A1 而不是 A0（这是实测发现的坑）
 
-`ChanlunPairStrategy` 默认 `lookahead_guard=True`：信号要经 3 根确认期复核、
+`ChanlunPairStrategy`（**现已废弃删除**，同口径改用
+`ChanlunStrategy(stop_loss_pct=0, take_profit_pct=0)`）默认
+`lookahead_guard=True`：信号要经 3 根确认期复核、
 延后到 b+3 发出，实际 b+4 成交。而 `chanlun_ml` **没有**这套守卫。
 
 ⇒ 拿"带守卫的 A0"当对照 = 让对手**晚 3 根进场**，会**高估**多级别。

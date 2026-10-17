@@ -10,7 +10,7 @@ from typing import Any, cast
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from easy_tdx.web.deps import get_client, get_mac_client_optional
 from easy_tdx.web.klines import (  # 共享 K 线取数（MAC 回退）
@@ -284,7 +284,10 @@ def build_train_session_payload(
     # 均匀采样干扰项：总数（信号+干扰）控制在 ~40
     target_total = 40
     distract_max = max(target_total - len(mmd_cands), 0)
-    if len(fx_cands) > distract_max:
+    if distract_max == 0:
+        # 信号数已超目标总数（target_total），不需干扰项（避免除零）
+        fx_cands = []
+    elif len(fx_cands) > distract_max:
         step = len(fx_cands) / distract_max
         fx_cands = [fx_cands[int(i * step)] for i in range(distract_max)]
     candidates = sorted(mmd_cands + fx_cands, key=lambda c: c["index"])
@@ -719,6 +722,11 @@ async def chanlun_multi_level(
             req.start,
             req.count,
         )
+        # 截断到 count 根：read_klines 命中磁盘缓存会整份返回（忽略 count），
+        # 实测 count=200 日线 → 返回 3976 根 → 高级别分析 30s+，浏览器 30s
+        # 超时切断，区间套功能等于不可用。买卖点只需最近 count 根。
+        if df_high is not None and len(df_high) > req.count:
+            df_high = df_high.tail(req.count).reset_index(drop=True)
     # 获取低级别数据（需要覆盖高级别的时间范围，否则最新高级别笔的低级别走势为空）
     # 每自然日对应的低级别 K 线数（A股一天约4小时交易时段）
     _bars_per_day = {
@@ -802,6 +810,7 @@ async def chanlun_multi_level(
             zss_low=low_result.zss,
             bcs_low=low_result.bcs,
             mmds_low=low_result.mmds,
+            synthetic=False,  # 真实双周期行情（df_low 非合成）→ 原文意义真区间套
         )
         # 同时挂到 MMD 上，供序列化与回测复用
         for m, qt in zip(high_result.mmds, qujiantao):
@@ -886,6 +895,419 @@ def _low_coverage(df: Any) -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         first = last = None
     return {"bar_count": int(n), "first": first, "last": last, "has_data": n > 0}
+
+
+# ── 实战交易信号（30min 买点入场 / 5min 卖点出场 / 止损止盈）─────────────
+# 设计原则（诚实，不瞎编）：
+#   1. 信号全部来自真实 30min/5min 缠论分析（ChanlunAnalyser），不编造。
+#   2. 买点的 date 是「笔终点 K 线」(分型中间根=局部最高/最低点)，当天不可知——
+#      分型成立需右根走完（第3根缠论K线）。因此买入价用「确认日收盘」(分型右根)，不是笔终点价。
+#      这是上轮发现的「事后偏差」根因，这里从源头修正：止损/止盈线都挂在可执行价上。
+#   3. 区间套三态（CONFIRMED/ASSUMED/REJECTED）用真实 5min 结构确认 30min 买点，
+#      有因果性过滤（V-18，低周期结构结束不晚于信号日），无未来函数。
+#   4. 标注「信号老化」(距最新 K 线多少根) 与「当前价 vs 确认价偏离」，让用户看见
+#      信号新鲜度，而不是看到一个孤立的买点日期就以为还能买。
+
+
+def _compute_confirm(klines: list, fx: Any, fmt_dt: Any) -> dict[str, Any]:
+    """纯函数：计算信号确认日（分型第3根缠论K线走完）+ 确认价 + 老化。
+
+    缠论原文依据（查证 62/65/81 课）：
+      - 第62课：分型 = 相邻三根缠论K线，中间根为极值（顶最高/底最低）。
+      - 第65课第20行：「当下那些K线还没走出来，分型就找不出来」→
+        分型成立需第3根（右根）走完。
+      - 第81课第61行：笔终点 = 分型极值 = 中间根。
+      - 第79课第120行：实操不需等分型全部形成后再操作（可更早用小级别），
+        故「右根走完」已是保守的可执行确认时点。
+
+    ⚠️ 不能用 k_idx+N（原始K线偏移）：包含关系合并后缠论K线与原始K线
+    非一一对应（types.py:41 k_index=「原始K线中最后一根的index」），
+    k_idx+2 会落到错误的K线上。必须用 fx.klines[2].k_index 定位右根。
+
+    确认价 = 右根最后一根原始K线收盘 = 分型成立最早可执行价。
+    """
+    n = len(klines)
+    # FX.klines = [左, 中(极值), 右] —— 右根是分型第3根（确认根）
+    right_ck = fx.klines[2] if (fx is not None and len(fx.klines) >= 3) else None
+    if right_ck is None:
+        return {"confirm_idx": None, "confirm_date": None, "confirm_price": None, "age_bars": None}
+    confirm_k_idx = right_ck.k_index  # 右根最后一根原始K线索引
+    if confirm_k_idx is not None and 0 <= confirm_k_idx < n:
+        ck = klines[confirm_k_idx]
+        return {
+            "confirm_idx": confirm_k_idx,
+            "confirm_date": fmt_dt(ck.date),
+            "confirm_price": float(ck.close),
+            "age_bars": n - 1 - confirm_k_idx,
+        }
+    return {"confirm_idx": confirm_k_idx, "confirm_date": None, "confirm_price": None, "age_bars": None}
+
+
+async def _run_trade_one(
+    mac_client: Any,
+    client: Any,
+    market: str,
+    code: str,
+    count: int,
+    stop_loss_pct: float,
+    take_profit_pct: float,
+) -> dict[str, Any]:
+    """对单只标的跑 30min(高)+5min(低) 联立，产出实战交易信号。
+
+    返回结构见 /chanlun/trade-signals 文档。失败时返回 {"symbol","error"}。
+    """
+    from easy_tdx.chanlun import ChanlunAnalyser
+    from easy_tdx.chanlun.qujiantao import compute_qujiantao_cross_period
+
+    symbol = f"{market}{code}"
+
+    # 30min 高级别数据（默认 400 根 ≈ 50 个交易日，足够识别近期买点）
+    df_high = await fetch_qfq_klines(mac_client, client, market, code, "MIN_30", 0, count)
+    if df_high is None or len(df_high) < 20:
+        return {"symbol": symbol, "error": "30min 数据不足"}
+
+    # 截断到 count 根：read_klines 命中缓存会整份返回（忽略 count），实测
+    # count=400 返回 3976 根 → 30min 分析 50s+。截断不影响近期买点识别。
+    if len(df_high) > count:
+        df_high = df_high.tail(count).reset_index(drop=True)
+
+    # 5min 低级别数据（覆盖 30min 时间范围；A股一天 8 根 30min / 48 根 5min）
+    low_count = int(min(count * 6 + 200, LOW_MAX_BARS))
+    df_low = await fetch_qfq_klines(mac_client, client, market, code, "MIN_5", 0, low_count)
+    if df_low is not None and len(df_low) > LOW_MAX_BARS:
+        df_low = df_low.tail(LOW_MAX_BARS).reset_index(drop=True)
+
+    high_analyser = ChanlunAnalyser(code=symbol, frequency="30min")
+    low_analyser = ChanlunAnalyser(code=symbol, frequency="5min")
+    high_result = high_analyser.process_klines(df_high)
+    low_result = low_analyser.process_klines(df_low)
+
+    high_klines = high_result.klines
+    low_klines = low_result.klines
+    n_high = len(high_klines)
+    last_high_k = high_klines[-1] if n_high else None
+    current_price = float(last_high_k.close) if last_high_k else 0.0
+    last_date = high_result._fmt_dt(last_high_k.date) if last_high_k else None
+
+    # 区间套：用真实 5min 结构逐个确认 30min 买卖点
+    qt_list: list[Any] = []
+    try:
+        qt_list = compute_qujiantao_cross_period(
+            high_result.mmds,
+            bis_low=low_result.bis,
+            zss_low=low_result.zss,
+            bcs_low=low_result.bcs,
+            mmds_low=low_result.mmds,
+            synthetic=False,  # 真实 5min 行情（df_low 非合成）→ 原文意义真区间套
+        )
+    except Exception:  # noqa: BLE001
+        qt_list = [None] * len(high_result.mmds)
+
+    def _signal_detail(mmd: Any, klines: list, qt: Any) -> dict[str, Any] | None:
+        """提取一个买卖点的诚实详情：笔终点日 + 确认日(分型右根) + 可执行价 + 老化 + 偏离。"""
+        try:
+            if mmd is None or mmd.bi is None:
+                return None
+            end = mmd.bi.end
+            base_price = float(end.val)  # 笔终点价（分型极值，当天不可知，仅供溯源）
+            base_date = high_result._fmt_dt(end.k.date) if end.k is not None else None
+            # 确认日 = 分型右根（第3根缠论K线）走完 —— 详见 _compute_confirm 原文依据
+            conf = _compute_confirm(klines, end, high_result._fmt_dt)
+            confirm_price = conf["confirm_price"]
+            confirm_date = conf["confirm_date"]
+            age = conf["age_bars"]
+            # 当前价 vs 确认价偏离（确认价未知时用笔终点价）
+            ref = confirm_price if confirm_price is not None else base_price
+            dev = round((current_price / ref - 1) * 100, 2) if ref else None
+            qt_state = None
+            if isinstance(qt, dict):
+                qt_state = qt.get("state")
+            return {
+                "type": mmd.mmd_type.value,
+                "date": base_date,            # 笔终点日（信号锚点）
+                "price": round(base_price, 3),
+                "confirm_date": confirm_date,  # 确认日（分型右根走完，可执行日）
+                "confirm_price": round(confirm_price, 3) if confirm_price else None,
+                "age_bars": age,              # 信号老化（距最新K线根数）
+                "price_deviation_pct": dev,   # 当前价 vs 可执行价偏离
+                "qt_state": qt_state,         # 区间套三态
+            }
+        except Exception:  # noqa: BLE001
+            return None
+
+    # 最新 30min 买点（1buy/2buy/3buy，取最近一个）
+    buy_mmds = [(m, qt_list[i] if i < len(qt_list) else None)
+                for i, m in enumerate(high_result.mmds) if "buy" in (m.mmd_type.value if m.mmd_type else "")]
+    latest_buy = None
+    if buy_mmds:
+        latest_buy = _signal_detail(buy_mmds[-1][0], high_klines, buy_mmds[-1][1])
+
+    # 最新 5min 卖点（1sell/2sell/3sell，取最近一个）——出场信号
+    sell_mmds = [m for m in low_result.mmds if "sell" in (m.mmd_type.value if m.mmd_type else "")]
+    latest_sell_5min = None
+    if sell_mmds:
+        latest_sell_5min = _signal_detail(sell_mmds[-1], low_klines, None)
+
+    # 操作建议 + 止损止盈线（基于可执行确认价，非笔终点价）
+    action = "观望"
+    action_reason = "近期无 30min 买点"
+    stop_loss_price = None
+    take_profit_price = None
+    if latest_buy and latest_buy.get("confirm_price"):
+        cp = latest_buy["confirm_price"]
+        stop_loss_price = round(cp * (1 - stop_loss_pct / 100), 3)
+        take_profit_price = round(cp * (1 + take_profit_pct / 100), 3)
+        qt_s = latest_buy.get("qt_state")
+        age = latest_buy.get("age_bars", 999)
+        if age <= 8 and qt_s in ("CONFIRMED", "ASSUMED"):
+            action = "可买"
+            action_reason = (
+                f"30min {latest_buy['type']} 已确认，区间套={qt_s}，"
+                f"确认价 {cp}（分型右根走完），止损 {stop_loss_price} / 止盈 {take_profit_price}"
+            )
+        elif age <= 8 and qt_s == "REJECTED":
+            action = "观望"
+            action_reason = f"30min {latest_buy['type']} 出现但区间套 REJECTED（5min 未确认背驰），不进场"
+        elif age > 8:
+            action = "观望"
+            action_reason = f"30min {latest_buy['type']} 已老化（{age} 根前），当前价偏离 {latest_buy.get('price_deviation_pct')}%，不宜追"
+
+    return {
+        "symbol": symbol,
+        "current_price": round(current_price, 3),
+        "last_date": last_date,
+        "latest_buy": latest_buy,
+        "latest_sell_5min": latest_sell_5min,
+        "action": action,
+        "action_reason": action_reason,
+        "stop_loss_price": stop_loss_price,
+        "take_profit_price": take_profit_price,
+        "stop_loss_pct": stop_loss_pct,
+        "take_profit_pct": take_profit_pct,
+    }
+
+
+class ChanlunTradeRequest(BaseModel):
+    """实战交易信号请求。
+
+    - symbols: 显式标的列表 [{market, code}]。前端用树粮菜选股定池后传入。
+    - stop_loss_pct / take_profit_pct: 止损/止盈百分比，默认 5 / 20。
+    - count: 30min K 线数（默认 400 ≈ 50 交易日）。
+    """
+
+    symbols: list[dict[str, str]] = Field(
+        default_factory=list,
+        description='标的列表，如 [{"market":"SH","code":"600000"}]',
+    )
+    stop_loss_pct: float = Field(default=5.0, description="止损百分比（默认 5%）")
+    take_profit_pct: float = Field(default=20.0, description="止盈百分比（默认 20%）")
+    count: int = Field(default=400, description="30min K 线数")
+
+
+@router.post("/chanlun/trade-signals")
+async def chanlun_trade_signals(
+    req: ChanlunTradeRequest,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
+    """实战交易信号：30min 买点入场 + 5min 卖点出场 + 止损止盈。
+
+    对每只标的跑 30min(高)/5min(低) 联立缠论分析，输出：
+    - latest_buy: 最新 30min 买点（1/2/3 买），含确认日(分型右根走完)、可执行价、老化、区间套三态
+    - latest_sell_5min: 最新 5min 卖点（出场信号）
+    - stop_loss_price / take_profit_price: 基于可执行确认价的止损/止盈线
+    - action: 可买 / 观望 / 卖出，附理由
+
+    诚实保证：买入价用「确认日收盘」(分型右根走完)，不用事后笔终点价；
+    信号老化与当前价偏离显式标注，让用户判断信号是否仍可执行。
+    """
+    if not req.symbols:
+        raise HTTPException(
+            status_code=400,
+            detail="需提供 symbols（标的列表）",
+        )
+    # 限制标的数（每只 30min+5min 联立约 2-4s，8 只约 20-30s）
+    syms = req.symbols[:8]
+    # 顺序处理（非 asyncio.gather）：MAC/TDX 客户端连接池有限，并发 5 标的
+    # ×2 fetch（30min+5min）= 10 并发请求会耗尽连接导致挂起。顺序跑每只 ~3-5s。
+    out: list[dict[str, Any]] = []
+    for s in syms:
+        try:
+            r = await _run_trade_one(
+                mac_client, client, s.get("market", "SH"), s.get("code", ""),
+                req.count, req.stop_loss_pct, req.take_profit_pct,
+            )
+            out.append(r)
+        except Exception as e:  # noqa: BLE001
+            out.append({"symbol": f"{s.get('market','')}{s.get('code','')}", "error": str(e)[:120]})
+    return {
+        "stop_loss_pct": req.stop_loss_pct,
+        "take_profit_pct": req.take_profit_pct,
+        "results": out,
+    }
+
+
+# ── 历史回放：验证「30min 买点买→5min 卖点卖/止损止盈」策略真实表现 ──────
+# 对全部历史买点逐个模拟：确认日(分型右根走完)按确认价买入，之后逐根跟踪
+# 30min K 线，触及止损/止盈/5min卖点则出场。无未来函数——买入只用确认日
+# 之前已知的信号，跟踪只用确认日之后的数据。
+
+
+def _track_trade(
+    klines: list,
+    buy_idx: int,
+    buy_price: float,
+    stop_loss: float,
+    take_profit: float,
+    sell5_after: dict[str, Any] | None = None,
+) -> tuple[int, float, str]:
+    """纯函数：从买入确认日后逐根跟踪到止损/止盈/5min卖点/持有至今。
+
+    无未来函数：只用 buy_idx 之后的 K 线（range(buy_idx+1, n)）。
+    止损优先（同根先止损后止盈，保守）。
+    sell5_after = 买点后第一个5min卖点（datetime 比较，跨级别对齐）。
+    单测见 test_chanlun_trade_signals。
+    """
+    n = len(klines)
+    for i in range(buy_idx + 1, n):
+        k = klines[i]
+        if k.low <= stop_loss:
+            return i, stop_loss, "止损"
+        if k.high >= take_profit:
+            return i, take_profit, "止盈"
+        if sell5_after:
+            prev_dt = klines[i - 1].date
+            if prev_dt < sell5_after["dt"] <= k.date:
+                return i, sell5_after["price"], f"5min {sell5_after['type']}"
+    return n - 1, float(klines[-1].close), "持有至今"
+
+
+async def _run_trade_replay(
+    mac_client: Any,
+    client: Any,
+    market: str,
+    code: str,
+    count: int,
+    stop_loss_pct: float,
+    take_profit_pct: float,
+) -> dict[str, Any]:
+    """对单只标的做历史回放：所有30min买点→逐根跟踪到止损/止盈/5min卖点。"""
+    from easy_tdx.chanlun import ChanlunAnalyser
+
+    symbol = f"{market}{code}"
+    df_high = await fetch_qfq_klines(mac_client, client, market, code, "MIN_30", 0, count)
+    if df_high is None or len(df_high) < 20:
+        return {"symbol": symbol, "error": "30min 数据不足"}
+
+    # 截断到 count 根：read_klines 命中磁盘缓存时会**整份返回**（忽略 count
+    # 参数，实测 600 → 3976 根），导致 30min 分析从 ~1s 飙到 50s+，浏览器 30s
+    # 超时切断。买卖点识别只需最近 count 根，截断不影响结论正确性。
+    if len(df_high) > count:
+        df_high = df_high.tail(count).reset_index(drop=True)
+
+    low_count = int(min(count * 6 + 200, LOW_MAX_BARS))
+    df_low = await fetch_qfq_klines(mac_client, client, market, code, "MIN_5", 0, low_count)
+    if df_low is not None and len(df_low) > LOW_MAX_BARS:
+        df_low = df_low.tail(LOW_MAX_BARS).reset_index(drop=True)
+
+    high_r = ChanlunAnalyser(code=symbol, frequency="30min").process_klines(df_high)
+    low_r = ChanlunAnalyser(code=symbol, frequency="5min").process_klines(df_low)
+    hk = high_r.klines  # 原始 30min K 线
+    lk = low_r.klines   # 原始 5min K 线
+    hfmt = high_r._fmt_dt
+
+    # 收集所有 30min 买点（确认日=分型右根走完，无未来函数）
+    buy_pts: list[dict[str, Any]] = []
+    for m in high_r.mmds:
+        if not (m.mmd_type and "buy" in m.mmd_type.value and m.bi and m.bi.end):
+            continue
+        c = _compute_confirm(hk, m.bi.end, hfmt)
+        if c["confirm_price"] is not None and c["confirm_idx"] is not None:
+            buy_pts.append({
+                "type": m.mmd_type.value,
+                "ci": c["confirm_idx"],
+                "dt": hk[c["confirm_idx"]].date,
+                "price": c["confirm_price"],
+            })
+
+    # 收集所有 5min 卖点（按确认时间排序，供跟踪时查「买点后第一个卖点」）
+    sell5: list[dict[str, Any]] = []
+    lfmt = low_r._fmt_dt
+    for m in low_r.mmds:
+        if not (m.mmd_type and "sell" in m.mmd_type.value and m.bi and m.bi.end):
+            continue
+        c = _compute_confirm(lk, m.bi.end, lfmt)
+        if c["confirm_price"] is not None and c["confirm_idx"] is not None:
+            sell5.append({"dt": lk[c["confirm_idx"]].date, "price": c["confirm_price"], "type": m.mmd_type.value})
+    sell5.sort(key=lambda s: s["dt"])
+
+    trades: list[dict[str, Any]] = []
+    for bp in buy_pts:
+        ci = bp["ci"]
+        cp = bp["price"]
+        sl = cp * (1 - stop_loss_pct / 100)
+        tp = cp * (1 + take_profit_pct / 100)
+        # 找买点之后的第一个 5min 卖点（datetime 比较，跨级别对齐）
+        next_sell5 = next((s for s in sell5 if s["dt"] > bp["dt"]), None)
+        # 逐根跟踪（纯函数 _track_trade，可单测）
+        exit_i, exit_price, exit_reason = _track_trade(
+            hk, ci, cp, sl, tp, next_sell5,
+        )
+        trades.append({
+            "buy_type": bp["type"],
+            "buy_date": hfmt(bp["dt"]),
+            "buy_price": round(cp, 3),
+            "exit_date": hfmt(hk[exit_i].date),
+            "exit_price": round(exit_price, 3),
+            "exit_reason": exit_reason,
+            "return_pct": round((exit_price / cp - 1) * 100, 2),
+            "hold_bars": exit_i - ci,
+        })
+
+    wins = [t for t in trades if t["return_pct"] > 0]
+    losses = [t for t in trades if t["return_pct"] <= 0]
+    n = len(trades)
+    summary = {
+        "total": n,
+        "wins": len(wins),
+        "losses": len(losses),
+        "win_rate": round(len(wins) / n * 100, 1) if n else 0,
+        "avg_return": round(sum(t["return_pct"] for t in trades) / n, 2) if n else 0,
+        "total_return": round(sum(t["return_pct"] for t in trades), 2),
+        "max_win": max((t["return_pct"] for t in trades), default=0),
+        "max_loss": min((t["return_pct"] for t in trades), default=0),
+    }
+    by_reason: dict[str, list[float]] = {}
+    for t in trades:
+        by_reason.setdefault(t["exit_reason"], []).append(t["return_pct"])
+    summary["by_reason"] = {k: {"count": len(v), "avg": round(sum(v) / len(v), 2)} for k, v in by_reason.items()}
+    return {"symbol": symbol, "trades": trades, "summary": summary}
+
+
+class ChanlunReplayRequest(BaseModel):
+    """历史回放请求。"""
+    market: str = Field(default="SH")
+    code: str = Field(description="股票代码，如 600000")
+    stop_loss_pct: float = Field(default=5.0)
+    take_profit_pct: float = Field(default=20.0)
+    count: int = Field(default=600, description="30min K 线数（默认600≈75交易日）")
+
+
+@router.post("/chanlun/trade-replay")
+async def chanlun_trade_replay(
+    req: ChanlunReplayRequest,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
+    """历史回放：所有30min买点→逐根跟踪止损/止盈/5min卖点出场。
+
+    无未来函数：买入只用确认日（分型右根走完）之前已知信号，跟踪只用
+    确认日之后数据。返回每笔交易明细 + 胜率/均收/总收/最大盈亏汇总。
+    """
+    return await _run_trade_replay(
+        mac_client, client, req.market, req.code,
+        req.count, req.stop_loss_pct, req.take_profit_pct,
+    )
 
 
 class ChanlunRecommendRequest(ChanlunRequest):

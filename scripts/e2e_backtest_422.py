@@ -14,7 +14,7 @@
   10 页全 concat ⇒ 15000 根，POST /backtest/run 撞上
   `BacktestRequest.ohlcv max_length=2000` ⇒ 422 too_long。
 
-  与策略无关（chanlun / chanlun_pair / changying_chanlun / ma_cross 全复现），
+  与策略无关（chanlun / changying_chanlun / ma_cross 全复现），
   只是缠论页默认区间最长，所以用户以为「选缠论才报错」。
 
 AGENTS.md §1：不能拿「DOM 里有下拉框」冒充验证，必须断言**真实行为**——
