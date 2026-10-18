@@ -314,7 +314,7 @@ def main():
     ap.add_argument("--atr-stop", action="store_true")
     ap.add_argument("--all", action="store_true", help="全部优化开启")
     ap.add_argument("--trend-hold", action="store_true", help="周线上行时忽略卖点(让利润奔跑)")
-    ap.add_argument("--stop-pct", type=float, default=0.08, help="止损百分比(默认0.08=8%)")
+    ap.add_argument("--stop-pct", type=float, default=0.08, help="止损百分比 默认0.08即8pct")
     ap.add_argument("--trailing-stop", action="store_true", help="移动止损(跟踪峰值回撤)")
     a = ap.parse_args()
     if a.all:
