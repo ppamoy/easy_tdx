@@ -157,7 +157,11 @@ def decompose_same_level(
     if config is None:
         config = ChanlunConfig()
 
-    min_lines = max(3, int(getattr(config, "zs_min_lines", _MIN_CENTRAL_SEGMENTS)))
+    # V857 偏差16（same_level subagent 报告偏差2）：第38课「只要5分钟级别的
+    # 三段上下上或下上下类型有价格区间的重合就构成中枢」——「三段」是同级别
+    # 分解的固定常量。原 `max(3, getattr(config, "zs_min_lines", ...))` 读的是
+    # 非同级别分解配置（合法范围 3~5），会把中枢段数污染成 4/5。改用固定常量。
+    min_lines = _MIN_CENTRAL_SEGMENTS
     if len(bis) < min_lines:
         # 不足以构成任何中枢：整段作为一个「未完成走势类型」返回。
         if not bis:

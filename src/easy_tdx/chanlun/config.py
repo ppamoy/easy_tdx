@@ -246,7 +246,16 @@ class ChanlunConfig:
     # 2. 复核脚本用 `ChanlunAnalyser.process_klines` 跑对照，但它内部用的是
     #    **已安装**的 mmd 模块，不是我 exec 出来的副本 ⇒ 两组其实跑的是同一份代码，
     #    得出「A 与 C 完全一致」的假结论。A/B 必须**直接调被 patch 的模块函数**。
-    mmd_2nd_span_max_bars: int = 40
+    # V857 偏差10：默认改为 0（纯原文口径，不限根数）。
+    # 第101课原文：第二类买点「第一次回拉不破前低」，无固定根数限制；
+    # 原默认 40 会静默吞掉间隔 >40 根的第二类买卖点（无原文依据）。
+    # mmd.py L2376 注释本就声明「默认放开(0=不限纯原文)」，但此默认值与之矛盾。
+    # 想按周期收紧的可显式设非零值。
+    mmd_2nd_span_max_bars: int = 0
+    # V857 偏差13（subagent报告偏差2）：1买后「找离开笔」的硬编码 30 根。
+    # 第101课无此限制；原硬编码会吞掉 1买后 >30 根才出现向上笔的情形。
+    # 默认 0=不限（纯原文）；与 mmd_2nd_span_max_bars 同口径。
+    mmd_2nd_leave_max_bars: int = 0
 
     # ── 线段级别买卖点配置（seg_mmd）────────────────────────────────────
     # use_seg_mmd=True: 使用线段末端买卖点检测（参考 chan.py 的 CBSPointList）
@@ -314,6 +323,7 @@ class ChanlunConfig:
             "mmd_3rd_retest_max_bars": self.mmd_3rd_retest_max_bars,
             "bi_force_normalize": self.bi_force_normalize,
             "mmd_2nd_span_max_bars": self.mmd_2nd_span_max_bars,
+            "mmd_2nd_leave_max_bars": self.mmd_2nd_leave_max_bars,
             "macd_fast": self.macd_fast,
             "macd_slow": self.macd_slow,
             "macd_signal": self.macd_signal,

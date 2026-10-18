@@ -213,7 +213,11 @@ def _detect_t1(
         # 买点 = 下跌线段结束（向下线段最后一笔是向下，end_bi 是底分型）
         # 卖点 = 上涨线段结束
 
-        if multi_bi_zss and multi_bi_zss[-1].exit_bi is not None:
+        # V857 偏差11：原文第28课「包含两个以上日线中枢的，那一定是日线
+        # 级别的趋势；包含一个中枢的是盘整」。趋势背驰(T1)须 ≥2 中枢，
+        # 仅 1 个中枢的盘整背驰走 T1P 分支。原 `if multi_bi_zss`（非空=≥1）
+        # 把盘整也当趋势背驰，偏离原文。
+        if len(multi_bi_zss) >= 2 and multi_bi_zss[-1].exit_bi is not None:
             # ── T1: 趋势背驰 ──
             last_zs = multi_bi_zss[-1]
             enter_bi = last_zs.enter_bi
@@ -260,7 +264,48 @@ def _detect_t1(
                 mmds.append(mmd)
         else:
             # ── T1P: 盘整背驰 ──
-            # 无多笔中枢，检查最后两根同向笔
+            # V857 偏差11：原文盘整=1中枢，盘整背驰比较该中枢 enter/exit 笔 MACD
+            # （与趋势背驰同口径，区别仅在中枢数）。原代码 1 中枢走 T1（误标趋势
+            # 背驰）、0 中枢走「最后两根同向笔」（原文无此概念，作兜底保留）。
+            # 现 1 中枢改走 T1P 的 enter/exit 比较；仅 0 中枢才用最后两根同向笔。
+            if len(multi_bi_zss) == 1 and multi_bi_zss[-1].exit_bi is not None:
+                last_zs = multi_bi_zss[-1]
+                enter_bi = last_zs.enter_bi
+                exit_bi = last_zs.exit_bi
+                if enter_bi is None or exit_bi is None:
+                    continue
+                enter_ks = _bi_start_kindex(enter_bi)
+                enter_ke = _bi_kindex(enter_bi)
+                exit_ks = _bi_start_kindex(exit_bi)
+                exit_ke = _bi_kindex(exit_bi)
+                if macd_algo == "area":
+                    in_metric = _macd_area(macd_data, enter_ks, enter_ke)
+                    out_metric = _macd_area(macd_data, exit_ks, exit_ke)
+                else:
+                    in_metric = _macd_peak(macd_data, enter_ks, enter_ke, not is_down)
+                    out_metric = _macd_peak(macd_data, exit_ks, exit_ke, not is_down)
+                is_diver = out_metric <= divergence_rate * (in_metric + 1e-7)
+                if not is_diver:
+                    is_target = False
+                if bs1_peak:
+                    if is_down:
+                        if exit_bi.low > enter_bi.low:
+                            is_target = False
+                    else:
+                        if exit_bi.high < enter_bi.high:
+                            is_target = False
+                mmd_type = MMDType.BUY_1 if is_down else MMDType.SELL_1
+                mmd = MMD(
+                    mmd_type=mmd_type,
+                    zs=last_zs,
+                    bi=end_bi,
+                    msg=f"T1P 盘整背驰 diver_rate={out_metric/(in_metric+1e-7):.3f}",
+                    confidence=max(0.0, min(1.0, out_metric / (in_metric + 1e-7))) if in_metric > 0 else 0.5,
+                )
+                if is_target:
+                    mmds.append(mmd)
+                continue
+            # 0 中枢兜底：原文无此概念，保留最后两根同向笔比较
             if end_bi_pos < 2:
                 continue
             last_bi = bis[end_bi_pos]

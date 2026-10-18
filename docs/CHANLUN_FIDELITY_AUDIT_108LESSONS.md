@@ -391,3 +391,42 @@
 | `/tmp/audit_round17.py` | 死代码核查、引文全文检索、else 分支一致性 |
 
 （脚本均在 `/tmp/`，未写入仓库；只读审计，仓库零改动。）
+
+---
+
+## V857 第二轮审计（2026-10-17，seg_mmd + mmd.py + config.py）
+
+对照原文 108 课，用 4 个 subagent 并行审计 seg_mmd / mmd_v102 / multi_level / same_level，
+并自行核查 config.py 阈值与 mmd.py 离开笔逻辑。
+
+### 本轮修复的偏差（低风险，无原文依据的根数/中枢数限制）
+
+| 偏差# | 位置 | 原文依据 | 修复 |
+|---|---|---|---|
+| 10 | `config.py` `mmd_2nd_span_max_bars` 默认 40 | 第101课「第二类买点第一次回拉不破前低」无根数限制 | 默认改 0（纯原文）；V734 回退到 40 的理由已被 V8「只认第一个回调笔」逻辑推翻 |
+| 11 | `seg_mmd.py` `_detect_t1` L216 `if multi_bi_zss`（≥1） | 第28课 L587「包含两个以上中枢=趋势，1中枢=盘整」 | T1 趋势背驰改要求 ≥2 中枢；1 中枢走 T1P 盘整背驰（enter/exit 比较，与 T1 同口径） |
+| 13 | `mmd.py` L2452/2668 离开笔硬编码 `> 30` | 第101课无 K 线根数限制 | 新增 `config.mmd_2nd_leave_max_bars`（默认 0=不限），买卖两侧对称 |
+| 14 | `multi_level.py` L288 `_detect_trend_direction` 用 `bis[0::2]` 当上升笔 | 第17课趋势/盘整只与中枢有关，方向靠笔本身 | 改用 `BI.direction`（Direction.UP/DOWN）按方向分组，不再假设首笔上升 |
+| 15 | `multi_level.py` L325 `_detect_bi_overlap` 相邻笔恒真 | 第17课「向上+向下+向上必然产生中枢」 | 改为检测连续 3 笔价格重叠区间（中枢雏形），不再逐对相邻笔 |
+| 16 | `same_level.py` L160 `min_lines` 读 `config.zs_min_lines`（3~5 可变） | 第38课「三段」固定常量 | 改用 `_MIN_CENTRAL_SEGMENTS` 常量（3），不读非同级别分解配置 |
+
+### 经核查确认的架构缺口/intentional 工程权衡（保留，注释已诚实标注）
+
+| 偏差# | 位置 | 性质 | 保留理由 |
+|---|---|---|---|
+| 12 | `config.py` `zs_from_xd=False` 用笔构中枢 | 架构缺口 | 第17/91课「中枢=次级别走势类型重叠」「笔不能构中枢」；但单级别分析缺次级别递归，注释 L69-71 已承认「未精确实现，zs_cross_timeframe=True 是近似」。修复需架构大改（次级别递归），风险高 |
+| 1 | `mmd.py` 2买默认用同级别笔而非次级别走势 | intentional 近似 | 第101课「次级别回抽」；但 analyser 默认单级别无次级别数据，注释承认「默认走同级别近似，原文精确口径只在跨周期模式生效」 |
+| 2(subagent) | `mmd_conditions.py:16694` 笔背驰/盘整背驰兜底 | intentional 权衡 | 第53/27课「盘整背驰≠第一类买点」；注释 L16643-16648 自认「strict 版破 15 个回归测试，故 revert 为 soft」 |
+| 5(subagent) | `mmd.py:1928` 去重阈值 5笔/3% | intentional 工程去重 | 第29课「不能放过任何情况」；但注释自认「工程去重，非缠论原文规则」，默认开启避免同底重复发 1买 |
+| SL-1 | `same_level.py:206` 每个 TrendSegment `zss=[zs]` 单元素，`is_trend` 恒 False | 结构性 | 第17课趋势=≥2中枢；但同级别分解每段只挂1中枢，趋势类型被拆成多个盘整段。修复需重构分段逻辑（允许一段含多中枢），风险高 |
+| SL-3/4 | `same_level.py:197` 第4段无条件按3切（不看延伸重合）；`kind="none"` 零散段当独立走势类型 | 算法近似 | 第38课「延伸出6段才拆」；当前按3机械切。离开段标 none 污染下游机械操作判定。修复需重写切分逻辑 |
+| ML-1~4 | `multi_level.py` compute_confluence_score 用时间窗计数非走势分解；has_trend 缺「依次同向/无重叠/已完成」；背驰力度用收盘价非MACD面积；不锚定同一中枢 | 架构缺口 | 第38/17/27/61课；但主路径(chanlun.py:790)已用 compute_qujiantao_cross_period 补救真区间套，confluence_score 是辅助API |
+| ML-7~12 | `multi_level.py` 中枢对齐只看时间不看价格；3天硬编码；级别关系零校验；只比最后一对MMD | intentional 启发式 | 第20/27/61课；confluence_score 是工程发明的共振评分（原文无此概念），加权只影响 confidence 不改变买卖点识别 |
+
+### 经核查确认符合原文的项（非偏差）
+
+- `same_level.py` 趋势=≥2 中枢、盘整=1 中枢（L86-87，第17课）✅
+- `multi_level.py` `query_low_level_qs` 用真实双周期 result（L202-203），非伪递归 ✅
+- `seg_mmd.py` 三类买卖点 T3A「突破后不回中枢上沿」（L576，第20课）✅
+- `qujiantao.py` 文档诚实区分 cross_period（真）/recursive（伪3%）/synthetic（合成），前端区分显示 ✅
+- `level_synth.py` 文档诚实标注「近似，非真实 Tick」，无调用当真区间套 ✅

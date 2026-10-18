@@ -306,6 +306,8 @@ find_mmds (mmd.py:1000)
   配合 `config.py:276` `seg_min_zs_cnt: int = 1`（**允许只有 1 个中枢**就算"趋势背驰"）与 `config.py:296` `seg_macd_algo: str = "peak"`（默认峰值）。
 - **偏差**：
   1. 单中枢即触发"T1 趋势背驰"（原文：第一个中枢的背驰只能是盘整背驰，第27课 line 8）；
+     **✅ V857 已修**：seg_mmd.py `_detect_t1` 改为要求 `len(multi_bi_zss) >= 2`（第28课 L587 趋势=≥2中枢）；
+     1 中枢走 T1P 盘整背驰分支（enter/exit 比较，与 T1 同口径区别仅中枢数=1）。
   2. 默认 `peak`（峰值）而非原文的「柱子面积」（第24课 line 19）；
   3. 无黄白线 0 轴检查（同偏差 3）。
 - **实测证据**：`config.py:270` `use_seg_mmd: bool = False` ⇒ 默认路径不触发，仅用户显式开启后才生效。

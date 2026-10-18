@@ -364,24 +364,16 @@ class TestSecondTypeSpanWindowConfigurable:
     阈值在周线/月线上跨周期不等价。
     """
 
-    def test_default_is_40_keeps_pre_v734_behaviour(self) -> None:
-        """默认 = 40，刻意保持 V734 之前的实际行为（不是"推荐值"）。
+    def test_default_is_0_pure_original(self) -> None:
+        """默认 = 0（纯原文口径，不限根数）。
 
-        ⚠️ 本断言的历史：这里原本断言「默认 == 0（不限，纯原文口径）」。
-        V734 把它改成 **40**，是一次**有意的回退**，理由（实测，见
-        docs/CHANLUN_FIDELITY_AUDIT_V734.md §3）：
-          - 本项长期形同虚设 —— mmd.py 另有硬编码 `total_time > 40`，
-            与本项并存且不受本项控制，所以设 0 时实际一直是 40 ⇒
-            「默认 0」从来没生效过，"纯原文口径"是**纸面口径**。
-          - 真放开（B 完全不限）会引入新偏误：1买 之后**任意远**的回调笔
-            都被收进来（000333 实测 99% 回撤档位误发 2buy@笔6），
-            并把 V731 对称性测试搞红 2 个。
-          - 「只认第一笔回调」(C) 虽不引入任意根数，但比现状严 21%，
-            **未做收益验证**。
-        ⇒ 默认取 40，把"真实行为"和"配置项"对齐，让两者不再互相骗人；
-        想试 B 的自己设 0，想收紧设正整数。**默认不动，等收益验证。**
+        V857 偏差10：第101课原文「第二类买点第一次回拉不破前低」无根数限制；
+        原默认 40 无原文依据。V734 回退到 40 的理由（「真放开会收任意远回调笔」）
+        已被 V8「只认第一个回调笔」逻辑（mmd.py L2506：遇到第一个回调笔不合格
+        即结束搜索，不顺延）推翻 —— 不会再把 1买 后任意远的回调收进来。
+        故恢复默认 0（纯原文）；想按周期收紧的可显式设正整数。
         """
-        assert ChanlunConfig().mmd_2nd_span_max_bars == 40
+        assert ChanlunConfig().mmd_2nd_span_max_bars == 0
         assert "mmd_2nd_span_max_bars" in ChanlunConfig().to_dict()
 
     def test_span_gate_actually_applies(self) -> None:

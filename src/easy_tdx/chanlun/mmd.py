@@ -2444,12 +2444,14 @@ def _find_second_type_mmds(
             existing_positions.add(bi_pos)
             continue  # 跳过下方同级别笔回调判定
 
-        # V8: 在1买之后找向上笔（离开笔），限制在30根K线内
+        # V857 偏差13：1买后找离开笔，原硬编码 30 根（无原文依据，第101课无此限制）。
+        # 改用 config.mmd_2nd_leave_max_bars 控制，默认 0=不限（纯原文口径）。
+        _max_leave_bars = int(getattr(config, "mmd_2nd_leave_max_bars", 0) or 0)
         leave_bi_up = None
         for bi in bis[buy_1_idx + 1 :]:
             if bi.direction.value == "up":
                 time_to_leave = bi.start.k.k_index - buy_1_end_k
-                if time_to_leave > 30:  # V8: 时间窗口限制
+                if _max_leave_bars > 0 and time_to_leave > _max_leave_bars:
                     break
                 leave_bi_up = bi
                 break
@@ -2493,8 +2495,8 @@ def _find_second_type_mmds(
         #   C 只认第一笔回调：不引入任意根数，但**比现状更严**。
         #     25 只日线：A 合计 135 → C 合计 107（买 -16、卖 -12，少 21%）。
         #     是否"更准/更赚"**未验证**，不敢当成默认改掉。
-        # 故：默认仍走 config.mmd_2nd_span_max_bars=40（= 修复前的实际行为），
-        # 想放开的自己设 0；设 0 时**真的**不限（不再被硬编码架空）。
+        # V857 偏差10：config 默认已改为 0（纯原文口径，不限根数），
+        # 与 L2376 注释「默认放开」一致；想按周期收紧的可显式设非零。
         found_2buy = False
         found_2s_buy = False
         for bi in bis[bis.index(leave_bi_up) + 1 :]:
@@ -2658,12 +2660,14 @@ def _find_second_type_mmds(
             existing_positions.add(bi_pos)
             continue
 
-        # V8: 在1卖之后找向下笔（离开笔），限制在30根K线内
+        # V857 偏差13：1卖后找离开笔，原硬编码 30 根（无原文依据）。
+        # 改用 config.mmd_2nd_leave_max_bars 控制，默认 0=不限（与买侧同口径）。
+        _max_leave_bars = int(getattr(config, "mmd_2nd_leave_max_bars", 0) or 0)
         leave_bi_down = None
         for bi in bis[sell_1_idx + 1 :]:
             if bi.direction.value == "down":
                 time_to_leave = bi.start.k.k_index - sell_1_end_k
-                if time_to_leave > 30:
+                if _max_leave_bars > 0 and time_to_leave > _max_leave_bars:
                     break
                 leave_bi_down = bi
                 break

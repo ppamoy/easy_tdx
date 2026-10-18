@@ -10,7 +10,7 @@ from datetime import datetime
 from typing import Any
 
 from easy_tdx.chanlun.analyser import ChanlunAnalyser, ChanlunResult
-from easy_tdx.chanlun.types import BI
+from easy_tdx.chanlun.types import BI, Direction
 
 
 def _to_datetime(dt: Any) -> Any:
@@ -285,9 +285,12 @@ def _detect_trend_direction(bis: list[BI]) -> str | None:
     if len(bis) < 3:
         return None
 
-    # 取偶数索引笔（上升笔）和奇数索引笔（下降笔）
-    up_bis = bis[0::2]
-    down_bis = bis[1::2]
+    # V857 偏差14（multi_level subagent 报告偏差5）：原用 bis[0::2] 当上升笔、
+    # bis[1::2] 当下降笔——假设序列必以上升笔开头。但 BI 自带 direction 字段
+    # （types.py:112 Direction.UP/DOWN），窗口切片首笔可能是下降笔，导致双向误判。
+    # 改用 BI.direction 按方向分组（第17课趋势/盘整只与中枢有关，方向判定靠笔本身）。
+    up_bis = [b for b in bis if b.direction == Direction.UP]
+    down_bis = [b for b in bis if b.direction == Direction.DOWN]
 
     # 上升趋势：上升笔高点递增 + 下降笔低点递增
     if len(up_bis) >= 3:
@@ -315,14 +318,22 @@ def _detect_trend_direction(bis: list[BI]) -> str | None:
 
 
 def _detect_bi_overlap(bis: list[BI]) -> bool:
-    """检测相邻笔是否有价格重叠（盘整特征）。"""
-    if len(bis) < 2:
+    """检测是否存在 3 笔构成的价格重叠区间（盘整/中枢特征）。
+
+    V857 偏差15（multi_level subagent 报告偏差6）：原实现逐对相邻笔判
+    `prev.low <= curr.high and curr.low <= prev.high`——但缠论笔由顶底
+    分型交替构成，相邻笔**必然共享端点分型**，该判据在真实笔序列上恒真，
+    无信息量。第17课「向上+向下+向上必然产生中枢」⇒ 改为检测连续 3 笔
+    的价格重叠区间（中枢雏形）：区间 = [max(low), min(high)]，存在即重叠。
+    """
+    if len(bis) < 3:
         return False
 
-    for i in range(1, len(bis)):
-        prev = bis[i - 1]
-        curr = bis[i]
-        if prev.low <= curr.high and curr.low <= prev.high:
+    for i in range(2, len(bis)):
+        tri = bis[i - 2 : i + 1]
+        hi = min(b.high for b in tri)
+        lo = max(b.low for b in tri)
+        if hi > lo:  # 三笔价格区间有重叠 → 中枢雏形
             return True
 
     return False
