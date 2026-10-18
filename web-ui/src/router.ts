@@ -18,6 +18,7 @@ import SignalCheckView from './views/SignalCheckView.vue'
 import WatchlistView from './views/WatchlistView.vue'
 import PickHubView from './views/PickHubView.vue'
 import TradeView from './views/TradeView.vue'
+import Chanlun2View from './views/Chanlun2View.vue'
 
 // 单标的回测（/）+ 缠论分析（/chanlun）+ 长赢投资（/changying）+ 动态选股（/screening）+ 组合回测（/portfolio）+ 参数寻优（/optimize）+ 结果对比（/compare）+ 策略库（/strategies）+ 服务器设置（/settings）+ 信号监控（/monitor）+ 技术诊断（/diagnosis）+ 吴伟志+缠论融合（/hybrid）。
 const routes: RouteRecordRaw[] = [
@@ -46,6 +47,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/data-cache', name: 'data-cache', component: DataCacheView },
   { path: '/pick', name: 'pick', component: PickHubView },
   { path: '/trade', name: 'trade', component: TradeView },
+  { path: '/chanlun2', name: 'chanlun2', component: Chanlun2View },
 ]
 
 export const router = createRouter({

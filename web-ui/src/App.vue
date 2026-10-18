@@ -20,7 +20,7 @@ function handleKeydown(e: KeyboardEvent) {
 // 树粮菜融合(/hybrid)、缠论选股(/pick)、组合/寻优/对比/策略库/自选股看板 均入导航。
 const route = useRoute()
 const CORE_PATHS = [
-  '/learn', '/', '/signal-check', // 缠论学习回测
+  '/learn', '/', '/signal-check', '/chanlun2', // 缠论学习回测
   '/changying', '/today', // 长赢选股
   '/pick', // 选股
   '/portfolio', '/optimize', '/compare', '/strategies', '/watchlist', // 工具
@@ -44,6 +44,7 @@ onUnmounted(() => document.removeEventListener('keydown', handleKeydown))
         <div class="nav-group">
           <span class="nav-label">缠论学习回测</span>
           <RouterLink to="/learn" active-class="active">缠论学习</RouterLink>
+          <RouterLink to="/chanlun2" active-class="active">缠论2(108课原文)</RouterLink>
           <RouterLink to="/" active-class="active">单标的回测</RouterLink>
           <RouterLink to="/signal-check" active-class="active">买卖点核对</RouterLink>
         </div>

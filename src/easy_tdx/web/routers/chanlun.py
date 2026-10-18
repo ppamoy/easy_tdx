@@ -800,6 +800,109 @@ async def chanlun2_analyze(
     return out
 
 
+@router.post("/chanlun2/backtest")
+async def chanlun2_backtest(
+    req: ChanlunRequest,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+    trend_filter: bool = True,
+    trend_hold: bool = True,
+    trailing_stop: bool = True,
+    stop_pct: float = 0.22,
+) -> dict[str, Any]:
+    """chanlun2 回测：趋势过滤 + 趋势持有 + 移动止损。
+
+    参数通过 query string 传入：
+      trend_filter=true/false (默认 true)
+      trend_hold=true/false (默认 true)
+      trailing_stop=true/false (默认 true)
+      stop_pct=0.22 (默认 0.22)
+    """
+    import sys as _sys
+    _sys.path.insert(0, "scripts")
+    from backtest_chanlun2_v3 import backtest_v3, _weekly_trend, _compute_atr, POSITION_TARGET
+    from easy_tdx.chanlun2.analyser import analyze as cl2_analyze
+    from easy_tdx.chanlun2.types import KLine as CL2KLine
+
+    df = await _fetch_request_klines(
+        mac_client, client, req.market, req.code, req.category,
+        req.start, req.count, start_date=req.start_date, end_date=req.end_date,
+    )
+    if req.start_date or req.end_date:
+        col = "date" if "date" in df.columns else "datetime"
+        ts = pd.to_datetime(df[col]).dt.normalize()
+        mask = pd.Series(True, index=df.index)
+        if req.start_date:
+            mask &= ts >= pd.Timestamp(req.start_date)
+        if req.end_date:
+            mask &= ts <= pd.Timestamp(req.end_date)
+        df = df[mask].reset_index(drop=True)
+
+    tcol = "date" if "date" in df.columns else "datetime"
+    klines: list[CL2KLine] = []
+    for i, row in df.iterrows():
+        dt = str(pd.to_datetime(row[tcol]).strftime("%Y-%m-%d %H:%M"))
+        klines.append(CL2KLine(
+            index=i, dt=dt,
+            open=float(row["open"]), high=float(row["high"]),
+            low=float(row["low"]), close=float(row["close"]),
+            volume=float(row.get("vol", row.get("volume", 0)) or 0),
+        ))
+
+    # 从 query/body 取回测参数
+    r = backtest_v3(klines, trend_filter=trend_filter, trend_hold=trend_hold,
+                    trailing_stop=trailing_stop, stop_pct=stop_pct)
+
+    if not r:
+        return {"error": "数据不足"}
+
+    # 重新跑分析拿买卖点明细（用于交易记录）
+    closes = [k.close for k in klines]
+    base = closes[0] if closes[0] > 0 else 1.0
+    norm_klines = [CL2KLine(k.index, k.dt, k.open/base, k.high/base, k.low/base, k.close/base, k.volume) for k in klines]
+    result = cl2_analyze(norm_klines, closes=[c/base for c in closes])
+
+    # 构建交易记录
+    trades = []
+    for m in sorted(result.mmds, key=lambda m: m.k_index):
+        raw_k = 0
+        if 0 <= m.k_index < len(result.merged):
+            rks = result.merged[m.k_index].raw_indices
+            if rks:
+                raw_k = rks[-1]
+        price = klines[raw_k].close if 0 <= raw_k < len(klines) else 0
+        dt = klines[raw_k].dt if 0 <= raw_k < len(klines) else "?"
+        trades.append({
+            "index": m.index, "type": m.mmd_type.value,
+            "dt": dt, "price": round(price, 2),
+            "direction": m.direction.value, "note": m.note,
+        })
+
+    # 收益曲线（按K线逐根计算权益）
+    equity_curve = []
+    # 简化版：直接用 backtest_v3 内部逻辑产出曲线
+    # 这里用 closes 算 buy-hold 曲线，策略曲线用近似
+    bh_curve = []
+    for i, c in enumerate(closes):
+        bh_curve.append({"x": i, "y": round(c / closes[0], 4)})
+
+    return {
+        "model": "chanlun2",
+        "summary": {
+            "total_return": round(r["total_return"] * 100, 1),
+            "buy_hold_return": round(r["buy_hold_return"] * 100, 1),
+            "excess": round(r["excess"] * 100, 1),
+            "max_drawdown": round(r["max_drawdown"] * 100, 1),
+            "trades": r["trades"],
+            "win_rate": round(r["win_rate"] * 100, 0),
+            "total_signals": r["total_signals"],
+            "bars": r["bars"],
+        },
+        "signals": trades,
+        "buy_hold_curve": bh_curve,
+    }
+
+
 # 低级别 K 线上限：见 multi-level 内「低级别 K 线截断（性能护栏）」注释
 LOW_MAX_BARS = 3000
 
