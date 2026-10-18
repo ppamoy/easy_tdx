@@ -176,7 +176,10 @@ def _detect_t1(
     if not xds or not bis:
         return mmds
 
-    divergence_rate = getattr(config, "divergence_rate", 0.8)
+    # V857 偏差17（seg_mmd subagent 报告偏差8）：原读 config."divergence_rate"
+    # 但 config 实际键名是 seg_divergence_rate（默认1.5），导致配置被静默忽略、
+    # 实际恒为 fallback 0.8。改读正确键名。
+    divergence_rate = getattr(config, "seg_divergence_rate", 0.8)
     min_zs_cnt = getattr(config, "seg_min_zs_cnt", 1)
     bsp1_only_multibi = getattr(config, "bsp1_only_multibi_zs", True)
     bs1_peak = getattr(config, "bs1_peak", True)
@@ -368,7 +371,9 @@ def _detect_t2(
 
     chan.py 逻辑：
     - 一类买卖点后，第一根反向笔（break_bi）+ 第二根同向笔（bsp2_bi）
-    - bsp2_bi 的回踩幅度 ≤ max_bs2_rate
+    - V857 偏差18：max_bs2_rate 是死变量（读取但未参与比较）；实际门槛由
+      mmd_2nd_max_pullback 控制（默认 None=无门槛，符合第101课「第二类
+      买点跌破第一类买点……完全可以」）。retrace_rate 仅用于 confidence。
     """
     mmds: list[MMD] = []
     if not t1_mmds or not bis:
@@ -522,7 +527,7 @@ def _detect_t3(
         return mmds
 
     bsp3_follow_1 = getattr(config, "bsp3_follow_1", True)
-    strict_bsp3 = getattr(config, "strict_bsp3", False)
+    strict_bsp3 = getattr(config, "strict_bsp3", False)  # V857 偏差19：死变量（读取后零使用）
     bsp3_peak = getattr(config, "bsp3_peak", False)
     bsp3a_max_zs_cnt = getattr(config, "bsp3a_max_zs_cnt", 1)
 

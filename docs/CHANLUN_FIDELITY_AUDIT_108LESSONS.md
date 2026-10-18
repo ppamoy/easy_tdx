@@ -409,6 +409,9 @@
 | 14 | `multi_level.py` L288 `_detect_trend_direction` 用 `bis[0::2]` 当上升笔 | 第17课趋势/盘整只与中枢有关，方向靠笔本身 | 改用 `BI.direction`（Direction.UP/DOWN）按方向分组，不再假设首笔上升 |
 | 15 | `multi_level.py` L325 `_detect_bi_overlap` 相邻笔恒真 | 第17课「向上+向下+向上必然产生中枢」 | 改为检测连续 3 笔价格重叠区间（中枢雏形），不再逐对相邻笔 |
 | 16 | `same_level.py` L160 `min_lines` 读 `config.zs_min_lines`（3~5 可变） | 第38课「三段」固定常量 | 改用 `_MIN_CENTRAL_SEGMENTS` 常量（3），不读非同级别分解配置 |
+| 17 | `seg_mmd.py` L179 `getattr(config,"divergence_rate",0.8)` 读错键名 | config 实际是 `seg_divergence_rate=1.5` | 改读正确键名 `seg_divergence_rate`（修复配置被静默忽略恒为0.8） |
+| 18 | `seg_mmd.py` L374 docstring「回踩≤max_bs2_rate」失实 | max_bs2_rate 是死变量 | 修 docstring 标明实际由 mmd_2nd_max_pullback 控制（默认None=无门槛符合第101课） |
+| 19 | `seg_mmd.py` L530 `strict_bsp3` 死变量（读取零使用） | — | 加注释标明死变量（保留 config 项兼容） |
 
 ### 经核查确认的架构缺口/intentional 工程权衡（保留，注释已诚实标注）
 
@@ -422,6 +425,11 @@
 | SL-3/4 | `same_level.py:197` 第4段无条件按3切（不看延伸重合）；`kind="none"` 零散段当独立走势类型 | 算法近似 | 第38课「延伸出6段才拆」；当前按3机械切。离开段标 none 污染下游机械操作判定。修复需重写切分逻辑 |
 | ML-1~4 | `multi_level.py` compute_confluence_score 用时间窗计数非走势分解；has_trend 缺「依次同向/无重叠/已完成」；背驰力度用收盘价非MACD面积；不锚定同一中枢 | 架构缺口 | 第38/17/27/61课；但主路径(chanlun.py:790)已用 compute_qujiantao_cross_period 补救真区间套，confluence_score 是辅助API |
 | ML-7~12 | `multi_level.py` 中枢对齐只看时间不看价格；3天硬编码；级别关系零校验；只比最后一对MMD | intentional 启发式 | 第20/27/61课；confluence_score 是工程发明的共振评分（原文无此概念），加权只影响 confidence 不改变买卖点识别 |
+| SM-1~4 | `seg_mmd.py` T3A参照中枢对象错误/未首次性/T3B机械按笔索引/_map_zs_to_seg跨线段错配 | 结构性 | 第20/61课；T3A需追踪「被离开的中枢」而非下一段自身中枢、首次性需校验、T3B需按5段结构判定、_map_zs_to_seg需按中枢归属重写。use_seg_mmd默认False，零测试覆盖，结构性重写风险高 |
+| SM-5 | `seg_mmd.py` T1/T1P输出同一MMDType.BUY_1 | 架构缺口 | 第27课「盘整背驰≠第一类买点」；但seg_mmd只有3类买卖点类型无盘整背驰类型，需新增MMDType或盘整背驰单独处理 |
+| SM-6 | `seg_mmd.py` 背驰用峰值非面积+无0轴回拉 | intentional 默认 | 第24课要求面积+黄白线回拉0轴；config seg_macd_algo支持"area"，默认"peak"是性能权衡，dif/dea 0轴回拉缺失 |
+| SM-7 | `seg_mmd.py` 2买在笔上判定 | 架构缺口 | 第101/17课要求次级别走势；与偏差1同源，analyser单级别缺次级别数据 |
+| SM-10 | `seg_mmd.py` 类二买卖点(T2S)自创 | intentional 工程 | 108课无「类二」；定义「2买后重叠同向笔」是工程扩展，与第53课中枢震荡区无买卖点张力，但默认关闭可接受 |
 
 ### 经核查确认符合原文的项（非偏差）
 
