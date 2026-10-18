@@ -661,6 +661,145 @@ class ChanlunMultiLevelRequest(ChanlunRequest):
     low_level: str = Field(default="MIN_30", description="低级别周期（如 MIN_30, MIN_5）")
 
 
+@router.post("/chanlun2/analyze")
+async def chanlun2_analyze(
+    req: ChanlunRequest,
+    client: Any = Depends(get_client),
+    mac_client: Any | None = Depends(get_mac_client_optional),
+) -> dict[str, Any]:
+    """chanlun2 缠论模型2分析（严格按108课原文从头实现）。
+
+    与 /chanlun/analyze（现有模型）并存：现有模型用笔构中枢、缺次级别递归，
+    chanlun2 严格按原文递归定义——最低级别中枢=K线重叠（非笔）、高级别中枢
+    =次级别走势重叠、盘整背驰≠1买、2买无根数限制、3买第一次回试+5段。
+
+    cross_timeframe=True 时拉取次级别K线跑区间套跨周期精确定位（第83课）。
+    """
+    from easy_tdx.chanlun2.analyser import analyze as cl2_analyze
+    from easy_tdx.chanlun2.types import KLine as CL2KLine
+    from easy_tdx.web.schemas import DataFrameResponse
+
+    # 1. 取K线（复用与 /chanlun/analyze 同一 QFQ 口径）
+    df = await _fetch_request_klines(
+        mac_client, client, req.market, req.code, req.category,
+        req.start, req.count, start_date=req.start_date, end_date=req.end_date,
+    )
+    if req.start_date or req.end_date:
+        col = "date" if "date" in df.columns else "datetime"
+        ts = pd.to_datetime(df[col]).dt.normalize()
+        mask = pd.Series(True, index=df.index)
+        if req.start_date:
+            mask &= ts >= pd.Timestamp(req.start_date)
+        if req.end_date:
+            mask &= ts <= pd.Timestamp(req.end_date)
+        df = df[mask].reset_index(drop=True)
+
+    # 2. df → chanlun2 KLine
+    tcol = "date" if "date" in df.columns else "datetime"
+    klines: list[CL2KLine] = []
+    for i, row in df.iterrows():
+        dt = str(pd.to_datetime(row[tcol]).strftime("%Y-%m-%d %H:%M"))
+        klines.append(CL2KLine(
+            index=i, dt=dt,
+            open=float(row["open"]), high=float(row["high"]),
+            low=float(row["low"]), close=float(row["close"]),
+            volume=float(row.get("vol", row.get("volume", 0)) or 0),
+        ))
+
+    closes = [k.close for k in klines]
+    result = cl2_analyze(klines, closes=closes)
+
+    # 3. 区间套跨周期精确定位（第83课）：cross_timeframe 时拉次级别
+    nested_data: list[dict] = []
+    if req.cross_timeframe and len(klines) > 0:
+        _LOWER_TF_MAP2 = {"DAY": "MIN_30", "MIN_30": "MIN_5", "MIN_60": "MIN_15", "WEEK": "DAY"}
+        lower_cat = _LOWER_TF_MAP2.get(req.category.upper())
+        if lower_cat:
+            try:
+                df_lower = await _fetch_request_klines(
+                    mac_client, client, req.market, req.code, lower_cat, 0,
+                    min(req.count * 8, 8000),
+                )
+                tcol2 = "date" if "date" in df_lower.columns else "datetime"
+                low_klines: list[CL2KLine] = []
+                for j, row in df_lower.iterrows():
+                    dt2 = str(pd.to_datetime(row[tcol2]).strftime("%Y-%m-%d %H:%M"))
+                    low_klines.append(CL2KLine(
+                        index=j, dt=dt2,
+                        open=float(row["open"]), high=float(row["high"]),
+                        low=float(row["low"]), close=float(row["close"]),
+                        volume=float(row.get("vol", row.get("volume", 0)) or 0),
+                    ))
+                if len(low_klines) >= 200:
+                    from easy_tdx.chanlun2.level_synth import (
+                        refine_with_lower_level, interval_bag_summary,
+                    )
+                    nested = refine_with_lower_level(result, low_klines)
+                    nested_data = interval_bag_summary(nested)
+            except Exception:
+                pass  # 次级别拉取失败不阻断主分析
+
+    # 4. 序列化结果
+    def _mk(k):
+        return {"dt": k.dt_start + "~" + k.dt_end, "high": round(k.high, 2),
+                "low": round(k.low, 2), "index": k.index}
+
+    out: dict[str, Any] = {
+        "model": "chanlun2",
+        "source": "108课原文严格实现",
+        "bars": DataFrameResponse.from_dataframe(df).data,
+        "merged": [_mk(m) for m in result.merged],
+        "fractals": [
+            {"index": f.index, "kind": f.kind.value, "value": round(f.value, 2),
+             "k_index": f.k_index, "dt": f.dt}
+            for f in result.fractals
+        ],
+        "moves": [
+            {"index": m.index, "direction": m.direction.value,
+             "start_k": m.start_k, "end_k": m.end_k,
+             "high": round(m.high, 2), "low": round(m.low, 2),
+             "macd_area": round(m.macd_area, 4),
+             "start_dt": m.start.dt, "end_dt": m.end.dt}
+            for m in result.moves
+        ],
+        "zs_lowest": [  # 最低级别中枢（K线重叠，非笔构=修复偏差12）
+            {"index": z.index, "direction": z.direction.value if z.direction else None,
+             "zg": round(z.zg, 2), "zd": round(z.zd, 2),
+             "gg": round(z.gg, 2), "dd": round(z.dd, 2),
+             "start_k": z.start_k, "end_k": z.end_k,
+             "level": "lowest_kline_overlap"}
+            for z in result.zs_lowest
+        ],
+        "zs_from_moves": [  # 走势类型中枢（次级别走势重叠）
+            {"index": z.index, "direction": z.direction.value if z.direction else None,
+             "zg": round(z.zg, 2), "zd": round(z.zd, 2),
+             "gg": round(z.gg, 2), "dd": round(z.dd, 2),
+             "g": round(z.g, 2), "d": round(z.d, 2),
+             "z_moves_count": len(z.z_moves),
+             "start_k": z.start_k, "end_k": z.end_k,
+             "level": "sublevel_move_overlap"}
+            for z in result.zs_from_moves
+        ],
+        "segments": [  # 同级别分解走势类型段（第38课）
+            {"index": s.index, "kind": s.kind.value,
+             "direction": s.direction.value if s.direction else None,
+             "zs_count": s.zs_count, "moves_count": len(s.moves),
+             "start_k": s.start_k, "end_k": s.end_k,
+             "high": round(s.high, 2), "low": round(s.low, 2)}
+            for s in result.segments
+        ],
+        "mmds": [  # 三类买卖点（第20/27/101课）
+            {"index": m.index, "type": m.mmd_type.value,
+             "k_index": m.k_index, "dt": m.dt, "price": round(m.price, 2),
+             "direction": m.direction.value, "note": m.note,
+             "confidence": m.confidence}
+            for m in result.mmds
+        ],
+        "nested": nested_data,  # 区间套跨周期精确定位（第83课）
+    }
+    return out
+
+
 # 低级别 K 线上限：见 multi-level 内「低级别 K 线截断（性能护栏）」注释
 LOW_MAX_BARS = 3000
 
